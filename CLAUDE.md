@@ -258,6 +258,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   binaire distribué qui embarque un décodeur HEVC est exposé ; la libheif de Homebrew est liée
   à x265 (GPL), à ne jamais livrer avec un binaire sous licence permissive ; liaison
   dynamique uniquement pour les bibliothèques LGPL (LibRaw, libheif, libde265).
+- **Pas de valeurs codées en dur** (demandé le 16/10/2026) : tout « potard » (délais,
+  tailles, capacités, qualités, seuils, nombre de workers…) doit être un paramètre, avec sa
+  valeur par défaut dans le code, regroupé dans une structure de réglages plutôt qu'en
+  `const` épars. Même sans interface pour les modifier, on doit pouvoir les changer pour
+  tester (fichier de configuration). Toute nouvelle valeur de ce type naît paramétrable.
 - Scripts/outils paramétrables plutôt que multipliés (un script avec options plutôt que N
   scripts dédiés) — vaut aussi pour l'organisation du code quand c'est pertinent.
 - Décisions pragmatiques : tester avant de s'engager, ne pas optimiser avant d'avoir confirmé
@@ -314,7 +319,19 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       pour des images seulement traversées bloquaient l'image d'arrivée). Si ça ne suffit
       pas : piste d'un worker LibRaw dédié aux 100 %, séparé des rendus ajustés (remettrait
       en cause « un seul worker LibRaw », à discuter).
-- [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
-      `thumbnails_first`, profil de raccourcis, thème).
+- [ ] **Prochaine séance (17/10/2026) : rendre tous les réglages paramétrables**, puis le
+      fichier de configuration de l'application. Valeurs aujourd'hui codées en dur :
+      - interface (`gui/src/app.rs`) : `FULL_RAW_DWELL` (0,4 s avant un 100 % RAW), `CELL`
+        (200 pt), `GAP` (8 pt), `LABEL` (18 pt), `TEXTURE_CAPACITY` (600 vignettes),
+        `BIG_CAPACITY` (8 grandes textures), `LOAD_BUDGET` (8 ms de chargement par image),
+        thème sombre ;
+      - moteur : `JPEG_QUALITY` du cache (90, `src/cache.rs`), `MIN_EMBEDDED_FULL` (1024 px,
+        `src/preview.rs`), règle `half_size` (côté long / 2 ≥ taille demandée), seuil
+        d'acceptation de l'aperçu boîtier (moitié de la taille demandée) ;
+      - déjà des réglages du moteur, mais figés faute de configuration : `Sizes` (vignette
+        400 px, aperçu « Auto »), `Config::light_workers` (moitié des cœurs),
+        `thumbnails_first`, `raw_previews` (OnDemand dans l'interface), `RenderOptions`
+        (balance des blancs, `auto_bright`), profil de raccourcis.
+      Le fichier de configuration couvrira aussi la taille d'aperçu Auto/fixe et le thème.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
