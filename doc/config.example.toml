@@ -1,0 +1,100 @@
+# Fichier de configuration de tri : toutes les valeurs par défaut, commentées.
+#
+# Emplacement (lu par l'interface et par la ligne de commande) :
+#   Linux    $XDG_CONFIG_HOME/tri/config.toml, sinon ~/.config/tri/config.toml
+#   macOS    ~/Library/Application Support/tri/config.toml
+#   Windows  %APPDATA%\tri\config.toml
+# ou ailleurs avec --config FICHIER.
+#
+# Toute clé absente prend sa valeur par défaut : il suffit de copier les lignes à changer.
+# Une clé inconnue (faute de frappe) est signalée au démarrage ; les valeurs par défaut
+# sont alors utilisées pour tout le fichier. Un test vérifie que ce fichier reste égal aux
+# valeurs du code. Voir doc/settings.md.
+
+[preview]
+# Côté long des vignettes de la grille (pixels).
+thumbnail = 400
+# Côté long de l'aperçu plein écran (pixels), ou "auto" : plus grand côté de l'écran
+# principal (2560 sur un écran 2560×1440).
+standard = "auto"
+# Taille "auto" quand l'écran est inconnu (ligne de commande).
+auto_fallback = 2560
+# Rendu RAW de l'aperçu standard en demi-résolution (≈ 0,35 s au lieu de ≈ 3,8 s sur un RAF
+# X-T4) si la moitié du côté long du RAW vaut au moins `half_size_margin` × `standard`.
+# 1.0 : dès qu'elle couvre la taille ; plus grand : marge de netteté.
+half_size_margin = 1.0
+# Aperçu boîtier (JPEG embarqué) refusé s'il est plus petit que cette fraction de
+# `standard` (certains boîtiers n'embarquent qu'une vignette de 160 px).
+embedded_min_ratio = 0.5
+# Plus petit JPEG embarqué accepté pour le 1:1 du JPEG boîtier (pixels, côté long).
+min_embedded_full = 1024
+
+[render]
+# Développement RAW (LibRaw). Changer un réglage recalcule les rendus RAW concernés.
+# Balance des blancs du boîtier (false : « lumière du jour »).
+camera_wb = true
+# Luminosité (1.0 = défaut LibRaw).
+bright = 1.0
+# Luminosité automatique de LibRaw : désactivée, elle « corrige » une sous-exposition
+# qu'on cherche justement à voir en triant.
+auto_bright = false
+
+[cache]
+# Dossier du cache. Absent : emplacement du système (~/.cache/tri, ~/Library/Caches/tri,
+# %LOCALAPPDATA%\tri). Exemple :
+# dir = "/mnt/ssd/cache-tri"
+# Qualité JPEG des entrées (1 à 100). Les entrées déjà écrites sont gardées : vider le
+# cache (tri --clear-cache) pour les réécrire.
+jpeg_quality = 90
+
+[scheduler]
+# Workers parallèles pour les vignettes et images plates, ou "auto" : moitié des cœurs.
+# Les rendus RAW passent toujours par un seul worker (LibRaw est déjà multithreadé).
+light_workers = "auto"
+# Vignettes d'abord, puis aperçus boîtier, puis rendus RAW (false : tout mélangé).
+thumbnails_first = true
+
+[gui]
+# "dark", "light" ou "system".
+theme = "dark"
+# Profils de raccourcis actifs, "classic" (flèches) et/ou "vim" (hjkl) ; le premier
+# l'emporte en cas de conflit.
+keys = ["classic", "vim"]
+# Taille initiale de la fenêtre (points).
+window = [1400.0, 900.0]
+# Rendus RAW : "on-demand" (image affichée et voisines, en mode RAW seulement) ou
+# "background" (tout le dossier, après vignettes et aperçus boîtier).
+raw_previews = "on-demand"
+# Temps maximal de chargement des vignettes par image affichée (ms) : au-delà, la suite
+# attend l'image suivante, pour ne pas figer l'interface.
+load_budget_ms = 8
+
+[gui.grid]
+# Dimensions en points.
+cell = 200.0
+gap = 8.0
+# Hauteur réservée au nom du fichier sous la vignette.
+label = 18.0
+# Marge intérieure de la cellule.
+padding = 6.0
+# Longueur maximale du nom affiché (caractères).
+name_chars = 24
+# Vignettes gardées en mémoire graphique au plus.
+textures = 600
+
+[gui.view]
+# Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
+# traversées en enchaînant les flèches ne lancent pas un calcul de plusieurs secondes.
+full_raw_dwell_ms = 400
+# Grandes textures (aperçus, 1:1) gardées en mémoire graphique ; un 1:1 de 26 Mpx occupe
+# ~100 Mo.
+textures = 8
+
+[gui.colors]
+# Couleurs "#rrggbb". Sélection et survol absents : couleurs du thème. Exemple :
+# selection = "#1e6f7f"
+# hover = "#2a2a2a"
+badge = "#78aae6"
+warning = "#e6a03c"
+error = "#e65a5a"
+view_background = "#0c0c0c"

@@ -13,7 +13,7 @@ use std::thread::JoinHandle;
 use eframe::egui::{self, ColorImage};
 use tri::cache::{Cache, Level};
 use tri::media::{MediaFile, MediaKind};
-use tri::preview::{self, Sizes};
+use tri::preview::{self, Settings};
 
 /// Une image chargée (ou absente du cache).
 pub struct Loaded {
@@ -51,7 +51,7 @@ pub struct Loader {
 
 impl Loader {
     /// Démarre le thread. `max_side` : plus grand côté accepté par le GPU pour une texture.
-    pub fn new(cache: Cache, sizes: Sizes, max_side: usize, ctx: egui::Context) -> Loader {
+    pub fn new(cache: Cache, settings: Settings, max_side: usize, ctx: egui::Context) -> Loader {
         let shared = Arc::new(Shared {
             state: Mutex::default(),
             wake: Condvar::new(),
@@ -60,7 +60,7 @@ impl Loader {
         let worker = shared.clone();
         let thread = std::thread::Builder::new()
             .name("tri-chargement".into())
-            .spawn(move || run(&worker, &cache, &sizes, max_side, &tx, &ctx))
+            .spawn(move || run(&worker, &cache, &settings, max_side, &tx, &ctx))
             .expect("création du thread de chargement");
         Loader {
             shared,
@@ -100,7 +100,7 @@ impl Drop for Loader {
 fn run(
     shared: &Shared,
     cache: &Cache,
-    sizes: &Sizes,
+    settings: &Settings,
     max_side: usize,
     tx: &Sender<Loaded>,
     ctx: &egui::Context,
@@ -119,7 +119,7 @@ fn run(
             }
         };
         let started = std::time::Instant::now();
-        let bitmap = preview::key(&file, level, sizes)
+        let bitmap = preview::key(&file, level, settings)
             .ok()
             .and_then(|k| cache.get(&k));
         let read = started.elapsed();

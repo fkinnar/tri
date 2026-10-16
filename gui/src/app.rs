@@ -15,34 +15,17 @@ use eframe::egui::{
 use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaFile, MediaKind};
-use tri::preview::{self, Sizes};
-use tri::scheduler::{CachedPreviews, Config, Event, Progress, RawPreviews, Scheduler};
+use tri::preview;
+use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
+use tri::settings::EngineSettings;
 
 use crate::actions::{Action, Keymap};
 use crate::grid::{self, Layout};
 use crate::loader::Loader;
+use crate::settings::{AppSettings, GuiSettings};
 use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
-
-/// Côté d'une cellule de la grille (points).
-const CELL: f32 = 200.0;
-/// Espace entre les cellules (points).
-const GAP: f32 = 8.0;
-/// Hauteur réservée au nom du fichier sous la vignette.
-const LABEL: f32 = 18.0;
-/// Textures de vignettes gardées en mémoire au plus.
-const TEXTURE_CAPACITY: usize = 600;
-/// Temps maximal passé à charger des vignettes par image affichée : au-delà, on reprend à
-/// l'image suivante pour ne pas figer l'interface.
-const LOAD_BUDGET: Duration = Duration::from_millis(8);
-/// Temps à passer sur une image avant de lancer son 100 % RAW (~4,5 s de calcul, que LibRaw
-/// ne sait pas interrompre) : en enchaînant vite les flèches, les images seulement
-/// traversées ne lancent pas un calcul qui bloquerait ensuite celui de l'image regardée.
-const FULL_RAW_DWELL: Duration = Duration::from_millis(400);
-/// Grandes textures (aperçus, 1:1) gardées en mémoire : l'image affichée, ses voisines et
-/// quelques images récentes. Un 1:1 de 26 Mpx occupe ~100 Mo de mémoire graphique.
-const BIG_CAPACITY: usize = 8;
 
 /// Ce qui occupe la fenêtre.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,7 +78,7 @@ struct Engine {
     events: Receiver<Event>,
     generation: u64,
     cache: Cache,
-    sizes: Sizes,
+    preview: preview::Settings,
     loader: Loader,
 }
 
@@ -113,8 +96,12 @@ struct Screenshot {
 /// État de l'application.
 pub struct TriApp {
     dir: PathBuf,
-    /// Dossier du cache ; `None` : emplacement par défaut du système.
-    cache_dir: Option<PathBuf>,
+    /// Réglages du moteur (fichier de configuration).
+    settings: EngineSettings,
+    /// Réglages de l'interface (section `[gui]`).
+    gui: GuiSettings,
+    /// Problème de configuration à signaler (fichier invalide...), dans la barre d'état.
+    warning: Option<String>,
     all: Vec<MediaFile>,
     filter: KindFilter,
     files: Vec<MediaFile>,
@@ -169,8 +156,10 @@ pub struct TriApp {
 
 impl TriApp {
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
-    /// image), avec le cache dans `cache_dir` (`None` : emplacement par défaut).
-    pub fn new(dir: PathBuf, cache_dir: Option<PathBuf>) -> TriApp {
+    /// image), avec les réglages `settings`. `warning` : problème de configuration à
+    /// afficher.
+    pub fn new(dir: PathBuf, settings: AppSettings, warning: Option<String>) -> TriApp {
+        let gui = settings.gui.clone();
         let (all, error) = match tri::media::scan(&dir, 1) {
             Ok(files) => (files, None),
             Err(e) => (Vec::new(), Some(format!("{} : {e}", dir.display()))),
@@ -188,7 +177,8 @@ impl TriApp {
             .unwrap_or(0);
         let mut app = TriApp {
             dir,
-            cache_dir,
+            settings: settings.engine(),
+            warning,
             all,
             filter: KindFilter::All,
             files: Vec::new(),
@@ -196,10 +186,10 @@ impl TriApp {
             progress: [Progress::default(); 3],
             engine: None,
             error,
-            keymap: Keymap::default(),
-            textures: Lru::new(TEXTURE_CAPACITY),
+            keymap: gui.keymap(),
+            textures: Lru::new(gui.grid.textures),
             selected,
-            layout: Layout::fit(0.0, CELL, GAP),
+            layout: Layout::fit(0.0, gui.grid.cell, gui.grid.gap),
             scroll_offset: 0.0,
             view_height: 0.0,
             reveal: None,
@@ -212,7 +202,7 @@ impl TriApp {
             source: Source::default(),
             zoom: None,
             zoom_anchor: None,
-            big: Lru::new(BIG_CAPACITY),
+            big: Lru::new(gui.view.textures),
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
@@ -220,6 +210,7 @@ impl TriApp {
             last_shown: (usize::MAX, None),
             focus_since: Instant::now(),
             last_zoom_size: std::collections::HashMap::new(),
+            gui,
         };
         app.apply_filter();
         app
@@ -250,19 +241,13 @@ impl TriApp {
         }
     }
 
-    /// Démarre le moteur : taille d'aperçu « Auto » = plus grand côté de l'écran.
+    /// Démarre le moteur : taille d'aperçu « auto » = plus grand côté de l'écran.
     fn start_engine(&mut self, ctx: &egui::Context) {
         let monitor = ctx.input(|i| i.viewport().monitor_size);
         let ppp = ctx.pixels_per_point();
-        let sizes = Sizes {
-            standard: monitor.map_or(2560, |m| (m.x.max(m.y) * ppp).round() as u32),
-            ..Sizes::default()
-        };
-        let cache = match self
-            .cache_dir
-            .as_ref()
-            .map_or_else(Cache::open_default, Cache::open)
-        {
+        let screen_side = monitor.map(|m| (m.x.max(m.y) * ppp).round() as u32);
+        let preview = self.settings.preview(screen_side);
+        let cache = match self.settings.open_cache() {
             Ok(c) => c,
             Err(e) => {
                 self.error = Some(format!("cache inaccessible : {e}"));
@@ -273,13 +258,9 @@ impl TriApp {
         let repaint = ctx.clone();
         let producer = CachedPreviews {
             cache: cache.clone(),
-            sizes,
+            settings: preview,
         };
-        // Rendus RAW à la demande : en mode JPEG boîtier, la machine reste libre.
-        let config = Config {
-            raw_previews: RawPreviews::OnDemand,
-            ..Config::default()
-        };
+        let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Scheduler::new(producer, config, move |event| {
             let _ = tx.send(event);
             repaint.request_repaint();
@@ -287,13 +268,13 @@ impl TriApp {
         let generation = scheduler.set_folder(self.files.clone());
         scheduler.set_focus(self.selected);
         let max_texture = ctx.input(|i| i.max_texture_side);
-        let loader = Loader::new(cache.clone(), sizes, max_texture, ctx.clone());
+        let loader = Loader::new(cache.clone(), preview, max_texture, ctx.clone());
         self.engine = Some(Engine {
             scheduler,
             events: rx,
             generation,
             cache,
-            sizes,
+            preview,
             loader,
         });
     }
@@ -490,7 +471,7 @@ impl TriApp {
                 let level = view::zoom_level(kind, self.source);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
-                if !expensive || self.focus_since.elapsed() >= FULL_RAW_DWELL {
+                if !expensive || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell() {
                     wanted.push((rank == 0, i, level));
                 }
             }
@@ -574,7 +555,11 @@ impl TriApp {
         self.request_zoom();
         // Repasser ici à la fin de l'attente, pour lancer le 100 % RAW.
         if self.zoom.is_some() && self.source == Source::Raw {
-            let left = FULL_RAW_DWELL.saturating_sub(self.focus_since.elapsed());
+            let left = self
+                .gui
+                .view
+                .full_raw_dwell()
+                .saturating_sub(self.focus_since.elapsed());
             if !left.is_zero() {
                 ctx.request_repaint_after(left);
             }
@@ -631,11 +616,11 @@ impl TriApp {
         let (view_rect, response) =
             ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         let painter = ui.painter_at(view_rect);
-        painter.rect_filled(view_rect, 0.0, Color32::from_gray(12));
+        painter.rect_filled(view_rect, 0.0, self.gui.colors.view_background);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
 
         // Texture à afficher, et dimensions d'origine (pixels) de l'image qu'elle représente.
-        let deadline = Instant::now() + LOAD_BUDGET;
+        let deadline = Instant::now() + self.gui.load_budget();
         let drawable: Option<(TextureHandle, Vec2, Option<f32>)> = match shown {
             Some(Level::Thumbnail) => self.thumbnail_texture(&ctx, index, deadline).map(|t| {
                 let size = t.size_vec2();
@@ -776,7 +761,7 @@ impl TriApp {
             return None;
         }
         let engine = self.engine.as_ref()?;
-        let key = preview::key(file, Level::Thumbnail, &engine.sizes).ok()?;
+        let key = preview::key(file, Level::Thumbnail, &engine.preview).ok()?;
         let bitmap = engine.cache.get(&key)?;
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
@@ -820,14 +805,25 @@ impl TriApp {
                 ui.separator();
                 ui.label(file_name(&file.path));
             }
+            if let Some(warning) = &self.warning {
+                // Le message de toml tient sur plusieurs lignes (extrait du fichier) : résumé
+                // ici, détail au survol, en chasse fixe pour que le « ^^^ » reste aligné.
+                ui.separator();
+                ui.colored_label(
+                    self.gui.colors.error,
+                    "configuration invalide : réglages par défaut",
+                )
+                .on_hover_text(egui::RichText::new(warning).monospace());
+            }
         });
     }
 
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
-        self.layout = Layout::fit(ui.available_width(), CELL, GAP);
+        let g = self.gui.grid;
+        self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
         let rows = self.layout.rows(self.files.len());
-        ui.spacing_mut().item_spacing = vec2(GAP, GAP);
+        ui.spacing_mut().item_spacing = vec2(g.gap, g.gap);
         let mut area = ScrollArea::vertical().auto_shrink(false);
         let row = self.selected / self.layout.columns;
         let offset = match self.reveal.take() {
@@ -842,12 +838,12 @@ impl TriApp {
         }
         // Grille centrée : la marge restante est répartie des deux côtés.
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
-        let deadline = Instant::now() + LOAD_BUDGET;
+        let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
-        let output = area.show_rows(ui, CELL, rows, |ui, visible| {
+        let output = area.show_rows(ui, g.cell, rows, |ui, visible| {
             for row in visible {
                 ui.horizontal(|ui| {
-                    ui.add_space((margin - GAP).max(0.0));
+                    ui.add_space((margin - g.gap).max(0.0));
                     let start = row * self.layout.columns;
                     let end = (start + self.layout.columns).min(self.files.len());
                     for index in start..end {
@@ -861,7 +857,8 @@ impl TriApp {
     }
 
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
-        let (rect, response) = ui.allocate_exact_size(vec2(CELL, CELL), Sense::click());
+        let (g, colors) = (self.gui.grid, self.gui.colors);
+        let (rect, response) = ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click());
         if response.clicked() {
             self.select(index);
         }
@@ -872,9 +869,13 @@ impl TriApp {
         let selected = index == self.selected;
         let visuals = ui.visuals();
         let background = if selected {
-            visuals.selection.bg_fill
+            colors
+                .selection
+                .map_or(visuals.selection.bg_fill, Color32::from)
         } else if response.hovered() {
-            visuals.widgets.hovered.bg_fill
+            colors
+                .hover
+                .map_or(visuals.widgets.hovered.bg_fill, Color32::from)
         } else {
             visuals.extreme_bg_color
         };
@@ -882,8 +883,8 @@ impl TriApp {
         painter.rect_filled(rect, 4.0, background);
 
         let image_area = Rect::from_min_max(
-            rect.min + vec2(6.0, 6.0),
-            pos2(rect.max.x - 6.0, rect.max.y - LABEL - 4.0),
+            rect.min + vec2(g.padding, g.padding),
+            pos2(rect.max.x - g.padding, rect.max.y - g.label - 4.0),
         );
         let file = self.files[index].clone();
         match (
@@ -903,7 +904,7 @@ impl TriApp {
                     Align2::CENTER_CENTER,
                     "⚠",
                     FontId::proportional(28.0),
-                    Color32::from_rgb(230, 160, 60),
+                    colors.warning.into(),
                 );
                 response.clone().on_hover_text(error.clone());
             }
@@ -920,18 +921,18 @@ impl TriApp {
             MediaKind::Flat => "",
         };
         ui.painter().text(
-            pos2(rect.min.x + 6.0, rect.max.y - 4.0),
+            pos2(rect.min.x + g.padding, rect.max.y - 4.0),
             Align2::LEFT_BOTTOM,
-            truncate(&file_name(&file.path), 24),
+            truncate(&file_name(&file.path), g.name_chars),
             FontId::proportional(12.0),
             text_color,
         );
         ui.painter().text(
-            pos2(rect.max.x - 6.0, rect.max.y - 4.0),
+            pos2(rect.max.x - g.padding, rect.max.y - 4.0),
             Align2::RIGHT_BOTTOM,
             badge,
             FontId::monospace(11.0),
-            Color32::from_rgb(120, 170, 230),
+            colors.badge.into(),
         );
     }
 
@@ -1055,7 +1056,7 @@ impl eframe::App for TriApp {
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(error) = &self.error {
-                ui.colored_label(Color32::from_rgb(230, 90, 90), error);
+                ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {
                 ui.label("Aucune image dans ce dossier (ou pour ce filtre : touche f).");
             } else if self.mode == Mode::View {
@@ -1202,10 +1203,11 @@ mod tests {
                 .save(photos.join(format!("img{i}.jpg")))
                 .unwrap();
         }
-        let cache = dir.path().join("cache");
+        let mut settings = AppSettings::default();
+        settings.cache.dir = Some(dir.path().join("cache"));
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
-            .build_eframe(move |_cc| TriApp::new(photos, Some(cache)));
+            .build_eframe(move |_cc| TriApp::new(photos, settings, None));
         (harness, dir)
     }
 

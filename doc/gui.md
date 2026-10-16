@@ -5,8 +5,13 @@ Application egui/eframe, dans son propre paquet (`gui/`) du workspace Cargo. Le 
 garantie par Cargo lui-même.
 
 ```sh
-cargo run --release -p tri-gui -- <dossier> [--cache <dossier du cache>]
+cargo run --release -p tri-gui -- <dossier> [--cache <dossier du cache>] [--config <fichier>]
 ```
+
+Tous les réglages (thème, raccourcis, dimensions de la grille, délais, capacités, couleurs,
+et ceux du moteur) viennent du fichier de configuration : voir [settings.md](settings.md)
+et [config.example.toml](config.example.toml). Une configuration invalide est signalée en
+rouge dans la barre d'état (détail au survol), et les réglages par défaut sont utilisés.
 
 Toujours en **`--release`** pour s'en servir : en build de débogage, le code Rust n'est pas
 optimisé, et le 1:1 du JPEG boîtier passe de 0,4 s à 2 s (rotation, conversion pour le GPU),
@@ -83,7 +88,7 @@ puis on vérifie la netteté des candidates **à 100 %**.
     non interruptible) passait devant le rendu ajusté (~0,5 s) et le JPEG restait affiché
     plusieurs secondes.
   - Mode RAW : un 100 % RAW (~4,5 s, que LibRaw ne sait pas interrompre) n'est demandé
-    qu'après **0,4 s passées sur l'image** (`FULL_RAW_DWELL`). Sans ce délai, en enchaînant
+    qu'après **0,4 s passées sur l'image** (`gui.view.full_raw_dwell_ms`). Sans ce délai, en enchaînant
     vite les flèches, chaque image traversée pouvait lancer son 100 %, et le rendu RAW de
     l'image où l'on s'arrêtait attendait jusqu'à ~5 s derrière un calcul devenu inutile (le
     JPEG restait affiché : retour du 16/10/2026). Mesuré après correction : aucune demande
@@ -169,6 +174,11 @@ Le défilement est mémorisé comme une *intention* (`Reveal::Minimal` après un
 la largeur, donc le nombre de colonnes, est connue. Le calculer plus tôt donnait une mauvaise
 ligne au démarrage (bug vu sur une capture).
 
+### Réglages (`settings.rs`)
+
+Le fichier de configuration entier vu par l'interface (sections du moteur + `[gui]`) : voir
+[settings.md](settings.md#interface--guisrcsettingsrs).
+
 ### Textures (`textures.rs`)
 
 Les vignettes visibles sont chargées depuis le cache disque (~1–2 ms chacune) dans un
@@ -224,5 +234,8 @@ Tests unitaires du paquet (`cargo test -p tri-gui`) : identifiants d'actions uni
 préfixés, profils complets et sans doublon, union des profils, modificateurs système
 ignorés, noms de touches et libellés de l'aide, identifiants réversibles ; colonnes, navigation (bords, colonnes, dernière ligne
 incomplète, pages, grille vide), défilement ; LRU (éviction, remplacement, capacité
-minimale) ; troncature des noms, mise à jour des statuts. Le rendu est vérifié par capture
-automatique.
+minimale) ; troncature des noms, mise à jour des statuts ; réglages (`settings.rs`) :
+fichier d'exemple égal aux valeurs par défaut, sections inconnues et valeurs invalides
+signalées (thème, profil, couleur), section du moteur transmise, liste de profils vide. Le
+rendu est vérifié par capture automatique (aussi avec un fichier de configuration :
+`tri-gui <dossier> --config <fichier>`).

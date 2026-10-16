@@ -85,6 +85,22 @@ fn put_then_get_roundtrips_through_jpeg() {
 }
 
 #[test]
+fn quality_is_clamped_and_shrinks_entries() {
+    let s = setup();
+    assert_eq!(s.cache.quality(), tri::cache::DEFAULT_JPEG_QUALITY);
+    assert_eq!(s.cache.clone().with_quality(0).quality(), 1);
+    assert_eq!(s.cache.clone().with_quality(200).quality(), 100);
+    let size_at = |quality: u8, level: Level| {
+        let cache = s.cache.clone().with_quality(quality);
+        let k = key(&s.source, level);
+        cache.put(&k, &gradient()).unwrap();
+        cache.usage(level).unwrap().bytes
+    };
+    let (low, high) = (size_at(20, Level::Thumbnail), size_at(98, Level::Standard));
+    assert!(low < high, "qualité 20 : {low} o, qualité 98 : {high} o");
+}
+
+#[test]
 fn put_overwrites_and_remove_deletes() {
     let s = setup();
     let k = key(&s.source, Level::Thumbnail);

@@ -10,6 +10,10 @@
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau.
+//!
+//! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
+//! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
+//! lui.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -20,14 +24,15 @@ use std::time::{Duration, Instant};
 use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaKind, scan};
-use tri::preview::Sizes;
-use tri::scheduler::{CachedPreviews, Config, Event, Progress, Scheduler};
+use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
+use tri::settings::{self, Auto, EngineSettings};
 
 const USAGE: &str = "usage :
   tri <dossier> [--raw|--flat] [--depth N]
   tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
-  tri --cache-usage [--cache DOSSIER]";
+  tri --cache-usage [--cache DOSSIER]
+option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -39,10 +44,12 @@ struct Args {
     previews: bool,
     clear: Option<Option<Level>>,
     usage: bool,
-    sizes: Sizes,
+    side: Option<u32>,
+    thumb: Option<u32>,
     workers: Option<usize>,
     mixed: bool,
     cache: Option<PathBuf>,
+    config: Option<PathBuf>,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -65,8 +72,9 @@ fn parse() -> AnyResult<Args> {
             "--flat" => args.kind = KindFilter::FlatOnly,
             "--depth" => args.depth = Some(value()?.parse()?),
             "--previews" => args.previews = true,
-            "--side" => args.sizes.standard = value()?.parse()?,
-            "--thumb" => args.sizes.thumbnail = value()?.parse()?,
+            "--side" => args.side = Some(value()?.parse()?),
+            "--thumb" => args.thumb = Some(value()?.parse()?),
+            "--config" => args.config = Some(value()?.into()),
             "--workers" => args.workers = Some(value()?.parse()?),
             "--mixed" => args.mixed = true,
             "--cache" => args.cache = Some(value()?.into()),
@@ -88,11 +96,29 @@ fn parse() -> AnyResult<Args> {
     Ok(args)
 }
 
-fn open_cache(args: &Args) -> AnyResult<Cache> {
-    Ok(match &args.cache {
-        Some(dir) => Cache::open(dir)?,
-        None => Cache::open_default()?,
-    })
+/// Réglages du fichier, corrigés par les options de la ligne de commande.
+fn settings(args: &Args) -> EngineSettings {
+    let loaded = settings::load::<EngineSettings>(args.config.as_deref());
+    if let Some(warning) = &loaded.warning {
+        eprintln!("attention : {warning}");
+    }
+    let mut s = loaded.settings;
+    if let Some(side) = args.side {
+        s.preview.standard = Auto::Fixed(side);
+    }
+    if let Some(thumb) = args.thumb {
+        s.preview.thumbnail = thumb;
+    }
+    if let Some(w) = args.workers {
+        s.scheduler.light_workers = Auto::Fixed(w);
+    }
+    if args.mixed {
+        s.scheduler.thumbnails_first = false;
+    }
+    if let Some(dir) = &args.cache {
+        s.cache.dir = Some(dir.clone());
+    }
+    s
 }
 
 fn mib(bytes: u64) -> f64 {
@@ -119,19 +145,18 @@ fn print_usage(cache: &Cache) -> AnyResult<()> {
 }
 
 /// Calcule les aperçus du dossier en affichant la progression sur une ligne.
-fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
-    let cache = open_cache(args)?;
+fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
+    let cache = settings.open_cache()?;
     let n = files.len();
     let raws = files.iter().filter(|f| f.kind == MediaKind::Raw).count();
-    let mut config = Config::default();
-    if let Some(w) = args.workers {
-        config.light_workers = w;
-    }
-    config.thumbnails_first = !args.mixed;
+    // Pas d'écran : la taille « auto » prend sa valeur de repli. Démonstration et mesure :
+    // tous les rendus RAW en fond.
+    let preview = settings.preview(None);
+    let config = settings.scheduler(RawPreviews::Background);
     println!(
         "{n} images ({raws} RAW), vignettes {} px, aperçus {} px, {} workers légers + 1 lourd, {}",
-        args.sizes.thumbnail,
-        args.sizes.standard,
+        preview.sizes.thumbnail,
+        preview.sizes.standard,
         config.light_workers,
         if config.thumbnails_first {
             "vignettes d'abord"
@@ -144,7 +169,7 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
     let (tx, rx) = mpsc::channel();
     let producer = CachedPreviews {
         cache: cache.clone(),
-        sizes: args.sizes,
+        settings: preview,
     };
     let scheduler = Scheduler::new(producer, config, move |e| {
         let _ = tx.send(e);
@@ -218,9 +243,10 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
 
 fn run() -> AnyResult<()> {
     let args = parse()?;
+    let settings = settings(&args);
 
     if let Some(level) = args.clear {
-        let cache = open_cache(&args)?;
+        let cache = settings.open_cache()?;
         cache.clear(level)?;
         println!(
             "cache vidé ({})",
@@ -229,7 +255,7 @@ fn run() -> AnyResult<()> {
         return print_usage(&cache);
     }
     if args.usage {
-        return print_usage(&open_cache(&args)?);
+        return print_usage(&settings.open_cache()?);
     }
 
     let dir = args.dir.clone().ok_or(USAGE)?;
@@ -237,7 +263,7 @@ fn run() -> AnyResult<()> {
         .kind
         .apply(ungrouped(scan(&dir, args.depth.unwrap_or(1))?));
     if args.previews {
-        return previews(&args, groups.into_iter().flatten().collect());
+        return previews(&settings, groups.into_iter().flatten().collect());
     }
     for (index, group) in groups.iter().enumerate() {
         println!("===== GROUPE {index} ({} images)", group.len());

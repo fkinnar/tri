@@ -11,6 +11,8 @@ existe.
 |---|---|
 | [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
+| [settings.md](settings.md) | Fichier de configuration (TOML) : emplacement, sections, erreurs ; module `tri::settings` |
+| [config.example.toml](config.example.toml) | Toutes les clés avec leur valeur par défaut, commentées |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
 | [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |
@@ -36,6 +38,9 @@ tri/
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
 │   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
+│   ├── preview.rs        calcul des vignettes, aperçus et 1:1 (réglages de calcul)
+│   ├── scheduler.rs      file de travail en fond : priorités, progression, annulation
+│   ├── settings.rs       fichier de configuration : sections du moteur, lecture
 │   ├── jpeg.rs           JPEG rapide : libjpeg-turbo (feature) ou crate image
 │   ├── flat/
 │   │   ├── mod.rs        décodage des images plates (crate image)

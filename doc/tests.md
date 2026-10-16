@@ -98,12 +98,27 @@ l'interface sont décrits dans [gui.md](gui.md#tests).
 - `usage` ignore les temporaires ; `evict` supprime le moins récemment utilisé (lecture =
   usage) ;
 - entrée corrompue supprimée par `get` ;
-- 4 threads écrivant et lisant la même clé : jamais d'entrée partielle.
+- 4 threads écrivant et lisant la même clé : jamais d'entrée partielle ;
+- qualité JPEG ramenée entre 1 et 100, et qualité basse ⇒ entrée plus petite.
 
 ### `preview` (unitaires, `src/preview.rs`)
 
-- règle `half_size` (seuil exact, orientation indifférente) ; paramètres de clé distincts par
-  niveau et par taille ; annulation avant démarrage.
+- règle `half_size` (seuil exact, orientation indifférente, marge) ; paramètres de clé
+  distincts par niveau et par taille ; chaque réglage ne change la clé que des niveaux qu'il
+  influence ; annulation avant démarrage.
+
+### `settings` (unitaires `src/settings.rs`, intégration `tests/settings.rs`)
+
+- emplacement par défaut par OS (XDG absolu ou relatif, variables absentes) ;
+- fichier vide = réglages par défaut, égaux à ceux des types du moteur ; fichier partiel ;
+- `Auto` : `"auto"` ou entier positif, refus de `"automatique"`, `-1`, `1.5`, `true`, d'un
+  entier trop grand ; 0 worker ramené à 1 ;
+- clé inconnue signalée avec sa ligne, mauvais type signalé, section `[gui]` ignorée par le
+  moteur ;
+- fichier valide lu ; fichier invalide ou introuvable : réglages par défaut et avertissement
+  nommant le fichier et la clé ; dossier et qualité du cache appliqués ;
+- **`doc/config.example.toml` égal aux valeurs par défaut** (moteur ici, fichier entier dans
+  `gui/src/settings.rs`).
 
 ### `scheduler` (unitaires et intégration)
 

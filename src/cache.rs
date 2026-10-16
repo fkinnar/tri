@@ -17,8 +17,8 @@ use crate::jpeg::{self, Chroma};
 /// Version du format du cache. L'incrémenter rend toutes les anciennes entrées invisibles.
 const FORMAT_VERSION: &str = "v1";
 
-/// Qualité JPEG des entrées.
-const JPEG_QUALITY: u8 = 90;
+/// Qualité JPEG des entrées par défaut (voir [`Cache::with_quality`]).
+pub const DEFAULT_JPEG_QUALITY: u8 = 90;
 
 /// Niveau de détail d'une entrée.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -125,12 +125,16 @@ impl Key {
 #[derive(Clone, Debug)]
 pub struct Cache {
     root: PathBuf,
+    quality: u8,
 }
 
 impl Cache {
-    /// Ouvre (et crée si besoin) un cache dans `root`.
+    /// Ouvre (et crée si besoin) un cache dans `root`, qualité JPEG par défaut.
     pub fn open(root: impl Into<PathBuf>) -> io::Result<Cache> {
-        let cache = Cache { root: root.into() };
+        let cache = Cache {
+            root: root.into(),
+            quality: DEFAULT_JPEG_QUALITY,
+        };
         for level in Level::ALL {
             fs::create_dir_all(cache.level_dir(level))?;
         }
@@ -146,6 +150,21 @@ impl Cache {
             )
         })?;
         Cache::open(dir)
+    }
+
+    /// Même cache, avec une autre qualité JPEG (1 à 100, ramenée dans ces bornes) pour les
+    /// entrées écrites désormais.
+    ///
+    /// La qualité n'entre pas dans la clé : les entrées déjà écrites restent valides (elles
+    /// représentent la même image), il suffit de vider le cache pour les réécrire.
+    pub fn with_quality(mut self, quality: u8) -> Cache {
+        self.quality = quality.clamp(1, 100);
+        self
+    }
+
+    /// Qualité JPEG des entrées écrites.
+    pub fn quality(&self) -> u8 {
+        self.quality
     }
 
     /// Dossier racine du cache.
@@ -203,7 +222,7 @@ impl Cache {
                 Level::Full | Level::EmbeddedFull => Chroma::Full,
                 _ => Chroma::Half,
             };
-            let bytes = jpeg::encode(bitmap, JPEG_QUALITY, chroma).map_err(io::Error::other)?;
+            let bytes = jpeg::encode(bitmap, self.quality, chroma).map_err(io::Error::other)?;
             let mut file = File::create(&tmp)?;
             file.write_all(&bytes)?;
             file.sync_all()?;

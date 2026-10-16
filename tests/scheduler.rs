@@ -684,7 +684,7 @@ fn dropping_stops_promptly_with_work_pending() {
 #[ignore = "nécessite TRI_TEST_RAW"]
 fn real_previews_fill_the_cache_and_are_reused() {
     use tri::cache::Cache;
-    use tri::preview::{self, Sizes};
+    use tri::preview::{self, Settings, Sizes};
     use tri::scheduler::CachedPreviews;
 
     let sample: PathBuf = std::env::var_os("TRI_TEST_RAW")
@@ -701,15 +701,18 @@ fn real_previews_fill_the_cache_and_are_reused() {
 
     let files = tri::media::scan(&photos, 1).unwrap();
     assert_eq!(files.len(), 2);
-    let sizes = Sizes {
-        thumbnail: 400,
-        standard: 1024,
+    let settings = Settings {
+        sizes: Sizes {
+            thumbnail: 400,
+            standard: 1024,
+        },
+        ..Settings::default()
     };
     let cache = Cache::open(dir.path().join("cache")).unwrap();
     let run = |cache: &Cache| {
         let producer = CachedPreviews {
             cache: cache.clone(),
-            sizes,
+            settings,
         };
         let scheduler = Scheduler::new(producer, Config::default(), |_| {});
         let t = Instant::now();
@@ -728,10 +731,10 @@ fn real_previews_fill_the_cache_and_are_reused() {
     let long_side = |b: &tri::bitmap::Bitmap| b.width.max(b.height);
     for f in &files {
         let thumb = cache
-            .get(&preview::key(f, Level::Thumbnail, &sizes).unwrap())
+            .get(&preview::key(f, Level::Thumbnail, &settings).unwrap())
             .unwrap();
         let standard = cache
-            .get(&preview::key(f, Level::Standard, &sizes).unwrap())
+            .get(&preview::key(f, Level::Standard, &settings).unwrap())
             .unwrap();
         assert_eq!(long_side(&thumb), 400, "{}", f.path.display());
         assert_eq!(long_side(&standard), 1024, "{}", f.path.display());
@@ -746,12 +749,12 @@ fn real_previews_fill_the_cache_and_are_reused() {
     // Aperçu boîtier : pour le RAW seulement, à la taille standard, dans le même sens que le
     // rendu RAW.
     for f in &files {
-        let embedded = cache.get(&preview::key(f, Level::Embedded, &sizes).unwrap());
+        let embedded = cache.get(&preview::key(f, Level::Embedded, &settings).unwrap());
         match f.kind {
             MediaKind::Raw => {
                 let embedded = embedded.expect("aperçu boîtier du RAW");
                 let standard = cache
-                    .get(&preview::key(f, Level::Standard, &sizes).unwrap())
+                    .get(&preview::key(f, Level::Standard, &settings).unwrap())
                     .unwrap();
                 assert_eq!(long_side(&embedded), 1024);
                 assert_eq!(
@@ -769,7 +772,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let raw_index = files.iter().position(|f| f.kind == MediaKind::Raw).unwrap();
         let producer = CachedPreviews {
             cache: cache.clone(),
-            sizes,
+            settings,
         };
         let scheduler = Scheduler::new(producer, Config::default(), |_| {});
         scheduler.set_folder(files.clone());
@@ -778,10 +781,10 @@ fn real_previews_fill_the_cache_and_are_reused() {
         assert!(scheduler.wait_idle(Duration::from_secs(120)));
         let f = &files[raw_index];
         let full = cache
-            .get(&preview::key(f, Level::EmbeddedFull, &sizes).unwrap())
+            .get(&preview::key(f, Level::EmbeddedFull, &settings).unwrap())
             .expect("1:1 du JPEG boîtier");
         let standard = cache
-            .get(&preview::key(f, Level::Embedded, &sizes).unwrap())
+            .get(&preview::key(f, Level::Embedded, &settings).unwrap())
             .unwrap();
         println!("JPEG boîtier 1:1 : {}x{}", full.width, full.height);
         assert!(

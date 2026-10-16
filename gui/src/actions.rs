@@ -133,8 +133,10 @@ const fn shifted(key: Key) -> Chord {
     Chord { key, shift: true }
 }
 
-/// Profil de raccourcis livré par défaut.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Profil de raccourcis livré par défaut. Dans le fichier de configuration : `"classic"`
+/// ou `"vim"`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Profile {
     /// Flèches, Début / Fin, Page préc. / suiv.
     Classic,

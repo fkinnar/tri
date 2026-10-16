@@ -21,7 +21,7 @@ pub enum Thumbnail {
 }
 
 /// Paramètres du développement complet (`RawFile::render`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RenderOptions {
     /// Balance des blancs du boîtier (sinon : multiplicateurs « lumière du jour »).
     pub camera_wb: bool,

@@ -47,7 +47,10 @@ garde toutes les portes ouvertes.
 ### Crates Rust (compilés dans le binaire)
 
 Relevé via `cargo metadata` (et complété à chaque ajout : `blake3` est sous CC0-1.0 OR
-Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT, `cmake` — outil de compilation seulement — sous MIT OR Apache-2.0) : les 71 crates de l'arbre de dépendances sont sous licences
+Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT, `cmake` — outil de compilation seulement — sous MIT OR Apache-2.0, `serde` et `toml` — fichier
+de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_parser`,
+`toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT) : les 69 crates de l'arbre de
+dépendances du moteur (`cargo tree -p tri -e normal,build`, recompté le 16/10/2026) sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
 ce sont des *bindings*, la libheif elle-même reste LGPL.

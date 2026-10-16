@@ -50,7 +50,7 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   panique ne bloque pas `wait_idle` (garde `Drop`).
 - **Annulation** : un nouveau dossier annule tout ; changer d'image annule un 1:1 en cours
   pour une autre image (effectif seulement entre deux étapes LibRaw, voir `raw.md`).
-- **`Producer`** : trait du calcul ; `CachedPreviews { cache, sizes }` est la vraie
+- **`Producer`** : trait du calcul ; `CachedPreviews { cache, settings }` est la vraie
   implémentation, et un faux producteur permettra de tester l'ordonnancement sans LibRaw.
 
 ## Politique « le plus rapide d'abord »

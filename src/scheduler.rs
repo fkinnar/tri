@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use crate::cache::{Cache, Level};
 use crate::media::{MediaFile, MediaKind};
-use crate::preview::{self, Outcome, PreviewError, Sizes};
+use crate::preview::{self, Outcome, PreviewError, Settings};
 
 /// Calcule et stocke les images. Implémenté par [`CachedPreviews`].
 pub trait Producer: Send + Sync + 'static {
@@ -43,17 +43,17 @@ pub enum Failure {
 pub struct CachedPreviews {
     /// Cache à remplir.
     pub cache: Cache,
-    /// Tailles des aperçus.
-    pub sizes: Sizes,
+    /// Réglages de calcul (tailles, rendu, seuils).
+    pub settings: Settings,
 }
 
 impl Producer for CachedPreviews {
     fn is_done(&self, file: &MediaFile, level: Level) -> bool {
-        preview::key(file, level, &self.sizes).is_ok_and(|k| self.cache.contains(&k))
+        preview::key(file, level, &self.settings).is_ok_and(|k| self.cache.contains(&k))
     }
 
     fn produce(&self, file: &MediaFile, level: Level, cancel: &AtomicBool) -> Result<(), Failure> {
-        match preview::ensure(&self.cache, file, level, &self.sizes, cancel) {
+        match preview::ensure(&self.cache, file, level, &self.settings, cancel) {
             Ok(Outcome::Cached | Outcome::Computed) => Ok(()),
             Err(PreviewError::Cancelled) => Err(Failure::Cancelled),
             Err(e) => Err(Failure::Error(e.to_string())),
@@ -150,7 +150,10 @@ pub struct Config {
 
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
 /// plates sont toujours calculés en fond : c'est leur seul aperçu plein écran.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+///
+/// Dans le fichier de configuration : `"background"` ou `"on-demand"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RawPreviews {
     /// Tout le dossier en fond (après vignettes et aperçus boîtier).
     #[default]
