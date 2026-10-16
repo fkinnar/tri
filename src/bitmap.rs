@@ -1,5 +1,19 @@
 //! Type d'image commun produit par le moteur (RAW développé ou image plate décodée).
 
+/// Rotation horaire d'une image.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Rotation {
+    /// Aucune.
+    #[default]
+    None,
+    /// 90° dans le sens horaire.
+    Cw90,
+    /// 180°.
+    Cw180,
+    /// 270° dans le sens horaire (90° anti-horaire).
+    Cw270,
+}
+
 /// Image RGB 8 bits, entrelacée (R, G, B, R, G, B...), ligne par ligne, sans remplissage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bitmap {
@@ -12,6 +26,32 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
+    /// Tourne l'image dans le sens horaire. `Cw90` et `Cw270` échangent largeur et hauteur.
+    pub fn rotate(self, rotation: Rotation) -> Bitmap {
+        let (w, h) = (self.width as usize, self.height as usize);
+        let src = |x: usize, y: usize| (y * w + x) * 3;
+        let (width, height, at): (usize, usize, Box<dyn Fn(usize, usize) -> usize>) = match rotation
+        {
+            Rotation::None => return self,
+            // Pixel (x, y) de la destination ← pixel source correspondant.
+            Rotation::Cw90 => (h, w, Box::new(move |x, y| src(y, h - 1 - x))),
+            Rotation::Cw180 => (w, h, Box::new(move |x, y| src(w - 1 - x, h - 1 - y))),
+            Rotation::Cw270 => (h, w, Box::new(move |x, y| src(w - 1 - y, x))),
+        };
+        let mut data = Vec::with_capacity(self.data.len());
+        for y in 0..height {
+            for x in 0..width {
+                let i = at(x, y);
+                data.extend_from_slice(&self.data[i..i + 3]);
+            }
+        }
+        Bitmap {
+            width: width as u32,
+            height: height as u32,
+            data,
+        }
+    }
+
     /// Réduit l'image pour que son plus grand côté fasse au plus `max_side` pixels, en
     /// gardant les proportions (filtre Lanczos3). Une image déjà assez petite est renvoyée
     /// telle quelle : on n'agrandit jamais.
@@ -55,6 +95,54 @@ mod tests {
             height,
             data: rgb.repeat((width * height) as usize),
         }
+    }
+
+    /// 3×2, pixels numérotés 0..6 (valeur répétée sur les 3 canaux) :
+    /// ```text
+    /// 0 1 2
+    /// 3 4 5
+    /// ```
+    fn numbered() -> Bitmap {
+        Bitmap {
+            width: 3,
+            height: 2,
+            data: (0..6u8).flat_map(|v| [v, v, v]).collect(),
+        }
+    }
+
+    fn values(bmp: &Bitmap) -> Vec<u8> {
+        bmp.data.chunks(3).map(|p| p[0]).collect()
+    }
+
+    #[test]
+    fn rotate_clockwise() {
+        // 90° horaire : la colonne de gauche (0, 3) devient la ligne du haut, de droite à gauche.
+        let r = numbered().rotate(Rotation::Cw90);
+        assert_eq!((r.width, r.height), (2, 3));
+        assert_eq!(values(&r), [3, 0, 4, 1, 5, 2]);
+
+        let r = numbered().rotate(Rotation::Cw180);
+        assert_eq!((r.width, r.height), (3, 2));
+        assert_eq!(values(&r), [5, 4, 3, 2, 1, 0]);
+
+        let r = numbered().rotate(Rotation::Cw270);
+        assert_eq!((r.width, r.height), (2, 3));
+        assert_eq!(values(&r), [2, 5, 1, 4, 0, 3]);
+
+        assert_eq!(numbered().rotate(Rotation::None), numbered());
+    }
+
+    #[test]
+    fn four_quarter_turns_are_identity() {
+        let mut r = numbered();
+        for _ in 0..4 {
+            r = r.rotate(Rotation::Cw90);
+        }
+        assert_eq!(r, numbered());
+        assert_eq!(
+            numbered().rotate(Rotation::Cw90).rotate(Rotation::Cw270),
+            numbered()
+        );
     }
 
     #[test]

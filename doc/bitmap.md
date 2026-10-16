@@ -15,6 +15,13 @@ pub struct Bitmap { pub width: u32, pub height: u32, pub data: Vec<u8> }
 - indépendant de toute bibliothèque d'affichage ou d'image : l'interface le convertit dans son
   propre format (pour egui : `ColorImage::from_rgb`).
 
+## `rotate(self, rotation) -> Bitmap`
+
+Tourne l'image dans le sens horaire selon un `Rotation` (`None`, `Cw90`, `Cw180`, `Cw270`).
+`Cw90` et `Cw270` échangent largeur et hauteur. Sert à redresser les aperçus embarqués des
+RAW (voir `RawFile::orientation` dans [raw.md](raw.md)). Faire le `fit` *avant* le `rotate`
+coûte moins cher : on tourne moins de pixels.
+
 ## `fit(self, max_side) -> Bitmap`
 
 Réduit l'image pour que son plus grand côté fasse au plus `max_side` pixels, en gardant les

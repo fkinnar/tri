@@ -8,8 +8,9 @@ use std::ffi::CStr;
 use std::fmt;
 use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::bitmap::Bitmap;
+use crate::bitmap::{Bitmap, Rotation};
 
 /// Aperçu embarqué : presque toujours un JPEG, parfois un bitmap brut.
 pub enum Thumbnail {
@@ -54,6 +55,8 @@ pub enum RawError {
         /// Message de `libraw_strerror`.
         message: String,
     },
+    /// Traitement annulé à la demande (voir [`RawFile::render_cancellable`]).
+    Cancelled,
     /// Image nulle sans code d'erreur.
     EmptyImage,
     /// Image produite dans un format que `Bitmap` ne gère pas.
@@ -75,6 +78,7 @@ impl fmt::Display for RawError {
                 write!(f, "chemin non transmissible à LibRaw : {}", p.display())
             }
             Self::LibRaw { code, message } => write!(f, "LibRaw erreur {code} : {message}"),
+            Self::Cancelled => write!(f, "traitement LibRaw annulé"),
             Self::EmptyImage => write!(f, "LibRaw a renvoyé une image nulle sans code d'erreur"),
             Self::UnsupportedImage { kind, colors, bits } => {
                 write!(
@@ -92,8 +96,10 @@ impl std::error::Error for RawError {}
 pub type Result<T> = std::result::Result<T, RawError>;
 
 fn check(code: c_int) -> Result<()> {
-    if code == 0 {
-        return Ok(());
+    match code {
+        0 => return Ok(()),
+        ffi::CANCELLED_BY_CALLBACK => return Err(RawError::Cancelled),
+        _ => {}
     }
     let message = unsafe { CStr::from_ptr(ffi::libraw_strerror(code)) }
         .to_string_lossy()
@@ -224,8 +230,54 @@ impl RawFile {
         }
     }
 
+    /// Rotation à appliquer à l'aperçu embarqué (le rendu, lui, est déjà pivoté).
+    /// Lue dans les métadonnées du RAW (`sizes.flip`), qui font foi : l'aperçu embarqué est
+    /// stocké dans l'orientation du capteur.
+    pub fn orientation(&self) -> Rotation {
+        rotation_from_flip(unsafe { ffi::tri_libraw_get_flip(self.ptr) })
+    }
+
+    /// Dimensions (largeur, hauteur) du rendu pleine résolution, avant rotation.
+    /// Disponibles dès l'ouverture, sans développer.
+    pub fn size(&self) -> (u32, u32) {
+        let (mut w, mut h): (c_int, c_int) = (0, 0);
+        unsafe { ffi::tri_libraw_get_size(self.ptr, &mut w, &mut h) };
+        (w.max(0) as u32, h.max(0) as u32)
+    }
+
     /// Développement complet des données RAW en RGB 8 bits (orientation appliquée).
     pub fn render(&mut self, options: &RenderOptions) -> Result<Bitmap> {
+        self.render_cancellable(options, &AtomicBool::new(false))
+    }
+
+    /// Comme [`RawFile::render`], mais s'arrête avec [`RawError::Cancelled`] dès que
+    /// `cancel` passe à `true`. LibRaw ne consulte ce drapeau qu'entre deux étapes du
+    /// traitement. Mesuré sur RAF X-T4 : le dématriçage X-Trans (~3 s sur ~3,5 s) est un
+    /// seul bloc sans point d'arrêt, donc une annulation pendant ce bloc ne prend effet qu'à
+    /// sa fin. En `half_size`, il n'y a pas de dématriçage.
+    pub fn render_cancellable(
+        &mut self,
+        options: &RenderOptions,
+        cancel: &AtomicBool,
+    ) -> Result<Bitmap> {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(RawError::Cancelled);
+        }
+        // Le handler pointe sur `cancel` : il est retiré à la sortie, quoi qu'il arrive.
+        struct ResetHandler(*mut ffi::LibRawData);
+        impl Drop for ResetHandler {
+            fn drop(&mut self) {
+                unsafe { ffi::libraw_set_progress_handler(self.0, None, std::ptr::null_mut()) };
+            }
+        }
+        unsafe {
+            ffi::libraw_set_progress_handler(
+                self.ptr,
+                Some(cancel_requested),
+                cancel as *const AtomicBool as *mut _,
+            )
+        };
+        let _reset = ResetHandler(self.ptr);
         unsafe {
             ffi::libraw_set_output_bps(self.ptr, 8);
             ffi::tri_libraw_set_use_camera_wb(self.ptr, options.camera_wb.into());
@@ -240,6 +292,28 @@ impl RawFile {
             err,
         )?;
         img.to_bitmap()
+    }
+}
+
+/// Callback de progression LibRaw : renvoie 1 (annuler) si le drapeau est levé.
+/// Ne peut pas paniquer (une simple lecture atomique) : rien ne se déroule à travers le C.
+unsafe extern "C" fn cancel_requested(
+    data: *mut std::ffi::c_void,
+    _stage: c_int,
+    _iteration: c_int,
+    _expected: c_int,
+) -> c_int {
+    let cancel = unsafe { &*(data as *const AtomicBool) };
+    c_int::from(cancel.load(Ordering::Relaxed))
+}
+
+/// Traduit `sizes.flip` (convention dcraw) en rotation horaire.
+fn rotation_from_flip(flip: c_int) -> Rotation {
+    match flip {
+        3 => Rotation::Cw180,
+        5 => Rotation::Cw270,
+        6 => Rotation::Cw90,
+        _ => Rotation::None,
     }
 }
 
@@ -312,6 +386,32 @@ mod tests {
         };
         assert_eq!(code, -2);
         assert!(!message.is_empty());
+    }
+
+    #[test]
+    fn cancellation_code_maps_to_cancelled() {
+        assert!(matches!(
+            check(ffi::CANCELLED_BY_CALLBACK),
+            Err(RawError::Cancelled)
+        ));
+    }
+
+    #[test]
+    fn flip_values_map_to_clockwise_rotations() {
+        assert_eq!(rotation_from_flip(0), Rotation::None);
+        assert_eq!(rotation_from_flip(3), Rotation::Cw180);
+        assert_eq!(rotation_from_flip(5), Rotation::Cw270);
+        assert_eq!(rotation_from_flip(6), Rotation::Cw90);
+        assert_eq!(rotation_from_flip(1), Rotation::None);
+    }
+
+    #[test]
+    fn cancel_callback_reads_the_flag() {
+        let flag = AtomicBool::new(false);
+        let data = &flag as *const AtomicBool as *mut std::ffi::c_void;
+        assert_eq!(unsafe { cancel_requested(data, 0, 0, 0) }, 0);
+        flag.store(true, Ordering::Relaxed);
+        assert_eq!(unsafe { cancel_requested(data, 0, 0, 0) }, 1);
     }
 
     #[test]

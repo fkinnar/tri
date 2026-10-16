@@ -1,12 +1,23 @@
 //! Déclarations brutes de l'API C de LibRaw (+ shim `csrc/libraw_shim.c`).
 
-use std::os::raw::{c_char, c_float, c_int, c_uchar, c_uint, c_ushort};
+use std::os::raw::{c_char, c_float, c_int, c_uchar, c_uint, c_ushort, c_void};
 
 /// Handle opaque : on ne connaît pas (et n'a pas besoin de connaître) son contenu.
 #[repr(C)]
 pub struct LibRawData {
     _private: [u8; 0],
 }
+
+/// Code renvoyé quand le callback de progression a demandé l'arrêt.
+pub const CANCELLED_BY_CALLBACK: c_int = -100010;
+
+/// `progress_callback` : une valeur de retour non nulle annule le traitement en cours.
+pub type ProgressCallback = unsafe extern "C" fn(
+    data: *mut c_void,
+    stage: c_int,
+    iteration: c_int,
+    expected: c_int,
+) -> c_int;
 
 pub const IMAGE_JPEG: c_int = 1;
 pub const IMAGE_BITMAP: c_int = 2;
@@ -41,9 +52,16 @@ unsafe extern "C" {
     pub fn libraw_dcraw_clear_mem(img: *mut ProcessedImage);
     pub fn libraw_set_output_bps(lr: *mut LibRawData, value: c_int);
     pub fn libraw_set_bright(lr: *mut LibRawData, value: c_float);
+    pub fn libraw_set_progress_handler(
+        lr: *mut LibRawData,
+        cb: Option<ProgressCallback>,
+        data: *mut c_void,
+    );
     pub fn libraw_close(lr: *mut LibRawData);
 
     // Shim C : champs de `params` sans setter dans l'API C.
     pub fn tri_libraw_set_use_camera_wb(lr: *mut LibRawData, value: c_int);
     pub fn tri_libraw_set_half_size(lr: *mut LibRawData, value: c_int);
+    pub fn tri_libraw_get_flip(lr: *mut LibRawData) -> c_int;
+    pub fn tri_libraw_get_size(lr: *mut LibRawData, width: *mut c_int, height: *mut c_int);
 }

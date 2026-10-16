@@ -42,6 +42,14 @@ let bitmap = raw.render(&RenderOptions::default())?; // développement complet
   l'orientation du boîtier.
 - On peut appeler `thumbnail()` puis `render()` sur le même `RawFile`.
 - **Libération** : `Drop` appelle `libraw_close`, y compris si une étape a échoué.
+- `orientation()` : rotation à appliquer à l'**aperçu embarqué** (`Rotation::Cw90`…), lue
+  dans `sizes.flip`. Le rendu, lui, est déjà pivoté. Les métadonnées du RAW font foi : on
+  décode l'aperçu JPEG *sans* tenir compte de sa propre balise EXIF, puis on applique cette
+  rotation. Sinon, un aperçu qui porte aussi la balise serait tourné deux fois.
+- `size()` : dimensions du rendu pleine résolution, *avant* rotation, disponibles dès
+  l'ouverture. Elles servent à décider si `half_size` suffit pour l'aperçu demandé.
+- `render_cancellable(&options, &cancel)` : comme `render`, mais renvoie
+  `RawError::Cancelled` si le drapeau `AtomicBool` passe à `true` (voir « Annulation »).
 - **Threads** : `RawFile` est `Send` (une instance LibRaw n'est liée à aucun thread, on peut la
   déplacer vers un thread de travail) mais pas `Sync` (deux threads ne doivent pas l'utiliser
   en même temps). Des instances distinctes peuvent travailler en parallèle.
@@ -116,6 +124,30 @@ en pleine résolution occupe ~200 Mo. Lancer plusieurs rendus complets en même 
 pas gagner de temps, au contraire : neuf rendus prennent 5,7 s en série, 18 s sur 4 threads et
 302 s sur un thread par cœur (contention CPU et mémoire). L'extraction des aperçus embarqués
 n'a pas ce problème : elle ne fait aucun calcul.
+
+## Annulation
+
+LibRaw appelle un *callback de progression* (`libraw_set_progress_handler`) entre les étapes
+du traitement ; s'il renvoie une valeur non nulle, le traitement s'arrête avec le code
+`LIBRAW_CANCELLED_BY_CALLBACK`. `render_cancellable` y branche une simple lecture du drapeau.
+Le handler est retiré à la sortie de la fonction quoi qu'il arrive (garde `Drop`), pour ne
+jamais laisser à LibRaw un pointeur vers un drapeau disparu.
+
+**Granularité mesurée** (RAF X-T4, rendu complet) :
+
+| Étape | Instant du rappel |
+|---|---|
+| chargement des données (`LOAD_RAW`) | 0 → 0,23 s |
+| balance des couleurs (`SCALE_COLORS`), pré-interpolation | 0,25 → 0,27 s |
+| *dématriçage X-Trans : aucun rappel* | 0,27 → 3,30 s |
+| conversion RGB (`CONVERT_RGB`) | 3,30 s |
+
+Une annulation demandée pendant le dématriçage prend donc effet à sa fin, soit environ 3 s
+plus tard (le test d'intégration le montre : annulation demandée à 300 ms, effective à
+3,3–3,4 s). C'est sans importance en `half_size` (pas de dématriçage, ~0,3 s en tout) ; pour
+un rendu 1:1 abandonné, le worker termine simplement le bloc en cours. Piste à mesurer si
+besoin : LibRaw peut dématricer le X-Trans en 1 passe au lieu de 3 (paramètre de qualité),
+probablement bien plus vite.
 
 ## Aperçu standard : half_size suffit
 

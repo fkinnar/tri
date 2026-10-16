@@ -4,7 +4,9 @@
 //!   TRI_TEST_RAW=/chemin/vers/photo.RAF cargo test -- --include-ignored
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use tri::raw::{RawError, RawFile, RenderOptions, Thumbnail};
 
@@ -132,4 +134,89 @@ fn rawfile_can_be_moved_to_another_thread() {
     .unwrap()
     .unwrap();
     assert!(bmp.width > 0);
+}
+
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
+fn size_matches_full_render_before_rotation() {
+    let _serial = serial();
+    let mut raw = RawFile::open(sample()).unwrap();
+    let (w, h) = raw.size();
+    let bmp = raw.render(&half()).unwrap();
+    // Le rendu est pivoté : on compare les côtés sans tenir compte de l'ordre.
+    let mut expected = [w / 2, h / 2];
+    let mut actual = [bmp.width, bmp.height];
+    expected.sort();
+    actual.sort();
+    for (a, e) in actual.iter().zip(expected) {
+        assert!(
+            a.abs_diff(e) <= 2,
+            "rendu {actual:?}, attendu ≈ {expected:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
+fn oriented_thumbnail_matches_render_orientation() {
+    let _serial = serial();
+    let mut raw = RawFile::open(sample()).unwrap();
+    let rotation = raw.orientation();
+    let thumb = match raw.thumbnail().unwrap() {
+        Thumbnail::Jpeg(bytes) => {
+            let img = image::load_from_memory(&bytes).unwrap().into_rgb8();
+            tri::bitmap::Bitmap {
+                width: img.width(),
+                height: img.height(),
+                data: img.into_raw(),
+            }
+        }
+        Thumbnail::Bitmap(bmp) => bmp,
+    }
+    .rotate(rotation);
+    let render = raw.render(&half()).unwrap();
+    let portrait = |w: u32, h: u32| h > w;
+    assert_eq!(
+        portrait(thumb.width, thumb.height),
+        portrait(render.width, render.height),
+        "aperçu {}x{} pivoté de {rotation:?}, rendu {}x{}",
+        thumb.width,
+        thumb.height,
+        render.width,
+        render.height
+    );
+}
+
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
+fn render_is_cancelled_when_flag_already_set() {
+    let _serial = serial();
+    let flag = AtomicBool::new(true);
+    let res = RawFile::open(sample())
+        .unwrap()
+        .render_cancellable(&RenderOptions::default(), &flag);
+    assert!(matches!(res, Err(RawError::Cancelled)));
+}
+
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
+fn render_can_be_cancelled_from_another_thread() {
+    let _serial = serial();
+    let mut raw = RawFile::open(sample()).unwrap();
+    let flag = AtomicBool::new(false);
+    let start = Instant::now();
+    let res = std::thread::scope(|s| {
+        s.spawn(|| {
+            std::thread::sleep(Duration::from_millis(300));
+            flag.store(true, Ordering::Relaxed);
+        });
+        raw.render_cancellable(&RenderOptions::default(), &flag)
+    });
+    let elapsed = start.elapsed();
+    assert!(matches!(res, Err(RawError::Cancelled)), "{:?}", res.err());
+    println!("rendu complet annulé après {elapsed:?}");
+
+    // Le handle reste utilisable après une annulation, sur une nouvelle instance.
+    let again = RawFile::open(sample()).unwrap().render(&half()).unwrap();
+    assert!(again.width > 0);
 }

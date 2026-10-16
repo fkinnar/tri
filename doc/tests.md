@@ -53,6 +53,7 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 ### `bitmap` (unitaires, `src/bitmap.rs`)
 
 - lecture d'un pixel, `None` hors de l'image ;
+- `rotate` : position de chaque pixel pour 90°, 180° et 270°, quatre quarts de tour = identité ;
 - `fit` : proportions gardées (paysage et portrait), jamais d'agrandissement (`0` = pas de
   limite), couleur unie préservée, côté minuscule arrondi à au moins 1 pixel.
 
@@ -118,4 +119,7 @@ Sans fichier RAW : fichier absent, fichier non RAW, chemin non ASCII transmis in
 
 Avec `TRI_TEST_RAW` : aperçu JPEG valide (marqueur `FF D8`), rendu RGB8 cohérent et non noir,
 aperçu puis rendu sur le même handle, effet réel de l'option balance des blancs (vérifie le
-shim C), `half_size` divise les dimensions par deux, rendu dans un autre thread.
+shim C), `half_size` divise les dimensions par deux, rendu dans un autre thread, `size()`
+cohérent avec le rendu, aperçu embarqué pivoté par `orientation()` dans le même sens que le
+rendu, annulation (drapeau déjà levé, puis levé depuis un autre thread pendant un rendu
+complet).
