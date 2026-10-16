@@ -82,6 +82,13 @@ puis on vérifie la netteté des candidates **à 100 %**.
     ajustée, son 1:1, puis les voisines) : envoyées dans un autre ordre, un 100 % (~4,5 s,
     non interruptible) passait devant le rendu ajusté (~0,5 s) et le JPEG restait affiché
     plusieurs secondes.
+  - Mode RAW : un 100 % RAW (~4,5 s, que LibRaw ne sait pas interrompre) n'est demandé
+    qu'après **0,4 s passées sur l'image** (`FULL_RAW_DWELL`). Sans ce délai, en enchaînant
+    vite les flèches, chaque image traversée pouvait lancer son 100 %, et le rendu RAW de
+    l'image où l'on s'arrêtait attendait jusqu'à ~5 s derrière un calcul devenu inutile (le
+    JPEG restait affiché : retour du 16/10/2026). Mesuré après correction : aucune demande
+    de 100 % pour les images traversées, rendu RAW de l'image d'arrivée en 0,8 s. Le rendu
+    ajusté (~0,5 s) et le 1:1 du JPEG (rapide) restent demandés immédiatement.
   - Mode RAW : le préchargement passe par l'unique worker LibRaw (~4,5 s par 1:1). En
     sautant une image, le 1:1 voulu attend la fin de celui de la voisine déjà commencé (le
     dématriçage X-Trans ne s'interrompt pas) : jusqu'à ~6 s mesurées.

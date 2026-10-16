@@ -36,6 +36,10 @@ const TEXTURE_CAPACITY: usize = 600;
 /// Temps maximal passé à charger des vignettes par image affichée : au-delà, on reprend à
 /// l'image suivante pour ne pas figer l'interface.
 const LOAD_BUDGET: Duration = Duration::from_millis(8);
+/// Temps à passer sur une image avant de lancer son 100 % RAW (~4,5 s de calcul, que LibRaw
+/// ne sait pas interrompre) : en enchaînant vite les flèches, les images seulement
+/// traversées ne lancent pas un calcul qui bloquerait ensuite celui de l'image regardée.
+const FULL_RAW_DWELL: Duration = Duration::from_millis(400);
 /// Grandes textures (aperçus, 1:1) gardées en mémoire : l'image affichée, ses voisines et
 /// quelques images récentes. Un 1:1 de 26 Mpx occupe ~100 Mo de mémoire graphique.
 const BIG_CAPACITY: usize = 8;
@@ -157,6 +161,8 @@ pub struct TriApp {
     /// Taille (pixels) du dernier 1:1 affiché, par niveau : sert à afficher l'aperçu d'une
     /// image voisine déjà à l'échelle 1:1 en attendant son propre 1:1.
     last_zoom_size: std::collections::HashMap<Level, Vec2>,
+    /// Moment où l'image sélectionnée l'a été (attente avant un 100 % RAW).
+    focus_since: Instant,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -212,6 +218,7 @@ impl TriApp {
             view_waiting: false,
             requested: HashSet::new(),
             last_shown: (usize::MAX, None),
+            focus_since: Instant::now(),
             last_zoom_size: std::collections::HashMap::new(),
         };
         app.apply_filter();
@@ -434,6 +441,7 @@ impl TriApp {
             return;
         }
         self.selected = index;
+        self.focus_since = Instant::now();
         if let Some(engine) = &self.engine {
             engine.scheduler.set_focus(index);
         }
@@ -479,7 +487,12 @@ impl TriApp {
                 wanted.push((rank == 0, i, Level::Standard));
             }
             if self.zoom.is_some() {
-                wanted.push((rank == 0, i, view::zoom_level(kind, self.source)));
+                let level = view::zoom_level(kind, self.source);
+                // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
+                let expensive = level == Level::Full && kind == MediaKind::Raw;
+                if !expensive || self.focus_since.elapsed() >= FULL_RAW_DWELL {
+                    wanted.push((rank == 0, i, level));
+                }
             }
         }
         // Image affichée d'abord (ajusté puis 1:1), voisines ensuite.
@@ -559,6 +572,13 @@ impl TriApp {
         let current = self.selected;
         // Demandes au moteur (dédoublonnées : seules les nouvelles partent).
         self.request_zoom();
+        // Repasser ici à la fin de l'attente, pour lancer le 100 % RAW.
+        if self.zoom.is_some() && self.source == Source::Raw {
+            let left = FULL_RAW_DWELL.saturating_sub(self.focus_since.elapsed());
+            if !left.is_zero() {
+                ctx.request_repaint_after(left);
+            }
+        }
         let Some(engine) = &self.engine else { return };
         let neighbours = [current + 1, current.wrapping_sub(1)]
             .into_iter()

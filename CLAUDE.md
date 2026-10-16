@@ -309,7 +309,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       Lenteur du zoom JPEG non reproduite en `--release` (0,4 s) ; confirmé disparu par
       l'utilisateur. Mode RAW zoomé : le JPEG s'affichait plusieurs secondes en changeant
       d'image (100 % passé devant le rendu ajusté) ; corrigé par l'ordre des priorités et
-      d'envoi des demandes, et la mention « rendu RAW en cours ».
+      d'envoi des demandes, et la mention « rendu RAW en cours ». Navigation rapide en mode
+      RAW zoomé : 100 % RAW demandé seulement après 0,4 s sur l'image (les calculs lancés
+      pour des images seulement traversées bloquaient l'image d'arrivée). Si ça ne suffit
+      pas : piste d'un worker LibRaw dédié aux 100 %, séparé des rendus ajustés (remettrait
+      en cause « un seul worker LibRaw », à discuter).
 - [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
       `thumbnails_first`, profil de raccourcis, thème).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
