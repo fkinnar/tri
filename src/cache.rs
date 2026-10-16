@@ -30,16 +30,19 @@ pub enum Level {
     Embedded,
     /// Aperçu plein écran, à la taille configurée (rendu RAW, ou image plate décodée).
     Standard,
+    /// JPEG embarqué du RAW à sa taille d'origine (1:1 du JPEG boîtier), à la demande.
+    EmbeddedFull,
     /// Rendu complet (zoom 100 %).
     Full,
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 4] = [
+    pub const ALL: [Level; 5] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
+        Level::EmbeddedFull,
         Level::Full,
     ];
 
@@ -47,6 +50,7 @@ impl Level {
         match self {
             Self::Thumbnail => "thumbnail",
             Self::Embedded => "embedded",
+            Self::EmbeddedFull => "embedded-full",
             Self::Standard => "standard",
             Self::Full => "full",
         }
@@ -196,7 +200,7 @@ impl Cache {
         let result = (|| {
             // Couleur à pleine résolution pour le 1:1, 4:2:0 ailleurs (plus compact).
             let chroma = match key.level {
-                Level::Full => Chroma::Full,
+                Level::Full | Level::EmbeddedFull => Chroma::Full,
                 _ => Chroma::Half,
             };
             let bytes = jpeg::encode(bitmap, JPEG_QUALITY, chroma).map_err(io::Error::other)?;

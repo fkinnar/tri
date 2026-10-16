@@ -131,6 +131,21 @@ pub struct Config {
     /// les aperçus standard de fond attendent la fin des deux (l'image affichée et ses
     /// voisines passent toujours). Mesures dans `doc/scheduler.md`.
     pub thumbnails_first: bool,
+    /// Rendus RAW (aperçus standard des RAW) : tout le dossier en fond, ou seulement à la
+    /// demande ([`Scheduler::request`]).
+    pub raw_previews: RawPreviews,
+}
+
+/// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
+/// plates sont toujours calculés en fond : c'est leur seul aperçu plein écran.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RawPreviews {
+    /// Tout le dossier en fond (après vignettes et aperçus boîtier).
+    #[default]
+    Background,
+    /// Seulement à la demande : l'interface les demande pour l'image affichée et ses
+    /// voisines quand l'utilisateur regarde le RAW.
+    OnDemand,
 }
 
 impl Default for Config {
@@ -139,6 +154,7 @@ impl Default for Config {
         Self {
             light_workers: (cores / 2).max(1),
             thumbnails_first: true,
+            raw_previews: RawPreviews::default(),
         }
     }
 }
@@ -146,12 +162,24 @@ impl Default for Config {
 /// Niveaux dont l'avancement est suivi (calculés en fond) ; `Full` ne l'est qu'à la demande.
 const TRACKED: [Level; 3] = [Level::Thumbnail, Level::Embedded, Level::Standard];
 
-/// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW.
-fn background_levels(kind: MediaKind) -> &'static [Level] {
-    match kind {
-        MediaKind::Raw => &TRACKED,
-        MediaKind::Flat => &[Level::Thumbnail, Level::Standard],
+/// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW, et
+/// leur rendu RAW dépend de la politique.
+fn background_levels(kind: MediaKind, raw_previews: RawPreviews) -> &'static [Level] {
+    match (kind, raw_previews) {
+        (MediaKind::Raw, RawPreviews::Background) => &TRACKED,
+        (MediaKind::Raw, RawPreviews::OnDemand) => &[Level::Thumbnail, Level::Embedded],
+        (MediaKind::Flat, _) => &[Level::Thumbnail, Level::Standard],
     }
+}
+
+/// Niveaux « 1:1 » : gardés seulement pour l'image affichée.
+fn is_zoom_level(level: Level) -> bool {
+    matches!(level, Level::Full | Level::EmbeddedFull)
+}
+
+/// Vrai si `index` est l'image affichée ou l'une de ses voisines.
+fn is_near(index: usize, focus: usize) -> bool {
+    index.abs_diff(focus) <= 1
 }
 
 /// Une tâche : un fichier (par sa position) et un niveau.
@@ -177,7 +205,7 @@ const STANDARD_BACKGROUND: u8 = 5;
 ///    affichée (en avant d'abord à distance égale).
 fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
     let (near_class, background_class) = match level {
-        Level::Full => return (0, 0),
+        Level::Full | Level::EmbeddedFull => return (0, 0),
         Level::Thumbnail => return (3, index),
         Level::Embedded => (1, EMBEDDED_BACKGROUND),
         Level::Standard => (2, STANDARD_BACKGROUND),
@@ -208,6 +236,10 @@ struct Running {
 #[derive(Default)]
 struct State {
     thumbnails_first: bool,
+    raw_previews: RawPreviews,
+    /// Tâches demandées hors du travail de fond ([`Scheduler::request`]) : elles ne
+    /// comptent pas dans la progression.
+    on_demand: HashSet<Job>,
     generation: u64,
     files: Vec<MediaFile>,
     focus: Option<usize>,
@@ -311,6 +343,7 @@ impl Scheduler {
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 thumbnails_first: config.thumbnails_first,
+                raw_previews: config.raw_previews,
                 ..State::default()
             }),
             work: Condvar::new(),
@@ -349,11 +382,13 @@ impl Scheduler {
         let mut s = self.shared.lock();
         s.cancel_running(|_| false);
         s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
+        s.on_demand.clear();
+        let policy = s.raw_previews;
         s.generation += 1;
         s.focus = None;
         s.pending = (0..files.len())
             .flat_map(|i| {
-                background_levels(files[i].kind)
+                background_levels(files[i].kind, policy)
                     .iter()
                     .map(move |&l| (i, l))
             })
@@ -361,7 +396,7 @@ impl Scheduler {
         let total = |level: Level| {
             files
                 .iter()
-                .filter(|f| background_levels(f.kind).contains(&level))
+                .filter(|f| background_levels(f.kind, policy).contains(&level))
                 .count()
         };
         s.progress = TRACKED.map(|l| Progress {
@@ -383,20 +418,53 @@ impl Scheduler {
             return;
         }
         s.focus = Some(index);
-        s.pending.retain(|&(i, l)| l != Level::Full || i == index);
-        s.cancel_running(|r| r.job.1 != Level::Full || r.job.0 == index);
+        let keep = |&(i, l): &Job| {
+            if is_zoom_level(l) {
+                i == index
+            } else {
+                is_near(i, index)
+            }
+        };
+        let dropped: Vec<Job> = s
+            .on_demand
+            .iter()
+            .filter(|j| !keep(j) && s.pending.contains(j))
+            .copied()
+            .collect();
+        for job in dropped {
+            s.pending.remove(&job);
+            s.on_demand.remove(&job);
+        }
+        s.cancel_running(|r| !is_zoom_level(r.job.1) || r.job.0 == index);
         drop(s);
         self.shared.work.notify_all();
     }
 
-    /// Demande le rendu 1:1 de l'image affichée (sans effet sans image affichée).
-    pub fn request_full(&self) {
+    /// Demande une image hors du travail de fond : 1:1 (`Full`, `EmbeddedFull`) de l'image
+    /// affichée, ou rendu RAW (`Standard`) de l'image affichée et de ses voisines en
+    /// politique [`RawPreviews::OnDemand`]. Ne compte pas dans la progression ; signalée par
+    /// `Ready` (immédiatement si déjà en cache) ou `Failed`.
+    ///
+    /// Ignorée sans image affichée, si `index` en est trop loin (1:1 : l'image affichée
+    /// seulement ; autres niveaux : elle et ses voisines), ou si la tâche est déjà prévue.
+    pub fn request(&self, index: usize, level: Level) {
         let mut s = self.shared.lock();
         let Some(focus) = s.focus else { return };
-        let already = s.running.iter().any(|r| r.job == (focus, Level::Full));
-        if !already {
-            s.pending.insert((focus, Level::Full));
+        let allowed = if is_zoom_level(level) {
+            index == focus
+        } else {
+            is_near(index, focus)
+        };
+        let job = (index, level);
+        if !allowed
+            || index >= s.files.len()
+            || s.pending.contains(&job)
+            || s.running.iter().any(|r| r.job == job)
+        {
+            return;
         }
+        s.pending.insert(job);
+        s.on_demand.insert(job);
         drop(s);
         self.shared.work.notify_all();
     }
@@ -535,6 +603,7 @@ fn finish(
 ) -> Vec<Event> {
     let generation = s.generation;
     let path = file.path;
+    let on_demand = s.on_demand.remove(&(index, level));
     let mut events = match result {
         Ok(()) => vec![Event::Ready {
             generation,
@@ -552,7 +621,11 @@ fn finish(
             error,
         }],
     };
-    if let Some(i) = TRACKED.iter().position(|&l| l == level) {
+    if let Some(i) = TRACKED
+        .iter()
+        .position(|&l| l == level)
+        .filter(|_| !on_demand)
+    {
         s.progress[i].done += 1;
         events.push(Event::Progress {
             generation,
@@ -625,14 +698,32 @@ mod tests {
 
     #[test]
     fn embedded_previews_only_for_raw_files() {
-        assert!(background_levels(MediaKind::Raw).contains(&Level::Embedded));
-        assert!(!background_levels(MediaKind::Flat).contains(&Level::Embedded));
+        use RawPreviews::*;
+        assert!(background_levels(MediaKind::Raw, Background).contains(&Level::Embedded));
+        assert!(!background_levels(MediaKind::Flat, Background).contains(&Level::Embedded));
         for kind in [MediaKind::Raw, MediaKind::Flat] {
-            assert!(
-                !background_levels(kind).contains(&Level::Full),
-                "1:1 à la demande"
-            );
+            for policy in [Background, OnDemand] {
+                let levels = background_levels(kind, policy);
+                assert!(!levels.contains(&Level::Full), "1:1 à la demande");
+                assert!(!levels.contains(&Level::EmbeddedFull), "1:1 à la demande");
+            }
         }
+    }
+
+    #[test]
+    fn on_demand_policy_keeps_raw_renders_out_of_the_background() {
+        use RawPreviews::*;
+        assert!(background_levels(MediaKind::Raw, Background).contains(&Level::Standard));
+        assert!(!background_levels(MediaKind::Raw, OnDemand).contains(&Level::Standard));
+        assert!(
+            background_levels(MediaKind::Flat, OnDemand).contains(&Level::Standard),
+            "les images plates gardent leur aperçu"
+        );
+        assert!(
+            !is_heavy(MediaKind::Raw, Level::EmbeddedFull),
+            "1:1 du JPEG : léger"
+        );
+        assert_eq!(priority((3, Level::EmbeddedFull), Some(3)), (0, 0));
     }
 
     #[test]

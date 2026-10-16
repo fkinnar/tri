@@ -150,6 +150,14 @@ de fond ; les aperçus 1:1 générés à la demande.
 - **Usage du 100 %** (16/10/2026) : présélection des candidates, puis vérification de la
   netteté à 100 % quand il en reste peu. Le zoom et la zone affichée sont conservés d'une
   image à l'autre pour comparer au même endroit.
+- **Source et échelle indépendantes** (décidé le 16/10/2026) : `b` = source (JPEG boîtier
+  par défaut / rendu RAW, reste active d'une image à l'autre), `z` = échelle (ajusté / 1:1).
+  Zoomer ne change jamais de source. En JPEG, le 1:1 est le JPEG embarqué à sa taille
+  (niveau `EmbeddedFull`, étiqueté « 71 % du capteur ») ; en RAW, le rendu complet à 100 %.
+  Le rendu RAW plat est voulu : c'est l'intérêt de voir les données brutes.
+- **Rendus RAW à la demande dans l'interface** (`RawPreviews::OnDemand`) : rien en mode
+  JPEG ; en mode RAW, l'image affichée et ses voisines. Calcul de tout le dossier en fond
+  possible en option (`RawPreviews::Background`, à exposer dans la configuration).
   Motif : les rendus RAW ne peuvent pas être accélérés (décompression du RAF déjà
   parallélisée par LibRaw ; aperçus plus petits : −21 % seulement ; rendus en parallèle :
   plus lent). Mesures dans `doc/scheduler.md`.
@@ -226,6 +234,16 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
 
+## Idées pour plus tard (non urgentes, notées pour mémoire)
+
+- **Quelques réglages rapides** sur le rendu RAW (exposition, contraste…), à terme. Pas le
+  but initial : `tri` ne doit pas devenir un logiciel de développement ; ne pas remplacer
+  les outils spécialisés.
+- **Plugin darktable** : appliquer un préréglage darktable à une image. Piste la plus simple
+  à vérifier le moment venu : `darktable-cli <RAW> <sortie> --style <nom>` (application
+  d'un style en ligne de commande) ; darktable expose aussi une API Lua. Serait un plugin
+  au sens du `CLAUDE.md` (statique), pas une fonction du cœur.
+
 ## Préférences de travail à respecter
 
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
@@ -280,9 +298,7 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - [x] Plein écran : JPEG boîtier par défaut, bascule vers le rendu RAW (`b`), étiquette de ce
       qui est affiché, navigation gauche/droite avec préchargement n±1, 100 % (`z` ou
       double-clic) conservé d'une image à l'autre, retour à la grille (Échap).
-- [ ] À évaluer : le rendu RAW de LibRaw est nettement plus terne que le JPEG boîtier (pas
-      de courbe de contraste ni de profil boîtier) ; une courbe de base rendrait la
-      comparaison plus parlante, sans prétendre imiter le boîtier.
+- [x] Source et échelle indépendantes, 1:1 du JPEG boîtier, rendus RAW à la demande.
 - [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
       `thumbnails_first`, profil de raccourcis, thème).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle

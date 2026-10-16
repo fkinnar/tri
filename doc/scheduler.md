@@ -12,9 +12,17 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   boîtier de l'image affichée, de n+1, de n-1 (presque instantanés) > leurs aperçus standard
   > vignettes dans l'ordre du dossier > autres aperçus boîtier > autres aperçus standard,
   par distance (en avant d'abord).
-- **API** : `set_folder(files) -> génération`, `set_focus(index)`, `request_full()`,
-  `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`. `Drop` annule et arrête
-  les threads.
+- **API** : `set_folder(files) -> génération`, `set_focus(index)`,
+  `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
+  `Drop` annule et arrête les threads.
+- **Demandes hors travail de fond** (`request`) : 1:1 (`Full`, `EmbeddedFull`) de l'image
+  affichée, et rendus RAW (`Standard`) de l'image affichée et de ses voisines. Elles ne
+  comptent pas dans la progression (`on_demand`). Changer d'image abandonne celles qui ne
+  sont plus proches (et annule un 1:1 en cours pour une autre image). Une demande déjà en
+  cache donne simplement un `Ready`.
+- **`Config::raw_previews`** : `Background` (défaut : rendus RAW de tout le dossier en
+  fond, après vignettes et aperçus boîtier) ou `OnDemand` (aucun rendu RAW en fond ; utilisé
+  par l'interface). Les aperçus des images plates sont toujours calculés en fond.
 - **Événements** : `Ready`, `Failed`, `Progress`, tous avec la génération du dossier.
   Garanties du callback :
   - appelé **hors du verrou** d'état : il peut rappeler le scheduler ;

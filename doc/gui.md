@@ -34,20 +34,34 @@ Pensé pour le tri : en passe rapide, le **JPEG du boîtier** sert de base (disp
 quelques secondes pour tout le dossier) pendant que les rendus RAW se calculent derrière ;
 puis on vérifie la netteté des candidates **à 100 %**.
 
-- **Source** : JPEG boîtier par défaut, `b` pour basculer vers le rendu RAW (et retour). Si
-  la source voulue n'est pas encore calculée, la meilleure disponible est affichée (l'autre
-  source, puis la vignette agrandie). Les images plates n'ont qu'une source.
+- **Deux réglages indépendants** (choix du 16/10/2026) : `b` choisit la **source** (JPEG
+  boîtier par défaut, ou rendu RAW), `z` choisit l'**échelle** (ajusté ou 1:1). Zoomer ne
+  change jamais de source, donc jamais le « look » de l'image ; `b` en restant zoomé passe
+  d'un 1:1 à l'autre au même endroit. La source choisie reste active d'une image à l'autre.
+  Si la source voulue n'est pas encore calculée, la meilleure disponible est affichée
+  (l'autre source, puis la vignette agrandie). Les images plates n'ont qu'une source.
+- **Rendus RAW à la demande** : en mode JPEG, aucun rendu RAW n'est calculé, la machine
+  reste libre. En mode RAW, l'interface demande au scheduler le rendu de l'image affichée
+  et de ses voisines (`Scheduler::request`, politique `RawPreviews::OnDemand`) ; un premier
+  `b` coûte ~0,5 s. Le calcul de tout le dossier en fond reste possible
+  (`RawPreviews::Background`, défaut du moteur et de la démo en ligne de commande).
 - **Ce qui est affiché est toujours écrit** en haut à gauche : position, nom, « JPEG
   boîtier », « Rendu RAW », « Rendu RAW · 100 % », « Vignette (aperçu en cours de calcul) »,
   et « calcul du 100 % en cours » le cas échéant. Le JPEG boîtier reflète les réglages du
   boîtier (contraste, simulation de film) ; le rendu RAW de LibRaw est plus neutre, donc
   plus terne : c'est attendu.
-- **100 %** : `z` (centré), ou double-clic (le point cliqué reste sous le curseur). Le
-  rendu complet est demandé au scheduler (~4–5 s pour un RAF X-T4) ; en attendant, l'image
-  reste ajustée avec la mention « calcul du 100 % en cours ». Glisser avec la souris déplace
-  l'image, sans jamais laisser de bord vide.
+- **1:1** : `z` (centré), ou double-clic (le point cliqué reste sous le curseur). Glisser
+  avec la souris déplace l'image, sans jamais laisser de bord vide.
+  - en JPEG : le JPEG embarqué à sa taille d'origine, ~70 ms. Étiquette honnête : « JPEG
+    boîtier · 1:1 (71 % du capteur) » (4416 px sur 6240 pour un X-T4). Netteté et débruitage
+    du boîtier : répond à « est-ce assez net pour ce que j'en ferai ? » ;
+  - en RAW : le rendu complet, ~4–5 s, « Rendu RAW · 100 % ». Répond à « la mise au point
+    est-elle vraiment sur l'œil ? ».
+  En attendant, l'image reste ajustée avec la mention « chargement du 1:1 » ou « calcul du
+  100 % en cours ». Le cadrage du JPEG embarqué peut différer de quelques pixels de celui du
+  RAW ; la position relative est gardée, donc la même zone à quelques pixels près.
 - **Navigation** : ←/→ (h/l), Début/Fin (g/Maj+G). **En 100 %, le zoom et la zone affichée
-  sont conservés d'une image à l'autre**, et le 100 % de la nouvelle image est demandé :
+  sont conservés d'une image à l'autre**, et le 1:1 de la nouvelle image est demandé :
   on compare la netteté de plusieurs vues au même endroit. Échap revient à la grille (sur
   l'image affichée).
 - **Fluidité** : les grandes images sont décodées par un thread de chargement
@@ -157,7 +171,8 @@ temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre et se 
 `?` (avec ou sans Maj), Échap la ferme, elle est modale, et elle affiche les libellés et
 non les identifiants. Plein écran : ouverture par Entrée et retour par Échap, navigation
 image par image (haut/bas sans effet), bascule de source, aperçu standard réellement chargé
-et affiché, 100 % réellement calculé puis affiché, conservé à l'image suivante. Ces tests
+et affiché, 1:1 réellement calculé puis affiché, conservé à l'image suivante, zoom conservé
+en basculant de source. Ces tests
 ont trouvé un glyphe manquant (« ⏴ ») dans l'aide, et l'absence de fermeture par Échap.
 
 Logique du plein écran (`view.rs`, unitaires) : choix de la source et repli sur ce qui est

@@ -27,16 +27,27 @@ impl Source {
     }
 }
 
-/// Niveau à afficher, parmi ceux disponibles (`have`). En 100 % (`zoomed`), le rendu
-/// complet s'il est prêt ; sinon la source préférée, puis l'autre, puis la vignette.
+/// Niveau du 1:1 pour une source : le JPEG embarqué à sa taille d'origine, ou le rendu RAW
+/// complet. Pour une image plate, l'image elle-même.
+pub fn zoom_level(kind: MediaKind, source: Source) -> Level {
+    match (kind, source) {
+        (MediaKind::Raw, Source::Embedded) => Level::EmbeddedFull,
+        _ => Level::Full,
+    }
+}
+
+/// Niveau à afficher, parmi ceux disponibles (`have`). En 1:1 (`zoomed`), le 1:1 de la
+/// source choisie s'il est prêt ; sinon la source préférée ajustée, puis l'autre, puis la
+/// vignette. Source et échelle sont indépendantes : zoomer ne change jamais de source.
 pub fn pick(
     kind: MediaKind,
     preferred: Source,
     zoomed: bool,
     have: impl Fn(Level) -> bool,
 ) -> Option<Level> {
-    if zoomed && have(Level::Full) {
-        return Some(Level::Full);
+    let zoom = zoom_level(kind, preferred);
+    if zoomed && have(zoom) {
+        return Some(zoom);
     }
     let order: &[Level] = match (kind, preferred) {
         (MediaKind::Flat, _) => &[Level::Standard, Level::Thumbnail],
@@ -53,6 +64,7 @@ pub fn label(kind: MediaKind, level: Level) -> &'static str {
         (MediaKind::Raw, Level::Embedded) => "JPEG boîtier",
         (MediaKind::Raw, Level::Standard) => "Rendu RAW",
         (MediaKind::Raw, Level::Full) => "Rendu RAW · 100 %",
+        (MediaKind::Raw, Level::EmbeddedFull) => "JPEG boîtier · 1:1",
         (MediaKind::Flat, Level::Full) => "Image · 100 %",
         (MediaKind::Flat, _) => "Image",
     }
@@ -135,8 +147,14 @@ mod tests {
             Some(Full)
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Embedded, true, have(&all)),
-            Some(Full)
+            pick(
+                MediaKind::Raw,
+                Source::Embedded,
+                true,
+                have(&[Embedded, EmbeddedFull, Full])
+            ),
+            Some(EmbeddedFull),
+            "zoomer en JPEG reste en JPEG"
         );
     }
 
@@ -158,10 +176,20 @@ mod tests {
                 MediaKind::Raw,
                 Source::Embedded,
                 true,
-                have(&[Thumbnail, Standard])
+                have(&[Thumbnail, Standard, Full])
             ),
             Some(Standard),
-            "100 % pas encore prêt, pas d'aperçu boîtier"
+            "1:1 du JPEG pas prêt, pas d'aperçu boîtier : on ne bascule pas sur le RAW 100 %"
+        );
+        assert_eq!(
+            pick(
+                MediaKind::Raw,
+                Source::Raw,
+                true,
+                have(&[Embedded, Standard])
+            ),
+            Some(Standard),
+            "RAW 100 % pas encore prêt : rendu RAW ajusté"
         );
         assert_eq!(
             pick(MediaKind::Raw, Source::Embedded, false, have(&[Thumbnail])),
@@ -195,6 +223,16 @@ mod tests {
         assert_eq!(label(MediaKind::Raw, Level::Standard), "Rendu RAW");
         assert_eq!(label(MediaKind::Flat, Level::Standard), "Image");
         assert!(label(MediaKind::Raw, Level::Full).contains("100 %"));
+        assert!(
+            !label(MediaKind::Raw, Level::EmbeddedFull).contains("100 %"),
+            "honnête"
+        );
+        assert_eq!(
+            zoom_level(MediaKind::Raw, Source::Embedded),
+            Level::EmbeddedFull
+        );
+        assert_eq!(zoom_level(MediaKind::Raw, Source::Raw), Level::Full);
+        assert_eq!(zoom_level(MediaKind::Flat, Source::Embedded), Level::Full);
         assert_eq!(Source::Embedded.toggled(), Source::Raw);
     }
 

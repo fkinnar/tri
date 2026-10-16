@@ -16,7 +16,7 @@ use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaFile, MediaKind};
 use tri::preview::{self, Sizes};
-use tri::scheduler::{CachedPreviews, Config, Event, Progress, Scheduler};
+use tri::scheduler::{CachedPreviews, Config, Event, Progress, RawPreviews, Scheduler};
 
 use crate::actions::{Action, Keymap};
 use crate::grid::{self, Layout};
@@ -52,6 +52,8 @@ enum Mode {
 struct Big {
     texture: TextureHandle,
     original: Vec2,
+    /// 1:1 du JPEG boîtier : part du capteur qu'il représente.
+    sensor_ratio: Option<f32>,
 }
 
 /// Défilement demandé. Résolu au dessin de la grille, quand la largeur (donc le nombre de
@@ -78,6 +80,7 @@ struct Status {
     thumbnail: Avail,
     embedded: Avail,
     standard: Avail,
+    embedded_full: Avail,
     full: Avail,
 }
 
@@ -143,6 +146,9 @@ pub struct TriApp {
     missing: HashSet<(PathBuf, Level)>,
     /// Plein écran : l'image voulue n'est pas encore affichée (pour la capture automatique).
     view_waiting: bool,
+    /// Demandes en cours auprès du scheduler (1:1, rendus RAW à la demande) : ne pas les
+    /// répéter à chaque image affichée.
+    requested: HashSet<(PathBuf, Level)>,
 }
 
 impl TriApp {
@@ -192,6 +198,7 @@ impl TriApp {
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
+            requested: HashSet::new(),
         };
         app.apply_filter();
         app
@@ -207,6 +214,7 @@ impl TriApp {
             .flatten()
             .collect();
         self.status = vec![Status::default(); self.files.len()];
+        self.requested.clear();
         self.progress = [Progress::default(); 3];
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path {
@@ -246,7 +254,12 @@ impl TriApp {
             cache: cache.clone(),
             sizes,
         };
-        let scheduler = Scheduler::new(producer, Config::default(), move |event| {
+        // Rendus RAW à la demande : en mode JPEG boîtier, la machine reste libre.
+        let config = Config {
+            raw_previews: RawPreviews::OnDemand,
+            ..Config::default()
+        };
+        let scheduler = Scheduler::new(producer, config, move |event| {
             let _ = tx.send(event);
             repaint.request_repaint();
         });
@@ -279,6 +292,7 @@ impl TriApp {
                     // Prête à nouveau (recalculée) : on peut la redemander au chargeur.
                     if let Some(f) = self.files.get(index) {
                         self.missing.remove(&(f.path.clone(), level));
+                        self.requested.remove(&(f.path.clone(), level));
                     }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
@@ -288,7 +302,12 @@ impl TriApp {
                     level,
                     error,
                     ..
-                } if g == generation => set(&mut self.status, index, level, Avail::Failed(error)),
+                } if g == generation => {
+                    if let Some(f) = self.files.get(index) {
+                        self.requested.remove(&(f.path.clone(), level));
+                    }
+                    set(&mut self.status, index, level, Avail::Failed(error))
+                }
                 Event::Progress {
                     generation: g,
                     level,
@@ -348,14 +367,18 @@ impl TriApp {
                     self.mode = Mode::View;
                 }
             }
-            Action::ToggleSource => self.source = self.source.toggled(),
+            Action::ToggleSource => {
+                // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
+                self.source = self.source.toggled();
+                self.request_zoom();
+            }
             Action::ToggleZoom => {
                 if self.mode == Mode::View {
                     self.zoom = match self.zoom {
                         Some(_) => None,
                         None => Some(vec2(0.5, 0.5)),
                     };
-                    self.request_full();
+                    self.request_zoom();
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -386,13 +409,27 @@ impl TriApp {
             engine.scheduler.set_focus(index);
         }
         self.reveal = Some(Reveal::Minimal);
-        self.request_full();
+        self.request_zoom();
     }
 
-    /// En 100 %, demande le rendu complet de l'image affichée (sans effet sinon).
-    fn request_full(&self) {
-        if let (Some(_), Some(engine)) = (self.zoom, &self.engine) {
-            engine.scheduler.request_full();
+    /// Demande une image au scheduler, une seule fois tant qu'elle n'est pas arrivée.
+    fn request(&mut self, index: usize, level: Level) {
+        if self.ready(index, level) {
+            return;
+        }
+        let key = (self.files[index].path.clone(), level);
+        if let Some(engine) = &self.engine
+            && self.requested.insert(key)
+        {
+            engine.scheduler.request(index, level);
+        }
+    }
+
+    /// En 1:1, demande le 1:1 de l'image affichée pour la source choisie (sans effet sinon).
+    fn request_zoom(&mut self) {
+        if self.zoom.is_some() && self.mode == Mode::View && !self.files.is_empty() {
+            let level = view::zoom_level(self.files[self.selected].kind, self.source);
+            self.request(self.selected, level);
         }
     }
 
@@ -403,6 +440,7 @@ impl TriApp {
             Level::Thumbnail => &s.thumbnail,
             Level::Embedded => &s.embedded,
             Level::Standard => &s.standard,
+            Level::EmbeddedFull => &s.embedded_full,
             Level::Full => &s.full,
         };
         *avail == Avail::Ready
@@ -433,7 +471,15 @@ impl TriApp {
                         TextureOptions::LINEAR,
                     );
                     let original = vec2(loaded.original[0] as f32, loaded.original[1] as f32);
-                    self.big.insert(key, Big { texture, original });
+                    let sensor_ratio = loaded.sensor_ratio;
+                    self.big.insert(
+                        key,
+                        Big {
+                            texture,
+                            original,
+                            sensor_ratio,
+                        },
+                    );
                 }
                 None => {
                     self.missing.insert(key);
@@ -445,6 +491,15 @@ impl TriApp {
         }
         let n = self.files.len();
         let current = self.selected;
+        // Mode RAW : rendus de l'image affichée et de ses voisines, à la demande.
+        if self.source == Source::Raw {
+            for i in [current, current + 1, current.wrapping_sub(1)] {
+                if i < n && self.files[i].kind == MediaKind::Raw {
+                    self.request(i, Level::Standard);
+                }
+            }
+        }
+        let Some(engine) = &self.engine else { return };
         let neighbours = [current + 1, current.wrapping_sub(1)]
             .into_iter()
             .filter(|&i| i < n);
@@ -480,10 +535,11 @@ impl TriApp {
         let shown = view::pick(file.kind, self.source, zoomed, |l| {
             self.ready(index, l) && self.loaded(index, l)
         });
-        // En attente tant que l'image voulue n'est pas affichée, ou que le 100 % demandé
+        // En attente tant que l'image voulue n'est pas affichée, ou que le 1:1 demandé
         // n'est pas encore calculé.
+        let zoom_level = view::zoom_level(file.kind, self.source);
         self.view_waiting =
-            shown != desired || shown.is_none() || (zoomed && shown != Some(Level::Full));
+            shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
 
         let (view_rect, response) =
             ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
@@ -492,6 +548,7 @@ impl TriApp {
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
 
         let mut image_rect = None;
+        let mut sensor_ratio = None;
         match shown {
             Some(Level::Thumbnail) => {
                 let deadline = Instant::now() + LOAD_BUDGET;
@@ -504,7 +561,7 @@ impl TriApp {
             Some(level) => {
                 if let Some(big) = self.big.get(&(file.path.clone(), level)).cloned() {
                     let rect = match (level, self.zoom) {
-                        (Level::Full, Some(center)) => {
+                        (Level::Full | Level::EmbeddedFull, Some(center)) => {
                             // 100 % : un pixel de l'image = un pixel de l'écran.
                             let size = big.original / ctx.pixels_per_point();
                             let mut center = match self.zoom_anchor.take() {
@@ -525,6 +582,7 @@ impl TriApp {
                     };
                     painter.image(big.texture.id(), rect, uv, Color32::WHITE);
                     image_rect = Some(rect);
+                    sensor_ratio = big.sensor_ratio.filter(|_| level == Level::EmbeddedFull);
                 }
             }
             None => {}
@@ -542,7 +600,7 @@ impl TriApp {
                 }
                 (None, _, _) => Some(vec2(0.5, 0.5)),
             };
-            self.request_full();
+            self.request_zoom();
         }
 
         // Ce qui est affiché, toujours visible.
@@ -556,11 +614,17 @@ impl TriApp {
             Some(level) => {
                 info.push_str(" · ");
                 info.push_str(view::label(file.kind, level));
+                if let Some(ratio) = sensor_ratio {
+                    info.push_str(&format!(" ({:.0} % du capteur)", ratio * 100.0));
+                }
             }
             None => info.push_str(" · aperçu en cours de calcul"),
         }
-        if zoomed && shown != Some(Level::Full) {
-            info.push_str(" · calcul du 100 % en cours");
+        if zoomed && shown != Some(zoom_level) {
+            info.push_str(match zoom_level {
+                Level::Full => " · calcul du 100 % en cours",
+                _ => " · chargement du 1:1",
+            });
         }
         overlay(
             &painter,
@@ -569,8 +633,8 @@ impl TriApp {
             &info,
         );
         let hint = match file.kind {
-            MediaKind::Raw => "b : JPEG boîtier / RAW   z : 100 %   Échap : grille",
-            MediaKind::Flat => "z : 100 %   Échap : grille",
+            MediaKind::Raw => "b : JPEG boîtier / RAW   z : 1:1   Échap : grille",
+            MediaKind::Flat => "z : 1:1   Échap : grille",
         };
         overlay(
             &painter,
@@ -632,8 +696,8 @@ impl TriApp {
                 ("JPEG boîtier", self.progress[1]),
                 ("aperçus", self.progress[2]),
             ] {
-                if p.total == 0 && name == "JPEG boîtier" {
-                    continue; // aucun RAW affiché
+                if p.total == 0 {
+                    continue; // rien à calculer en fond pour ce niveau
                 }
                 ui.add(
                     egui::ProgressBar::new(p.fraction())
@@ -895,7 +959,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Thumbnail => Some(0),
         Level::Embedded => Some(1),
         Level::Standard => Some(2),
-        Level::Full => None,
+        Level::EmbeddedFull | Level::Full => None,
     }
 }
 
@@ -905,6 +969,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Thumbnail => s.thumbnail = avail,
             Level::Embedded => s.embedded = avail,
             Level::Standard => s.standard = avail,
+            Level::EmbeddedFull => s.embedded_full = avail,
             Level::Full => s.full = avail,
         }
     }
@@ -1126,6 +1191,23 @@ mod tests {
         run_until(&mut h, |app| app.status[1].full == Avail::Ready);
         press(&mut h, Key::Z, Modifiers::NONE);
         assert!(h.state().zoom.is_none());
+    }
+
+    #[test]
+    fn switching_source_keeps_the_zoom_and_the_spot() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        h.state_mut().zoom = Some(vec2(0.3, 0.6));
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert_eq!(h.state().source, Source::Raw);
+        let zoom = h.state().zoom.expect("toujours zoomé");
+        // Image plate de 64×48 plus petite que la vue : le centre est ramené au milieu,
+        // mais le zoom reste actif.
+        assert!(zoom.x >= 0.0 && zoom.y >= 0.0);
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert!(h.state().zoom.is_some());
     }
 
     #[test]

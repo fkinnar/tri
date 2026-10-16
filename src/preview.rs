@@ -99,6 +99,7 @@ pub fn params(level: Level, sizes: &Sizes) -> String {
         Level::Thumbnail => format!("r{RULES_VERSION};side={}", sizes.thumbnail),
         Level::Embedded => format!("r{RULES_VERSION};side={};src=embedded", sizes.standard),
         Level::Standard => format!("r{RULES_VERSION};side={};{render}", sizes.standard),
+        Level::EmbeddedFull => format!("r{RULES_VERSION};src=embedded;full"),
         Level::Full => format!("r{RULES_VERSION};{render}"),
     }
 }
@@ -126,7 +127,8 @@ pub fn compute(
     }
     match (file.kind, level) {
         (MediaKind::Raw, Level::Thumbnail) => raw_thumbnail(file, sizes, cancel),
-        (MediaKind::Raw, Level::Embedded) => raw_embedded(file, sizes),
+        (MediaKind::Raw, Level::Embedded) => raw_embedded(file, sizes.standard),
+        (MediaKind::Raw, Level::EmbeddedFull) => raw_embedded(file, 0),
         (MediaKind::Raw, Level::Standard) => {
             let mut raw = RawFile::open(&file.path)?;
             let options = RenderOptions {
@@ -145,7 +147,8 @@ pub fn compute(
         (MediaKind::Flat, Level::Embedded | Level::Standard) => {
             Ok(flat::decode_fit(&file.path, sizes.standard)?)
         }
-        (MediaKind::Flat, Level::Full) => Ok(flat::decode(&file.path)?),
+        // Pas de JPEG « embarqué » distinct pour une image plate : c'est l'image elle-même.
+        (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => Ok(flat::decode(&file.path)?),
     }
 }
 
@@ -161,16 +164,25 @@ fn embedded_bitmap(raw: &mut RawFile, min_side: u32) -> Option<Bitmap> {
     }
 }
 
-/// Aperçu plein écran tiré du JPEG embarqué : réduit à la taille standard, redressé. Refusé
-/// s'il fait moins de la moitié de la taille demandée (certains boîtiers n'embarquent
-/// qu'une vignette de 160 px).
-fn raw_embedded(file: &MediaFile, sizes: &Sizes) -> Result<Bitmap> {
+/// Plus petit JPEG embarqué accepté pour le 1:1 du JPEG boîtier.
+const MIN_EMBEDDED_FULL: u32 = 1024;
+
+/// JPEG embarqué redressé, réduit à `side` (`0` : taille d'origine, pour le 1:1). Refusé
+/// s'il est trop petit pour servir : moins de la moitié de `side`, ou de
+/// `MIN_EMBEDDED_FULL` en taille d'origine (certains boîtiers n'embarquent qu'une
+/// vignette de 160 px).
+fn raw_embedded(file: &MediaFile, side: u32) -> Result<Bitmap> {
     let mut raw = RawFile::open(&file.path)?;
     let rotation = raw.orientation();
-    let bmp = embedded_bitmap(&mut raw, sizes.standard)
-        .filter(|b| b.width.max(b.height) >= sizes.standard / 2)
+    let min = if side == 0 {
+        MIN_EMBEDDED_FULL
+    } else {
+        side / 2
+    };
+    let bmp = embedded_bitmap(&mut raw, side)
+        .filter(|b| b.width.max(b.height) >= min)
         .ok_or(PreviewError::NoEmbeddedPreview)?;
-    Ok(bmp.fit(sizes.standard).rotate(rotation))
+    Ok(bmp.fit(side).rotate(rotation))
 }
 
 /// Vignette d'un RAW : aperçu embarqué, réduit puis redressé selon l'orientation du RAW.

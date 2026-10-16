@@ -13,6 +13,8 @@ Calcul synchrone des images mises en cache (voir `CLAUDE.md`, « Aperçus et cac
     (`PreviewError::NoEmbeddedPreview`) s'il fait moins de la moitié de la taille demandée :
     certains boîtiers n'embarquent qu'une vignette de 160 px. Pour une image plate, ce
     niveau est identique à l'aperçu standard (le scheduler ne le demande pas) ;
+  - 1:1 du JPEG boîtier (`EmbeddedFull`) : JPEG embarqué à sa taille d'origine, redressé ;
+    refusé sous 1024 px ;
   - 1:1 RAW : rendu complet annulable ;
   - images plates : `flat::decode` puis `fit` (sauf pour le 1:1).
 - `params(level, sizes)` : chaîne stable incluse dans la clé de cache (taille, balance des

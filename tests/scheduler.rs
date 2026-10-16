@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use tri::cache::Level;
 use tri::media::{MediaFile, MediaKind};
-use tri::scheduler::{Config, Event, Failure, Producer, Progress, Scheduler};
+use tri::scheduler::{Config, Event, Failure, Producer, Progress, RawPreviews, Scheduler};
 
 const LONG: Duration = Duration::from_secs(10);
 
@@ -152,6 +152,7 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
         Config {
             light_workers,
             thumbnails_first: false,
+            ..Config::default()
         },
     )
 }
@@ -321,6 +322,7 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
         Config {
             light_workers: 2,
             thumbnails_first: true,
+            ..Config::default()
         },
     );
     scheduler.set_paused(true);
@@ -379,6 +381,7 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
         Config {
             light_workers: 1, // ordre des tâches légères déterministe
             thumbnails_first: true,
+            ..Config::default()
         },
     );
     scheduler.set_paused(true);
@@ -435,9 +438,10 @@ fn full_render_is_on_demand_and_dropped_when_focus_moves() {
     let (scheduler, events) = start(&fake, 1);
     let generation = scheduler.set_folder(all);
 
-    scheduler.request_full(); // sans image affichée : sans effet
+    scheduler.request(1, Level::Full); // sans image affichée : sans effet
     scheduler.set_focus(1);
-    scheduler.request_full();
+    scheduler.request(0, Level::Full); // 1:1 d'une autre image que l'affichée : ignoré
+    scheduler.request(1, Level::Full);
     let deadline = Instant::now() + LONG;
     while !fake
         .0
@@ -471,7 +475,7 @@ fn full_render_is_on_demand_and_dropped_when_focus_moves() {
 
     // Un 1:1 demandé pour l'image affichée aboutit.
     *fake.0.full_delay.lock().unwrap() = Duration::from_millis(10);
-    scheduler.request_full();
+    scheduler.request(2, Level::Full);
     assert!(scheduler.wait_idle(LONG));
     assert_eq!(ready(&events, generation, Level::Full), [2]);
 }
@@ -520,12 +524,85 @@ fn pause_holds_work_until_resumed() {
 }
 
 #[test]
+fn on_demand_policy_leaves_raw_renders_to_requests() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let mut all = files(6, MediaKind::Raw);
+    all.extend(files(2, MediaKind::Flat));
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: true,
+            raw_previews: RawPreviews::OnDemand,
+        },
+    );
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    // En fond : aucun rendu RAW, mais les aperçus des images plates.
+    let mut background = fake.order(Level::Standard);
+    background.sort(); // deux workers : l'ordre de fin varie
+    assert_eq!(
+        background,
+        ["img0.JPG", "img1.JPG"],
+        "seuls les aperçus des images plates"
+    );
+    assert_eq!(scheduler.progress(Level::Standard), complete(2));
+
+    // À la demande : l'image affichée et ses voisines, sans toucher à la progression.
+    scheduler.set_focus(3);
+    for i in [2, 3, 4, 0] {
+        scheduler.request(i, Level::Standard); // 0 : trop loin, ignorée
+    }
+    assert!(scheduler.wait_idle(LONG));
+    let mut requested = ready(&events, generation, Level::Standard)
+        .into_iter()
+        .filter(|&i| i < 6)
+        .collect::<Vec<_>>();
+    requested.sort();
+    assert_eq!(requested, [2, 3, 4]);
+    assert_eq!(scheduler.progress(Level::Standard), complete(2));
+
+    // Déjà en cache : redemander donne juste un nouvel événement Ready.
+    fake.mark_all_cached(&files(6, MediaKind::Raw)[3..4], &[Level::Standard]);
+    let before = fake.order(Level::Standard).len();
+    scheduler.request(3, Level::Standard);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.order(Level::Standard).len(), before, "pas de recalcul");
+}
+
+#[test]
+fn moving_focus_drops_requests_that_are_no_longer_near() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(10, MediaKind::Raw);
+    let (scheduler, _) = start_with(
+        &fake,
+        Config {
+            light_workers: 1,
+            thumbnails_first: true,
+            raw_previews: RawPreviews::OnDemand,
+        },
+    );
+    scheduler.set_paused(true);
+    scheduler.set_folder(all);
+    scheduler.set_focus(2);
+    scheduler.request(2, Level::Standard);
+    scheduler.request(3, Level::Standard);
+    scheduler.request(2, Level::EmbeddedFull);
+    scheduler.set_focus(3); // 2 reste voisine ; son 1:1 tombe
+    scheduler.set_focus(8); // plus rien de proche
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Standard).is_empty());
+    assert!(fake.order(Level::EmbeddedFull).is_empty());
+}
+
+#[test]
 fn focus_out_of_range_is_ignored() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let (scheduler, _) = start(&fake, 1);
     scheduler.set_folder(files(2, MediaKind::Flat));
     scheduler.set_focus(99);
-    scheduler.request_full();
+    scheduler.request(0, Level::Full);
     assert!(scheduler.wait_idle(LONG));
     assert!(fake.order(Level::Full).is_empty());
 }
@@ -625,6 +702,33 @@ fn real_previews_fill_the_cache_and_are_reused() {
             }
             MediaKind::Flat => assert!(embedded.is_none(), "pas d'aperçu boîtier pour un JPEG"),
         }
+    }
+
+    // 1:1 du JPEG boîtier, à la demande : taille d'origine du JPEG embarqué, redressé.
+    {
+        let raw_index = files.iter().position(|f| f.kind == MediaKind::Raw).unwrap();
+        let producer = CachedPreviews {
+            cache: cache.clone(),
+            sizes,
+        };
+        let scheduler = Scheduler::new(producer, Config::default(), |_| {});
+        scheduler.set_folder(files.clone());
+        scheduler.set_focus(raw_index);
+        scheduler.request(raw_index, Level::EmbeddedFull);
+        assert!(scheduler.wait_idle(Duration::from_secs(120)));
+        let f = &files[raw_index];
+        let full = cache
+            .get(&preview::key(f, Level::EmbeddedFull, &sizes).unwrap())
+            .expect("1:1 du JPEG boîtier");
+        let standard = cache
+            .get(&preview::key(f, Level::Embedded, &sizes).unwrap())
+            .unwrap();
+        println!("JPEG boîtier 1:1 : {}x{}", full.width, full.height);
+        assert!(
+            long_side(&full) > long_side(&standard),
+            "plus grand que l'aperçu"
+        );
+        assert_eq!(full.height > full.width, standard.height > standard.width);
     }
 
     let second = run(&cache);

@@ -16,6 +16,7 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
     │   └── …
     ├── embedded/            aperçus tirés du JPEG du boîtier (RAW seulement)
     ├── standard/
+    ├── embedded-full/       JPEG embarqué à sa taille d'origine (1:1 du JPEG boîtier)
     └── full/
 ```
 
@@ -47,7 +48,7 @@ Une clé est un hash **BLAKE3** (256 bits, en hexadécimal) de :
 2. le **chemin absolu** du fichier source (`std::path::absolute`) : `photo.RAF` et
    `/dossier/photo.RAF` donnent la même clé ;
 3. sa **taille** et sa **date de modification** (nanosecondes) ;
-4. le **niveau** (`Thumbnail`, `Embedded`, `Standard`, `Full`) ;
+4. le **niveau** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`) ;
 5. les **paramètres** de calcul, une chaîne libre fournie par l'appelant (ex.
    `"half=1;side=2560"`).
 

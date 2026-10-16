@@ -12,7 +12,7 @@ use std::thread::JoinHandle;
 
 use eframe::egui::{self, ColorImage};
 use tri::cache::{Cache, Level};
-use tri::media::MediaFile;
+use tri::media::{MediaFile, MediaKind};
 use tri::preview::{self, Sizes};
 
 /// Une image chargée (ou absente du cache).
@@ -26,6 +26,9 @@ pub struct Loaded {
     /// Dimensions d'origine (pixels), même si l'image a dû être réduite pour tenir dans une
     /// texture.
     pub original: [usize; 2],
+    /// Pour le 1:1 du JPEG boîtier : part du capteur qu'il représente (côté long du JPEG /
+    /// côté long du rendu complet), pour un affichage honnête.
+    pub sensor_ratio: Option<f32>,
 }
 
 #[derive(Default)]
@@ -127,11 +130,18 @@ fn run(
             let b = b.fit(max_side as u32);
             ColorImage::from_rgb([b.width as usize, b.height as usize], &b.data)
         });
+        let sensor_ratio = (level == Level::EmbeddedFull && file.kind == MediaKind::Raw)
+            .then(|| tri::raw::RawFile::open(&file.path).ok())
+            .flatten()
+            .map(|raw| raw.size())
+            .filter(|&(w, h)| w.max(h) > 0)
+            .map(|(w, h)| original[0].max(original[1]) as f32 / w.max(h) as f32);
         let loaded = Loaded {
             path: file.path,
             level,
             image,
             original,
+            sensor_ratio,
         };
         if tx.send(loaded).is_err() {
             return; // l'interface est partie
