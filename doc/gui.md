@@ -13,8 +13,9 @@ cargo run --release -p tri-gui -- <dossier>
 - **Grille de vignettes** du dossier, alimentée en tâche de fond par le
   [scheduler](scheduler.md) ; seules les lignes visibles sont dessinées
   (`ScrollArea::show_rows`), ce qui tient des milliers d'images.
-- **Barre d'état** : dossier, nombre d'images (dont RAW), filtre, progression des vignettes et
-  des aperçus standard, nom de l'image sélectionnée.
+- **Barre d'état** : dossier, nombre d'images (dont RAW), filtre, progression des vignettes,
+  des aperçus « JPEG boîtier » (masquée s'il n'y a aucun RAW) et des aperçus standard, nom
+  de l'image sélectionnée.
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
 - **Filtre par type** (touche `f`) : tout → RAW → plates. La sélection est conservée si

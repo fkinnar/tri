@@ -5,9 +5,13 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
 - **Workers** : un seul worker *lourd* pour les rendus LibRaw (aperçus standard et 1:1 des
   RAW), plus `Config::light_workers` workers *légers* (par défaut la moitié des cœurs) pour
   les vignettes et les images plates.
-- **Priorités**, recalculées à chaque prise de tâche (`priority`) : 1:1 demandé > aperçu de
-  l'image affichée > n+1 > n-1 > vignettes dans l'ordre du dossier > autres aperçus par
-  distance (en avant d'abord).
+- **Niveaux de fond par type de fichier** : vignette, **aperçu boîtier** (JPEG embarqué,
+  RAW seulement) et aperçu standard ; le 1:1 n'est calculé qu'à la demande. L'aperçu
+  boîtier est léger (worker léger), l'aperçu standard d'un RAW lourd (LibRaw).
+- **Priorités**, recalculées à chaque prise de tâche (`priority`) : 1:1 demandé > aperçus
+  boîtier de l'image affichée, de n+1, de n-1 (presque instantanés) > leurs aperçus standard
+  > vignettes dans l'ordre du dossier > autres aperçus boîtier > autres aperçus standard,
+  par distance (en avant d'abord).
 - **API** : `set_folder(files) -> génération`, `set_focus(index)`, `request_full()`,
   `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`. `Drop` annule et arrête
   les threads.
@@ -30,11 +34,13 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
 - **`Producer`** : trait du calcul ; `CachedPreviews { cache, sizes }` est la vraie
   implémentation, et un faux producteur permettra de tester l'ordonnancement sans LibRaw.
 
-## Politique « vignettes d'abord »
+## Politique « le plus rapide d'abord »
 
-`Config::thumbnails_first` (par défaut `true`) : tant qu'il reste des vignettes à calculer,
-les aperçus standard *de fond* attendent. L'image affichée et ses voisines n+1/n-1 passent
-toujours. Chaque tâche terminée réveille les workers, pour qu'ils reprennent les aperçus
+`Config::thumbnails_first` (par défaut `true`) : les aperçus boîtier *de fond* attendent la
+fin des vignettes, et les aperçus standard *de fond* (rendus RAW) attendent la fin des
+vignettes **et** des aperçus boîtier. L'image affichée et ses voisines n+1/n-1 passent
+toujours. Ainsi la grille, puis tout le dossier en plein écran, sont disponibles au plus vite,
+avant de lancer les rendus LibRaw qui occupent tous les cœurs. Chaque tâche terminée réveille les workers, pour qu'ils reprennent les aperçus
 dès que la dernière vignette est faite.
 
 ## Mesures
@@ -65,7 +71,23 @@ Avec un décodage plus rapide, « vignettes d'abord » gagne sur les deux plans 
 défaut, l'autre politique reste disponible (`Config::thumbnails_first`, `--mixed`). Le
 total est dominé par les 236 aperçus RAW du worker lourd (~0,5 s chacun).
 
-Second passage (tout en cache) : ~10 ms. Taille du cache : 13 Mo de vignettes (28 Kio en
+Second passage (tout en cache) : ~10 ms.
+
+### Pourquoi l'aperçu boîtier (16/10/2026)
+
+Les rendus RAW ne peuvent pas aller plus vite : la décompression d'un RAF X-T4 occupe déjà
+tous les cœurs (LibRaw la parallélise), et rien ne se gagne ailleurs :
+
+| Essai | Résultat |
+|---|---|
+| aperçus à 1280 px au lieu de 2560 | 139 s au lieu de 176 s (−21 %), cache 4× plus léger |
+| 1 / 2 / 4 / 8 rendus `half_size` en parallèle | 600 / 573 / 1 046 / 1 440 ms par RAF |
+
+D'où l'aperçu boîtier : le JPEG embarqué (4416×2944 sur X-T4) réduit à la taille standard.
+Mesuré sur le dossier de test : **vignettes à 14 s, tout le dossier consultable en plein
+écran à 35 s**, rendus RAW terminés à 180 s (total inchangé). Coût : un niveau de cache de
+plus (197 Mo pour 236 RAF à 2560 px). Piste : ~0,25 s par aperçu boîtier, surtout la
+réduction Lanczos3 de 4416 à 2560 px ; un filtre plus simple serait à mesurer. Taille du cache : 13 Mo de vignettes (28 Kio en
 moyenne), 397 Mo d'aperçus standard à 2560 px (861 Kio en moyenne).
 
 Lecture :
@@ -96,6 +118,9 @@ worker :
   génération ;
 - « vignettes d'abord » : avant la dernière vignette, seuls l'image affichée et ses voisines
   ont un aperçu ; tout finit par être calculé ;
+- aperçus boîtier pour les RAW seulement (progression = nombre de RAW) ; rendus RAW de fond
+  jamais avant la fin des aperçus boîtier ; l'aperçu boîtier de l'image affichée passe avant
+  toutes les vignettes ;
 - pause / reprise ; image affichée hors limites ignorée ; arrêt rapide à la destruction ;
 - avec `TRI_TEST_RAW` : vrai producteur sur un RAW et un JPEG, tailles et orientation des
   entrées, second passage servi par le cache (0,66 s puis ~40 µs).

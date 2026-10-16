@@ -146,14 +146,19 @@ fn levels_are_isolated_and_clearable() {
         s.cache.put(k, &gradient()).unwrap();
     }
     s.cache.clear(Some(Level::Standard)).unwrap();
-    assert!(s.cache.contains(&keys[0]));
-    assert!(!s.cache.contains(&keys[1]));
-    assert!(s.cache.contains(&keys[2]));
+    for (level, k) in Level::ALL.iter().zip(&keys) {
+        assert_eq!(
+            s.cache.contains(k),
+            *level != Level::Standard,
+            "{level:?} après vidage du niveau Standard"
+        );
+    }
     s.cache.clear(None).unwrap();
     assert!(keys.iter().all(|k| !s.cache.contains(k)));
     // Le cache reste utilisable après un vidage.
-    s.cache.put(&keys[1], &gradient()).unwrap();
-    assert!(s.cache.contains(&keys[1]));
+    let standard = key(&s.source, Level::Standard);
+    s.cache.put(&standard, &gradient()).unwrap();
+    assert!(s.cache.contains(&standard));
 }
 
 #[test]

@@ -54,6 +54,7 @@ enum Avail {
 #[derive(Clone, Debug, Default)]
 struct Status {
     thumbnail: Avail,
+    embedded: Avail,
     standard: Avail,
 }
 
@@ -84,7 +85,7 @@ pub struct TriApp {
     filter: KindFilter,
     files: Vec<MediaFile>,
     status: Vec<Status>,
-    progress: [Progress; 2],
+    progress: [Progress; 3],
     engine: Option<Engine>,
     error: Option<String>,
     keymap: Keymap,
@@ -127,7 +128,7 @@ impl TriApp {
             filter: KindFilter::All,
             files: Vec::new(),
             status: Vec::new(),
-            progress: [Progress::default(); 2],
+            progress: [Progress::default(); 3],
             engine: None,
             error,
             keymap: Keymap::default(),
@@ -156,7 +157,7 @@ impl TriApp {
             .flatten()
             .collect();
         self.status = vec![Status::default(); self.files.len()];
-        self.progress = [Progress::default(); 2];
+        self.progress = [Progress::default(); 3];
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path {
             self.selected = self.files.iter().position(|f| f.path == path).unwrap_or(0);
@@ -233,10 +234,11 @@ impl TriApp {
                     generation: g,
                     level,
                     progress,
-                } if g == generation => match level {
-                    Level::Thumbnail => self.progress[0] = progress,
-                    _ => self.progress[1] = progress,
-                },
+                } if g == generation => {
+                    if let Some(i) = tracked(level) {
+                        self.progress[i] = progress;
+                    }
+                }
                 _ => {} // ancien dossier, ou niveau non suivi
             }
         }
@@ -349,8 +351,12 @@ impl TriApp {
             ui.separator();
             for (name, p) in [
                 ("vignettes", self.progress[0]),
-                ("aperçus", self.progress[1]),
+                ("JPEG boîtier", self.progress[1]),
+                ("aperçus", self.progress[2]),
             ] {
+                if p.total == 0 && name == "JPEG boîtier" {
+                    continue; // aucun RAW affiché
+                }
                 ui.add(
                     egui::ProgressBar::new(p.fraction())
                         .desired_width(160.0)
@@ -596,10 +602,21 @@ fn parse_actions(list: &str) -> Vec<Action> {
         .collect()
 }
 
+/// Position d'un niveau dans `TriApp::progress`, `None` pour le 1:1 (non suivi).
+fn tracked(level: Level) -> Option<usize> {
+    match level {
+        Level::Thumbnail => Some(0),
+        Level::Embedded => Some(1),
+        Level::Standard => Some(2),
+        Level::Full => None,
+    }
+}
+
 fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
     if let Some(s) = status.get_mut(index) {
         match level {
             Level::Thumbnail => s.thumbnail = avail,
+            Level::Embedded => s.embedded = avail,
             Level::Standard => s.standard = avail,
             Level::Full => {}
         }

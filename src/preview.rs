@@ -42,6 +42,8 @@ pub enum PreviewError {
     Flat(FlatError),
     /// Accès au fichier source ou au cache.
     Io(io::Error),
+    /// Le RAW n'embarque pas d'aperçu assez grand pour servir d'aperçu plein écran.
+    NoEmbeddedPreview,
     /// Calcul annulé.
     Cancelled,
 }
@@ -52,6 +54,7 @@ impl fmt::Display for PreviewError {
             Self::Raw(e) => e.fmt(f),
             Self::Flat(e) => e.fmt(f),
             Self::Io(e) => write!(f, "accès fichier impossible : {e}"),
+            Self::NoEmbeddedPreview => write!(f, "pas d'aperçu embarqué exploitable"),
             Self::Cancelled => write!(f, "calcul annulé"),
         }
     }
@@ -94,6 +97,7 @@ pub fn params(level: Level, sizes: &Sizes) -> String {
     let render = format!("wb={};bright={}", defaults.camera_wb, defaults.bright);
     match level {
         Level::Thumbnail => format!("r{RULES_VERSION};side={}", sizes.thumbnail),
+        Level::Embedded => format!("r{RULES_VERSION};side={};src=embedded", sizes.standard),
         Level::Standard => format!("r{RULES_VERSION};side={};{render}", sizes.standard),
         Level::Full => format!("r{RULES_VERSION};{render}"),
     }
@@ -122,6 +126,7 @@ pub fn compute(
     }
     match (file.kind, level) {
         (MediaKind::Raw, Level::Thumbnail) => raw_thumbnail(file, sizes, cancel),
+        (MediaKind::Raw, Level::Embedded) => raw_embedded(file, sizes),
         (MediaKind::Raw, Level::Standard) => {
             let mut raw = RawFile::open(&file.path)?;
             let options = RenderOptions {
@@ -136,9 +141,36 @@ pub fn compute(
             Ok(RawFile::open(&file.path)?.render_cancellable(&RenderOptions::default(), cancel)?)
         }
         (MediaKind::Flat, Level::Thumbnail) => Ok(flat::decode_fit(&file.path, sizes.thumbnail)?),
-        (MediaKind::Flat, Level::Standard) => Ok(flat::decode_fit(&file.path, sizes.standard)?),
+        // Une image plate n'a pas d'aperçu « boîtier » distinct : c'est son aperçu standard.
+        (MediaKind::Flat, Level::Embedded | Level::Standard) => {
+            Ok(flat::decode_fit(&file.path, sizes.standard)?)
+        }
         (MediaKind::Flat, Level::Full) => Ok(flat::decode(&file.path)?),
     }
+}
+
+/// Aperçu embarqué d'un RAW déjà ouvert, décodé au moins à `min_side` si possible (non
+/// redressé). `None` s'il n'y en a pas ou s'il est illisible.
+fn embedded_bitmap(raw: &mut RawFile, min_side: u32) -> Option<Bitmap> {
+    match raw.thumbnail() {
+        // jpeg::decode n'applique pas la balise EXIF : c'est voulu, l'orientation du RAW
+        // fait foi (voir RawFile::orientation). Décodage directement réduit (IDCT).
+        Ok(Thumbnail::Jpeg(bytes)) => jpeg::decode(&bytes, min_side).ok(),
+        Ok(Thumbnail::Bitmap(bmp)) => Some(bmp),
+        Err(_) => None,
+    }
+}
+
+/// Aperçu plein écran tiré du JPEG embarqué : réduit à la taille standard, redressé. Refusé
+/// s'il fait moins de la moitié de la taille demandée (certains boîtiers n'embarquent
+/// qu'une vignette de 160 px).
+fn raw_embedded(file: &MediaFile, sizes: &Sizes) -> Result<Bitmap> {
+    let mut raw = RawFile::open(&file.path)?;
+    let rotation = raw.orientation();
+    let bmp = embedded_bitmap(&mut raw, sizes.standard)
+        .filter(|b| b.width.max(b.height) >= sizes.standard / 2)
+        .ok_or(PreviewError::NoEmbeddedPreview)?;
+    Ok(bmp.fit(sizes.standard).rotate(rotation))
 }
 
 /// Vignette d'un RAW : aperçu embarqué, réduit puis redressé selon l'orientation du RAW.
@@ -146,14 +178,7 @@ pub fn compute(
 fn raw_thumbnail(file: &MediaFile, sizes: &Sizes, cancel: &AtomicBool) -> Result<Bitmap> {
     let mut raw = RawFile::open(&file.path)?;
     let rotation = raw.orientation();
-    let embedded = match raw.thumbnail() {
-        // jpeg::decode n'applique pas la balise EXIF : c'est voulu, l'orientation du RAW
-        // fait foi (voir RawFile::orientation). Décodage directement réduit (IDCT).
-        Ok(Thumbnail::Jpeg(bytes)) => jpeg::decode(&bytes, sizes.thumbnail).ok(),
-        Ok(Thumbnail::Bitmap(bmp)) => Some(bmp),
-        Err(_) => None,
-    };
-    match embedded {
+    match embedded_bitmap(&mut raw, sizes.thumbnail) {
         Some(bmp) => Ok(bmp.fit(sizes.thumbnail).rotate(rotation)),
         None => {
             let options = RenderOptions {
@@ -214,9 +239,14 @@ mod tests {
     #[test]
     fn params_differ_by_level_and_size() {
         let s = Sizes::default();
-        let all = Level::ALL.map(|l| params(l, &s));
-        assert_ne!(all[0], all[1]);
-        assert_ne!(all[1], all[2]);
+        let mut all: Vec<String> = Level::ALL.iter().map(|l| params(*l, &s)).collect();
+        all.sort();
+        all.dedup();
+        assert_eq!(
+            all.len(),
+            Level::ALL.len(),
+            "paramètres distincts par niveau"
+        );
         let bigger = Sizes {
             standard: 3840,
             ..s

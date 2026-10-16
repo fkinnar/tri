@@ -350,6 +350,68 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
 }
 
 #[test]
+fn embedded_previews_are_scheduled_for_raw_files_only() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let mut all = files(3, MediaKind::Raw);
+    all.extend(files(2, MediaKind::Flat));
+    let (scheduler, events) = start(&fake, 2);
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Embedded), complete(3));
+    let mut embedded = fake.order(Level::Embedded);
+    embedded.sort();
+    assert_eq!(embedded, ["img0.RAF", "img1.RAF", "img2.RAF"]);
+    let mut ready_embedded = ready(&events, generation, Level::Embedded);
+    ready_embedded.sort();
+    assert_eq!(
+        ready_embedded,
+        [0, 1, 2],
+        "aperçus boîtier des 3 RAW seulement"
+    );
+}
+
+#[test]
+fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
+    let fake = Fake::with_delay(Duration::from_millis(5));
+    let all = files(10, MediaKind::Raw);
+    let (scheduler, _) = start_with(
+        &fake,
+        Config {
+            light_workers: 1, // ordre des tâches légères déterministe
+            thumbnails_first: true,
+        },
+    );
+    scheduler.set_paused(true);
+    scheduler.set_folder(all);
+    scheduler.set_focus(4);
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+
+    let log = fake.log();
+    let last_light = log
+        .iter()
+        .rposition(|(_, l, _)| matches!(l, Level::Thumbnail | Level::Embedded))
+        .unwrap();
+    let early: HashSet<String> = log[..last_light]
+        .iter()
+        .filter(|(_, l, _)| *l == Level::Standard)
+        .map(|(p, _, _)| p.to_string_lossy().into_owned())
+        .collect();
+    let allowed: HashSet<String> = [3, 4, 5].iter().map(|i| format!("img{i}.RAF")).collect();
+    assert!(early.is_subset(&allowed), "rendus RAW trop tôt : {early:?}");
+    // L'aperçu boîtier de l'image affichée passe avant toutes les vignettes (le journal suit
+    // l'ordre de fin des tâches : un seul worker léger pour qu'il suive aussi l'ordre de départ).
+    let first_light = log
+        .iter()
+        .find(|(_, l, _)| matches!(l, Level::Thumbnail | Level::Embedded))
+        .unwrap();
+    assert_eq!(
+        (first_light.0.to_string_lossy().as_ref(), first_light.1),
+        ("img4.RAF", Level::Embedded)
+    );
+}
+
+#[test]
 fn raw_renders_never_overlap_but_light_jobs_do() {
     let fake = Fake::with_delay(Duration::from_millis(40));
     let mut all = files(4, MediaKind::Raw);
@@ -517,6 +579,11 @@ fn real_previews_fill_the_cache_and_are_reused() {
         scheduler.set_folder(files.clone());
         assert!(scheduler.wait_idle(Duration::from_secs(120)));
         assert_eq!(scheduler.progress(Level::Standard), complete(2));
+        assert_eq!(
+            scheduler.progress(Level::Embedded),
+            complete(1),
+            "un seul RAW"
+        );
         t.elapsed()
     };
 
@@ -537,6 +604,27 @@ fn real_previews_fill_the_cache_and_are_reused() {
             "vignette et aperçu dans le même sens : {}",
             f.path.display()
         );
+    }
+
+    // Aperçu boîtier : pour le RAW seulement, à la taille standard, dans le même sens que le
+    // rendu RAW.
+    for f in &files {
+        let embedded = cache.get(&preview::key(f, Level::Embedded, &sizes).unwrap());
+        match f.kind {
+            MediaKind::Raw => {
+                let embedded = embedded.expect("aperçu boîtier du RAW");
+                let standard = cache
+                    .get(&preview::key(f, Level::Standard, &sizes).unwrap())
+                    .unwrap();
+                assert_eq!(long_side(&embedded), 1024);
+                assert_eq!(
+                    embedded.height > embedded.width,
+                    standard.height > standard.width,
+                    "aperçu boîtier et rendu RAW dans le même sens"
+                );
+            }
+            MediaKind::Flat => assert!(embedded.is_none(), "pas d'aperçu boîtier pour un JPEG"),
+        }
     }
 
     let second = run(&cache);

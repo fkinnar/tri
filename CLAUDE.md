@@ -139,6 +139,15 @@ de fond ; les aperçus 1:1 générés à la demande.
   - *aperçu standard* (plein écran) : rendu LibRaw réduit au côté long configuré ; généré en
     fond pour tout le dossier dès l'ouverture ;
   - *1:1* (zoom 100 %) : rendu LibRaw complet, à la demande, mis en cache.
+- **Aperçu boîtier (décidé le 16/10/2026)** : niveau de cache `Embedded`, le JPEG embarqué
+  du RAW réduit à la taille standard. Calculé juste après les vignettes (tout le dossier
+  consultable en ~35 s au lieu de ~3 min sur le dossier de test), remplacé à l'affichage
+  par le rendu RAW quand il est prêt. **Basculable** en plein écran (forcer JPEG boîtier ou
+  RAW, comme FastRawViewer), et l'interface indique toujours lequel est affiché : le JPEG
+  boîtier reflète les réglages du boîtier, pas les données RAW (exposition, hautes lumières).
+  Motif : les rendus RAW ne peuvent pas être accélérés (décompression du RAF déjà
+  parallélisée par LibRaw ; aperçus plus petits : −21 % seulement ; rendus en parallèle :
+  plus lent). Mesures dans `doc/scheduler.md`.
 - **Taille de l'aperçu standard : « Auto » par défaut** = plus grand côté de l'écran principal
   (2560 px sur la machine de dev, 2560×1440), valeur fixe configurable.
 - **Source de l'aperçu standard : `half_size` si sa taille suffit**, sinon rendu complet.

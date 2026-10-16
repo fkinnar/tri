@@ -25,7 +25,10 @@ const JPEG_QUALITY: u8 = 90;
 pub enum Level {
     /// Vignette de la grille.
     Thumbnail,
-    /// Aperçu plein écran, à la taille configurée.
+    /// Aperçu plein écran tiré du JPEG embarqué par le boîtier (RAW seulement) : immédiat,
+    /// mais reflète les réglages du boîtier, pas les données RAW.
+    Embedded,
+    /// Aperçu plein écran, à la taille configurée (rendu RAW, ou image plate décodée).
     Standard,
     /// Rendu complet (zoom 100 %).
     Full,
@@ -33,11 +36,17 @@ pub enum Level {
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 3] = [Level::Thumbnail, Level::Standard, Level::Full];
+    pub const ALL: [Level; 4] = [
+        Level::Thumbnail,
+        Level::Embedded,
+        Level::Standard,
+        Level::Full,
+    ];
 
     fn dir_name(self) -> &'static str {
         match self {
             Self::Thumbnail => "thumbnail",
+            Self::Embedded => "embedded",
             Self::Standard => "standard",
             Self::Full => "full",
         }

@@ -126,9 +126,10 @@ pub struct Config {
     /// Nombre de workers légers (vignettes, images plates). Le worker lourd est toujours
     /// unique.
     pub light_workers: usize,
-    /// Les aperçus standard de fond attendent la fin de toutes les vignettes (l'image
-    /// affichée et ses voisines passent toujours). Grille complète plus vite, total plus
-    /// long : mesures dans `doc/scheduler.md`.
+    /// Ordre « le plus rapide d'abord » pour le travail de fond : vignettes, puis aperçus
+    /// boîtier, puis rendus RAW. Les aperçus boîtier de fond attendent la fin des vignettes,
+    /// les aperçus standard de fond attendent la fin des deux (l'image affichée et ses
+    /// voisines passent toujours). Mesures dans `doc/scheduler.md`.
     pub thumbnails_first: bool,
 }
 
@@ -142,36 +143,59 @@ impl Default for Config {
     }
 }
 
-/// Les niveaux calculés en fond pour tout le dossier ; `Full` ne l'est qu'à la demande.
-const BACKGROUND: [Level; 2] = [Level::Thumbnail, Level::Standard];
+/// Niveaux dont l'avancement est suivi (calculés en fond) ; `Full` ne l'est qu'à la demande.
+const TRACKED: [Level; 3] = [Level::Thumbnail, Level::Embedded, Level::Standard];
+
+/// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW.
+fn background_levels(kind: MediaKind) -> &'static [Level] {
+    match kind {
+        MediaKind::Raw => &TRACKED,
+        MediaKind::Flat => &[Level::Thumbnail, Level::Standard],
+    }
+}
 
 /// Une tâche : un fichier (par sa position) et un niveau.
 type Job = (usize, Level);
 
 /// Vrai si la tâche passe par le worker lourd (rendu LibRaw).
 fn is_heavy(kind: MediaKind, level: Level) -> bool {
-    kind == MediaKind::Raw && level != Level::Thumbnail
+    kind == MediaKind::Raw && matches!(level, Level::Standard | Level::Full)
 }
 
-/// Classe de priorité des aperçus standard de fond (ni l'image affichée, ni ses voisines).
-const BACKGROUND_CLASS: u8 = 5;
+/// Classe de priorité des aperçus boîtier de fond (ni l'image affichée, ni ses voisines).
+const EMBEDDED_BACKGROUND: u8 = 4;
+/// Classe de priorité des aperçus standard de fond.
+const STANDARD_BACKGROUND: u8 = 5;
 
-/// Priorité d'une tâche (la plus petite passe en premier). Ordre : 1:1 de l'image affichée,
-/// son aperçu standard, celui de la suivante, de la précédente, les vignettes (dans l'ordre
-/// du dossier), puis les autres aperçus standard par distance à l'image affichée (en avant
-/// d'abord à distance égale).
+/// Priorité d'une tâche (la plus petite passe en premier). Ordre :
+/// 1. le 1:1 demandé ;
+/// 2. les aperçus boîtier de l'image affichée, de la suivante, de la précédente
+///    (presque instantanés) ;
+/// 3. leurs aperçus standard, dans le même ordre ;
+/// 4. les vignettes, dans l'ordre du dossier ;
+/// 5. les autres aperçus boîtier, puis les autres aperçus standard, par distance à l'image
+///    affichée (en avant d'abord à distance égale).
 fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
-    match (level, focus) {
-        (Level::Full, _) => (0, 0),
-        (Level::Standard, Some(f)) if index == f => (1, 0),
-        (Level::Standard, Some(f)) if index == f + 1 => (2, 0),
-        (Level::Standard, Some(f)) if index + 1 == f => (3, 0),
-        (Level::Thumbnail, _) => (4, index),
-        (Level::Standard, Some(f)) => (
-            BACKGROUND_CLASS,
+    let (near_class, background_class) = match level {
+        Level::Full => return (0, 0),
+        Level::Thumbnail => return (3, index),
+        Level::Embedded => (1, EMBEDDED_BACKGROUND),
+        Level::Standard => (2, STANDARD_BACKGROUND),
+    };
+    let Some(f) = focus else {
+        return (background_class, index);
+    };
+    if index == f {
+        (near_class, 0)
+    } else if index == f + 1 {
+        (near_class, 1)
+    } else if index + 1 == f {
+        (near_class, 2)
+    } else {
+        (
+            background_class,
             index.abs_diff(f) * 2 + usize::from(index < f),
-        ),
-        (Level::Standard, None) => (BACKGROUND_CLASS, index),
+        )
     }
 }
 
@@ -189,7 +213,7 @@ struct State {
     focus: Option<usize>,
     pending: HashSet<Job>,
     running: Vec<Running>,
-    progress: [Progress; 2],
+    progress: [Progress; 3],
     paused: bool,
     shutdown: bool,
     /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
@@ -205,16 +229,24 @@ impl State {
             return None;
         }
         let focus = self.focus;
-        // Les aperçus de fond attendent la fin des vignettes : la grille d'abord, et pas de
-        // rendu LibRaw (qui occupe tous les cœurs) pour ralentir les vignettes.
-        let thumbnails_left = self.thumbnails_first
-            && (self.pending.iter().any(|j| j.1 == Level::Thumbnail)
-                || self.running.iter().any(|r| r.job.1 == Level::Thumbnail));
+        // Travail de fond du plus rapide au plus lent : la grille d'abord, puis les aperçus
+        // boîtier ; pas de rendu LibRaw de fond (qui occupe tous les cœurs) avant.
+        let left = |level: Level| {
+            self.thumbnails_first
+                && (self.pending.iter().any(|j| j.1 == level)
+                    || self.running.iter().any(|r| r.job.1 == level))
+        };
+        let (thumbnails_left, embedded_left) = (left(Level::Thumbnail), left(Level::Embedded));
+        let blocked = |class: u8| match class {
+            EMBEDDED_BACKGROUND => thumbnails_left,
+            STANDARD_BACKGROUND => thumbnails_left || embedded_left,
+            _ => false,
+        };
         let job = *self
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
-            .filter(|job| !(thumbnails_left && priority(**job, focus).0 >= BACKGROUND_CLASS))
+            .filter(|job| !blocked(priority(**job, focus).0))
             .min_by_key(|job| (priority(**job, focus), job.0))?;
         self.pending.remove(&job);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -320,12 +352,22 @@ impl Scheduler {
         s.generation += 1;
         s.focus = None;
         s.pending = (0..files.len())
-            .flat_map(|i| BACKGROUND.map(|l| (i, l)))
+            .flat_map(|i| {
+                background_levels(files[i].kind)
+                    .iter()
+                    .map(move |&l| (i, l))
+            })
             .collect();
-        s.progress = [Progress {
+        let total = |level: Level| {
+            files
+                .iter()
+                .filter(|f| background_levels(f.kind).contains(&level))
+                .count()
+        };
+        s.progress = TRACKED.map(|l| Progress {
             done: 0,
-            total: files.len(),
-        }; 2];
+            total: total(l),
+        });
         s.files = files;
         let generation = s.generation;
         drop(s);
@@ -367,10 +409,10 @@ impl Scheduler {
         self.shared.idle.notify_all();
     }
 
-    /// Avancement d'un niveau calculé en fond (`Thumbnail` ou `Standard`) ; `None` pour
-    /// `Full`.
+    /// Avancement d'un niveau calculé en fond (`Thumbnail`, `Embedded`, `Standard`) ; `None`
+    /// pour `Full`. Le total de `Embedded` est le nombre de RAW.
     pub fn progress(&self, level: Level) -> Option<Progress> {
-        let i = BACKGROUND.iter().position(|&l| l == level)?;
+        let i = TRACKED.iter().position(|&l| l == level)?;
         Some(self.shared.lock().progress[i])
     }
 
@@ -510,7 +552,7 @@ fn finish(
             error,
         }],
     };
-    if let Some(i) = BACKGROUND.iter().position(|&l| l == level) {
+    if let Some(i) = TRACKED.iter().position(|&l| l == level) {
         s.progress[i].done += 1;
         events.push(Event::Progress {
             generation,
@@ -538,17 +580,23 @@ mod tests {
             (7, Level::Standard),
             (5, Level::Full),
             (8, Level::Thumbnail),
+            (9, Level::Embedded),
+            (6, Level::Embedded),
+            (5, Level::Embedded),
         ];
         jobs.sort_by_key(|j| (priority(*j, f), j.0));
         assert_eq!(
             jobs,
             [
                 (5, Level::Full),
+                (5, Level::Embedded),
+                (6, Level::Embedded),
                 (5, Level::Standard),
                 (6, Level::Standard),
                 (4, Level::Standard),
                 (0, Level::Thumbnail),
                 (8, Level::Thumbnail),
+                (9, Level::Embedded),
                 (7, Level::Standard),
                 (3, Level::Standard),
                 (9, Level::Standard),
@@ -564,11 +612,27 @@ mod tests {
 
     #[test]
     fn heavy_jobs_are_raw_renders() {
+        assert!(
+            !is_heavy(MediaKind::Raw, Level::Embedded),
+            "aperçu boîtier : léger"
+        );
         assert!(is_heavy(MediaKind::Raw, Level::Standard));
         assert!(is_heavy(MediaKind::Raw, Level::Full));
         assert!(!is_heavy(MediaKind::Raw, Level::Thumbnail));
         assert!(!is_heavy(MediaKind::Flat, Level::Standard));
         assert!(!is_heavy(MediaKind::Flat, Level::Full));
+    }
+
+    #[test]
+    fn embedded_previews_only_for_raw_files() {
+        assert!(background_levels(MediaKind::Raw).contains(&Level::Embedded));
+        assert!(!background_levels(MediaKind::Flat).contains(&Level::Embedded));
+        for kind in [MediaKind::Raw, MediaKind::Flat] {
+            assert!(
+                !background_levels(kind).contains(&Level::Full),
+                "1:1 à la demande"
+            );
+        }
     }
 
     #[test]

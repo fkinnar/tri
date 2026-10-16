@@ -6,7 +6,7 @@
 //!                            [--workers N] [--mixed] [--cache DOSSIER]
 //!       calcule vignettes et aperçus standard en tâche de fond, avec progression
 //!       (`--mixed` : sans attendre la fin des vignettes pour les aperçus) ;
-//!   tri --clear-cache [thumbnail|standard|full] [--cache DOSSIER]
+//!   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau.
@@ -26,7 +26,7 @@ use tri::scheduler::{CachedPreviews, Config, Event, Progress, Scheduler};
 const USAGE: &str = "usage :
   tri <dossier> [--raw|--flat] [--depth N]
   tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
-  tri --clear-cache [thumbnail|standard|full] [--cache DOSSIER]
+  tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
   tri --cache-usage [--cache DOSSIER]";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -48,6 +48,7 @@ struct Args {
 fn parse_level(name: &str) -> Option<Level> {
     match name {
         "thumbnail" => Some(Level::Thumbnail),
+        "embedded" => Some(Level::Embedded),
         "standard" => Some(Level::Standard),
         "full" => Some(Level::Full),
         _ => None,
@@ -151,8 +152,12 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
     let start = Instant::now();
     scheduler.set_folder(files);
 
-    let (mut thumbs, mut standards) = (Progress::default(), Progress::default());
-    let mut thumbs_done_at = None;
+    let (mut thumbs, mut embedded, mut standards) = (
+        Progress::default(),
+        Progress::default(),
+        Progress::default(),
+    );
+    let (mut thumbs_done_at, mut embedded_done_at) = (None, None);
     let mut failures = Vec::new();
     loop {
         match rx.recv_timeout(Duration::from_millis(200)) {
@@ -160,6 +165,7 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
                 level, progress, ..
             }) => match level {
                 Level::Thumbnail => thumbs = progress,
+                Level::Embedded => embedded = progress,
                 _ => standards = progress,
             },
             Ok(Event::Failed {
@@ -169,21 +175,26 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
-        if thumbs_done_at.is_none() && thumbs.done == thumbs.total && thumbs.total > 0 {
+        let finished = |p: Progress, total: usize| p.done == total && p.total == total;
+        if thumbs_done_at.is_none() && finished(thumbs, n) {
             thumbs_done_at = Some(start.elapsed());
         }
+        if embedded_done_at.is_none() && finished(embedded, raws) {
+            embedded_done_at = Some(start.elapsed());
+        }
         print!(
-            "\r  vignettes {:>4}/{:<4} {:>3.0} %   aperçus {:>4}/{:<4} {:>3.0} %   {:>6.1} s",
+            "\r  vignettes {:>4}/{:<4}   JPEG boîtier {:>4}/{:<4}   aperçus {:>4}/{:<4} {:>3.0} %   {:>6.1} s",
             thumbs.done,
             thumbs.total,
-            thumbs.fraction() * 100.0,
+            embedded.done,
+            embedded.total,
             standards.done,
             standards.total,
             standards.fraction() * 100.0,
             start.elapsed().as_secs_f64()
         );
         std::io::stdout().flush()?;
-        if thumbs.done == n && standards.done == n {
+        if finished(thumbs, n) && finished(embedded, raws) && finished(standards, n) {
             break;
         }
     }
@@ -191,6 +202,9 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
     println!();
     if let Some(t) = thumbs_done_at {
         println!("vignettes terminées en {t:.2?}");
+    }
+    if let Some(t) = embedded_done_at {
+        println!("aperçus boîtier terminés en {t:.2?} (tout le dossier consultable)");
     }
     println!(
         "terminé en {total:.2?} ({:.0} ms par image en moyenne)",
