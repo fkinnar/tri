@@ -28,6 +28,9 @@ vers l'architecture cible décrite plus bas :
    l'aperçu embarqué). Aucun toolkit d'affichage n'a encore été expérimenté : le choix reste
    à faire.
 4. Navigation clavier gauche/droite entre images.
+5. **Calcul en tâche de fond avec cache persistant** (ajouté au MVP le 16/10/2026, voir
+   « Aperçus et cache ») : à l'ouverture d'un dossier, vignettes et aperçus standard sont
+   calculés en fond, avec une progression visible dans l'interface.
 
 Seul filtre requis dès le MVP : par type de fichier — RAW seuls, plates seules, ou les deux
 (ex. une carte RAW+JPEG doit pouvoir s'afficher en entier, ou juste l'un des deux).
@@ -125,6 +128,43 @@ Précisions actées après discussion, toujours non implémentées avant la fin 
   - Les filtres natifs (étoiles, couleurs, flags) implémentent le même `trait` que les futurs
     filtres netteté/IA — pas de code spécial pour les built-in.
 
+## Aperçus et cache (décidé le 16/10/2026)
+
+Modèle inspiré de Lightroom : une taille d'aperçu configurée, générée automatiquement en tâche
+de fond ; les aperçus 1:1 générés à la demande.
+
+- **Trois niveaux** :
+  - *vignette* (grille, ~400 px) : aperçu embarqué pour les RAW, image décodée pour les
+    plates ; générée en fond, workers parallèles (peu de calcul) ;
+  - *aperçu standard* (plein écran) : rendu LibRaw réduit au côté long configuré ; généré en
+    fond pour tout le dossier dès l'ouverture ;
+  - *1:1* (zoom 100 %) : rendu LibRaw complet, à la demande, mis en cache.
+- **Taille de l'aperçu standard : « Auto » par défaut** = plus grand côté de l'écran principal
+  (2560 px sur la machine de dev, 2560×1440), valeur fixe configurable.
+- **Source de l'aperçu standard : `half_size` si sa taille suffit**, sinon rendu complet.
+  Règle : `half_size` tant que (côté long RAW / 2) ≥ côté long demandé. Mesuré sur RAF X-T4 à
+  2560 px : PSNR 40–43 dB entre half_size réduit et rendu complet réduit (visuellement
+  identiques sur recadrages 1:1 œil/barbe), 0,31 s + 0,15 s de réduction contre ≈ 3,8 s +
+  0,31 s. En 4K (3840 > 3123), on bascule automatiquement sur le rendu complet.
+- **Un seul worker LibRaw**, file à priorités : image affichée > voisines n+1/n-1 > reste du
+  dossier en fond. Annulation d'un rendu devenu inutile via le callback de progression LibRaw
+  (`libraw_set_progress_handler`, valeur de retour non nulle = annulation), qui donne aussi
+  un pourcentage par image.
+- **Progression** : événements envoyés par le moteur sur un canal (fait / total par niveau),
+  l'UI ne fait qu'afficher. Le moteur reste indépendant de l'UI.
+- **Cache central par utilisateur** (pas à côté des photos : cartes SD, lecture seule, NAS) :
+  `$XDG_CACHE_HOME/tri` ou `~/.cache/tri` (Linux), `~/Library/Caches/tri` (macOS),
+  `%LOCALAPPDATA%\tri` (Windows).
+  - Clé : hash de (chemin absolu, taille, date de modification, niveau, version des paramètres
+    de rendu). Fichier modifié ou réglages changés ⇒ recalcul. Déplacer un dossier invalide
+    son cache (assumé).
+  - Format : JPEG qualité ~90 (compact, décodage rapide).
+  - Effaçable : par niveau ou en entier ; taille maximale pour les 1:1 avec éviction des moins
+    récemment utilisés.
+  - Reprise naturelle : à la réouverture, seul ce qui manque est recalculé.
+  - Pas de base de données pour l'instant (fichiers seuls). Distinct du cache d'*analyse*
+    (scores de netteté, etc.) décrit plus haut.
+
 ## LibRaw depuis Rust — déjà résolu
 
 Intégré dans `src/raw/` (`ffi.rs` = déclarations brutes, `mod.rs` = wrapper sûr `RawFile`
@@ -202,6 +242,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - [x] Reprendre le dossier `libraw_test` (prototype JPEG embarqué) et l'étendre au rendu RAW
       complet (`libraw_dcraw_process` + `libraw_dcraw_make_mem_image`) pour obtenir un bitmap
       affichable.
+- [x] `Bitmap::fit` (réduction Lanczos3) et comparaison half_size / rendu complet.
+- [ ] Cache persistant des aperçus (module moteur, sans UI).
+- [ ] File de travail à priorités + progression + annulation (module moteur, démo CLI).
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).

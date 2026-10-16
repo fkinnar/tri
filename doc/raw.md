@@ -117,11 +117,20 @@ pas gagner de temps, au contraire : neuf rendus prennent 5,7 s en série, 18 s s
 302 s sur un thread par cœur (contention CPU et mémoire). L'extraction des aperçus embarqués
 n'a pas ce problème : elle ne fait aucun calcul.
 
+## Aperçu standard : half_size suffit
+
+À la taille d'un aperçu plein écran, un rendu `half_size` réduit est visuellement identique à
+un rendu complet réduit. Mesuré sur deux RAF X-T4 réduits à 2560 px : PSNR de 40 à 43 dB entre
+les deux, aucune différence visible sur des recadrages 1:1 (œil, barbe). Coût : 0,31 s +
+0,15 s de réduction, contre ≈ 3,8 s + 0,31 s. Le cache utilise donc `half_size` tant que
+la moitié du côté long du RAW couvre la taille demandée (voir `CLAUDE.md`, « Aperçus et
+cache »).
+
 ## Outil de test
 
 ```sh
 cargo run --release --example decode -- thumb  photo.RAF aperçu.jpg
-cargo run --release --example decode -- render photo.RAF rendu.png [--half] [--daylight] [--bright X]
+cargo run --release --example decode -- render photo.RAF rendu.png [--half] [--daylight] [--bright X] [--fit N]
 ```
 
 Affiche la version de LibRaw, les dimensions et les temps de chaque étape.

@@ -52,7 +52,9 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
 ### `bitmap` (unitaires, `src/bitmap.rs`)
 
-- lecture d'un pixel, `None` hors de l'image.
+- lecture d'un pixel, `None` hors de l'image ;
+- `fit` : proportions gardées (paysage et portrait), jamais d'agrandissement (`0` = pas de
+  limite), couleur unie préservée, côté minuscule arrondi à au moins 1 pixel.
 
 ### `flat` (unitaires, `src/flat/mod.rs` et `src/flat/heif.rs`)
 
