@@ -29,19 +29,22 @@ impl Bitmap {
     /// Tourne l'image dans le sens horaire. `Cw90` et `Cw270` échangent largeur et hauteur.
     pub fn rotate(self, rotation: Rotation) -> Bitmap {
         let (w, h) = (self.width as usize, self.height as usize);
-        let src = |x: usize, y: usize| (y * w + x) * 3;
-        let (width, height, at): (usize, usize, Box<dyn Fn(usize, usize) -> usize>) = match rotation
-        {
+        let (width, height) = match rotation {
             Rotation::None => return self,
-            // Pixel (x, y) de la destination ← pixel source correspondant.
-            Rotation::Cw90 => (h, w, Box::new(move |x, y| src(y, h - 1 - x))),
-            Rotation::Cw180 => (w, h, Box::new(move |x, y| src(w - 1 - x, h - 1 - y))),
-            Rotation::Cw270 => (h, w, Box::new(move |x, y| src(w - 1 - y, x))),
+            Rotation::Cw180 => (w, h),
+            Rotation::Cw90 | Rotation::Cw270 => (h, w),
         };
         let mut data = Vec::with_capacity(self.data.len());
         for y in 0..height {
             for x in 0..width {
-                let i = at(x, y);
+                // Pixel (x, y) de la destination ← pixel (sx, sy) de la source.
+                let (sx, sy) = match rotation {
+                    Rotation::Cw90 => (y, h - 1 - x),
+                    Rotation::Cw180 => (w - 1 - x, h - 1 - y),
+                    Rotation::Cw270 => (w - 1 - y, x),
+                    Rotation::None => unreachable!(),
+                };
+                let i = (sy * w + sx) * 3;
                 data.extend_from_slice(&self.data[i..i + 3]);
             }
         }
