@@ -2,7 +2,7 @@
 
 ## Vision
 
-Équivalent Linux (puis macOS) de FastRawViewer : visionneuse RAW rapide pour le tri/culling
+Équivalent Linux et macOS (Windows si possible) de FastRawViewer : visionneuse RAW rapide pour le tri/culling
 après une séance photo — vignettes de dossier, affichage plein écran en rendu RAW réel,
 notation par étoiles/couleurs filtrable (stockée en XMP). Design minimaliste, moderne,
 entièrement pilotable au clavier (inspiration nvim).
@@ -16,11 +16,21 @@ traitée a minima dans un premier temps.
 On restreint volontairement le scope pour obtenir vite un résultat concret, avant de revenir
 vers l'architecture cible décrite plus bas :
 
-1. Parcourir un dossier et lister les fichiers RAW.
-2. Générer une grille de vignettes à partir du JPEG embarqué (LibRaw).
+1. Parcourir un dossier et lister les fichiers RAW — tous les formats RAW gérés par LibRaw
+   (RAF, CR2/CR3, NEF, ARW, DNG, ORF, RW2...), extensions comparées sans tenir compte de la
+   casse. Les images « plates » (JPEG, TIFF, PNG, HEIF...) sont aussi listées : indispensable
+   en pratique (cartes SD en RAW+JPEG).
+2. Générer une grille de vignettes à partir du JPEG embarqué (LibRaw) pour les RAW, et de
+   l'image elle-même pour les images plates (décodage simple, aucun développement).
+   Attention : l'aperçu embarqué n'est pas pivoté, l'orientation EXIF doit être appliquée
+   à l'affichage (le rendu complet `dcraw_process`, lui, est déjà pivoté).
 3. Sélectionner une image et l'afficher en plein écran, développée via LibRaw (pas juste
-   l'aperçu embarqué), dans le canvas déjà expérimenté.
+   l'aperçu embarqué). Aucun toolkit d'affichage n'a encore été expérimenté : le choix reste
+   à faire.
 4. Navigation clavier gauche/droite entre images.
+
+Seul filtre requis dès le MVP : par type de fichier — RAW seuls, plates seules, ou les deux
+(ex. une carte RAW+JPEG doit pouvoir s'afficher en entier, ou juste l'un des deux).
 
 Pas de filtrage avancé, pas de notation XMP, pas de dynamique/plugins/libloading à ce stade.
 L'objectif est de valider la chaîne complète dossier → vignettes → rendu RAW affiché, et de
@@ -52,9 +62,11 @@ mais ne pas non plus les implémenter avant que le MVP ci-dessus fonctionne :
 - **Filtrage (pour plus tard) :** point d'entrée unique qui retourne les images à afficher ;
   type de retour pensé dès le départ comme `Vec<Vec<Image>>` pour permettre la détection de
   groupes/séries de photos (façon Capture One), pas juste une liste plate.
-- **Multiplateforme dès la conception** : Linux en priorité, macOS pour le développement
-  quotidien, Windows envisagé seulement si le projet est publié sur GitHub.
-- **Formats** : RAW uniquement au départ, puis JPEG/TIFF rapidement ; vidéo/son à très long
+- **Multiplateforme dès le MVP** : Linux et macOS au même niveau, les deux doivent compiler et
+  tourner dès le départ (macOS est aussi la machine de développement quotidien). Windows est
+  souhaité : ne pas faire de choix qui l'excluent (dépendances, build, chemins), même s'il
+  n'est pas testé en continu.
+- **Formats** : RAW et images plates (JPEG/TIFF...) dès le MVP ; vidéo/son à très long
   terme, hors scope pour longtemps.
 
 ## Décisions d'architecture complémentaires (réflexion du 16/10/2026)
@@ -107,13 +119,20 @@ Précisions actées après discussion, toujours non implémentées avant la fin 
 
 ## LibRaw depuis Rust — déjà résolu
 
-Un prototype minimal fonctionne (dossier `libraw_test`, à réintégrer/adapter) :
+Intégré dans `src/raw/` (`ffi.rs` = déclarations brutes, `mod.rs` = wrapper sûr `RawFile`
+avec `thumbnail()` et `render(&RenderOptions)` → `Bitmap` RGB8). Outil de test paramétrable :
+`cargo run --release --example raw -- <thumb|render> <RAW> <sortie> [--half] [--daylight] [--bright X]`.
+Prérequis système dans `prerequisites.sh`. Points acquis :
 
 - LibRaw expose une **API C** (`libraw_*`) utilisable via FFI ; l'API C++ n'a pas d'ABI stable
   et n'est pas directement appelable depuis Rust.
 - `build.rs` utilise `pkg-config` pour localiser la lib, avec une correction manuelle macOS :
   `pkg-config` renvoie `-lstdc++` (GNU) alors que macOS utilise `libc++` → remplacer `stdc++`
   par `c++` quand `CARGO_CFG_TARGET_OS == "macos"`. Sur Linux, `stdc++` est correct tel quel.
+  Windows (non testé) : pas de pkg-config, on définit `LIBRAW_DIR` (dossier avec `include/` et
+  `lib/`, ex. installation vcpkg) et éventuellement `LIBRAW_LIB` (nom de la lib, défaut `raw`).
+  Ouverture des fichiers via `libraw_open_wfile` (UTF-16) sous Windows, octets bruts du chemin
+  ailleurs (noms non UTF-8 acceptés).
 - Édition Rust 2024 : la syntaxe est `unsafe extern "C" { ... }` (le `unsafe` se place devant
   `extern`, pas autour du bloc).
 - Wrapper sûr autour du handle opaque `libraw_data_t*`, avec `Drop` qui appelle
@@ -122,8 +141,12 @@ Un prototype minimal fonctionne (dossier `libraw_test`, à réintégrer/adapter)
   `libraw_dcraw_make_mem_thumb` (extraction du JPEG embarqué).
 - Pour le rendu HD complet (nécessaire au MVP, pas juste l'aperçu) : même logique avec
   `libraw_unpack` → `libraw_dcraw_process` → `libraw_dcraw_make_mem_image` (bitmap RGB, au
-  lieu du JPEG embarqué). Les paramètres de sortie se règlent avec les `libraw_set_*`
-  (ex. `libraw_set_output_bps`, `libraw_set_use_camera_wb`).
+  lieu du JPEG embarqué) — fonctionnel. Certains paramètres ont un setter C
+  (`libraw_set_output_bps`, `libraw_set_bright`...), mais **pas** `use_camera_wb` ni
+  `half_size` : ils sont réglés par un mini shim C (`csrc/libraw_shim.c`, compilé par `cc`
+  avec le vrai `libraw.h`, donc layout de struct toujours correct, sans bindgen).
+- Mesures (X-T4, RAF 26 Mpx, Mac Apple Silicon, release) : aperçu embarqué ≈ 10 ms ; rendu
+  complet ≈ 3,8 s ; rendu `half_size` ≈ 0,35 s (X-Trans : le dématriçage complet est lent).
 - Pistes non vérifiées : crates `libraw-rs` / `rsraw` existent sur crates.io mais leur
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
@@ -137,15 +160,23 @@ Un prototype minimal fonctionne (dossier `libraw_test`, à réintégrer/adapter)
   le besoin (ex. parallélisation des vignettes — à mesurer, pas à deviner).
 - Avant d'adopter une dépendance externe, vérifier qu'elle est activement maintenue.
 - Transparence : relire les valeurs réelles plutôt que supposer qu'une écriture a réussi.
+- **Tests et documentation à chaque étape, pas après coup** :
+  - tests unitaires dans chaque module (`#[cfg(test)]`), tests d'intégration dans `tests/`
+    (un fichier par module, API publique uniquement) ; les tests qui ont besoin d'un vrai RAW
+    sont `#[ignore]` et lisent `TRI_TEST_RAW` (aucun RAW versionné) ;
+  - documentation Markdown dans `doc/` (un fichier par module + `README.md` sommaire,
+    `build.md`, `tests.md`) expliquant mods, traits, fonctions et le *pourquoi* ; commentaires
+    `///` sur tout l'API public pour `cargo doc` ;
+  - avant chaque commit : `cargo fmt`, `cargo clippy --all-targets` sans warning, tests verts.
 
 ## Prochaine étape immédiate
 
-- [ ] Reprendre le dossier `libraw_test` (prototype JPEG embarqué) et l'étendre au rendu RAW
+- [x] Reprendre le dossier `libraw_test` (prototype JPEG embarqué) et l'étendre au rendu RAW
       complet (`libraw_dcraw_process` + `libraw_dcraw_make_mem_image`) pour obtenir un bitmap
       affichable.
-- [ ] Brancher ce rendu dans le canvas d'affichage déjà expérimenté.
-- [ ] Ajouter le parcours de dossier (lecture de la liste des fichiers RAW).
-- [ ] Grille de vignettes à partir des aperçus JPEG embarqués (déjà fonctionnel côté LibRaw).
+- [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
+- [ ] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier.
+- [ ] Grille de vignettes : aperçus embarqués pour les RAW, image décodée pour les plates.
 - [ ] Navigation clavier gauche/droite entre images affichées en plein écran.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

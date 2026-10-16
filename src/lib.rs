@@ -1,3 +1,5 @@
+pub mod raw;
+
 use std::ffi::OsString;
 use std::path::PathBuf;
 
