@@ -171,7 +171,7 @@ fn previews(args: &Args, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
             Ok(Event::Failed {
                 path, level, error, ..
             }) => failures.push(format!("{level:?} {} : {error}", path.display())),
-            Ok(Event::Ready { .. }) => {}
+            Ok(Event::Ready { .. } | Event::Dropped { .. }) => {}
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }

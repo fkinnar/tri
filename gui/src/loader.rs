@@ -118,9 +118,11 @@ fn run(
                 s = shared.wake.wait(s).unwrap_or_else(|e| e.into_inner());
             }
         };
+        let started = std::time::Instant::now();
         let bitmap = preview::key(&file, level, sizes)
             .ok()
             .and_then(|k| cache.get(&k));
+        let read = started.elapsed();
         let original = bitmap
             .as_ref()
             .map_or([0, 0], |b| [b.width as usize, b.height as usize]);
@@ -129,6 +131,12 @@ fn run(
             // l'étire à sa taille d'origine).
             let b = b.fit(max_side as u32);
             ColorImage::from_rgb([b.width as usize, b.height as usize], &b.data)
+        });
+        crate::trace::trace(|| {
+            format!(
+                "chargeur : {level:?} lu en {read:.1?}, prêt pour le GPU en {:.1?}",
+                started.elapsed()
+            )
         });
         let sensor_ratio = (level == Level::EmbeddedFull && file.kind == MediaKind::Raw)
             .then(|| tri::raw::RawFile::open(&file.path).ok())

@@ -89,6 +89,18 @@ pub enum Event {
         /// Message d'erreur.
         error: String,
     },
+    /// Une demande ([`Scheduler::request`]) a été abandonnée parce que l'image affichée
+    /// s'est éloignée : elle ne sera pas calculée, il faudra la redemander si besoin.
+    Dropped {
+        /// Dossier concerné.
+        generation: u64,
+        /// Position du fichier.
+        index: usize,
+        /// Chemin du fichier.
+        path: PathBuf,
+        /// Niveau concerné.
+        level: Level,
+    },
     /// Avancement d'un niveau calculé en fond (vignettes ou aperçus standard).
     Progress {
         /// Dossier concerné.
@@ -172,7 +184,7 @@ fn background_levels(kind: MediaKind, raw_previews: RawPreviews) -> &'static [Le
     }
 }
 
-/// Niveaux « 1:1 » : gardés seulement pour l'image affichée.
+/// Niveaux « 1:1 » : les plus urgents (l'utilisateur attend devant l'image).
 fn is_zoom_level(level: Level) -> bool {
     matches!(level, Level::Full | Level::EmbeddedFull)
 }
@@ -205,7 +217,7 @@ const STANDARD_BACKGROUND: u8 = 5;
 ///    affichée (en avant d'abord à distance égale).
 fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
     let (near_class, background_class) = match level {
-        Level::Full | Level::EmbeddedFull => return (0, 0),
+        Level::Full | Level::EmbeddedFull => (0, 0),
         Level::Thumbnail => return (3, index),
         Level::Embedded => (1, EMBEDDED_BACKGROUND),
         Level::Standard => (2, STANDARD_BACKGROUND),
@@ -410,53 +422,55 @@ impl Scheduler {
         generation
     }
 
-    /// Indique l'image affichée : son aperçu passe en tête, puis ses voisines. Un rendu 1:1
-    /// demandé pour une autre image est abandonné (et annulé s'il a commencé).
+    /// Indique l'image affichée : son aperçu passe en tête, puis ses voisines. Les demandes
+    /// pour des images qui ne sont plus voisines sont abandonnées (un 1:1 en cours est
+    /// annulé) et signalées par [`Event::Dropped`].
     pub fn set_focus(&self, index: usize) {
         let mut s = self.shared.lock();
         if index >= s.files.len() || s.focus == Some(index) {
             return;
         }
         s.focus = Some(index);
-        let keep = |&(i, l): &Job| {
-            if is_zoom_level(l) {
-                i == index
-            } else {
-                is_near(i, index)
-            }
-        };
         let dropped: Vec<Job> = s
             .on_demand
             .iter()
-            .filter(|j| !keep(j) && s.pending.contains(j))
+            .filter(|&&(i, _)| !is_near(i, index))
+            .filter(|j| s.pending.contains(j))
             .copied()
             .collect();
+        let generation = s.generation;
         for job in dropped {
             s.pending.remove(&job);
             s.on_demand.remove(&job);
+            let path = s.files[job.0].path.clone();
+            s.outbox.push_back(Event::Dropped {
+                generation,
+                index: job.0,
+                path,
+                level: job.1,
+            });
         }
-        s.cancel_running(|r| !is_zoom_level(r.job.1) || r.job.0 == index);
+        // Un 1:1 en cours pour une image éloignée est annulé (signalé à sa fin).
+        s.cancel_running(|r| !is_zoom_level(r.job.1) || is_near(r.job.0, index));
         drop(s);
         self.shared.work.notify_all();
+        deliver(&self.shared);
     }
 
-    /// Demande une image hors du travail de fond : 1:1 (`Full`, `EmbeddedFull`) de l'image
-    /// affichée, ou rendu RAW (`Standard`) de l'image affichée et de ses voisines en
-    /// politique [`RawPreviews::OnDemand`]. Ne compte pas dans la progression ; signalée par
-    /// `Ready` (immédiatement si déjà en cache) ou `Failed`.
+    /// Demande une image hors du travail de fond, pour l'image affichée ou l'une de ses
+    /// voisines : 1:1 (`Full`, `EmbeddedFull` ; ceux des voisines servent au préchargement
+    /// quand on navigue zoomé) ou rendu RAW (`Standard`) en politique
+    /// [`RawPreviews::OnDemand`]. Ne compte pas dans la progression ; signalée par `Ready`
+    /// (immédiatement si déjà en cache), `Failed`, ou `Dropped` si l'image affichée
+    /// s'éloigne avant.
     ///
-    /// Ignorée sans image affichée, si `index` en est trop loin (1:1 : l'image affichée
-    /// seulement ; autres niveaux : elle et ses voisines), ou si la tâche est déjà prévue.
+    /// Ignorée sans image affichée, si `index` n'en est pas voisin, ou si la tâche est déjà
+    /// prévue.
     pub fn request(&self, index: usize, level: Level) {
         let mut s = self.shared.lock();
         let Some(focus) = s.focus else { return };
-        let allowed = if is_zoom_level(level) {
-            index == focus
-        } else {
-            is_near(index, focus)
-        };
         let job = (index, level);
-        if !allowed
+        if !is_near(index, focus)
             || index >= s.files.len()
             || s.pending.contains(&job)
             || s.running.iter().any(|r| r.job == job)
@@ -611,7 +625,16 @@ fn finish(
             path,
             level,
         }],
-        // Annulée sans changement de dossier : un 1:1 abandonné, rien à signaler.
+        // Annulée sans changement de dossier : une demande abandonnée (l'image affichée
+        // s'est éloignée) ; à signaler pour qu'elle puisse être redemandée.
+        Err(Failure::Cancelled) if on_demand => {
+            return vec![Event::Dropped {
+                generation,
+                index,
+                path,
+                level,
+            }];
+        }
         Err(Failure::Cancelled) => return Vec::new(),
         Err(Failure::Error(error)) => vec![Event::Failed {
             generation,

@@ -181,6 +181,24 @@ fn ready(events: &Events, generation: u64, level: Level) -> Vec<usize> {
         .collect()
 }
 
+/// Demandes abandonnées signalées pour une génération : (position, niveau).
+fn dropped(events: &Events, generation: u64) -> Vec<(usize, Level)> {
+    events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            Event::Dropped {
+                generation: g,
+                index,
+                level,
+                ..
+            } if *g == generation => Some((*index, *level)),
+            _ => None,
+        })
+        .collect()
+}
+
 fn complete(n: usize) -> Option<Progress> {
     Some(Progress { done: n, total: n })
 }
@@ -430,17 +448,17 @@ fn raw_renders_never_overlap_but_light_jobs_do() {
 }
 
 #[test]
-fn full_render_is_on_demand_and_dropped_when_focus_moves() {
+fn full_render_is_on_demand_and_dropped_when_focus_moves_away() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     *fake.0.full_delay.lock().unwrap() = Duration::from_secs(5);
-    let all = files(3, MediaKind::Raw);
-    fake.mark_all_cached(&all, &[Level::Thumbnail, Level::Standard]);
+    let all = files(5, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail, Level::Embedded, Level::Standard]);
     let (scheduler, events) = start(&fake, 1);
     let generation = scheduler.set_folder(all);
 
     scheduler.request(1, Level::Full); // sans image affichée : sans effet
     scheduler.set_focus(1);
-    scheduler.request(0, Level::Full); // 1:1 d'une autre image que l'affichée : ignoré
+    scheduler.request(3, Level::Full); // pas voisine de l'image affichée : ignoré
     scheduler.request(1, Level::Full);
     let deadline = Instant::now() + LONG;
     while !fake
@@ -456,7 +474,7 @@ fn full_render_is_on_demand_and_dropped_when_focus_moves() {
     }
 
     let moved = Instant::now();
-    scheduler.set_focus(2);
+    scheduler.set_focus(4); // 1 n'est plus voisine : son 1:1 en cours est annulé
     assert!(scheduler.wait_idle(LONG));
     assert!(
         moved.elapsed() < Duration::from_secs(2),
@@ -472,12 +490,43 @@ fn full_render_is_on_demand_and_dropped_when_focus_moves() {
         [("img1.RAF".into(), Level::Full, Err(Failure::Cancelled))]
     );
     assert!(ready(&events, generation, Level::Full).is_empty());
+    assert_eq!(
+        dropped(&events, generation),
+        [(1, Level::Full)],
+        "l'annulation est signalée"
+    );
 
     // Un 1:1 demandé pour l'image affichée aboutit.
     *fake.0.full_delay.lock().unwrap() = Duration::from_millis(10);
-    scheduler.request(2, Level::Full);
+    scheduler.request(4, Level::Full);
     assert!(scheduler.wait_idle(LONG));
-    assert_eq!(ready(&events, generation, Level::Full), [2]);
+    assert_eq!(ready(&events, generation, Level::Full), [4]);
+}
+
+#[test]
+fn zoom_of_neighbours_can_be_prefetched_and_survives_a_step() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    *fake.0.full_delay.lock().unwrap() = Duration::from_millis(20);
+    let all = files(5, MediaKind::Raw);
+    let (scheduler, events) = start(&fake, 1);
+    let generation = scheduler.set_folder(all);
+    scheduler.set_focus(2);
+    for i in [2, 3, 1] {
+        scheduler.request(i, Level::EmbeddedFull);
+    }
+    scheduler.set_focus(3); // 2 et 3 restent proches, 1 non
+    assert!(scheduler.wait_idle(LONG));
+    let mut ready_full = ready(&events, generation, Level::EmbeddedFull);
+    ready_full.sort();
+    let mut dropped_or_ready = ready_full.clone();
+    dropped_or_ready.extend(dropped(&events, generation).iter().map(|(i, _)| *i));
+    dropped_or_ready.sort();
+    assert!(ready_full.contains(&2) && ready_full.contains(&3));
+    assert_eq!(
+        dropped_or_ready,
+        [1, 2, 3],
+        "1 calculée à temps ou abandonnée, jamais perdue"
+    );
 }
 
 #[test]
@@ -574,7 +623,7 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
 fn moving_focus_drops_requests_that_are_no_longer_near() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let all = files(10, MediaKind::Raw);
-    let (scheduler, _) = start_with(
+    let (scheduler, events) = start_with(
         &fake,
         Config {
             light_workers: 1,
@@ -583,17 +632,28 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
         },
     );
     scheduler.set_paused(true);
-    scheduler.set_folder(all);
+    let generation = scheduler.set_folder(all);
     scheduler.set_focus(2);
     scheduler.request(2, Level::Standard);
     scheduler.request(3, Level::Standard);
     scheduler.request(2, Level::EmbeddedFull);
-    scheduler.set_focus(3); // 2 reste voisine ; son 1:1 tombe
+    scheduler.set_focus(3); // 2 reste voisine, avec son 1:1 (préchargement)
     scheduler.set_focus(8); // plus rien de proche
     scheduler.set_paused(false);
     assert!(scheduler.wait_idle(LONG));
     assert!(fake.order(Level::Standard).is_empty());
     assert!(fake.order(Level::EmbeddedFull).is_empty());
+    let mut gone = dropped(&events, generation);
+    gone.sort_by_key(|(i, l)| (*i, *l as u8));
+    assert_eq!(
+        gone,
+        [
+            (2, Level::Standard),
+            (2, Level::EmbeddedFull),
+            (3, Level::Standard)
+        ],
+        "chaque abandon est signalé"
+    );
 }
 
 #[test]

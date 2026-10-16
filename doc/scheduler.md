@@ -15,11 +15,14 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
 - **API** : `set_folder(files) -> génération`, `set_focus(index)`,
   `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
   `Drop` annule et arrête les threads.
-- **Demandes hors travail de fond** (`request`) : 1:1 (`Full`, `EmbeddedFull`) de l'image
-  affichée, et rendus RAW (`Standard`) de l'image affichée et de ses voisines. Elles ne
-  comptent pas dans la progression (`on_demand`). Changer d'image abandonne celles qui ne
-  sont plus proches (et annule un 1:1 en cours pour une autre image). Une demande déjà en
-  cache donne simplement un `Ready`.
+- **Demandes hors travail de fond** (`request`) : 1:1 (`Full`, `EmbeddedFull`) et rendus
+  RAW (`Standard`) de l'image affichée **et de ses voisines** (préchargement quand on
+  navigue zoomé). Elles ne comptent pas dans la progression (`on_demand`). Priorité : les
+  1:1 d'abord (image affichée, puis suivante, puis précédente). Changer d'image abandonne
+  celles qui ne sont plus voisines, annule un 1:1 en cours pour une image éloignée, et le
+  **signale par `Event::Dropped`** : l'interface sait ainsi qu'elle doit redemander si l'on
+  revient. (Sans ce signal, un 1:1 abandonné n'était jamais redemandé : bug corrigé le
+  16/10/2026.) Une demande déjà en cache donne simplement un `Ready`.
 - **`Config::raw_previews`** : `Background` (défaut : rendus RAW de tout le dossier en
   fond, après vignettes et aperçus boîtier) ou `OnDemand` (aucun rendu RAW en fond ; utilisé
   par l'interface). Les aperçus des images plates sont toujours calculés en fond.
@@ -120,8 +123,9 @@ worker :
 - entrées en cache signalées sans recalcul ; échecs signalés et comptés ;
 - ordre exact du worker lourd autour de l'image affichée (5, 6, 4, 7, 3, 8, 2, 9, 1, 0) ;
 - rendus RAW jamais simultanés, tâches légères en parallèle ;
-- 1:1 à la demande, annulé quand l'image affichée change (< 2 s), puis abouti pour la
-  nouvelle ;
+- 1:1 à la demande, annulé quand l'image affichée s'éloigne (< 2 s), signalé par
+  `Dropped`, puis abouti pour la nouvelle ; 1:1 des voisines préchargés et gardés d'un pas
+  à l'autre ; chaque abandon de demande signalé ;
 - nouveau dossier : l'ancien est abandonné, aucun de ses résultats sous la nouvelle
   génération ;
 - « vignettes d'abord » : avant la dernière vignette, seuls l'image affichée et ses voisines

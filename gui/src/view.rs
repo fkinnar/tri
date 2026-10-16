@@ -116,6 +116,18 @@ pub fn center_keeping(view: Rect, size: Vec2, point: Vec2, pointer: Pos2) -> Vec
     vec2(point.x - offset.x / size.x, point.y - offset.y / size.y)
 }
 
+/// Taille (pixels) supposée du 1:1 d'une image dont on n'a encore qu'un aperçu de
+/// proportions `aspect` (largeur / hauteur), d'après le dernier 1:1 affiché (`last`) :
+/// même côté long, orientation de l'aperçu. Une série vient en général du même boîtier.
+pub fn estimate_zoom_size(last: Vec2, aspect: f32) -> Vec2 {
+    let long = last.x.max(last.y);
+    if aspect >= 1.0 {
+        vec2(long, long / aspect)
+    } else {
+        vec2(long * aspect, long)
+    }
+}
+
 /// Origine de l'image (coin haut gauche), pour les tests.
 #[cfg(test)]
 fn origin(r: Rect) -> Pos2 {
@@ -265,6 +277,15 @@ mod tests {
             clamp_center(view, vec2(4000.0, 400.0), vec2(0.2, 0.9)),
             vec2(0.2, 0.5)
         );
+    }
+
+    #[test]
+    fn zoom_size_estimate_follows_the_orientation_of_the_preview() {
+        let last = vec2(2944.0, 4416.0); // portrait
+        assert_eq!(estimate_zoom_size(last, 2944.0 / 4416.0), last);
+        let landscape = estimate_zoom_size(last, 4416.0 / 2944.0);
+        assert_eq!(landscape.x, 4416.0);
+        assert!((landscape.y - 2944.0).abs() < 0.5);
     }
 
     #[test]

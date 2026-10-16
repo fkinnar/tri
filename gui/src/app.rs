@@ -22,6 +22,7 @@ use crate::actions::{Action, Keymap};
 use crate::grid::{self, Layout};
 use crate::loader::Loader;
 use crate::textures::Lru;
+use crate::trace::trace;
 use crate::view::{self, Source};
 
 /// Côté d'une cellule de la grille (points).
@@ -98,6 +99,8 @@ struct Engine {
 /// prise une fois toutes les vignettes prêtes, puis l'application se ferme.
 struct Screenshot {
     path: PathBuf,
+    /// Capture demandée par le script (`shot`) : tout de suite, sans attendre.
+    forced: bool,
     requested: bool,
     done: Arc<AtomicBool>,
     started: Instant,
@@ -125,7 +128,9 @@ pub struct TriApp {
     screenshot: Option<Screenshot>,
     help: bool,
     /// Actions à exécuter à la première image (`TRI_GUI_ACTIONS`, développement).
-    startup_actions: Vec<Action>,
+    startup_actions: std::collections::VecDeque<Step>,
+    /// Pause en cours dans le script de démarrage.
+    script_wait: Option<Instant>,
     /// Vignettes visibles prêtes mais pas encore chargées (budget de l'image dépassé).
     visible_waiting: usize,
     mode: Mode,
@@ -149,6 +154,11 @@ pub struct TriApp {
     /// Demandes en cours auprès du scheduler (1:1, rendus RAW à la demande) : ne pas les
     /// répéter à chaque image affichée.
     requested: HashSet<(PathBuf, Level)>,
+    /// Taille (pixels) du dernier 1:1 affiché, par niveau : sert à afficher l'aperçu d'une
+    /// image voisine déjà à l'échelle 1:1 en attendant son propre 1:1.
+    last_zoom_size: std::collections::HashMap<Level, Vec2>,
+    /// Dernière image affichée en plein écran (pour la trace).
+    last_shown: (usize, Option<Level>),
 }
 
 impl TriApp {
@@ -161,6 +171,7 @@ impl TriApp {
         };
         let screenshot = std::env::var_os("TRI_GUI_SCREENSHOT").map(|p| Screenshot {
             path: p.into(),
+            forced: false,
             requested: false,
             done: Arc::default(),
             started: Instant::now(),
@@ -189,7 +200,8 @@ impl TriApp {
             screenshot,
             help: false,
             visible_waiting: 0,
-            startup_actions: startup_actions(),
+            startup_actions: startup_actions().into(),
+            script_wait: None,
             mode: Mode::Grid,
             source: Source::default(),
             zoom: None,
@@ -199,6 +211,8 @@ impl TriApp {
             missing: HashSet::new(),
             view_waiting: false,
             requested: HashSet::new(),
+            last_shown: (usize::MAX, None),
+            last_zoom_size: std::collections::HashMap::new(),
         };
         app.apply_filter();
         app
@@ -289,6 +303,9 @@ impl TriApp {
                     level,
                     ..
                 } if g == generation => {
+                    if level != Level::Thumbnail {
+                        trace(|| format!("prête dans le cache : image {index} {level:?}"));
+                    }
                     // Prête à nouveau (recalculée) : on peut la redemander au chargeur.
                     if let Some(f) = self.files.get(index) {
                         self.missing.remove(&(f.path.clone(), level));
@@ -315,6 +332,18 @@ impl TriApp {
                 } if g == generation => {
                     if let Some(i) = tracked(level) {
                         self.progress[i] = progress;
+                    }
+                }
+                Event::Dropped {
+                    generation: g,
+                    index,
+                    level,
+                    ..
+                } if g == generation => {
+                    // Abandonnée par le moteur (image éloignée) : à redemander si besoin.
+                    if let Some(f) = self.files.get(index) {
+                        trace(|| format!("abandonnée par le moteur : image {index} {level:?}"));
+                        self.requested.remove(&(f.path.clone(), level));
                     }
                 }
                 _ => {} // ancien dossier, ou niveau non suivi
@@ -421,15 +450,23 @@ impl TriApp {
         if let Some(engine) = &self.engine
             && self.requested.insert(key)
         {
+            trace(|| format!("demande au moteur : image {index} {level:?}"));
             engine.scheduler.request(index, level);
         }
     }
 
-    /// En 1:1, demande le 1:1 de l'image affichée pour la source choisie (sans effet sinon).
+    /// En 1:1, demande le 1:1 de l'image affichée pour la source choisie, puis celui de ses
+    /// voisines (préchargement : on navigue souvent zoomé pour comparer). Sans effet sinon.
     fn request_zoom(&mut self) {
-        if self.zoom.is_some() && self.mode == Mode::View && !self.files.is_empty() {
-            let level = view::zoom_level(self.files[self.selected].kind, self.source);
-            self.request(self.selected, level);
+        if self.zoom.is_none() || self.mode != Mode::View || self.files.is_empty() {
+            return;
+        }
+        let current = self.selected;
+        for i in [current, current + 1, current.wrapping_sub(1)] {
+            if i < self.files.len() {
+                let level = view::zoom_level(self.files[i].kind, self.source);
+                self.request(i, level);
+            }
         }
     }
 
@@ -446,12 +483,14 @@ impl TriApp {
         *avail == Avail::Ready
     }
 
-    /// Vrai si l'image `index` au niveau `level` est affichable tout de suite (texture
-    /// chargée).
+    /// Vrai si l'image `index` au niveau `level` est affichable tout de suite : texture
+    /// chargée, ou vignette calculée (elle se charge en 1–2 ms, au moment de dessiner). La
+    /// vignette sert ainsi toujours de solution d'attente : jamais d'écran noir en changeant
+    /// d'image.
     fn loaded(&self, index: usize, level: Level) -> bool {
         let path = &self.files[index].path;
         match level {
-            Level::Thumbnail => self.textures.contains(path),
+            Level::Thumbnail => self.textures.contains(path) || self.ready(index, level),
             _ => self.big.contains(&(path.clone(), level)),
         }
     }
@@ -461,6 +500,14 @@ impl TriApp {
     fn update_loads(&mut self, ctx: &egui::Context) {
         let Some(engine) = &self.engine else { return };
         for loaded in engine.loader.drain() {
+            trace(|| {
+                format!(
+                    "texture reçue : {} {:?} {:?}",
+                    file_name(&loaded.path),
+                    loaded.level,
+                    loaded.original
+                )
+            });
             let key = (loaded.path.clone(), loaded.level);
             self.wanted.retain(|w| *w != key);
             match loaded.image {
@@ -505,7 +552,9 @@ impl TriApp {
             .filter(|&i| i < n);
         let mut wanted = Vec::new();
         for (index, zoomed) in
-            std::iter::once((current, self.zoom.is_some())).chain(neighbours.map(|i| (i, false)))
+            // Zoomé, les voisines aussi en 1:1 (préchargement).
+            std::iter::once((current, self.zoom.is_some()))
+                .chain(neighbours.map(|i| (i, self.zoom.is_some())))
         {
             let kind = self.files[index].kind;
             let level = view::pick(kind, self.source, zoomed, |l| self.ready(index, l));
@@ -519,6 +568,7 @@ impl TriApp {
         let keys: Vec<(PathBuf, Level)> =
             wanted.iter().map(|(f, l)| (f.path.clone(), *l)).collect();
         if keys != self.wanted {
+            trace(|| format!("chargeur : {keys:?}"));
             self.wanted = keys;
             engine.loader.want(wanted);
         }
@@ -535,6 +585,10 @@ impl TriApp {
         let shown = view::pick(file.kind, self.source, zoomed, |l| {
             self.ready(index, l) && self.loaded(index, l)
         });
+        if (index, shown) != self.last_shown {
+            trace(|| format!("affichée : image {index} {shown:?} (voulue {desired:?})"));
+            self.last_shown = (index, shown);
+        }
         // En attente tant que l'image voulue n'est pas affichée, ou que le 1:1 demandé
         // n'est pas encore calculé.
         let zoom_level = view::zoom_level(file.kind, self.source);
@@ -547,45 +601,60 @@ impl TriApp {
         painter.rect_filled(view_rect, 0.0, Color32::from_gray(12));
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
 
+        // Texture à afficher, et dimensions d'origine (pixels) de l'image qu'elle représente.
+        let deadline = Instant::now() + LOAD_BUDGET;
+        let drawable: Option<(TextureHandle, Vec2, Option<f32>)> = match shown {
+            Some(Level::Thumbnail) => self.thumbnail_texture(&ctx, index, deadline).map(|t| {
+                let size = t.size_vec2();
+                (t, size, None)
+            }),
+            Some(level) => self.big.get(&(file.path.clone(), level)).cloned().map(|b| {
+                let ratio = b.sensor_ratio.filter(|_| level == Level::EmbeddedFull);
+                (b.texture, b.original, ratio)
+            }),
+            None => None,
+        };
         let mut image_rect = None;
         let mut sensor_ratio = None;
-        match shown {
-            Some(Level::Thumbnail) => {
-                let deadline = Instant::now() + LOAD_BUDGET;
-                if let Some(t) = self.thumbnail_texture(&ctx, index, deadline) {
-                    let rect = view::fit_rect(view_rect, t.size_vec2());
-                    painter.image(t.id(), rect, uv, Color32::WHITE);
-                    image_rect = Some(rect);
+        if let Some((texture, original, ratio)) = drawable {
+            sensor_ratio = ratio;
+            // Taille du 1:1 en pixels : connue si c'est lui qui est affiché ; sinon estimée
+            // d'après le dernier 1:1 de même niveau (même boîtier, souvent même taille). En
+            // attendant le 1:1, l'aperçu est ainsi déjà affiché à l'échelle 1:1 (flou un
+            // instant), sans repasser par la vue ajustée.
+            let zoom_px = match (self.zoom, shown) {
+                (Some(_), Some(level)) if level == zoom_level => {
+                    self.last_zoom_size.insert(zoom_level, original);
+                    Some(original)
                 }
-            }
-            Some(level) => {
-                if let Some(big) = self.big.get(&(file.path.clone(), level)).cloned() {
-                    let rect = match (level, self.zoom) {
-                        (Level::Full | Level::EmbeddedFull, Some(center)) => {
-                            // 100 % : un pixel de l'image = un pixel de l'écran.
-                            let size = big.original / ctx.pixels_per_point();
-                            let mut center = match self.zoom_anchor.take() {
-                                Some((point, pointer)) => {
-                                    view::center_keeping(view_rect, size, point, pointer)
-                                }
-                                None => center,
-                            };
-                            if response.dragged() {
-                                let d = response.drag_delta();
-                                center -= vec2(d.x / size.x, d.y / size.y);
-                            }
-                            let center = view::clamp_center(view_rect.size(), size, center);
-                            self.zoom = Some(center);
-                            view::zoom_rect(view_rect, size, center)
+                (Some(_), _) => self
+                    .last_zoom_size
+                    .get(&zoom_level)
+                    .map(|&last| view::estimate_zoom_size(last, original.x / original.y)),
+                (None, _) => None,
+            };
+            let rect = match (zoom_px, self.zoom) {
+                (Some(px), Some(center)) => {
+                    // 1:1 : un pixel de l'image = un pixel de l'écran.
+                    let size = px / ctx.pixels_per_point();
+                    let mut center = match self.zoom_anchor.take() {
+                        Some((point, pointer)) => {
+                            view::center_keeping(view_rect, size, point, pointer)
                         }
-                        _ => view::fit_rect(view_rect, big.original),
+                        None => center,
                     };
-                    painter.image(big.texture.id(), rect, uv, Color32::WHITE);
-                    image_rect = Some(rect);
-                    sensor_ratio = big.sensor_ratio.filter(|_| level == Level::EmbeddedFull);
+                    if response.dragged() {
+                        let d = response.drag_delta();
+                        center -= vec2(d.x / size.x, d.y / size.y);
+                    }
+                    let center = view::clamp_center(view_rect.size(), size, center);
+                    self.zoom = Some(center);
+                    view::zoom_rect(view_rect, size, center)
                 }
-            }
-            None => {}
+                _ => view::fit_rect(view_rect, original),
+            };
+            painter.image(texture.id(), rect, uv, Color32::WHITE);
+            image_rect = Some(rect);
         }
 
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
@@ -824,6 +893,36 @@ impl TriApp {
         );
     }
 
+    /// Script de démarrage (développement) : exécute les actions jusqu'à la prochaine pause.
+    fn run_script(&mut self, ctx: &egui::Context) {
+        if let Some(until) = self.script_wait {
+            if Instant::now() < until {
+                ctx.request_repaint_after(until - Instant::now());
+                return;
+            }
+            self.script_wait = None;
+        }
+        while let Some(step) = self.startup_actions.pop_front() {
+            match step {
+                Step::Do(action) => {
+                    trace(|| format!("script : {}", action.id()));
+                    self.perform(ctx, action);
+                }
+                Step::Wait(d) => {
+                    self.script_wait = Some(Instant::now() + d);
+                    ctx.request_repaint_after(d);
+                    return;
+                }
+                Step::Shot => {
+                    if let Some(shot) = &mut self.screenshot {
+                        shot.forced = true;
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -870,7 +969,9 @@ impl TriApp {
         // Au moins une seconde : laisser finir les animations (fondu d'ouverture des
         // fenêtres), sinon la capture montre un état intermédiaire.
         let settled = shot.started.elapsed() > Duration::from_secs(1);
-        if !shot.requested && ((ready && self.visible_waiting == 0 && settled) || timeout) {
+        let script_done = self.startup_actions.is_empty() && self.script_wait.is_none();
+        let automatic = ready && self.visible_waiting == 0 && settled && script_done;
+        if !shot.requested && (automatic || shot.forced || timeout) {
             shot.requested = true;
             let (path, done) = (shot.path.clone(), shot.done.clone());
             let repaint = ctx.clone();
@@ -905,9 +1006,7 @@ impl eframe::App for TriApp {
             self.start_engine(&ctx);
         }
         self.drain_events();
-        for action in std::mem::take(&mut self.startup_actions) {
-            self.perform(&ctx, action);
-        }
+        self.run_script(&ctx);
         self.handle_keys(&ctx);
         self.update_loads(&ctx);
 
@@ -932,23 +1031,42 @@ impl eframe::App for TriApp {
 
 /// Actions de `TRI_GUI_ACTIONS` (identifiants séparés par des virgules, ex.
 /// `core.nav.next,core.app.help`) ; les identifiants inconnus sont signalés et ignorés.
-fn startup_actions() -> Vec<Action> {
+/// Étape du script de démarrage (`TRI_GUI_ACTIONS`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    /// Exécuter une action.
+    Do(Action),
+    /// Attendre (`wait:<ms>`), pour laisser le moteur travailler entre deux actions.
+    Wait(Duration),
+    /// Capturer tout de suite (`shot`), sans attendre que tout soit prêt : pour voir un
+    /// état intermédiaire (chargement en cours).
+    Shot,
+}
+
+fn startup_actions() -> Vec<Step> {
     let Ok(list) = std::env::var("TRI_GUI_ACTIONS") else {
         return Vec::new();
     };
     parse_actions(&list)
 }
 
-fn parse_actions(list: &str) -> Vec<Action> {
+fn parse_actions(list: &str) -> Vec<Step> {
     list.split(',')
         .map(str::trim)
         .filter(|id| !id.is_empty())
         .filter_map(|id| {
-            let action = Action::from_id(id);
-            if action.is_none() {
-                eprintln!("TRI_GUI_ACTIONS : action inconnue « {id} »");
+            let step = match id.strip_prefix("wait:") {
+                Some(ms) => ms
+                    .parse()
+                    .ok()
+                    .map(|ms| Step::Wait(Duration::from_millis(ms))),
+                None if id == "shot" => Some(Step::Shot),
+                None => Action::from_id(id).map(Step::Do),
+            };
+            if step.is_none() {
+                eprintln!("TRI_GUI_ACTIONS : étape inconnue « {id} »");
             }
-            action
+            step
         })
         .collect()
 }
@@ -1213,10 +1331,15 @@ mod tests {
     #[test]
     fn startup_actions_are_parsed_by_id() {
         assert_eq!(
-            parse_actions(" core.nav.next, core.app.help ,,inconnue"),
-            [Action::NavNext, Action::Help]
+            parse_actions(" core.nav.next, wait:250, core.app.help ,,inconnue,wait:x"),
+            [
+                Step::Do(Action::NavNext),
+                Step::Wait(Duration::from_millis(250)),
+                Step::Do(Action::Help)
+            ]
         );
         assert!(parse_actions("").is_empty());
+        assert_eq!(parse_actions("shot"), [Step::Shot]);
     }
 
     #[test]

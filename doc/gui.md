@@ -5,8 +5,13 @@ Application egui/eframe, dans son propre paquet (`gui/`) du workspace Cargo. Le 
 garantie par Cargo lui-même.
 
 ```sh
-cargo run --release -p tri-gui -- <dossier>
+cargo run --release -p tri-gui -- <dossier> [--cache <dossier du cache>]
 ```
+
+Toujours en **`--release`** pour s'en servir : en build de débogage, le code Rust n'est pas
+optimisé, et le 1:1 du JPEG boîtier passe de 0,4 s à 2 s (rotation, conversion pour le GPU),
+le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celui du système
+(mesures « à froid », essais).
 
 ## Ce qui est en place
 
@@ -60,10 +65,22 @@ puis on vérifie la netteté des candidates **à 100 %**.
   En attendant, l'image reste ajustée avec la mention « chargement du 1:1 » ou « calcul du
   100 % en cours ». Le cadrage du JPEG embarqué peut différer de quelques pixels de celui du
   RAW ; la position relative est gardée, donc la même zone à quelques pixels près.
-- **Navigation** : ←/→ (h/l), Début/Fin (g/Maj+G). **En 100 %, le zoom et la zone affichée
-  sont conservés d'une image à l'autre**, et le 1:1 de la nouvelle image est demandé :
-  on compare la netteté de plusieurs vues au même endroit. Échap revient à la grille (sur
-  l'image affichée).
+- **Navigation** : ←/→ (h/l), Début/Fin (g/Maj+G). **En 1:1, le zoom et la zone affichée
+  sont conservés d'une image à l'autre** : on compare la netteté de plusieurs vues au même
+  endroit. Échap revient à la grille (sur l'image affichée).
+  - **Préchargement** : zoomé, le 1:1 des deux voisines est demandé et chargé à l'avance ;
+    en avançant d'une image, son 1:1 est en général déjà là (mesuré : affichage immédiat).
+  - **Jamais de passage par la vue ajustée ni d'écran noir** : si le 1:1 de la nouvelle
+    image n'est pas encore prêt, le meilleur aperçu disponible est affiché **déjà à
+    l'échelle 1:1** (taille estimée d'après le dernier 1:1 affiché, même boîtier), flou un
+    instant puis net, comme dans Lightroom. En dernier recours, la vignette (chargée en
+    1–2 ms) tient lieu d'attente.
+  - Mode RAW : le préchargement passe par l'unique worker LibRaw (~4,5 s par 1:1). En
+    sautant une image, le 1:1 voulu attend la fin de celui de la voisine déjà commencé (le
+    dématriçage X-Trans ne s'interrompt pas) : jusqu'à ~6 s mesurées.
+  - Dans un dossier RAW+JPEG, le 1:1 d'un .JPG (6240 px) et celui du JPEG embarqué d'un
+    .RAF (4416 px) n'ont pas le même grossissement : c'est le principe du 1:1 (un pixel de
+    l'image pour un pixel de l'écran).
 - **Fluidité** : les grandes images sont décodées par un thread de chargement
   (`loader.rs`) : l'image affichée d'abord, puis ses voisines n+1 et n-1 (préchargement). La
   liste remplace la précédente : une image dépassée n'est jamais chargée pour rien. Les
@@ -159,9 +176,14 @@ délai, une capture faite pendant le fondu d'ouverture d'une fenêtre la montrai
 moitié transparente.
 
 - `TRI_GUI_SELECT=<n>` : image sélectionnée au démarrage ;
-- `TRI_GUI_ACTIONS=<id>,<id>...` : actions exécutées à la première image, par leur
-  identifiant (`core.nav.next`, `core.app.help`…). Un identifiant inconnu est signalé et
-  ignoré. Permet de capturer n'importe quel état de l'interface.
+- `TRI_GUI_ACTIONS=<étape>,<étape>...` : script exécuté au démarrage. Étapes : un
+  identifiant d'action (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, pour
+  laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
+  prêt : pour voir un état intermédiaire). Une étape inconnue est signalée et ignorée.
+  Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
+- `TRI_GUI_TRACE=1` : trace minutée de chaque étape du chargement des images (demande au
+  moteur, image prête, abandonnée, lecture et décodage, image affichée) sur la sortie
+  d'erreur. C'est elle qui a permis de mesurer les délais ci-dessus.
 
 ## Tests
 

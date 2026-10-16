@@ -1,6 +1,6 @@
 //! Interface graphique de tri.
 //!
-//!   tri-gui <dossier>
+//!   tri-gui <dossier> [--cache <dossier du cache>]
 //!
 //! Variables de développement : `TRI_GUI_SCREENSHOT=<fichier.png>` (capture de la fenêtre
 //! une fois les vignettes prêtes, puis fermeture), `TRI_GUI_SELECT=<n>` (image
@@ -12,13 +12,23 @@ mod app;
 mod grid;
 mod loader;
 mod textures;
+mod trace;
 mod view;
 
 use std::path::PathBuf;
 
 fn main() -> eframe::Result {
-    let Some(dir) = std::env::args_os().nth(1).map(PathBuf::from) else {
-        eprintln!("usage : tri-gui <dossier>");
+    let mut args = std::env::args_os().skip(1);
+    let (mut dir, mut cache) = (None, None);
+    while let Some(arg) = args.next() {
+        if arg == "--cache" {
+            cache = args.next().map(PathBuf::from);
+        } else {
+            dir = Some(PathBuf::from(arg));
+        }
+    }
+    let Some(dir) = dir else {
+        eprintln!("usage : tri-gui <dossier> [--cache <dossier du cache>]");
         std::process::exit(2);
     };
     let options = eframe::NativeOptions {
@@ -33,7 +43,7 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             // Fond sombre et neutre : la norme pour juger des photos.
             cc.egui_ctx.set_theme(eframe::egui::Theme::Dark);
-            Ok(Box::new(app::TriApp::new(dir, None)))
+            Ok(Box::new(app::TriApp::new(dir, cache)))
         }),
     )
 }

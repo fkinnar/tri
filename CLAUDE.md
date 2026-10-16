@@ -299,6 +299,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       qui est affiché, navigation gauche/droite avec préchargement n±1, 100 % (`z` ou
       double-clic) conservé d'une image à l'autre, retour à la grille (Échap).
 - [x] Source et échelle indépendantes, 1:1 du JPEG boîtier, rendus RAW à la demande.
+- [x] Retours du premier essai (16/10/2026) : 1:1 abandonné jamais redemandé (événement
+      `Dropped`), préchargement des 1:1 voisins, attente affichée à l'échelle 1:1 (plus de
+      passage par la vue ajustée ni d'écran noir), trace `TRI_GUI_TRACE`, `--cache`.
+      Lenteur du zoom JPEG non reproduite en `--release` (0,4 s) : à confirmer avec
+      l'utilisateur (build de débogage ?).
 - [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
       `thumbnails_first`, profil de raccourcis, thème).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
