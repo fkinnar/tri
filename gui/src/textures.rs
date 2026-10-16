@@ -33,7 +33,6 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
     }
 
     /// Vrai si `key` est présente (sans la marquer comme utilisée).
-    #[cfg(test)]
     pub fn contains(&self, key: &K) -> bool {
         self.entries.contains_key(key)
     }

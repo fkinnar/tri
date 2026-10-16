@@ -141,10 +141,15 @@ de fond ; les aperçus 1:1 générés à la demande.
   - *1:1* (zoom 100 %) : rendu LibRaw complet, à la demande, mis en cache.
 - **Aperçu boîtier (décidé le 16/10/2026)** : niveau de cache `Embedded`, le JPEG embarqué
   du RAW réduit à la taille standard. Calculé juste après les vignettes (tout le dossier
-  consultable en ~35 s au lieu de ~3 min sur le dossier de test), remplacé à l'affichage
-  par le rendu RAW quand il est prêt. **Basculable** en plein écran (forcer JPEG boîtier ou
-  RAW, comme FastRawViewer), et l'interface indique toujours lequel est affiché : le JPEG
-  boîtier reflète les réglages du boîtier, pas les données RAW (exposition, hautes lumières).
+  consultable en ~35 s au lieu de ~3 min sur le dossier de test). **Affiché par défaut en
+  plein écran** (précisé par l'utilisateur le 16/10/2026 : en tri rapide, le JPEG boîtier
+  est une bonne base, le RAW se calcule tranquillement derrière), **basculable** vers le
+  rendu RAW (touche `b`), et l'interface indique toujours lequel est affiché : le JPEG
+  boîtier reflète les réglages du boîtier, pas les données RAW (exposition, hautes
+  lumières).
+- **Usage du 100 %** (16/10/2026) : présélection des candidates, puis vérification de la
+  netteté à 100 % quand il en reste peu. Le zoom et la zone affichée sont conservés d'une
+  image à l'autre pour comparer au même endroit.
   Motif : les rendus RAW ne peuvent pas être accélérés (décompression du RAF déjà
   parallélisée par LibRaw ; aperçus plus petits : −21 % seulement ; rendus en parallèle :
   plus lent). Mesures dans `doc/scheduler.md`.
@@ -272,8 +277,12 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).
 - [x] Grille de vignettes : aperçus embarqués pour les RAW, image décodée pour les plates.
-- [ ] Plein écran : aperçu standard de l'image sélectionnée (vignette agrandie en attendant),
-      navigation gauche/droite, retour à la grille, zoom 1:1 à la demande.
+- [x] Plein écran : JPEG boîtier par défaut, bascule vers le rendu RAW (`b`), étiquette de ce
+      qui est affiché, navigation gauche/droite avec préchargement n±1, 100 % (`z` ou
+      double-clic) conservé d'une image à l'autre, retour à la grille (Échap).
+- [ ] À évaluer : le rendu RAW de LibRaw est nettement plus terne que le JPEG boîtier (pas
+      de courbe de contraste ni de profil boîtier) ; une courbe de base rendrait la
+      comparaison plus parlante, sans prétendre imiter le boîtier.
 - [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
       `thumbnails_first`, profil de raccourcis, thème).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle

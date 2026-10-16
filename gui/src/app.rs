@@ -1,5 +1,7 @@
-//! L'application egui : grille de vignettes alimentée par le scheduler du moteur.
+//! L'application egui : grille de vignettes et plein écran, alimentés par le scheduler du
+//! moteur.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{
     self, Align2, Color32, ColorImage, Event as UiEvent, FontId, Rect, ScrollArea, Sense,
-    TextureHandle, TextureOptions, Ui, ViewportCommand, pos2, vec2,
+    TextureHandle, TextureOptions, Ui, Vec2, ViewportCommand, pos2, vec2,
 };
 use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
@@ -18,7 +20,9 @@ use tri::scheduler::{CachedPreviews, Config, Event, Progress, Scheduler};
 
 use crate::actions::{Action, Keymap};
 use crate::grid::{self, Layout};
+use crate::loader::Loader;
 use crate::textures::Lru;
+use crate::view::{self, Source};
 
 /// Côté d'une cellule de la grille (points).
 const CELL: f32 = 200.0;
@@ -31,6 +35,24 @@ const TEXTURE_CAPACITY: usize = 600;
 /// Temps maximal passé à charger des vignettes par image affichée : au-delà, on reprend à
 /// l'image suivante pour ne pas figer l'interface.
 const LOAD_BUDGET: Duration = Duration::from_millis(8);
+/// Grandes textures (aperçus, 1:1) gardées en mémoire : l'image affichée, ses voisines et
+/// quelques images récentes. Un 1:1 de 26 Mpx occupe ~100 Mo de mémoire graphique.
+const BIG_CAPACITY: usize = 8;
+
+/// Ce qui occupe la fenêtre.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Grid,
+    View,
+}
+
+/// Une grande texture, avec les dimensions d'origine de l'image (la texture a pu être
+/// réduite pour tenir dans les limites du GPU).
+#[derive(Clone)]
+struct Big {
+    texture: TextureHandle,
+    original: Vec2,
+}
 
 /// Défilement demandé. Résolu au dessin de la grille, quand la largeur (donc le nombre de
 /// colonnes) est connue : la calculer avant donnait une mauvaise ligne.
@@ -56,6 +78,7 @@ struct Status {
     thumbnail: Avail,
     embedded: Avail,
     standard: Avail,
+    full: Avail,
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
@@ -65,6 +88,7 @@ struct Engine {
     generation: u64,
     cache: Cache,
     sizes: Sizes,
+    loader: Loader,
 }
 
 /// Capture d'écran automatique pour le développement (`TRI_GUI_SCREENSHOT=<fichier.png>`) :
@@ -101,6 +125,24 @@ pub struct TriApp {
     startup_actions: Vec<Action>,
     /// Vignettes visibles prêtes mais pas encore chargées (budget de l'image dépassé).
     visible_waiting: usize,
+    mode: Mode,
+    /// Source préférée en plein écran pour les RAW (JPEG boîtier par défaut).
+    source: Source,
+    /// Zoom 100 % demandé : point de l'image (coordonnées relatives) au centre de la vue.
+    /// Conservé d'une image à l'autre pour comparer la netteté au même endroit.
+    zoom: Option<Vec2>,
+    /// Zoom par double-clic : point cliqué (relatif) et position du curseur, appliqués dès
+    /// que le 100 % est affiché (sa taille n'est connue qu'à ce moment) pour garder ce point
+    /// sous le curseur.
+    zoom_anchor: Option<(Vec2, egui::Pos2)>,
+    /// Grandes textures chargées, par fichier et niveau.
+    big: Lru<(PathBuf, Level), Big>,
+    /// Dernière liste envoyée au chargeur (pour ne pas la renvoyer à chaque image).
+    wanted: Vec<(PathBuf, Level)>,
+    /// Entrées annoncées prêtes mais introuvables dans le cache : ne pas les redemander.
+    missing: HashSet<(PathBuf, Level)>,
+    /// Plein écran : l'image voulue n'est pas encore affichée (pour la capture automatique).
+    view_waiting: bool,
 }
 
 impl TriApp {
@@ -142,6 +184,14 @@ impl TriApp {
             help: false,
             visible_waiting: 0,
             startup_actions: startup_actions(),
+            mode: Mode::Grid,
+            source: Source::default(),
+            zoom: None,
+            zoom_anchor: None,
+            big: Lru::new(BIG_CAPACITY),
+            wanted: Vec::new(),
+            missing: HashSet::new(),
+            view_waiting: false,
         };
         app.apply_filter();
         app
@@ -202,12 +252,15 @@ impl TriApp {
         });
         let generation = scheduler.set_folder(self.files.clone());
         scheduler.set_focus(self.selected);
+        let max_texture = ctx.input(|i| i.max_texture_side);
+        let loader = Loader::new(cache.clone(), sizes, max_texture, ctx.clone());
         self.engine = Some(Engine {
             scheduler,
             events: rx,
             generation,
             cache,
             sizes,
+            loader,
         });
     }
 
@@ -222,7 +275,13 @@ impl TriApp {
                     index,
                     level,
                     ..
-                } if g == generation => set(&mut self.status, index, level, Avail::Ready),
+                } if g == generation => {
+                    // Prête à nouveau (recalculée) : on peut la redemander au chargeur.
+                    if let Some(f) = self.files.get(index) {
+                        self.missing.remove(&(f.path.clone(), level));
+                    }
+                    set(&mut self.status, index, level, Avail::Ready)
+                }
                 Event::Failed {
                     generation: g,
                     index,
@@ -274,7 +333,34 @@ impl TriApp {
         match action {
             Action::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
             Action::Help => self.help = !self.help,
-            Action::Back => self.help = false, // le plein écran s'y ajoutera
+            Action::Back => {
+                if self.help {
+                    self.help = false;
+                } else if self.mode == Mode::View {
+                    self.mode = Mode::Grid;
+                    self.zoom = None;
+                    self.zoom_anchor = None;
+                    self.reveal = Some(Reveal::Minimal);
+                }
+            }
+            Action::Open => {
+                if self.mode == Mode::Grid && !self.files.is_empty() {
+                    self.mode = Mode::View;
+                }
+            }
+            Action::ToggleSource => self.source = self.source.toggled(),
+            Action::ToggleZoom => {
+                if self.mode == Mode::View {
+                    self.zoom = match self.zoom {
+                        Some(_) => None,
+                        None => Some(vec2(0.5, 0.5)),
+                    };
+                    self.request_full();
+                }
+            }
+            // En plein écran, seule la navigation image par image a un sens.
+            Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
+                if self.mode == Mode::View => {}
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -300,6 +386,198 @@ impl TriApp {
             engine.scheduler.set_focus(index);
         }
         self.reveal = Some(Reveal::Minimal);
+        self.request_full();
+    }
+
+    /// En 100 %, demande le rendu complet de l'image affichée (sans effet sinon).
+    fn request_full(&self) {
+        if let (Some(_), Some(engine)) = (self.zoom, &self.engine) {
+            engine.scheduler.request_full();
+        }
+    }
+
+    /// Vrai si le niveau est calculé (dans le cache) pour l'image `index`.
+    fn ready(&self, index: usize, level: Level) -> bool {
+        let s = &self.status[index];
+        let avail = match level {
+            Level::Thumbnail => &s.thumbnail,
+            Level::Embedded => &s.embedded,
+            Level::Standard => &s.standard,
+            Level::Full => &s.full,
+        };
+        *avail == Avail::Ready
+    }
+
+    /// Vrai si l'image `index` au niveau `level` est affichable tout de suite (texture
+    /// chargée).
+    fn loaded(&self, index: usize, level: Level) -> bool {
+        let path = &self.files[index].path;
+        match level {
+            Level::Thumbnail => self.textures.contains(path),
+            _ => self.big.contains(&(path.clone(), level)),
+        }
+    }
+
+    /// Plein écran : intègre les images chargées et indique au chargeur ce qu'il faut
+    /// préparer (l'image affichée, puis ses voisines).
+    fn update_loads(&mut self, ctx: &egui::Context) {
+        let Some(engine) = &self.engine else { return };
+        for loaded in engine.loader.drain() {
+            let key = (loaded.path.clone(), loaded.level);
+            self.wanted.retain(|w| *w != key);
+            match loaded.image {
+                Some(image) => {
+                    let texture = ctx.load_texture(
+                        format!("{}#{:?}", loaded.path.display(), loaded.level),
+                        image,
+                        TextureOptions::LINEAR,
+                    );
+                    let original = vec2(loaded.original[0] as f32, loaded.original[1] as f32);
+                    self.big.insert(key, Big { texture, original });
+                }
+                None => {
+                    self.missing.insert(key);
+                }
+            }
+        }
+        if self.mode != Mode::View || self.files.is_empty() {
+            return;
+        }
+        let n = self.files.len();
+        let current = self.selected;
+        let neighbours = [current + 1, current.wrapping_sub(1)]
+            .into_iter()
+            .filter(|&i| i < n);
+        let mut wanted = Vec::new();
+        for (index, zoomed) in
+            std::iter::once((current, self.zoom.is_some())).chain(neighbours.map(|i| (i, false)))
+        {
+            let kind = self.files[index].kind;
+            let level = view::pick(kind, self.source, zoomed, |l| self.ready(index, l));
+            if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
+                let key = (self.files[index].path.clone(), level);
+                if !self.loaded(index, level) && !self.missing.contains(&key) {
+                    wanted.push((self.files[index].clone(), level));
+                }
+            }
+        }
+        let keys: Vec<(PathBuf, Level)> =
+            wanted.iter().map(|(f, l)| (f.path.clone(), *l)).collect();
+        if keys != self.wanted {
+            self.wanted = keys;
+            engine.loader.want(wanted);
+        }
+    }
+
+    /// Plein écran : l'image sélectionnée, ajustée ou à 100 %, avec ce qui est affiché.
+    fn viewer(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let index = self.selected;
+        let file = self.files[index].clone();
+        let zoomed = self.zoom.is_some();
+        let desired = view::pick(file.kind, self.source, zoomed, |l| self.ready(index, l));
+        // En attendant que l'image voulue soit chargée, la meilleure déjà affichable.
+        let shown = view::pick(file.kind, self.source, zoomed, |l| {
+            self.ready(index, l) && self.loaded(index, l)
+        });
+        // En attente tant que l'image voulue n'est pas affichée, ou que le 100 % demandé
+        // n'est pas encore calculé.
+        self.view_waiting =
+            shown != desired || shown.is_none() || (zoomed && shown != Some(Level::Full));
+
+        let (view_rect, response) =
+            ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+        let painter = ui.painter_at(view_rect);
+        painter.rect_filled(view_rect, 0.0, Color32::from_gray(12));
+        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+
+        let mut image_rect = None;
+        match shown {
+            Some(Level::Thumbnail) => {
+                let deadline = Instant::now() + LOAD_BUDGET;
+                if let Some(t) = self.thumbnail_texture(&ctx, index, deadline) {
+                    let rect = view::fit_rect(view_rect, t.size_vec2());
+                    painter.image(t.id(), rect, uv, Color32::WHITE);
+                    image_rect = Some(rect);
+                }
+            }
+            Some(level) => {
+                if let Some(big) = self.big.get(&(file.path.clone(), level)).cloned() {
+                    let rect = match (level, self.zoom) {
+                        (Level::Full, Some(center)) => {
+                            // 100 % : un pixel de l'image = un pixel de l'écran.
+                            let size = big.original / ctx.pixels_per_point();
+                            let mut center = match self.zoom_anchor.take() {
+                                Some((point, pointer)) => {
+                                    view::center_keeping(view_rect, size, point, pointer)
+                                }
+                                None => center,
+                            };
+                            if response.dragged() {
+                                let d = response.drag_delta();
+                                center -= vec2(d.x / size.x, d.y / size.y);
+                            }
+                            let center = view::clamp_center(view_rect.size(), size, center);
+                            self.zoom = Some(center);
+                            view::zoom_rect(view_rect, size, center)
+                        }
+                        _ => view::fit_rect(view_rect, big.original),
+                    };
+                    painter.image(big.texture.id(), rect, uv, Color32::WHITE);
+                    image_rect = Some(rect);
+                }
+            }
+            None => {}
+        }
+
+        // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
+        if response.double_clicked() {
+            self.zoom_anchor = None;
+            self.zoom = match (self.zoom, image_rect, response.interact_pointer_pos()) {
+                (Some(_), _, _) => None,
+                (None, Some(rect), Some(pos)) => {
+                    let point = view::relative(rect, pos);
+                    self.zoom_anchor = Some((point, pos));
+                    Some(point)
+                }
+                (None, _, _) => Some(vec2(0.5, 0.5)),
+            };
+            self.request_full();
+        }
+
+        // Ce qui est affiché, toujours visible.
+        let mut info = format!(
+            "{} / {} · {}",
+            index + 1,
+            self.files.len(),
+            file_name(&file.path)
+        );
+        match shown {
+            Some(level) => {
+                info.push_str(" · ");
+                info.push_str(view::label(file.kind, level));
+            }
+            None => info.push_str(" · aperçu en cours de calcul"),
+        }
+        if zoomed && shown != Some(Level::Full) {
+            info.push_str(" · calcul du 100 % en cours");
+        }
+        overlay(
+            &painter,
+            view_rect.left_top() + vec2(10.0, 10.0),
+            Align2::LEFT_TOP,
+            &info,
+        );
+        let hint = match file.kind {
+            MediaKind::Raw => "b : JPEG boîtier / RAW   z : 100 %   Échap : grille",
+            MediaKind::Flat => "z : 100 %   Échap : grille",
+        };
+        overlay(
+            &painter,
+            view_rect.right_top() + vec2(-10.0, 10.0),
+            Align2::RIGHT_TOP,
+            hint,
+        );
     }
 
     /// Texture de la vignette `index`, chargée depuis le cache si besoin et si le budget de
@@ -412,6 +690,10 @@ impl TriApp {
         if response.clicked() {
             self.select(index);
         }
+        if response.double_clicked() {
+            self.select(index);
+            self.mode = Mode::View;
+        }
         let selected = index == self.selected;
         let visuals = ui.visuals();
         let background = if selected {
@@ -517,7 +799,9 @@ impl TriApp {
             ctx.send_viewport_cmd(ViewportCommand::Close);
             return;
         }
-        let ready = self.progress[0].total > 0 && self.progress[0].done == self.progress[0].total;
+        let ready = self.progress[0].total > 0
+            && self.progress[0].done == self.progress[0].total
+            && !(self.mode == Mode::View && self.view_waiting);
         let timeout = shot.started.elapsed() > Duration::from_secs(60);
         // Au moins une seconde : laisser finir les animations (fondu d'ouverture des
         // fenêtres), sinon la capture montre un état intermédiaire.
@@ -561,6 +845,7 @@ impl eframe::App for TriApp {
             self.perform(&ctx, action);
         }
         self.handle_keys(&ctx);
+        self.update_loads(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::default().show(ui, |ui| {
@@ -568,6 +853,8 @@ impl eframe::App for TriApp {
                 ui.colored_label(Color32::from_rgb(230, 90, 90), error);
             } else if self.files.is_empty() {
                 ui.label("Aucune image dans ce dossier (ou pour ce filtre : touche f).");
+            } else if self.mode == Mode::View {
+                self.viewer(ui);
             } else {
                 self.grid(ui);
             }
@@ -618,9 +905,21 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Thumbnail => s.thumbnail = avail,
             Level::Embedded => s.embedded = avail,
             Level::Standard => s.standard = avail,
-            Level::Full => {}
+            Level::Full => s.full = avail,
         }
     }
+}
+
+/// Texte lisible sur n'importe quelle image : fond sombre translucide.
+fn overlay(painter: &egui::Painter, pos: egui::Pos2, anchor: Align2, text: &str) {
+    let galley = painter.layout_no_wrap(
+        text.to_string(),
+        FontId::proportional(13.0),
+        Color32::from_gray(230),
+    );
+    let rect = anchor.anchor_size(pos, galley.size()).expand(5.0);
+    painter.rect_filled(rect, 4.0, Color32::from_black_alpha(170));
+    painter.galley(rect.min + vec2(5.0, 5.0), galley, Color32::WHITE);
 }
 
 fn visuals_text(ui: &Ui, strong: bool) -> Color32 {
@@ -745,6 +1044,88 @@ mod tests {
         assert!(h.state().help);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().help, "Échap doit fermer l'aide");
+    }
+
+    /// Fait tourner l'interface jusqu'à ce que `done` soit vrai (le moteur travaille dans
+    /// d'autres threads), au plus 20 s.
+    fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !done(h.state()) {
+            assert!(Instant::now() < deadline, "délai dépassé");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn enter_opens_fullscreen_and_escape_goes_back() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+    }
+
+    #[test]
+    fn fullscreen_navigates_image_by_image() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, 1);
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(h.state().selected, 1, "pas de lignes en plein écran");
+        press(&mut h, Key::H, Modifiers::NONE);
+        assert_eq!(h.state().selected, 0);
+    }
+
+    #[test]
+    fn fullscreen_shows_the_standard_preview_once_loaded() {
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            let path = app.files[0].path.clone();
+            app.big.contains(&(path, Level::Standard)) && !app.view_waiting
+        });
+    }
+
+    #[test]
+    fn source_toggles_between_embedded_and_raw() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().source,
+            Source::Embedded,
+            "JPEG boîtier par défaut"
+        );
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert_eq!(h.state().source, Source::Raw);
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert_eq!(h.state().source, Source::Embedded);
+    }
+
+    #[test]
+    fn zoom_computes_and_displays_the_full_image() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        assert!(h.state().zoom.is_none(), "pas de zoom dans la grille");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        assert!(h.state().zoom.is_some());
+        run_until(&mut h, |app| {
+            let path = app.files[0].path.clone();
+            app.status[0].full == Avail::Ready
+                && app.big.contains(&(path, Level::Full))
+                && !app.view_waiting
+        });
+        // Image voisine : le zoom est conservé et son 100 % est demandé à son tour.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(h.state().zoom.is_some());
+        run_until(&mut h, |app| app.status[1].full == Avail::Ready);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        assert!(h.state().zoom.is_none());
     }
 
     #[test]

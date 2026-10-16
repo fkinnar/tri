@@ -9,7 +9,7 @@ existe.
 
 | Document | Contenu |
 |---|---|
-| [gui.md](gui.md) | Interface egui : grille, actions et raccourcis, textures |
+| [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |

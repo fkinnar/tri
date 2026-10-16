@@ -26,7 +26,36 @@ cargo run --release -p tri-gui -- <dossier>
 - Taille des aperçus standard **« Auto »** : plus grand côté de l'écran, en pixels physiques.
 - Thème sombre par défaut.
 
-Le plein écran et la navigation entre images affichées viennent à l'étape suivante.
+- **Plein écran** (Entrée ou double-clic) : voir plus bas.
+
+## Plein écran
+
+Pensé pour le tri : en passe rapide, le **JPEG du boîtier** sert de base (disponible en
+quelques secondes pour tout le dossier) pendant que les rendus RAW se calculent derrière ;
+puis on vérifie la netteté des candidates **à 100 %**.
+
+- **Source** : JPEG boîtier par défaut, `b` pour basculer vers le rendu RAW (et retour). Si
+  la source voulue n'est pas encore calculée, la meilleure disponible est affichée (l'autre
+  source, puis la vignette agrandie). Les images plates n'ont qu'une source.
+- **Ce qui est affiché est toujours écrit** en haut à gauche : position, nom, « JPEG
+  boîtier », « Rendu RAW », « Rendu RAW · 100 % », « Vignette (aperçu en cours de calcul) »,
+  et « calcul du 100 % en cours » le cas échéant. Le JPEG boîtier reflète les réglages du
+  boîtier (contraste, simulation de film) ; le rendu RAW de LibRaw est plus neutre, donc
+  plus terne : c'est attendu.
+- **100 %** : `z` (centré), ou double-clic (le point cliqué reste sous le curseur). Le
+  rendu complet est demandé au scheduler (~4–5 s pour un RAF X-T4) ; en attendant, l'image
+  reste ajustée avec la mention « calcul du 100 % en cours ». Glisser avec la souris déplace
+  l'image, sans jamais laisser de bord vide.
+- **Navigation** : ←/→ (h/l), Début/Fin (g/Maj+G). **En 100 %, le zoom et la zone affichée
+  sont conservés d'une image à l'autre**, et le 100 % de la nouvelle image est demandé :
+  on compare la netteté de plusieurs vues au même endroit. Échap revient à la grille (sur
+  l'image affichée).
+- **Fluidité** : les grandes images sont décodées par un thread de chargement
+  (`loader.rs`) : l'image affichée d'abord, puis ses voisines n+1 et n-1 (préchargement). La
+  liste remplace la précédente : une image dépassée n'est jamais chargée pour rien. Les
+  grandes textures vivent dans un LRU de 8 entrées (un 1:1 de 26 Mpx occupe ~100 Mo de
+  mémoire graphique). Une image plus grande que la limite de texture du GPU est réduite
+  pour l'affichage (sa taille d'origine sert toujours à la géométrie).
 
 ## Modules
 
@@ -37,6 +66,8 @@ Le plein écran et la navigation entre images affichées viennent à l'étape su
 | `actions.rs` | Actions nommées et raccourcis |
 | `grid.rs` | Calculs purs de la grille : colonnes, navigation, défilement |
 | `textures.rs` | Cache LRU des textures |
+| `view.rs` | Logique pure du plein écran : choix de la source, ajustement, 100 %, déplacement |
+| `loader.rs` | Thread de chargement des grandes images |
 
 ### Actions et raccourcis (`actions.rs`)
 
@@ -54,6 +85,9 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.nav.first` / `core.nav.last` | Début / Fin | g / Maj+G |
 | `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | u / d |
 | `core.filter.cycle` | f | f |
+| `core.view.open` | Entrée | Entrée |
+| `core.view.zoom` | z | z |
+| `core.view.source` | b | b |
 | `core.view.back` | Échap | Échap |
 | `core.app.help` | F1 | ? |
 | `core.app.quit` | q | q |
@@ -63,8 +97,7 @@ Avec Ctrl, Cmd ou Alt, aucune action n'est déclenchée : ces combinaisons reste
 
 Chaque action a deux noms : un **identifiant** stable pour les fichiers et le code
 (`core.view.back`), et un **libellé** pour l'utilisateur (« Fermer / revenir »).
-`core.view.back` ferme ce qui est au premier plan : l'aide aujourd'hui, le plein écran
-ensuite.
+`core.view.back` ferme ce qui est au premier plan : l'aide, sinon le plein écran.
 
 Les touches sont affichées par des **noms français en toutes lettres** (`key_label` :
 « Flèche gauche », « Début », « Page suiv. », « Échap »), en police à chasse fixe pour que
@@ -106,7 +139,8 @@ TRI_GUI_SCREENSHOT=/tmp/aide.png TRI_GUI_SELECT=40 TRI_GUI_ACTIONS=core.app.help
 
 L'application se capture elle-même (contenu de sa fenêtre seulement, pas l'écran), puis se
 ferme. La capture a lieu une fois toutes les vignettes calculées et celles qui sont
-visibles affichées, **et au moins 1 s après le démarrage**, au plus tard après 60 s. Sans ce
+visibles affichées (en plein écran : l'image voulue affichée, y compris le 100 % s'il est
+demandé), **et au moins 1 s après le démarrage**, au plus tard après 60 s. Sans ce
 délai, une capture faite pendant le fondu d'ouverture d'une fenêtre la montrait à
 moitié transparente.
 
@@ -121,8 +155,14 @@ moitié transparente.
 test officiel d'egui) : l'application tourne sans fenêtre, sur un dossier et un cache
 temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre et se ferme avec F1 et
 `?` (avec ou sans Maj), Échap la ferme, elle est modale, et elle affiche les libellés et
-non les identifiants. Ces tests ont trouvé un glyphe manquant (« ⏴ ») dans l'aide, et
-l'absence de fermeture par Échap.
+non les identifiants. Plein écran : ouverture par Entrée et retour par Échap, navigation
+image par image (haut/bas sans effet), bascule de source, aperçu standard réellement chargé
+et affiché, 100 % réellement calculé puis affiché, conservé à l'image suivante. Ces tests
+ont trouvé un glyphe manquant (« ⏴ ») dans l'aide, et l'absence de fermeture par Échap.
+
+Logique du plein écran (`view.rs`, unitaires) : choix de la source et repli sur ce qui est
+prêt, libellés, ajustement, placement à 100 %, limites du déplacement, point cliqué gardé
+sous le curseur.
 
 Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) et non dans
 `tests/` : `tri-gui` est un binaire, ses modules ne sont pas importables depuis `tests/`.

@@ -10,7 +10,9 @@
 mod actions;
 mod app;
 mod grid;
+mod loader;
 mod textures;
+mod view;
 
 use std::path::PathBuf;
 

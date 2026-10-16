@@ -28,6 +28,12 @@ pub enum Action {
     NavPageDown,
     /// Filtre suivant : tout → RAW → plates → tout.
     FilterCycle,
+    /// Ouvrir l'image sélectionnée en plein écran.
+    Open,
+    /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
+    ToggleZoom,
+    /// Plein écran : basculer entre JPEG du boîtier et rendu RAW.
+    ToggleSource,
     /// Fermer ce qui est au premier plan (aide, plein écran...) / revenir en arrière.
     Back,
     /// Afficher / masquer l'aide des raccourcis.
@@ -38,7 +44,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 12] = [
+    pub const ALL: [Action; 15] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -48,6 +54,9 @@ impl Action {
         Action::NavPageUp,
         Action::NavPageDown,
         Action::FilterCycle,
+        Action::Open,
+        Action::ToggleZoom,
+        Action::ToggleSource,
         Action::Back,
         Action::Help,
         Action::Quit,
@@ -70,6 +79,9 @@ impl Action {
             Action::NavPageUp => "Page précédente",
             Action::NavPageDown => "Page suivante",
             Action::FilterCycle => "Changer de filtre : tout, RAW, plates",
+            Action::Open => "Ouvrir en plein écran",
+            Action::ToggleZoom => "Zoom 100 % / ajusté",
+            Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
             Action::Back => "Fermer / revenir",
             Action::Help => "Afficher ou masquer cette aide",
             Action::Quit => "Quitter",
@@ -93,6 +105,9 @@ impl Action {
             Action::NavPageUp => "core.nav.page_up",
             Action::NavPageDown => "core.nav.page_down",
             Action::FilterCycle => "core.filter.cycle",
+            Action::Open => "core.view.open",
+            Action::ToggleZoom => "core.view.zoom",
+            Action::ToggleSource => "core.view.source",
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::Quit => "core.app.quit",
@@ -139,6 +154,9 @@ const CLASSIC: &[(Chord, Action)] = {
         (plain(Key::PageUp), NavPageUp),
         (plain(Key::PageDown), NavPageDown),
         (plain(Key::F), FilterCycle),
+        (plain(Key::Enter), Open),
+        (plain(Key::Z), ToggleZoom),
+        (plain(Key::B), ToggleSource),
         (plain(Key::Escape), Back),
         (plain(Key::F1), Help),
         (plain(Key::Q), Quit),
@@ -157,8 +175,11 @@ const VIM: &[(Chord, Action)] = {
         (plain(Key::U), NavPageUp),
         (plain(Key::D), NavPageDown),
         (plain(Key::F), FilterCycle),
-        // « ? » arrive avec ou sans Maj selon la disposition du clavier.
+        (plain(Key::Enter), Open),
+        (plain(Key::Z), ToggleZoom),
+        (plain(Key::B), ToggleSource),
         (plain(Key::Escape), Back),
+        // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (plain(Key::Questionmark), Help),
         (shifted(Key::Questionmark), Help),
         (plain(Key::Q), Quit),
@@ -295,7 +316,7 @@ mod tests {
         assert_eq!(km.action(Key::J, none), Some(Action::NavDown));
         assert_eq!(km.action(Key::G, none), Some(Action::NavFirst));
         assert_eq!(km.action(Key::G, Modifiers::SHIFT), Some(Action::NavLast));
-        assert_eq!(km.action(Key::Z, none), None);
+        assert_eq!(km.action(Key::W, none), None, "touche libre");
     }
 
     #[test]
