@@ -12,9 +12,9 @@ Un compilateur C est aussi nécessaire, pour le petit shim `csrc/libraw_shim.c`.
 
 | Plateforme | Installation |
 |---|---|
-| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 pkg-config build-essential` |
-| macOS (Homebrew) | `brew install libraw libheif pkg-config` (+ outils Xcode en ligne de commande) |
-| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, puis `LIBRAW_DIR` (voir plus bas) |
+| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 libturbojpeg0-dev pkg-config build-essential` |
+| macOS (Homebrew) | `brew install libraw libheif jpeg-turbo pkg-config` (+ outils Xcode en ligne de commande) |
+| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows libjpeg-turbo:x64-windows`, puis `LIBRAW_DIR` et `TURBOJPEG_*` (voir plus bas) |
 
 Le script [`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes.
 
@@ -69,9 +69,24 @@ les noms non ASCII.
 
 | Feature | Défaut | Effet |
 |---|---|---|
+| `turbojpeg` | activée | JPEG via libjpeg-turbo (pkg-config `libturbojpeg`). Désactivée, repli sur le décodeur/encodeur pur Rust du crate `image`, plus lent : voir [jpeg.md](jpeg.md) |
 | `heif` | activée | Décodage HEIC/HEIF via libheif. Désactivée (`--no-default-features`), libheif n'est plus requise ni liée : voir [flat.md](flat.md) et [licensing.md](licensing.md) |
 
-Sans `heif`, seule LibRaw reste nécessaire comme bibliothèque système.
+Avec `--no-default-features`, seule LibRaw reste nécessaire comme bibliothèque système.
+
+### libjpeg-turbo hors pkg-config (Windows)
+
+Le crate `turbojpeg-sys` lit des variables d'environnement :
+
+```powershell
+$env:TURBOJPEG_SOURCE = "explicit"
+$env:TURBOJPEG_LIB_DIR = "C:\vcpkg\installed\x64-windows\lib"
+$env:TURBOJPEG_INCLUDE_DIR = "C:\vcpkg\installed\x64-windows\include"
+```
+
+Il sait aussi compiler libjpeg-turbo depuis ses sources (feature `cmake` du crate, CMake et
+NASM requis), non activé ici pour rester cohérent avec LibRaw et libheif (bibliothèques du
+système).
 
 ## Variables d'environnement
 

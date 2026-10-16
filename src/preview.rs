@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::bitmap::Bitmap;
 use crate::cache::{Cache, Key, Level};
 use crate::flat::{self, FlatError};
+use crate::jpeg;
 use crate::media::{MediaFile, MediaKind};
 use crate::raw::{RawError, RawFile, RenderOptions, Thumbnail};
 
@@ -146,11 +147,9 @@ fn raw_thumbnail(file: &MediaFile, sizes: &Sizes, cancel: &AtomicBool) -> Result
     let mut raw = RawFile::open(&file.path)?;
     let rotation = raw.orientation();
     let embedded = match raw.thumbnail() {
-        // load_from_memory n'applique pas la balise EXIF : c'est voulu, l'orientation du RAW
-        // fait foi (voir RawFile::orientation).
-        Ok(Thumbnail::Jpeg(bytes)) => image::load_from_memory(&bytes)
-            .ok()
-            .map(|img| Bitmap::from(img.into_rgb8())),
+        // jpeg::decode n'applique pas la balise EXIF : c'est voulu, l'orientation du RAW
+        // fait foi (voir RawFile::orientation). Décodage directement réduit (IDCT).
+        Ok(Thumbnail::Jpeg(bytes)) => jpeg::decode(&bytes, sizes.thumbnail).ok(),
         Ok(Thumbnail::Bitmap(bmp)) => Some(bmp),
         Err(_) => None,
     };

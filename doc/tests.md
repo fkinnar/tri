@@ -108,6 +108,14 @@ Voir [scheduler.md](scheduler.md#tests). Les tests de concurrence ont été rela
 boucle (300 à 500 fois) après chaque correction : un test qui passe une fois sur dix ne
 prouve rien.
 
+### `jpeg` (unitaires, `src/jpeg.rs`)
+
+- choix du facteur de réduction (jamais sous `min_side`, `0` = pleine taille, image déjà
+  petite, orientation indifférente) ;
+- aller-retour encodage/décodage en 4:4:4 et 4:2:0 ; décodage réduit (1/4 avec turbojpeg,
+  pleine taille sans) ; contenu invalide refusé.
+- Ces tests passent dans les deux configurations : ils vérifient aussi le repli.
+
 ### `filter` (unitaires, `src/filter.rs`)
 
 - `ungrouped`, `KindFilter` (tout / RAW / plates), suppression des groupes vidés, valeur par

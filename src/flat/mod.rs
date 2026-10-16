@@ -9,11 +9,13 @@
 mod heif;
 
 use std::fmt;
+use std::io::Cursor;
 use std::path::Path;
 
-use image::{DynamicImage, ImageDecoder, ImageReader, metadata::Orientation};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, metadata::Orientation};
 
 use crate::bitmap::Bitmap;
+use crate::jpeg::{self, JpegError};
 
 /// Extensions HEIF (HEIC iPhone, HEIF, HIF Fujifilm), en minuscules.
 pub const HEIF_EXTENSIONS: &[&str] = &["heic", "heif", "hif"];
@@ -28,6 +30,8 @@ pub enum FlatError {
     Io(std::io::Error),
     /// Erreur du crate `image` (format non reconnu, fichier corrompu...).
     Image(image::ImageError),
+    /// Erreur de décodage JPEG (libjpeg-turbo puis repli `image`).
+    Jpeg(JpegError),
     /// Fichier HEIF alors que ce binaire a été compilé sans la feature `heif`.
     HeifNotCompiled,
     /// Erreur de libheif.
@@ -43,6 +47,7 @@ impl fmt::Display for FlatError {
         match self {
             Self::Io(e) => write!(f, "lecture impossible : {e}"),
             Self::Image(e) => write!(f, "décodage impossible : {e}"),
+            Self::Jpeg(e) => write!(f, "décodage impossible : {e}"),
             Self::HeifNotCompiled => write!(f, "HEIF non pris en charge (compilé sans « heif »)"),
             #[cfg(feature = "heif")]
             Self::Heif(e) => write!(f, "décodage HEIF impossible : {e}"),
@@ -57,6 +62,7 @@ impl std::error::Error for FlatError {
         match self {
             Self::Io(e) => Some(e),
             Self::Image(e) => Some(e),
+            Self::Jpeg(e) => Some(e),
             Self::HeifNotCompiled => None,
             #[cfg(feature = "heif")]
             Self::Heif(e) => Some(e),
@@ -69,6 +75,12 @@ impl std::error::Error for FlatError {
 impl From<std::io::Error> for FlatError {
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<JpegError> for FlatError {
+    fn from(e: JpegError) -> Self {
+        Self::Jpeg(e)
     }
 }
 
@@ -121,12 +133,20 @@ pub fn is_heif(path: &Path) -> bool {
 }
 
 fn decode_image(path: &Path, max_side: u32) -> Result<Bitmap> {
-    let mut decoder = ImageReader::open(path)?
-        .with_guessed_format()?
-        .into_decoder()?;
+    let bytes = std::fs::read(path)?;
+    let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format()?;
+    let is_jpeg = reader.format() == Some(ImageFormat::Jpeg);
+    // Le décodeur `image` ne lit ici que les en-têtes (format, balise EXIF).
+    let mut decoder = reader.into_decoder()?;
     // Une balise EXIF illisible ne doit pas empêcher l'affichage.
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-    let decoded = Bitmap::from(DynamicImage::from_decoder(decoder)?.into_rgb8());
+    let decoded = if is_jpeg {
+        drop(decoder);
+        // JPEG : libjpeg-turbo si disponible, réduit dès le décodage.
+        jpeg::decode(&bytes, max_side)?
+    } else {
+        Bitmap::from(DynamicImage::from_decoder(decoder)?.into_rgb8())
+    };
     let mut img = DynamicImage::ImageRgb8(decoded.fit(max_side).into());
     img.apply_orientation(orientation);
     Ok(img.into_rgb8().into())

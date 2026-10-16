@@ -5,7 +5,7 @@ Décodage des images « plates » — déjà développées par l'appareil ou un 
 
 | Format | Extensions | Décodeur |
 |---|---|---|
-| JPEG | `jpg`, `jpeg`, `jpe` | crate `image` |
+| JPEG | `jpg`, `jpeg`, `jpe` | libjpeg-turbo (feature `turbojpeg`), sinon crate `image` — voir [jpeg.md](jpeg.md) |
 | PNG | `png` | crate `image` |
 | TIFF | `tif`, `tiff` | crate `image` |
 | WebP | `webp` | crate `image` |

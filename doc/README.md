@@ -15,6 +15,7 @@ existe.
 | [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |
 | [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
+| [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |
@@ -34,6 +35,7 @@ tri/
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
 │   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
+│   ├── jpeg.rs           JPEG rapide : libjpeg-turbo (feature) ou crate image
 │   ├── flat/
 │   │   ├── mod.rs        décodage des images plates (crate image)
 │   │   └── heif.rs       HEIC/HEIF via libheif (feature `heif`)

@@ -52,6 +52,19 @@ Dossier réel : 472 images (236 RAF X-T4 + 236 JPEG du boîtier), Mac Apple Sili
 | vignettes d'abord | 4 | 29 s | 227 s |
 | vignettes d'abord | 8 | **19 s** | 252 s |
 
+Après passage à libjpeg-turbo (feature `turbojpeg`), plusieurs mesures par configuration
+pour estimer la variance (machine plus ou moins chaude) :
+
+| Politique | Workers légers | Vignettes | Total |
+|---|---|---|---|
+| vignettes d'abord (défaut) | 4 | **14–19 s** | **179–183 s** |
+| vignettes d'abord | 8 | 12 s | 190 s |
+| mélangé | 4 | 27–38 s | 187–209 s |
+
+Avec un décodage plus rapide, « vignettes d'abord » gagne sur les deux plans : c'est le
+défaut, l'autre politique reste disponible (`Config::thumbnails_first`, `--mixed`). Le
+total est dominé par les 236 aperçus RAW du worker lourd (~0,5 s chacun).
+
 Second passage (tout en cache) : ~10 ms. Taille du cache : 13 Mo de vignettes (28 Kio en
 moyenne), 397 Mo d'aperçus standard à 2560 px (861 Kio en moyenne).
 

@@ -4,6 +4,7 @@
 //! - [`bitmap`] : type d'image RGB8 commun ;
 //! - [`cache`] : cache persistant des vignettes et aperçus ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
+//! - [`jpeg`] : décodage / encodage JPEG rapides (libjpeg-turbo, repli pur Rust) ;
 //! - [`filter`] : filtres sur la liste des images à afficher ;
 //! - [`raw`] : lecture et développement des RAW via LibRaw ;
 //! - [`preview`] : calcul des vignettes, aperçus et rendus 1:1 ;
@@ -17,6 +18,7 @@ pub mod bitmap;
 pub mod cache;
 pub mod filter;
 pub mod flat;
+pub mod jpeg;
 pub mod media;
 pub mod preview;
 pub mod raw;

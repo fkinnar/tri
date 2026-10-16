@@ -7,13 +7,17 @@ edition = "2024"
 blake3 = "1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
 libheif-rs = { version = "3", optional = true }
+turbojpeg = { version = "1", default-features = false, features = ["pkg-config"], optional = true }
 walkdir = "2.5.0"
 
 [features]
-default = ["heif"]
+default = ["heif", "turbojpeg"]
 # HEIC/HEIF via libheif. HEVC est breveté : désactivable pour un binaire distribué
 # (cargo build --no-default-features). Voir doc/licensing.md.
 heif = ["dep:libheif-rs"]
+# JPEG via libjpeg-turbo (système) : décodage 1,6–2,5× et encodage 4× plus rapides.
+# Sans elle, repli sur le décodeur/encodeur pur Rust du crate image. Voir doc/jpeg.md.
+turbojpeg = ["dep:turbojpeg"]
 
 [dev-dependencies]
 tempfile = "3"

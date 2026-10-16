@@ -172,6 +172,8 @@ avec `thumbnail()` et `render(&RenderOptions)` → `Bitmap` RGB8). Outil de test
 `cargo run --release --example decode -- <thumb|render|flat> <fichier> <sortie> [--half] [--daylight] [--bright X]`.
 Images plates (JPEG/PNG/TIFF/WebP via `image`, HEIC/HEIF via `libheif-rs` ≥ libheif 1.17) :
 `src/flat/`, même type de sortie `Bitmap` (`src/bitmap.rs`), orientation déjà appliquée.
+JPEG (aperçus embarqués, JPEG plats, cache) via `src/jpeg.rs` : libjpeg-turbo derrière la
+feature `turbojpeg` (défaut), repli pur Rust sinon.
 HEIF derrière la feature Cargo `heif` (défaut), code confiné dans `src/flat/heif.rs` ;
 `--no-default-features` donne un binaire sans aucun lien HEVC (brevets, `doc/licensing.md`).
 Prérequis système dans `prerequisites.sh`. Points acquis :
@@ -248,8 +250,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       `src/scheduler.rs`, tests d'intégration (faux producteur + vrai RAW).
 - [x] Démo CLI avec progression (`tri <dossier> --previews`, `--clear-cache`,
       `--cache-usage`) et mesures sur un vrai dossier (voir `doc/scheduler.md`).
-      Ouvert : politique par défaut (`thumbnails_first`) et piste turbojpeg (décodage JPEG
-      1,7 à 2,5× plus rapide, dépendance C) — à trancher avec l'utilisateur.
+- [x] JPEG via libjpeg-turbo (`src/jpeg.rs`, feature `turbojpeg`, défaut) : grille
+      complète du dossier de test en 14–19 s au lieu de 29 s.
+- Décidé le 16/10/2026 : politique « vignettes d'abord » par défaut, **réglable** (option
+  `Config::thumbnails_first` du moteur, `--mixed` en CLI). À exposer dans le futur fichier
+  de configuration de l'application, avec la taille « Auto » des aperçus.
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).

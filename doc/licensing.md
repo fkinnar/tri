@@ -39,6 +39,7 @@ Relevées le 16/10/2026 sur les paquets Homebrew installés (`brew info`) et les
 | ↳ libde265 | 1.1.3 | **LGPL-3.0-or-later** | Décodeur **HEVC** (brevets, voir §2) |
 | ↳ **x265** | 4.3 | **GPL-2.0-or-later** | Encodeur HEVC : **inutile pour `tri`**, mais lié par la libheif de Homebrew |
 | ↳ aom | 3.15.2 | BSD-2-Clause | AV1 (AVIF), inutilisé pour l'instant |
+| libjpeg-turbo (`libturbojpeg`) | 3.2.0 | IJG AND Zlib AND BSD-3-Clause | JPEG rapide (feature `turbojpeg`), aucun brevet actif |
 
 **LibRaw** : on retient l'option LGPL-2.1. La CDDL est incompatible avec la GPL ; la LGPL
 garde toutes les portes ouvertes.
@@ -46,7 +47,7 @@ garde toutes les portes ouvertes.
 ### Crates Rust (compilés dans le binaire)
 
 Relevé via `cargo metadata` (et complété à chaque ajout : `blake3` est sous CC0-1.0 OR
-Apache-2.0) : les 70 crates de l'arbre de dépendances sont sous licences
+Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT) : les 70 crates de l'arbre de dépendances sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
 ce sont des *bindings*, la libheif elle-même reste LGPL.

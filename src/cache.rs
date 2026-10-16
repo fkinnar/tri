@@ -6,14 +6,13 @@
 
 use std::ffi::OsString;
 use std::fs::{self, File};
-use std::io::{self, BufWriter};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use image::{ExtendedColorType, ImageEncoder, codecs::jpeg::JpegEncoder};
-
 use crate::bitmap::Bitmap;
+use crate::jpeg::{self, Chroma};
 
 /// Version du format du cache. L'incrémenter rend toutes les anciennes entrées invisibles.
 const FORMAT_VERSION: &str = "v1";
@@ -164,20 +163,15 @@ impl Cache {
     /// de dernier usage pour [`Cache::evict`].
     pub fn get(&self, key: &Key) -> Option<Bitmap> {
         let path = self.entry_path(key);
-        let img = match image::open(&path) {
-            Ok(img) => img.into_rgb8(),
-            Err(image::ImageError::IoError(e)) if e.kind() == io::ErrorKind::NotFound => {
-                return None;
-            }
-            Err(_) => {
-                let _ = fs::remove_file(&path);
-                return None;
-            }
+        let bytes = fs::read(&path).ok()?;
+        let Ok(bitmap) = jpeg::decode(&bytes, 0) else {
+            let _ = fs::remove_file(&path);
+            return None;
         };
         if let Ok(file) = File::options().write(true).open(&path) {
             let _ = file.set_modified(SystemTime::now());
         }
-        Some(img.into())
+        Some(bitmap)
     }
 
     /// Écrit une entrée (JPEG). L'écriture est atomique : fichier temporaire puis
@@ -191,16 +185,15 @@ impl Cache {
         fs::create_dir_all(dir)?;
         let tmp = temp_path(&path);
         let result = (|| {
-            let mut out = BufWriter::new(File::create(&tmp)?);
-            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY)
-                .write_image(
-                    &bitmap.data,
-                    bitmap.width,
-                    bitmap.height,
-                    ExtendedColorType::Rgb8,
-                )
-                .map_err(io::Error::other)?;
-            out.into_inner().map_err(|e| e.into_error())?.sync_all()?;
+            // Couleur à pleine résolution pour le 1:1, 4:2:0 ailleurs (plus compact).
+            let chroma = match key.level {
+                Level::Full => Chroma::Full,
+                _ => Chroma::Half,
+            };
+            let bytes = jpeg::encode(bitmap, JPEG_QUALITY, chroma).map_err(io::Error::other)?;
+            let mut file = File::create(&tmp)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
             fs::rename(&tmp, &path)
         })();
         if result.is_err() {
