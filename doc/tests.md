@@ -8,19 +8,28 @@
 - **Tests d'intégration** : dans `tests/`, un fichier par module (`tests/raw.rs`…). Ils
   utilisent uniquement l'API publique, comme le ferait l'interface. Les fichiers temporaires
   passent par le crate `tempfile` (supprimés automatiquement).
+- **Fixtures** : `tests/fixtures/` ne contient que de petits fichiers synthétiques, impossibles
+  à générer depuis Rust sans dépendance lourde. `quadrants.heic` (856 octets, 64×48, quadrants
+  rouge / vert / bleu / blanc) a été produit par :
+  `heif-enc -q 95 -p chroma=444 quadrants.png -o quadrants.heic`.
 
 ## Lancer les tests
 
 ```sh
 cargo test                       # tout ce qui ne nécessite pas de fichier externe
-TRI_TEST_RAW=/chemin/photo.RAF cargo test --release -- --include-ignored   # tout
+TRI_TEST_RAW=/chemin/photo.RAF TRI_TEST_HEIC=/chemin/photo.heic \
+  cargo test --release -- --include-ignored                               # tout
 ```
 
-Les tests qui ont besoin d'un vrai RAW sont marqués `#[ignore = "nécessite TRI_TEST_RAW"]` :
+Les tests qui ont besoin d'un vrai fichier sont marqués `#[ignore = "nécessite TRI_TEST_…"]` :
 aucun fichier RAW n'est versionné (trop lourd, et propre à chaque boîtier). `cargo test` les
 signale comme ignorés au lieu de les faire passer en silence. Avec `--include-ignored`, ils
-échouent clairement si `TRI_TEST_RAW` n'est pas définie. `--release` est conseillé : le
+échouent clairement si la variable n'est pas définie. `--release` est conseillé : le
 développement RAW est beaucoup plus lent en debug.
+
+Les tests sur vrai RAW sont **sérialisés** par un `Mutex` statique (`serial()` dans
+`tests/raw.rs`) : chaque rendu LibRaw occupe déjà plusieurs cœurs, et les lancer en parallèle
+les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
 ## Ce qui est couvert
 
@@ -30,6 +39,26 @@ développement RAW est beaucoup plus lent en debug.
 - fichiers cachés et AppleDouble (`._x.RAF`) ignorés ;
 - listes d'extensions en minuscules et disjointes ;
 - tri : le RAW précède son jumeau JPEG.
+
+### `bitmap` (unitaires, `src/bitmap.rs`)
+
+- lecture d'un pixel, `None` hors de l'image.
+
+### `flat` (unitaires, `src/flat.rs`)
+
+- extensions HEIF reconnues quelle que soit la casse ;
+- `pack_rows` : retrait du remplissage, cas sans remplissage, dernière ligne sans
+  remplissage, rejet des données trop courtes et des strides incohérents.
+
+### `flat` (intégration, `tests/flat.rs`)
+
+- PNG, TIFF, WebP (sans perte) générés à la volée : décodés au pixel près ;
+- format détecté d'après le contenu (PNG nommé `.jpg`) ;
+- JPEG avec balise EXIF `Orientation = 6` : dimensions et couleurs pivotées ;
+- HEIC (fixture) : dimensions et couleur de chaque quadrant ; extension en majuscules et
+  chemin non ASCII ;
+- fichier absent → `Io` ; contenu invalide → `Image` ou `Heif` ;
+- avec `TRI_TEST_HEIC` : un vrai HEIC d'iPhone se décode en RGB8 cohérent.
 
 ### `filter` (unitaires, `src/filter.rs`)
 

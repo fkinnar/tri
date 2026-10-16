@@ -2,16 +2,34 @@
 
 ## Prérequis
 
-`tri` lie la bibliothèque système [LibRaw](https://www.libraw.org/) (API C). Un compilateur C
-est aussi nécessaire, pour le petit shim `csrc/libraw_shim.c`.
+`tri` lie deux bibliothèques système :
+
+- [LibRaw](https://www.libraw.org/) (API C), pour les RAW ;
+- [libheif](https://github.com/strukturag/libheif) **≥ 1.17**, pour HEIC/HEIF, avec son
+  plugin de décodage HEVC (libde265).
+
+Un compilateur C est aussi nécessaire, pour le petit shim `csrc/libraw_shim.c`.
 
 | Plateforme | Installation |
 |---|---|
-| Debian / Ubuntu / Mint | `sudo apt install libraw-dev pkg-config build-essential` |
-| macOS (Homebrew) | `brew install libraw pkg-config` (+ outils Xcode en ligne de commande) |
-| Windows (non testé) | `vcpkg install libraw:x64-windows` puis `LIBRAW_DIR` (voir plus bas) |
+| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 pkg-config build-essential` |
+| macOS (Homebrew) | `brew install libraw libheif pkg-config` (+ outils Xcode en ligne de commande) |
+| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, puis `LIBRAW_DIR` (voir plus bas) |
 
 Le script [`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes.
+
+### libheif trop ancienne
+
+Debian 12 et Ubuntu 22.04 fournissent une libheif < 1.17, refusée à la compilation. Dans ce
+cas, `libheif-rs` peut compiler libheif lui-même (CMake requis), en activant sa feature
+`embedded-libheif` dans `Cargo.toml` :
+
+```toml
+libheif-rs = { version = "3", features = ["embedded-libheif"] }
+```
+
+libheif est localisée par le crate `libheif-sys` lui-même (pkg-config, ou vcpkg sous Windows
+MSVC). Le `build.rs` de `tri` ne concerne que LibRaw.
 
 ## Ce que fait `build.rs`
 
@@ -51,3 +69,4 @@ les noms non ASCII.
 | `LIBRAW_DIR` | Racine d'une installation LibRaw (`include/`, `lib/`) ; court-circuite pkg-config |
 | `LIBRAW_LIB` | Nom de la bibliothèque à lier avec `LIBRAW_DIR` (défaut : `raw`) |
 | `TRI_TEST_RAW` | Fichier RAW utilisé par les tests d'intégration (voir [tests.md](tests.md)) |
+| `TRI_TEST_HEIC` | Vrai HEIC (iPhone) utilisé par un test d'intégration optionnel |

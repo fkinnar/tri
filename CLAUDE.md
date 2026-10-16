@@ -121,7 +121,9 @@ Précisions actées après discussion, toujours non implémentées avant la fin 
 
 Intégré dans `src/raw/` (`ffi.rs` = déclarations brutes, `mod.rs` = wrapper sûr `RawFile`
 avec `thumbnail()` et `render(&RenderOptions)` → `Bitmap` RGB8). Outil de test paramétrable :
-`cargo run --release --example raw -- <thumb|render> <RAW> <sortie> [--half] [--daylight] [--bright X]`.
+`cargo run --release --example decode -- <thumb|render|flat> <fichier> <sortie> [--half] [--daylight] [--bright X]`.
+Images plates (JPEG/PNG/TIFF/WebP via `image`, HEIC/HEIF via `libheif-rs` ≥ libheif 1.17) :
+`src/flat.rs`, même type de sortie `Bitmap` (`src/bitmap.rs`), orientation déjà appliquée.
 Prérequis système dans `prerequisites.sh`. Points acquis :
 
 - LibRaw expose une **API C** (`libraw_*`) utilisable via FFI ; l'API C++ n'a pas d'ABI stable
@@ -147,6 +149,12 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   avec le vrai `libraw.h`, donc layout de struct toujours correct, sans bindgen).
 - Mesures (X-T4, RAF 26 Mpx, Mac Apple Silicon, release) : aperçu embarqué ≈ 10 ms ; rendu
   complet ≈ 3,8 s ; rendu `half_size` ≈ 0,35 s (X-Trans : le dématriçage complet est lent).
+- **Mesuré le 16/10/2026 : un rendu LibRaw est déjà multithreadé en interne** (≈ 440 % CPU,
+  ~200 Mo par instance en pleine résolution). Plusieurs rendus complets simultanés se gênent
+  fortement (9 tests : 5,7 s en série, 18 s à 4 threads, 302 s à un thread par cœur). À
+  prendre en compte pour le découpage parallèle des vignettes et le préchargement n-1/n+1 :
+  peu de rendus complets à la fois, mesurer avant de paralléliser davantage. (Les aperçus
+  embarqués, eux, ne développent rien et ne sont pas concernés.)
 - Pistes non vérifiées : crates `libraw-rs` / `rsraw` existent sur crates.io mais leur
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
@@ -163,7 +171,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - **Tests et documentation à chaque étape, pas après coup** :
   - tests unitaires dans chaque module (`#[cfg(test)]`), tests d'intégration dans `tests/`
     (un fichier par module, API publique uniquement) ; les tests qui ont besoin d'un vrai RAW
-    sont `#[ignore]` et lisent `TRI_TEST_RAW` (aucun RAW versionné) ;
+    sont `#[ignore]` et lisent `TRI_TEST_RAW` / `TRI_TEST_HEIC` (aucune vraie photo versionnée,
+    seulement de petites fixtures synthétiques dans `tests/fixtures/`) ;
   - documentation Markdown dans `doc/` (un fichier par module + `README.md` sommaire,
     `build.md`, `tests.md`) expliquant mods, traits, fonctions et le *pourquoi* ; commentaires
     `///` sur tout l'API public pour `cargo doc` ;

@@ -60,13 +60,7 @@ une balise EXIF `Orientation` (souvent 6 ou 8) qu'il faut appliquer à l'afficha
 
 ### `Bitmap`
 
-```rust
-pub struct Bitmap { pub width: u32, pub height: u32, pub data: Vec<u8> }
-```
-
-Pixels RGB 8 bits entrelacés (`R G B R G B …`), ligne par ligne, sans remplissage :
-`data.len() == width * height * 3`. C'est un type du moteur, indépendant de toute bibliothèque
-d'affichage ou d'image.
+Type commun défini dans [`tri::bitmap`](bitmap.md) : RGB 8 bits entrelacé, sans remplissage.
 
 ### `RenderOptions`
 
@@ -117,11 +111,17 @@ X-T4 (RAF 26 Mpx, capteur X-Trans), Mac Apple Silicon, build release :
 
 Le dématriçage X-Trans est particulièrement coûteux ; les capteurs Bayer sont plus rapides.
 
+**Un rendu est déjà parallèle en interne** (≈ 440 % CPU sur un seul `render`) et une instance
+en pleine résolution occupe ~200 Mo. Lancer plusieurs rendus complets en même temps ne fait
+pas gagner de temps, au contraire : neuf rendus prennent 5,7 s en série, 18 s sur 4 threads et
+302 s sur un thread par cœur (contention CPU et mémoire). L'extraction des aperçus embarqués
+n'a pas ce problème : elle ne fait aucun calcul.
+
 ## Outil de test
 
 ```sh
-cargo run --release --example raw -- thumb  photo.RAF aperçu.jpg
-cargo run --release --example raw -- render photo.RAF rendu.png [--half] [--daylight] [--bright X]
+cargo run --release --example decode -- thumb  photo.RAF aperçu.jpg
+cargo run --release --example decode -- render photo.RAF rendu.png [--half] [--daylight] [--bright X]
 ```
 
 Affiche la version de LibRaw, les dimensions et les temps de chaque étape.

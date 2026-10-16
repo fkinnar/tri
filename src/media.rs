@@ -16,7 +16,9 @@ pub const RAW_EXTENSIONS: &[&str] = &[
 ];
 
 /// Extensions d'images « plates » reconnues (affichées sans développement), en minuscules.
-pub const FLAT_EXTENSIONS: &[&str] = &["jpg", "jpeg", "jpe", "png", "tif", "tiff", "webp"];
+pub const FLAT_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "jpe", "png", "tif", "tiff", "webp", "heic", "heif", "hif",
+];
 
 /// Nature d'un fichier image.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -117,7 +119,9 @@ mod tests {
 
     #[test]
     fn flat_extensions_are_recognized_case_insensitively() {
-        for name in ["a.JPG", "a.jpeg", "a.Tif", "a.TIFF", "a.png", "a.webp"] {
+        for name in [
+            "a.JPG", "a.jpeg", "a.Tif", "a.TIFF", "a.png", "a.webp", "a.HEIC", "a.heif", "a.HIF",
+        ] {
             assert_eq!(kind(name), Some(MediaKind::Flat), "{name}");
         }
     }

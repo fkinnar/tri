@@ -9,16 +9,7 @@ use std::fmt;
 use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
 
-/// Image RGB 8 bits, entrelacée (R, G, B, R, G, B...), ligne par ligne.
-#[derive(Clone)]
-pub struct Bitmap {
-    /// Largeur en pixels.
-    pub width: u32,
-    /// Hauteur en pixels.
-    pub height: u32,
-    /// `width * height * 3` octets.
-    pub data: Vec<u8>,
-}
+use crate::bitmap::Bitmap;
 
 /// Aperçu embarqué : presque toujours un JPEG, parfois un bitmap brut.
 pub enum Thumbnail {

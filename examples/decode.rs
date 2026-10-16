@@ -1,16 +1,19 @@
-//! Outil de test du module raw : extrait l'aperçu embarqué ou développe un RAW.
+//! Outil de test du décodage : aperçu embarqué ou développement d'un RAW, décodage d'une
+//! image plate.
 //!
-//!   cargo run --release --example raw -- thumb  <fichier RAW> <sortie>
-//!   cargo run --release --example raw -- render <fichier RAW> <sortie.png> [--half] [--daylight] [--bright X]
+//!   cargo run --release --example decode -- thumb  <fichier RAW> <sortie>
+//!   cargo run --release --example decode -- render <fichier RAW> <sortie.png> [--half] [--daylight] [--bright X]
+//!   cargo run --release --example decode -- flat   <image plate> <sortie.png>
 
 use std::path::Path;
 use std::process::exit;
 use std::time::Instant;
 
-use tri::raw::{Bitmap, RawFile, RenderOptions, Thumbnail};
+use tri::bitmap::Bitmap;
+use tri::raw::{RawFile, RenderOptions, Thumbnail};
 
 const USAGE: &str =
-    "usage : raw <thumb|render> <fichier RAW> <sortie> [--half] [--daylight] [--bright X]";
+    "usage : decode <thumb|render|flat> <fichier> <sortie> [--half] [--daylight] [--bright X]";
 
 fn save_png(bitmap: &Bitmap, out: &Path) -> Result<(), Box<dyn std::error::Error>> {
     image::save_buffer(
@@ -39,6 +42,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "--bright" => options.bright = flags.next().ok_or(USAGE)?.parse()?,
             other => return Err(format!("option inconnue : {other}\n{USAGE}").into()),
         }
+    }
+
+    if mode == "flat" {
+        let start = Instant::now();
+        let bitmap = tri::flat::decode(input)?;
+        println!(
+            "décodé {}x{} en {:?}",
+            bitmap.width,
+            bitmap.height,
+            start.elapsed()
+        );
+        save_png(&bitmap, output)?;
+        println!("écrit dans {}", output.display());
+        return Ok(());
     }
 
     println!("LibRaw {}", tri::raw::version());

@@ -12,6 +12,8 @@ existe.
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
+| [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
+| [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |
 | [tests.md](tests.md) | Organisation et lancement des tests |
 
@@ -26,11 +28,14 @@ tri/
 │   ├── main.rs           démo en ligne de commande : liste un dossier filtré
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
+│   ├── bitmap.rs         Bitmap : image RGB8 commune
+│   ├── flat.rs           décodage des images plates (image, libheif)
 │   └── raw/
 │       ├── ffi.rs        déclarations brutes de l'API C LibRaw (privé)
-│       └── mod.rs        API sûre : RawFile, Bitmap, Thumbnail, RenderOptions, RawError
-├── examples/raw.rs       outil en ligne de commande pour tester le module raw
+│       └── mod.rs        API sûre : RawFile, Thumbnail, RenderOptions, RawError
+├── examples/decode.rs    outil en ligne de commande : aperçu / rendu RAW, décodage plat
 └── tests/                tests d'intégration (un fichier par module)
+    └── fixtures/         petits fichiers de test synthétiques (HEIC)
 ```
 
 Le moteur (`src/lib.rs` et ses modules) ne dépend d'aucune bibliothèque d'affichage : il

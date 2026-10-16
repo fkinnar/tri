@@ -37,11 +37,12 @@ Classe un chemin d'après son extension, **sans tenir compte de la casse** (`.RA
 
 Les listes d'extensions sont publiques : `RAW_EXTENSIONS` (formats photo gérés par LibRaw :
 `raf`, `cr2`, `cr3`, `nef`, `arw`, `dng`, `orf`, `rw2`…) et `FLAT_EXTENSIONS` (`jpg`,
-`jpeg`, `jpe`, `png`, `tif`, `tiff`, `webp`). Elles sont en minuscules et disjointes (vérifié
+`jpeg`, `jpe`, `png`, `tif`, `tiff`, `webp`, `heic`, `heif`, `hif`). Elles sont en minuscules et disjointes (vérifié
 par un test).
 
-Les formats vidéo RAW (`.r3d`, `.braw`) sont volontairement exclus. HEIF/HEIC n'est pas encore
-listé : le crate `image` ne sait pas le décoder sans dépendance supplémentaire (libheif).
+Les formats vidéo RAW (`.r3d`, `.braw`) sont volontairement exclus. AVIF n'est pas listé :
+selon la distribution, libheif n'a pas toujours de décodeur AV1. Le décodage des images plates
+est décrit dans [flat.md](flat.md).
 
 ### `scan(root, depth) -> io::Result<Vec<MediaFile>>`
 
