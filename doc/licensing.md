@@ -45,7 +45,8 @@ garde toutes les portes ouvertes.
 
 ### Crates Rust (compilés dans le binaire)
 
-Relevé via `cargo metadata` : les 70 crates de l'arbre de dépendances sont sous licences
+Relevé via `cargo metadata` (et complété à chaque ajout : `blake3` est sous CC0-1.0 OR
+Apache-2.0) : les 70 crates de l'arbre de dépendances sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
 ce sont des *bindings*, la libheif elle-même reste LGPL.

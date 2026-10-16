@@ -12,6 +12,7 @@ existe.
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
+| [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |
@@ -30,6 +31,7 @@ tri/
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
+│   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
 │   ├── flat/
 │   │   ├── mod.rs        décodage des images plates (crate image)
 │   │   └── heif.rs       HEIC/HEIF via libheif (feature `heif`)

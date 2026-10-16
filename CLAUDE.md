@@ -243,7 +243,7 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       complet (`libraw_dcraw_process` + `libraw_dcraw_make_mem_image`) pour obtenir un bitmap
       affichable.
 - [x] `Bitmap::fit` (réduction Lanczos3) et comparaison half_size / rendu complet.
-- [ ] Cache persistant des aperçus (module moteur, sans UI).
+- [x] Cache persistant des aperçus (module moteur, sans UI) : `src/cache.rs`.
 - [ ] File de travail à priorités + progression + annulation (module moteur, démo CLI).
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier

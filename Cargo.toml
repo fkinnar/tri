@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+blake3 = "1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
 libheif-rs = { version = "3", optional = true }
 walkdir = "2.5.0"

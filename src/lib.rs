@@ -2,6 +2,7 @@
 //!
 //! - [`media`] : parcours de dossier, classification RAW / image plate ;
 //! - [`bitmap`] : type d'image RGB8 commun ;
+//! - [`cache`] : cache persistant des vignettes et aperçus ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
 //! - [`filter`] : filtres sur la liste des images à afficher ;
 //! - [`raw`] : lecture et développement des RAW via LibRaw.
@@ -11,6 +12,7 @@
 #![warn(missing_docs)]
 
 pub mod bitmap;
+pub mod cache;
 pub mod filter;
 pub mod flat;
 pub mod media;
