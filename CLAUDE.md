@@ -199,7 +199,10 @@ avec `thumbnail()` et `render(&RenderOptions)` → `Bitmap` RGB8). Outil de test
 Images plates (JPEG/PNG/TIFF/WebP via `image`, HEIC/HEIF via `libheif-rs` ≥ libheif 1.17) :
 `src/flat/`, même type de sortie `Bitmap` (`src/bitmap.rs`), orientation déjà appliquée.
 JPEG (aperçus embarqués, JPEG plats, cache) via `src/jpeg.rs` : libjpeg-turbo derrière la
-feature `turbojpeg` (défaut), repli pur Rust sinon.
+feature `turbojpeg` (défaut), repli pur Rust sinon. libjpeg-turbo 3.x est compilée depuis les
+sources embarquées par `turbojpeg-sys` (CMake + NASM), liée statiquement : les LTS Linux
+n'ont que la 2.1 (décidé le 16/10/2026, voir `doc/build.md`). API libheif fixée à `v1_17`
+(Mint 22 / Ubuntu 24.04 : 1.17.6).
 HEIF derrière la feature Cargo `heif` (défaut), code confiné dans `src/flat/heif.rs` ;
 `--no-default-features` donne un binaire sans aucun lien HEVC (brevets, `doc/licensing.md`).
 Prérequis système dans `prerequisites.sh`. Points acquis :

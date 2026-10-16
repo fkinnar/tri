@@ -8,15 +8,30 @@
 - [libheif](https://github.com/strukturag/libheif) **≥ 1.17**, pour HEIC/HEIF, avec son
   plugin de décodage HEVC (libde265).
 
+libjpeg-turbo (feature `turbojpeg`) n'est **pas** prise au système : elle est compilée
+depuis les sources embarquées par le crate `turbojpeg-sys` (voir plus bas), ce qui demande
+CMake et NASM.
+
 Un compilateur C est aussi nécessaire, pour le petit shim `csrc/libraw_shim.c`.
 
 | Plateforme | Installation |
 |---|---|
-| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 libturbojpeg0-dev pkg-config build-essential` |
-| macOS (Homebrew) | `brew install libraw libheif jpeg-turbo pkg-config` (+ outils Xcode en ligne de commande) |
-| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows libjpeg-turbo:x64-windows`, puis `LIBRAW_DIR` et `TURBOJPEG_*` (voir plus bas) |
+| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential` |
+| macOS (Homebrew) | `brew install libraw libheif cmake pkg-config` (+ outils Xcode en ligne de commande ; NASM inutile sur Apple Silicon) |
+| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, CMake et NASM, puis `LIBRAW_DIR` (voir plus bas) |
 
 Le script [`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes.
+
+`zlib1g-dev` : sous Ubuntu/Mint, `libheif.pc` déclare zlib dans `Requires.private` ;
+sans ce paquet, pkg-config refuse libheif (« Package 'zlib', required by 'libheif', not
+found ») alors que `libheif-dev` est bien installé.
+
+### Version de l'API libheif
+
+`libheif-rs` 3 vise par défaut la toute dernière API (libheif ≥ 1.23), absente des
+distributions LTS (Mint 22 / Ubuntu 24.04 : 1.17.6). `Cargo.toml` fixe donc la feature
+`v1_17`, le minimum requis par `tri`. À relever seulement si on utilise une fonction plus
+récente de libheif.
 
 ### libheif trop ancienne
 
@@ -87,24 +102,30 @@ les noms non ASCII.
 
 | Feature | Défaut | Effet |
 |---|---|---|
-| `turbojpeg` | activée | JPEG via libjpeg-turbo (pkg-config `libturbojpeg`). Désactivée, repli sur le décodeur/encodeur pur Rust du crate `image`, plus lent : voir [jpeg.md](jpeg.md) |
+| `turbojpeg` | activée | JPEG via libjpeg-turbo, compilée depuis ses sources et liée statiquement. Désactivée, repli sur le décodeur/encodeur pur Rust du crate `image`, plus lent : voir [jpeg.md](jpeg.md) |
 | `heif` | activée | Décodage HEIC/HEIF via libheif. Désactivée (`--no-default-features`), libheif n'est plus requise ni liée : voir [flat.md](flat.md) et [licensing.md](licensing.md) |
 
 Avec `--no-default-features`, seule LibRaw reste nécessaire comme bibliothèque système.
 
-### libjpeg-turbo hors pkg-config (Windows)
+### libjpeg-turbo compilée avec le projet
 
-Le crate `turbojpeg-sys` lit des variables d'environnement :
+Le crate `turbojpeg` 1.x utilise l'API TurboJPEG 3 et exige **libjpeg-turbo ≥ 3.0**. Les
+distributions LTS fournissent encore la 2.1 (Mint 22 / Ubuntu 24.04 : 2.1.5), refusée à la
+compilation. D'où le choix (16/10/2026) d'activer la feature `cmake` de `turbojpeg-sys` sur
+toutes les plateformes : il compile les sources qu'il embarque (libjpeg-turbo 3.1.0) en
+bibliothèque **statique**. Même version partout, aucun paquet libjpeg-turbo à installer,
+Windows compris. Coût : CMake et NASM (extensions SIMD x86 ; `require-simd` fait échouer la
+compilation plutôt que de produire en silence une version lente), et ~20 s de compilation
+la première fois. Licences permissives, liaison statique sans contrainte autre que
+l'attribution (voir [licensing.md](licensing.md)).
 
-```powershell
-$env:TURBOJPEG_SOURCE = "explicit"
-$env:TURBOJPEG_LIB_DIR = "C:\vcpkg\installed\x64-windows\lib"
-$env:TURBOJPEG_INCLUDE_DIR = "C:\vcpkg\installed\x64-windows\include"
+Pour utiliser malgré tout une libjpeg-turbo ≥ 3.0 du système, `turbojpeg-sys` lit des
+variables d'environnement :
+
+```sh
+TURBOJPEG_SOURCE=pkg-config cargo build --release        # via pkg-config (libturbojpeg)
+TURBOJPEG_SOURCE=explicit TURBOJPEG_LIB_DIR=… TURBOJPEG_INCLUDE_DIR=… cargo build --release
 ```
-
-Il sait aussi compiler libjpeg-turbo depuis ses sources (feature `cmake` du crate, CMake et
-NASM requis), non activé ici pour rester cohérent avec LibRaw et libheif (bibliothèques du
-système).
 
 ## Variables d'environnement
 

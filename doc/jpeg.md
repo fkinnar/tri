@@ -51,6 +51,7 @@ dans [scheduler.md](scheduler.md#mesures).
 
 ## Licence
 
-libjpeg-turbo : IJG AND BSD-3-Clause AND Zlib, permissives ; crates `turbojpeg` et
+libjpeg-turbo : IJG AND BSD-3-Clause AND Zlib, permissives, compilée depuis ses sources et
+liée statiquement (voir [build.md](build.md#libjpeg-turbo-compilée-avec-le-projet)) ; crates `turbojpeg` et
 `turbojpeg-sys` : Unlicense OR MIT. Aucun brevet actif sur le JPEG de base. Voir
 [licensing.md](licensing.md).
