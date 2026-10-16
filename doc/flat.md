@@ -64,8 +64,10 @@ Pour la grille, décoder l'image entière puis la réduire coûte cher. Les pist
 avant de choisir : la vignette EXIF embarquée dans les JPEG, la vignette HEIF
 (`thumbnail_ids`), ou un décodage JPEG à résolution réduite.
 
-## Licences
+## Licences et brevets
 
-libheif et le décodeur HEVC libde265 sont sous LGPL et liés dynamiquement. HEVC est un codec
-couvert par des brevets ; c'est sans conséquence pour un usage personnel. Il faudra y penser
-en cas de distribution binaire.
+libheif et le décodeur HEVC libde265 sont sous LGPL, liés dynamiquement. **HEVC est couvert
+par des brevets** : sans conséquence pour un usage personnel, mais à traiter avant de
+distribuer des binaires. La libheif de Homebrew est aussi liée à l'encodeur x265, sous GPL.
+Le détail et les options (HEIF optionnel à la compilation, décodeur du système sous macOS ou
+Windows…) sont dans [licensing.md](licensing.md).

@@ -1,0 +1,203 @@
+# Licences, brevets et distribution
+
+> **Avertissement :** ce document résume ce qu'on a pu vérifier et ce qui est communément
+> admis. Ce n'est pas un avis juridique. Avant toute distribution de binaires, en particulier
+> commerciale ou par une organisation, il faut faire vérifier ces points.
+
+L'objectif est de publier `tri` en open source s'il aboutit. Ce document recense ce que ça
+implique, pour que le choix de la licence et le mode de distribution soient faits en
+connaissance de cause et pas découverts après coup.
+
+**Résumé :**
+
+1. Le code Rust et les crates utilisés n'imposent presque rien (MIT, Apache-2.0…).
+2. LibRaw, libheif et libde265 sont sous **LGPL** : la liaison dynamique est compatible avec
+   n'importe quelle licence de projet, à condition de respecter quelques obligations si on les
+   livre avec le binaire.
+3. **Le vrai sujet est HEVC** (le codec des HEIC d'iPhone), couvert par des **brevets** :
+   c'est un problème *distinct* de la licence du code. Il concerne la distribution de
+   *binaires* capables de décoder du HEVC, pas le code source de `tri`.
+4. La libheif de Homebrew embarque **x265 (GPL)**. Elle ne doit pas être redistribuée telle
+   quelle avec un binaire de `tri` sous licence non GPL.
+
+---
+
+## 1. Licences des dépendances
+
+### Bibliothèques système (liées dynamiquement)
+
+Relevées le 16/10/2026 sur les paquets Homebrew installés (`brew info`) et les liens réels
+(`otool -L`).
+
+| Bibliothèque | Version | Licence | Rôle dans `tri` |
+|---|---|---|---|
+| LibRaw | 0.22.2 | **LGPL-2.1-only OU CDDL-1.0** (au choix) | Décodage RAW |
+| ↳ libomp (OpenMP) | — | Apache-2.0 WITH LLVM-exception | Parallélisme interne de LibRaw |
+| ↳ little-cms2 | 2.19.1 | MIT | Gestion couleur de LibRaw |
+| ↳ jpeg-turbo | 3.2.0 | IJG AND Zlib AND BSD-3-Clause | JPEG dans LibRaw |
+| libheif | 1.23.6 | **LGPL-3.0-or-later** | Conteneur HEIF/HEIC |
+| ↳ libde265 | 1.1.3 | **LGPL-3.0-or-later** | Décodeur **HEVC** (brevets, voir §2) |
+| ↳ **x265** | 4.3 | **GPL-2.0-or-later** | Encodeur HEVC : **inutile pour `tri`**, mais lié par la libheif de Homebrew |
+| ↳ aom | 3.15.2 | BSD-2-Clause | AV1 (AVIF), inutilisé pour l'instant |
+
+**LibRaw** : on retient l'option LGPL-2.1. La CDDL est incompatible avec la GPL ; la LGPL
+garde toutes les portes ouvertes.
+
+### Crates Rust (compilés dans le binaire)
+
+Relevé via `cargo metadata` : les 70 crates de l'arbre de dépendances sont sous licences
+permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
+`MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
+ce sont des *bindings*, la libheif elle-même reste LGPL.
+
+Obligation pratique : reproduire les notices de copyright et de licence de ces crates dans la
+distribution. Un outil comme [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
+génère ce fichier automatiquement. À vérifier (maintenance) avant adoption.
+
+### Ce qu'impose la LGPL (LibRaw, libheif, libde265)
+
+Avec une **liaison dynamique** (ce que fait `tri`), la LGPL n'impose rien sur la licence de
+`tri` lui-même. Si on **livre** ces bibliothèques avec le binaire (bundle `.app` macOS,
+installeur Windows, AppImage), il faut :
+
+- fournir leur code source, ou une offre écrite de le fournir, pour la version livrée ;
+- inclure le texte de leur licence ;
+- permettre à l'utilisateur de remplacer la bibliothèque par une autre version : c'est
+  naturellement le cas avec une `.dylib`/`.so`/`.dll` séparée ;
+- ne pas interdire, dans la licence de `tri`, la rétro-ingénierie nécessaire pour déboguer ces
+  modifications.
+
+Avec une **liaison statique**, il faudrait en plus fournir les objets de `tri` permettant de
+relier une autre version. On l'évite : liaison dynamique uniquement. Note : le module LibRaw
+doit de toute façon devenir une bibliothèque dynamique chargée par `libloading` (voir
+`CLAUDE.md`).
+
+Si on ne livre pas ces bibliothèques (paquet de distribution Linux qui dépend de `libraw` et
+`libheif` du système), ces obligations reviennent à la distribution, pas à nous.
+
+### Le piège x265 (GPL)
+
+`otool -L` montre que la `libheif.dylib` de Homebrew est **liée directement à `libx265`**,
+sous GPL-2.0-or-later. Ce n'est pas un plugin chargé à la demande : c'est une dépendance dure.
+
+- **En développement** : aucun problème, rien n'est distribué.
+- **En distribution** : livrer cette libheif avec `tri` revient à livrer du code GPL lié au
+  programme. Si `tri` est sous licence permissive (MIT/Apache), c'est un problème. Et x265 ne
+  sert à rien ici : il ne fait qu'*encoder* du HEVC.
+- **Solution** : pour un binaire distribué, compiler libheif soi-même **sans encodeur**
+  (options CMake `WITH_X265=OFF` ; libde265 seul pour le décodage), ou passer par le décodeur
+  du système (voir §3).
+
+Sous Linux, à partir de libheif 1.17, les codecs sont des plugins séparés
+(`libheif-plugin-libde265`, `libheif-plugin-x265`…) : on dépend seulement du plugin de
+décodage, et c'est l'utilisateur ou la distribution qui l'installe.
+
+---
+
+## 2. Brevets HEVC (H.265)
+
+### De quoi il s'agit
+
+Une photo HEIC d'iPhone est un conteneur HEIF qui contient une image compressée en **HEVC**.
+HEVC est couvert par un grand nombre de brevets, détenus par de nombreuses entreprises. Leurs
+licences sont gérées par plusieurs *patent pools* concurrents (notamment Access Advance et
+Via Licensing Alliance), plus des titulaires indépendants. Il n'existe **pas de guichet
+unique**, et les conditions varient selon le pool.
+
+C'est **indépendant de la licence du code** : libde265 est un logiciel libre (LGPL) écrit
+sans code propriétaire, mais *mettre en œuvre* HEVC peut quand même tomber sous ces brevets
+dans les pays où ils sont reconnus et valides.
+
+### Qui est concerné
+
+- **Le code source de `tri`** : il n'implémente pas HEVC. Il appelle libheif, qui délègue à un
+  plugin de décodage. Publier ce code source n'implique pas de distribuer un décodeur HEVC.
+- **Un binaire distribué qui embarque libde265** (ou tout autre décodeur HEVC), par exemple un
+  bundle macOS ou un installeur Windows : c'est ce cas qui peut être exposé à des demandes de
+  redevances, selon les pays.
+- **Usage personnel** (compiler et utiliser `tri` sur sa machine) : en pratique, pas de sujet.
+- **La géographie compte** : les brevets logiciels sont largement reconnus aux États-Unis.
+  En Europe, les « logiciels en tant que tels » ne sont pas brevetables, mais des brevets liés
+  à HEVC y ont été délivrés. La situation n'y est donc pas nulle non plus.
+- **Durée** : HEVC a été normalisé en 2013 ; les brevets durent en général 20 ans à compter
+  du dépôt. Une bonne partie devrait expirer vers le début des années 2030, mais pas toute.
+
+### Comment font les autres
+
+C'est un indicateur utile, pas une garantie :
+
+- **Fedora** ne livre pas de décodeur HEVC dans ses dépôts officiels. libheif y est compilée
+  sans HEVC, et le support complet vient de RPM Fusion (paquet `libheif-freeworld`), un dépôt
+  tiers que l'utilisateur active lui-même.
+- **Debian / Ubuntu** livrent libde265 dans leurs dépôts.
+- **Windows** : le décodage HEVC passe par l'extension « HEVC Video Extensions » de Microsoft
+  (payante sur le Store), que l'utilisateur installe ; les applications utilisent le décodeur
+  du système.
+- **macOS / iOS** : le décodeur HEVC fait partie du système. Apple paie les licences, et les
+  applications qui passent par les API du système (ImageIO) n'ont pas à s'en soucier.
+
+### AVIF / AV1
+
+AV1 est promu royalty-free par l'Alliance for Open Media (AOM), avec une licence de brevets
+gratuite de ses membres. Un pool tiers (Sisvel) revendique toutefois des brevets sur AV1. Le
+risque est généralement jugé bien plus faible que pour HEVC. AVIF n'est pas encore géré par
+`tri`.
+
+---
+
+## 3. Options pour la distribution
+
+Rien n'est à trancher avant le MVP. Ces options sont à garder en tête pour ne pas fermer de
+porte :
+
+1. **Rendre HEIF optionnel à la compilation** : une feature Cargo `heif`, désactivable. On
+   peut alors produire un binaire sans aucune dépendance HEVC. Peu coûteux à faire tôt :
+   `flat::decode` renverrait une erreur « format non compilé » pour les HEIC.
+2. **Linux : dépendre de la libheif du système** (paquet `.deb`/`.rpm`, Flatpak avec
+   extension). Le plugin HEVC est installé, ou non, par l'utilisateur ou la distribution. On ne
+   livre aucun décodeur.
+3. **macOS : utiliser le décodeur du système** (ImageIO, via les crates `objc2-*`) plutôt que
+   libheif. Pas de brevet à notre charge, pas de LGPL à livrer. Contrepartie : du code
+   spécifique à la plateforme derrière la même fonction `flat::decode`.
+4. **Windows : passer par WIC** (Windows Imaging Component), qui utilise l'extension HEVC de
+   l'utilisateur si elle est installée.
+5. **Ne jamais livrer x265** : `tri` n'encode pas.
+
+L'option 1 est la plus simple et compatible avec toutes les autres. L'architecture actuelle
+s'y prête bien, car tout le décodage HEIF est confiné dans `src/flat.rs`.
+
+---
+
+## 4. Choix de la licence de `tri` (à décider)
+
+Les deux familles sont compatibles avec les dépendances actuelles, à condition de respecter
+le §1 (liaison dynamique, pas de x265 livré si la licence est permissive).
+
+| | **MIT OR Apache-2.0** | **GPL-3.0-or-later** |
+|---|---|---|
+| Usage dans l'écosystème Rust | Standard | Moins courant |
+| Un tiers peut-il en faire un logiciel fermé ? | Oui | Non : les versions modifiées et distribuées restent libres |
+| Compatibilité avec les dépendances LGPL | Oui (liaison dynamique) | Oui |
+| Livrer une libheif liée à x265 (GPL) | **Non** | Oui (GPL-2.0-or-later est compatible avec GPL-3) |
+| Réutilisation du moteur par d'autres projets | Très facile | Seulement par des projets GPL-compatibles |
+| Clause de brevets explicite | Oui (Apache-2.0) | Oui (GPL-3) |
+
+À noter : **aucune de ces licences ne règle la question des brevets HEVC** (§2). Les clauses
+de brevets d'Apache-2.0 et de la GPL-3 ne concernent que les brevets *des contributeurs de
+`tri`*, pas ceux des détenteurs de brevets HEVC.
+
+Il faut choisir **avant la première contribution externe** : changer de licence ensuite
+demande l'accord de tous les contributeurs.
+
+---
+
+## 5. Avant une première publication
+
+- [ ] Choisir la licence de `tri`, ajouter `LICENSE` et le champ `license` dans `Cargo.toml`.
+- [ ] Générer le fichier des notices des crates (ex. `cargo-about`).
+- [ ] Décider du traitement de HEIF dans les binaires distribués (§3).
+- [ ] Si des bibliothèques LGPL sont livrées : inclure leurs licences et un lien vers leur
+      code source exact.
+- [ ] Vérifier qu'aucun binaire distribué ne contient ou ne dépend de x265.
+- [ ] Relire ce document : les versions, licences et pratiques des distributions ont pu
+      changer.

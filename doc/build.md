@@ -28,6 +28,9 @@ cas, `libheif-rs` peut compiler libheif lui-même (CMake requis), en activant sa
 libheif-rs = { version = "3", features = ["embedded-libheif"] }
 ```
 
+Pour un binaire **distribué**, voir [licensing.md](licensing.md) : la libheif de Homebrew
+est liée à x265 (GPL) et HEVC est breveté.
+
 libheif est localisée par le crate `libheif-sys` lui-même (pkg-config, ou vcpkg sous Windows
 MSVC). Le `build.rs` de `tri` ne concerne que LibRaw.
 

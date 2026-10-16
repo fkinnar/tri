@@ -16,6 +16,7 @@ existe.
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |
 | [tests.md](tests.md) | Organisation et lancement des tests |
+| [licensing.md](licensing.md) | Licences des dépendances, brevets HEVC, options de distribution |
 
 ## Vue d'ensemble du code
 

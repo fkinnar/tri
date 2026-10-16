@@ -59,6 +59,14 @@ mais ne pas non plus les implémenter avant que le MVP ci-dessus fonctionne :
   d'images à traiter en parallèle, + un thread dédié qui précharge les voisins de l'image
   sélectionnée (principe : on ne regarde rarement plus de 5 images/seconde, donc traiter n+1
   et n-1 pendant l'affichage de n).
+  Précisé le 16/10/2026 : **en pratique, rarement plus d'un rendu LibRaw complet à la fois.**
+  Pendant qu'on regarde n, on précalcule n+1 ; n-1 seulement quand on entre au milieu de la
+  grille. Donc un seul worker de rendu complet, avec une priorité n > n+1 > n-1, et les
+  requêtes devenues obsolètes (l'utilisateur a déjà bougé) abandonnées. Un rendu complet
+  prenant ≈ 3,8 s sur un RAF X-T4, plus long que le temps passé sur une image en tri rapide,
+  l'affichage doit montrer tout de suite l'aperçu embarqué (voire `half_size`), puis le
+  remplacer quand le rendu complet arrive. Le parallélisme massif ne concerne que les
+  vignettes (aperçus embarqués, sans calcul).
 - **Filtrage (pour plus tard) :** point d'entrée unique qui retourne les images à afficher ;
   type de retour pensé dès le départ comme `Vec<Vec<Image>>` pour permettre la détection de
   groupes/séries de photos (façon Capture One), pas juste une liste plate.
@@ -149,12 +157,13 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   avec le vrai `libraw.h`, donc layout de struct toujours correct, sans bindgen).
 - Mesures (X-T4, RAF 26 Mpx, Mac Apple Silicon, release) : aperçu embarqué ≈ 10 ms ; rendu
   complet ≈ 3,8 s ; rendu `half_size` ≈ 0,35 s (X-Trans : le dématriçage complet est lent).
-- **Mesuré le 16/10/2026 : un rendu LibRaw est déjà multithreadé en interne** (≈ 440 % CPU,
+- **Mesuré le 16/10/2026 : un rendu LibRaw est déjà multithreadé en interne** via OpenMP
+  (`libomp`, lié par la LibRaw de Homebrew ; ≈ 440 % CPU,
   ~200 Mo par instance en pleine résolution). Plusieurs rendus complets simultanés se gênent
   fortement (9 tests : 5,7 s en série, 18 s à 4 threads, 302 s à un thread par cœur). À
   prendre en compte pour le découpage parallèle des vignettes et le préchargement n-1/n+1 :
-  peu de rendus complets à la fois, mesurer avant de paralléliser davantage. (Les aperçus
-  embarqués, eux, ne développent rien et ne sont pas concernés.)
+  peu de rendus complets à la fois, ce qui correspond à l'usage réel (voir « Perf
+  vignettes »). (Les aperçus embarqués ne développent rien et ne sont pas concernés.)
 - Pistes non vérifiées : crates `libraw-rs` / `rsraw` existent sur crates.io mais leur
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
@@ -162,6 +171,13 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 ## Préférences de travail à respecter
 
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
+- **Objectif : publication open source si le projet aboutit.** La licence n'est pas encore
+  choisie (MIT/Apache-2.0 ou GPL-3.0, comparaison dans `doc/licensing.md`). Toute nouvelle
+  dépendance doit être vérifiée aussi sous l'angle licence et brevets, et ajoutée au tableau
+  de `doc/licensing.md`. Points déjà identifiés : HEVC (HEIC iPhone) est breveté, donc un
+  binaire distribué qui embarque un décodeur HEVC est exposé ; la libheif de Homebrew est liée
+  à x265 (GPL), à ne jamais livrer avec un binaire sous licence permissive ; liaison
+  dynamique uniquement pour les bibliothèques LGPL (LibRaw, libheif, libde265).
 - Scripts/outils paramétrables plutôt que multipliés (un script avec options plutôt que N
   scripts dédiés) — vaut aussi pour l'organisation du code quand c'est pertinent.
 - Décisions pragmatiques : tester avant de s'engager, ne pas optimiser avant d'avoir confirmé
