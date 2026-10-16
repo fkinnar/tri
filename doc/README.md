@@ -10,6 +10,8 @@ existe.
 | Document | Contenu |
 |---|---|
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
+| [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
+| [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |
 | [tests.md](tests.md) | Organisation et lancement des tests |
 
@@ -20,8 +22,10 @@ tri/
 ├── build.rs              localise LibRaw, compile le shim C, émet les directives de lien
 ├── csrc/libraw_shim.c    accès aux paramètres LibRaw sans setter dans l'API C
 ├── src/
-│   ├── lib.rs            crate bibliothèque (le « moteur ») : filtres + `pub mod raw`
-│   ├── main.rs           binaire de démonstration
+│   ├── lib.rs            crate bibliothèque (le « moteur ») : déclare les modules
+│   ├── main.rs           démo en ligne de commande : liste un dossier filtré
+│   ├── media.rs          parcours de dossier, classification RAW / plate
+│   ├── filter.rs         trait Filter, groupes, KindFilter
 │   └── raw/
 │       ├── ffi.rs        déclarations brutes de l'API C LibRaw (privé)
 │       └── mod.rs        API sûre : RawFile, Bitmap, Thumbnail, RenderOptions, RawError
@@ -34,7 +38,7 @@ produit des données (`Bitmap`, listes de fichiers) que l'interface consomme.
 
 ## Documentation générée
 
-Chaque élément public porte aussi un commentaire `///`. La documentation API navigable
+Chaque élément public porte aussi un commentaire `///` (imposé par `#![warn(missing_docs)]`). La documentation API navigable
 s'obtient avec :
 
 ```sh

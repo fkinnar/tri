@@ -175,7 +175,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       complet (`libraw_dcraw_process` + `libraw_dcraw_make_mem_image`) pour obtenir un bitmap
       affichable.
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
-- [ ] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier.
+- [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
+      (`src/media.rs`, `src/filter.rs`).
 - [ ] Grille de vignettes : aperçus embarqués pour les RAW, image décodée pour les plates.
 - [ ] Navigation clavier gauche/droite entre images affichées en plein écran.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle

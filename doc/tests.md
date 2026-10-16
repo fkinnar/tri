@@ -24,6 +24,25 @@ développement RAW est beaucoup plus lent en debug.
 
 ## Ce qui est couvert
 
+### `media` (unitaires, `src/media.rs`)
+
+- extensions RAW et plates reconnues quelle que soit la casse ; autres fichiers ignorés ;
+- fichiers cachés et AppleDouble (`._x.RAF`) ignorés ;
+- listes d'extensions en minuscules et disjointes ;
+- tri : le RAW précède son jumeau JPEG.
+
+### `filter` (unitaires, `src/filter.rs`)
+
+- `ungrouped`, `KindFilter` (tout / RAW / plates), suppression des groupes vidés, valeur par
+  défaut, chaînage `apply_all`.
+
+### `media` + `filter` (intégration, `tests/media.rs`)
+
+Sur une fausse carte SD temporaire (paires RAW+JPEG, casse mixte, AppleDouble, `.xmp`,
+sous-dossiers, dossier nommé `x.RAF`) : contenu et ordre exacts de `scan`, effet de `depth`
+(0, 1, 2, 3, illimité), dossier vide, dossier absent, fichier passé comme racine, filtre par
+type sur la carte.
+
 ### `raw` (unitaires, `src/raw/mod.rs`)
 
 - conversion RGB8, niveaux de gris → RGB, octets superflus ignorés ;

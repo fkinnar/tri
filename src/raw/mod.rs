@@ -12,14 +12,19 @@ use std::path::{Path, PathBuf};
 /// Image RGB 8 bits, entrelacée (R, G, B, R, G, B...), ligne par ligne.
 #[derive(Clone)]
 pub struct Bitmap {
+    /// Largeur en pixels.
     pub width: u32,
+    /// Hauteur en pixels.
     pub height: u32,
+    /// `width * height * 3` octets.
     pub data: Vec<u8>,
 }
 
 /// Aperçu embarqué : presque toujours un JPEG, parfois un bitmap brut.
 pub enum Thumbnail {
+    /// Octets du fichier JPEG, tels qu'embarqués (orientation EXIF non appliquée).
     Jpeg(Vec<u8>),
+    /// Aperçu non compressé, converti en RGB8.
     Bitmap(Bitmap),
 }
 
@@ -52,11 +57,23 @@ pub enum RawError {
     /// Chemin impossible à transmettre en C (octet nul).
     InvalidPath(PathBuf),
     /// Code d'erreur renvoyé par LibRaw, avec son message.
-    LibRaw { code: i32, message: String },
+    LibRaw {
+        /// Code LibRaw (négatif).
+        code: i32,
+        /// Message de `libraw_strerror`.
+        message: String,
+    },
     /// Image nulle sans code d'erreur.
     EmptyImage,
     /// Image produite dans un format que `Bitmap` ne gère pas.
-    UnsupportedImage { kind: i32, colors: u16, bits: u16 },
+    UnsupportedImage {
+        /// Type LibRaw (1 = JPEG, 2 = bitmap).
+        kind: i32,
+        /// Nombre de canaux.
+        colors: u16,
+        /// Bits par canal.
+        bits: u16,
+    },
 }
 
 impl fmt::Display for RawError {
