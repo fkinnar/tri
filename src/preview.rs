@@ -94,7 +94,11 @@ const RULES_VERSION: u32 = 1;
 /// taille ou une règle donne de nouvelles clés, donc un recalcul.
 pub fn params(level: Level, sizes: &Sizes) -> String {
     let defaults = RenderOptions::default();
-    let render = format!("wb={};bright={}", defaults.camera_wb, defaults.bright);
+    // Tout réglage de rendu figure ici : en changer donne de nouvelles clés, donc un recalcul.
+    let render = format!(
+        "wb={};bright={};autobright={}",
+        defaults.camera_wb, defaults.bright, defaults.auto_bright
+    );
     match level {
         Level::Thumbnail => format!("r{RULES_VERSION};side={}", sizes.thumbnail),
         Level::Embedded => format!("r{RULES_VERSION};side={};src=embedded", sizes.standard),

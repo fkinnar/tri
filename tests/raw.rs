@@ -110,6 +110,33 @@ fn white_balance_option_changes_output() {
 
 #[test]
 #[ignore = "nécessite TRI_TEST_RAW"]
+fn auto_bright_is_off_by_default_and_brightens_when_on() {
+    let _serial = serial();
+    let mean = |b: &tri::bitmap::Bitmap| {
+        b.data.iter().map(|&v| v as f64).sum::<f64>() / b.data.len() as f64
+    };
+    let raw = RawFile::open(sample()).unwrap().render(&half()).unwrap();
+    let auto = RawFile::open(sample())
+        .unwrap()
+        .render(&RenderOptions {
+            auto_bright: true,
+            ..half()
+        })
+        .unwrap();
+    assert!(!RenderOptions::default().auto_bright);
+    println!(
+        "luminance moyenne : brute {:.1}, auto {:.1}",
+        mean(&raw),
+        mean(&auto)
+    );
+    assert!(
+        mean(&auto) > mean(&raw),
+        "la luminosité automatique éclaircit ; sans elle, l'exposition réelle est gardée"
+    );
+}
+
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
 fn half_size_halves_dimensions() {
     let _serial = serial();
     let full = RawFile::open(sample())

@@ -77,6 +77,7 @@ Type commun défini dans [`tri::bitmap`](bitmap.md) : RGB 8 bits entrelacé, san
 | `camera_wb` | `true` | Balance des blancs enregistrée par le boîtier. Sinon, multiplicateurs « lumière du jour » de LibRaw (rendu souvent trop chaud ou trop froid). |
 | `half_size` | `false` | Demi-résolution : chaque bloc de photosites devient un pixel, sans dématriçage. Environ 10× plus rapide. |
 | `bright` | `1.0` | Luminosité appliquée par LibRaw. |
+| `auto_bright` | `false` | Luminosité automatique de LibRaw (éclaircit jusqu'à écrêter 1 % des pixels). **Désactivée** : elle « corrigeait » les sous-expositions (DSCF0130 : luminance moyenne 39 sans, 129 avec, JPEG boîtier 65) et masquait ainsi l'erreur de prise de vue qu'on cherche à voir en triant. Sans elle, le rendu RAW montre l'exposition réelle, souvent plus sombre que le JPEG boîtier (qui applique sa courbe de tons). |
 
 La sortie est toujours en 8 bits par canal (`libraw_set_output_bps(8)`).
 

@@ -155,6 +155,10 @@ de fond ; les aperçus 1:1 générés à la demande.
   Zoomer ne change jamais de source. En JPEG, le 1:1 est le JPEG embarqué à sa taille
   (niveau `EmbeddedFull`, étiqueté « 71 % du capteur ») ; en RAW, le rendu complet à 100 %.
   Le rendu RAW plat est voulu : c'est l'intérêt de voir les données brutes.
+- **Pas de luminosité automatique LibRaw** (corrigé le 16/10/2026, retour utilisateur) :
+  activée par défaut dans LibRaw, elle rendait « bien exposée » une photo sous-exposée
+  (DSCF0130 : 39 → 129 de luminance moyenne). Le rendu RAW montre l'exposition réelle de la
+  prise de vue ; `RenderOptions::auto_bright` reste disponible, désactivé.
 - **Rendus RAW à la demande dans l'interface** (`RawPreviews::OnDemand`) : rien en mode
   JPEG ; en mode RAW, l'image affichée et ses voisines. Calcul de tout le dossier en fond
   possible en option (`RawPreviews::Background`, à exposer dans la configuration).

@@ -2,7 +2,7 @@
 //! image plate.
 //!
 //!   cargo run --release --example decode -- thumb  <fichier RAW> <sortie>
-//!   cargo run --release --example decode -- render <fichier RAW> <sortie.png> [--half] [--daylight] [--bright X] [--fit N]
+//!   cargo run --release --example decode -- render <fichier RAW> <sortie.png> [--half] [--daylight] [--bright X] [--auto-bright] [--fit N]
 //!   cargo run --release --example decode -- flat   <image plate> <sortie.png> [--fit N]
 //!
 //! `--fit N` réduit le résultat pour que son plus grand côté fasse au plus N pixels.
@@ -15,7 +15,7 @@ use tri::bitmap::Bitmap;
 use tri::raw::{RawFile, RenderOptions, Thumbnail};
 
 const USAGE: &str = "usage : decode <thumb|render|flat> <fichier> <sortie> \
-                     [--half] [--daylight] [--bright X] [--fit N]";
+                     [--half] [--daylight] [--bright X] [--auto-bright] [--fit N]";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -67,6 +67,7 @@ fn run() -> AnyResult<()> {
             "--half" => options.half_size = true,
             "--daylight" => options.camera_wb = false,
             "--bright" => options.bright = flags.next().ok_or(USAGE)?.parse()?,
+            "--auto-bright" => options.auto_bright = true,
             "--fit" => fit = Some(flags.next().ok_or(USAGE)?.parse()?),
             other => return Err(format!("option inconnue : {other}\n{USAGE}").into()),
         }

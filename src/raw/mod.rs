@@ -29,6 +29,10 @@ pub struct RenderOptions {
     pub half_size: bool,
     /// Luminosité (1.0 = défaut LibRaw).
     pub bright: f32,
+    /// Luminosité automatique de LibRaw : éclaircit jusqu'à écrêter 1 % des pixels. Désactivée
+    /// par défaut : elle « corrige » une sous-exposition et masque donc l'erreur de prise de
+    /// vue qu'on cherche justement à voir en triant.
+    pub auto_bright: bool,
 }
 
 impl Default for RenderOptions {
@@ -37,6 +41,7 @@ impl Default for RenderOptions {
             camera_wb: true,
             half_size: false,
             bright: 1.0,
+            auto_bright: false,
         }
     }
 }
@@ -283,6 +288,7 @@ impl RawFile {
             ffi::tri_libraw_set_use_camera_wb(self.ptr, options.camera_wb.into());
             ffi::tri_libraw_set_half_size(self.ptr, options.half_size.into());
             ffi::libraw_set_bright(self.ptr, options.bright);
+            ffi::libraw_set_no_auto_bright(self.ptr, c_int::from(!options.auto_bright));
         }
         check(unsafe { ffi::libraw_unpack(self.ptr) })?;
         check(unsafe { ffi::libraw_dcraw_process(self.ptr) })?;
