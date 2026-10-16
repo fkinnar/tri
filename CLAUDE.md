@@ -333,5 +333,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
         `thumbnails_first`, `raw_previews` (OnDemand dans l'interface), `RenderOptions`
         (balance des blancs, `auto_bright`), profil de raccourcis.
       Le fichier de configuration couvrira aussi la taille d'aperçu Auto/fixe et le thème.
+- [ ] Grille : le survol de la souris (fond gris moyen) et la sélection (fond turquoise) se
+      ressemblent trop, on croit voir deux images sélectionnées (retour du 16/10/2026).
+      Rendre le survol nettement plus discret (léger éclaircissement ou fin contour) et la
+      sélection sans ambiguïté ; couleurs à mettre dans les réglages, comme le reste.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
