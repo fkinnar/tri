@@ -208,34 +208,50 @@ const EMBEDDED_BACKGROUND: u8 = 4;
 const STANDARD_BACKGROUND: u8 = 5;
 
 /// Priorité d'une tâche (la plus petite passe en premier). Ordre :
-/// 1. le 1:1 demandé ;
-/// 2. les aperçus boîtier de l'image affichée, de la suivante, de la précédente
-///    (presque instantanés) ;
-/// 3. leurs aperçus standard, dans le même ordre ;
-/// 4. les vignettes, dans l'ordre du dossier ;
-/// 5. les autres aperçus boîtier, puis les autres aperçus standard, par distance à l'image
+/// 1. l'image affichée : d'abord ce qui s'affiche ajusté (aperçu boîtier, rendu RAW
+///    ~0,5 s), puis son 1:1 (100 % RAW ~4,5 s) : en mode RAW, l'aspect RAW apparaît vite,
+///    la netteté du 100 % suit ;
+/// 2. ses voisines (suivante, puis précédente) : ajusté, puis 1:1 (préchargement) ;
+/// 3. les vignettes, dans l'ordre du dossier ;
+/// 4. les autres aperçus boîtier, puis les autres aperçus standard, par distance à l'image
 ///    affichée (en avant d'abord à distance égale).
+///
+/// (Aperçus boîtier et 1:1 du JPEG passent par les workers légers, rendus RAW par le
+/// worker lourd : chaque file ne voit que ses propres niveaux.)
 fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
-    let (near_class, background_class) = match level {
-        Level::Full | Level::EmbeddedFull => (0, 0),
+    let (fit, background_class) = match level {
         Level::Thumbnail => return (3, index),
-        Level::Embedded => (1, EMBEDDED_BACKGROUND),
-        Level::Standard => (2, STANDARD_BACKGROUND),
+        Level::Embedded => (true, EMBEDDED_BACKGROUND),
+        Level::Standard => (true, STANDARD_BACKGROUND),
+        Level::EmbeddedFull | Level::Full => (false, STANDARD_BACKGROUND),
     };
-    let Some(f) = focus else {
-        return (background_class, index);
-    };
-    if index == f {
-        (near_class, 0)
-    } else if index == f + 1 {
-        (near_class, 1)
-    } else if index + 1 == f {
-        (near_class, 2)
-    } else {
-        (
+    let near = focus.and_then(|f| {
+        if index == f {
+            Some(0)
+        } else if index == f + 1 {
+            Some(1)
+        } else if index + 1 == f {
+            Some(2)
+        } else {
+            None
+        }
+    });
+    match (near, focus) {
+        // Image affichée : ajusté (0) puis 1:1 (1) ; voisines : ajusté (2, 3) puis 1:1 (4, 5).
+        (Some(rank), _) => {
+            let order = match (rank, fit) {
+                (0, true) => 0,
+                (0, false) => 1,
+                (r, true) => 1 + r,
+                (r, false) => 3 + r,
+            };
+            (0, order)
+        }
+        (None, Some(f)) => (
             background_class,
             index.abs_diff(f) * 2 + usize::from(index < f),
-        )
+        ),
+        (None, None) => (background_class, index),
     }
 }
 
@@ -666,36 +682,52 @@ mod tests {
     #[test]
     fn priority_order_around_focus() {
         let f = Some(5);
-        let mut jobs = vec![
-            (9, Level::Standard),
-            (4, Level::Standard),
-            (6, Level::Standard),
-            (5, Level::Standard),
-            (0, Level::Thumbnail),
-            (3, Level::Standard),
-            (7, Level::Standard),
-            (5, Level::Full),
-            (8, Level::Thumbnail),
-            (9, Level::Embedded),
-            (6, Level::Embedded),
-            (5, Level::Embedded),
-        ];
-        jobs.sort_by_key(|j| (priority(*j, f), j.0));
+        let sorted = |mut jobs: Vec<Job>| {
+            jobs.sort_by_key(|j| (priority(*j, f), j.0));
+            jobs
+        };
+        // Worker lourd (rendus RAW) : image affichée ajustée puis à 100 %, puis voisines.
         assert_eq!(
-            jobs,
-            [
+            sorted(vec![
+                (9, Level::Standard),
+                (4, Level::Full),
+                (4, Level::Standard),
+                (6, Level::Full),
+                (6, Level::Standard),
                 (5, Level::Full),
-                (5, Level::Embedded),
-                (6, Level::Embedded),
                 (5, Level::Standard),
+                (3, Level::Standard),
+                (7, Level::Standard),
+            ]),
+            [
+                (5, Level::Standard),
+                (5, Level::Full),
                 (6, Level::Standard),
                 (4, Level::Standard),
-                (0, Level::Thumbnail),
-                (8, Level::Thumbnail),
-                (9, Level::Embedded),
+                (6, Level::Full),
+                (4, Level::Full),
                 (7, Level::Standard),
                 (3, Level::Standard),
                 (9, Level::Standard),
+            ]
+        );
+        // Workers légers : aperçus boîtier proches, 1:1 du JPEG, vignettes, reste du dossier.
+        assert_eq!(
+            sorted(vec![
+                (0, Level::Thumbnail),
+                (9, Level::Embedded),
+                (5, Level::EmbeddedFull),
+                (6, Level::Embedded),
+                (8, Level::Thumbnail),
+                (5, Level::Embedded),
+            ]),
+            [
+                (5, Level::Embedded),
+                (5, Level::EmbeddedFull),
+                (6, Level::Embedded),
+                (0, Level::Thumbnail),
+                (8, Level::Thumbnail),
+                (9, Level::Embedded),
             ]
         );
     }
@@ -746,7 +778,11 @@ mod tests {
             !is_heavy(MediaKind::Raw, Level::EmbeddedFull),
             "1:1 du JPEG : léger"
         );
-        assert_eq!(priority((3, Level::EmbeddedFull), Some(3)), (0, 0));
+        assert_eq!(
+            priority((3, Level::EmbeddedFull), Some(3)),
+            (0, 1),
+            "juste après l'ajusté"
+        );
     }
 
     #[test]

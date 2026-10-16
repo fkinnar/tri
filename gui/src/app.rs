@@ -455,18 +455,37 @@ impl TriApp {
         }
     }
 
-    /// En 1:1, demande le 1:1 de l'image affichée pour la source choisie, puis celui de ses
-    /// voisines (préchargement : on navigue souvent zoomé pour comparer). Sans effet sinon.
+    /// Plein écran : demande au moteur ce que l'affichage va réclamer, **dans l'ordre des
+    /// priorités** : image affichée ajustée (rendu RAW en mode RAW), son 1:1 si zoomé, puis
+    /// les voisines (préchargement) dans le même ordre. L'ordre d'envoi compte : un worker
+    /// libre prend aussitôt la première demande reçue, et un rendu LibRaw ne s'interrompt
+    /// pas ; envoyer d'abord les 1:1 faisait passer un 100 % (~4,5 s) devant le rendu
+    /// ajusté (~0,5 s).
     fn request_zoom(&mut self) {
-        if self.zoom.is_none() || self.mode != Mode::View || self.files.is_empty() {
+        if self.mode != Mode::View || self.files.is_empty() {
             return;
         }
+        let n = self.files.len();
         let current = self.selected;
-        for i in [current, current + 1, current.wrapping_sub(1)] {
-            if i < self.files.len() {
-                let level = view::zoom_level(self.files[i].kind, self.source);
-                self.request(i, level);
+        let images: Vec<usize> = [current, current + 1, current.wrapping_sub(1)]
+            .into_iter()
+            .filter(|&i| i < n)
+            .collect();
+        let mut wanted = Vec::new();
+        for (rank, &i) in images.iter().enumerate() {
+            let kind = self.files[i].kind;
+            // Ajusté : en mode RAW, le rendu RAW (le JPEG boîtier est calculé en fond).
+            if self.source == Source::Raw && kind == MediaKind::Raw {
+                wanted.push((rank == 0, i, Level::Standard));
             }
+            if self.zoom.is_some() {
+                wanted.push((rank == 0, i, view::zoom_level(kind, self.source)));
+            }
+        }
+        // Image affichée d'abord (ajusté puis 1:1), voisines ensuite.
+        wanted.sort_by_key(|&(focus, _, _)| !focus);
+        for (_, i, level) in wanted {
+            self.request(i, level);
         }
     }
 
@@ -538,14 +557,8 @@ impl TriApp {
         }
         let n = self.files.len();
         let current = self.selected;
-        // Mode RAW : rendus de l'image affichée et de ses voisines, à la demande.
-        if self.source == Source::Raw {
-            for i in [current, current + 1, current.wrapping_sub(1)] {
-                if i < n && self.files[i].kind == MediaKind::Raw {
-                    self.request(i, Level::Standard);
-                }
-            }
-        }
+        // Demandes au moteur (dédoublonnées : seules les nouvelles partent).
+        self.request_zoom();
         let Some(engine) = &self.engine else { return };
         let neighbours = [current + 1, current.wrapping_sub(1)]
             .into_iter()
@@ -689,7 +702,16 @@ impl TriApp {
             }
             None => info.push_str(" · aperçu en cours de calcul"),
         }
-        if zoomed && shown != Some(zoom_level) {
+        // Mode RAW, mais faute de mieux c'est encore le JPEG qui est affiché : le dire.
+        let raw_pending = self.source == Source::Raw
+            && file.kind == MediaKind::Raw
+            && matches!(
+                shown,
+                Some(Level::Thumbnail | Level::Embedded | Level::EmbeddedFull)
+            );
+        if raw_pending {
+            info.push_str(" · rendu RAW en cours");
+        } else if zoomed && shown != Some(zoom_level) {
             info.push_str(match zoom_level {
                 Level::Full => " · calcul du 100 % en cours",
                 _ => " · chargement du 1:1",

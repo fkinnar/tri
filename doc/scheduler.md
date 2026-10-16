@@ -8,10 +8,18 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
 - **Niveaux de fond par type de fichier** : vignette, **aperçu boîtier** (JPEG embarqué,
   RAW seulement) et aperçu standard ; le 1:1 n'est calculé qu'à la demande. L'aperçu
   boîtier est léger (worker léger), l'aperçu standard d'un RAW lourd (LibRaw).
-- **Priorités**, recalculées à chaque prise de tâche (`priority`) : 1:1 demandé > aperçus
-  boîtier de l'image affichée, de n+1, de n-1 (presque instantanés) > leurs aperçus standard
-  > vignettes dans l'ordre du dossier > autres aperçus boîtier > autres aperçus standard,
-  par distance (en avant d'abord).
+- **Priorités**, recalculées à chaque prise de tâche (`priority`) :
+  1. image affichée : ce qui s'affiche ajusté (aperçu boîtier, rendu RAW ~0,5 s), puis son
+     1:1 (100 % RAW ~4,5 s) ;
+  2. voisines n+1 puis n-1 : ajusté, puis 1:1 (préchargement) ;
+  3. vignettes, dans l'ordre du dossier ;
+  4. autres aperçus boîtier, puis autres aperçus standard, par distance (en avant d'abord).
+
+  Le rendu ajusté passe devant le 1:1 pour que l'aspect RAW apparaisse vite ; le 1:1 de
+  l'image affichée passe devant le préchargement des voisines pour que la netteté de
+  l'image regardée arrive au plus tôt. Une priorité ne vaut que pour les tâches *en
+  attente* : une tâche lancée ne s'interrompt pas (le dématriçage X-Trans moins encore),
+  d'où l'importance de l'ordre d'envoi des demandes (voir [gui.md](gui.md)).
 - **API** : `set_folder(files) -> génération`, `set_focus(index)`,
   `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
   `Drop` annule et arrête les threads.

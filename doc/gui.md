@@ -75,9 +75,18 @@ puis on vérifie la netteté des candidates **à 100 %**.
     l'échelle 1:1** (taille estimée d'après le dernier 1:1 affiché, même boîtier), flou un
     instant puis net, comme dans Lightroom. En dernier recours, la vignette (chargée en
     1–2 ms) tient lieu d'attente.
+  - Mode RAW : la source reste RAW d'une image à l'autre. Si aucun rendu RAW n'est encore
+    prêt pour la nouvelle image, le JPEG boîtier est affiché en attendant, avec la mention
+    « rendu RAW en cours » (sans elle, on croyait le mode RAW désactivé : retour du
+    16/10/2026). Les demandes partent **dans l'ordre des priorités** (image affichée
+    ajustée, son 1:1, puis les voisines) : envoyées dans un autre ordre, un 100 % (~4,5 s,
+    non interruptible) passait devant le rendu ajusté (~0,5 s) et le JPEG restait affiché
+    plusieurs secondes.
   - Mode RAW : le préchargement passe par l'unique worker LibRaw (~4,5 s par 1:1). En
     sautant une image, le 1:1 voulu attend la fin de celui de la voisine déjà commencé (le
     dématriçage X-Trans ne s'interrompt pas) : jusqu'à ~6 s mesurées.
+  - Dans un dossier RAW+JPEG, les voisines d'un .RAF sont ses .JPG : le préchargement RAW
+    ne sert vraiment qu'avec le filtre « RAW seuls » (`f`).
   - Dans un dossier RAW+JPEG, le 1:1 d'un .JPG (6240 px) et celui du JPEG embarqué d'un
     .RAF (4416 px) n'ont pas le même grossissement : c'est le principe du 1:1 (un pixel de
     l'image pour un pixel de l'écran).
