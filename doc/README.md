@@ -30,7 +30,9 @@ tri/
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
-│   ├── flat.rs           décodage des images plates (image, libheif)
+│   ├── flat/
+│   │   ├── mod.rs        décodage des images plates (crate image)
+│   │   └── heif.rs       HEIC/HEIF via libheif (feature `heif`)
 │   └── raw/
 │       ├── ffi.rs        déclarations brutes de l'API C LibRaw (privé)
 │       └── mod.rs        API sûre : RawFile, Thumbnail, RenderOptions, RawError

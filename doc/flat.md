@@ -13,6 +13,28 @@ Décodage des images « plates » — déjà développées par l'appareil ou un 
 
 `heic` : iPhone. `hif` : extension HEIF utilisée par les boîtiers Fujifilm récents.
 
+## Feature `heif`
+
+Le support HEIF est une **feature Cargo**, activée par défaut :
+
+```sh
+cargo build --release                         # avec HEIF (libheif requise)
+cargo build --release --no-default-features   # sans HEIF : aucun lien vers libheif / HEVC
+```
+
+Pourquoi : HEVC est breveté et la libheif de Homebrew embarque x265, sous GPL (voir
+[licensing.md](licensing.md)). Un binaire distribué doit pouvoir s'en passer.
+
+Tout le code libheif est dans `src/flat/heif.rs`, compilé seulement avec la feature. Sans
+elle :
+
+- `decode` sur un fichier HEIF renvoie `FlatError::HeifNotCompiled` (« HEIF non pris en
+  charge »), sans même lire le fichier ;
+- les variantes `FlatError::Heif` et `UnexpectedHeifLayout` n'existent pas ;
+- `HEIF_SUPPORTED` vaut `false`, ce qui permet à l'interface d'adapter son message ;
+- `media::scan` **liste quand même** les fichiers HEIC. Ils existent, et l'interface doit
+  pouvoir dire « présent, mais non décodable par ce binaire » plutôt que de les cacher.
+
 ## API
 
 ### `decode(path) -> Result<Bitmap>`
@@ -32,7 +54,11 @@ prêt à afficher.
 
 ### `is_heif(path) -> bool`
 
-Vrai si l'extension fait partie de `HEIF_EXTENSIONS`.
+Vrai si l'extension fait partie de `HEIF_EXTENSIONS`, que la feature soit compilée ou non.
+
+### `HEIF_SUPPORTED: bool`
+
+`true` si ce binaire a été compilé avec la feature `heif`.
 
 ### `FlatError` et `Result<T>`
 
@@ -40,14 +66,17 @@ Vrai si l'extension fait partie de `HEIF_EXTENSIONS`.
 |---|---|
 | `Io(io::Error)` | Fichier absent ou illisible |
 | `Image(image::ImageError)` | Format non reconnu, fichier corrompu (hors HEIF) |
-| `Heif(HeifError)` | Erreur libheif : fichier corrompu, codec absent… |
-| `UnexpectedHeifLayout` | libheif n'a pas fourni de RGB 8 bits entrelacé (ne devrait pas arriver) |
+| `HeifNotCompiled` | Fichier HEIF, binaire compilé sans la feature `heif` |
+| `Heif(HeifError)` | *(feature `heif`)* Erreur libheif : fichier corrompu, codec absent… |
+| `UnexpectedHeifLayout` | *(feature `heif`)* libheif n'a pas fourni de RGB 8 bits entrelacé (ne devrait pas arriver) |
 
 `FlatError` implémente `std::error::Error`, avec `source()` qui renvoie l'erreur d'origine.
 
 ## Mécanismes internes
 
-- **`pack_rows(data, width, height, stride)`** : libheif peut remplir la fin de chaque ligne
+- **`heif::decode`** (`src/flat/heif.rs`) : lecture en mémoire, contexte libheif, image
+  primaire, décodage en RGB entrelacé.
+- **`heif::pack_rows(data, width, height, stride)`** : libheif peut remplir la fin de chaque ligne
   pour l'alignement mémoire (`stride` > `width * 3`). Cette fonction pure recopie les lignes
   sans le remplissage, et rejette un stride incohérent ou des données trop courtes.
 
@@ -69,5 +98,5 @@ avant de choisir : la vignette EXIF embarquée dans les JPEG, la vignette HEIF
 libheif et le décodeur HEVC libde265 sont sous LGPL, liés dynamiquement. **HEVC est couvert
 par des brevets** : sans conséquence pour un usage personnel, mais à traiter avant de
 distribuer des binaires. La libheif de Homebrew est aussi liée à l'encodeur x265, sous GPL.
-Le détail et les options (HEIF optionnel à la compilation, décodeur du système sous macOS ou
-Windows…) sont dans [licensing.md](licensing.md).
+D'où la feature `heif`, désactivable. Le détail et les autres options (décodeur du système sous
+macOS ou Windows…) sont dans [licensing.md](licensing.md).

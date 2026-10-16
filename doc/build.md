@@ -65,6 +65,14 @@ La DLL LibRaw doit être trouvable à l'exécution (dans le `PATH` ou à côté 
 Les chemins de fichiers sont transmis à LibRaw en UTF-16 (`libraw_open_wfile`), ce qui gère
 les noms non ASCII.
 
+## Features Cargo
+
+| Feature | Défaut | Effet |
+|---|---|---|
+| `heif` | activée | Décodage HEIC/HEIF via libheif. Désactivée (`--no-default-features`), libheif n'est plus requise ni liée : voir [flat.md](flat.md) et [licensing.md](licensing.md) |
+
+Sans `heif`, seule LibRaw reste nécessaire comme bibliothèque système.
+
 ## Variables d'environnement
 
 | Variable | Rôle |

@@ -21,6 +21,16 @@ TRI_TEST_RAW=/chemin/photo.RAF TRI_TEST_HEIC=/chemin/photo.heic \
   cargo test --release -- --include-ignored                               # tout
 ```
 
+Les deux configurations de features doivent passer :
+
+```sh
+cargo test                          # avec HEIF (défaut)
+cargo test --no-default-features    # sans HEIF
+```
+
+Les tests HEIF sont `#[cfg(feature = "heif")]`. Sans la feature, un test dédié vérifie qu'un
+HEIC donne `HeifNotCompiled`.
+
 Les tests qui ont besoin d'un vrai fichier sont marqués `#[ignore = "nécessite TRI_TEST_…"]` :
 aucun fichier RAW n'est versionné (trop lourd, et propre à chaque boîtier). `cargo test` les
 signale comme ignorés au lieu de les faire passer en silence. Avec `--include-ignored`, ils
@@ -44,10 +54,10 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
 - lecture d'un pixel, `None` hors de l'image.
 
-### `flat` (unitaires, `src/flat.rs`)
+### `flat` (unitaires, `src/flat/mod.rs` et `src/flat/heif.rs`)
 
 - extensions HEIF reconnues quelle que soit la casse ;
-- `pack_rows` : retrait du remplissage, cas sans remplissage, dernière ligne sans
+- *(feature `heif`)* `pack_rows` : retrait du remplissage, cas sans remplissage, dernière ligne sans
   remplissage, rejet des données trop courtes et des strides incohérents.
 
 ### `flat` (intégration, `tests/flat.rs`)
@@ -58,6 +68,7 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 - HEIC (fixture) : dimensions et couleur de chaque quadrant ; extension en majuscules et
   chemin non ASCII ;
 - fichier absent → `Io` ; contenu invalide → `Image` ou `Heif` ;
+- sans la feature `heif` : la fixture HEIC donne `HeifNotCompiled` ;
 - avec `TRI_TEST_HEIC` : un vrai HEIC d'iPhone se décode en RGB8 cohérent.
 
 ### `filter` (unitaires, `src/filter.rs`)

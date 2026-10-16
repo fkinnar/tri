@@ -131,7 +131,9 @@ Intégré dans `src/raw/` (`ffi.rs` = déclarations brutes, `mod.rs` = wrapper s
 avec `thumbnail()` et `render(&RenderOptions)` → `Bitmap` RGB8). Outil de test paramétrable :
 `cargo run --release --example decode -- <thumb|render|flat> <fichier> <sortie> [--half] [--daylight] [--bright X]`.
 Images plates (JPEG/PNG/TIFF/WebP via `image`, HEIC/HEIF via `libheif-rs` ≥ libheif 1.17) :
-`src/flat.rs`, même type de sortie `Bitmap` (`src/bitmap.rs`), orientation déjà appliquée.
+`src/flat/`, même type de sortie `Bitmap` (`src/bitmap.rs`), orientation déjà appliquée.
+HEIF derrière la feature Cargo `heif` (défaut), code confiné dans `src/flat/heif.rs` ;
+`--no-default-features` donne un binaire sans aucun lien HEVC (brevets, `doc/licensing.md`).
 Prérequis système dans `prerequisites.sh`. Points acquis :
 
 - LibRaw expose une **API C** (`libraw_*`) utilisable via FFI ; l'API C++ n'a pas d'ABI stable
@@ -192,7 +194,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   - documentation Markdown dans `doc/` (un fichier par module + `README.md` sommaire,
     `build.md`, `tests.md`) expliquant mods, traits, fonctions et le *pourquoi* ; commentaires
     `///` sur tout l'API public pour `cargo doc` ;
-  - avant chaque commit : `cargo fmt`, `cargo clippy --all-targets` sans warning, tests verts.
+  - avant chaque commit : `cargo fmt`, `cargo clippy --all-targets` sans warning, tests verts,
+    **dans les deux configurations** (défaut et `--no-default-features`).
 
 ## Prochaine étape immédiate
 

@@ -5,8 +5,14 @@ edition = "2024"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
-libheif-rs = "3"
+libheif-rs = { version = "3", optional = true }
 walkdir = "2.5.0"
+
+[features]
+default = ["heif"]
+# HEIC/HEIF via libheif. HEVC est breveté : désactivable pour un binaire distribué
+# (cargo build --no-default-features). Voir doc/licensing.md.
+heif = ["dep:libheif-rs"]
 
 [dev-dependencies]
 tempfile = "3"

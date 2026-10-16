@@ -4,6 +4,9 @@
 //! `tests/fixtures/quadrants.heic` (64×48, quadrants rouge / vert / bleu / blanc), produit
 //! par `heif-enc -q 95 -p chroma=444`. Un vrai HEIC d'iPhone peut être testé en plus via
 //! `TRI_TEST_HEIC` (test ignoré par défaut).
+//!
+//! Les tests HEIF dépendent de la feature `heif`. Sans elle (`--no-default-features`), on
+//! vérifie à la place que les HEIC donnent une erreur explicite.
 
 use std::path::{Path, PathBuf};
 
@@ -91,10 +94,15 @@ fn jpeg_exif_orientation_is_applied() {
     assert_close(bmp.pixel(4, 12), [0, 0, 255], 40);
 }
 
+fn heic_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/quadrants.heic")
+}
+
 #[test]
+#[cfg(feature = "heif")]
 fn heic_fixture_decodes_with_expected_colors() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/quadrants.heic");
-    let bmp = decode(&path).unwrap();
+    const { assert!(tri::flat::HEIF_SUPPORTED) };
+    let bmp = decode(heic_fixture()).unwrap();
     assert_eq!((bmp.width, bmp.height), (64, 48));
     assert_eq!(bmp.data.len(), 64 * 48 * 3);
     assert_close(bmp.pixel(10, 10), [255, 0, 0], 30);
@@ -104,33 +112,50 @@ fn heic_fixture_decodes_with_expected_colors() {
 }
 
 #[test]
+#[cfg(feature = "heif")]
 fn heic_extension_is_case_insensitive_and_path_may_be_non_ascii() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("photo_été.HEIC");
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/quadrants.heic");
-    std::fs::copy(fixture, &path).unwrap();
+    std::fs::copy(heic_fixture(), &path).unwrap();
     assert_eq!(decode(&path).unwrap().width, 64);
 }
 
 #[test]
+#[cfg(not(feature = "heif"))]
+fn heic_without_feature_is_an_explicit_error() {
+    const { assert!(!tri::flat::HEIF_SUPPORTED) };
+    assert!(matches!(
+        decode(heic_fixture()),
+        Err(FlatError::HeifNotCompiled)
+    ));
+}
+
+#[test]
 fn missing_file_is_an_io_error() {
-    for name in ["absent.jpg", "absent.heic"] {
-        assert!(matches!(decode(name), Err(FlatError::Io(_))), "{name}");
-    }
+    assert!(matches!(decode("absent.jpg"), Err(FlatError::Io(_))));
+    #[cfg(feature = "heif")]
+    assert!(matches!(decode("absent.heic"), Err(FlatError::Io(_))));
 }
 
 #[test]
 fn garbage_is_a_decoding_error() {
     let dir = tempfile::tempdir().unwrap();
     let jpg = dir.path().join("faux.jpg");
-    let heic = dir.path().join("faux.heic");
     std::fs::write(&jpg, b"pas une image").unwrap();
-    std::fs::write(&heic, b"pas une image").unwrap();
     assert!(matches!(decode(jpg), Err(FlatError::Image(_))));
+}
+
+#[test]
+#[cfg(feature = "heif")]
+fn garbage_heic_is_a_heif_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let heic = dir.path().join("faux.heic");
+    std::fs::write(&heic, b"pas une image").unwrap();
     assert!(matches!(decode(heic), Err(FlatError::Heif(_))));
 }
 
 #[test]
+#[cfg(feature = "heif")]
 #[ignore = "nécessite TRI_TEST_HEIC"]
 fn real_iphone_heic_decodes() {
     let path: PathBuf = std::env::var_os("TRI_TEST_HEIC")

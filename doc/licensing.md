@@ -150,9 +150,10 @@ risque est généralement jugé bien plus faible que pour HEVC. AVIF n'est pas e
 Rien n'est à trancher avant le MVP. Ces options sont à garder en tête pour ne pas fermer de
 porte :
 
-1. **Rendre HEIF optionnel à la compilation** : une feature Cargo `heif`, désactivable. On
-   peut alors produire un binaire sans aucune dépendance HEVC. Peu coûteux à faire tôt :
-   `flat::decode` renverrait une erreur « format non compilé » pour les HEIC.
+1. **HEIF optionnel à la compilation** — ✅ **fait** : feature Cargo `heif` (activée par
+   défaut). `cargo build --release --no-default-features` produit un binaire sans aucune
+   dépendance HEVC (vérifié avec `otool -L` : ni libheif, ni libde265, ni x265). Dans ce
+   cas, `flat::decode` renvoie `FlatError::HeifNotCompiled` pour les HEIC.
 2. **Linux : dépendre de la libheif du système** (paquet `.deb`/`.rpm`, Flatpak avec
    extension). Le plugin HEVC est installé, ou non, par l'utilisateur ou la distribution. On ne
    livre aucun décodeur.
@@ -163,8 +164,9 @@ porte :
    l'utilisateur si elle est installée.
 5. **Ne jamais livrer x265** : `tri` n'encode pas.
 
-L'option 1 est la plus simple et compatible avec toutes les autres. L'architecture actuelle
-s'y prête bien, car tout le décodage HEIF est confiné dans `src/flat.rs`.
+L'option 1 est en place et compatible avec toutes les autres : tout le code libheif est
+confiné dans `src/flat/heif.rs`. Un décodeur du système (options 3 et 4) pourrait plus tard
+s'y substituer derrière la même fonction `flat::decode`.
 
 ---
 
@@ -195,7 +197,8 @@ demande l'accord de tous les contributeurs.
 
 - [ ] Choisir la licence de `tri`, ajouter `LICENSE` et le champ `license` dans `Cargo.toml`.
 - [ ] Générer le fichier des notices des crates (ex. `cargo-about`).
-- [ ] Décider du traitement de HEIF dans les binaires distribués (§3).
+- [ ] Décider du traitement de HEIF dans les binaires distribués (§3). Au minimum :
+      `--no-default-features`, ou une libheif compilée sans x265.
 - [ ] Si des bibliothèques LGPL sont livrées : inclure leurs licences et un lien vers leur
       code source exact.
 - [ ] Vérifier qu'aucun binaire distribué ne contient ou ne dépend de x265.
