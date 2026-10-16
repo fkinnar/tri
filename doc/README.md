@@ -13,6 +13,8 @@ existe.
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
 | [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |
+| [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
+| [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |

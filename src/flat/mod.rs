@@ -120,12 +120,7 @@ fn decode_image(path: &Path) -> Result<Bitmap> {
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
     let mut img = DynamicImage::from_decoder(decoder)?;
     img.apply_orientation(orientation);
-    let rgb = img.into_rgb8();
-    Ok(Bitmap {
-        width: rgb.width(),
-        height: rgb.height(),
-        data: rgb.into_raw(),
-    })
+    Ok(img.into_rgb8().into())
 }
 
 #[cfg(test)]

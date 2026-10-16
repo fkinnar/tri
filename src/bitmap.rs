@@ -1,5 +1,15 @@
 //! Type d'image commun produit par le moteur (RAW développé ou image plate décodée).
 
+impl From<image::RgbImage> for Bitmap {
+    fn from(img: image::RgbImage) -> Self {
+        Bitmap {
+            width: img.width(),
+            height: img.height(),
+            data: img.into_raw(),
+        }
+    }
+}
+
 /// Rotation horaire d'une image.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Rotation {

@@ -177,11 +177,7 @@ impl Cache {
         if let Ok(file) = File::options().write(true).open(&path) {
             let _ = file.set_modified(SystemTime::now());
         }
-        Some(Bitmap {
-            width: img.width(),
-            height: img.height(),
-            data: img.into_raw(),
-        })
+        Some(img.into())
     }
 
     /// Écrit une entrée (JPEG). L'écriture est atomique : fichier temporaire puis

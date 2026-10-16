@@ -5,7 +5,9 @@
 //! - [`cache`] : cache persistant des vignettes et aperçus ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
 //! - [`filter`] : filtres sur la liste des images à afficher ;
-//! - [`raw`] : lecture et développement des RAW via LibRaw.
+//! - [`raw`] : lecture et développement des RAW via LibRaw ;
+//! - [`preview`] : calcul des vignettes, aperçus et rendus 1:1 ;
+//! - [`scheduler`] : file de travail en tâche de fond, priorités, progression.
 //!
 //! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/README.md`.
 
@@ -16,4 +18,6 @@ pub mod cache;
 pub mod filter;
 pub mod flat;
 pub mod media;
+pub mod preview;
 pub mod raw;
+pub mod scheduler;
