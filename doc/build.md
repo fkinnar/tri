@@ -2,6 +2,21 @@
 
 ## Prérequis
 
+À installer **avant la première compilation** (une seule commande par plateforme) :
+
+| Plateforme | Installation |
+|---|---|
+| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential` |
+| macOS (Homebrew) | `brew install libraw libheif cmake pkg-config` (+ outils Xcode en ligne de commande : `xcode-select --install`) |
+| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, CMake et NASM, puis `LIBRAW_DIR` (voir plus bas) |
+
+Plus Rust lui-même ([rustup](https://rustup.rs/), édition 2024). Le script
+[`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes. Commande Linux vérifiée sur
+Mint 22.3 (16/10/2026). Commande macOS : `cmake` ajouté le 16/10/2026, pas encore vérifié
+sur une installation neuve.
+
+### Pourquoi ces paquets
+
 `tri` lie deux bibliothèques système :
 
 - [LibRaw](https://www.libraw.org/) (API C), pour les RAW ;
@@ -13,14 +28,6 @@ depuis les sources embarquées par le crate `turbojpeg-sys` (voir plus bas), ce 
 CMake et NASM.
 
 Un compilateur C est aussi nécessaire, pour le petit shim `csrc/libraw_shim.c`.
-
-| Plateforme | Installation |
-|---|---|
-| Ubuntu ≥ 24.04 / Mint ≥ 22 | `sudo apt install libraw-dev libheif-dev libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential` |
-| macOS (Homebrew) | `brew install libraw libheif cmake pkg-config` (+ outils Xcode en ligne de commande ; NASM inutile sur Apple Silicon) |
-| Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, CMake et NASM, puis `LIBRAW_DIR` (voir plus bas) |
-
-Le script [`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes.
 
 `zlib1g-dev` : sous Ubuntu/Mint, `libheif.pc` déclare zlib dans `Requires.private` ;
 sans ce paquet, pkg-config refuse libheif (« Package 'zlib', required by 'libheif', not
@@ -40,7 +47,7 @@ cas, `libheif-rs` peut compiler libheif lui-même (CMake requis), en activant sa
 `embedded-libheif` dans `Cargo.toml` :
 
 ```toml
-libheif-rs = { version = "3", features = ["embedded-libheif"] }
+libheif-rs = { version = "3", default-features = false, features = ["v1_17", "embedded-libheif"], optional = true }
 ```
 
 Pour un binaire **distribué**, voir [licensing.md](licensing.md) : la libheif de Homebrew
@@ -63,9 +70,10 @@ cargo test --workspace                        # tous les tests
 `tri-gui` transmet les features `heif` et `turbojpeg` au moteur (`--no-default-features`
 s'applique donc aux deux).
 
-Sous Linux, eframe (winit + wgpu) a aussi besoin des en-têtes X11/Wayland et d'un pilote
-Vulkan ou OpenGL. D'après la documentation d'egui (non vérifié ici) :
-`sudo apt install libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev`.
+Sous Linux, l'interface (eframe : winit + wgpu) n'a besoin d'**aucun paquet de
+développement supplémentaire** : les bibliothèques X11/Wayland/xkbcommon et le pilote
+Vulkan/OpenGL sont chargés à l'exécution, pas liés (vérifié sur Mint 22.3 sans
+`libxkbcommon-dev`, `libwayland-dev` ni `libxcb-*-dev`). Une session graphique normale suffit.
 
 ## Ce que fait `build.rs`
 
