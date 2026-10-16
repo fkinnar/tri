@@ -78,6 +78,8 @@ struct Screenshot {
 /// État de l'application.
 pub struct TriApp {
     dir: PathBuf,
+    /// Dossier du cache ; `None` : emplacement par défaut du système.
+    cache_dir: Option<PathBuf>,
     all: Vec<MediaFile>,
     filter: KindFilter,
     files: Vec<MediaFile>,
@@ -94,14 +96,16 @@ pub struct TriApp {
     reveal: Option<Reveal>,
     screenshot: Option<Screenshot>,
     help: bool,
+    /// Actions à exécuter à la première image (`TRI_GUI_ACTIONS`, développement).
+    startup_actions: Vec<Action>,
     /// Vignettes visibles prêtes mais pas encore chargées (budget de l'image dépassé).
     visible_waiting: usize,
 }
 
 impl TriApp {
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
-    /// image).
-    pub fn new(dir: PathBuf) -> TriApp {
+    /// image), avec le cache dans `cache_dir` (`None` : emplacement par défaut).
+    pub fn new(dir: PathBuf, cache_dir: Option<PathBuf>) -> TriApp {
         let (all, error) = match tri::media::scan(&dir, 1) {
             Ok(files) => (files, None),
             Err(e) => (Vec::new(), Some(format!("{} : {e}", dir.display()))),
@@ -118,6 +122,7 @@ impl TriApp {
             .unwrap_or(0);
         let mut app = TriApp {
             dir,
+            cache_dir,
             all,
             filter: KindFilter::All,
             files: Vec::new(),
@@ -135,6 +140,7 @@ impl TriApp {
             screenshot,
             help: false,
             visible_waiting: 0,
+            startup_actions: startup_actions(),
         };
         app.apply_filter();
         app
@@ -172,7 +178,11 @@ impl TriApp {
             standard: monitor.map_or(2560, |m| (m.x.max(m.y) * ppp).round() as u32),
             ..Sizes::default()
         };
-        let cache = match Cache::open_default() {
+        let cache = match self
+            .cache_dir
+            .as_ref()
+            .map_or_else(Cache::open_default, Cache::open)
+        {
             Ok(c) => c,
             Err(e) => {
                 self.error = Some(format!("cache inaccessible : {e}"));
@@ -249,6 +259,10 @@ impl TriApp {
                 .collect()
         });
         for action in actions {
+            // L'aide est modale : derrière elle, la grille ne bouge pas.
+            if self.help && !action.works_over_overlay() {
+                continue;
+            }
             self.perform(ctx, action);
         }
     }
@@ -258,6 +272,7 @@ impl TriApp {
         match action {
             Action::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
             Action::Help => self.help = !self.help,
+            Action::Back => self.help = false, // le plein écran s'y ajoutera
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -463,15 +478,25 @@ impl TriApp {
         egui::Window::new("Raccourcis")
             .open(&mut open)
             .collapsible(false)
+            .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 egui::Grid::new("help").striped(true).show(ui, |ui| {
                     for action in Action::ALL {
-                        ui.label(self.keymap.keys_for(action).join("  "));
-                        ui.monospace(action.id());
+                        // Identifiant technique au survol seulement (utile pour le futur
+                        // fichier de raccourcis).
+                        ui.label(action.label()).on_hover_text(action.id());
+                        // Chasse fixe : « l » et « I » restent distincts.
+                        ui.label(
+                            egui::RichText::new(self.keymap.keys_for(action).join(", "))
+                                .monospace()
+                                .strong(),
+                        );
                         ui.end_row();
                     }
                 });
+                ui.add_space(6.0);
+                ui.weak("Échap pour fermer.");
             });
         self.help = open;
     }
@@ -488,7 +513,10 @@ impl TriApp {
         }
         let ready = self.progress[0].total > 0 && self.progress[0].done == self.progress[0].total;
         let timeout = shot.started.elapsed() > Duration::from_secs(60);
-        if !shot.requested && ((ready && self.visible_waiting == 0) || timeout) {
+        // Au moins une seconde : laisser finir les animations (fondu d'ouverture des
+        // fenêtres), sinon la capture montre un état intermédiaire.
+        let settled = shot.started.elapsed() > Duration::from_secs(1);
+        if !shot.requested && ((ready && self.visible_waiting == 0 && settled) || timeout) {
             shot.requested = true;
             let (path, done) = (shot.path.clone(), shot.done.clone());
             let repaint = ctx.clone();
@@ -523,6 +551,9 @@ impl eframe::App for TriApp {
             self.start_engine(&ctx);
         }
         self.drain_events();
+        for action in std::mem::take(&mut self.startup_actions) {
+            self.perform(&ctx, action);
+        }
         self.handle_keys(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
@@ -540,6 +571,29 @@ impl eframe::App for TriApp {
         }
         self.handle_screenshot(&ctx);
     }
+}
+
+/// Actions de `TRI_GUI_ACTIONS` (identifiants séparés par des virgules, ex.
+/// `core.nav.next,core.app.help`) ; les identifiants inconnus sont signalés et ignorés.
+fn startup_actions() -> Vec<Action> {
+    let Ok(list) = std::env::var("TRI_GUI_ACTIONS") else {
+        return Vec::new();
+    };
+    parse_actions(&list)
+}
+
+fn parse_actions(list: &str) -> Vec<Action> {
+    list.split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .filter_map(|id| {
+            let action = Action::from_id(id);
+            if action.is_none() {
+                eprintln!("TRI_GUI_ACTIONS : action inconnue « {id} »");
+            }
+            action
+        })
+        .collect()
 }
 
 fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
@@ -593,6 +647,97 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eframe::egui::{Key, Modifiers};
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    /// Application sur un dossier temporaire de 3 JPEG, avec un cache temporaire.
+    fn harness() -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir(&photos).unwrap();
+        for i in 0..3 {
+            image::RgbImage::from_pixel(64, 48, image::Rgb([40 * i, 100, 160]))
+                .save(photos.join(format!("img{i}.jpg")))
+                .unwrap();
+        }
+        let cache = dir.path().join("cache");
+        let harness = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(photos, Some(cache)));
+        (harness, dir)
+    }
+
+    fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
+        h.key_press_modifiers(modifiers, key);
+        h.run_steps(3);
+    }
+
+    #[test]
+    fn help_opens_and_closes_with_its_keys() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(!h.state().help);
+        for (key, modifiers) in [
+            (Key::F1, Modifiers::NONE),
+            (Key::Questionmark, Modifiers::NONE),
+            (Key::Questionmark, Modifiers::SHIFT),
+        ] {
+            press(&mut h, key, modifiers);
+            assert!(h.state().help, "{key:?} {modifiers:?} doit ouvrir l'aide");
+            press(&mut h, key, modifiers);
+            assert!(
+                !h.state().help,
+                "{key:?} {modifiers:?} doit refermer l'aide"
+            );
+        }
+    }
+
+    #[test]
+    fn help_is_modal() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 0);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(
+            h.state().selected,
+            0,
+            "la grille ne doit pas bouger sous l'aide"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, 1);
+    }
+
+    #[test]
+    fn help_shows_labels_not_ids() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.query_by_label("Image suivante").is_some());
+        assert!(h.query_by_label("Flèche droite, l").is_some());
+        assert!(h.query_by_label("core.nav.next").is_none());
+    }
+
+    #[test]
+    fn escape_closes_help() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.state().help);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().help, "Échap doit fermer l'aide");
+    }
+
+    #[test]
+    fn startup_actions_are_parsed_by_id() {
+        assert_eq!(
+            parse_actions(" core.nav.next, core.app.help ,,inconnue"),
+            [Action::NavNext, Action::Help]
+        );
+        assert!(parse_actions("").is_empty());
+    }
 
     #[test]
     fn truncate_counts_characters_not_bytes() {

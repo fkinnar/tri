@@ -19,7 +19,9 @@ cargo run --release -p tri-gui -- <dossier>
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
 - **Filtre par type** (touche `f`) : tout → RAW → plates. La sélection est conservée si
   l'image reste visible.
-- **Aide** (`F1` ou `?`) : chaque action avec ses touches et son identifiant.
+- **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
+  et ses touches ; l'identifiant technique n'apparaît qu'au survol. L'aide est **modale** :
+  tant qu'elle est ouverte, seules Échap, l'aide et Quitter agissent.
 - Taille des aperçus standard **« Auto »** : plus grand côté de l'écran, en pixels physiques.
 - Thème sombre par défaut.
 
@@ -51,11 +53,23 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.nav.first` / `core.nav.last` | Début / Fin | g / Maj+G |
 | `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | u / d |
 | `core.filter.cycle` | f | f |
+| `core.view.back` | Échap | Échap |
 | `core.app.help` | F1 | ? |
 | `core.app.quit` | q | q |
 
 Avec Ctrl, Cmd ou Alt, aucune action n'est déclenchée : ces combinaisons restent au système
 (Cmd+Q…).
+
+Chaque action a deux noms : un **identifiant** stable pour les fichiers et le code
+(`core.view.back`), et un **libellé** pour l'utilisateur (« Fermer / revenir »).
+`core.view.back` ferme ce qui est au premier plan : l'aide aujourd'hui, le plein écran
+ensuite.
+
+Les touches sont affichées par des **noms français en toutes lettres** (`key_label` :
+« Flèche gauche », « Début », « Page suiv. », « Échap »), en police à chasse fixe pour que
+« l » et « I » restent distincts. Pas de symboles : « ⏴ » (nom fourni par egui) et même
+« ← » manquent dans la police par défaut d'egui. Les tests d'interface échouent sur tout
+caractère sans glyphe, ce qui garantit que l'aide s'affiche partout.
 
 ### Grille (`grid.rs`)
 
@@ -85,19 +99,36 @@ occuperaient ~2 Go de mémoire graphique.
 ## Développement : capture automatique
 
 ```sh
-TRI_GUI_SCREENSHOT=/tmp/grille.png TRI_GUI_SELECT=40 cargo run --release -p tri-gui -- <dossier>
+TRI_GUI_SCREENSHOT=/tmp/aide.png TRI_GUI_SELECT=40 TRI_GUI_ACTIONS=core.app.help \
+  cargo run --release -p tri-gui -- <dossier>
 ```
 
-L'application se capture elle-même (contenu de sa fenêtre seulement, pas l'écran) une fois
-toutes les vignettes calculées et celles qui sont visibles affichées, au plus tard après
-60 s, puis se ferme. `TRI_GUI_SELECT` choisit l'image sélectionnée au démarrage. Sert à
-vérifier le rendu sans intervention.
+L'application se capture elle-même (contenu de sa fenêtre seulement, pas l'écran), puis se
+ferme. La capture a lieu une fois toutes les vignettes calculées et celles qui sont
+visibles affichées, **et au moins 1 s après le démarrage**, au plus tard après 60 s. Sans ce
+délai, une capture faite pendant le fondu d'ouverture d'une fenêtre la montrait à
+moitié transparente.
+
+- `TRI_GUI_SELECT=<n>` : image sélectionnée au démarrage ;
+- `TRI_GUI_ACTIONS=<id>,<id>...` : actions exécutées à la première image, par leur
+  identifiant (`core.nav.next`, `core.app.help`…). Un identifiant inconnu est signalé et
+  ignoré. Permet de capturer n'importe quel état de l'interface.
 
 ## Tests
 
+**Tests d'interface** avec [egui_kittest](https://crates.io/crates/egui_kittest) (banc de
+test officiel d'egui) : l'application tourne sans fenêtre, sur un dossier et un cache
+temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre et se ferme avec F1 et
+`?` (avec ou sans Maj), Échap la ferme, elle est modale, et elle affiche les libellés et
+non les identifiants. Ces tests ont trouvé un glyphe manquant (« ⏴ ») dans l'aide, et
+l'absence de fermeture par Échap.
+
+Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) et non dans
+`tests/` : `tri-gui` est un binaire, ses modules ne sont pas importables depuis `tests/`.
+
 Tests unitaires du paquet (`cargo test -p tri-gui`) : identifiants d'actions uniques et
 préfixés, profils complets et sans doublon, union des profils, modificateurs système
-ignorés, noms de touches de l'aide ; colonnes, navigation (bords, colonnes, dernière ligne
+ignorés, noms de touches et libellés de l'aide, identifiants réversibles ; colonnes, navigation (bords, colonnes, dernière ligne
 incomplète, pages, grille vide), défilement ; LRU (éviction, remplacement, capacité
 minimale) ; troncature des noms, mise à jour des statuts. Le rendu est vérifié par capture
 automatique.

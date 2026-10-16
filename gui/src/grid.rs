@@ -69,7 +69,7 @@ pub fn navigate(
         Action::NavLast => last,
         Action::NavPageUp => selected.saturating_sub(cols * page_rows.max(1)),
         Action::NavPageDown => (selected + cols * page_rows.max(1)).min(last),
-        Action::FilterCycle | Action::Help | Action::Quit => selected,
+        Action::FilterCycle | Action::Back | Action::Help | Action::Quit => selected,
     }
 }
 

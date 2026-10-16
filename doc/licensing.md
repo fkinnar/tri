@@ -58,7 +58,7 @@ crates en double licence, où l'on retient l'option permissive : `r-efi` (MIT OR
 OR LGPL-2.1-or-later) et `self_cell` (Apache-2.0 OR GPL-2.0-only). Les polices par défaut
 d'egui (`epaint_default_fonts`) sont sous **OFL-1.1** et **Ubuntu Font Licence** : licences
 de polices qui permettent de les embarquer dans un logiciel sous n'importe quelle licence,
-avec leur notice.
+avec leur notice. En développement seulement : `egui_kittest` (MIT OR Apache-2.0).
 
 Obligation pratique : reproduire les notices de copyright et de licence de ces crates dans la
 distribution. Un outil comme [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)

@@ -28,6 +28,8 @@ pub enum Action {
     NavPageDown,
     /// Filtre suivant : tout → RAW → plates → tout.
     FilterCycle,
+    /// Fermer ce qui est au premier plan (aide, plein écran...) / revenir en arrière.
+    Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
     /// Quitter l'application.
@@ -36,7 +38,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 11] = [
+    pub const ALL: [Action; 12] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -46,9 +48,38 @@ impl Action {
         Action::NavPageUp,
         Action::NavPageDown,
         Action::FilterCycle,
+        Action::Back,
         Action::Help,
         Action::Quit,
     ];
+
+    /// Action correspondant à un identifiant (fichier de raccourcis, scripts de capture).
+    pub fn from_id(id: &str) -> Option<Action> {
+        Action::ALL.into_iter().find(|a| a.id() == id)
+    }
+
+    /// Libellé pour l'utilisateur (aide, menus).
+    pub fn label(self) -> &'static str {
+        match self {
+            Action::NavPrev => "Image précédente",
+            Action::NavNext => "Image suivante",
+            Action::NavUp => "Ligne du dessus",
+            Action::NavDown => "Ligne du dessous",
+            Action::NavFirst => "Première image",
+            Action::NavLast => "Dernière image",
+            Action::NavPageUp => "Page précédente",
+            Action::NavPageDown => "Page suivante",
+            Action::FilterCycle => "Changer de filtre : tout, RAW, plates",
+            Action::Back => "Fermer / revenir",
+            Action::Help => "Afficher ou masquer cette aide",
+            Action::Quit => "Quitter",
+        }
+    }
+
+    /// Vrai pour les actions encore actives quand une fenêtre (l'aide) est au premier plan.
+    pub fn works_over_overlay(self) -> bool {
+        matches!(self, Action::Back | Action::Help | Action::Quit)
+    }
 
     /// Identifiant stable, utilisé par le fichier de raccourcis.
     pub fn id(self) -> &'static str {
@@ -62,6 +93,7 @@ impl Action {
             Action::NavPageUp => "core.nav.page_up",
             Action::NavPageDown => "core.nav.page_down",
             Action::FilterCycle => "core.filter.cycle",
+            Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::Quit => "core.app.quit",
         }
@@ -107,6 +139,7 @@ const CLASSIC: &[(Chord, Action)] = {
         (plain(Key::PageUp), NavPageUp),
         (plain(Key::PageDown), NavPageDown),
         (plain(Key::F), FilterCycle),
+        (plain(Key::Escape), Back),
         (plain(Key::F1), Help),
         (plain(Key::Q), Quit),
     ]
@@ -125,6 +158,7 @@ const VIM: &[(Chord, Action)] = {
         (plain(Key::D), NavPageDown),
         (plain(Key::F), FilterCycle),
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
+        (plain(Key::Escape), Back),
         (plain(Key::Questionmark), Help),
         (shifted(Key::Questionmark), Help),
         (plain(Key::Q), Quit),
@@ -186,16 +220,45 @@ impl Keymap {
             .iter()
             .filter(|(_, a)| *a == action)
             .map(|(c, _)| {
-                let name = c.key.symbol_or_name();
+                let name = key_label(c.key);
                 if c.shift && c.key != Key::Questionmark {
                     format!("Maj+{name}")
                 } else {
-                    name.to_string()
+                    name
                 }
             })
             .collect();
         keys.dedup();
         keys
+    }
+}
+
+/// Nom lisible d'une touche, en français. Volontairement indépendant des noms d'egui et sans
+/// symboles : « ⏴ » et même « ← » manquent dans la police par défaut d'egui (les tests
+/// d'interface le vérifient), et les polices du système ne sont pas garanties.
+pub fn key_label(key: Key) -> String {
+    match key {
+        Key::ArrowLeft => "Flèche gauche".into(),
+        Key::ArrowRight => "Flèche droite".into(),
+        Key::ArrowUp => "Flèche haut".into(),
+        Key::ArrowDown => "Flèche bas".into(),
+        Key::Home => "Début".into(),
+        Key::End => "Fin".into(),
+        Key::PageUp => "Page préc.".into(),
+        Key::PageDown => "Page suiv.".into(),
+        Key::Escape => "Échap".into(),
+        Key::Enter => "Entrée".into(),
+        Key::Space => "Espace".into(),
+        Key::Questionmark => "?".into(),
+        other => {
+            let name = other.name();
+            // Lettres en minuscules, comme on les tape (g et Maj+G sont deux touches).
+            if name.len() == 1 {
+                name.to_lowercase()
+            } else {
+                name.to_string()
+            }
+        }
     }
 }
 
@@ -211,9 +274,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ids_are_unique_and_namespaced() {
+    fn ids_are_unique_namespaced_and_reversible() {
         let mut ids: Vec<&str> = Action::ALL.iter().map(|a| a.id()).collect();
         assert!(ids.iter().all(|id| id.starts_with("core.")));
+        for a in Action::ALL {
+            assert_eq!(Action::from_id(a.id()), Some(a));
+        }
+        assert_eq!(Action::from_id("plugin.x.y"), None);
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), Action::ALL.len());
@@ -265,12 +332,22 @@ mod tests {
     #[test]
     fn help_lists_readable_keys() {
         let km = Keymap::default();
-        assert_eq!(km.keys_for(Action::NavLast), ["End", "Maj+G"]);
+        assert_eq!(km.keys_for(Action::NavLast), ["Fin", "Maj+g"]);
+        assert_eq!(km.keys_for(Action::NavPrev), ["Flèche gauche", "h"]);
         assert_eq!(km.keys_for(Action::Help), ["F1", "?"]);
         assert_eq!(
             km.action(Key::Questionmark, Modifiers::SHIFT),
             Some(Action::Help)
         );
+    }
+
+    #[test]
+    fn labels_are_distinct_and_readable() {
+        let mut labels: Vec<&str> = Action::ALL.iter().map(|a| a.label()).collect();
+        assert!(labels.iter().all(|l| !l.contains('.') || l.contains(' ')));
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), Action::ALL.len());
     }
 
     #[test]

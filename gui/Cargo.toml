@@ -18,3 +18,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 default = ["heif", "turbojpeg"]
 heif = ["tri/heif"]
 turbojpeg = ["tri/turbojpeg"]
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["eframe"] }
+tempfile = "3"

@@ -3,8 +3,9 @@
 //!   tri-gui <dossier>
 //!
 //! Variables de développement : `TRI_GUI_SCREENSHOT=<fichier.png>` (capture de la fenêtre
-//! une fois les vignettes prêtes, puis fermeture) et `TRI_GUI_SELECT=<n>` (image
-//! sélectionnée au démarrage).
+//! une fois les vignettes prêtes, puis fermeture), `TRI_GUI_SELECT=<n>` (image
+//! sélectionnée au démarrage) et `TRI_GUI_ACTIONS=<id>,<id>...` (actions exécutées au
+//! démarrage, ex. `core.app.help`).
 
 mod actions;
 mod app;
@@ -30,7 +31,7 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             // Fond sombre et neutre : la norme pour juger des photos.
             cc.egui_ctx.set_theme(eframe::egui::Theme::Dark);
-            Ok(Box::new(app::TriApp::new(dir)))
+            Ok(Box::new(app::TriApp::new(dir, None)))
         }),
     )
 }
