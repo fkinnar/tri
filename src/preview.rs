@@ -134,8 +134,8 @@ pub fn compute(
         (MediaKind::Raw, Level::Full) => {
             Ok(RawFile::open(&file.path)?.render_cancellable(&RenderOptions::default(), cancel)?)
         }
-        (MediaKind::Flat, Level::Thumbnail) => Ok(flat::decode(&file.path)?.fit(sizes.thumbnail)),
-        (MediaKind::Flat, Level::Standard) => Ok(flat::decode(&file.path)?.fit(sizes.standard)),
+        (MediaKind::Flat, Level::Thumbnail) => Ok(flat::decode_fit(&file.path, sizes.thumbnail)?),
+        (MediaKind::Flat, Level::Standard) => Ok(flat::decode_fit(&file.path, sizes.standard)?),
         (MediaKind::Flat, Level::Full) => Ok(flat::decode(&file.path)?),
     }
 }

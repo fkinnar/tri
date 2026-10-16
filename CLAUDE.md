@@ -246,7 +246,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - [x] Cache persistant des aperçus (module moteur, sans UI) : `src/cache.rs`.
 - [x] File de travail à priorités + progression + annulation : `src/preview.rs`,
       `src/scheduler.rs`, tests d'intégration (faux producteur + vrai RAW).
-- [ ] Démo CLI avec progression sur un vrai dossier, mesures (temps, taille du cache).
+- [x] Démo CLI avec progression (`tri <dossier> --previews`, `--clear-cache`,
+      `--cache-usage`) et mesures sur un vrai dossier (voir `doc/scheduler.md`).
+      Ouvert : politique par défaut (`thumbnails_first`) et piste turbojpeg (décodage JPEG
+      1,7 à 2,5× plus rapide, dépendance C) — à trancher avec l'utilisateur.
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).

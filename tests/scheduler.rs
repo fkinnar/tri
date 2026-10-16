@@ -145,12 +145,21 @@ fn files(n: usize, kind: MediaKind) -> Vec<MediaFile> {
 
 type Events = Arc<Mutex<Vec<Event>>>;
 
+/// Scheduler en mode « mélangé » : l'ordre des tâches ne dépend que des priorités.
 fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
+    start_with(
+        fake,
+        Config {
+            light_workers,
+            thumbnails_first: false,
+        },
+    )
+}
+
+fn start_with(fake: &Fake, config: Config) -> (Scheduler, Events) {
     let events: Events = Arc::default();
     let sink = events.clone();
-    let scheduler = Scheduler::new(fake.clone(), Config { light_workers }, move |e| {
-        sink.lock().unwrap().push(e)
-    });
+    let scheduler = Scheduler::new(fake.clone(), config, move |e| sink.lock().unwrap().push(e));
     (scheduler, events)
 }
 
@@ -301,6 +310,43 @@ fn heavy_worker_serves_focus_then_neighbours_then_distance() {
         .map(|i| format!("img{i}.RAF"))
         .collect();
     assert_eq!(fake.order(Level::Standard), order);
+}
+
+#[test]
+fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
+    let fake = Fake::with_delay(Duration::from_millis(5));
+    let all = files(12, MediaKind::Raw);
+    let (scheduler, _) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: true,
+        },
+    );
+    scheduler.set_paused(true);
+    scheduler.set_folder(all);
+    scheduler.set_focus(4);
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+
+    let log = fake.log();
+    let last_thumbnail = log
+        .iter()
+        .rposition(|(_, l, _)| *l == Level::Thumbnail)
+        .unwrap();
+    // Avant la dernière vignette, seuls l'image affichée et ses voisines ont un aperçu.
+    let early: HashSet<String> = log[..last_thumbnail]
+        .iter()
+        .filter(|(_, l, _)| *l == Level::Standard)
+        .map(|(p, _, _)| p.to_string_lossy().into_owned())
+        .collect();
+    let allowed: HashSet<String> = [3, 4, 5].iter().map(|i| format!("img{i}.RAF")).collect();
+    assert!(early.is_subset(&allowed), "aperçus trop tôt : {early:?}");
+    assert_eq!(
+        fake.order(Level::Standard).len(),
+        12,
+        "tout finit par être calculé"
+    );
 }
 
 #[test]

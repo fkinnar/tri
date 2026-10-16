@@ -30,6 +30,40 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
 - **`Producer`** : trait du calcul ; `CachedPreviews { cache, sizes }` est la vraie
   implémentation, et un faux producteur permettra de tester l'ordonnancement sans LibRaw.
 
+## Politique « vignettes d'abord »
+
+`Config::thumbnails_first` (par défaut `true`) : tant qu'il reste des vignettes à calculer,
+les aperçus standard *de fond* attendent. L'image affichée et ses voisines n+1/n-1 passent
+toujours. Chaque tâche terminée réveille les workers, pour qu'ils reprennent les aperçus
+dès que la dernière vignette est faite.
+
+## Mesures
+
+Dossier réel : 472 images (236 RAF X-T4 + 236 JPEG du boîtier), Mac Apple Silicon à
+8 cœurs, build release, cache vide. Commande :
+`tri <dossier> --previews --cache <dossier vide> [--workers N] [--mixed]`.
+
+| Politique | Workers légers | Vignettes (grille complète) | Total |
+|---|---|---|---|
+| mélangé, avant optimisation de `fit` | 4 | 91 s | 210 s |
+| mélangé | 2 | 59 s | 206 s |
+| mélangé | 4 | 39 s | **173 s** |
+| mélangé | 8 | 36 s | 237 s |
+| vignettes d'abord | 4 | 29 s | 227 s |
+| vignettes d'abord | 8 | **19 s** | 252 s |
+
+Second passage (tout en cache) : ~10 ms. Taille du cache : 13 Mo de vignettes (28 Kio en
+moyenne), 397 Mo d'aperçus standard à 2560 px (861 Kio en moyenne).
+
+Lecture :
+
+- **la concurrence avec LibRaw domine**. Une vignette coûte 140 à 250 ms seule, mais plus de
+  300 ms par worker pendant qu'un rendu LibRaw occupe tous les cœurs. D'où le gain de la
+  politique « vignettes d'abord » sur la grille ;
+- elle allonge en revanche le total : le worker lourd ne fait rien pendant la phase des
+  vignettes, et on perd le recouvrement entre les deux phases ;
+- plus de workers légers n'aide que si LibRaw ne tourne pas en même temps.
+
 ## Tests
 
 Tests unitaires : priorités, routage lourd/léger, fraction de progression.
@@ -47,6 +81,8 @@ worker :
   nouvelle ;
 - nouveau dossier : l'ancien est abandonné, aucun de ses résultats sous la nouvelle
   génération ;
+- « vignettes d'abord » : avant la dernière vignette, seuls l'image affichée et ses voisines
+  ont un aperçu ; tout finit par être calculé ;
 - pause / reprise ; image affichée hors limites ignorée ; arrêt rapide à la destruction ;
 - avec `TRI_TEST_RAW` : vrai producteur sur un RAW et un JPEG, tailles et orientation des
   entrées, second passage servi par le cache (0,66 s puis ~40 µs).

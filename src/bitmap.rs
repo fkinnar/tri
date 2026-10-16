@@ -10,6 +10,13 @@ impl From<image::RgbImage> for Bitmap {
     }
 }
 
+impl From<Bitmap> for image::RgbImage {
+    fn from(bmp: Bitmap) -> Self {
+        image::RgbImage::from_raw(bmp.width, bmp.height, bmp.data)
+            .expect("Bitmap incohérent : data.len() != width * height * 3")
+    }
+}
+
 /// Rotation horaire d'une image.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Rotation {
@@ -66,25 +73,60 @@ impl Bitmap {
     }
 
     /// Réduit l'image pour que son plus grand côté fasse au plus `max_side` pixels, en
-    /// gardant les proportions (filtre Lanczos3). Une image déjà assez petite est renvoyée
+    /// gardant les proportions. Une image déjà assez petite (ou `max_side == 0`) est renvoyée
     /// telle quelle : on n'agrandit jamais.
+    ///
+    /// Pour une forte réduction, une moyenne par blocs (rapide) ramène d'abord l'image à
+    /// environ deux fois la taille cible, puis Lanczos3 fait la dernière étape : même rendu
+    /// qu'un Lanczos3 direct, pour une fraction du coût.
     pub fn fit(self, max_side: u32) -> Bitmap {
         let long = self.width.max(self.height);
         if long <= max_side || max_side == 0 {
             return self;
         }
+        // Dimensions finales calculées sur l'original : pas de cumul d'arrondis.
         let scale = |side: u32| {
             ((u64::from(side) * u64::from(max_side)).div_ceil(u64::from(long)) as u32).max(1)
         };
         let (width, height) = (scale(self.width), scale(self.height));
-        let src = image::RgbImage::from_raw(self.width, self.height, self.data)
+        // Moyenne par blocs tant que les deux côtés restent au moins au double de la cible.
+        let factor = (self.width / (2 * width)).min(self.height / (2 * height));
+        let src = if factor >= 2 {
+            self.box_downsample(factor)
+        } else {
+            self
+        };
+        let src = image::RgbImage::from_raw(src.width, src.height, src.data)
             .expect("Bitmap incohérent : data.len() != width * height * 3");
-        let dst =
-            image::imageops::resize(&src, width, height, image::imageops::FilterType::Lanczos3);
+        image::imageops::resize(&src, width, height, image::imageops::FilterType::Lanczos3).into()
+    }
+
+    /// Moyenne de chaque bloc `factor`×`factor`. Les pixels de bord qui ne remplissent pas un
+    /// bloc entier sont ignorés (moins de `factor` pixels, négligeable avant une réduction).
+    fn box_downsample(self, factor: u32) -> Bitmap {
+        let (w, k) = (self.width as usize, factor as usize);
+        let (width, height) = (self.width / factor, self.height / factor);
+        let mut data = Vec::with_capacity(width as usize * height as usize * 3);
+        let mut sums = vec![0u32; width as usize * 3];
+        for by in 0..height as usize {
+            sums.fill(0);
+            for row in by * k..(by + 1) * k {
+                let line = &self.data[row * w * 3..(row * w + width as usize * k) * 3];
+                for (bx, block) in line.chunks_exact(k * 3).enumerate() {
+                    for px in block.as_chunks::<3>().0 {
+                        sums[bx * 3] += u32::from(px[0]);
+                        sums[bx * 3 + 1] += u32::from(px[1]);
+                        sums[bx * 3 + 2] += u32::from(px[2]);
+                    }
+                }
+            }
+            let n = (k * k) as u32;
+            data.extend(sums.iter().map(|&s| ((s + n / 2) / n) as u8));
+        }
         Bitmap {
             width,
             height,
-            data: dst.into_raw(),
+            data,
         }
     }
 
@@ -165,6 +207,56 @@ mod tests {
         let portrait = solid(300, 400, [10, 20, 30]).fit(100);
         assert_eq!((portrait.width, portrait.height), (75, 100));
         assert_eq!(portrait.data.len(), 75 * 100 * 3);
+    }
+
+    #[test]
+    fn box_downsample_averages_blocks() {
+        // 4×2, blocs 2×2 : moyenne de (0, 10, 40, 50) et (20, 30, 60, 70), bords ignorés.
+        let bmp = Bitmap {
+            width: 5,
+            height: 2,
+            data: [0u8, 10, 20, 30, 99, 40, 50, 60, 70, 99]
+                .iter()
+                .flat_map(|&v| [v, v, v])
+                .collect(),
+        };
+        let small = bmp.box_downsample(2);
+        assert_eq!((small.width, small.height), (2, 1));
+        assert_eq!(small.data, [25, 25, 25, 45, 45, 45]);
+    }
+
+    #[test]
+    fn fit_large_reduction_matches_direct_lanczos() {
+        // Dégradé 2000×1500 : la réduction en deux temps doit rester proche d'un Lanczos3
+        // direct (écart moyen < 2 niveaux).
+        let (w, h) = (2000u32, 1500u32);
+        let bmp = Bitmap {
+            width: w,
+            height: h,
+            data: (0..h)
+                .flat_map(|y| (0..w).flat_map(move |x| [(x / 8) as u8, (y / 6) as u8, 100]))
+                .collect(),
+        };
+        let direct: Bitmap = image::imageops::resize(
+            &image::RgbImage::from_raw(w, h, bmp.data.clone()).unwrap(),
+            200,
+            150,
+            image::imageops::FilterType::Lanczos3,
+        )
+        .into();
+        let fast = bmp.fit(200);
+        assert_eq!((fast.width, fast.height), (200, 150));
+        let diff: u64 = fast
+            .data
+            .iter()
+            .zip(&direct.data)
+            .map(|(a, b)| u64::from(a.abs_diff(*b)))
+            .sum();
+        assert!(
+            diff / (fast.data.len() as u64) < 2,
+            "écart moyen {}",
+            diff / fast.data.len() as u64
+        );
     }
 
     #[test]

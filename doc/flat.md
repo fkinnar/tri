@@ -52,6 +52,14 @@ prêt à afficher.
   Une balise EXIF illisible est ignorée (image affichée sans rotation) plutôt que de faire
   échouer le décodage.
 
+### `decode_fit(path, max_side) -> Result<Bitmap>`
+
+Comme `decode`, mais réduit l'image à `max_side` (voir `Bitmap::fit` ; `0` = pas de
+réduction). Pour les formats décodés par `image`, l'orientation EXIF est appliquée *après*
+la réduction : tourner une vignette coûte beaucoup moins cher que tourner une image de
+26 Mpx. `decode(path)` équivaut à `decode_fit(path, 0)`. Utilisé pour les vignettes et les
+aperçus standard des images plates.
+
 ### `is_heif(path) -> bool`
 
 Vrai si l'extension fait partie de `HEIF_EXTENSIONS`, que la feature soit compilée ou non.

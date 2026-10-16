@@ -87,11 +87,19 @@ pub type Result<T> = std::result::Result<T, FlatError>;
 /// d'après le contenu (un PNG nommé `.jpg` est décodé correctement). Sans la feature `heif`,
 /// un fichier HEIF donne `FlatError::HeifNotCompiled`.
 pub fn decode(path: impl AsRef<Path>) -> Result<Bitmap> {
+    decode_fit(path, 0)
+}
+
+/// Comme [`decode`], mais réduit l'image pour que son plus grand côté fasse au plus
+/// `max_side` pixels (`0` = pas de réduction, voir [`Bitmap::fit`]). Pour les formats
+/// décodés par `image`, l'orientation EXIF est appliquée *après* la réduction : tourner une
+/// vignette coûte bien moins cher que tourner l'image entière.
+pub fn decode_fit(path: impl AsRef<Path>, max_side: u32) -> Result<Bitmap> {
     let path = path.as_ref();
     if is_heif(path) {
-        decode_heif(path)
+        decode_heif(path).map(|b| b.fit(max_side))
     } else {
-        decode_image(path)
+        decode_image(path, max_side)
     }
 }
 
@@ -112,13 +120,14 @@ pub fn is_heif(path: &Path) -> bool {
         .is_some_and(|e| HEIF_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
-fn decode_image(path: &Path) -> Result<Bitmap> {
+fn decode_image(path: &Path, max_side: u32) -> Result<Bitmap> {
     let mut decoder = ImageReader::open(path)?
         .with_guessed_format()?
         .into_decoder()?;
     // Une balise EXIF illisible ne doit pas empêcher l'affichage.
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
-    let mut img = DynamicImage::from_decoder(decoder)?;
+    let decoded = Bitmap::from(DynamicImage::from_decoder(decoder)?.into_rgb8());
+    let mut img = DynamicImage::ImageRgb8(decoded.fit(max_side).into());
     img.apply_orientation(orientation);
     Ok(img.into_rgb8().into())
 }

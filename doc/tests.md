@@ -54,6 +54,8 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
 - lecture d'un pixel, `None` hors de l'image ;
 - `rotate` : position de chaque pixel pour 90°, 180° et 270°, quatre quarts de tour = identité ;
+- `box_downsample` : moyenne exacte des blocs, bords ignorés ;
+- `fit` en deux temps : écart moyen < 2 niveaux par rapport à un Lanczos3 direct ;
 - `fit` : proportions gardées (paysage et portrait), jamais d'agrandissement (`0` = pas de
   limite), couleur unie préservée, côté minuscule arrondi à au moins 1 pixel.
 
@@ -67,7 +69,8 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
 - PNG, TIFF, WebP (sans perte) générés à la volée : décodés au pixel près ;
 - format détecté d'après le contenu (PNG nommé `.jpg`) ;
-- JPEG avec balise EXIF `Orientation = 6` : dimensions et couleurs pivotées ;
+- JPEG avec balise EXIF `Orientation = 6` : dimensions et couleurs pivotées, aussi avec
+  `decode_fit` (réduction puis orientation) ;
 - HEIC (fixture) : dimensions et couleur de chaque quadrant ; extension en majuscules et
   chemin non ASCII ;
 - fichier absent → `Io` ; contenu invalide → `Image` ou `Heif` ;

@@ -29,7 +29,7 @@ tri/
 ├── csrc/libraw_shim.c    accès aux paramètres LibRaw sans setter dans l'API C
 ├── src/
 │   ├── lib.rs            crate bibliothèque (le « moteur ») : déclare les modules
-│   ├── main.rs           démo en ligne de commande : liste un dossier filtré
+│   ├── main.rs           démo en ligne de commande : liste, aperçus en fond, cache
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── bitmap.rs         Bitmap : image RGB8 commune

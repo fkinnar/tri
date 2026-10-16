@@ -28,6 +28,15 @@ Réduit l'image pour que son plus grand côté fasse au plus `max_side` pixels, 
 proportions (arrondi vers le haut, jamais moins d'un pixel). Filtre **Lanczos3** du crate
 `image`, le plus net des filtres disponibles, adapté aux aperçus.
 
+**Réduction en deux temps.** Le coût d'un Lanczos3 croît avec le rapport de réduction (son
+noyau s'élargit d'autant) : réduire 4416 px à 400 px coûtait ~110 ms. Pour une forte
+réduction, `fit` fait d'abord une **moyenne par blocs** entiers (`box_downsample`, très
+rapide), tant que les deux côtés restent au moins au double de la cible, puis Lanczos3 pour
+la dernière étape. Un test vérifie que le résultat reste à moins de 2 niveaux d'écart moyen
+d'un Lanczos3 direct. Les dimensions finales sont toujours calculées sur l'image d'origine.
+Les pixels de bord qui ne remplissent pas un bloc entier sont ignorés (moins d'un bloc,
+négligeable).
+
 - n'agrandit jamais : une image déjà assez petite (ou `max_side == 0`) est renvoyée telle
   quelle, sans copie ;
 - consomme le `Bitmap` (`self`) : l'original, souvent volumineux, est libéré dès la fin de la

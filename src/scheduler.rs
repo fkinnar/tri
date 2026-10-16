@@ -126,6 +126,10 @@ pub struct Config {
     /// Nombre de workers légers (vignettes, images plates). Le worker lourd est toujours
     /// unique.
     pub light_workers: usize,
+    /// Les aperçus standard de fond attendent la fin de toutes les vignettes (l'image
+    /// affichée et ses voisines passent toujours). Grille complète plus vite, total plus
+    /// long : mesures dans `doc/scheduler.md`.
+    pub thumbnails_first: bool,
 }
 
 impl Default for Config {
@@ -133,6 +137,7 @@ impl Default for Config {
         let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
         Self {
             light_workers: (cores / 2).max(1),
+            thumbnails_first: true,
         }
     }
 }
@@ -148,6 +153,9 @@ fn is_heavy(kind: MediaKind, level: Level) -> bool {
     kind == MediaKind::Raw && level != Level::Thumbnail
 }
 
+/// Classe de priorité des aperçus standard de fond (ni l'image affichée, ni ses voisines).
+const BACKGROUND_CLASS: u8 = 5;
+
 /// Priorité d'une tâche (la plus petite passe en premier). Ordre : 1:1 de l'image affichée,
 /// son aperçu standard, celui de la suivante, de la précédente, les vignettes (dans l'ordre
 /// du dossier), puis les autres aperçus standard par distance à l'image affichée (en avant
@@ -159,8 +167,11 @@ fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
         (Level::Standard, Some(f)) if index == f + 1 => (2, 0),
         (Level::Standard, Some(f)) if index + 1 == f => (3, 0),
         (Level::Thumbnail, _) => (4, index),
-        (Level::Standard, Some(f)) => (5, index.abs_diff(f) * 2 + usize::from(index < f)),
-        (Level::Standard, None) => (5, index),
+        (Level::Standard, Some(f)) => (
+            BACKGROUND_CLASS,
+            index.abs_diff(f) * 2 + usize::from(index < f),
+        ),
+        (Level::Standard, None) => (BACKGROUND_CLASS, index),
     }
 }
 
@@ -172,6 +183,7 @@ struct Running {
 
 #[derive(Default)]
 struct State {
+    thumbnails_first: bool,
     generation: u64,
     files: Vec<MediaFile>,
     focus: Option<usize>,
@@ -193,10 +205,16 @@ impl State {
             return None;
         }
         let focus = self.focus;
+        // Les aperçus de fond attendent la fin des vignettes : la grille d'abord, et pas de
+        // rendu LibRaw (qui occupe tous les cœurs) pour ralentir les vignettes.
+        let thumbnails_left = self.thumbnails_first
+            && (self.pending.iter().any(|j| j.1 == Level::Thumbnail)
+                || self.running.iter().any(|r| r.job.1 == Level::Thumbnail));
         let job = *self
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
+            .filter(|job| !(thumbnails_left && priority(**job, focus).0 >= BACKGROUND_CLASS))
             .min_by_key(|job| (priority(**job, focus), job.0))?;
         self.pending.remove(&job);
         let cancel = Arc::new(AtomicBool::new(false));
@@ -259,7 +277,10 @@ impl Scheduler {
         on_event: impl Fn(Event) + Send + Sync + 'static,
     ) -> Scheduler {
         let shared = Arc::new(Shared {
-            state: Mutex::new(State::default()),
+            state: Mutex::new(State {
+                thumbnails_first: config.thumbnails_first,
+                ..State::default()
+            }),
             work: Condvar::new(),
             idle: Condvar::new(),
             delivery: Mutex::new(()),
@@ -423,6 +444,8 @@ fn worker(shared: &Shared, producer: &dyn Producer, heavy: bool) {
                 s.outbox.extend(events);
             } // sinon : dossier remplacé entre-temps, résultat ignoré
         }
+        // Une tâche terminée peut débloquer les autres workers (fin des vignettes).
+        shared.work.notify_all();
         deliver(shared);
     }
 }

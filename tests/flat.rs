@@ -92,6 +92,12 @@ fn jpeg_exif_orientation_is_applied() {
     // Après rotation horaire, l'ancienne moitié gauche (rouge) est en haut.
     assert_close(bmp.pixel(4, 3), [255, 0, 0], 40);
     assert_close(bmp.pixel(4, 12), [0, 0, 255], 40);
+
+    // decode_fit : réduction puis orientation, même résultat en plus petit.
+    let small = tri::flat::decode_fit(&path, 8).unwrap();
+    assert_eq!((small.width, small.height), (4, 8));
+    assert_close(small.pixel(2, 1), [255, 0, 0], 60);
+    assert_close(small.pixel(2, 6), [0, 0, 255], 60);
 }
 
 fn heic_fixture() -> PathBuf {
