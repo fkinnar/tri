@@ -244,9 +244,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       affichable.
 - [x] `Bitmap::fit` (réduction Lanczos3) et comparaison half_size / rendu complet.
 - [x] Cache persistant des aperçus (module moteur, sans UI) : `src/cache.rs`.
-- [~] File de travail à priorités + progression + annulation : `src/preview.rs`,
-      `src/scheduler.rs` écrits avec tests unitaires. Restent : tests d'intégration du
-      scheduler (faux producteur + vrai RAW), démo CLI avec progression, mesures.
+- [x] File de travail à priorités + progression + annulation : `src/preview.rs`,
+      `src/scheduler.rs`, tests d'intégration (faux producteur + vrai RAW).
+- [ ] Démo CLI avec progression sur un vrai dossier, mesures (temps, taille du cache).
 - [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).

@@ -10,7 +10,7 @@
 //! Le calcul lui-même est délégué à un [`Producer`] : [`CachedPreviews`] en vrai, un faux
 //! producteur dans les tests. Voir `doc/scheduler.md`.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -180,6 +180,10 @@ struct State {
     progress: [Progress; 2],
     paused: bool,
     shutdown: bool,
+    /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
+    outbox: VecDeque<Event>,
+    /// Vrai pendant un appel au callback.
+    in_callback: bool,
 }
 
 impl State {
@@ -211,7 +215,10 @@ impl State {
     }
 
     fn is_idle(&self) -> bool {
-        self.running.is_empty() && (self.pending.is_empty() || self.paused)
+        self.running.is_empty()
+            && self.outbox.is_empty()
+            && !self.in_callback
+            && (self.pending.is_empty() || self.paused)
     }
 }
 
@@ -221,6 +228,9 @@ struct Shared {
     work: Condvar,
     /// Réveille ceux qui attendent la fin du travail ([`Scheduler::wait_idle`]).
     idle: Condvar,
+    /// Un seul thread à la fois livre les événements : ordre préservé, callback jamais
+    /// appelé en parallèle.
+    delivery: Mutex<()>,
     on_event: Box<dyn Fn(Event) + Send + Sync>,
 }
 
@@ -240,7 +250,9 @@ pub struct Scheduler {
 
 impl Scheduler {
     /// Démarre les workers. `on_event` est appelé depuis les threads de travail, jamais en
-    /// tenant le verrou interne : il peut rappeler le scheduler.
+    /// tenant le verrou interne (il peut rappeler le scheduler), jamais deux fois en même
+    /// temps, et dans l'ordre où les événements se sont produits : une progression ne
+    /// recule jamais.
     pub fn new(
         producer: impl Producer,
         config: Config,
@@ -250,6 +262,7 @@ impl Scheduler {
             state: Mutex::new(State::default()),
             work: Condvar::new(),
             idle: Condvar::new(),
+            delivery: Mutex::new(()),
             on_event: Box::new(on_event),
         });
         let producer = Arc::new(producer);
@@ -276,12 +289,13 @@ impl Scheduler {
 
     /// Remplace le dossier courant : annule tout le travail en cours, puis planifie vignettes
     /// et aperçus standard de tous les fichiers. Renvoie la génération du dossier, présente
-    /// dans les événements. Les résultats du dossier précédent sont écartés, mais quelques
-    /// événements déjà préparés peuvent encore arriver juste après cet appel : l'interface
-    /// ignore ceux dont la génération n'est pas la sienne.
+    /// dans les événements. Les résultats du dossier précédent sont écartés et ses événements
+    /// non livrés supprimés ; seul un événement en cours de livraison au moment de l'appel
+    /// peut encore arriver : l'interface ignore ceux dont la génération n'est pas la sienne.
     pub fn set_folder(&self, files: Vec<MediaFile>) -> u64 {
         let mut s = self.shared.lock();
         s.cancel_running(|_| false);
+        s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
         s.generation += 1;
         s.focus = None;
         s.pending = (0..files.len())
@@ -340,7 +354,9 @@ impl Scheduler {
     }
 
     /// Attend que plus rien ne soit en cours ni en attente (ou que le scheduler soit en
-    /// pause et sans tâche en cours). Renvoie `false` si `timeout` est écoulé avant.
+    /// pause et sans tâche en cours), **événements compris** : au retour, le callback a reçu
+    /// tous les événements des tâches terminées. Renvoie `false` si `timeout` est écoulé
+    /// avant.
     pub fn wait_idle(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         let mut s = self.shared.lock();
@@ -394,7 +410,7 @@ fn worker(shared: &Shared, producer: &dyn Producer, heavy: bool) {
             producer.produce(&file, job.1, &cancel)
         };
 
-        let events = {
+        {
             let mut s = shared.lock();
             let pos = s
                 .running
@@ -402,19 +418,46 @@ fn worker(shared: &Shared, producer: &dyn Producer, heavy: bool) {
                 .position(|r| Arc::ptr_eq(&r.cancel, &cancel))
                 .expect("tâche en cours introuvable");
             let generation = s.running.swap_remove(pos).generation;
-            let events = if generation == s.generation {
-                finish(&mut s, job, file, result)
-            } else {
-                Vec::new() // dossier remplacé entre-temps : résultat ignoré
-            };
-            if s.is_idle() {
-                shared.idle.notify_all();
-            }
-            events
-        };
-        for event in events {
-            (shared.on_event)(event);
+            if generation == s.generation {
+                let events = finish(&mut s, job, file, result);
+                s.outbox.extend(events);
+            } // sinon : dossier remplacé entre-temps, résultat ignoré
         }
+        deliver(shared);
+    }
+}
+
+/// Livre les événements en attente, dans l'ordre, hors du verrou d'état (le callback peut
+/// rappeler le scheduler). Un seul thread livre à la fois ; les autres attendent puis
+/// trouvent la file vide.
+fn deliver(shared: &Shared) {
+    let _turn = shared.delivery.lock().unwrap_or_else(|e| e.into_inner());
+    // Remet `in_callback` à faux même si le callback panique : wait_idle ne doit pas rester
+    // bloqué.
+    struct EndOfCallback<'a>(&'a Shared);
+    impl Drop for EndOfCallback<'_> {
+        fn drop(&mut self) {
+            let mut s = self.0.lock();
+            s.in_callback = false;
+            if s.is_idle() {
+                self.0.idle.notify_all();
+            }
+        }
+    }
+    loop {
+        let event = {
+            let mut s = shared.lock();
+            let Some(event) = s.outbox.pop_front() else {
+                if s.is_idle() {
+                    shared.idle.notify_all();
+                }
+                return;
+            };
+            s.in_callback = true;
+            event
+        };
+        let _end = EndOfCallback(shared);
+        (shared.on_event)(event);
     }
 }
 

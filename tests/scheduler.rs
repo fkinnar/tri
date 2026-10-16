@@ -1,0 +1,499 @@
+//! Tests d'intégration du scheduler.
+//!
+//! La logique (priorités, parallélisme, annulation, progression) est testée avec un faux
+//! producteur qui enregistre ce qu'on lui demande. Un test optionnel (`TRI_TEST_RAW`) fait
+//! tourner le vrai producteur sur un RAW et une image plate.
+
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use tri::cache::Level;
+use tri::media::{MediaFile, MediaKind};
+use tri::scheduler::{Config, Event, Failure, Producer, Progress, Scheduler};
+
+const LONG: Duration = Duration::from_secs(10);
+
+/// Une tâche exécutée : (chemin, niveau, résultat).
+type Entry = (PathBuf, Level, Result<(), Failure>);
+
+/// Ce que le faux producteur a fait, et comment il doit se comporter.
+#[derive(Default)]
+struct FakeState {
+    /// Tâches exécutées, dans l'ordre : (chemin, niveau, résultat).
+    log: Mutex<Vec<Entry>>,
+    /// Tâches en cours (pour détecter le démarrage d'un 1:1).
+    started: Mutex<Vec<(PathBuf, Level)>>,
+    /// Entrées considérées comme déjà en cache.
+    cached: Mutex<HashSet<(PathBuf, Level)>>,
+    /// Fichiers dont le calcul échoue.
+    failing: Mutex<HashSet<PathBuf>>,
+    /// Durée d'une tâche ordinaire.
+    delay: Mutex<Duration>,
+    /// Durée d'un 1:1 (interrompue par l'annulation).
+    full_delay: Mutex<Duration>,
+    /// Tâches lourdes / légères en cours, et maximums observés.
+    heavy_now: AtomicUsize,
+    heavy_max: AtomicUsize,
+    light_now: AtomicUsize,
+    light_max: AtomicUsize,
+}
+
+#[derive(Clone, Default)]
+struct Fake(Arc<FakeState>);
+
+impl Fake {
+    fn with_delay(delay: Duration) -> Fake {
+        let fake = Fake::default();
+        *fake.0.delay.lock().unwrap() = delay;
+        *fake.0.full_delay.lock().unwrap() = Duration::from_millis(300);
+        fake
+    }
+
+    fn log(&self) -> Vec<Entry> {
+        self.0.log.lock().unwrap().clone()
+    }
+
+    /// Fichiers traités pour un niveau, dans l'ordre.
+    fn order(&self, level: Level) -> Vec<String> {
+        self.log()
+            .into_iter()
+            .filter(|(_, l, _)| *l == level)
+            .map(|(p, _, _)| p.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    fn mark_all_cached(&self, files: &[MediaFile], levels: &[Level]) {
+        let mut cached = self.0.cached.lock().unwrap();
+        for f in files {
+            for l in levels {
+                cached.insert((f.path.clone(), *l));
+            }
+        }
+    }
+}
+
+fn bump(now: &AtomicUsize, max: &AtomicUsize) {
+    let n = now.fetch_add(1, Ordering::SeqCst) + 1;
+    max.fetch_max(n, Ordering::SeqCst);
+}
+
+impl Producer for Fake {
+    fn is_done(&self, file: &MediaFile, level: Level) -> bool {
+        self.0
+            .cached
+            .lock()
+            .unwrap()
+            .contains(&(file.path.clone(), level))
+    }
+
+    fn produce(&self, file: &MediaFile, level: Level, cancel: &AtomicBool) -> Result<(), Failure> {
+        let heavy = std::thread::current()
+            .name()
+            .is_some_and(|n| n.contains("lourd"));
+        let (now, max) = if heavy {
+            (&self.0.heavy_now, &self.0.heavy_max)
+        } else {
+            (&self.0.light_now, &self.0.light_max)
+        };
+        bump(now, max);
+        self.0
+            .started
+            .lock()
+            .unwrap()
+            .push((file.path.clone(), level));
+
+        let delay = if level == Level::Full {
+            *self.0.full_delay.lock().unwrap()
+        } else {
+            *self.0.delay.lock().unwrap()
+        };
+        let start = Instant::now();
+        let mut result = Ok(());
+        while start.elapsed() < delay {
+            if cancel.load(Ordering::SeqCst) {
+                result = Err(Failure::Cancelled);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        if result.is_ok() && self.0.failing.lock().unwrap().contains(&file.path) {
+            result = Err(Failure::Error("échec simulé".into()));
+        }
+
+        now.fetch_sub(1, Ordering::SeqCst);
+        self.0
+            .log
+            .lock()
+            .unwrap()
+            .push((file.path.clone(), level, result.clone()));
+        result
+    }
+}
+
+fn files(n: usize, kind: MediaKind) -> Vec<MediaFile> {
+    let ext = if kind == MediaKind::Raw { "RAF" } else { "JPG" };
+    (0..n)
+        .map(|i| MediaFile {
+            path: format!("img{i}.{ext}").into(),
+            kind,
+        })
+        .collect()
+}
+
+type Events = Arc<Mutex<Vec<Event>>>;
+
+fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
+    let events: Events = Arc::default();
+    let sink = events.clone();
+    let scheduler = Scheduler::new(fake.clone(), Config { light_workers }, move |e| {
+        sink.lock().unwrap().push(e)
+    });
+    (scheduler, events)
+}
+
+fn ready(events: &Events, generation: u64, level: Level) -> Vec<usize> {
+    events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            Event::Ready {
+                generation: g,
+                index,
+                level: l,
+                ..
+            } if *g == generation && *l == level => Some(*index),
+            _ => None,
+        })
+        .collect()
+}
+
+fn complete(n: usize) -> Option<Progress> {
+    Some(Progress { done: n, total: n })
+}
+
+#[test]
+fn processes_every_file_once_and_reports_progress() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, events) = start(&fake, 2);
+    let mut all = files(3, MediaKind::Raw);
+    all.extend(files(3, MediaKind::Flat));
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+
+    for level in [Level::Thumbnail, Level::Standard] {
+        let mut done = fake.order(level);
+        done.sort();
+        assert_eq!(
+            done.len(),
+            6,
+            "{level:?} : chaque fichier exactement une fois"
+        );
+        done.dedup();
+        assert_eq!(done.len(), 6);
+        assert_eq!(scheduler.progress(level), complete(6));
+        assert_eq!(ready(&events, generation, level).len(), 6);
+    }
+    assert!(
+        fake.order(Level::Full).is_empty(),
+        "pas de 1:1 sans demande"
+    );
+    assert_eq!(scheduler.progress(Level::Full), None);
+
+    // Le dernier événement de progression de chaque niveau annonce 6/6.
+    let last = |level| {
+        events.lock().unwrap().iter().rev().find_map(|e| match e {
+            Event::Progress {
+                level: l, progress, ..
+            } if *l == level => Some(*progress),
+            _ => None,
+        })
+    };
+    assert_eq!(last(Level::Thumbnail), complete(6));
+    assert_eq!(last(Level::Standard), complete(6));
+}
+
+#[test]
+fn events_arrive_in_order_and_progress_never_goes_back() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let mut all = files(30, MediaKind::Flat);
+    all.extend(files(5, MediaKind::Raw));
+    let (scheduler, events) = start(&fake, 4);
+    scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    for level in [Level::Thumbnail, Level::Standard] {
+        let done: Vec<usize> = events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                Event::Progress {
+                    level: l, progress, ..
+                } if *l == level => Some(progress.done),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(done, (1..=35).collect::<Vec<_>>(), "{level:?}");
+    }
+}
+
+#[test]
+fn cached_entries_are_reported_without_recomputing() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(4, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail]);
+    let (scheduler, events) = start(&fake, 2);
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Thumbnail).is_empty(), "rien à recalculer");
+    assert_eq!(ready(&events, generation, Level::Thumbnail).len(), 4);
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(4));
+    assert_eq!(fake.order(Level::Standard).len(), 4);
+}
+
+#[test]
+fn failures_are_reported_and_still_counted() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(3, MediaKind::Flat);
+    fake.0.failing.lock().unwrap().insert(all[1].path.clone());
+    let (scheduler, events) = start(&fake, 2);
+    scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    let failed: Vec<(usize, Level)> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            Event::Failed {
+                index,
+                level,
+                error,
+                ..
+            } => {
+                assert_eq!(error, "échec simulé");
+                Some((*index, *level))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(failed.len(), 2);
+    assert!(failed.iter().all(|(i, _)| *i == 1));
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(3));
+    assert_eq!(scheduler.progress(Level::Standard), complete(3));
+}
+
+#[test]
+fn heavy_worker_serves_focus_then_neighbours_then_distance() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(10, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail]);
+    let (scheduler, _) = start(&fake, 2);
+    scheduler.set_paused(true);
+    scheduler.set_folder(all);
+    scheduler.set_focus(5);
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+    let order: Vec<String> = [5, 6, 4, 7, 3, 8, 2, 9, 1, 0]
+        .iter()
+        .map(|i| format!("img{i}.RAF"))
+        .collect();
+    assert_eq!(fake.order(Level::Standard), order);
+}
+
+#[test]
+fn raw_renders_never_overlap_but_light_jobs_do() {
+    let fake = Fake::with_delay(Duration::from_millis(40));
+    let mut all = files(4, MediaKind::Raw);
+    all.extend(files(8, MediaKind::Flat));
+    let (scheduler, _) = start(&fake, 4);
+    scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.0.heavy_max.load(Ordering::SeqCst), 1);
+    assert!(
+        fake.0.light_max.load(Ordering::SeqCst) > 1,
+        "les workers légers doivent travailler en parallèle"
+    );
+}
+
+#[test]
+fn full_render_is_on_demand_and_dropped_when_focus_moves() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    *fake.0.full_delay.lock().unwrap() = Duration::from_secs(5);
+    let all = files(3, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail, Level::Standard]);
+    let (scheduler, events) = start(&fake, 1);
+    let generation = scheduler.set_folder(all);
+
+    scheduler.request_full(); // sans image affichée : sans effet
+    scheduler.set_focus(1);
+    scheduler.request_full();
+    let deadline = Instant::now() + LONG;
+    while !fake
+        .0
+        .started
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(_, l)| *l == Level::Full)
+    {
+        assert!(Instant::now() < deadline, "le 1:1 n'a jamais démarré");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    let moved = Instant::now();
+    scheduler.set_focus(2);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(
+        moved.elapsed() < Duration::from_secs(2),
+        "annulation trop lente"
+    );
+    let full = fake
+        .log()
+        .into_iter()
+        .filter(|(_, l, _)| *l == Level::Full)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        full,
+        [("img1.RAF".into(), Level::Full, Err(Failure::Cancelled))]
+    );
+    assert!(ready(&events, generation, Level::Full).is_empty());
+
+    // Un 1:1 demandé pour l'image affichée aboutit.
+    *fake.0.full_delay.lock().unwrap() = Duration::from_millis(10);
+    scheduler.request_full();
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(ready(&events, generation, Level::Full), [2]);
+}
+
+#[test]
+fn new_folder_cancels_and_supersedes_the_previous_one() {
+    let fake = Fake::with_delay(Duration::from_millis(50));
+    let (scheduler, events) = start(&fake, 2);
+    let first = scheduler.set_folder(files(20, MediaKind::Raw));
+    std::thread::sleep(Duration::from_millis(20));
+    let second = scheduler.set_folder(files(2, MediaKind::Flat));
+    assert!(second > first);
+    assert!(scheduler.wait_idle(LONG));
+
+    assert_eq!(scheduler.progress(Level::Standard), complete(2));
+    assert_eq!(ready(&events, second, Level::Thumbnail).len(), 2);
+    assert_eq!(ready(&events, second, Level::Standard).len(), 2);
+    // Le premier dossier a été abandonné bien avant la fin.
+    assert!(ready(&events, first, Level::Standard).len() < 20);
+    let raf_after_switch = events.lock().unwrap().iter().any(|e| {
+        matches!(e, Event::Ready { generation, path, .. }
+            if *generation == second && path.extension().is_some_and(|x| x == "RAF"))
+    });
+    assert!(!raf_after_switch);
+}
+
+#[test]
+fn pause_holds_work_until_resumed() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, _) = start(&fake, 2);
+    scheduler.set_paused(true);
+    scheduler.set_folder(files(3, MediaKind::Flat));
+    assert!(
+        scheduler.wait_idle(LONG),
+        "en pause sans tâche en cours = au repos"
+    );
+    std::thread::sleep(Duration::from_millis(30));
+    assert!(fake.log().is_empty());
+    assert_eq!(
+        scheduler.progress(Level::Thumbnail),
+        Some(Progress { done: 0, total: 3 })
+    );
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Thumbnail), complete(3));
+}
+
+#[test]
+fn focus_out_of_range_is_ignored() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let (scheduler, _) = start(&fake, 1);
+    scheduler.set_folder(files(2, MediaKind::Flat));
+    scheduler.set_focus(99);
+    scheduler.request_full();
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Full).is_empty());
+}
+
+#[test]
+fn dropping_stops_promptly_with_work_pending() {
+    let fake = Fake::with_delay(Duration::from_millis(50));
+    let (scheduler, _) = start(&fake, 2);
+    scheduler.set_folder(files(200, MediaKind::Raw));
+    std::thread::sleep(Duration::from_millis(30));
+    let t = Instant::now();
+    drop(scheduler);
+    assert!(t.elapsed() < Duration::from_secs(1), "arrêt trop lent");
+    assert!(fake.log().len() < 50);
+}
+
+/// Vrai producteur sur un vrai RAW et une image plate, avec un cache temporaire.
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW"]
+fn real_previews_fill_the_cache_and_are_reused() {
+    use tri::cache::Cache;
+    use tri::preview::{self, Sizes};
+    use tri::scheduler::CachedPreviews;
+
+    let sample: PathBuf = std::env::var_os("TRI_TEST_RAW")
+        .expect("définir TRI_TEST_RAW")
+        .into();
+    let dir = tempfile::tempdir().unwrap();
+    let photos = dir.path().join("photos");
+    std::fs::create_dir(&photos).unwrap();
+    let ext = sample.extension().unwrap().to_string_lossy().into_owned();
+    std::fs::copy(&sample, photos.join(format!("a.{ext}"))).unwrap();
+    image::RgbImage::from_pixel(3000, 2000, image::Rgb([200, 120, 40]))
+        .save(photos.join("b.jpg"))
+        .unwrap();
+
+    let files = tri::media::scan(&photos, 1).unwrap();
+    assert_eq!(files.len(), 2);
+    let sizes = Sizes {
+        thumbnail: 400,
+        standard: 1024,
+    };
+    let cache = Cache::open(dir.path().join("cache")).unwrap();
+    let run = |cache: &Cache| {
+        let producer = CachedPreviews {
+            cache: cache.clone(),
+            sizes,
+        };
+        let scheduler = Scheduler::new(producer, Config::default(), |_| {});
+        let t = Instant::now();
+        scheduler.set_folder(files.clone());
+        assert!(scheduler.wait_idle(Duration::from_secs(120)));
+        assert_eq!(scheduler.progress(Level::Standard), complete(2));
+        t.elapsed()
+    };
+
+    let first = run(&cache);
+    let long_side = |b: &tri::bitmap::Bitmap| b.width.max(b.height);
+    for f in &files {
+        let thumb = cache
+            .get(&preview::key(f, Level::Thumbnail, &sizes).unwrap())
+            .unwrap();
+        let standard = cache
+            .get(&preview::key(f, Level::Standard, &sizes).unwrap())
+            .unwrap();
+        assert_eq!(long_side(&thumb), 400, "{}", f.path.display());
+        assert_eq!(long_side(&standard), 1024, "{}", f.path.display());
+        assert_eq!(
+            thumb.height > thumb.width,
+            standard.height > standard.width,
+            "vignette et aperçu dans le même sens : {}",
+            f.path.display()
+        );
+    }
+
+    let second = run(&cache);
+    println!("premier passage {first:?}, second (cache) {second:?}");
+    assert!(second < first / 4, "le second passage doit venir du cache");
+}

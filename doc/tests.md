@@ -94,6 +94,17 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 - entrée corrompue supprimée par `get` ;
 - 4 threads écrivant et lisant la même clé : jamais d'entrée partielle.
 
+### `preview` (unitaires, `src/preview.rs`)
+
+- règle `half_size` (seuil exact, orientation indifférente) ; paramètres de clé distincts par
+  niveau et par taille ; annulation avant démarrage.
+
+### `scheduler` (unitaires et intégration)
+
+Voir [scheduler.md](scheduler.md#tests). Les tests de concurrence ont été relancés en
+boucle (300 à 500 fois) après chaque correction : un test qui passe une fois sur dix ne
+prouve rien.
+
 ### `filter` (unitaires, `src/filter.rs`)
 
 - `ungrouped`, `KindFilter` (tout / RAW / plates), suppression des groupes vidés, valeur par
