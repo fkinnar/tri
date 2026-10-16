@@ -1,0 +1,189 @@
+//! Calculs de la grille de vignettes, sans dépendance à l'affichage : nombre de colonnes,
+//! déplacement de la sélection, défilement pour garder la sélection visible.
+
+use crate::actions::Action;
+
+/// Géométrie d'une grille : cellules carrées de `cell` points, séparées de `gap`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layout {
+    /// Côté d'une cellule (points).
+    pub cell: f32,
+    /// Espace entre deux cellules (points).
+    pub gap: f32,
+    /// Nombre de colonnes.
+    pub columns: usize,
+}
+
+impl Layout {
+    /// Autant de colonnes que la largeur `width` en contient (au moins une).
+    pub fn fit(width: f32, cell: f32, gap: f32) -> Layout {
+        let columns = (((width + gap) / (cell + gap)).floor() as usize).max(1);
+        Layout { cell, gap, columns }
+    }
+
+    /// Largeur occupée par les colonnes (sans marge extérieure).
+    pub fn width(&self) -> f32 {
+        self.columns as f32 * self.cell + (self.columns.saturating_sub(1)) as f32 * self.gap
+    }
+
+    /// Nombre de lignes pour `n` images.
+    pub fn rows(&self, n: usize) -> usize {
+        n.div_ceil(self.columns)
+    }
+
+    /// Distance entre le haut de deux lignes consécutives.
+    pub fn row_pitch(&self) -> f32 {
+        self.cell + self.gap
+    }
+
+    /// Lignes entièrement visibles dans une hauteur `height` (au moins une).
+    pub fn rows_in(&self, height: f32) -> usize {
+        ((height / self.row_pitch()).floor() as usize).max(1)
+    }
+}
+
+/// Nouvelle sélection après `action`, dans une grille de `n` images. `page_rows` : lignes
+/// sautées par page. Les actions non liées à la navigation laissent la sélection en place.
+pub fn navigate(
+    selected: usize,
+    n: usize,
+    layout: &Layout,
+    page_rows: usize,
+    action: Action,
+) -> usize {
+    if n == 0 {
+        return 0;
+    }
+    let last = n - 1;
+    let cols = layout.columns;
+    let selected = selected.min(last);
+    match action {
+        Action::NavPrev => selected.saturating_sub(1),
+        Action::NavNext => (selected + 1).min(last),
+        // Haut / bas : même colonne ; sur la dernière ligne incomplète, la dernière image.
+        Action::NavUp => selected.checked_sub(cols).unwrap_or(selected),
+        Action::NavDown if selected + cols <= last => selected + cols,
+        Action::NavDown if selected / cols < last / cols => last,
+        Action::NavDown => selected,
+        Action::NavFirst => 0,
+        Action::NavLast => last,
+        Action::NavPageUp => selected.saturating_sub(cols * page_rows.max(1)),
+        Action::NavPageDown => (selected + cols * page_rows.max(1)).min(last),
+        Action::FilterCycle | Action::Help | Action::Quit => selected,
+    }
+}
+
+/// Défilement nécessaire pour que la ligne `row` soit entièrement visible, la vue
+/// commençant à `offset` et faisant `height` de haut. `None` si elle l'est déjà.
+pub fn scroll_to_show(layout: &Layout, row: usize, offset: f32, height: f32) -> Option<f32> {
+    let top = row as f32 * layout.row_pitch();
+    let bottom = top + layout.cell;
+    if top < offset {
+        Some(top)
+    } else if bottom > offset + height {
+        Some((bottom - height).max(0.0))
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use Action::*;
+
+    /// 4 colonnes.
+    fn layout() -> Layout {
+        Layout::fit(4.0 * 100.0 + 3.0 * 10.0, 100.0, 10.0)
+    }
+
+    #[test]
+    fn columns_fit_the_width() {
+        assert_eq!(layout().columns, 4);
+        assert_eq!(layout().width(), 430.0);
+        assert_eq!(
+            Layout::fit(429.0, 100.0, 10.0).columns,
+            3,
+            "il manque 1 point"
+        );
+        assert_eq!(
+            Layout::fit(10.0, 100.0, 10.0).columns,
+            1,
+            "au moins une colonne"
+        );
+        assert_eq!(layout().rows(9), 3);
+        assert_eq!(layout().rows(0), 0);
+        assert_eq!(layout().rows_in(330.0), 3);
+        assert_eq!(layout().rows_in(5.0), 1);
+    }
+
+    #[test]
+    fn left_right_stop_at_the_ends() {
+        let l = layout();
+        assert_eq!(navigate(0, 10, &l, 2, NavPrev), 0);
+        assert_eq!(navigate(5, 10, &l, 2, NavPrev), 4);
+        assert_eq!(navigate(5, 10, &l, 2, NavNext), 6);
+        assert_eq!(navigate(9, 10, &l, 2, NavNext), 9);
+    }
+
+    #[test]
+    fn up_down_keep_the_column() {
+        // 10 images, 4 colonnes :
+        // 0 1 2 3
+        // 4 5 6 7
+        // 8 9
+        let l = layout();
+        assert_eq!(navigate(5, 10, &l, 2, NavUp), 1);
+        assert_eq!(navigate(1, 10, &l, 2, NavUp), 1, "première ligne");
+        assert_eq!(navigate(1, 10, &l, 2, NavDown), 5);
+        assert_eq!(navigate(5, 10, &l, 2, NavDown), 9);
+        assert_eq!(
+            navigate(6, 10, &l, 2, NavDown),
+            9,
+            "ligne incomplète : dernière image"
+        );
+        assert_eq!(navigate(9, 10, &l, 2, NavDown), 9, "dernière ligne");
+        assert_eq!(navigate(8, 10, &l, 2, NavDown), 8);
+    }
+
+    #[test]
+    fn first_last_and_pages() {
+        let l = layout();
+        assert_eq!(navigate(6, 10, &l, 2, NavFirst), 0);
+        assert_eq!(navigate(2, 10, &l, 2, NavLast), 9);
+        assert_eq!(navigate(1, 40, &l, 3, NavPageDown), 13);
+        assert_eq!(navigate(38, 40, &l, 3, NavPageDown), 39);
+        assert_eq!(navigate(13, 40, &l, 3, NavPageUp), 1);
+        assert_eq!(navigate(5, 40, &l, 3, NavPageUp), 0);
+    }
+
+    #[test]
+    fn empty_grid_and_out_of_range_selection() {
+        let l = layout();
+        assert_eq!(navigate(0, 0, &l, 2, NavNext), 0);
+        assert_eq!(
+            navigate(50, 10, &l, 2, NavPrev),
+            8,
+            "sélection ramenée dans la grille"
+        );
+        assert_eq!(navigate(3, 10, &l, 2, FilterCycle), 3);
+    }
+
+    #[test]
+    fn scrolling_brings_the_row_into_view() {
+        let l = layout(); // pas de ligne : 110
+        assert_eq!(scroll_to_show(&l, 0, 0.0, 300.0), None);
+        // ligne 2 : 220..320, dépasse la vue 0..300 de 20.
+        assert_eq!(scroll_to_show(&l, 2, 0.0, 300.0), Some(20.0));
+    }
+
+    #[test]
+    fn scrolling_up_and_down() {
+        let l = layout();
+        // ligne 3 : 330..430, vue 0..300 → descendre à 130.
+        assert_eq!(scroll_to_show(&l, 3, 0.0, 300.0), Some(130.0));
+        // ligne 1 : 110..210, vue à 200 → remonter à 110.
+        assert_eq!(scroll_to_show(&l, 1, 200.0, 300.0), Some(110.0));
+        assert_eq!(scroll_to_show(&l, 2, 130.0, 300.0), None);
+    }
+}

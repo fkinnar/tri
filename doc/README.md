@@ -9,6 +9,7 @@ existe.
 
 | Document | Contenu |
 |---|---|
+| [gui.md](gui.md) | Interface egui : grille, actions et raccourcis, textures |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
@@ -42,6 +43,7 @@ tri/
 │   └── raw/
 │       ├── ffi.rs        déclarations brutes de l'API C LibRaw (privé)
 │       └── mod.rs        API sûre : RawFile, Thumbnail, RenderOptions, RawError
+├── gui/                  paquet tri-gui : l'interface egui (voir gui.md)
 ├── examples/decode.rs    outil en ligne de commande : aperçu / rendu RAW, décodage plat
 └── tests/                tests d'intégration (un fichier par module)
     └── fixtures/         petits fichiers de test synthétiques (HEIC)

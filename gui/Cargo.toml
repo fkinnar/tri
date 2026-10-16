@@ -1,0 +1,20 @@
+[package]
+name = "tri-gui"
+version = "0.1.0"
+edition = "2024"
+description = "Interface graphique (egui) de tri, visionneuse RAW"
+
+[[bin]]
+name = "tri-gui"
+path = "src/main.rs"
+
+[dependencies]
+tri = { path = "..", default-features = false }
+eframe = "0.37"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[features]
+# Mêmes features que le moteur, transmises telles quelles.
+default = ["heif", "turbojpeg"]
+heif = ["tri/heif"]
+turbojpeg = ["tri/turbojpeg"]

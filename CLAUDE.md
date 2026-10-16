@@ -236,8 +236,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   - documentation Markdown dans `doc/` (un fichier par module + `README.md` sommaire,
     `build.md`, `tests.md`) expliquant mods, traits, fonctions et le *pourquoi* ; commentaires
     `///` sur tout l'API public pour `cargo doc` ;
-  - avant chaque commit : `cargo fmt`, `cargo clippy --all-targets` sans warning, tests verts,
-    **dans les deux configurations** (défaut et `--no-default-features`).
+  - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans warning,
+    `cargo test --workspace` vert, **dans les deux configurations** (défaut et
+    `--no-default-features`) ; pour l'interface, vérifier aussi le rendu par capture
+    automatique (`TRI_GUI_SCREENSHOT`, voir `doc/gui.md`).
 
 ## Prochaine étape immédiate
 
@@ -255,10 +257,15 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - Décidé le 16/10/2026 : politique « vignettes d'abord » par défaut, **réglable** (option
   `Config::thumbnails_first` du moteur, `--mixed` en CLI). À exposer dans le futur fichier
   de configuration de l'application, avec la taille « Auto » des aperçus.
-- [ ] Brancher ce rendu dans egui/eframe (toolkit choisi le 16/10/2026).
+- [x] Interface egui dans un paquet séparé (`gui/`, workspace Cargo) : grille de vignettes
+      alimentée par le scheduler, barre d'état avec progression, sélection clavier/souris,
+      filtre par type, aide, actions nommées (profils classique + vim).
 - [x] Ajouter le parcours de dossier (RAW + images plates) et le filtre par type de fichier
       (`src/media.rs`, `src/filter.rs`).
-- [ ] Grille de vignettes : aperçus embarqués pour les RAW, image décodée pour les plates.
-- [ ] Navigation clavier gauche/droite entre images affichées en plein écran.
+- [x] Grille de vignettes : aperçus embarqués pour les RAW, image décodée pour les plates.
+- [ ] Plein écran : aperçu standard de l'image sélectionnée (vignette agrandie en attendant),
+      navigation gauche/droite, retour à la grille, zoom 1:1 à la demande.
+- [ ] Fichier de configuration de l'application (taille d'aperçu Auto/fixe, politique
+      `thumbnails_first`, profil de raccourcis, thème).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

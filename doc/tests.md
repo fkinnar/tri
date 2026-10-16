@@ -41,6 +41,9 @@ Les tests sur vrai RAW sont **sérialisés** par un `Mutex` statique (`serial()`
 `tests/raw.rs`) : chaque rendu LibRaw occupe déjà plusieurs cœurs, et les lancer en parallèle
 les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 
+Tout le workspace : `cargo test --workspace` (et `--no-default-features`). Les tests de
+l'interface sont décrits dans [gui.md](gui.md#tests).
+
 ## Ce qui est couvert
 
 ### `media` (unitaires, `src/media.rs`)

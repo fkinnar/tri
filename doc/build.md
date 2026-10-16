@@ -34,6 +34,24 @@ est liée à x265 (GPL) et HEVC est breveté.
 libheif est localisée par le crate `libheif-sys` lui-même (pkg-config, ou vcpkg sous Windows
 MSVC). Le `build.rs` de `tri` ne concerne que LibRaw.
 
+## Workspace
+
+Le dépôt est un workspace Cargo à deux paquets : `tri` (moteur + démo en ligne de commande, à
+la racine) et `tri-gui` (interface egui, dans `gui/`). Le moteur ne dépend pas d'egui.
+
+```sh
+cargo build --release --workspace             # tout
+cargo run --release -p tri-gui -- <dossier>   # l'interface
+cargo test --workspace                        # tous les tests
+```
+
+`tri-gui` transmet les features `heif` et `turbojpeg` au moteur (`--no-default-features`
+s'applique donc aux deux).
+
+Sous Linux, eframe (winit + wgpu) a aussi besoin des en-têtes X11/Wayland et d'un pilote
+Vulkan ou OpenGL. D'après la documentation d'egui (non vérifié ici) :
+`sudo apt install libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev`.
+
 ## Ce que fait `build.rs`
 
 1. **Localise LibRaw.**

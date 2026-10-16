@@ -52,6 +52,14 @@ permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double 
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
 ce sont des *bindings*, la libheif elle-même reste LGPL.
 
+**Interface (`tri-gui`)** : egui, eframe, winit, wgpu et leurs dépendances, ~370 crates de
+plus, toutes permissives (MIT, Apache-2.0, BSD, Zlib, ISC, BSL-1.0, Unicode-3.0). Trois
+crates en double licence, où l'on retient l'option permissive : `r-efi` (MIT OR Apache-2.0
+OR LGPL-2.1-or-later) et `self_cell` (Apache-2.0 OR GPL-2.0-only). Les polices par défaut
+d'egui (`epaint_default_fonts`) sont sous **OFL-1.1** et **Ubuntu Font Licence** : licences
+de polices qui permettent de les embarquer dans un logiciel sous n'importe quelle licence,
+avec leur notice.
+
 Obligation pratique : reproduire les notices de copyright et de licence de ces crates dans la
 distribution. Un outil comme [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
 génère ce fichier automatiquement. À vérifier (maintenance) avant adoption.
