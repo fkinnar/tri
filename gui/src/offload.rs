@@ -15,7 +15,14 @@ use tri::offload::{self, History, OffloadSettings, Plan, Progress, Report};
 pub enum Request {
     /// Fermer la boîte.
     Close,
-    /// Ouvrir ce dossier dans la grille (fin du déchargement).
+    /// Copie terminée : enchaîner ce qui a été coché (la boîte reste ouverte sur le bilan).
+    Finished {
+        /// Dossier de la séance à ouvrir.
+        open: Option<PathBuf>,
+        /// Volume à éjecter.
+        eject: Option<PathBuf>,
+    },
+    /// Ouvrir ce dossier dans la grille (bouton du bilan).
     Open(PathBuf),
     /// Éjecter ce volume (la carte).
     Eject(PathBuf),
@@ -46,8 +53,12 @@ enum Stage {
     /// Bilan.
     Done {
         report: Report,
-        confirm_delete: bool,
+        /// Suites cochées déjà déclenchées.
+        finished: bool,
+        /// Suppression de la carte faite : échecs.
         deleted: Option<Vec<(PathBuf, String)>>,
+        opened: bool,
+        ejected: bool,
     },
     /// Erreur d'inventaire.
     Failed(String),
@@ -102,8 +113,8 @@ impl OffloadDialog {
                 if let Ok(result) = rx.try_recv() {
                     self.stage = match result {
                         Ok((plan, history)) => {
-                            let folder = offload::suggest_folder(&plan, self.settings.skip_known)
-                                .unwrap_or_default();
+                            let folder =
+                                offload::suggest_folder(&plan, &self.settings).unwrap_or_default();
                             Stage::Ready {
                                 plan,
                                 history: Some(history),
@@ -123,8 +134,10 @@ impl OffloadDialog {
                         Message::Done(report) => {
                             self.stage = Stage::Done {
                                 report,
-                                confirm_delete: false,
+                                finished: false,
                                 deleted: None,
+                                opened: false,
+                                ejected: false,
                             };
                             return;
                         }
@@ -207,13 +220,13 @@ impl OffloadDialog {
                         error,
                         ..
                     } => {
-                        let skip = self.settings.skip_known;
+                        let settings = &mut self.settings;
                         let known = plan.items.iter().filter(|i| i.known).count();
-                        let count = plan.to_copy(skip).count();
+                        let count = plan.to_copy(settings).count();
                         ui.label(format!(
                             "{} images, dont {known} déjà déchargées ; {count} à copier ({} Mo).",
                             plan.items.len(),
-                            french_mb(plan.bytes(skip))
+                            french_mb(plan.bytes(settings))
                         ));
                         if plan.ignored > 0 {
                             ui.weak(format!(
@@ -244,6 +257,21 @@ impl OffloadDialog {
                         if let Some(e) = error {
                             ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
                         }
+                        // Choix faits avant la copie, enchaînés à la fin (retour du
+                        // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
+                        ui.add_space(6.0);
+                        ui.checkbox(&mut settings.raw_only, "RAW seulement")
+                            .on_hover_text("Les JPEG du boîtier restent sur la carte.");
+                        ui.checkbox(&mut settings.open_after, "Ouvrir le dossier à la fin");
+                        ui.checkbox(&mut settings.eject_after, "Éjecter la carte à la fin");
+                        ui.checkbox(
+                            &mut settings.delete_after,
+                            "Supprimer de la carte les fichiers copiés et vérifiés",
+                        )
+                        .on_hover_text(
+                            "Seulement ceux copiés (et vérifiés) pendant ce déchargement ; \
+                         les autres (ignorés, en erreur, laissés, vidéos) restent.",
+                        );
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             start = ui
@@ -278,10 +306,28 @@ impl OffloadDialog {
                     }
                     Stage::Done {
                         report,
-                        confirm_delete,
+                        finished,
                         deleted,
+                        opened,
+                        ejected,
                     } => {
-                        let verified = if self.settings.verify {
+                        let settings = &self.settings;
+                        // Première image du bilan : enchaîner les suites cochées.
+                        if !*finished {
+                            *finished = true;
+                            let complete = !report.cancelled;
+                            if complete && settings.delete_after && !report.copied.is_empty() {
+                                *deleted = Some(offload::delete_sources(report));
+                            }
+                            let open = (settings.open_after
+                                && (!report.copied.is_empty() || !report.skipped.is_empty()))
+                            .then(|| report.destination.clone());
+                            let eject = (complete && settings.eject_after).then(|| source.clone());
+                            *opened = open.is_some();
+                            *ejected = eject.is_some();
+                            request = Some(Request::Finished { open, eject });
+                        }
+                        let verified = if settings.verify {
                             " et vérifiés"
                         } else {
                             ""
@@ -293,6 +339,9 @@ impl OffloadDialog {
                         report.errors.len(),
                         if report.cancelled { " — interrompu" } else { "" }
                     ));
+                        if !report.left.is_empty() {
+                            ui.weak(format!("{} JPEG laissés sur la carte.", report.left.len()));
+                        }
                         ui.weak(format!("Destination : {}", report.destination.display()));
                         for (file, e) in report.errors.iter().take(5) {
                             ui.colored_label(
@@ -307,41 +356,22 @@ impl OffloadDialog {
                                 format!("{} fichiers n'ont pas pu être supprimés.", errors.len())
                             });
                         }
+                        if *ejected {
+                            ui.weak("Éjection de la carte : voir la barre d'état.");
+                        }
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            if ui.button("Ouvrir le dossier").clicked() {
+                            // Ce qui n'a pas été coché reste possible ici.
+                            if !*opened && ui.button("Ouvrir le dossier").clicked() {
                                 request = Some(Request::Open(report.destination.clone()));
                             }
-                            if ui.button("Éjecter la carte").clicked() {
+                            if !*ejected && ui.button("Éjecter la carte").clicked() {
                                 request = Some(Request::Eject(source.clone()));
-                            }
-                            if deleted.is_none()
-                                && !report.copied.is_empty()
-                                && ui.button("Supprimer de la carte…").clicked()
-                            {
-                                *confirm_delete = true;
                             }
                             if ui.button("Fermer").clicked() {
                                 request = Some(Request::Close);
                             }
                         });
-                        if *confirm_delete {
-                            ui.add_space(6.0);
-                            ui.label(format!(
-                                "Supprimer de la carte les {} fichiers copiés{verified} ? \
-                             Les autres (ignorés, en erreur, vidéos) restent.",
-                                report.copied.len()
-                            ));
-                            ui.horizontal(|ui| {
-                                if ui.button("Supprimer").clicked() {
-                                    *deleted = Some(offload::delete_sources(report));
-                                    *confirm_delete = false;
-                                }
-                                if ui.button("Garder").clicked() {
-                                    *confirm_delete = false;
-                                }
-                            });
-                        }
                     }
                 }
             });

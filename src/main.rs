@@ -15,10 +15,12 @@
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --metadata [--raw|--flat] [--depth N]
 //!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
-//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--dry-run] [--previews]
+//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
 //!       décharge une carte : copie vérifiée des images vers <racine>/<nom> (défauts :
 //!       `[offload] destination`, nom proposé AAAA/AAAA-MM-JJ), sans les fichiers déjà
-//!       déchargés ; `--previews` calcule ensuite vignettes et aperçus ;
+//!       déchargés ; `--raw-only` laisse les JPEG sur la carte ; `--previews` calcule
+//!       ensuite vignettes et aperçus ; `--delete-copied` supprime de la carte les
+//!       fichiers copiés et vérifiés, `--eject` éjecte la carte ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
@@ -48,7 +50,7 @@ const USAGE: &str = "usage :
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
   tri <dossier> --exposure [--raw|--flat] [--depth N]
   tri <dossier> --metadata [--raw|--flat] [--depth N]
-  tri --offload <carte> [--to <racine>] [--folder <nom>] [--dry-run] [--previews]
+  tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -74,6 +76,9 @@ struct Args {
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
     folder: Option<String>,
+    raw_only: bool,
+    eject: bool,
+    delete_copied: bool,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -122,6 +127,9 @@ fn parse() -> AnyResult<Args> {
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
             "--folder" => args.folder = Some(value()?),
+            "--raw-only" => args.raw_only = true,
+            "--eject" => args.eject = true,
+            "--delete-copied" => args.delete_copied = true,
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -304,7 +312,9 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
 /// Déchargement d'une carte, avec progression et bilan ; puis aperçus si demandé.
 fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> AnyResult<()> {
     use tri::offload::{self, History};
-    let s = &settings.offload;
+    let mut chosen = settings.offload.clone();
+    chosen.raw_only |= args.raw_only;
+    let s = &chosen;
     let mut history = if args.dry_run {
         History::open_configured(s, settings.data_dir().as_deref())
             .unwrap_or_else(|_| History::in_memory())
@@ -318,7 +328,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         .unwrap_or_else(|| settings::expand_home(&s.destination));
     let folder = match &args.folder {
         Some(f) => f.clone(),
-        None => offload::suggest_folder(&plan, s.skip_known).unwrap_or_default(),
+        None => offload::suggest_folder(&plan, s).unwrap_or_default(),
     };
     let known = plan.items.iter().filter(|i| i.known).count();
     println!(
@@ -326,16 +336,16 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         card.display(),
         plan.items.len(),
         plan.ignored,
-        plan.bytes(s.skip_known) as f64 / 1e6
+        plan.bytes(s) as f64 / 1e6
     );
-    if plan.to_copy(s.skip_known).next().is_none() {
+    if plan.to_copy(s).next().is_none() {
         println!("rien à copier");
         return Ok(());
     }
     let dest = offload::destination(&root, &folder)?;
     println!("destination : {}", dest.display());
     if args.dry_run {
-        for item in plan.to_copy(s.skip_known) {
+        for item in plan.to_copy(s) {
             println!("à copier\t{}", item.source.display());
         }
         return Ok(());
@@ -356,13 +366,31 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         eprintln!("erreur\t{} : {error}", file.display());
     }
     println!(
-        "{} copiés{}, {} ignorés, {} erreurs, en {:.1?}",
+        "{} copiés{}, {} ignorés, {} laissés sur la carte, {} erreurs, en {:.1?}",
         report.copied.len(),
         if s.verify { " et vérifiés" } else { "" },
         report.skipped.len(),
+        report.left.len(),
         report.errors.len(),
         report.elapsed
     );
+    // En ligne de commande, rien ne se fait sur la carte sans option explicite.
+    if args.delete_copied {
+        let failed = offload::delete_sources(&report);
+        println!(
+            "{} fichiers supprimés de la carte",
+            report.copied.len() - failed.len()
+        );
+        for (file, e) in &failed {
+            eprintln!("non supprimé\t{} : {e}", file.display());
+        }
+    }
+    if args.eject {
+        match tri::places::eject(card) {
+            Ok(()) => println!("carte éjectée"),
+            Err(e) => eprintln!("éjection impossible : {e}"),
+        }
+    }
     if args.previews {
         let files = scan(&dest, 1)?;
         previews(settings, files)?;

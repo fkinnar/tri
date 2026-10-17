@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 
-use crate::media::{self, MediaFile};
+use crate::media::{self, MediaFile, MediaKind};
 
 /// Réglages du déchargement (section `[offload]` du fichier de configuration).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -33,6 +33,14 @@ pub struct OffloadSettings {
     /// Fichier de l'historique (`~` accepté) ; vide : `offload-history.tsv` dans le
     /// dossier de données (`settings::data_dir`).
     pub history: String,
+    /// Ne copier que les RAW (les JPEG du boîtier restent sur la carte).
+    pub raw_only: bool,
+    /// À la fin : ouvrir le dossier de la séance (interface).
+    pub open_after: bool,
+    /// À la fin : éjecter la carte.
+    pub eject_after: bool,
+    /// À la fin : supprimer de la carte les fichiers copiés et vérifiés.
+    pub delete_after: bool,
 }
 
 impl Default for OffloadSettings {
@@ -42,6 +50,10 @@ impl Default for OffloadSettings {
             verify: true,
             skip_known: true,
             history: String::new(),
+            raw_only: false,
+            open_after: true,
+            eject_after: true,
+            delete_after: false,
         }
     }
 }
@@ -55,6 +67,8 @@ pub struct Item {
     pub size: u64,
     /// Date de modification (prise de vue, sur une carte).
     pub modified: SystemTime,
+    /// RAW ou image plate.
+    pub kind: MediaKind,
     /// Déjà déchargé (d'après l'historique).
     pub known: bool,
 }
@@ -98,15 +112,23 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// Images à copier (hors celles déjà déchargées si `skip_known`).
-    pub fn to_copy(&self, skip_known: bool) -> impl Iterator<Item = &Item> {
-        self.items.iter().filter(move |i| !(skip_known && i.known))
+    /// Images à copier selon `settings` : sans celles déjà déchargées (`skip_known`),
+    /// seulement les RAW (`raw_only`).
+    pub fn to_copy<'a>(&'a self, settings: &'a OffloadSettings) -> impl Iterator<Item = &'a Item> {
+        self.items
+            .iter()
+            .filter(|i| selected(i, settings) && !(settings.skip_known && i.known))
     }
 
     /// Octets à copier.
-    pub fn bytes(&self, skip_known: bool) -> u64 {
-        self.to_copy(skip_known).map(|i| i.size).sum()
+    pub fn bytes(&self, settings: &OffloadSettings) -> u64 {
+        self.to_copy(settings).map(|i| i.size).sum()
     }
+}
+
+/// Image retenue par les réglages (`raw_only`).
+fn selected(item: &Item, settings: &OffloadSettings) -> bool {
+    !settings.raw_only || item.kind == MediaKind::Raw
 }
 
 /// Historique des déchargements : un fichier texte dans le dossier de données
@@ -198,12 +220,13 @@ pub fn plan(source: &Path, history: &History) -> io::Result<Plan> {
         .filter(|e| e.file_type().is_file())
         .count();
     let mut items = Vec::with_capacity(files.len());
-    for MediaFile { path, .. } in files {
+    for MediaFile { path, kind } in files {
         let meta = fs::metadata(&path)?;
         let mut item = Item {
             source: path,
             size: meta.len(),
             modified: meta.modified().unwrap_or(UNIX_EPOCH),
+            kind,
             known: false,
         };
         item.known = history.contains(&item);
@@ -220,12 +243,11 @@ pub fn plan(source: &Path, history: &History) -> io::Result<Plan> {
 /// plus ancienne image à copier (lue dans ses métadonnées, heure locale ; à défaut, sa
 /// date de modification en UTC). Le `_` final invite à compléter (« _Self ») ; il est
 /// retiré s'il reste seul ([`destination`]). `None` si rien à copier.
-pub fn suggest_folder(plan: &Plan, skip_known: bool) -> Option<String> {
-    let first = plan.to_copy(skip_known).min_by_key(|i| i.modified)?;
-    let kind = media::kind_of(&first.source)?;
+pub fn suggest_folder(plan: &Plan, settings: &OffloadSettings) -> Option<String> {
+    let first = plan.to_copy(settings).min_by_key(|i| i.modified)?;
     let file = MediaFile {
         path: first.source.clone(),
-        kind,
+        kind: first.kind,
     };
     let date = crate::metadata::read(&file)
         .ok()
@@ -295,6 +317,8 @@ pub struct Report {
     pub copied: Vec<(PathBuf, PathBuf)>,
     /// Ignorés : déjà déchargés (historique), ou copie identique déjà présente.
     pub skipped: Vec<PathBuf>,
+    /// Laissés sur la carte par choix (`raw_only` : les images plates).
+    pub left: Vec<PathBuf>,
     /// Échecs : (original, message).
     pub errors: Vec<(PathBuf, String)>,
     /// Interrompu à la demande.
@@ -324,7 +348,7 @@ pub fn run(
     let todo: Vec<&Item> = plan.items.iter().collect();
     let mut p = Progress {
         files_total: todo.len(),
-        bytes_total: plan.bytes(settings.skip_known),
+        bytes_total: plan.bytes(settings),
         ..Progress::default()
     };
     if let Err(e) = fs::create_dir_all(destination) {
@@ -341,7 +365,9 @@ pub fn run(
         }
         p.current = Some(item.source.clone());
         progress(&p);
-        if settings.skip_known && item.known {
+        if !selected(item, settings) {
+            report.left.push(item.source.clone());
+        } else if settings.skip_known && item.known {
             report.skipped.push(item.source.clone());
         } else {
             match copy_one(

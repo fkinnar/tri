@@ -459,7 +459,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      dossier proposé `AAAA/AAAA-MM-JJ_` + champ libre (gabarits plus tard), noms
      d'origine (renommage par gabarits plus tard), fichiers déjà déchargés ignorés
      (historique dans le dossier de données), copie vérifiée (BLAKE3), puis ouvrir /
-     éjecter / supprimer de la carte les fichiers vérifiés. En ligne de commande :
+     éjecter / supprimer de la carte les fichiers vérifiés — choisis par cases à cocher
+     avant la copie et enchaînés à la fin (retour du 17/10/2026), plus « RAW
+     seulement ». En ligne de commande :
      `tri --offload <carte> [--to] [--folder] [--dry-run] [--previews]`. À venir :
      gabarits de dossier et de noms, séances de plusieurs jours (un dossier par jour ?).
   5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,

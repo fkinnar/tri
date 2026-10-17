@@ -117,6 +117,15 @@ skip_known = true
 # dossier de données (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
 # Windows %APPDATA%\tri).
 history = ""
+# Choix par défaut de la boîte de déchargement (cochés ou non) : ne copier que les RAW
+# (JPEG du boîtier laissés sur la carte) ; à la fin, ouvrir le dossier de la séance,
+# éjecter la carte, supprimer de la carte les fichiers copiés et vérifiés. En ligne de
+# commande, éjection et suppression demandent une option explicite (--eject,
+# --delete-copied).
+raw_only = false
+open_after = true
+eject_after = true
+delete_after = false
 
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :

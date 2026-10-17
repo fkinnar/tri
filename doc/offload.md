@@ -29,9 +29,20 @@ besoins de tous, pas seulement les siens.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,
   puis copie relue et comparée ; date de modification d'origine conservée ; écriture
   atomique (fichier temporaire caché, puis renommage).
-- **Après** : bilan ; ouvrir la séance pour trier, éjecter la carte, ou **supprimer de la
-  carte** les seuls fichiers copiés et vérifiés (`delete_sources`, après confirmation ;
-  chaque copie est encore contrôlée — présente, même taille — juste avant).
+- **Choix faits avant la copie, enchaînés à la fin** (retour du 17/10/2026 : devoir
+  choisir entre « ouvrir » et « éjecter » n'avait pas de sens) : cases à cocher, défauts
+  dans `[offload]` :
+  - **RAW seulement** (`raw_only`, non) : les images plates (JPEG du boîtier) restent sur
+    la carte (`Report::left`) ; elles ne sont pas « déjà déchargées » pour la suite ;
+  - **ouvrir le dossier à la fin** (`open_after`, oui) ;
+  - **éjecter la carte à la fin** (`eject_after`, oui), sauf si la copie a été
+    interrompue ;
+  - **supprimer de la carte les fichiers copiés et vérifiés** (`delete_after`, non) :
+    `delete_sources`, seulement eux ; chaque copie est encore contrôlée — présente, même
+    taille — juste avant ; pas après une interruption.
+
+  Ordre : suppression, ouverture, éjection ; le bilan reste affiché, avec des boutons
+  pour ce qui n'a pas été coché.
 - Seules les images (RAW et plates) sont copiées ; vidéos et fichiers du boîtier sont
   comptés (`Plan::ignored`) et laissés.
 
@@ -48,10 +59,12 @@ besoins de tous, pas seulement les siens.
 ## Ligne de commande
 
 ```
-tri --offload <carte> [--to <racine>] [--folder <nom>] [--dry-run] [--previews]
+tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
 ```
 
-`--dry-run` liste ce qui serait copié ; `--previews` calcule ensuite vignettes, aperçus et
+En ligne de commande, rien ne se fait sur la carte sans option explicite (`--eject`,
+`--delete-copied` ; `open_after`, `eject_after`, `delete_after` ne valent que pour
+l'interface). `--dry-run` liste ce qui serait copié ; `--previews` calcule ensuite vignettes, aperçus et
 histogrammes de la séance. Mesuré (17/10/2026, image disque locale, Mac Apple Silicon) :
 4 RAF (109 Mo) copiés et vérifiés en 0,23 s ; second passage : « rien à copier ».
 
@@ -59,7 +72,6 @@ histogrammes de la séance. Mesuré (17/10/2026, image disque locale, Mac Apple 
 
 Icône « décharger » à côté de l'icône d'éjection de chaque volume non fixé du panneau des
 dossiers : boîte (modale, près du clic) avec inventaire en fond, racine et nom modifiables
-(destination complète affichée), copie en fond avec barre de progression et
-« Interrompre », bilan, puis « Ouvrir le dossier » (la séance s'ouvre dans la grille et
-ses calculs démarrent), « Éjecter la carte », « Supprimer de la carte… » (seconde
-confirmation). Voir [gui.md](gui.md).
+(destination complète affichée), cases à cocher ci-dessus, copie en fond avec barre de
+progression et « Interrompre », puis suites enchaînées et bilan (la séance s'ouvre dans
+la grille et ses calculs démarrent). Voir [gui.md](gui.md).

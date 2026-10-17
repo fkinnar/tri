@@ -578,25 +578,43 @@ impl TriApp {
             self.eject_dialog = None;
         } else if confirm {
             self.eject_dialog = None;
-            if open_inside {
-                // Fermer le dossier : sinon le système refuse (fichiers ouverts).
-                self.close_folder();
-            }
-            let (tx, rx) = mpsc::channel();
-            let repaint = ctx.clone();
-            let volume = path.clone();
-            std::thread::spawn(move || {
-                let _ = tx.send(tri::places::eject(&volume));
-                repaint.request_repaint();
-            });
-            self.notice = Some((format!("Éjection de « {name} »…"), false));
-            self.ejecting = Some((path, rx));
+            self.start_eject(ctx, path);
         } else if cancel || modal.should_close() {
             self.eject_dialog = None;
         }
     }
 
-    /// Boîte de déchargement : affichage, et suites demandées (ouvrir la séance, éjecter).
+    /// Éjecte `volume` dans un fil à part (l'outil du système prend une à quelques
+    /// secondes) ; ferme d'abord le dossier ouvert s'il est dessus (sinon le système
+    /// refuse : fichiers ouverts). Le résultat s'affiche dans la barre d'état.
+    fn start_eject(&mut self, ctx: &egui::Context, volume: PathBuf) {
+        if !self.tree.can_eject(&volume) {
+            return; // volume fixé (configuration) : jamais
+        }
+        if !self.folder.is_none() && self.folder.dir.starts_with(&volume) {
+            self.close_folder();
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        let target = volume.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(tri::places::eject(&target));
+            repaint.request_repaint();
+        });
+        self.notice = Some((format!("Éjection de « {} »…", folder_name(&volume)), false));
+        self.ejecting = Some((volume, rx));
+    }
+
+    /// Ouvre la séance déchargée dans la grille, et la montre dans l'arborescence.
+    fn open_offloaded(&mut self, dir: &Path) {
+        self.tree.reload();
+        self.tree.reveal(dir);
+        self.reveal_folder = true;
+        self.open_folder(dir);
+    }
+
+    /// Boîte de déchargement : affichage, et suites (ouvrir la séance, éjecter la carte),
+    /// choisies avant la copie et enchaînées à la fin.
     fn offload_dialog(&mut self, ctx: &egui::Context) {
         let Some(dialog) = &mut self.offload else {
             return;
@@ -604,17 +622,22 @@ impl TriApp {
         match dialog.show(ctx) {
             None => {}
             Some(OffloadRequest::Close) => self.offload = None,
+            // Fin de la copie : la boîte reste ouverte sur le bilan.
+            Some(OffloadRequest::Finished { open, eject }) => {
+                if let Some(dir) = open {
+                    self.open_offloaded(&dir);
+                }
+                if let Some(volume) = eject {
+                    self.start_eject(ctx, volume);
+                }
+            }
             Some(OffloadRequest::Open(dir)) => {
                 self.offload = None;
-                self.tree.reload();
-                self.tree.reveal(&dir);
-                self.reveal_folder = true;
-                self.open_folder(&dir);
+                self.open_offloaded(&dir);
             }
             Some(OffloadRequest::Eject(volume)) => {
                 self.offload = None;
-                let at = ctx.content_rect().center();
-                self.eject_dialog = Some((volume, at));
+                self.start_eject(ctx, volume);
             }
         }
     }
@@ -2317,6 +2340,9 @@ mod tests {
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
+        // Jamais d'éjection réelle dans les tests : la « carte » est un dossier temporaire,
+        // sur le disque du système.
+        settings.offload.eject_after = false;
         // Données (dernier dossier…) dans le dossier temporaire : jamais celles de
         // l'utilisateur.
         settings.data.dir = Some(dir.path().join("data"));
@@ -2851,15 +2877,14 @@ mod tests {
         };
         wait_for(&mut h, "Décharger");
         assert!(h.query_by_label_contains("2 à copier").is_some());
+        // « Ouvrir le dossier à la fin » est coché par défaut ; « RAW seulement » non.
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "Ouvrir le dossier");
+        wait_for(&mut h, "Fermer");
+        h.run_steps(3);
         assert!(
             h.query_by_label_contains("2 fichiers copiés et vérifiés")
                 .is_some()
         );
-        h.get_by_label("Ouvrir le dossier").click();
-        h.run_steps(3);
-        assert!(h.state().offload.is_none(), "boîte fermée");
         let opened = h.state().folder.dir.clone();
         assert!(
             opened.starts_with(dir.path().join("photos-local")),
@@ -2868,8 +2893,13 @@ mod tests {
         assert_eq!(
             names(&h),
             ["IMG0.jpg", "IMG1.jpg"],
-            "séance ouverte, à plat"
+            "séance ouverte d'elle-même, à plat"
         );
+        assert!(h.state().offload.is_some(), "le bilan reste affiché");
+        assert!(h.state().ejecting.is_none(), "éjection non cochée : rien");
+        h.get_by_label("Fermer").click();
+        h.run_steps(2);
+        assert!(h.state().offload.is_none());
         let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
         assert_eq!(history.lines().count(), 2, "historique écrit");
     }

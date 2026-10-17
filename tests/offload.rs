@@ -43,6 +43,7 @@ fn settings() -> OffloadSettings {
         verify: true,
         skip_known: true,
         history: String::new(),
+        ..OffloadSettings::default()
     }
 }
 
@@ -67,9 +68,9 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     let plan = offload::plan(&src, &history).unwrap();
     assert_eq!(plan.items.len(), 3);
     assert_eq!(plan.ignored, 1, "la vidéo");
-    assert_eq!(plan.bytes(true), 5 + 5 + 12);
+    assert_eq!(plan.bytes(&settings()), 5 + 5 + 12);
     assert_eq!(
-        offload::suggest_folder(&plan, true).as_deref(),
+        offload::suggest_folder(&plan, &settings()).as_deref(),
         Some("2026/2026-10-16_"),
         "date de la plus ancienne image"
     );
@@ -106,7 +107,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         again.items.iter().all(|i| i.known),
         "historique relu du disque"
     );
-    assert_eq!(again.bytes(true), 0);
+    assert_eq!(again.bytes(&settings()), 0);
     let mut history = history;
     let other = tmp.path().join("photos/ailleurs");
     let report = offload::run(
@@ -193,6 +194,35 @@ fn cancelling_copies_nothing() {
         offload::delete_sources(&report).is_empty(),
         "rien à supprimer"
     );
+}
+
+#[test]
+fn raw_only_leaves_the_jpegs_on_the_card() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (src, dst) = (tmp.path().join("carte"), tmp.path().join("dest"));
+    card(&src);
+    let raw_only = OffloadSettings {
+        raw_only: true,
+        ..settings()
+    };
+    let mut history = History::in_memory();
+    let plan = offload::plan(&src, &history).unwrap();
+    assert_eq!(plan.to_copy(&raw_only).count(), 2);
+    assert_eq!(plan.bytes(&raw_only), 5 + 12);
+    let report = offload::run(
+        &plan,
+        &dst,
+        &raw_only,
+        &mut history,
+        &AtomicBool::new(false),
+        |_| {},
+    );
+    assert_eq!(report.copied.len(), 2);
+    assert_eq!(report.left, [src.join("DCIM/100_FUJI/DSCF0001.JPG")]);
+    assert_eq!(names(&dst), ["DSCF0001.RAF", "DSCF0002.RAF"]);
+    // Le JPEG laissé n'est pas « déjà déchargé » : un déchargement complet le prendra.
+    let plan = offload::plan(&src, &history).unwrap();
+    assert_eq!(plan.to_copy(&settings()).count(), 1);
 }
 
 #[test]
