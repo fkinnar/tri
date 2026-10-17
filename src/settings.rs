@@ -103,6 +103,8 @@ pub struct EngineSettings {
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.
     pub offload: crate::offload::OffloadSettings,
+    /// Actions sur les fichiers (renommer, supprimer, éditeur externe).
+    pub files: crate::files::FileSettings,
     /// Dossier des données.
     pub data: DataSection,
 }

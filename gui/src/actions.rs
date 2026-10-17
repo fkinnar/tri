@@ -25,18 +25,21 @@ pub enum Group {
     Filters,
     /// Panneaux et barres.
     Panels,
+    /// Renommer, supprimer, afficher, éditeur externe.
+    Files,
     /// Aide, quitter.
     App,
 }
 
 impl Group {
     /// Les thèmes, dans l'ordre de l'aide.
-    pub const ALL: [Group; 6] = [
+    pub const ALL: [Group; 7] = [
         Group::Navigation,
         Group::View,
         Group::Rating,
         Group::Filters,
         Group::Panels,
+        Group::Files,
         Group::App,
     ];
 
@@ -48,6 +51,7 @@ impl Group {
             Group::Rating => "Notation",
             Group::Filters => "Filtres",
             Group::Panels => "Panneaux",
+            Group::Files => "Fichiers",
             Group::App => "Application",
         }
     }
@@ -184,6 +188,14 @@ pub enum Action {
     ToggleRatingBar,
     /// Avance automatique à l'image suivante après une note : oui / non.
     ToggleAutoAdvance,
+    /// Renommer l'image (sa paire et ses sidecars suivent).
+    FileRename,
+    /// Mettre l'image à la corbeille (après confirmation).
+    FileDelete,
+    /// Afficher l'image dans le gestionnaire de fichiers.
+    FileReveal,
+    /// Ouvrir l'image dans l'éditeur externe.
+    FileEdit,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -228,7 +240,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 58] = [
+    pub const ALL: [Action; 62] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -256,6 +268,10 @@ impl Action {
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleAutoAdvance,
+        Action::FileRename,
+        Action::FileDelete,
+        Action::FileReveal,
+        Action::FileEdit,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -324,6 +340,16 @@ impl Action {
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
+            Action::FileRename => "Renommer…",
+            Action::FileDelete => "Mettre à la corbeille…",
+            Action::FileReveal => {
+                if cfg!(target_os = "macos") {
+                    "Afficher dans le Finder"
+                } else {
+                    "Afficher dans le gestionnaire de fichiers"
+                }
+            }
+            Action::FileEdit => "Ouvrir dans l'éditeur externe",
             Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
             Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
             Action::ToggleHistogram => "Afficher / masquer l'histogramme",
@@ -372,6 +398,7 @@ impl Action {
             }
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
+            FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
             Help | Quit => Group::App,
         }
     }
@@ -411,6 +438,10 @@ impl Action {
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
+            Action::FileRename => "core.file.rename",
+            Action::FileDelete => "core.file.delete",
+            Action::FileReveal => "core.file.reveal",
+            Action::FileEdit => "core.file.edit",
             Action::ToggleFolderPanel => "core.view.folders",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
@@ -593,6 +624,21 @@ const VIM: &[Binding] = {
         (&[plain(Key::Questionmark)], Help),
         (&[shifted(Key::Questionmark)], Help),
         (&[plain(Key::Q)], Quit),
+        // Comme `dd` dans nvim (une confirmation suit).
+        (&[plain(Key::D), plain(Key::D)], FileDelete),
+    ]
+};
+
+/// Actions sur les fichiers, communes aux deux profils. Supprimer : Suppr, ou la touche
+/// « effacer » des claviers Mac (Backspace) ; une confirmation suit toujours.
+const FILES: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::F2)], FileRename),
+        (&[plain(Key::Delete)], FileDelete),
+        (&[plain(Key::Backspace)], FileDelete),
+        (&[shifted(Key::R)], FileReveal),
+        (&[plain(Key::E)], FileEdit),
     ]
 };
 
@@ -691,7 +737,7 @@ impl Profile {
             Profile::Classic => CLASSIC,
             Profile::Vim => VIM,
         };
-        own.iter().chain(RATING).chain(FILTERS)
+        own.iter().chain(RATING).chain(FILTERS).chain(FILES)
     }
 }
 

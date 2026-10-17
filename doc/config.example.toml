@@ -132,6 +132,17 @@ delete_after = false
 # Avec raw_only et delete_after : supprimer aussi les JPEG laissés sur la carte (non copiés).
 delete_left = false
 
+[files]
+# Renommer ou supprimer une image : l'autre image de sa paire RAW+JPEG (même nom, autre
+# extension) suit. Ses sidecars XMP suivent toujours.
+pairs = true
+# Supprimer = mettre à la corbeille (récupérable) ; false : suppression définitive.
+trash = true
+# Éditeur externe : programme puis arguments ; "{files}" est remplacé par les fichiers
+# (ajoutés à la fin sinon). Vide : application par défaut du système. Exemples :
+# ["darktable"], ["open", "-a", "darktable"] (macOS), ["gimp", "{files}"].
+editor = []
+
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

@@ -226,6 +226,14 @@ la plus récente, source mal formée signalée.
 - Avec `TRI_TEST_RAW` : données capteur (12 à 16 bits, blanc > noir, plage = blanc −
   noir), masque dans la taille demandée, aller-retour binaire.
 
+### `files` (unitaires `src/files.rs`, intégration `tests/files.rs`)
+
+Voir [files.md](files.md#tests) : groupes (paires, sidecars partagés), renommage avec
+notes relues, nom pris refusé sans rien changer, suppression définitive ; la vraie
+corbeille seulement à la demande (`#[ignore]`). Les tests d'interface suppriment
+toujours définitivement, dans leur dossier temporaire (`[files] trash = false`) : jamais
+la corbeille de l'utilisateur.
+
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 
 Dernier dossier mémorisé puis oublié s'il disparaît ; aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et

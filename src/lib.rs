@@ -25,6 +25,7 @@
 pub mod bitmap;
 pub mod cache;
 pub mod exposure;
+pub mod files;
 pub mod filter;
 pub mod flat;
 pub mod folder;

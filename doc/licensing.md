@@ -52,8 +52,12 @@ de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_pars
 `toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `quick-xml` — sidecars XMP —
 sous MIT, avec `memchr` sous Unlicense OR MIT ; `kamadak-exif` — EXIF des images
 plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` sous
-BSD-2-Clause) : les 73 crates de l'arbre de
-dépendances du moteur (`cargo tree -p tri -e normal,build`, recompté le 17/10/2026) sont sous licences
+BSD-2-Clause ; `trash` — corbeille du système, maintenu, version du 13/09/2026 — sous
+MIT, avec `objc2`, `objc2-foundation`, `objc2-encode`, `urlencoding` sous MIT et
+`percent-encoding`, `scopeguard`, `once_cell`, `chrono`, `windows` sous MIT OR
+Apache-2.0) : les 77 crates de l'arbre de
+dépendances du moteur sur macOS (`cargo tree -p tri -e normal,build`, recompté le
+17/10/2026) sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :
 ce sont des *bindings*, la libheif elle-même reste LGPL.

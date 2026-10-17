@@ -40,6 +40,8 @@ pub struct AppSettings {
     pub offload: tri::offload::OffloadSettings,
     /// `[data]` (moteur).
     pub data: tri::settings::DataSection,
+    /// `[files]` (moteur).
+    pub files: tri::files::FileSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -60,6 +62,7 @@ impl AppSettings {
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),
+            files: self.files.clone(),
         }
     }
 

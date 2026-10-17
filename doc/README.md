@@ -20,6 +20,7 @@ existe.
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
+| [files.md](files.md) | Module `tri::files` : renommer, corbeille, afficher, éditeur externe (paires et sidecars suivent) |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [offload.md](offload.md) | Module `tri::offload` : déchargement d'une carte (copie vérifiée, historique, suppression) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
@@ -43,6 +44,7 @@ tri/
 │   ├── main.rs           démo en ligne de commande : liste, aperçus en fond, cache
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
+│   ├── files.rs          renommer, corbeille, afficher, éditeur externe
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
 │   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
 │   ├── preview.rs        calcul des vignettes, aperçus et 1:1 (réglages de calcul)

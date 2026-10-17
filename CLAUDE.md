@@ -550,8 +550,11 @@ explicitement par l'utilisateur comme important.
       copier / déplacer vers…, ouvrir avec l'éditeur externe ; sidecars XMP et paires
       RAW+JPEG suivent ; aussi en ligne de commande. Premier lot décidé le 17/10/2026 :
       **renommer, supprimer, ouvrir dans un éditeur externe (configurable dans le TOML),
-      afficher dans le Finder** (« ce serait déjà super »).
-- [ ] **Éditeur externe** configurable (dans le premier lot ci-dessus).
+      afficher dans le Finder** (« ce serait déjà super »). **Premier lot fait** le
+      17/10/2026 : `src/files.rs` (`doc/files.md`), `[files]` (paires, corbeille, éditeur),
+      `F2` / `Suppr` / `Maj+R` / `e`, boutons du clic droit, `tri --rename|--delete|
+      --reveal|--edit`. Restent : copier / déplacer vers…
+- [x] **Éditeur externe** configurable (`[files] editor`, fait le 17/10/2026).
 - [ ] Panneau des dossiers : navigation au clavier, favoris.
 - [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours
       (un dossier par jour ?), vidéos (aujourd'hui ignorées).

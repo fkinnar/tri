@@ -153,6 +153,10 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Boîte « Renommer » ou « Corbeille » ouverte.
+    file_dialog: Option<crate::files::FileDialog>,
+    /// Échec de la dernière action sur un fichier (barre d'état).
+    file_error: Option<String>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 4],
@@ -306,6 +310,8 @@ impl TriApp {
             rating_bar: gui.rating_bar,
             auto_advance: gui.auto_advance,
             rating_dialog: None,
+            file_dialog: None,
+            file_error: None,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 4],
@@ -921,6 +927,15 @@ impl TriApp {
                 }
                 continue;
             }
+            // Renommer / corbeille : seule la fermeture (la boîte gère Entrée).
+            if self.file_dialog.is_some() {
+                if action == Action::Back {
+                    self.file_dialog = None;
+                } else if action.works_over_overlay() {
+                    self.perform(ctx, action);
+                }
+                continue;
+            }
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
             if let Some((path, _)) = &self.rating_dialog {
                 match action {
@@ -995,6 +1010,13 @@ impl TriApp {
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
+            Action::FileRename | Action::FileDelete | Action::FileReveal | Action::FileEdit => {
+                if let Some(file) = self.files.get(self.selected) {
+                    // Au clavier : boîte vers le centre de la fenêtre.
+                    let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                    self.file_action(action, file.path.clone(), at);
+                }
+            }
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -1664,7 +1686,7 @@ impl TriApp {
                     ui.label(text);
                 }
             }
-            if let Some(error) = &self.note_error {
+            for error in [&self.note_error, &self.file_error].into_iter().flatten() {
                 ui.separator();
                 ui.colored_label(self.gui.colors.error, error);
             }
@@ -1821,6 +1843,78 @@ impl TriApp {
 
     /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
     /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
+    /// Action sur le fichier `path` ; `at` : position d'une boîte éventuelle.
+    fn file_action(&mut self, action: Action, path: PathBuf, at: egui::Pos2) {
+        let settings = &self.settings.files;
+        self.file_error = None;
+        let result = match action {
+            Action::FileRename => {
+                self.file_dialog = Some(crate::files::FileDialog::rename(path, at));
+                Ok(())
+            }
+            Action::FileDelete => {
+                self.file_dialog = Some(crate::files::FileDialog::delete(&[path], settings, at));
+                Ok(())
+            }
+            Action::FileReveal => tri::files::reveal(&path),
+            Action::FileEdit => tri::files::open_with(&settings.editor, &[path]),
+            _ => Ok(()),
+        };
+        if let Err(e) = result {
+            self.file_error = Some(e.to_string());
+        }
+    }
+
+    /// Boîte « Renommer » ou « Corbeille » ; une fois l'action faite, le dossier est relu.
+    fn file_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.file_dialog else {
+            return;
+        };
+        match dialog.show(ctx, &self.settings.files) {
+            crate::files::Outcome::Open => {}
+            crate::files::Outcome::Cancelled => self.file_dialog = None,
+            crate::files::Outcome::Failed(e) => {
+                self.file_dialog = None;
+                self.file_error = Some(e);
+                // Un renommage annulé à mi-chemin est remis en place, mais une corbeille
+                // partielle non : relire le dossier.
+                self.reload_folder(None);
+            }
+            crate::files::Outcome::Done { select } => {
+                self.file_dialog = None;
+                self.reload_folder(select);
+            }
+        }
+    }
+
+    /// Relit le dossier ouvert après une action sur ses fichiers, en gardant la vue (grille
+    /// ou plein écran, zoom) ; `select` : image à sélectionner (nouveau nom), sinon la
+    /// sélection garde sa place (l'image suivante, après une suppression).
+    fn reload_folder(&mut self, select: Option<PathBuf>) {
+        match Folder::open(&self.folder.dir, 1, self.settings.xmp.sidecar) {
+            Ok(folder) => self.folder = folder,
+            Err(e) => {
+                self.file_error = Some(format!("{} : {e}", self.folder.dir.display()));
+                return;
+            }
+        }
+        self.wanted.clear();
+        self.missing.clear();
+        if let Some(meta) = &mut self.meta {
+            meta.clear();
+        }
+        self.refilter(Reveal::Minimal);
+        if let Some(index) = select.and_then(|p| self.files.iter().position(|f| f.path == p)) {
+            self.selected = index;
+            if let Some(engine) = &self.engine {
+                engine.scheduler.set_focus(index);
+            }
+        }
+        if self.files.is_empty() {
+            self.mode = Mode::Grid;
+        }
+    }
+
     fn rating_dialog(&mut self, ctx: &egui::Context) {
         let Some((path, at)) = self.rating_dialog.clone() else {
             return;
@@ -1828,11 +1922,31 @@ impl TriApp {
         let notes = self.folder.notes.notes(&path).clone();
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 8.0);
         let mut clicked = None;
+        let mut file_action = None;
         let mut close = false;
         let modal = modal_at("rating_dialog", at).show(ctx, |ui| {
             ui.strong(file_name(&path));
             ui.add_space(6.0);
             ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
+            ui.add_space(6.0);
+            ui.separator();
+            // Actions sur le fichier.
+            ui.horizontal_wrapped(|ui| {
+                for action in [
+                    Action::FileRename,
+                    Action::FileDelete,
+                    Action::FileReveal,
+                    Action::FileEdit,
+                ] {
+                    if ui
+                        .button(action.label())
+                        .on_hover_text(self.action_tip(action))
+                        .clicked()
+                    {
+                        file_action = Some(action);
+                    }
+                }
+            });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 close = ui.button("Fermer").clicked();
@@ -1840,7 +1954,12 @@ impl TriApp {
             });
         });
         if let Some(action) = clicked {
-            self.rate_path(path, action);
+            self.rate_path(path.clone(), action);
+        }
+        if let Some(action) = file_action {
+            self.rating_dialog = None;
+            self.file_action(action, path, at);
+            return;
         }
         if close || modal.should_close() {
             self.rating_dialog = None;
@@ -2394,6 +2513,7 @@ impl eframe::App for TriApp {
             self.help_search = None;
         }
         self.rating_dialog(&ctx);
+        self.file_dialog(&ctx);
         self.eject_dialog(&ctx);
         self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
@@ -2637,6 +2757,9 @@ mod tests {
         // Données (dernier dossier…) dans le dossier temporaire : jamais celles de
         // l'utilisateur.
         settings.data.dir = Some(dir.path().join("data"));
+        // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
+        // temporaire.
+        settings.files.trash = false;
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
@@ -2831,6 +2954,92 @@ mod tests {
     }
 
     #[test]
+    fn rename_with_f2_typing_and_enter() {
+        let names = ["img0.jpg", "img0.png", "img1.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0.png");
+        press(&mut h, Key::F2, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_some());
+        assert!(h.ctx.egui_wants_keyboard_input(), "le champ a le focus");
+        // Le nom est sélectionné : on tape le nouveau directement ; « q » ne quitte pas.
+        h.event(UiEvent::Text("quai".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label("img0.png devient quai.png").is_some());
+        assert!(
+            h.query_by_label("img0.jpg devient quai.jpg").is_some(),
+            "la paire suit"
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert!(!h.state().quit_requested);
+        let photos = dir.path().join("photos");
+        assert!(photos.join("quai.png").exists() && photos.join("quai.jpg").exists());
+        assert!(!photos.join("img0.png").exists());
+        assert_eq!(
+            selected_name(&h),
+            "quai.png",
+            "l'image renommée reste sélectionnée"
+        );
+    }
+
+    #[test]
+    fn rename_refuses_a_taken_name_and_escape_cancels() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F2, Modifiers::NONE);
+        h.event(UiEvent::Text("img1".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("existe déjà").is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(dir.path().join("photos/img0.jpg").exists(), "rien renommé");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert_eq!(h.state().mode, Mode::Grid, "Échap ne ferme que la boîte");
+    }
+
+    #[test]
+    fn delete_asks_then_removes_and_selects_the_next_image() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        // Échap annule.
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.query_by_label("Supprimer définitivement").is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert!(photos.join("img0.jpg").exists());
+        // Backspace (touche « effacer » des Mac), puis Entrée.
+        press(&mut h, Key::Backspace, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!photos.join("img0.jpg").exists());
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(selected_name(&h), "img1.jpg");
+        assert!(h.state().file_error.is_none());
+    }
+
+    #[test]
+    fn the_right_click_dialog_offers_the_file_actions() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().rating_dialog =
+            Some((h.state().files[1].path.clone(), egui::pos2(100.0, 100.0)));
+        h.run_steps(2);
+        h.get_by_label("Renommer…").click();
+        h.run_steps(2);
+        assert!(h.state().rating_dialog.is_none());
+        match &h.state().file_dialog {
+            Some(crate::files::FileDialog::Rename { image, .. }) => {
+                assert!(image.ends_with("img1.jpg"), "l'image de la boîte")
+            }
+            _ => panic!("boîte « Renommer » attendue"),
+        }
+        assert!(h.query_by_label("Mettre à la corbeille…").is_none());
+    }
+
+    #[test]
     fn right_click_rates_the_clicked_thumbnail() {
         let (mut h, dir) = harness();
         h.run_steps(5);
@@ -2968,6 +3177,9 @@ mod tests {
         let mut settings = AppSettings::default();
         settings.cache.dir = Some(dir.path().join("cache"));
         settings.data.dir = Some(dir.path().join("data"));
+        // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
+        // temporaire.
+        settings.files.trash = false;
         let mut h = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(None, settings, None));

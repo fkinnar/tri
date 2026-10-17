@@ -14,6 +14,7 @@ libheif-rs = { version = "3", default-features = false, features = ["v1_17"], op
 quick-xml = "0.42"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
+trash = "5"
 turbojpeg = { version = "1", default-features = false, features = ["cmake", "pkg-config", "require-simd"], optional = true }
 walkdir = "2.5.0"
 

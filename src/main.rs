@@ -24,7 +24,16 @@
 //!       `--raw-only`), `--eject` éjecte la carte ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
-//!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
+//!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert` ;
+//!   tri --rename <image> <nom> [--dry-run]
+//!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;
+//!   tri --delete <image>... [--permanent] [--dry-run]
+//!       met les images, leurs paires et leurs sidecars à la corbeille (`--permanent` :
+//!       suppression définitive) ;
+//!   tri --reveal <image>
+//!       montre l'image dans le gestionnaire de fichiers ;
+//!   tri --edit <image>...
+//!       ouvre les images dans l'éditeur externe (`[files] editor`), voir `tri::files`.
 //!
 //! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
@@ -52,13 +61,30 @@ const USAGE: &str = "usage :
   tri <dossier> --exposure [--raw|--flat] [--depth N]
   tri <dossier> --metadata [--raw|--flat] [--depth N]
   tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
+  tri --rename <image> <nom> [--dry-run]
+  tri --delete <image>... [--permanent] [--dry-run]
+  tri --reveal <image>
+  tri --edit <image>...
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
+/// Action sur des fichiers (`tri::files`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FileAction {
+    Rename,
+    Delete,
+    Reveal,
+    Edit,
+}
+
 #[derive(Default)]
 struct Args {
     dir: Option<PathBuf>,
+    /// Arguments sans option après le premier (images d'une action sur fichiers).
+    rest: Vec<String>,
+    file_action: Option<FileAction>,
+    permanent: bool,
     kind: KindFilter,
     depth: Option<usize>,
     previews: bool,
@@ -124,6 +150,11 @@ fn parse() -> AnyResult<Args> {
                 })
             }
             "--dry-run" => args.dry_run = true,
+            "--rename" => args.file_action = Some(FileAction::Rename),
+            "--delete" => args.file_action = Some(FileAction::Delete),
+            "--reveal" => args.file_action = Some(FileAction::Reveal),
+            "--edit" => args.file_action = Some(FileAction::Edit),
+            "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
             "--offload" => args.offload = Some(value()?.into()),
@@ -144,8 +175,13 @@ fn parse() -> AnyResult<Args> {
                 return Err(format!("option inconnue : {other}\n{USAGE}").into());
             }
             dir if args.dir.is_none() => args.dir = Some(dir.into()),
-            other => return Err(format!("argument en trop : {other}\n{USAGE}").into()),
+            other => args.rest.push(other.into()),
         }
+    }
+    if args.file_action.is_none()
+        && let Some(other) = args.rest.first()
+    {
+        return Err(format!("argument en trop : {other}\n{USAGE}").into());
     }
     Ok(args)
 }
@@ -497,6 +533,60 @@ fn convert_xmp(
     }
 }
 
+/// `--rename`, `--delete`, `--reveal`, `--edit` : voir `tri::files`.
+fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> AnyResult<()> {
+    let s = &settings.files;
+    let first = args.dir.clone().ok_or(USAGE)?;
+    match action {
+        FileAction::Rename => {
+            let [name] = args.rest.as_slice() else {
+                return Err(USAGE.into());
+            };
+            let plan = tri::files::plan_rename(&first, name, s)?;
+            for (from, to) in &plan.moves {
+                println!("{} → {}", from.display(), to.display());
+            }
+            for (from, to) in &plan.copies {
+                println!("{} → {} (copie : partagé)", from.display(), to.display());
+            }
+            if !args.dry_run {
+                tri::files::rename(&plan)?;
+            }
+        }
+        FileAction::Delete => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            let group = tri::files::plan_delete(&images, s);
+            let trash = s.trash && !args.permanent;
+            for file in group.files() {
+                println!(
+                    "{} {}",
+                    if trash { "corbeille :" } else { "supprimé :" },
+                    file.display()
+                );
+            }
+            for file in &group.shared {
+                println!("gardé (partagé) : {}", file.display());
+            }
+            if !args.dry_run {
+                tri::files::delete(&group, trash)?;
+            }
+        }
+        FileAction::Reveal => tri::files::reveal(&first)?,
+        FileAction::Edit => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            tri::files::open_with(&s.editor, &images)?;
+        }
+    }
+    if args.dry_run {
+        println!("(--dry-run : rien n'a été modifié)");
+    }
+    Ok(())
+}
+
 fn run() -> AnyResult<()> {
     let args = parse()?;
     let settings = settings(&args);
@@ -516,6 +606,9 @@ fn run() -> AnyResult<()> {
 
     if let Some(card) = &args.offload {
         return offload(&settings, &args, card);
+    }
+    if let Some(action) = args.file_action {
+        return file_action(&settings, &args, action);
     }
     let dir = args.dir.clone().ok_or(USAGE)?;
     let groups = args

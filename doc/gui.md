@@ -88,6 +88,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
+  renommer (`F2`), mettre à la corbeille (`Suppr` ou `Backspace` — la touche « effacer »
+  des Mac —, `d d` dans le profil vim), afficher dans le Finder / le gestionnaire de
+  fichiers (`Maj+R`), ouvrir dans l'éditeur externe (`e`, `[files] editor`). Aussi par
+  boutons dans la boîte du clic droit. Renommer : le nom (sans extension) est
+  sélectionné, on tape le nouveau ; la boîte montre ce que deviennent l'image, sa paire et
+  ses sidecars, ou pourquoi c'est impossible (nom pris) ; Entrée confirme, Échap annule.
+  Corbeille : la liste des fichiers (paire et sidecars compris) avant confirmation
+  (Entrée). Ensuite le dossier est relu, la vue (grille ou plein écran) gardée : l'image
+  renommée reste sélectionnée, après une suppression la suivante prend sa place. Erreurs
+  dans la barre d'état. Code : `gui/src/files.rs` (boîtes), `TriApp::file_action`,
+  `reload_folder`.
 - **Avance automatique après une note** (`[gui] auto_advance`, désactivée par défaut ;
   `Maj+A` ou le bouton « avance auto » du bandeau) : après une note au clavier ou au
   bandeau, l'image suivante est sélectionnée (pas depuis la boîte du clic droit, qui note
@@ -473,6 +485,13 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Actions sur les fichiers (17/10/2026) : `F2`, le nom tapé remplace le nom sélectionné
+(« q » ne quitte pas), la boîte annonce l'image et sa paire renommées, Entrée renomme sur le
+disque et garde l'image sélectionnée ; un nom pris est refusé (rien ne change), Échap ne
+ferme que la boîte ; `Suppr` puis Échap ne supprime rien, `Backspace` puis Entrée supprime
+(définitivement, dans le dossier temporaire) et sélectionne la suivante ; les boutons de
+la boîte du clic droit ouvrent l'action pour l'image cliquée.
 
 Avance automatique (17/10/2026) : désactivée par défaut ; avec Maj+A, une note passe à
 l'image suivante en sautant l'autre image de la paire (notée aussi, relue du disque), une

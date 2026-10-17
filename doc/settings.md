@@ -36,6 +36,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |
 | `[exposure]` | Seuils de saturation et d'ombres bouchées (IL), cases des histogrammes, taille du masque | moteur |
 | `[offload]` | Déchargement des cartes : racine, vérification, fichiers déjà déchargés, historique | moteur |
+| `[files]` | Actions sur les fichiers : paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |
 | `[data]` | Dossier des données (historique des déchargements, dernier dossier ouvert) | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
 | `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée, cadre du survol | interface |

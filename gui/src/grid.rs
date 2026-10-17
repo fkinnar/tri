@@ -77,6 +77,10 @@ pub fn navigate(
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleAutoAdvance
+        | Action::FileRename
+        | Action::FileDelete
+        | Action::FileReveal
+        | Action::FileEdit
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
         | Action::ToggleHistogram
