@@ -83,6 +83,10 @@ load_budget_ms = 8
 # Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
 # l'affiche ou la masque.
 filter_bar = true
+# Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
+# affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
+# les mêmes contrôles.
+rating_bar = true
 
 [gui.grid]
 # Dimensions en points.

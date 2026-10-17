@@ -80,6 +80,8 @@ pub struct GuiSettings {
     pub load_budget_ms: u64,
     /// Barre de filtres affichée au démarrage (Maj+F l'affiche ou la masque).
     pub filter_bar: bool,
+    /// Bandeau de notation à la souris affiché au démarrage (Maj+N l'affiche ou le masque).
+    pub rating_bar: bool,
     /// `[gui.grid]`.
     pub grid: GridSettings,
     /// `[gui.view]`.
@@ -100,6 +102,7 @@ impl Default for GuiSettings {
             raw_previews: RawPreviews::OnDemand,
             load_budget_ms: 8,
             filter_bar: true,
+            rating_bar: true,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             colors: Colors::default(),

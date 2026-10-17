@@ -62,6 +62,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Notation à la souris** (17/10/2026, demande de l'utilisateur : tout le monde ne veut
+  pas tout faire au clavier) :
+  - **bandeau de notation** en bas (au-dessus de la barre d'état), dans la grille et en
+    plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
+    estompés quand ils ne sont pas posés ; `Maj+N` l'affiche ou le masque
+    (`[gui] rating_bar`) ;
+  - **clic droit** sur une vignette ou en plein écran : menu avec les mêmes contrôles. Il
+    sélectionne la vignette et note *cette* image, même si le pointeur survole d'autres
+    vignettes en allant vers le menu ; le menu reste ouvert pour poser plusieurs notes ;
+  - chaque clic déclenche la même action que le clavier : recliquer la note active la
+    retire (étoiles, drapeau), une couleur s'ajoute ou se retire ;
+  - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
+    d'interface de cliquer « 3 étoiles ».
 - **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,
   17/10/2026), voir [notes.md](notes.md).
 - **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
@@ -209,7 +222,7 @@ Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplaceme
 
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f Échap`) ;
-`core.view.filter_bar` : Maj+F.
+`core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N.
 
 Caractères : egui-winit livre la touche (Maj + `Minus`, physique) **et** le caractère
 (« ° ») dans la même image ; `Keymap::chords` ignore une touche suivie d'un caractère lié à
@@ -332,6 +345,11 @@ sous le curseur.
 
 Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) et non dans
 `tests/` : `tri-gui` est un binaire, ses modules ne sont pas importables depuis `tests/`.
+
+Notation à la souris (17/10/2026) : clics dans le bandeau (3 étoiles, rejeter, vert, puis
+retrait des étoiles et du drapeau en recliquant), relus du disque ; Maj+N masque le
+bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, le menu s'ouvre, et
+« 4 étoiles » note cette image et pas la première.
 
 Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
 `f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre

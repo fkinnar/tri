@@ -6,9 +6,12 @@
 
 use std::f32::consts::{FRAC_PI_2, PI};
 
-use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
+use eframe::egui::{
+    Color32, Mesh, Painter, Pos2, Rect, Role, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2,
+};
 use tri::xmp::{Color, Flag, Notes};
 
+use crate::actions::Action;
 use crate::settings::Colors;
 
 /// Couleur d'écran d'une couleur de notation.
@@ -47,6 +50,11 @@ pub fn flag(painter: &Painter, center: Pos2, radius: f32, flag: Flag, colors: &C
         Flag::Accepted => (Color32::from(colors.accepted), true),
         Flag::Rejected => (Color32::from(colors.rejected), false),
     };
+    badge(painter, center, radius, accepted, fill);
+}
+
+/// Pastille coche (`accepted`) ou croix, de couleur `fill`.
+fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Color32) {
     painter.circle_filled(center, radius, fill);
     let stroke = Stroke::new((radius * 0.28).max(1.5), Color32::WHITE);
     let r = radius * 0.5;
@@ -115,6 +123,76 @@ pub fn row(
         pos2(left_center.x, y - radius),
         pos2((x - gap).max(left_center.x), y + radius),
     )
+}
+
+/// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
+/// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
+/// la même que celle du clavier : recliquer la note active la retire (drapeau, étoiles),
+/// une couleur s'ajoute ou se retire.
+pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Option<Action> {
+    let weak = ui.visuals().weak_text_color();
+    let mut clicked = None;
+    let cell = |ui: &mut Ui, tip: &str| {
+        let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+        // Nom lisible pour l'accessibilité (et les tests d'interface).
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, tip));
+        (rect, response.on_hover_text(tip).clicked())
+    };
+    for (flag, color) in [
+        (Flag::Accepted, colors.accepted),
+        (Flag::Rejected, colors.rejected),
+    ] {
+        let active = notes.flag == flag;
+        let action = Action::Flag(if active { Flag::None } else { flag });
+        let (rect, hit) = cell(ui, action.label());
+        let fill = if active { Color32::from(color) } else { weak };
+        badge(
+            ui.painter(),
+            rect.center(),
+            size * 0.45,
+            flag == Flag::Accepted,
+            fill,
+        );
+        if hit {
+            clicked = Some(action);
+        }
+    }
+    ui.add_space(size * 0.5);
+    for n in 1..=5u8 {
+        let action = Action::Stars(if n == notes.stars { 0 } else { n });
+        let (rect, hit) = cell(ui, action.label());
+        let fill = if n <= notes.stars {
+            Color32::from(colors.stars)
+        } else {
+            weak
+        };
+        star(ui.painter(), rect.center(), size / 2.0, fill);
+        if hit {
+            clicked = Some(action);
+        }
+    }
+    ui.add_space(size * 0.5);
+    for color in Color::ALL {
+        let action = Action::Color(color);
+        let (rect, hit) = cell(ui, action.label());
+        let active = notes.has_color(color);
+        let fill = color_of(colors, color);
+        let painter = ui.painter();
+        if active {
+            painter.circle_filled(rect.center(), size * 0.4, fill);
+            painter.circle_stroke(
+                rect.center(),
+                size * 0.48,
+                Stroke::new(2.0, ui.visuals().strong_text_color()),
+            );
+        } else {
+            painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(0.4));
+        }
+        if hit {
+            clicked = Some(action);
+        }
+    }
+    clicked
 }
 
 #[cfg(test)]

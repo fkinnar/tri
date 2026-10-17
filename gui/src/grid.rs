@@ -75,6 +75,7 @@ pub fn navigate(
         | Action::FilterColor(_)
         | Action::FilterClear
         | Action::ToggleFilterBar
+        | Action::ToggleRatingBar
         | Action::Open
         | Action::ToggleZoom
         | Action::ToggleSource

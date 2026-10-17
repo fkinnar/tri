@@ -118,6 +118,8 @@ pub struct TriApp {
     notes_rule: NotesRule,
     /// Barre de filtres affichée (grille).
     filter_bar: bool,
+    /// Bandeau de notation affiché.
+    rating_bar: bool,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 3],
@@ -219,6 +221,7 @@ impl TriApp {
             filter: KindFilter::All,
             notes_rule: NotesRule::default(),
             filter_bar: gui.filter_bar,
+            rating_bar: gui.rating_bar,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 3],
@@ -462,7 +465,9 @@ impl TriApp {
             // En plein écran, seule la navigation image par image a un sens.
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate(action),
+            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
+                self.rate(self.selected, action)
+            }
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -504,6 +509,7 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
+            Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
             nav => {
                 let page = self.layout.rows_in(self.view_height);
                 let new = grid::navigate(self.selected, self.files.len(), &self.layout, page, nav);
@@ -512,10 +518,10 @@ impl TriApp {
         }
     }
 
-    /// Note l'image sélectionnée et écrit son sidecar. En cas d'échec, l'erreur est affichée
+    /// Note l'image `index` et écrit son sidecar. En cas d'échec, l'erreur est affichée
     /// dans la barre d'état et la note affichée reste celle du disque.
-    fn rate(&mut self, action: Action) {
-        let Some(file) = self.files.get(self.selected) else {
+    fn rate(&mut self, index: usize, action: Action) {
+        let Some(file) = self.files.get(index) else {
             return;
         };
         let multiple = self.settings.xmp.multiple_colors;
@@ -812,6 +818,7 @@ impl TriApp {
             image_rect = Some(rect);
         }
 
+        self.rating_menu(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
         if response.double_clicked() {
             self.zoom_anchor = None;
@@ -975,6 +982,42 @@ impl TriApp {
                 .on_hover_text(egui::RichText::new(warning).monospace());
             }
         });
+    }
+
+    /// Menu du clic droit sur `response` : contrôles de notation de l'image `index`.
+    fn rating_menu(&mut self, response: &egui::Response, index: usize) {
+        let Some(file) = self.files.get(index) else {
+            return;
+        };
+        let notes = self.notes.notes(&file.path).clone();
+        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 6.0);
+        let mut clicked = None;
+        response.context_menu(|ui| {
+            ui.label(file_name(&file.path));
+            ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
+        });
+        if let Some(action) = clicked {
+            self.rate(index, action);
+        }
+    }
+
+    /// Bandeau de notation : notes de l'image sélectionnée, cliquables.
+    fn rating_bar(&mut self, ui: &mut Ui) {
+        let Some(file) = self.files.get(self.selected) else {
+            return;
+        };
+        let notes = self.notes.notes(&file.path).clone();
+        let name = file_name(&file.path);
+        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
+        let mut clicked = None;
+        ui.horizontal(|ui| {
+            ui.label("Notes");
+            clicked = marks::controls(ui, &notes, &colors, size);
+            ui.weak(name);
+        });
+        if let Some(action) = clicked {
+            self.rate(self.selected, action);
+        }
     }
 
     /// Filtres actifs en clair (« RAW · 3 étoiles et plus · sans les rejetées »).
@@ -1142,9 +1185,12 @@ impl TriApp {
         if self.pointer_moved && response.hovered() {
             self.select_with(index, false);
         }
-        if response.clicked() {
+        if response.clicked() || response.secondary_clicked() {
             self.select(index);
         }
+        // Clic droit : notation de cette image (et pas de celle que le pointeur survolerait
+        // en allant vers le menu).
+        self.rating_menu(&response, index);
         if response.double_clicked() {
             self.select(index);
             self.mode = Mode::View;
@@ -1360,6 +1406,9 @@ impl eframe::App for TriApp {
         self.update_loads(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        if self.rating_bar && !self.files.is_empty() && self.error.is_none() {
+            egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
+        }
         if self.filter_bar && self.mode == Mode::Grid && self.error.is_none() {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
@@ -1642,6 +1691,74 @@ mod tests {
         );
         press(&mut h, Key::X, Modifiers::SHIFT);
         assert_eq!(names(&h), ["img2.jpg"]);
+    }
+
+    #[test]
+    fn the_rating_bar_rates_with_the_mouse() {
+        let (mut h, dir) = harness();
+        let image = dir.path().join("photos").join("img0.jpg");
+        h.get_by_label("3 étoiles").click();
+        h.run_steps(3);
+        h.get_by_label("Rejeter").click();
+        h.run_steps(3);
+        h.get_by_label("Couleur verte (ajouter / retirer)").click();
+        h.run_steps(3);
+        let on_disk = tri::xmp::read(&image).unwrap();
+        assert_eq!(on_disk.stars, 3);
+        assert_eq!(on_disk.flag, Flag::Rejected);
+        assert_eq!(on_disk.colors, [Color::Green]);
+        // Recliquer l'étoile active retire les étoiles ; le drapeau actif, le drapeau.
+        h.get_by_label("Retirer les étoiles").click();
+        h.run_steps(3);
+        h.get_by_label("Ni acceptée ni rejetée").click();
+        h.run_steps(3);
+        let on_disk = tri::xmp::read(&image).unwrap();
+        assert_eq!((on_disk.stars, on_disk.flag), (0, Flag::None));
+        press(&mut h, Key::N, Modifiers::SHIFT);
+        assert!(
+            h.query_by_label("3 étoiles").is_none(),
+            "Maj+N masque le bandeau"
+        );
+    }
+
+    #[test]
+    fn right_click_rates_the_clicked_thumbnail() {
+        let (mut h, dir) = harness();
+        h.run_steps(5);
+        let rect = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 2)
+            .unwrap()
+            .1;
+        h.event(UiEvent::PointerMoved(rect.center()));
+        h.event(UiEvent::PointerButton {
+            pos: rect.center(),
+            button: egui::PointerButton::Secondary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.event(UiEvent::PointerButton {
+            pos: rect.center(),
+            button: egui::PointerButton::Secondary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(5);
+        assert_eq!(h.state().selected, 2, "le clic droit sélectionne");
+        assert_eq!(
+            h.query_all_by_label("4 étoiles").count(),
+            2,
+            "menu ouvert, en plus du bandeau"
+        );
+        // Le bandeau et le menu proposent tous deux « 4 étoiles » : celui du menu est le
+        // dernier dessiné.
+        h.get_all_by_label("4 étoiles").last().unwrap().click();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        assert_eq!(tri::xmp::read(&photos.join("img2.jpg")).unwrap().stars, 4);
+        assert_eq!(tri::xmp::read(&photos.join("img0.jpg")).unwrap().stars, 0);
     }
 
     #[test]

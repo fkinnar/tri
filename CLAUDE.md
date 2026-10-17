@@ -396,7 +396,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       `[keys]` (raccourcis par action, conflits signalés), notes affichées (grille, plein
       écran), écriture immédiate, erreurs dans la barre d'état. Filtres (choix du
       17/10/2026) : préfixe `f` au clavier + barre de filtres masquable à la souris
-      (Maj+F) ; noter le RAF note aussi le JPG de la paire. À discuter plus tard : filtres
+      (Maj+F) ; noter le RAF note aussi le JPG de la paire. Notation à la souris : bandeau
+      masquable (Maj+N) et clic droit (17/10/2026). À discuter plus tard : filtres
       complexes (fenêtre modale ou panneau latéral). Conversion de
       convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle

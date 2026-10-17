@@ -81,6 +81,8 @@ pub enum Action {
     FilterClear,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
+    /// Afficher / masquer le bandeau de notation.
+    ToggleRatingBar,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -111,7 +113,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 49] = [
+    pub const ALL: [Action; 50] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -137,6 +139,7 @@ impl Action {
         Action::FilterColor(Color::Purple),
         Action::FilterClear,
         Action::ToggleFilterBar,
+        Action::ToggleRatingBar,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -196,6 +199,7 @@ impl Action {
             Action::FilterColor(Color::Purple) => "Filtre : violet (ajouter / retirer)",
             Action::FilterClear => "Effacer tous les filtres",
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
+            Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -256,6 +260,7 @@ impl Action {
             Action::FilterColor(Color::Purple) => "core.filter.color.purple",
             Action::FilterClear => "core.filter.clear",
             Action::ToggleFilterBar => "core.view.filter_bar",
+            Action::ToggleRatingBar => "core.view.rating_bar",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -454,6 +459,7 @@ const RATING: &[Binding] = {
         (&[shifted(Key::P)], Flag(tri::xmp::Flag::Accepted)),
         (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
+        (&[shifted(Key::N)], ToggleRatingBar),
     ]
 };
 
