@@ -66,6 +66,7 @@ pub fn label(kind: MediaKind, level: Level) -> &'static str {
         (MediaKind::Raw, Level::Full) => "Rendu RAW · 100 %",
         (MediaKind::Raw, Level::EmbeddedFull) => "JPEG boîtier · 1:1",
         (MediaKind::Flat, Level::Full) => "Image · 100 %",
+        (_, Level::Exposure) => "Analyse d'exposition",
         (MediaKind::Flat, _) => "Image",
     }
 }

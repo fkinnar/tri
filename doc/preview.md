@@ -26,4 +26,10 @@ Calcul synchrone des images mises en cache (voir `CLAUDE.md`, « Aperçus et cac
   recalcule les niveaux concernés, et eux seuls (testé par
   `params_follow_only_the_settings_that_matter`).
 - `ensure(cache, …)` : ne calcule que si l'entrée manque ; renvoie `Cached` ou `Computed`.
-- `PreviewError` : `Raw`, `Flat`, `Io`, `Cancelled`.
+  Pour `Level::Exposure`, calcule l'analyse (`compute_exposure` : données du capteur pour
+  un RAW, image décodée pour une image plate) et l'écrit en binaire (`put_bytes`).
+- `exposure(cache, file, settings)` : analyse lue dans le cache (`None` si absente ; une
+  entrée illisible est supprimée pour être recalculée). Sa clé contient tous les réglages
+  `[exposure]`.
+- `PreviewError` : `Raw`, `Flat`, `Io`, `Cancelled`, `NotAnImage` (`compute` sur
+  `Level::Exposure`).

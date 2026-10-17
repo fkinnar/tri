@@ -6,7 +6,7 @@
 //!                            [--workers N] [--mixed] [--cache DOSSIER]
 //!       calcule vignettes et aperçus standard en tâche de fond, avec progression
 //!       (`--mixed` : sans attendre la fin des vignettes pour les aperçus) ;
-//!   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
+//!   tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau ;
@@ -37,7 +37,7 @@ use tri::xmp::{self, Convention};
 const USAGE: &str = "usage :
   tri <dossier> [--raw|--flat] [--depth N]
   tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
-  tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
+  tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
   tri --cache-usage [--cache DOSSIER]
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
   tri <dossier> --exposure [--raw|--flat] [--depth N]
@@ -70,6 +70,7 @@ fn parse_level(name: &str) -> Option<Level> {
         "embedded" => Some(Level::Embedded),
         "standard" => Some(Level::Standard),
         "full" => Some(Level::Full),
+        "exposure" => Some(Level::Exposure),
         _ => None,
     }
 }
@@ -203,11 +204,13 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     let start = Instant::now();
     scheduler.set_folder(files);
 
-    let (mut thumbs, mut embedded, mut standards) = (
+    let (mut thumbs, mut embedded, mut standards, mut exposures) = (
+        Progress::default(),
         Progress::default(),
         Progress::default(),
         Progress::default(),
     );
+    let analyses = if config.exposure { n } else { 0 };
     let (mut thumbs_done_at, mut embedded_done_at) = (None, None);
     let mut failures = Vec::new();
     loop {
@@ -217,6 +220,7 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
             }) => match level {
                 Level::Thumbnail => thumbs = progress,
                 Level::Embedded => embedded = progress,
+                Level::Exposure => exposures = progress,
                 _ => standards = progress,
             },
             Ok(Event::Failed {
@@ -234,18 +238,24 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
             embedded_done_at = Some(start.elapsed());
         }
         print!(
-            "\r  vignettes {:>4}/{:<4}   JPEG boîtier {:>4}/{:<4}   aperçus {:>4}/{:<4} {:>3.0} %   {:>6.1} s",
+            "\r  vignettes {:>4}/{:<4}   JPEG boîtier {:>4}/{:<4}   histogrammes {:>4}/{:<4}   aperçus {:>4}/{:<4} {:>3.0} %   {:>6.1} s",
             thumbs.done,
             thumbs.total,
             embedded.done,
             embedded.total,
+            exposures.done,
+            exposures.total,
             standards.done,
             standards.total,
             standards.fraction() * 100.0,
             start.elapsed().as_secs_f64()
         );
         std::io::stdout().flush()?;
-        if finished(thumbs, n) && finished(embedded, raws) && finished(standards, n) {
+        if finished(thumbs, n)
+            && finished(embedded, raws)
+            && finished(standards, n)
+            && finished(exposures, analyses)
+        {
             break;
         }
     }

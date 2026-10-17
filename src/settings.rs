@@ -202,6 +202,9 @@ pub struct SchedulerSection {
     pub light_workers: Auto<usize>,
     /// Vignettes d'abord, puis aperçus boîtier, puis rendus RAW.
     pub thumbnails_first: bool,
+    /// Analyser l'exposition de tout le dossier en fond (histogrammes, badges de la
+    /// grille) ; sinon seulement l'image affichée et ses voisines.
+    pub exposure: bool,
 }
 
 impl Default for SchedulerSection {
@@ -209,6 +212,7 @@ impl Default for SchedulerSection {
         Self {
             light_workers: Auto::Auto,
             thumbnails_first: scheduler::Config::default().thumbnails_first,
+            exposure: scheduler::Config::default().exposure,
         }
     }
 }
@@ -235,6 +239,7 @@ impl EngineSettings {
             half_size_margin: p.half_size_margin,
             embedded_min_ratio: p.embedded_min_ratio,
             min_embedded_full: p.min_embedded_full,
+            exposure: self.exposure,
         }
     }
 
@@ -251,6 +256,7 @@ impl EngineSettings {
                 .max(1),
             thumbnails_first: self.scheduler.thumbnails_first,
             raw_previews,
+            exposure: self.scheduler.exposure,
         }
     }
 

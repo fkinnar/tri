@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::bitmap::Bitmap;
 use crate::cache::{Cache, Key, Level};
+use crate::exposure::{Exposure, ExposureError, ExposureSettings};
 use crate::flat::{self, FlatError};
 use crate::jpeg;
 use crate::media::{MediaFile, MediaKind};
@@ -54,6 +55,8 @@ pub struct Settings {
     pub embedded_min_ratio: f32,
     /// Plus petit JPEG embarqué accepté pour le 1:1 du JPEG boîtier (pixels, côté long).
     pub min_embedded_full: u32,
+    /// Analyse de l'exposition (niveau [`Level::Exposure`]).
+    pub exposure: ExposureSettings,
 }
 
 impl Default for Settings {
@@ -64,6 +67,7 @@ impl Default for Settings {
             half_size_margin: 1.0,
             embedded_min_ratio: 0.5,
             min_embedded_full: 1024,
+            exposure: ExposureSettings::default(),
         }
     }
 }
@@ -81,6 +85,8 @@ pub enum PreviewError {
     NoEmbeddedPreview,
     /// Calcul annulé.
     Cancelled,
+    /// Niveau qui n'est pas une image ([`Level::Exposure`] : voir [`exposure`]).
+    NotAnImage,
 }
 
 impl fmt::Display for PreviewError {
@@ -91,6 +97,7 @@ impl fmt::Display for PreviewError {
             Self::Io(e) => write!(f, "accès fichier impossible : {e}"),
             Self::NoEmbeddedPreview => write!(f, "pas d'aperçu embarqué exploitable"),
             Self::Cancelled => write!(f, "calcul annulé"),
+            Self::NotAnImage => write!(f, "ce niveau n'est pas une image"),
         }
     }
 }
@@ -109,6 +116,15 @@ impl From<RawError> for PreviewError {
 impl From<FlatError> for PreviewError {
     fn from(e: FlatError) -> Self {
         Self::Flat(e)
+    }
+}
+
+impl From<ExposureError> for PreviewError {
+    fn from(e: ExposureError) -> Self {
+        match e {
+            ExposureError::Raw(e) => e.into(),
+            ExposureError::Format => Self::Io(io::Error::other(e.to_string())),
+        }
     }
 }
 
@@ -152,6 +168,13 @@ pub fn params(level: Level, settings: &Settings) -> String {
             settings.min_embedded_full
         ),
         Level::Full => format!("r{RULES_VERSION};{render}"),
+        Level::Exposure => {
+            let e = &settings.exposure;
+            format!(
+                "r{RULES_VERSION};over={};under={};lin={};evr={};evb={};mask={}",
+                e.over_ev, e.under_ev, e.linear_bins, e.ev_range, e.ev_bins_per_stop, e.mask_size
+            )
+        }
     }
 }
 
@@ -213,6 +236,7 @@ pub fn compute(
         }
         // Pas de JPEG « embarqué » distinct pour une image plate : c'est l'image elle-même.
         (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => Ok(flat::decode(&file.path)?),
+        (_, Level::Exposure) => Err(PreviewError::NotAnImage),
     }
 }
 
@@ -281,9 +305,45 @@ pub fn ensure(
     if cache.contains(&key) {
         return Ok(Outcome::Cached);
     }
+    if level == Level::Exposure {
+        let exposure = compute_exposure(file, settings, cancel)?;
+        cache.put_bytes(&key, &exposure.to_bytes())?;
+        return Ok(Outcome::Computed);
+    }
     let bitmap = compute(file, level, settings, cancel)?;
     cache.put(&key, &bitmap)?;
     Ok(Outcome::Computed)
+}
+
+/// Analyse l'exposition de `file`, sans cache : données du capteur pour un RAW (~0,4 s,
+/// non interruptible une fois la décompression lancée), image décodée pour une image
+/// plate.
+pub fn compute_exposure(
+    file: &MediaFile,
+    settings: &Settings,
+    cancel: &AtomicBool,
+) -> Result<Exposure> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(PreviewError::Cancelled);
+    }
+    Ok(match file.kind {
+        MediaKind::Raw => Exposure::from_raw(&file.path, &settings.exposure)?,
+        MediaKind::Flat => Exposure::from_bitmap(&flat::decode(&file.path)?, &settings.exposure),
+    })
+}
+
+/// Analyse d'exposition de `file` lue dans le cache, `None` si elle n'y est pas (encore)
+/// ou si l'entrée est illisible (elle est alors supprimée, pour être recalculée).
+pub fn exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<Exposure> {
+    let key = key(file, Level::Exposure, settings).ok()?;
+    let bytes = cache.get_bytes(&key)?;
+    match Exposure::from_bytes(&bytes) {
+        Ok(e) => Some(e),
+        Err(_) => {
+            let _ = cache.remove(&key);
+            None
+        }
+    }
 }
 
 #[cfg(test)]

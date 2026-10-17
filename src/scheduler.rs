@@ -146,6 +146,10 @@ pub struct Config {
     /// Rendus RAW (aperçus standard des RAW) : tout le dossier en fond, ou seulement à la
     /// demande ([`Scheduler::request`]).
     pub raw_previews: RawPreviews,
+    /// Analyse d'exposition ([`Level::Exposure`]) de tout le dossier en fond, après
+    /// vignettes et aperçus boîtier et avant les rendus RAW de fond ; sinon seulement à
+    /// la demande.
+    pub exposure: bool,
 }
 
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
@@ -170,21 +174,33 @@ impl Default for Config {
             light_workers: (cores / 2).max(1),
             thumbnails_first: true,
             raw_previews: RawPreviews::default(),
+            exposure: true,
         }
     }
 }
 
 /// Niveaux dont l'avancement est suivi (calculés en fond) ; `Full` ne l'est qu'à la demande.
-const TRACKED: [Level; 3] = [Level::Thumbnail, Level::Embedded, Level::Standard];
+const TRACKED: [Level; 4] = [
+    Level::Thumbnail,
+    Level::Embedded,
+    Level::Standard,
+    Level::Exposure,
+];
 
-/// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW, et
-/// leur rendu RAW dépend de la politique.
-fn background_levels(kind: MediaKind, raw_previews: RawPreviews) -> &'static [Level] {
-    match (kind, raw_previews) {
-        (MediaKind::Raw, RawPreviews::Background) => &TRACKED,
-        (MediaKind::Raw, RawPreviews::OnDemand) => &[Level::Thumbnail, Level::Embedded],
-        (MediaKind::Flat, _) => &[Level::Thumbnail, Level::Standard],
+/// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW,
+/// leur rendu RAW dépend de la politique, l'analyse d'exposition du réglage `exposure`.
+fn background_levels(kind: MediaKind, raw_previews: RawPreviews, exposure: bool) -> Vec<Level> {
+    let mut levels = match (kind, raw_previews) {
+        (MediaKind::Raw, RawPreviews::Background) => {
+            vec![Level::Thumbnail, Level::Embedded, Level::Standard]
+        }
+        (MediaKind::Raw, RawPreviews::OnDemand) => vec![Level::Thumbnail, Level::Embedded],
+        (MediaKind::Flat, _) => vec![Level::Thumbnail, Level::Standard],
+    };
+    if exposure {
+        levels.push(Level::Exposure);
     }
+    levels
 }
 
 /// Niveaux « 1:1 » : les plus urgents (l'utilisateur attend devant l'image).
@@ -200,33 +216,40 @@ fn is_near(index: usize, focus: usize) -> bool {
 /// Une tâche : un fichier (par sa position) et un niveau.
 type Job = (usize, Level);
 
-/// Vrai si la tâche passe par le worker lourd (rendu LibRaw).
+/// Vrai si la tâche passe par le worker lourd (LibRaw : rendu, ou décompression pour
+/// l'analyse d'exposition, elle aussi parallélisée en interne).
 fn is_heavy(kind: MediaKind, level: Level) -> bool {
-    kind == MediaKind::Raw && matches!(level, Level::Standard | Level::Full)
+    kind == MediaKind::Raw && matches!(level, Level::Standard | Level::Full | Level::Exposure)
 }
 
 /// Classe de priorité des aperçus boîtier de fond (ni l'image affichée, ni ses voisines).
 const EMBEDDED_BACKGROUND: u8 = 4;
+/// Classe de priorité des analyses d'exposition de fond : avant les rendus RAW de fond
+/// (~0,4 s chacune, elles alimentent les badges de la grille).
+const EXPOSURE_BACKGROUND: u8 = 5;
 /// Classe de priorité des aperçus standard de fond.
-const STANDARD_BACKGROUND: u8 = 5;
+const STANDARD_BACKGROUND: u8 = 6;
 
 /// Priorité d'une tâche (la plus petite passe en premier). Ordre :
 /// 1. l'image affichée : d'abord ce qui s'affiche ajusté (aperçu boîtier, rendu RAW
-///    ~0,5 s), puis son 1:1 (100 % RAW ~4,5 s) : en mode RAW, l'aspect RAW apparaît vite,
-///    la netteté du 100 % suit ;
-/// 2. ses voisines (suivante, puis précédente) : ajusté, puis 1:1 (préchargement) ;
+///    ~0,5 s), puis son analyse d'exposition (histogramme, ~0,4 s), puis son 1:1 (100 %
+///    RAW ~4,5 s) : en mode RAW, l'aspect RAW apparaît vite, la netteté du 100 % suit ;
+/// 2. ses voisines (suivante, puis précédente) : ajusté, analyse, puis 1:1
+///    (préchargement) ;
 /// 3. les vignettes, dans l'ordre du dossier ;
-/// 4. les autres aperçus boîtier, puis les autres aperçus standard, par distance à l'image
-///    affichée (en avant d'abord à distance égale).
+/// 4. les autres aperçus boîtier, puis les autres analyses, puis les autres aperçus
+///    standard, par distance à l'image affichée (en avant d'abord à distance égale).
 ///
 /// (Aperçus boîtier et 1:1 du JPEG passent par les workers légers, rendus RAW par le
 /// worker lourd : chaque file ne voit que ses propres niveaux.)
 fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
-    let (fit, background_class) = match level {
+    // Étape pour l'image affichée et ses voisines : ajusté (0), analyse (1), 1:1 (2).
+    let (stage, background_class) = match level {
         Level::Thumbnail => return (3, index),
-        Level::Embedded => (true, EMBEDDED_BACKGROUND),
-        Level::Standard => (true, STANDARD_BACKGROUND),
-        Level::EmbeddedFull | Level::Full => (false, STANDARD_BACKGROUND),
+        Level::Embedded => (0, EMBEDDED_BACKGROUND),
+        Level::Standard => (0, STANDARD_BACKGROUND),
+        Level::Exposure => (1, EXPOSURE_BACKGROUND),
+        Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
     };
     let near = focus.and_then(|f| {
         if index == f {
@@ -240,16 +263,10 @@ fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
         }
     });
     match (near, focus) {
-        // Image affichée : ajusté (0) puis 1:1 (1) ; voisines : ajusté (2, 3) puis 1:1 (4, 5).
-        (Some(rank), _) => {
-            let order = match (rank, fit) {
-                (0, true) => 0,
-                (0, false) => 1,
-                (r, true) => 1 + r,
-                (r, false) => 3 + r,
-            };
-            (0, order)
-        }
+        // Image affichée : ajusté, analyse, 1:1 (0, 1, 2) ; puis les voisines, étape par
+        // étape : ajusté (3, 4), analyse (5, 6), 1:1 (7, 8).
+        (Some(0), _) => (0, stage),
+        (Some(rank), _) => (0, 3 + stage * 2 + (rank - 1)),
         (None, Some(f)) => (
             background_class,
             index.abs_diff(f) * 2 + usize::from(index < f),
@@ -268,6 +285,7 @@ struct Running {
 struct State {
     thumbnails_first: bool,
     raw_previews: RawPreviews,
+    exposure: bool,
     /// Tâches demandées hors du travail de fond ([`Scheduler::request`]) : elles ne
     /// comptent pas dans la progression.
     on_demand: HashSet<Job>,
@@ -276,7 +294,7 @@ struct State {
     focus: Option<usize>,
     pending: HashSet<Job>,
     running: Vec<Running>,
-    progress: [Progress; 3],
+    progress: [Progress; 4],
     paused: bool,
     shutdown: bool,
     /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
@@ -302,7 +320,7 @@ impl State {
         let (thumbnails_left, embedded_left) = (left(Level::Thumbnail), left(Level::Embedded));
         let blocked = |class: u8| match class {
             EMBEDDED_BACKGROUND => thumbnails_left,
-            STANDARD_BACKGROUND => thumbnails_left || embedded_left,
+            EXPOSURE_BACKGROUND | STANDARD_BACKGROUND => thumbnails_left || embedded_left,
             _ => false,
         };
         let job = *self
@@ -375,6 +393,7 @@ impl Scheduler {
             state: Mutex::new(State {
                 thumbnails_first: config.thumbnails_first,
                 raw_previews: config.raw_previews,
+                exposure: config.exposure,
                 ..State::default()
             }),
             work: Condvar::new(),
@@ -414,20 +433,20 @@ impl Scheduler {
         s.cancel_running(|_| false);
         s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
         s.on_demand.clear();
-        let policy = s.raw_previews;
+        let (policy, exposure) = (s.raw_previews, s.exposure);
         s.generation += 1;
         s.focus = None;
         s.pending = (0..files.len())
             .flat_map(|i| {
-                background_levels(files[i].kind, policy)
-                    .iter()
-                    .map(move |&l| (i, l))
+                background_levels(files[i].kind, policy, exposure)
+                    .into_iter()
+                    .map(move |l| (i, l))
             })
             .collect();
         let total = |level: Level| {
             files
                 .iter()
-                .filter(|f| background_levels(f.kind, policy).contains(&level))
+                .filter(|f| background_levels(f.kind, policy, exposure).contains(&level))
                 .count()
         };
         s.progress = TRACKED.map(|l| Progress {
@@ -757,11 +776,11 @@ mod tests {
     #[test]
     fn embedded_previews_only_for_raw_files() {
         use RawPreviews::*;
-        assert!(background_levels(MediaKind::Raw, Background).contains(&Level::Embedded));
-        assert!(!background_levels(MediaKind::Flat, Background).contains(&Level::Embedded));
+        assert!(background_levels(MediaKind::Raw, Background, true).contains(&Level::Embedded));
+        assert!(!background_levels(MediaKind::Flat, Background, true).contains(&Level::Embedded));
         for kind in [MediaKind::Raw, MediaKind::Flat] {
             for policy in [Background, OnDemand] {
-                let levels = background_levels(kind, policy);
+                let levels = background_levels(kind, policy, true);
                 assert!(!levels.contains(&Level::Full), "1:1 à la demande");
                 assert!(!levels.contains(&Level::EmbeddedFull), "1:1 à la demande");
             }
@@ -771,10 +790,10 @@ mod tests {
     #[test]
     fn on_demand_policy_keeps_raw_renders_out_of_the_background() {
         use RawPreviews::*;
-        assert!(background_levels(MediaKind::Raw, Background).contains(&Level::Standard));
-        assert!(!background_levels(MediaKind::Raw, OnDemand).contains(&Level::Standard));
+        assert!(background_levels(MediaKind::Raw, Background, true).contains(&Level::Standard));
+        assert!(!background_levels(MediaKind::Raw, OnDemand, true).contains(&Level::Standard));
         assert!(
-            background_levels(MediaKind::Flat, OnDemand).contains(&Level::Standard),
+            background_levels(MediaKind::Flat, OnDemand, true).contains(&Level::Standard),
             "les images plates gardent leur aperçu"
         );
         assert!(
@@ -783,9 +802,48 @@ mod tests {
         );
         assert_eq!(
             priority((3, Level::EmbeddedFull), Some(3)),
-            (0, 1),
-            "juste après l'ajusté"
+            (0, 2),
+            "après l'ajusté et l'analyse"
         );
+    }
+
+    #[test]
+    fn exposure_analysis_is_scheduled_like_a_raw_render() {
+        use RawPreviews::*;
+        for policy in [Background, OnDemand] {
+            assert!(background_levels(MediaKind::Raw, policy, true).contains(&Level::Exposure));
+            assert!(!background_levels(MediaKind::Raw, policy, false).contains(&Level::Exposure));
+        }
+        assert!(background_levels(MediaKind::Flat, OnDemand, true).contains(&Level::Exposure));
+        assert!(
+            is_heavy(MediaKind::Raw, Level::Exposure),
+            "décompression LibRaw"
+        );
+        assert!(!is_heavy(MediaKind::Flat, Level::Exposure));
+        // Image affichée : ajusté, puis analyse, puis 1:1 ; puis les voisines.
+        let focus = Some(5);
+        let order = [
+            (5, Level::Standard),
+            (5, Level::Exposure),
+            (5, Level::Full),
+            (6, Level::Standard),
+            (4, Level::Standard),
+            (6, Level::Exposure),
+            (4, Level::Exposure),
+            (6, Level::Full),
+            (4, Level::Full),
+        ];
+        for pair in order.windows(2) {
+            assert!(
+                priority(pair[0], focus) < priority(pair[1], focus),
+                "{:?} avant {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+        // En fond : analyses avant les rendus RAW, après les aperçus boîtier.
+        assert!(priority((20, Level::Embedded), focus) < priority((20, Level::Exposure), focus));
+        assert!(priority((20, Level::Exposure), focus) < priority((7, Level::Standard), focus));
     }
 
     #[test]

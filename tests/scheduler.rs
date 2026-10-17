@@ -152,6 +152,7 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
         Config {
             light_workers,
             thumbnails_first: false,
+            exposure: false,
             ..Config::default()
         },
     )
@@ -340,6 +341,7 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
         Config {
             light_workers: 2,
             thumbnails_first: true,
+            exposure: false,
             ..Config::default()
         },
     );
@@ -399,6 +401,7 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
         Config {
             light_workers: 1, // ordre des tâches légères déterministe
             thumbnails_first: true,
+            exposure: false,
             ..Config::default()
         },
     );
@@ -583,6 +586,7 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
             light_workers: 2,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
+            exposure: false,
         },
     );
     let generation = scheduler.set_folder(all);
@@ -629,6 +633,7 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
             light_workers: 1,
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
+            exposure: false,
         },
     );
     scheduler.set_paused(true);
@@ -714,7 +719,14 @@ fn real_previews_fill_the_cache_and_are_reused() {
             cache: cache.clone(),
             settings,
         };
-        let scheduler = Scheduler::new(producer, Config::default(), |_| {});
+        let scheduler = Scheduler::new(
+            producer,
+            Config {
+                exposure: false,
+                ..Config::default()
+            },
+            |_| {},
+        );
         let t = Instant::now();
         scheduler.set_folder(files.clone());
         assert!(scheduler.wait_idle(Duration::from_secs(120)));
@@ -774,7 +786,14 @@ fn real_previews_fill_the_cache_and_are_reused() {
             cache: cache.clone(),
             settings,
         };
-        let scheduler = Scheduler::new(producer, Config::default(), |_| {});
+        let scheduler = Scheduler::new(
+            producer,
+            Config {
+                exposure: false,
+                ..Config::default()
+            },
+            |_| {},
+        );
         scheduler.set_folder(files.clone());
         scheduler.set_focus(raw_index);
         scheduler.request(raw_index, Level::EmbeddedFull);
@@ -797,4 +816,48 @@ fn real_previews_fill_the_cache_and_are_reused() {
     let second = run(&cache);
     println!("premier passage {first:?}, second (cache) {second:?}");
     assert!(second < first / 4, "le second passage doit venir du cache");
+}
+
+#[test]
+fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
+    let fake = Fake::with_delay(Duration::from_millis(2));
+    let mut all = files(8, MediaKind::Raw);
+    all.extend(files(2, MediaKind::Flat));
+    let (scheduler, events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: true,
+            raw_previews: RawPreviews::Background,
+            exposure: true,
+        },
+    );
+    let generation = scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(scheduler.progress(Level::Exposure), complete(10), "RAW et plates");
+    let mut analysed = ready(&events, generation, Level::Exposure);
+    analysed.sort();
+    assert_eq!(analysed, (0..10).collect::<Vec<_>>());
+    let log = fake.log();
+    let position = |pred: &dyn Fn(&Entry) -> bool| log.iter().position(pred).unwrap();
+    let last_embedded = log
+        .iter()
+        .rposition(|(_, l, _)| *l == Level::Embedded)
+        .unwrap();
+    let first_raw_exposure =
+        position(&|(p, l, _)| *l == Level::Exposure && p.to_string_lossy().ends_with(".RAF"));
+    let last_raw_exposure = log
+        .iter()
+        .rposition(|(p, l, _)| *l == Level::Exposure && p.to_string_lossy().ends_with(".RAF"))
+        .unwrap();
+    let first_raw_render =
+        position(&|(p, l, _)| *l == Level::Standard && p.to_string_lossy().ends_with(".RAF"));
+    assert!(
+        first_raw_exposure > last_embedded,
+        "analyses de fond après les aperçus boîtier"
+    );
+    assert!(
+        last_raw_exposure < first_raw_render,
+        "toutes les analyses RAW avant le premier rendu RAW de fond (même worker)"
+    );
 }

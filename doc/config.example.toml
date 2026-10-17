@@ -53,6 +53,9 @@ jpeg_quality = 90
 light_workers = "auto"
 # Vignettes d'abord, puis aperçus boîtier, puis rendus RAW (false : tout mélangé).
 thumbnails_first = true
+# Analyser l'exposition de tout le dossier en fond (histogrammes, badges de la grille),
+# après vignettes et aperçus boîtier ; false : seulement l'image affichée et ses voisines.
+exposure = true
 
 [xmp]
 # Nom d'un NOUVEAU sidecar : "darktable" (IMAGE.RAF.xmp, un par fichier) ou "adobe"

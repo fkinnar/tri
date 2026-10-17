@@ -10,10 +10,21 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   boîtier est léger (worker léger), l'aperçu standard d'un RAW lourd (LibRaw).
 - **Priorités**, recalculées à chaque prise de tâche (`priority`) :
   1. image affichée : ce qui s'affiche ajusté (aperçu boîtier, rendu RAW ~0,5 s), puis son
-     1:1 (100 % RAW ~4,5 s) ;
-  2. voisines n+1 puis n-1 : ajusté, puis 1:1 (préchargement) ;
+     analyse d'exposition (histogramme, ~0,4 s), puis son 1:1 (100 % RAW ~4,5 s) ;
+  2. voisines n+1 puis n-1 : ajusté, analyse, puis 1:1 (préchargement) ;
   3. vignettes, dans l'ordre du dossier ;
-  4. autres aperçus boîtier, puis autres aperçus standard, par distance (en avant d'abord).
+  4. autres aperçus boîtier, puis autres **analyses d'exposition** (avant les rendus RAW de
+     fond : elles alimentent les badges de la grille), puis autres aperçus standard, par
+     distance (en avant d'abord).
+
+  **Analyse d'exposition** (`Level::Exposure`, 17/10/2026) : calculée en fond pour tout le
+  dossier (`[scheduler] exposure`, défaut vrai), RAW comme images plates ; celle d'un RAW
+  passe par le **worker lourd** (décompression LibRaw, déjà parallélisée en interne,
+  voir [exposure.md](exposure.md)), celle d'une image plate par les workers légers.
+  Comme les rendus de fond, elle attend la fin des vignettes et des aperçus boîtier.
+  Mesuré sur 24 RAF : histogrammes terminés ~10 s après les aperçus boîtier
+  (~0,45 s par image). Piste non faite : le rendu RAW décompresse aussi le fichier, il
+  pourrait produire l'analyse au passage.
 
   Le rendu ajusté passe devant le 1:1 pour que l'aspect RAW apparaisse vite ; le 1:1 de
   l'image affichée passe devant le préchargement des voisines pour que la netteté de

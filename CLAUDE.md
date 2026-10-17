@@ -433,7 +433,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      interface. **A fait** (17/10/2026) : `raw::Sensor` (mosaïque, noir par pixel),
      `exposure::Exposure` (histogrammes linéaire et en IL, saturés / bouchés, marge
      avant saturation, masque pivoté, format binaire), `tri <dossier> --exposure` ;
-     0,38 s par RAF en moyenne, vérifié sur une vraie séance.
+     0,38 s par RAF en moyenne, vérifié sur une vraie séance. **B fait** (17/10/2026) :
+     niveau de cache `Exposure` (entrées binaires ~14 Ko), `preview::exposure`,
+     scheduler (worker lourd pour un RAW, après les aperçus boîtier et avant les rendus
+     RAW de fond, `[scheduler] exposure`), progression « histogrammes ».
   3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
      pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
   4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le

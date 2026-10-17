@@ -75,6 +75,7 @@ struct Status {
     standard: Avail,
     embedded_full: Avail,
     full: Avail,
+    exposure: Avail,
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
@@ -142,7 +143,7 @@ pub struct TriApp {
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
-    progress: [Progress; 3],
+    progress: [Progress; 4],
     engine: Option<Engine>,
     error: Option<String>,
     keymap: Keymap,
@@ -256,7 +257,7 @@ impl TriApp {
             rating_dialog: None,
             files: Vec::new(),
             status: Vec::new(),
-            progress: [Progress::default(); 3],
+            progress: [Progress::default(); 4],
             engine: None,
             error,
             keymap,
@@ -518,7 +519,7 @@ impl TriApp {
             .collect();
         self.status = vec![Status::default(); self.files.len()];
         self.requested.clear();
-        self.progress = [Progress::default(); 3];
+        self.progress = [Progress::default(); 4];
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path
             && let Some(index) = self.files.iter().position(|f| f.path == path)
@@ -894,6 +895,7 @@ impl TriApp {
             Level::Standard => &s.standard,
             Level::EmbeddedFull => &s.embedded_full,
             Level::Full => &s.full,
+            Level::Exposure => &s.exposure,
         };
         *avail == Avail::Ready
     }
@@ -1215,6 +1217,7 @@ impl TriApp {
                 ("vignettes", self.progress[0]),
                 ("JPEG boîtier", self.progress[1]),
                 ("aperçus", self.progress[2]),
+                ("histogrammes", self.progress[3]),
             ] {
                 if p.total == 0 {
                     continue; // rien à calculer en fond pour ce niveau
@@ -1815,6 +1818,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Thumbnail => Some(0),
         Level::Embedded => Some(1),
         Level::Standard => Some(2),
+        Level::Exposure => Some(3),
         Level::EmbeddedFull | Level::Full => None,
     }
 }
@@ -1827,6 +1831,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Standard => s.standard = avail,
             Level::EmbeddedFull => s.embedded_full = avail,
             Level::Full => s.full = avail,
+            Level::Exposure => s.exposure = avail,
         }
     }
 }

@@ -34,17 +34,27 @@ pub enum Level {
     EmbeddedFull,
     /// Rendu complet (zoom 100 %).
     Full,
+    /// Analyse de l'exposition ([`crate::exposure::Exposure`]) : histogrammes, saturés /
+    /// bouchés, masque. Entrée binaire, pas une image (voir [`Cache::get_bytes`]).
+    Exposure,
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 5] = [
+    pub const ALL: [Level; 6] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
         Level::EmbeddedFull,
         Level::Full,
+        Level::Exposure,
     ];
+
+    /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
+    /// (binaire).
+    pub fn is_image(self) -> bool {
+        self != Level::Exposure
+    }
 
     fn dir_name(self) -> &'static str {
         match self {
@@ -53,6 +63,7 @@ impl Level {
             Self::EmbeddedFull => "embedded-full",
             Self::Standard => "standard",
             Self::Full => "full",
+            Self::Exposure => "exposure",
         }
     }
 }
@@ -178,9 +189,11 @@ impl Cache {
 
     fn entry_path(&self, key: &Key) -> PathBuf {
         // Sous-dossier sur 2 caractères : évite des dizaines de milliers de fichiers par dossier.
-        self.level_dir(key.level)
-            .join(&key.hash[..2])
-            .join(format!("{}.jpg", key.hash))
+        self.level_dir(key.level).join(&key.hash[..2]).join(format!(
+            "{}.{}",
+            key.hash,
+            if key.level.is_image() { "jpg" } else { "bin" }
+        ))
     }
 
     /// Vrai si l'entrée existe (sans la décoder).
@@ -210,6 +223,33 @@ impl Cache {
     /// renommage, donc un lecteur ne voit jamais d'entrée à moitié écrite, même si le
     /// programme est interrompu.
     pub fn put(&self, key: &Key, bitmap: &Bitmap) -> io::Result<()> {
+        // Couleur à pleine résolution pour le 1:1, 4:2:0 ailleurs (plus compact).
+        let chroma = match key.level {
+            Level::Full | Level::EmbeddedFull => Chroma::Full,
+            _ => Chroma::Half,
+        };
+        let bytes = jpeg::encode(bitmap, self.quality, chroma).map_err(io::Error::other)?;
+        self.write_entry(key, &bytes)
+    }
+
+    /// Lit une entrée binaire (analyse), telle qu'écrite par [`Cache::put_bytes`]. `None`
+    /// si elle n'existe pas. Une lecture réussie met à jour sa date (dernier usage).
+    pub fn get_bytes(&self, key: &Key) -> Option<Vec<u8>> {
+        let path = self.entry_path(key);
+        let bytes = fs::read(&path).ok()?;
+        if let Ok(file) = File::options().write(true).open(&path) {
+            let _ = file.set_modified(SystemTime::now());
+        }
+        Some(bytes)
+    }
+
+    /// Écrit une entrée binaire (analyse), atomiquement comme [`Cache::put`].
+    pub fn put_bytes(&self, key: &Key, bytes: &[u8]) -> io::Result<()> {
+        self.write_entry(key, bytes)
+    }
+
+    /// Écriture atomique d'une entrée : fichier temporaire, puis renommage.
+    fn write_entry(&self, key: &Key, bytes: &[u8]) -> io::Result<()> {
         let path = self.entry_path(key);
         let dir = path
             .parent()
@@ -217,14 +257,8 @@ impl Cache {
         fs::create_dir_all(dir)?;
         let tmp = temp_path(&path);
         let result = (|| {
-            // Couleur à pleine résolution pour le 1:1, 4:2:0 ailleurs (plus compact).
-            let chroma = match key.level {
-                Level::Full | Level::EmbeddedFull => Chroma::Full,
-                _ => Chroma::Half,
-            };
-            let bytes = jpeg::encode(bitmap, self.quality, chroma).map_err(io::Error::other)?;
             let mut file = File::create(&tmp)?;
-            file.write_all(&bytes)?;
+            file.write_all(bytes)?;
             file.sync_all()?;
             fs::rename(&tmp, &path)
         })();
@@ -296,7 +330,7 @@ impl Cache {
             for file in fs::read_dir(shard.path())? {
                 let file = file?;
                 let path = file.path();
-                if path.extension().is_none_or(|e| e != "jpg") {
+                if path.extension().is_none_or(|e| e != "jpg" && e != "bin") {
                     continue; // fichiers temporaires en cours d'écriture
                 }
                 let meta = file.metadata()?;

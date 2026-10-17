@@ -31,7 +31,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[preview]` | Tailles (vignette, aperçu « auto » ou fixe), règle `half_size`, seuils d'acceptation de l'aperçu boîtier | moteur |
 | `[render]` | Développement LibRaw : balance des blancs, luminosité, luminosité automatique | moteur |
 | `[cache]` | Dossier, qualité JPEG | moteur |
-| `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord | moteur |
+| `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord, analyse d'exposition en fond | moteur |
 | `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs | moteur |
 | `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |
 | `[exposure]` | Seuils de saturation et d'ombres bouchées (IL), cases des histogrammes, taille du masque | moteur |

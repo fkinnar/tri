@@ -126,6 +126,10 @@ Voir [scheduler.md](scheduler.md#tests). Les tests de concurrence ont été rela
 boucle (300 à 500 fois) après chaque correction : un test qui passe une fois sur dix ne
 prouve rien.
 
+- Analyse d'exposition (17/10/2026) : niveaux de fond avec et sans analyse, worker lourd
+  pour un RAW seulement, ordre des priorités (ajusté, analyse, 1:1, puis voisines), en fond
+  après les aperçus boîtier et avant tous les rendus RAW (faux producteur, 30 passages
+  sans échec).
 ### `jpeg` (unitaires, `src/jpeg.rs`)
 
 - choix du facteur de réduction (jamais sous `min_side`, `0` = pleine taille, image déjà
