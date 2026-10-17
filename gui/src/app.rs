@@ -118,8 +118,10 @@ pub struct TriApp {
     /// Surveillance des volumes (moteur), démarrée à la première image, et la liste
     /// qu'elle envoie quand un disque est branché ou débranché.
     volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
-    /// Boîte de déchargement d'une carte.
+    /// Boîte de déchargement d'une carte (éventuellement en arrière-plan).
     offload: Option<OffloadDialog>,
+    /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
+    offloaded: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -277,6 +279,7 @@ impl TriApp {
             places: settings.places.clone(),
             volumes: None,
             offload: None,
+            offloaded: None,
             eject_dialog: None,
             ejecting: None,
             notice: None,
@@ -517,11 +520,14 @@ impl TriApp {
                                 "Disque fixé ([places] fixed) : pas d'éjection depuis tri",
                             );
                         } else if self.ejecting.is_none() {
-                            let (rect, response) =
-                                marks::clickable(ui, size, "Décharger la carte…");
-                            marks::offload(ui.painter(), rect, color);
-                            if response.clicked() {
-                                offload = Some((row.path.clone(), rect.right_bottom()));
+                            // Un seul déchargement à la fois.
+                            if self.offload.is_none() {
+                                let (rect, response) =
+                                    marks::clickable(ui, size, "Décharger la carte…");
+                                marks::offload(ui.painter(), rect, color);
+                                if response.clicked() {
+                                    offload = Some((row.path.clone(), rect.right_bottom()));
+                                }
                             }
                             let (rect, response) = marks::clickable(ui, size, "Éjecter");
                             marks::eject(ui.painter(), rect, color);
@@ -619,13 +625,30 @@ impl TriApp {
         let Some(dialog) = &mut self.offload else {
             return;
         };
-        match dialog.show(ctx) {
+        let hidden = dialog.is_hidden();
+        let request = if hidden {
+            dialog.tick()
+        } else {
+            dialog.show(ctx)
+        };
+        match request {
             None => {}
             Some(OffloadRequest::Close) => self.offload = None,
             // Fin de la copie : la boîte reste ouverte sur le bilan.
-            Some(OffloadRequest::Finished { open, eject }) => {
+            Some(OffloadRequest::Finished {
+                open,
+                offer,
+                eject,
+                summary,
+            }) => {
                 if let Some(dir) = open {
                     self.open_offloaded(&dir);
+                }
+                self.offloaded = offer;
+                if hidden {
+                    // En arrière-plan : plus de boîte, le bilan va dans la barre d'état.
+                    self.offload = None;
+                    self.notice = Some((summary, false));
                 }
                 if let Some(volume) = eject {
                     self.start_eject(ctx, volume);
@@ -833,7 +856,7 @@ impl TriApp {
                 continue;
             }
             // Boîte de déchargement : seule la fermeture (pas pendant la copie).
-            if let Some(dialog) = &self.offload {
+            if let Some(dialog) = self.offload.as_ref().filter(|d| !d.is_hidden()) {
                 if action == Action::Back && !dialog.is_running() {
                     self.offload = None;
                 } else if action.works_over_overlay() && action != Action::Back {
@@ -1497,12 +1520,12 @@ impl TriApp {
 
     /// Barre d'état ; renvoie l'action d'une icône cliquée (afficher / masquer un
     /// panneau).
-    fn status_bar(&self, ui: &mut Ui) -> Option<Action> {
+    fn status_bar(&self, ui: &mut Ui) -> Option<StatusClick> {
         let mut clicked = None;
         let size = ui.text_style_height(&egui::TextStyle::Body) + 2.0;
         let color = ui.visuals().text_color();
         // Icône d'un panneau : cadre, bande du panneau pleine quand il est affiché.
-        let mut toggle = |ui: &mut Ui, side: marks::Side, shown: bool, action: Action| {
+        let toggle = |ui: &mut Ui, side: marks::Side, shown: bool, action: Action| {
             let tip = format!(
                 "{} ({})",
                 action.label(),
@@ -1510,29 +1533,33 @@ impl TriApp {
             );
             let (rect, response) = marks::clickable(ui, size, &tip);
             marks::panel(ui.painter(), rect, side, shown, color);
-            if response.clicked() {
-                clicked = Some(action);
-            }
+            response.clicked().then_some(StatusClick::Action(action))
         };
         ui.horizontal(|ui| {
-            toggle(
+            if let Some(c) = toggle(
                 ui,
                 marks::Side::Left,
                 self.folder_panel,
                 Action::ToggleFolderPanel,
-            );
-            toggle(
+            ) {
+                clicked = Some(c);
+            }
+            if let Some(c) = toggle(
                 ui,
                 marks::Side::Top,
                 self.filter_bar,
                 Action::ToggleFilterBar,
-            );
-            toggle(
+            ) {
+                clicked = Some(c);
+            }
+            if let Some(c) = toggle(
                 ui,
                 marks::Side::Bottom,
                 self.rating_bar,
                 Action::ToggleRatingBar,
-            );
+            ) {
+                clicked = Some(c);
+            }
             ui.separator();
             let raws = self
                 .files
@@ -1609,12 +1636,53 @@ impl TriApp {
                 .on_hover_text(egui::RichText::new(warning).monospace());
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                toggle(
+                // De droite à gauche : icône du panneau des métadonnées, puis déchargement.
+                if let Some(c) = toggle(
                     ui,
                     marks::Side::Right,
                     self.metadata_panel,
                     Action::ToggleMetadata,
-                );
+                ) {
+                    clicked = Some(c);
+                }
+                // Déchargement en arrière-plan : progression (clic : réafficher la boîte).
+                if let Some((text, fraction)) = self
+                    .offload
+                    .as_ref()
+                    .filter(|d| d.is_hidden())
+                    .and_then(|d| d.status())
+                {
+                    let fill = self
+                        .gui
+                        .colors
+                        .progress
+                        .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
+                    let bar = ui
+                        .add(
+                            egui::ProgressBar::new(fraction)
+                                .desired_width(260.0)
+                                .fill(fill)
+                                .text(text),
+                        )
+                        .interact(Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text("Afficher le déchargement");
+                    if bar.clicked() {
+                        clicked = Some(StatusClick::RevealOffload);
+                    }
+                }
+                // Séance déchargée en arrière-plan : proposée, pas ouverte d'office.
+                if let Some(dir) = &self.offloaded {
+                    if ui.small_button("ignorer").clicked() {
+                        clicked = Some(StatusClick::DismissOffloaded);
+                    }
+                    if ui
+                        .button(format!("Ouvrir la séance « {} »", folder_name(dir)))
+                        .clicked()
+                    {
+                        clicked = Some(StatusClick::OpenOffloaded);
+                    }
+                }
             });
         });
         clicked
@@ -2110,11 +2178,23 @@ impl eframe::App for TriApp {
         self.handle_keys(&ctx);
         self.update_loads(&ctx);
 
-        let status_action = egui::Panel::bottom("status")
+        let status_click = egui::Panel::bottom("status")
             .show(ui, |ui| self.status_bar(ui))
             .inner;
-        if let Some(action) = status_action {
-            self.perform(&ctx, action);
+        match status_click {
+            Some(StatusClick::Action(action)) => self.perform(&ctx, action),
+            Some(StatusClick::RevealOffload) => {
+                if let Some(dialog) = &mut self.offload {
+                    dialog.reveal();
+                }
+            }
+            Some(StatusClick::OpenOffloaded) => {
+                if let Some(dir) = self.offloaded.take() {
+                    self.open_offloaded(&dir);
+                }
+            }
+            Some(StatusClick::DismissOffloaded) => self.offloaded = None,
+            None => {}
         }
         if self.metadata_panel && self.error.is_none() && !self.folder.is_none() {
             egui::Panel::right("metadata")
@@ -2264,6 +2344,19 @@ fn file_name(path: &Path) -> String {
 
 fn folder_name(path: &Path) -> String {
     file_name(path)
+}
+
+/// Clic dans la barre d'état.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StatusClick {
+    /// Icône d'un panneau.
+    Action(Action),
+    /// Progression d'un déchargement en arrière-plan : réafficher sa boîte.
+    RevealOffload,
+    /// Ouvrir la séance déchargée en arrière-plan.
+    OpenOffloaded,
+    /// Ne plus la proposer.
+    DismissOffloaded,
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
@@ -3003,6 +3096,59 @@ mod tests {
                 h.run_steps(2);
             }
         }
+    }
+
+    #[test]
+    fn an_offload_in_the_background_offers_the_session_without_switching() {
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM")).unwrap();
+        image::RgbImage::new(16, 16)
+            .save(card.join("DCIM/IMG0.jpg"))
+            .unwrap();
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card,
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        let before = h.state().folder.dir.clone();
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.get_by_label("Décharger").click();
+        h.run_steps(1); // le clic démarre la copie
+        assert!(h.state().offload.as_ref().unwrap().is_running());
+        h.state_mut().offload.as_mut().unwrap().hide();
+        // La copie se termine en fond : plus de boîte, séance proposée, dossier inchangé.
+        while h.state().offload.is_some() {
+            assert!(Instant::now() < deadline, "jamais terminé");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(2);
+        assert_eq!(
+            h.state().folder.dir,
+            before,
+            "pas de changement de dossier d'office"
+        );
+        assert!(h.state().offloaded.is_some());
+        assert!(
+            h.query_by_label_contains("1 copiés").is_some(),
+            "bilan dans la barre d'état"
+        );
+        h.get_by_label_contains("Ouvrir la séance").click();
+        h.run_steps(3);
+        assert_ne!(h.state().folder.dir, before, "séance ouverte à la demande");
+        assert_eq!(names(&h), ["IMG0.jpg"]);
+        assert!(h.state().offloaded.is_none());
     }
 
     #[test]

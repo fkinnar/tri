@@ -463,7 +463,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      option), copie vérifiée (BLAKE3), puis ouvrir /
      éjecter / supprimer de la carte les fichiers vérifiés — choisis par cases à cocher
      avant la copie et enchaînés à la fin (retour du 17/10/2026), plus « RAW
-     seulement ». En ligne de commande :
+     seulement ». Copie en arrière-plan possible (barre d'état), séance alors proposée
+     plutôt qu'ouverte d'office. En ligne de commande :
      `tri --offload <carte> [--to] [--folder] [--dry-run] [--previews]`. À venir :
      gabarits de dossier et de noms, séances de plusieurs jours (un dossier par jour ?).
   5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,

@@ -55,6 +55,18 @@ besoins de tous, pas seulement les siens.
 - Seules les images (RAW et plates) sont copiées ; vidéos et fichiers du boîtier sont
   comptés (`Plan::ignored`) et laissés.
 
+## En arrière-plan (17/10/2026)
+
+Pour trier une séance pendant qu'une autre carte se décharge : pendant la copie,
+« Continuer en arrière-plan » (ou Échap, ou un clic à côté) referme la boîte ; la copie
+continue, la progression s'affiche dans la barre d'état (un clic rouvre la boîte, avec
+« Interrompre »). À la fin, en arrière-plan, suppression et éjection cochées se font
+comme prévu, mais la séance n'est **pas ouverte d'office** — ce serait changer de dossier
+sous les yeux de l'utilisateur — : la barre d'état propose « Ouvrir la séance » (et
+« ignorer »), avec le bilan. Boîte restée affichée jusqu'au bout : ouverture automatique
+comme avant. Un seul déchargement à la fois : l'icône « décharger » disparaît des volumes
+tant qu'un déchargement existe.
+
 ## API
 
 - `History::open(fichier)`, `History::open_configured(&réglages)`, `History::in_memory()` ;

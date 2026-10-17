@@ -119,7 +119,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier de la séance (proposé `AAAA-MM-JJ_` ; racine mémorisée), cases à cocher (RAW seulement,
   ouvrir le dossier, éjecter la carte, supprimer de la carte les fichiers copiés et
   vérifiés), copie vérifiée en fond avec progression et « Interrompre », puis suites
-  cochées enchaînées (suppression, ouverture, éjection) et bilan. Le travail est dans
+  cochées enchaînées (suppression, ouverture, éjection) et bilan. **En arrière-plan**
+  (« Continuer en arrière-plan », Échap) : la copie continue, progression cliquable dans
+  la barre d'état ; à la fin, la séance est proposée (« Ouvrir la séance ») plutôt
+  qu'ouverte d'office. Voir [offload.md](offload.md). Le travail est dans
   le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
   (`Maj+M`, `[gui.metadata]`) : lignes du moteur (`Metadata::rows`, voir

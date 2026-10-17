@@ -15,12 +15,18 @@ use tri::offload::{self, History, OffloadSettings, Plan, Progress, Report};
 pub enum Request {
     /// Fermer la boîte.
     Close,
-    /// Copie terminée : enchaîner ce qui a été coché (la boîte reste ouverte sur le bilan).
+    /// Copie terminée : enchaîner ce qui a été coché. Boîte affichée : elle reste ouverte
+    /// sur le bilan. En arrière-plan : elle n'existe plus, le bilan va dans la barre d'état.
     Finished {
-        /// Dossier de la séance à ouvrir.
+        /// Dossier de la séance à ouvrir tout de suite (boîte affichée).
         open: Option<PathBuf>,
+        /// Séance à *proposer* d'ouvrir (arrière-plan : ne pas changer de dossier sous les
+        /// yeux de l'utilisateur).
+        offer: Option<PathBuf>,
         /// Volume à éjecter.
         eject: Option<PathBuf>,
+        /// Bilan en une ligne.
+        summary: String,
     },
     /// Ouvrir ce dossier dans la grille (bouton du bilan).
     Open(PathBuf),
@@ -75,6 +81,8 @@ pub struct OffloadDialog {
     /// Dossier des données (historique, racine mémorisée).
     data: Option<PathBuf>,
     stage: Stage,
+    /// En arrière-plan : la copie continue, la boîte n'est pas affichée.
+    hidden: bool,
 }
 
 impl OffloadDialog {
@@ -106,7 +114,101 @@ impl OffloadDialog {
             settings,
             data,
             stage: Stage::Planning(rx),
+            hidden: false,
         }
+    }
+
+    /// Vrai si la boîte est passée en arrière-plan.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden
+    }
+
+    /// Passe en arrière-plan (tests : sans dépendre de la vitesse de la copie).
+    #[cfg(test)]
+    pub fn hide(&mut self) {
+        self.hidden = true;
+    }
+
+    /// Réaffiche la boîte (clic sur la progression de la barre d'état).
+    pub fn reveal(&mut self) {
+        self.hidden = false;
+    }
+
+    /// Avancement, pour la barre d'état : (texte, fraction), pendant la copie.
+    pub fn status(&self) -> Option<(String, f32)> {
+        let Stage::Running { progress, .. } = &self.stage else {
+            return None;
+        };
+        let fraction = if progress.bytes_total > 0 {
+            progress.bytes_done as f32 / progress.bytes_total as f32
+        } else {
+            0.0
+        };
+        Some((
+            format!(
+                "déchargement de « {} » {}/{}",
+                file_name(&self.source),
+                progress.files_done,
+                progress.files_total
+            ),
+            fraction,
+        ))
+    }
+
+    /// En arrière-plan : suit la copie et, à la fin, enchaîne les suites cochées (sans
+    /// ouvrir la séance : elle est seulement proposée).
+    pub fn tick(&mut self) -> Option<Request> {
+        self.poll();
+        self.finish(false)
+    }
+
+    /// Fin de la copie, une seule fois : suppression de la carte, puis ouverture (boîte
+    /// affichée) ou proposition d'ouverture (arrière-plan) de la séance, puis éjection.
+    fn finish(&mut self, interactive: bool) -> Option<Request> {
+        let Stage::Done {
+            report,
+            finished,
+            deleted,
+            opened,
+            ejected,
+        } = &mut self.stage
+        else {
+            return None;
+        };
+        if *finished {
+            return None;
+        }
+        *finished = true;
+        let settings = &self.settings;
+        let complete = !report.cancelled;
+        if complete && settings.delete_after && !report.copied.is_empty() {
+            *deleted = Some(offload::delete_sources(report));
+        }
+        let session = (settings.open_after
+            && (!report.copied.is_empty() || !report.skipped.is_empty()))
+        .then(|| report.destination.clone());
+        let (open, offer) = if interactive {
+            (session, None)
+        } else {
+            (None, session)
+        };
+        let eject = (complete && settings.eject_after).then(|| self.source.clone());
+        *opened = open.is_some();
+        *ejected = eject.is_some();
+        let summary = format!(
+            "« {} » : {} copiés, {} ignorés, {} erreurs{}",
+            file_name(&self.source),
+            report.copied.len(),
+            report.skipped.len(),
+            report.errors.len(),
+            if report.cancelled { ", interrompu" } else { "" }
+        );
+        Some(Request::Finished {
+            open,
+            offer,
+            eject,
+            summary,
+        })
     }
 
     /// Vrai pendant la copie (la fermer l'interrompt).
@@ -204,8 +306,10 @@ impl OffloadDialog {
     /// Dessine la boîte (modale, près du clic) ; renvoie ce que l'utilisateur a demandé.
     pub fn show(&mut self, ctx: &egui::Context) -> Option<Request> {
         self.poll();
-        let mut request = None;
+        // Fin de la copie sous les yeux de l'utilisateur : suites cochées, séance ouverte.
+        let mut request = self.finish(true);
         let mut start = false;
+        let mut background = false;
         let source = self.source.clone();
         let name = source.file_name().map_or_else(
             || source.display().to_string(),
@@ -338,9 +442,14 @@ impl OffloadDialog {
                         if let Some(current) = &progress.current {
                             ui.weak(file_name(current));
                         }
-                        if ui.button("Interrompre").clicked() {
-                            cancel.store(true, Ordering::Relaxed);
-                        }
+                        ui.horizontal(|ui| {
+                            if ui.button("Continuer en arrière-plan").clicked() {
+                                background = true;
+                            }
+                            if ui.button("Interrompre").clicked() {
+                                cancel.store(true, Ordering::Relaxed);
+                            }
+                        });
                     }
                     Stage::Done {
                         report,
@@ -350,21 +459,7 @@ impl OffloadDialog {
                         ejected,
                     } => {
                         let settings = &self.settings;
-                        // Première image du bilan : enchaîner les suites cochées.
-                        if !*finished {
-                            *finished = true;
-                            let complete = !report.cancelled;
-                            if complete && settings.delete_after && !report.copied.is_empty() {
-                                *deleted = Some(offload::delete_sources(report));
-                            }
-                            let open = (settings.open_after
-                                && (!report.copied.is_empty() || !report.skipped.is_empty()))
-                            .then(|| report.destination.clone());
-                            let eject = (complete && settings.eject_after).then(|| source.clone());
-                            *opened = open.is_some();
-                            *ejected = eject.is_some();
-                            request = Some(Request::Finished { open, eject });
-                        }
+                        let _ = finished;
                         let verified = if settings.verify {
                             " et vérifiés"
                         } else {
@@ -416,8 +511,10 @@ impl OffloadDialog {
         if start {
             self.start(ctx);
         }
-        // Échap ou clic à côté : fermer, sauf pendant la copie (bouton « Interrompre »).
-        if request.is_none() && modal.should_close() && !self.is_running() {
+        // Échap ou clic à côté : fermer ; pendant la copie, passer en arrière-plan.
+        if background || (modal.should_close() && self.is_running()) {
+            self.hidden = true;
+        } else if request.is_none() && modal.should_close() {
             request = Some(Request::Close);
         }
         request
