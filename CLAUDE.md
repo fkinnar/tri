@@ -270,6 +270,19 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   source) : en mode une couleur, écrire les deux ; en mode plusieurs couleurs, seulement
   `darktable:colorlabels` (et `xmp:Label` s'il n'y en a qu'une), sinon darktable n'en
   verrait qu'une.
+- **Raccourcis de notation par défaut** (17/10/2026, pensés pour l'AZERTY aussi) : étoiles
+  `0`–`5` et couleurs `6`–`9` (rouge, jaune, vert, bleu) **avec ou sans Maj** (rangée du
+  haut AZERTY = Maj, pavé numérique = sans) ; violet `°` et `,` (virgule du pavé
+  numérique) ; accepté / rejeté / sans drapeau `Maj+P` / `Maj+X` / `Maj+U`. Profil vim
+  aligné sur nvim : `Ctrl+U` / `Ctrl+D` pour page précédente / suivante, `u` réservé à
+  l'annulation (à venir). Ctrl + lettre autorisé (seuls Cmd, Alt et Ctrl + flèches restent
+  au système).
+- **Raccourcis entièrement configurables en TOML** (validé le 17/10/2026, remplace l'idée
+  d'un fichier JSON rangé par touche) : section `[keys]` du fichier de configuration,
+  rangée par action (`"core.flag.accept" = ["Maj+P"]`), une touche (avec modificateurs),
+  une séquence (`"g g"`) ou un caractère (`"°"`, pour les touches qu'egui ne nomme pas).
+  Les profils restent les valeurs par défaut ; `[keys]` remplace les actions citées ; un
+  raccourci attribué à deux actions est signalé au démarrage.
 - Sources : spécification XMP (rating -1), exiv2 (schéma digiKam), forums Adobe et
   ExifTool (xmpDM:pick, LR 13.2), code source darktable (`src/common/exif.cc`).
 
