@@ -12,8 +12,9 @@
 
 Plus Rust lui-même ([rustup](https://rustup.rs/), édition 2024). Le script
 [`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes. Commande Linux vérifiée sur
-Mint 22.3 (16/10/2026). Commande macOS : `cmake` ajouté le 16/10/2026, pas encore vérifié
-sur une installation neuve.
+Mint 22.3 (16/10/2026). Commande macOS vérifiée le 17/10/2026 : `cmake` est bien
+nécessaire depuis que libjpeg-turbo est compilée avec le projet (sur Apple Silicon, NASM
+n'est pas requis : les optimisations SIMD ARM n'en ont pas besoin).
 
 ### Pourquoi ces paquets
 
