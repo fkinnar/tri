@@ -2722,9 +2722,6 @@ impl TriApp {
                     if response.clicked() {
                         clicked = Some(action);
                     }
-                    if action == Action::ToggleAutoAdvance {
-                        ui.add_space(6.0);
-                    }
                 }
             });
         });
