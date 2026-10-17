@@ -13,6 +13,7 @@
 //! - [`scheduler`] : file de travail en tâche de fond, priorités, progression ;
 //! - [`settings`] : fichier de configuration (TOML), emplacement et lecture ;
 //! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP ;
+//! - [`metadata`] : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher ;
 //! - [`notes`] : notes d'un dossier en mémoire, modification, filtres sur les notes ;
 //! - [`places`] : emplacements (volumes montés, dossier personnel, racine) et sous-dossiers.
 //!
@@ -28,6 +29,7 @@ pub mod flat;
 pub mod folder;
 pub mod jpeg;
 pub mod media;
+pub mod metadata;
 pub mod notes;
 pub mod places;
 pub mod preview;

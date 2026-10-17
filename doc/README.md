@@ -22,6 +22,7 @@ existe.
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
+| [metadata.md](metadata.md) | Module `tri::metadata` : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher |
 | [notes.md](notes.md) | Module `tri::notes` : notes d'un dossier en mémoire, modification, filtres sur les notes |
 | [xmp.md](xmp.md) | Module `tri::xmp` : notes (étoiles, couleurs, accepté/rejeté) dans les sidecars XMP |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |

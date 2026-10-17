@@ -53,6 +53,22 @@ pub struct RawInfo {
     pub filters: c_uint,
 }
 
+/// Équivalent de `tri_metadata` (shim) : métadonnées de prise de vue.
+#[repr(C)]
+pub struct Metadata {
+    pub make: [c_char; 64],
+    pub model: [c_char; 64],
+    pub lens: [c_char; 128],
+    pub iso: c_float,
+    pub shutter: c_float,
+    pub aperture: c_float,
+    pub focal: c_float,
+    pub focal_35mm: c_float,
+    pub date: [c_char; 32],
+    pub width: c_int,
+    pub height: c_int,
+}
+
 unsafe extern "C" {
     pub fn libraw_version() -> *const c_char;
     pub fn libraw_strerror(err: c_int) -> *const c_char;
@@ -86,4 +102,5 @@ unsafe extern "C" {
     pub fn tri_libraw_get_flip(lr: *mut LibRawData) -> c_int;
     pub fn tri_libraw_get_size(lr: *mut LibRawData, width: *mut c_int, height: *mut c_int);
     pub fn tri_libraw_raw_info(lr: *mut LibRawData, out: *mut RawInfo);
+    pub fn tri_libraw_metadata(lr: *mut LibRawData, out: *mut Metadata);
 }

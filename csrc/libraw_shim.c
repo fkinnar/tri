@@ -50,3 +50,37 @@ void tri_libraw_raw_info(libraw_data_t *lr, tri_raw_info *out) {
     out->maximum = lr->rawdata.color.maximum;
     out->filters = lr->idata.filters;
 }
+
+/* Métadonnées de prise de vue lues par LibRaw (open_file suffit, pas d'unpack). La date
+ * est mise en forme ici, en heure locale, comme LibRaw l'a lue (mktime). */
+typedef struct {
+    char make[64], model[64], lens[128];
+    float iso, shutter, aperture, focal, focal_35mm;
+    char date[32]; /* "AAAA-MM-JJ HH:MM:SS", vide si inconnue */
+    int width, height; /* zone visible, avant rotation */
+} tri_metadata;
+
+#include <string.h>
+#include <time.h>
+
+void tri_libraw_metadata(libraw_data_t *lr, tri_metadata *out) {
+    const char *lens;
+    memset(out, 0, sizeof(*out));
+    strncpy(out->make, lr->idata.make, sizeof(out->make) - 1);
+    strncpy(out->model, lr->idata.model, sizeof(out->model) - 1);
+    lens = lr->lens.Lens[0] ? lr->lens.Lens : lr->lens.makernotes.Lens;
+    strncpy(out->lens, lens, sizeof(out->lens) - 1);
+    out->iso = lr->other.iso_speed;
+    out->shutter = lr->other.shutter;
+    out->aperture = lr->other.aperture;
+    out->focal = lr->other.focal_len;
+    out->focal_35mm = lr->lens.FocalLengthIn35mmFormat;
+    if (lr->other.timestamp > 0) {
+        time_t t = lr->other.timestamp;
+        struct tm *local = localtime(&t);
+        if (local)
+            strftime(out->date, sizeof(out->date), "%Y-%m-%d %H:%M:%S", local);
+    }
+    out->width = lr->sizes.width;
+    out->height = lr->sizes.height;
+}

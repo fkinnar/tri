@@ -50,7 +50,9 @@ Relevé via `cargo metadata` (et complété à chaque ajout : `blake3` est sous 
 Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT, `cmake` — outil de compilation seulement — sous MIT OR Apache-2.0, `serde` et `toml` — fichier
 de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_parser`,
 `toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `quick-xml` — sidecars XMP —
-sous MIT, avec `memchr` sous Unlicense OR MIT) : les 71 crates de l'arbre de
+sous MIT, avec `memchr` sous Unlicense OR MIT ; `kamadak-exif` — EXIF des images
+plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` sous
+BSD-2-Clause) : les 73 crates de l'arbre de
 dépendances du moteur (`cargo tree -p tri -e normal,build`, recompté le 17/10/2026) sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence
 `MIT OR Apache-2.0`. Aucun n'est sous copyleft. `libheif-rs` et `libheif-sys` sont sous MIT :

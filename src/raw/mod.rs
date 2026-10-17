@@ -257,6 +257,38 @@ impl RawFile {
         (w.max(0) as u32, h.max(0) as u32)
     }
 
+    /// Métadonnées de prise de vue lues par LibRaw (dès l'ouverture, sans décompresser) :
+    /// voir [`crate::metadata`], qui les complète par l'EXIF du JPEG embarqué.
+    pub fn shooting_info(&self) -> ShootingInfo {
+        let mut m = std::mem::MaybeUninit::<ffi::Metadata>::uninit();
+        let m = unsafe {
+            ffi::tri_libraw_metadata(self.ptr, m.as_mut_ptr());
+            m.assume_init()
+        };
+        let text = |chars: &[std::os::raw::c_char]| {
+            let bytes: Vec<u8> = chars
+                .iter()
+                .take_while(|&&c| c != 0)
+                .map(|&c| c as u8)
+                .collect();
+            let s = String::from_utf8_lossy(&bytes).trim().to_string();
+            (!s.is_empty()).then_some(s)
+        };
+        let positive = |v: f32| (v > 0.0 && v.is_finite()).then_some(v);
+        ShootingInfo {
+            make: text(&m.make),
+            model: text(&m.model),
+            lens: text(&m.lens),
+            iso: positive(m.iso),
+            shutter: positive(m.shutter),
+            aperture: positive(m.aperture),
+            focal: positive(m.focal),
+            focal_35mm: positive(m.focal_35mm),
+            date: text(&m.date),
+            size: (m.width > 0 && m.height > 0).then_some((m.width as u32, m.height as u32)),
+        }
+    }
+
     /// Données brutes du capteur : décompresse le RAW (`libraw_unpack`, sans
     /// dématriçage) et donne accès aux valeurs de la mosaïque, à leur profondeur réelle
     /// (12, 14 ou 16 bits selon le boîtier), avec les niveaux de noir et de blanc. Base de
@@ -402,6 +434,32 @@ impl Drop for RawFile {
     fn drop(&mut self) {
         unsafe { ffi::libraw_close(self.ptr) };
     }
+}
+
+/// Métadonnées de prise de vue lues par LibRaw ([`RawFile::shooting_info`]) ; `None` :
+/// inconnue.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ShootingInfo {
+    /// Fabricant.
+    pub make: Option<String>,
+    /// Modèle.
+    pub model: Option<String>,
+    /// Objectif.
+    pub lens: Option<String>,
+    /// Sensibilité ISO.
+    pub iso: Option<f32>,
+    /// Temps de pose (s).
+    pub shutter: Option<f32>,
+    /// Ouverture (f/).
+    pub aperture: Option<f32>,
+    /// Focale (mm).
+    pub focal: Option<f32>,
+    /// Focale équivalente 24 × 36 (mm).
+    pub focal_35mm: Option<f32>,
+    /// Date de prise de vue, « AAAA-MM-JJ HH:MM:SS », heure locale.
+    pub date: Option<String>,
+    /// Dimensions de la zone visible (pixels, avant rotation).
+    pub size: Option<(u32, u32)>,
 }
 
 /// Période de la table du motif de filtres : 24 couvre Bayer (8 × 2) et X-Trans (6 × 6).

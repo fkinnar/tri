@@ -455,6 +455,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
      copier les acceptées), éditeur externe configurable, avance automatique après une
      note (option), surveillance du dossier (fichiers ajoutés, XMP modifiés ailleurs).
+  - **Zoom continu** (demandé le 17/10/2026, pas urgent, « un confort de temps en
+    temps ») : pas seulement ajusté / 1:1 ; touches `+`, `-`, `*`, `/` comme Lightroom,
+    geste de pince au pavé tactile, et au-delà de 100 % au besoin. À rapprocher du
+    contrat « rendu par zone / résolution demandée » (architecture cible).
   - **Annuler** (`u`, réservé) : pas une petite tâche (historique à concevoir : paires,
     filtres actifs, XMP modifiés ailleurs entre-temps ; session seule ou persistant) ; à
     reprendre plus tard.

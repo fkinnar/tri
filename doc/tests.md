@@ -164,6 +164,15 @@ aucun fichier temporaire laissé. Conversion : darktable → Adobe (simulation s
 Adobe → darktable (un sidecar partagé recopié pour les deux images), cible à jour rendue
 la plus récente, source mal formée signalée.
 
+### `metadata` (unitaires `src/metadata.rs`, intégration `tests/metadata.rs`)
+
+- Lignes en français (exposition, correction signée, focale et équivalent, date, Mpx,
+  Mo / ko), champs inconnus omis, fabricant non répété, temps de pose, focale courte
+  avec décimale, équivalent 24 × 36 non répété s'il est identique.
+- Fixture `tests/fixtures/exif.jpg` (16 × 12, balises posées par ExifTool) : tous les
+  champs, orientation 6 → dimensions échangées ; PNG sans EXIF (champs vides, dimensions
+  de l'en-tête) ; avec `TRI_TEST_RAW` : appareil, exposition, dimensions.
+
 ### `notes` (unitaires `src/notes.rs`, intégration `tests/notes.rs`)
 
 - Règles d'étoiles, de couleurs (dont « sans couleur »), combinaison des critères, règle

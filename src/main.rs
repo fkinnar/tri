@@ -13,6 +13,8 @@
 //!   tri <dossier> --exposure [--raw|--flat] [--depth N]
 //!       exposition de chaque image (données du capteur pour un RAW) : marge avant
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
+//!   tri <dossier> --metadata [--raw|--flat] [--depth N]
+//!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
@@ -41,6 +43,7 @@ const USAGE: &str = "usage :
   tri --cache-usage [--cache DOSSIER]
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
   tri <dossier> --exposure [--raw|--flat] [--depth N]
+  tri <dossier> --metadata [--raw|--flat] [--depth N]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -62,6 +65,7 @@ struct Args {
     convert: Option<Convention>,
     dry_run: bool,
     exposure: bool,
+    metadata: bool,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -106,6 +110,7 @@ fn parse() -> AnyResult<Args> {
             }
             "--dry-run" => args.dry_run = true,
             "--exposure" => args.exposure = true,
+            "--metadata" => args.metadata = true,
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -372,6 +377,25 @@ fn run() -> AnyResult<()> {
     let groups = args
         .kind
         .apply(ungrouped(scan(&dir, args.depth.unwrap_or(1))?));
+    if args.metadata {
+        for file in groups.into_iter().flatten() {
+            let start = Instant::now();
+            let name = file.path.file_name().unwrap_or_default().to_string_lossy();
+            match tri::metadata::read(&file) {
+                Ok(m) => {
+                    println!(
+                        "== {name} ({:.0} ms)",
+                        start.elapsed().as_secs_f64() * 1000.0
+                    );
+                    for (label, value) in m.rows() {
+                        println!("  {label:<11} {value}");
+                    }
+                }
+                Err(e) => eprintln!("== {name} : {e}"),
+            }
+        }
+        return Ok(());
+    }
     if args.exposure {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return exposure(&settings, &files);
