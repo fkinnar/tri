@@ -9,8 +9,46 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{Key, Modifiers};
+use eframe::egui::{Event, Key, Modifiers};
 use tri::xmp::{Color, Flag};
+
+/// Filtres sur le drapeau proposés à l'utilisateur.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FlagFilter {
+    /// Seulement les photos acceptées.
+    Accepted,
+    /// Masquer les photos rejetées.
+    NotRejected,
+    /// Seulement les photos rejetées.
+    Rejected,
+}
+
+impl FlagFilter {
+    /// Les trois filtres.
+    pub const ALL: [FlagFilter; 3] = [
+        FlagFilter::Accepted,
+        FlagFilter::NotRejected,
+        FlagFilter::Rejected,
+    ];
+
+    /// Drapeaux gardés par ce filtre.
+    pub fn flags(self) -> Vec<Flag> {
+        match self {
+            FlagFilter::Accepted => vec![Flag::Accepted],
+            FlagFilter::NotRejected => vec![Flag::None, Flag::Accepted],
+            FlagFilter::Rejected => vec![Flag::Rejected],
+        }
+    }
+
+    /// Nom court (barre de filtres, barre d'état).
+    pub fn label(self) -> &'static str {
+        match self {
+            FlagFilter::Accepted => "acceptées",
+            FlagFilter::NotRejected => "sans les rejetées",
+            FlagFilter::Rejected => "rejetées",
+        }
+    }
+}
 
 /// Ce que l'utilisateur demande, indépendamment de la touche (ou du clic) utilisée.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -31,8 +69,18 @@ pub enum Action {
     NavPageUp,
     /// Une page plus bas (grille).
     NavPageDown,
-    /// Filtre suivant : tout → RAW → plates → tout.
+    /// Filtre de type suivant : tout → RAW → plates → tout.
     FilterCycle,
+    /// Filtre : au moins n étoiles (0 : étoiles indifférentes).
+    FilterStars(u8),
+    /// Filtre sur le drapeau (activer / désactiver).
+    FilterFlag(FlagFilter),
+    /// Filtre : ajouter ou retirer une couleur.
+    FilterColor(Color),
+    /// Effacer tous les filtres (type compris).
+    FilterClear,
+    /// Afficher / masquer la barre de filtres.
+    ToggleFilterBar,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -63,7 +111,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 33] = [
+    pub const ALL: [Action; 49] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -73,6 +121,22 @@ impl Action {
         Action::NavPageUp,
         Action::NavPageDown,
         Action::FilterCycle,
+        Action::FilterStars(0),
+        Action::FilterStars(1),
+        Action::FilterStars(2),
+        Action::FilterStars(3),
+        Action::FilterStars(4),
+        Action::FilterStars(5),
+        Action::FilterFlag(FlagFilter::Accepted),
+        Action::FilterFlag(FlagFilter::NotRejected),
+        Action::FilterFlag(FlagFilter::Rejected),
+        Action::FilterColor(Color::Red),
+        Action::FilterColor(Color::Yellow),
+        Action::FilterColor(Color::Green),
+        Action::FilterColor(Color::Blue),
+        Action::FilterColor(Color::Purple),
+        Action::FilterClear,
+        Action::ToggleFilterBar,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -115,7 +179,23 @@ impl Action {
             Action::NavLast => "Dernière image",
             Action::NavPageUp => "Page précédente",
             Action::NavPageDown => "Page suivante",
-            Action::FilterCycle => "Changer de filtre : tout, RAW, plates",
+            Action::FilterCycle => "Filtre de type : tout, RAW, plates",
+            Action::FilterStars(0) => "Filtre : étoiles indifférentes",
+            Action::FilterStars(1) => "Filtre : au moins 1 étoile",
+            Action::FilterStars(2) => "Filtre : au moins 2 étoiles",
+            Action::FilterStars(3) => "Filtre : au moins 3 étoiles",
+            Action::FilterStars(4) => "Filtre : au moins 4 étoiles",
+            Action::FilterStars(_) => "Filtre : 5 étoiles",
+            Action::FilterFlag(FlagFilter::Accepted) => "Filtre : acceptées seulement",
+            Action::FilterFlag(FlagFilter::NotRejected) => "Filtre : masquer les rejetées",
+            Action::FilterFlag(FlagFilter::Rejected) => "Filtre : rejetées seulement",
+            Action::FilterColor(Color::Red) => "Filtre : rouge (ajouter / retirer)",
+            Action::FilterColor(Color::Yellow) => "Filtre : jaune (ajouter / retirer)",
+            Action::FilterColor(Color::Green) => "Filtre : vert (ajouter / retirer)",
+            Action::FilterColor(Color::Blue) => "Filtre : bleu (ajouter / retirer)",
+            Action::FilterColor(Color::Purple) => "Filtre : violet (ajouter / retirer)",
+            Action::FilterClear => "Effacer tous les filtres",
+            Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -160,6 +240,22 @@ impl Action {
             Action::NavPageUp => "core.nav.page_up",
             Action::NavPageDown => "core.nav.page_down",
             Action::FilterCycle => "core.filter.cycle",
+            Action::FilterStars(0) => "core.filter.stars.0",
+            Action::FilterStars(1) => "core.filter.stars.1",
+            Action::FilterStars(2) => "core.filter.stars.2",
+            Action::FilterStars(3) => "core.filter.stars.3",
+            Action::FilterStars(4) => "core.filter.stars.4",
+            Action::FilterStars(_) => "core.filter.stars.5",
+            Action::FilterFlag(FlagFilter::Accepted) => "core.filter.flag.accepted",
+            Action::FilterFlag(FlagFilter::NotRejected) => "core.filter.flag.not_rejected",
+            Action::FilterFlag(FlagFilter::Rejected) => "core.filter.flag.rejected",
+            Action::FilterColor(Color::Red) => "core.filter.color.red",
+            Action::FilterColor(Color::Yellow) => "core.filter.color.yellow",
+            Action::FilterColor(Color::Green) => "core.filter.color.green",
+            Action::FilterColor(Color::Blue) => "core.filter.color.blue",
+            Action::FilterColor(Color::Purple) => "core.filter.color.purple",
+            Action::FilterClear => "core.filter.clear",
+            Action::ToggleFilterBar => "core.view.filter_bar",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -287,7 +383,6 @@ const CLASSIC: &[Binding] = {
         (&[plain(Key::End)], NavLast),
         (&[plain(Key::PageUp)], NavPageUp),
         (&[plain(Key::PageDown)], NavPageDown),
-        (&[plain(Key::F)], FilterCycle),
         (&[plain(Key::Enter)], Open),
         (&[plain(Key::Z)], ToggleZoom),
         (&[plain(Key::B)], ToggleSource),
@@ -312,7 +407,6 @@ const VIM: &[Binding] = {
         (&[shifted(Key::G)], NavLast),
         (&[ctrl(Key::U)], NavPageUp),
         (&[ctrl(Key::D)], NavPageDown),
-        (&[plain(Key::F)], FilterCycle),
         (&[plain(Key::Enter)], Open),
         (&[plain(Key::Z)], ToggleZoom),
         (&[plain(Key::B)], ToggleSource),
@@ -363,14 +457,55 @@ const RATING: &[Binding] = {
     ]
 };
 
+/// Filtres, communs aux deux profils : préfixe `f` (choix du 17/10/2026), suivi de la
+/// touche de notation correspondante ; `f f` change le type, `f Échap` efface tout.
+const FILTERS: &[Binding] = {
+    use Action::*;
+    use tri::xmp::Color as C;
+    const F: Chord = plain(Key::F);
+    &[
+        (&[F, F], FilterCycle),
+        (&[F, plain(Key::Num0)], FilterStars(0)),
+        (&[F, shifted(Key::Num0)], FilterStars(0)),
+        (&[F, plain(Key::Num1)], FilterStars(1)),
+        (&[F, shifted(Key::Num1)], FilterStars(1)),
+        (&[F, plain(Key::Num2)], FilterStars(2)),
+        (&[F, shifted(Key::Num2)], FilterStars(2)),
+        (&[F, plain(Key::Num3)], FilterStars(3)),
+        (&[F, shifted(Key::Num3)], FilterStars(3)),
+        (&[F, plain(Key::Num4)], FilterStars(4)),
+        (&[F, shifted(Key::Num4)], FilterStars(4)),
+        (&[F, plain(Key::Num5)], FilterStars(5)),
+        (&[F, shifted(Key::Num5)], FilterStars(5)),
+        (&[F, plain(Key::P)], FilterFlag(FlagFilter::Accepted)),
+        (&[F, shifted(Key::P)], FilterFlag(FlagFilter::Accepted)),
+        (&[F, plain(Key::U)], FilterFlag(FlagFilter::NotRejected)),
+        (&[F, shifted(Key::U)], FilterFlag(FlagFilter::NotRejected)),
+        (&[F, plain(Key::X)], FilterFlag(FlagFilter::Rejected)),
+        (&[F, shifted(Key::X)], FilterFlag(FlagFilter::Rejected)),
+        (&[F, plain(Key::Num6)], FilterColor(C::Red)),
+        (&[F, shifted(Key::Num6)], FilterColor(C::Red)),
+        (&[F, plain(Key::Num7)], FilterColor(C::Yellow)),
+        (&[F, shifted(Key::Num7)], FilterColor(C::Yellow)),
+        (&[F, plain(Key::Num8)], FilterColor(C::Green)),
+        (&[F, shifted(Key::Num8)], FilterColor(C::Green)),
+        (&[F, plain(Key::Num9)], FilterColor(C::Blue)),
+        (&[F, shifted(Key::Num9)], FilterColor(C::Blue)),
+        (&[F, Chord::char('°')], FilterColor(C::Purple)),
+        (&[F, plain(Key::Comma)], FilterColor(C::Purple)),
+        (&[F, plain(Key::Escape)], FilterClear),
+        (&[shifted(Key::F)], ToggleFilterBar),
+    ]
+};
+
 impl Profile {
-    /// Raccourcis du profil, notation comprise.
+    /// Raccourcis du profil, notation et filtres compris.
     pub fn bindings(self) -> impl Iterator<Item = &'static Binding> {
         let own = match self {
             Profile::Classic => CLASSIC,
             Profile::Vim => VIM,
         };
-        own.iter().chain(RATING)
+        own.iter().chain(RATING).chain(FILTERS)
     }
 }
 
@@ -481,6 +616,49 @@ impl Keymap {
             }
         }
         (self, warnings)
+    }
+
+    /// Combinaisons tapées dans les événements d'une image d'egui, dans l'ordre.
+    ///
+    /// Seuls les caractères liés à un raccourci (« ° ») sont gardés : les autres
+    /// accompagnent une touche déjà traitée, et interrompraient une séquence. Une touche
+    /// suivie d'un tel caractère est ignorée : « ° » arrive aussi comme Maj + `Minus`
+    /// (touche physique, egui ne connaissant pas « ° »), qui interromprait `f °`. egui-winit
+    /// livre la touche et son caractère dans la même image (même événement winit).
+    pub fn chords(&self, events: &[Event]) -> Vec<Chord> {
+        let bound_char = |e: &Event| match e {
+            Event::Text(text) => {
+                let mut chars = text.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) if self.uses_char(c) => Some(c),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        // Ce qui suit la touche `n` : premier texte ou appui de touche (en sautant
+        // relâchements et changements de modificateurs).
+        let next_is_bound_char = |n: usize| {
+            events[n + 1..]
+                .iter()
+                .find(|e| matches!(e, Event::Text(_) | Event::Key { pressed: true, .. }))
+                .and_then(bound_char)
+                .is_some()
+        };
+        events
+            .iter()
+            .enumerate()
+            .filter_map(|(n, e)| match e {
+                Event::Key {
+                    key,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if !next_is_bound_char(n) => Chord::from_event(*key, *modifiers),
+                Event::Text(_) => bound_char(e).map(Chord::char),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Vrai si le caractère `c` sert dans un raccourci : seuls ceux-là sont passés au
@@ -924,10 +1102,7 @@ mod tests {
     #[test]
     fn first_profile_wins_on_conflict() {
         let km = Keymap::from_profiles(&[Profile::Vim, Profile::Classic]);
-        assert_eq!(
-            km.action(Key::F, Modifiers::NONE),
-            Some(Action::FilterCycle)
-        );
+        assert_eq!(km.action(Key::Z, Modifiers::NONE), Some(Action::ToggleZoom));
     }
 
     fn g() -> Chord {
@@ -1101,5 +1276,38 @@ mod tests {
             warnings.iter().any(|w| w.contains("gg")),
             "g ne peut plus se déclencher : {warnings:?}"
         );
+    }
+
+    fn key_event(key: Key, pressed: bool, modifiers: Modifiers) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    #[test]
+    fn a_character_replaces_the_key_that_typed_it() {
+        let km = Keymap::default();
+        // « f ° » sur un AZERTY : f, puis Maj + touche physique Minus et le caractère °.
+        let events = [
+            key_event(Key::F, true, Modifiers::NONE),
+            Event::Text("f".into()),
+            key_event(Key::F, false, Modifiers::NONE),
+            key_event(Key::Minus, true, Modifiers::SHIFT),
+            Event::Text("°".into()),
+            key_event(Key::Minus, false, Modifiers::SHIFT),
+        ];
+        let chords = km.chords(&events);
+        assert_eq!(chords, [plain(Key::F), Chord::char('°')]);
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        let now = Instant::now();
+        let actions: Vec<Action> = chords
+            .into_iter()
+            .filter_map(|c| seq.feed(&km, c, now))
+            .collect();
+        assert_eq!(actions, [Action::FilterColor(Color::Purple)]);
     }
 }

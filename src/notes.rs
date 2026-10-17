@@ -123,12 +123,30 @@ impl NoteBook {
         self.entries.is_empty()
     }
 
-    /// Modifie les notes de `image` avec `edit`, puis les écrit dans son sidecar. Renvoie
-    /// les images dont les notes ont changé : `image`, plus celles qui partagent son
-    /// sidecar (convention Adobe), à rafraîchir à l'écran. Une image inconnue est ajoutée.
+    /// Images du même nom que `image` dans son dossier, à l'extension près, sans tenir compte
+    /// de la casse : `IMG.JPG` pour `IMG.RAF` (paire RAW+JPEG d'une carte SD).
+    pub fn siblings(&self, image: &Path) -> Vec<PathBuf> {
+        let stem = |p: &Path| p.file_stem().map(|s| s.to_string_lossy().to_lowercase());
+        let wanted = stem(image);
+        self.by_dir
+            .get(&dir_of(image))
+            .into_iter()
+            .flatten()
+            .filter(|p| p.as_path() != image && stem(p) == wanted)
+            .cloned()
+            .collect()
+    }
+
+    /// Modifie les notes de `image` avec `edit`, puis les écrit dans son sidecar. Les
+    /// images de même nom (paire RAW+JPEG, voir [`NoteBook::siblings`]) reçoivent les mêmes
+    /// notes : noter le RAF note aussi le JPG, quelle que soit la convention (choix du
+    /// 17/10/2026). Renvoie les images dont les notes ont changé, à rafraîchir à l'écran.
+    /// Une image inconnue est ajoutée.
     ///
-    /// En cas d'erreur (sidecar mal formé, disque en lecture seule…), rien ne change en
-    /// mémoire : ce qui est affiché reste ce qui est sur le disque.
+    /// En cas d'erreur (sidecar mal formé, disque en lecture seule…), rien n'est écrit pour
+    /// `image` ; pour une image de la paire, les autres sont écrites et l'erreur est
+    /// renvoyée. La mémoire est toujours relue du disque : ce qui est affiché reste ce qui
+    /// y est.
     pub fn edit(
         &mut self,
         image: &Path,
@@ -144,25 +162,55 @@ impl NoteBook {
         }
         let entry = &self.entries[image];
         if let Some(error) = &entry.error {
-            return Err(XmpError::Malformed(error.clone()));
+            return Err(XmpError::Image {
+                image: image.to_path_buf(),
+                message: error.clone(),
+            });
         }
         let mut notes = entry.notes.clone();
         edit(&mut notes);
-        if notes == entry.notes {
+        let mut targets = vec![image.to_path_buf()];
+        targets.extend(self.siblings(image));
+        let mut written: Vec<PathBuf> = Vec::new();
+        let mut failure = None;
+        for target in &targets {
+            let entry = &self.entries[target];
+            // Sidecar partagé (convention Adobe) : déjà écrit pour l'autre image.
+            if entry.notes == notes || written.contains(&entry.sidecar) {
+                continue;
+            }
+            let result = match &entry.error {
+                Some(error) => Err(error.clone()),
+                None => xmp::write_sidecar(&entry.sidecar, &notes)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string()),
+            };
+            match result {
+                Ok(()) => written.push(entry.sidecar.clone()),
+                Err(message) => {
+                    failure.get_or_insert(XmpError::Image {
+                        image: target.clone(),
+                        message,
+                    });
+                }
+            }
+        }
+        if written.is_empty() && failure.is_none() {
             return Ok(Vec::new());
         }
-        let sidecar = entry.sidecar.clone();
-        xmp::write_sidecar(&sidecar, &notes)?;
-        // Le sidecar a pu être créé, et d'autres images le partager : on relit le dossier
-        // (une liste de fichiers, puis seulement les sidecars).
+        // Des sidecars ont pu être créés, et d'autres images les partager : on relit le
+        // dossier (une liste de fichiers, puis seulement les sidecars).
         let before: Vec<(PathBuf, Notes)> = self.by_dir[&dir]
             .iter()
             .map(|p| (p.clone(), self.notes(p).clone()))
             .collect();
         self.reload_dir(&dir);
+        if let Some(e) = failure {
+            return Err(e);
+        }
         Ok(before
             .into_iter()
-            .filter(|(p, old)| p == image || self.notes(p) != old)
+            .filter(|(p, old)| self.notes(p) != old)
             .map(|(p, _)| p)
             .collect())
     }

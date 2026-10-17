@@ -45,8 +45,25 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`[gui.grid] rejected_opacity`). Une écriture impossible (sidecar mal formé, disque en
   lecture seule) est signalée dans la barre d'état, et la note affichée reste celle du
   disque. Une seule couleur par photo par défaut (`[xmp] multiple_colors`).
-- **Filtre par type** (touche `f`) : tout → RAW → plates. La sélection est conservée si
-  l'image reste visible.
+- **Filtres** (17/10/2026) : type (tout / RAW / plates) et notes (au moins n étoiles ;
+  acceptées, sans les rejetées ou rejetées ; une ou plusieurs couleurs), combinés.
+  - Clavier : préfixe `f` (choix de l'utilisateur), suivi de la touche de notation
+    correspondante : `f f` type suivant, `f 1`…`f 5` au moins n étoiles, `f 0` étoiles
+    indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
+    séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,` couleurs (ajouter / retirer),
+    `f Échap` tout effacer. Chiffres et lettres avec ou sans Maj.
+  - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
+    `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
+    l'étoile active efface le filtre d'étoiles). Des filtres plus complexes (fenêtre ou
+    panneau latéral) restent à discuter.
+  - Barre d'état : filtres actifs en clair (« RAW · 3 étoiles et plus · sans les
+    rejetées »).
+  - La sélection est conservée si l'image reste visible ; sinon elle garde sa place dans
+    la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
+    photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
+    rapide).
+- **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,
+  17/10/2026), voir [notes.md](notes.md).
 - **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
   et ses touches ; l'identifiant technique n'apparaît qu'au survol. L'aide est **modale** :
   tant qu'elle est ouverte, seules Échap, l'aide et Quitter agissent.
@@ -115,7 +132,7 @@ puis on vérifie la netteté des candidates **à 100 %**.
     sautant une image, le 1:1 voulu attend la fin de celui de la voisine déjà commencé (le
     dématriçage X-Trans ne s'interrompt pas) : jusqu'à ~6 s mesurées.
   - Dans un dossier RAW+JPEG, les voisines d'un .RAF sont ses .JPG : le préchargement RAW
-    ne sert vraiment qu'avec le filtre « RAW seuls » (`f`).
+    ne sert vraiment qu'avec le filtre « RAW seuls » (`f f`).
   - Dans un dossier RAW+JPEG, le 1:1 d'un .JPG (6240 px) et celui du JPEG embarqué d'un
     .RAF (4416 px) n'ont pas le même grossissement : c'est le principe du 1:1 (un pixel de
     l'image pour un pixel de l'écran).
@@ -154,7 +171,6 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.nav.up` / `core.nav.down` | ↑ / ↓ | k / j |
 | `core.nav.first` / `core.nav.last` | Début / Fin | gg / Maj+G |
 | `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | Ctrl+U / Ctrl+D |
-| `core.filter.cycle` | f | f |
 | `core.view.open` | Entrée | Entrée |
 | `core.view.zoom` | z | z |
 | `core.view.source` | b | b |
@@ -190,6 +206,14 @@ Cmd et Alt ne déclenchent aucune action : ces combinaisons restent au système 
 Ctrl est permis (Ctrl+U / Ctrl+D du profil vim) ; Sous Linux et Windows, egui signale aussi
 Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd. Pas de raccourci
 Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplacement.
+
+Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
+`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f Échap`) ;
+`core.view.filter_bar` : Maj+F.
+
+Caractères : egui-winit livre la touche (Maj + `Minus`, physique) **et** le caractère
+(« ° ») dans la même image ; `Keymap::chords` ignore une touche suivie d'un caractère lié à
+un raccourci, sinon elle interromprait `f °`.
 
 **Section `[keys]`** du fichier de configuration, rangée par action :
 
@@ -308,6 +332,10 @@ sous le curseur.
 
 Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) et non dans
 `tests/` : `tri-gui` est un binaire, ses modules ne sont pas importables depuis `tests/`.
+
+Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
+`f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre
+masquée / affichée par Maj+F, clics sur RAW, Plates, Effacer.
 
 Notation (17/10/2026) : Maj+3, Maj+X, 8 puis « ° » (événement `Text`) écrivent le sidecar
 de l'image sélectionnée (relu du disque : 3 étoiles, rejetée, violet seul), l'image

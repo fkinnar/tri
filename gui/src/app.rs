@@ -9,19 +9,19 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{
-    self, Align2, Color32, ColorImage, Event as UiEvent, FontId, Rect, ScrollArea, Sense,
-    TextureHandle, TextureOptions, Ui, Vec2, ViewportCommand, pos2, vec2,
+    self, Align2, Color32, ColorImage, FontId, Rect, ScrollArea, Sense, TextureHandle,
+    TextureOptions, Ui, Vec2, ViewportCommand, pos2, vec2,
 };
 use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaFile, MediaKind};
-use tri::notes::NoteBook;
+use tri::notes::{ColorRule, NoteBook, NotesRule, StarsRule};
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
-use tri::xmp::Flag;
+use tri::xmp::{Color, Flag};
 
-use crate::actions::{Action, Chord, Keymap, Sequencer};
+use crate::actions::{Action, FlagFilter, Keymap, Sequencer};
 use crate::grid::{self, Layout};
 use crate::loader::Loader;
 use crate::marks;
@@ -114,6 +114,10 @@ pub struct TriApp {
     /// Dernière note impossible à écrire (sidecar mal formé, disque en lecture seule...).
     note_error: Option<String>,
     filter: KindFilter,
+    /// Filtres sur les notes (étoiles, drapeau, couleurs).
+    notes_rule: NotesRule,
+    /// Barre de filtres affichée (grille).
+    filter_bar: bool,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 3],
@@ -213,6 +217,8 @@ impl TriApp {
             notes,
             note_error: None,
             filter: KindFilter::All,
+            notes_rule: NotesRule::default(),
+            filter_bar: gui.filter_bar,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 3],
@@ -254,12 +260,21 @@ impl TriApp {
         app
     }
 
-    /// Recalcule la liste affichée selon le filtre, et la confie au scheduler.
+    /// Recalcule la liste affichée selon les filtres, et la confie au scheduler. La ligne
+    /// sélectionnée est remise en haut de la vue.
     fn apply_filter(&mut self) {
+        self.refilter(Reveal::Top);
+    }
+
+    /// Recalcule la liste affichée selon les filtres (type, puis notes). L'image
+    /// sélectionnée reste sélectionnée si elle reste visible ; sinon, la sélection garde sa
+    /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
+    /// les rejetées », on passe à la suite).
+    fn refilter(&mut self, reveal: Reveal) {
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
-        self.files = self
-            .filter
-            .apply(ungrouped(self.all.clone()))
+        let notes_filter = self.notes_rule.filter(&self.notes);
+        self.files = notes_filter
+            .apply(self.filter.apply(ungrouped(self.all.clone())))
             .into_iter()
             .flatten()
             .collect();
@@ -267,12 +282,13 @@ impl TriApp {
         self.requested.clear();
         self.progress = [Progress::default(); 3];
         // Garder la même image sélectionnée si elle reste visible.
-        if let Some(path) = selected_path {
-            self.selected = self.files.iter().position(|f| f.path == path).unwrap_or(0);
+        if let Some(path) = selected_path
+            && let Some(index) = self.files.iter().position(|f| f.path == path)
+        {
+            self.selected = index;
         }
         self.selected = self.selected.min(self.files.len().saturating_sub(1));
-        // La liste a changé : remettre la ligne sélectionnée en haut de la vue.
-        self.reveal = Some(Reveal::Top);
+        self.reveal = Some(reveal);
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
             engine.scheduler.set_focus(self.selected);
@@ -379,29 +395,7 @@ impl TriApp {
 
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let chords: Vec<Chord> = ctx.input(|i| {
-            i.events
-                .iter()
-                .filter_map(|e| match e {
-                    UiEvent::Key {
-                        key,
-                        pressed: true,
-                        modifiers,
-                        ..
-                    } => Chord::from_event(*key, *modifiers),
-                    // Seuls les caractères liés à un raccourci (« ° ») : les autres
-                    // accompagnent une touche déjà traitée.
-                    UiEvent::Text(text) => {
-                        let mut chars = text.chars();
-                        match (chars.next(), chars.next()) {
-                            (Some(c), None) if self.keymap.uses_char(c) => Some(Chord::char(c)),
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                })
-                .collect()
-        });
+        let chords = ctx.input(|i| self.keymap.chords(&i.events));
         if !chords.is_empty() {
             self.mouse_active = false; // on tape : pointeur masqué
         }
@@ -477,6 +471,39 @@ impl TriApp {
                 };
                 self.apply_filter();
             }
+            Action::FilterStars(stars) => {
+                self.notes_rule.stars = (stars > 0).then_some(StarsRule::AtLeast(stars));
+                self.apply_filter();
+            }
+            Action::FilterFlag(choice) => {
+                // La même touche désactive le filtre.
+                let flags = choice.flags();
+                self.notes_rule.flags = match &self.notes_rule.flags {
+                    Some(current) if *current == flags => None,
+                    _ => Some(flags),
+                };
+                self.apply_filter();
+            }
+            Action::FilterColor(color) => {
+                let mut rule = self.notes_rule.colors.take().unwrap_or_default();
+                match rule.any_of.iter().position(|&c| c == color) {
+                    Some(i) => {
+                        rule.any_of.remove(i);
+                    }
+                    None => {
+                        rule.any_of.push(color);
+                        rule.any_of.sort();
+                    }
+                }
+                self.notes_rule.colors = (rule != ColorRule::default()).then_some(rule);
+                self.apply_filter();
+            }
+            Action::FilterClear => {
+                self.filter = KindFilter::All;
+                self.notes_rule = NotesRule::default();
+                self.apply_filter();
+            }
+            Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             nav => {
                 let page = self.layout.rows_in(self.view_height);
                 let new = grid::navigate(self.selected, self.files.len(), &self.layout, page, nav);
@@ -503,11 +530,12 @@ impl TriApp {
                 trace(|| format!("notes écrites : {changed:?}"));
                 None
             }
-            Err(e) => Some(format!(
-                "{} : note non enregistrée ({e})",
-                file_name(&file.path)
-            )),
+            Err(e) => Some(format!("note non enregistrée : {e}")),
         };
+        // Filtre sur les notes : l'image peut ne plus y correspondre.
+        if !self.notes_rule.is_empty() {
+            self.refilter(Reveal::Minimal);
+        }
     }
 
     fn select(&mut self, index: usize) {
@@ -903,7 +931,7 @@ impl TriApp {
             ui.label(format!(
                 "{} images ({raws} RAW) · filtre : {}",
                 self.files.len(),
-                filter_name(self.filter)
+                self.filter_summary()
             ));
             ui.separator();
             for (name, p) in [
@@ -947,6 +975,122 @@ impl TriApp {
                 .on_hover_text(egui::RichText::new(warning).monospace());
             }
         });
+    }
+
+    /// Filtres actifs en clair (« RAW · 3 étoiles et plus · sans les rejetées »).
+    fn filter_summary(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if self.filter != KindFilter::All {
+            parts.push(filter_name(self.filter).into());
+        }
+        if let Some(StarsRule::AtLeast(n)) = self.notes_rule.stars {
+            parts.push(match n {
+                5 => "5 étoiles".into(),
+                n => format!("{n} étoile{} et plus", if n > 1 { "s" } else { "" }),
+            });
+        }
+        if let Some(flags) = &self.notes_rule.flags
+            && let Some(choice) = FlagFilter::ALL.into_iter().find(|c| c.flags() == *flags)
+        {
+            parts.push(choice.label().into());
+        }
+        if let Some(colors) = &self.notes_rule.colors {
+            let names: Vec<&str> = colors.any_of.iter().map(|&c| color_name(c)).collect();
+            parts.push(names.join(" ou "));
+        }
+        if parts.is_empty() {
+            "tout".into()
+        } else {
+            parts.join(" · ")
+        }
+    }
+
+    /// Barre de filtres, à la souris : chaque clic déclenche la même action que le clavier.
+    fn filter_bar(&mut self, ui: &mut Ui) {
+        let mut clicked: Vec<Action> = Vec::new();
+        let colors = self.gui.colors;
+        ui.horizontal(|ui| {
+            ui.label("Type");
+            for (kind, label) in [
+                (KindFilter::All, "Tout"),
+                (KindFilter::RawOnly, "RAW"),
+                (KindFilter::FlatOnly, "Plates"),
+            ] {
+                if ui.selectable_label(self.filter == kind, label).clicked() {
+                    // Le type tourne en boucle : autant de crans que nécessaire.
+                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
+                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
+                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
+                    for _ in 0..(to + 3 - from) % 3 {
+                        clicked.push(Action::FilterCycle);
+                    }
+                }
+            }
+            ui.separator();
+            ui.label("Étoiles");
+            let current = match self.notes_rule.stars {
+                Some(StarsRule::AtLeast(n)) => n,
+                _ => 0,
+            };
+            let size = self.gui.grid.marks + 4.0;
+            for n in 1..=5u8 {
+                let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+                let color = if n <= current {
+                    Color32::from(colors.stars)
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                marks::star(ui.painter(), rect.center(), size / 2.0, color);
+                let tip = if n == current {
+                    "Étoiles indifférentes"
+                } else {
+                    Action::FilterStars(n).label()
+                };
+                if response.on_hover_text(tip).clicked() {
+                    // Recliquer l'étoile du filtre actif l'efface.
+                    clicked.push(Action::FilterStars(if n == current { 0 } else { n }));
+                }
+            }
+            ui.separator();
+            for choice in FlagFilter::ALL {
+                let active = self.notes_rule.flags.as_ref() == Some(&choice.flags());
+                if ui.selectable_label(active, choice.label()).clicked() {
+                    clicked.push(Action::FilterFlag(choice));
+                }
+            }
+            ui.separator();
+            ui.label("Couleurs");
+            for color in Color::ALL {
+                let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+                let active = self
+                    .notes_rule
+                    .colors
+                    .as_ref()
+                    .is_some_and(|r| r.any_of.contains(&color));
+                let painter = ui.painter();
+                painter.circle_filled(rect.center(), size * 0.35, marks::color_of(&colors, color));
+                if active {
+                    painter.circle_stroke(
+                        rect.center(),
+                        size * 0.48,
+                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
+                    );
+                }
+                if response.on_hover_text(color_name(color)).clicked() {
+                    clicked.push(Action::FilterColor(color));
+                }
+            }
+            ui.separator();
+            let any = self.filter != KindFilter::All || !self.notes_rule.is_empty();
+            if ui.add_enabled(any, egui::Button::new("Effacer")).clicked() {
+                clicked.push(Action::FilterClear);
+            }
+            ui.weak(format!("{} / {} images", self.files.len(), self.all.len()));
+        });
+        let ctx = ui.ctx().clone();
+        for action in clicked {
+            self.perform(&ctx, action);
+        }
     }
 
     fn grid(&mut self, ui: &mut Ui) {
@@ -1216,11 +1360,18 @@ impl eframe::App for TriApp {
         self.update_loads(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        if self.filter_bar && self.mode == Mode::Grid && self.error.is_none() {
+            egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
+        }
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {
-                ui.label("Aucune image dans ce dossier (ou pour ce filtre : touche f).");
+                ui.label(if self.all.is_empty() {
+                    "Aucune image dans ce dossier."
+                } else {
+                    "Aucune image pour ces filtres (f puis Échap pour les effacer)."
+                });
             } else if self.mode == Mode::View {
                 self.viewer(ui);
             } else {
@@ -1333,6 +1484,17 @@ fn folder_name(path: &Path) -> String {
     file_name(path)
 }
 
+/// Nom d'une couleur de notation.
+fn color_name(color: Color) -> &'static str {
+    match color {
+        Color::Red => "rouge",
+        Color::Yellow => "jaune",
+        Color::Green => "vert",
+        Color::Blue => "bleu",
+        Color::Purple => "violet",
+    }
+}
+
 fn filter_name(filter: KindFilter) -> &'static str {
     match filter {
         KindFilter::All => "tout",
@@ -1355,7 +1517,7 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui::{Key, Modifiers};
+    use eframe::egui::{Event as UiEvent, Key, Modifiers};
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
 
@@ -1413,6 +1575,98 @@ mod tests {
         press(&mut h, Key::Num1, Modifiers::NONE);
         assert_eq!(tri::xmp::read(&photos.join("img1.jpg")).unwrap().stars, 1);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
+    }
+
+    fn names(h: &Harness<'_, TriApp>) -> Vec<String> {
+        h.state().files.iter().map(|f| file_name(&f.path)).collect()
+    }
+
+    #[test]
+    fn f_prefixed_keys_filter_on_notes() {
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::Num3, Modifiers::NONE); // img0 : 3 étoiles
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::X, Modifiers::SHIFT); // img1 : rejetée
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num9, Modifiers::NONE); // img2 : bleue
+
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num2, Modifiers::SHIFT);
+        assert_eq!(names(&h), ["img0.jpg"], "f puis Maj+2 : au moins 2 étoiles");
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num0, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "f 0 : étoiles indifférentes");
+
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert_eq!(
+            names(&h),
+            ["img0.jpg", "img2.jpg"],
+            "f u : sans les rejetées"
+        );
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "f u à nouveau : filtre retiré");
+
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num9, Modifiers::SHIFT);
+        assert_eq!(names(&h), ["img2.jpg"], "f 9 : bleues");
+        // « ° » : le caractère (sa touche physique, livrée dans la même image par winit, est
+        // vérifiée dans `actions::tests` : kittest envoie un événement par image).
+        press(&mut h, Key::F, Modifiers::NONE);
+        h.event(UiEvent::Text("°".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().filter_summary(), "bleu ou violet");
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "f Échap : tout effacé");
+        assert_eq!(h.state().filter_summary(), "tout");
+        assert_eq!(
+            h.state().mode,
+            Mode::Grid,
+            "Échap de la séquence ne fait rien d'autre"
+        );
+    }
+
+    #[test]
+    fn rejecting_under_hide_rejected_moves_on_to_the_next_image() {
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        assert_eq!(names(&h), ["img1.jpg", "img2.jpg"]);
+        assert_eq!(
+            h.state().selected,
+            0,
+            "img1, désormais première, est sélectionnée"
+        );
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        assert_eq!(names(&h), ["img2.jpg"]);
+    }
+
+    #[test]
+    fn the_filter_bar_shows_and_hides_with_shift_f() {
+        let (mut h, _dir) = harness();
+        assert!(
+            h.query_by_label("Effacer").is_some(),
+            "barre visible par défaut"
+        );
+        press(&mut h, Key::F, Modifiers::SHIFT);
+        assert!(h.query_by_label("Effacer").is_none());
+        press(&mut h, Key::F, Modifiers::SHIFT);
+        h.get_by_label("RAW").click();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().filter,
+            KindFilter::RawOnly,
+            "clic : même action que le clavier"
+        );
+        h.get_by_label("Plates").click();
+        h.run_steps(3);
+        assert_eq!(h.state().filter, KindFilter::FlatOnly);
+        h.get_by_label("Effacer").click();
+        h.run_steps(3);
+        assert_eq!(h.state().filter, KindFilter::All);
     }
 
     #[test]

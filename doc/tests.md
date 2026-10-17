@@ -166,7 +166,9 @@ la plus récente, source mal formée signalée.
   vide ; image inconnue.
 - Dans un dossier temporaire : chargement (sidecar mal formé signalé sans arrêter le
   reste), modification écrite puis relue du disque, paire RAW+JPEG en convention Adobe
-  (les deux rafraîchies) et darktable (séparées), sidecar mal formé jamais modifié,
+  (les deux rafraîchies) et darktable (même note dans les deux sidecars, casse ignorée,
+  `IMG_01` à part), paire différente réalignée, sidecar mal formé dans la paire signalé
+  sans bloquer le reste, sidecar mal formé jamais modifié,
   `reload` après une modification extérieure, filtres sur un dossier parcouru par
   `media::scan`.
 

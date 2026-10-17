@@ -173,6 +173,13 @@ pub enum XmpError {
     Malformed(String),
     /// Aucun `rdf:Description` : pas un paquet XMP utilisable, le sidecar n'est pas modifié.
     NoDescription,
+    /// Erreur déjà décrite, rapportée pour une image précise (notes d'un dossier).
+    Image {
+        /// Image concernée.
+        image: PathBuf,
+        /// Description de l'erreur.
+        message: String,
+    },
 }
 
 impl fmt::Display for XmpError {
@@ -181,6 +188,7 @@ impl fmt::Display for XmpError {
             Self::Io(e) => write!(f, "sidecar XMP : {e}"),
             Self::Malformed(e) => write!(f, "sidecar XMP mal formé (non modifié) : {e}"),
             Self::NoDescription => write!(f, "sidecar XMP sans rdf:Description (non modifié)"),
+            Self::Image { image, message } => write!(f, "{} : {message}", image.display()),
         }
     }
 }

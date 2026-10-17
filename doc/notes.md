@@ -16,6 +16,13 @@ Le format des sidecars est l'affaire de [xmp.md](xmp.md).
   change l'autre, et les deux sont renvoyés pour être rafraîchis à l'écran. Après écriture,
   le dossier est relu (le sidecar a pu être créé). En cas d'erreur, la mémoire ne change
   pas : l'affichage reste fidèle au disque. Un sidecar mal formé n'est jamais modifié.
+- **Paires** (choix du 17/10/2026) : `siblings(image)` donne les images de même nom à
+  l'extension près, sans tenir compte de la casse (`IMG.JPG` pour `IMG.RAF`, mais pas
+  `IMG_01.JPG`) ; `edit` leur donne les mêmes notes, quelle que soit la convention
+  (convention darktable : `IMG.RAF.xmp` et `IMG.JPG.xmp` ; Adobe : un seul `IMG.xmp`,
+  écrit une fois). Une paire déjà différente est réalignée. Un sidecar mal formé dans la
+  paire est signalé (`XmpError::Image`, qui nomme l'image) sans empêcher les autres
+  écritures.
 - `reload()` : relit tout (notes changées par un autre logiciel).
 
 Pourquoi tout en mémoire : **filtrer doit rester instantané** (`CLAUDE.md`, « analyse ≠

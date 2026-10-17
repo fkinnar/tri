@@ -80,15 +80,68 @@ fn shared_adobe_sidecar_updates_both_images_of_a_pair() {
 }
 
 #[test]
-fn darktable_pair_keeps_separate_notes() {
+fn darktable_pair_gets_the_same_notes_in_both_sidecars() {
+    let dir = tempfile::tempdir().unwrap();
+    let raf = file(dir.path(), "IMG.RAF");
+    let jpg = file(dir.path(), "img.jpg");
+    let other = file(dir.path(), "IMG_01.JPG");
+    let mut book = NoteBook::load(
+        [raf.as_path(), jpg.as_path(), other.as_path()],
+        Convention::Darktable,
+    );
+    assert_eq!(
+        book.siblings(&raf),
+        std::slice::from_ref(&jpg),
+        "casse ignorée, IMG_01 à part"
+    );
+    let changed = book.edit(&raf, |n| n.set_stars(5)).unwrap();
+    assert_eq!(changed, [raf.clone(), jpg.clone()]);
+    assert_eq!(
+        xmp::read_sidecar(&dir.path().join("IMG.RAF.xmp"))
+            .unwrap()
+            .stars,
+        5
+    );
+    assert_eq!(
+        xmp::read_sidecar(&dir.path().join("img.jpg.xmp"))
+            .unwrap()
+            .stars,
+        5
+    );
+    assert_eq!(book.notes(&other).stars, 0);
+}
+
+#[test]
+fn a_pair_that_differs_is_brought_in_line() {
     let dir = tempfile::tempdir().unwrap();
     let raf = file(dir.path(), "IMG.RAF");
     let jpg = file(dir.path(), "IMG.JPG");
+    fs::write(
+        dir.path().join("IMG.RAF.xmp"),
+        xmp_with(r#"xmp:Rating="3""#),
+    )
+    .unwrap();
     let mut book = NoteBook::load([raf.as_path(), jpg.as_path()], Convention::Darktable);
-    book.edit(&raf, |n| n.set_stars(5)).unwrap();
-    assert_eq!(book.notes(&jpg).stars, 0);
-    assert!(dir.path().join("IMG.RAF.xmp").exists());
-    assert!(!dir.path().join("IMG.JPG.xmp").exists());
+    // 3 étoiles de nouveau sur le RAF : rien ne change pour lui, mais le JPG suit.
+    let changed = book.edit(&raf, |n| n.set_stars(3)).unwrap();
+    assert_eq!(changed, std::slice::from_ref(&jpg));
+    assert_eq!(book.notes(&jpg).stars, 3);
+}
+
+#[test]
+fn a_malformed_sidecar_in_the_pair_is_reported_but_the_rest_is_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let raf = file(dir.path(), "IMG.RAF");
+    let jpg = file(dir.path(), "IMG.JPG");
+    fs::write(dir.path().join("IMG.JPG.xmp"), "<pas du xml").unwrap();
+    let mut book = NoteBook::load([raf.as_path(), jpg.as_path()], Convention::Darktable);
+    let err = book.edit(&raf, |n| n.set_stars(4)).unwrap_err();
+    assert!(err.to_string().contains("IMG.JPG"), "{err}");
+    assert_eq!(book.notes(&raf).stars, 4);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("IMG.JPG.xmp")).unwrap(),
+        "<pas du xml"
+    );
 }
 
 #[test]

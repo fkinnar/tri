@@ -78,6 +78,8 @@ pub struct GuiSettings {
     /// Temps maximal passé à charger des vignettes par image affichée (ms) : au-delà, on
     /// reprend à l'image suivante pour ne pas figer l'interface.
     pub load_budget_ms: u64,
+    /// Barre de filtres affichée au démarrage (Maj+F l'affiche ou la masque).
+    pub filter_bar: bool,
     /// `[gui.grid]`.
     pub grid: GridSettings,
     /// `[gui.view]`.
@@ -97,6 +99,7 @@ impl Default for GuiSettings {
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
             load_budget_ms: 8,
+            filter_bar: true,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             colors: Colors::default(),

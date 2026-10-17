@@ -80,6 +80,9 @@ raw_previews = "on-demand"
 # Temps maximal de chargement des vignettes par image affichée (ms) : au-delà, la suite
 # attend l'image suivante, pour ne pas figer l'interface.
 load_budget_ms = 8
+# Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
+# l'affiche ou la masque.
+filter_bar = true
 
 [gui.grid]
 # Dimensions en points.

@@ -70,6 +70,11 @@ pub fn navigate(
         Action::NavPageUp => selected.saturating_sub(cols * page_rows.max(1)),
         Action::NavPageDown => (selected + cols * page_rows.max(1)).min(last),
         Action::FilterCycle
+        | Action::FilterStars(_)
+        | Action::FilterFlag(_)
+        | Action::FilterColor(_)
+        | Action::FilterClear
+        | Action::ToggleFilterBar
         | Action::Open
         | Action::ToggleZoom
         | Action::ToggleSource
