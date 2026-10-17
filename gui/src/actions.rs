@@ -180,6 +180,8 @@ pub enum Action {
     FilterClear,
     /// Filtre : masquer les photos jugées floues.
     FilterBlurry,
+    /// Filtre : seulement les photos jugées floues.
+    FilterOnlyBlurry,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -192,6 +194,8 @@ pub enum Action {
     TogglePeaking,
     /// Carte de netteté : couleur suivante.
     PeakingColor,
+    /// Afficher / masquer le collimateur de mise au point.
+    ToggleFocusPoint,
     /// Sélectionner / désélectionner l'image courante.
     SelectToggle,
     /// Mode visuel : la plage suit l'image courante.
@@ -252,7 +256,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 70] = [
+    pub const ALL: [Action; 72] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -278,6 +282,7 @@ impl Action {
         Action::FilterColor(Color::Purple),
         Action::FilterClear,
         Action::FilterBlurry,
+        Action::FilterOnlyBlurry,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleAutoAdvance,
@@ -286,6 +291,7 @@ impl Action {
         Action::Compare,
         Action::TogglePeaking,
         Action::PeakingColor,
+        Action::ToggleFocusPoint,
         Action::SelectAll,
         Action::SelectClear,
         Action::FileRename,
@@ -344,12 +350,11 @@ impl Action {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back => Group::Navigation,
             ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | ToggleClipping | TogglePeaking | PeakingColor => {
-                Group::View
-            }
+            | HistogramScale | HistogramLarge | ToggleClipping | TogglePeaking | PeakingColor
+            | ToggleFocusPoint => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
-            | FilterBlurry => Group::Filters,
+            | FilterBlurry | FilterOnlyBlurry => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
@@ -391,12 +396,14 @@ impl Action {
             Action::FilterColor(Color::Purple) => "core.filter.color.purple",
             Action::FilterClear => "core.filter.clear",
             Action::FilterBlurry => "core.filter.blurry",
+            Action::FilterOnlyBlurry => "core.filter.only_blurry",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
             Action::Compare => "core.view.compare",
             Action::TogglePeaking => "core.view.peaking",
             Action::PeakingColor => "core.view.peaking_color",
+            Action::ToggleFocusPoint => "core.view.focus_point",
             Action::SelectToggle => "core.select.toggle",
             Action::SelectVisual => "core.select.visual",
             Action::SelectAll => "core.select.all",
@@ -668,6 +675,7 @@ const RATING: &[Binding] = {
         (&[plain(Key::O)], ToggleClipping),
         (&[plain(Key::P)], TogglePeaking),
         (&[ctrl(Key::P)], PeakingColor),
+        (&[plain(Key::M)], ToggleFocusPoint),
         (&[shifted(Key::M)], ToggleMetadata),
     ]
 };
@@ -711,6 +719,7 @@ const FILTERS: &[Binding] = {
         (&[F, plain(Key::Period)], FilterColor(C::Purple)),
         (&[F, plain(Key::Escape)], FilterClear),
         (&[F, plain(Key::B)], FilterBlurry),
+        (&[F, shifted(Key::B)], FilterOnlyBlurry),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };

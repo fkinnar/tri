@@ -289,6 +289,15 @@ pub struct ViewSettings {
     pub pan_step: f32,
     /// Taille des notes (étoiles, couleurs, drapeau) en plein écran.
     pub marks: f32,
+    /// Collimateur de mise au point affiché au démarrage (`m` l'affiche ou le masque ;
+    /// plein écran et comparaison).
+    pub focus_point: bool,
+    /// Forme du repère du collimateur.
+    pub focus_marker: FocusMarker,
+    /// Taille du repère du collimateur (points).
+    pub focus_marker_size: f32,
+    /// Épaisseur du trait du repère (points).
+    pub focus_marker_width: f32,
 }
 
 impl Default for ViewSettings {
@@ -298,8 +307,28 @@ impl Default for ViewSettings {
             textures: 8,
             pan_step: 0.2,
             marks: 18.0,
+            focus_point: true,
+            focus_marker: FocusMarker::default(),
+            focus_marker_size: 28.0,
+            focus_marker_width: 2.0,
         }
     }
+}
+
+/// Forme du repère du collimateur. Dans le fichier : `"square"`, `"cross"`, `"circle"` ou
+/// `"heart"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FocusMarker {
+    /// Carré, comme dans le viseur.
+    #[default]
+    Square,
+    /// Croix.
+    Cross,
+    /// Cercle.
+    Circle,
+    /// Cœur (proposé par l'utilisateur, le 17/10/2026).
+    Heart,
 }
 
 impl ViewSettings {
@@ -466,6 +495,8 @@ pub struct Colors {
     pub hover: Color,
     /// Cadre des images sélectionnées (sélection multiple : Espace, v, Maj+clic…).
     pub marked: Color,
+    /// Repère du collimateur de mise au point.
+    pub focus: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -516,6 +547,7 @@ impl Default for Colors {
             progress: None,
             hover: Color([180, 180, 180]),
             marked: Color([255, 170, 40]),
+            focus: Color([60, 255, 110]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

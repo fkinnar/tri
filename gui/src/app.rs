@@ -169,11 +169,13 @@ pub struct TriApp {
     /// Jugement de chaque photo notée (dossier et voisines, voir `tri::sharpness::judge`).
     judgements: HashMap<PathBuf, tri::sharpness::Judgement>,
     /// Filtre « masquer les floues » (`f b`).
-    hide_blurry: bool,
+    blur_rule: Option<tri::sharpness::BlurRule>,
     /// Photos jugées floues au dernier filtrage (refiltrer seulement si ça change).
     blurry_applied: HashSet<PathBuf>,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
+    /// Collimateur de mise au point affiché (`m`).
+    focus_point: bool,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
@@ -350,10 +352,11 @@ impl TriApp {
             selection: Default::default(),
             scores: HashMap::new(),
             judgements: HashMap::new(),
-            hide_blurry: false,
+            blur_rule: None,
             blurry_applied: HashSet::new(),
             peaking: gui.sharpness.visible,
             peaking_color: 0,
+            focus_point: gui.view.focus_point,
             peaking_texture: None,
             peaking_asked: None,
             compare: Vec::new(),
@@ -815,13 +818,13 @@ impl TriApp {
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
         let groups = self.folder.filtered(self.filter, &self.notes_rule);
         // Photos floues : jugées par le moteur, d'après les scores connus.
-        let groups = if self.hide_blurry {
-            tri::sharpness::BlurFilter {
+        let groups = match self.blur_rule {
+            Some(rule) => tri::sharpness::BlurFilter {
                 judgements: &self.judgements,
+                rule,
             }
-            .apply(groups)
-        } else {
-            groups
+            .apply(groups),
+            None => groups,
         };
         self.blurry_applied = self.blurry_now();
         self.files = groups.into_iter().flatten().collect();
@@ -942,7 +945,7 @@ impl TriApp {
             self.judgements = tri::sharpness::judge(&ordered, &self.settings.sharpness);
         }
         let p = self.progress[4];
-        if self.hide_blurry
+        if self.blur_rule.is_some()
             && p.total > 0
             && p.done == p.total
             && self.blurry_now() != self.blurry_applied
@@ -1139,6 +1142,7 @@ impl TriApp {
             }
             Action::Compare => self.start_compare(),
             Action::TogglePeaking => self.peaking = !self.peaking,
+            Action::ToggleFocusPoint => self.focus_point = !self.focus_point,
             Action::PeakingColor => {
                 // Changer de couleur montre la carte si elle était masquée.
                 let n = self.gui.sharpness.colors.len().max(1);
@@ -1239,11 +1243,17 @@ impl TriApp {
             Action::FilterClear => {
                 self.filter = KindFilter::All;
                 self.notes_rule = NotesRule::default();
-                self.hide_blurry = false;
+                self.blur_rule = None;
                 self.apply_filter();
             }
-            Action::FilterBlurry => {
-                self.hide_blurry = !self.hide_blurry;
+            Action::FilterBlurry | Action::FilterOnlyBlurry => {
+                use tri::sharpness::BlurRule;
+                let rule = match action {
+                    Action::FilterBlurry => BlurRule::HideBlurry,
+                    _ => BlurRule::OnlyBlurry,
+                };
+                // Même touche : on retire le filtre ; l'autre : on bascule.
+                self.blur_rule = (self.blur_rule != Some(rule)).then_some(rule);
                 self.apply_filter();
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
@@ -1688,6 +1698,38 @@ impl TriApp {
         }
     }
 
+    /// Repère du collimateur de mise au point de `file` sur l'image affichée en `rect`
+    /// (métadonnées lues en fond ; rien tant qu'elles ne sont pas là, ni pour un boîtier
+    /// dont le collimateur n'est pas lu).
+    fn draw_focus_point(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        file: &MediaFile,
+        rect: Option<Rect>,
+    ) {
+        let Some(rect) = rect.filter(|_| self.focus_point) else {
+            return;
+        };
+        let point = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
+            .get(file)
+            .and_then(|read| read.as_ref().ok())
+            .and_then(|m| m.focus_point);
+        if let Some((x, y)) = point {
+            let v = &self.gui.view;
+            let center = rect.min + vec2(x * rect.width(), y * rect.height());
+            let color = Color32::from(self.gui.colors.focus);
+            // Liseré sombre sous le trait : visible sur un fond clair comme foncé.
+            let shadow =
+                egui::Stroke::new(v.focus_marker_width + 2.0, Color32::from_black_alpha(140));
+            marks::focus_marker(painter, center, v.focus_marker_size, v.focus_marker, shadow);
+            let stroke = egui::Stroke::new(v.focus_marker_width, color);
+            marks::focus_marker(painter, center, v.focus_marker_size, v.focus_marker, stroke);
+        }
+    }
+
     /// Carte de netteté de `file` sur son 1:1 affiché en `rect` (`at_one_to_one` : c'est
     /// le 1:1 qui est affiché) : dessinée si elle est chargée, demandée au chargeur sinon ;
     /// sans objet, la demande en cours est retirée.
@@ -1810,6 +1852,7 @@ impl TriApp {
                     _ => view::fit_rect(rect, original),
                 };
                 painter.image(texture.id(), image_rect, uv, Color32::WHITE);
+                self.draw_focus_point(&ctx, &painter, &file, Some(image_rect));
                 if self.clipping
                     && let Some(mask) = self.mask_texture(&ctx, index)
                 {
@@ -1978,6 +2021,7 @@ impl TriApp {
                 );
             }
         }
+        self.draw_focus_point(&ctx, &painter, &file, image_rect);
         // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
         let peaking = self.peaking_overlay(
             &painter,
@@ -2623,8 +2667,10 @@ impl TriApp {
             let names: Vec<String> = colors.any_of.iter().map(|&c| color_name(c)).collect();
             parts.push(names.join(&t!("filter-summary-or")));
         }
-        if self.hide_blurry {
-            parts.push(t!("filter-bar-no-blurry"));
+        match self.blur_rule {
+            Some(tri::sharpness::BlurRule::HideBlurry) => parts.push(t!("filter-bar-no-blurry")),
+            Some(tri::sharpness::BlurRule::OnlyBlurry) => parts.push(t!("filter-bar-only-blurry")),
+            None => {}
         }
         if parts.is_empty() {
             t!("filter-all")
@@ -2685,12 +2731,25 @@ impl TriApp {
                 }
             }
             ui.separator();
-            if ui
-                .selectable_label(self.hide_blurry, t!("filter-bar-no-blurry"))
-                .on_hover_text(self.action_tip(Action::FilterBlurry))
-                .clicked()
-            {
-                clicked.push(Action::FilterBlurry);
+            for (rule, label, action) in [
+                (
+                    tri::sharpness::BlurRule::HideBlurry,
+                    t!("filter-bar-no-blurry"),
+                    Action::FilterBlurry,
+                ),
+                (
+                    tri::sharpness::BlurRule::OnlyBlurry,
+                    t!("filter-bar-only-blurry"),
+                    Action::FilterOnlyBlurry,
+                ),
+            ] {
+                if ui
+                    .selectable_label(self.blur_rule == Some(rule), label)
+                    .on_hover_text(self.action_tip(action))
+                    .clicked()
+                {
+                    clicked.push(action);
+                }
             }
             ui.separator();
             ui.label(t!("filter-bar-colors"));
@@ -2715,8 +2774,9 @@ impl TriApp {
                 }
             }
             ui.separator();
-            let any =
-                self.filter != KindFilter::All || !self.notes_rule.is_empty() || self.hide_blurry;
+            let any = self.filter != KindFilter::All
+                || !self.notes_rule.is_empty()
+                || self.blur_rule.is_some();
             if ui
                 .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
                 .clicked()
@@ -3860,12 +3920,35 @@ mod tests {
         // f b : la floue disparaît ; f b encore : elle revient.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
-        assert!(h.state().hide_blurry);
+        assert_eq!(
+            h.state().blur_rule,
+            Some(tri::sharpness::BlurRule::HideBlurry)
+        );
         assert_eq!(h.state().files.len(), 3);
         assert!(h.state().files.iter().all(|f| f.path != c));
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 4);
+        // f Maj+B : seulement la floue.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::B, Modifiers::SHIFT);
+        assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().files[0].path, c);
+        // f b depuis « floues seulement » : bascule vers « sans les floues ».
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 3);
+    }
+
+    #[test]
+    fn m_toggles_the_focus_point() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(h.state().focus_point, "affiché par défaut");
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert!(!h.state().focus_point);
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert!(h.state().focus_point);
     }
 
     #[test]

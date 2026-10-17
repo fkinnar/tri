@@ -75,6 +75,7 @@ pub fn navigate(
         | Action::FilterColor(_)
         | Action::FilterClear
         | Action::FilterBlurry
+        | Action::FilterOnlyBlurry
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleAutoAdvance
@@ -82,6 +83,7 @@ pub fn navigate(
         | Action::Compare
         | Action::TogglePeaking
         | Action::PeakingColor
+        | Action::ToggleFocusPoint
         | Action::SelectVisual
         | Action::SelectAll
         | Action::SelectClear

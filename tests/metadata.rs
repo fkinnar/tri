@@ -57,3 +57,19 @@ fn a_real_raw() {
     assert!(m.exposure_text().is_some());
     assert!(m.size.is_some_and(|(w, h)| w > 1000 && h > 1000));
 }
+
+/// Collimateur d'un vrai RAF Fujifilm (`TRI_TEST_RAW`) : lu dans la note du fabricant,
+/// dans l'image affichée (entre 0 et 1).
+#[test]
+#[ignore = "nécessite TRI_TEST_RAW (RAF Fujifilm)"]
+fn a_fuji_raw_gives_its_focus_point() {
+    let path = std::env::var("TRI_TEST_RAW").expect("TRI_TEST_RAW");
+    let file = tri::media::MediaFile {
+        path: path.into(),
+        kind: tri::media::MediaKind::Raw,
+    };
+    let m = tri::metadata::read(&file).unwrap();
+    let (x, y) = m.focus_point.expect("collimateur");
+    println!("collimateur : ({x:.3}, {y:.3})");
+    assert!((0.0..=1.0).contains(&x) && (0.0..=1.0).contains(&y));
+}

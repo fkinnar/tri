@@ -147,9 +147,9 @@ editor = []
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de
 # luminance (Sobel, 0 à 510 ; un bord franc noir / blanc donne 255) dépasse ce seuil. Fixe,
 # pas relatif à l'image : dans une rafale, la photo la plus nette montre plus de contours.
-# Plus bas : plus de contours, bruit compris. 32 : lignes de la main, lèvres nettes ; 48 :
-# seulement les bords francs.
-threshold = 32
+# Plus bas : plus de contours, bruit compris. 48 : une photo molle n'est presque plus
+# marquée, une nette l'est franchement (32 marquait aussi les molles).
+threshold = 48
 # Épaississement des contours marqués (pixels de chaque côté ; 0 : aucun) : un contour d'un
 # pixel est à peine visible à 1:1 sur un écran haute densité.
 spread = 1
@@ -263,6 +263,13 @@ textures = 8
 pan_step = 0.2
 # Taille des notes (étoiles, couleurs, drapeau) en plein écran.
 marks = 18.0
+# Collimateur de mise au point (lu dans le RAW : Fujifilm pour l'instant), affiché au
+# démarrage en plein écran et en comparaison ; m l'affiche ou le masque. Forme : "square"
+# (comme dans le viseur), "cross", "circle" ou "heart". Taille et épaisseur en points.
+focus_point = true
+focus_marker = "square"
+focus_marker_size = 28.0
+focus_marker_width = 2.0
 
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
@@ -335,6 +342,8 @@ hover = "#b4b4b4"
 # Cadre des images sélectionnées (sélection multiple : Espace, v, Ctrl+A, Maj+clic…),
 # distinct de l'image courante (fond plein) et du survol.
 marked = "#ffaa28"
+# Repère du collimateur de mise au point.
+focus = "#3cff6e"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

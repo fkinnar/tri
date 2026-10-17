@@ -48,6 +48,10 @@ pub struct Metadata {
     pub size: Option<(u32, u32)>,
     /// Taille du fichier (octets).
     pub file_size: u64,
+    /// Collimateur de mise au point, en coordonnées relatives (0 à 1) de l'image affichée
+    /// (orientation appliquée). Lu dans la note du fabricant : Fujifilm (`FocusPixel`)
+    /// pour l'instant.
+    pub focus_point: Option<(f32, f32)>,
     /// Orientation EXIF d'un quart de tour (5 à 8) : dimensions à échanger.
     quarter_turn: bool,
 }
@@ -205,8 +209,23 @@ impl Metadata {
                     .collect()
             }),
         );
-        self.quarter_turn =
-            number(exif, Tag::Orientation).is_some_and(|o| (5.0..=8.0).contains(&o));
+        let orientation = number(exif, Tag::Orientation).map_or(1, |o| o as u32);
+        self.quarter_turn = (5..=8).contains(&orientation);
+        if self.focus_point.is_none()
+            && let (Some(Value::Undefined(note, _)), Some(w), Some(h)) = (
+                field(exif, Tag::MakerNote),
+                number(exif, Tag::PixelXDimension),
+                number(exif, Tag::PixelYDimension),
+            )
+            && let Some((x, y)) = fuji_focus_pixel(note)
+            && w > 0.0
+            && h > 0.0
+        {
+            let point = (x as f32 / w, y as f32 / h);
+            if (0.0..=1.0).contains(&point.0) && (0.0..=1.0).contains(&point.1) {
+                self.focus_point = Some(oriented(point, orientation));
+            }
+        }
         if self.size.is_none()
             && let (Some(w), Some(h)) = (
                 number(exif, Tag::PixelXDimension),
@@ -327,6 +346,40 @@ impl Metadata {
     }
 }
 
+/// Collimateur d'une note du fabricant Fujifilm : balise `FocusPixel` (0x1023, deux
+/// entiers 16 bits x, y, en pixels de l'image du JPEG, avant orientation). Format : « FUJIFILM »,
+/// position de l'IFD (32 bits), puis l'IFD, petit-boutiste, positions relatives au début de
+/// la note. `None` pour une autre marque ou une note illisible.
+fn fuji_focus_pixel(note: &[u8]) -> Option<(u16, u16)> {
+    let rest = note.strip_prefix(b"FUJIFILM")?;
+    let u16_at = |i: usize| -> Option<u16> {
+        Some(u16::from_le_bytes(note.get(i..i + 2)?.try_into().ok()?))
+    };
+    let offset = u32::from_le_bytes(rest.get(..4)?.try_into().ok()?) as usize;
+    let count = u16_at(offset)? as usize;
+    (0..count).find_map(|i| {
+        let entry = offset + 2 + i * 12;
+        let (tag, kind) = (u16_at(entry)?, u16_at(entry + 2)?);
+        // Type 3 (entiers 16 bits), 2 valeurs : rangées dans le champ de valeur lui-même.
+        (tag == 0x1023 && kind == 3).then(|| Some((u16_at(entry + 8)?, u16_at(entry + 10)?)))?
+    })
+}
+
+/// Point relatif (x, y) d'une image stockée, ramené dans l'image affichée selon
+/// l'orientation EXIF (1 à 8).
+fn oriented((x, y): (f32, f32), orientation: u32) -> (f32, f32) {
+    match orientation {
+        2 => (1.0 - x, y),
+        3 => (1.0 - x, 1.0 - y),
+        4 => (x, 1.0 - y),
+        5 => (y, x),
+        6 => (1.0 - y, x),
+        7 => (1.0 - y, 1.0 - x),
+        8 => (y, 1.0 - x),
+        _ => (x, y),
+    }
+}
+
 /// Mode d'exposition EXIF (`ExposureProgram`).
 fn program_name(code: u32) -> Option<String> {
     let id = match code {
@@ -399,6 +452,7 @@ mod tests {
             date: Some("2026-10-16 14:32:05".into()),
             size: Some((4160, 6240)),
             file_size: 26_300_000,
+            focus_point: None,
             quarter_turn: false,
         }
     }
@@ -482,5 +536,50 @@ mod tests {
             ..Metadata::default()
         };
         assert_eq!(m.rows(), [("Focale".to_string(), "50 mm".to_string())]);
+    }
+
+    /// Note du fabricant Fujifilm minimale : en-tête, IFD de deux entrées dont
+    /// `FocusPixel`.
+    fn fuji_note(x: u16, y: u16) -> Vec<u8> {
+        let mut note = b"FUJIFILM".to_vec();
+        note.extend_from_slice(&12u32.to_le_bytes());
+        note.extend_from_slice(&2u16.to_le_bytes());
+        // Entrée quelconque (version), puis FocusPixel.
+        for (tag, kind, count, value) in [
+            (0u16, 7u16, 4u32, [0u8; 4]),
+            (0x1023, 3, 2, {
+                let mut v = [0u8; 4];
+                v[..2].copy_from_slice(&x.to_le_bytes());
+                v[2..].copy_from_slice(&y.to_le_bytes());
+                v
+            }),
+        ] {
+            note.extend_from_slice(&tag.to_le_bytes());
+            note.extend_from_slice(&kind.to_le_bytes());
+            note.extend_from_slice(&count.to_le_bytes());
+            note.extend_from_slice(&value);
+        }
+        note
+    }
+
+    #[test]
+    fn fuji_focus_pixel_is_read_from_the_maker_note() {
+        assert_eq!(fuji_focus_pixel(&fuji_note(2517, 1317)), Some((2517, 1317)));
+        assert_eq!(fuji_focus_pixel(b"Nikon\0\x02\x10"), None, "autre marque");
+        assert_eq!(fuji_focus_pixel(&fuji_note(1, 2)[..20]), None, "tronquée");
+    }
+
+    #[test]
+    fn the_focus_point_follows_the_orientation() {
+        // Vérifié sur un RAF X-T4 tenu verticalement (orientation 6) : le collimateur
+        // (2517, 1317) d'un JPEG 4416 × 2944 tombe à (0,553 ; 0,570) de l'image affichée.
+        let p = oriented((2517.0 / 4416.0, 1317.0 / 2944.0), 6);
+        assert!(
+            (p.0 - 0.553).abs() < 0.001 && (p.1 - 0.570).abs() < 0.001,
+            "{p:?}"
+        );
+        assert_eq!(oriented((0.25, 0.75), 1), (0.25, 0.75));
+        assert_eq!(oriented((0.25, 0.75), 3), (0.75, 0.25));
+        assert_eq!(oriented((0.25, 0.75), 8), (0.75, 0.75));
     }
 }

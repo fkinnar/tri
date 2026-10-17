@@ -40,3 +40,21 @@ tri <dossier> --metadata [--raw|--flat] [--depth N]
 
 Vérifié (17/10/2026) : RAF X-T4 (objectif Sigma, mode manuel), JPEG exporté, HEIC
 d'iPhone 13 Pro (focale 5,7 mm, orientation portrait).
+
+## Collimateur de mise au point (`focus_point`, 17/10/2026)
+
+Coordonnées relatives (0 à 1) dans l'image **affichée** (orientation appliquée), pour
+dessiner le repère du collimateur. Lu dans la **note du fabricant** de l'EXIF du JPEG
+embarqué (`MakerNote`, que `kamadak-exif` rend brute) :
+
+- **Fujifilm** : en-tête `FUJIFILM`, position de l'IFD (32 bits), IFD petit-boutiste,
+  balise **0x1023** `FocusPixel` (deux entiers 16 bits x, y, en pixels de l'image du JPEG
+  avant orientation : on divise par `PixelXDimension` / `PixelYDimension`), puis
+  l'orientation EXIF (1 à 8) est appliquée. Vérifié sur un RAF X-T4 tenu verticalement
+  (ExifTool : `FocusPixel 2517 1317`, JPEG 4416 × 2944, orientation 6) : (0,553 ; 0,570),
+  bien sur le poteau où le boîtier avait fait le point. (Une première version lisait la
+  balise 0x1031 : point faux, attrapé par le test sur un vrai fichier.)
+- Autres marques : pas encore (`None`) ; chacune a son propre format de note.
+
+Tests : note synthétique (lue, autre marque refusée, note tronquée refusée), orientations ;
+`tests/metadata.rs` sur un vrai RAF (`TRI_TEST_RAW`, `#[ignore]`).

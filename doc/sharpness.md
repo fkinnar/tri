@@ -17,7 +17,9 @@ rien), aux dimensions de l'image.
 
 1. Luminance approchée `(R + 2G + B) / 4` (le vert porte l'essentiel du détail).
 2. Gradient de **Sobel**, `(|gx| + |gy|) / 4` (0 à 510 ; un bord franc noir / blanc
-   donne 255), comparé à un **seuil fixe** (`threshold`, 32) : pas relatif à l'image,
+   donne 255), comparé à un **seuil fixe** (`threshold`, 48 ; 32 jusqu'au 17/10/2026,
+   jugé trop permissif : une photo molle restait marquée à 4 %, contre 1 % à 48 ; une
+   nette passe de 16 % à 8 %, toujours franchement marquée) : pas relatif à l'image,
    pour que deux photos d'une rafale se comparent — la plus nette montre plus de contours.
 3. **Points isolés retirés** (`min_neighbours`, 2) : un contour est une ligne, le bruit
    à ISO élevé fait des points épars (mesuré sur un RAF X-T4 à 2000 ISO : la peau se
@@ -99,8 +101,14 @@ lu par `preview::sharpness`. Filtre `BlurFilter` (trait `Filter`, comme les autr
 photo sans score encore calculé est gardée.
 
 Interface : mention « floue » sur la vignette (`[gui.grid] blur_badge`), ligne
-« Netteté » dans le panneau des métadonnées (score et rapport à la médiane), filtre « sans
-les floues » (barre de filtres, `f b`), barre de progression « netteté ». Le filtre
+« Netteté » dans le panneau des métadonnées (rapports au dossier et aux voisines), filtres
+« sans les floues » (`f b`) et « floues seulement » (`f B`, pour vérifier les photos
+signalées avant de les rejeter : `BlurRule`), barre de progression « netteté ».
+
+**Collimateur** (17/10/2026) : le repère du collimateur de mise au point (lu dans le RAW,
+`Metadata::focus_point`, voir `metadata.md`) est dessiné en plein écran et en comparaison
+(`m`, `[gui.view] focus_point`, forme `focus_marker` : carré, croix, cercle ou cœur).
+Il montre d'un coup d'œil une mise au point sur l'arrière-plan, que le score ne voit pas. Le filtre
 s'applique une fois tous les scores connus (la médiane bouge tant qu'ils arrivent), et
 seulement si le jugement a changé.
 
@@ -120,7 +128,7 @@ accentué ; le bruit à ISO très élevé ressemble à du détail.
 
 | Section | Clé | Défaut | Rôle |
 |---|---|---|---|
-| `[sharpness]` | `threshold` | 32 | seuil du gradient |
+| `[sharpness]` | `threshold` | 48 | seuil du gradient |
 | | `spread` | 1 | épaississement (pixels) |
 | | `min_neighbours` | 2 | voisins marqués requis (0 : tout garder) |
 | | `score_side` | 1536 | score : côté long de l'image analysée |

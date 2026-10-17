@@ -554,6 +554,9 @@ explicitement par l'utilisateur comme important.
       avant / 3 après) → 14 rouges sur 15, 0 verte. Non détectable sans IA : mise au point
       sur l'arrière-plan (le collimateur était sur l'arrière-plan). Netteté au collimateur
       testée et écartée (dépend du contenu de la zone). Détails : `doc/sharpness.md`.
+      Ajouté le 17/10/2026 (retours) : filtre « floues seulement » (`f B`), carte de
+      netteté resserrée (seuil 48 au lieu de 32), repère du collimateur (`m`, Fujifilm,
+      carré / croix / cercle / cœur). À affiner à l'usage (l'utilisateur a étiqueté vite).
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).

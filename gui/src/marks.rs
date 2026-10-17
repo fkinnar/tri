@@ -13,7 +13,7 @@ use eframe::egui::{
 use tri::xmp::{Color, Flag, Notes};
 
 use crate::actions::Action;
-use crate::settings::Colors;
+use crate::settings::{Colors, FocusMarker};
 
 /// Couleur d'écran d'une couleur de notation.
 pub fn color_of(colors: &Colors, color: Color) -> Color32 {
@@ -369,6 +369,50 @@ pub fn drive(painter: &Painter, rect: Rect, color: Color32) {
         body.height() * 0.15,
         color,
     );
+}
+
+/// Repère du collimateur de mise au point, centré en `center`, de côté `size`.
+pub fn focus_marker(
+    painter: &Painter,
+    center: Pos2,
+    size: f32,
+    shape: FocusMarker,
+    stroke: Stroke,
+) {
+    let half = size / 2.0;
+    match shape {
+        FocusMarker::Square => {
+            painter.rect_stroke(
+                Rect::from_center_size(center, vec2(size, size)),
+                0.0,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+        }
+        FocusMarker::Circle => {
+            painter.circle_stroke(center, half, stroke);
+        }
+        FocusMarker::Cross => {
+            painter.line_segment([center - vec2(half, 0.0), center + vec2(half, 0.0)], stroke);
+            painter.line_segment([center - vec2(0.0, half), center + vec2(0.0, half)], stroke);
+        }
+        FocusMarker::Heart => {
+            // Courbe classique du cœur : x = 16 sin³ t, y = 13 cos t − 5 cos 2t − 2 cos 3t −
+            // cos 4t (y de −17 à 12, x de −16 à 16), ramenée à `size`.
+            let points = (0..64)
+                .map(|i| {
+                    let t = i as f32 / 64.0 * 2.0 * PI;
+                    let x = 16.0 * t.sin().powi(3);
+                    let y = 13.0 * t.cos()
+                        - 5.0 * (2.0 * t).cos()
+                        - 2.0 * (3.0 * t).cos()
+                        - (4.0 * t).cos();
+                    center + vec2(x, -y - 2.5) * (size / 32.0)
+                })
+                .collect();
+            painter.add(Shape::closed_line(points, stroke));
+        }
+    }
 }
 
 #[cfg(test)]

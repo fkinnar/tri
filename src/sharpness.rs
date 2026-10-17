@@ -35,9 +35,9 @@ pub const SCORE_VERSION: u32 = 2;
 pub struct SharpnessSettings {
     /// Seuil du gradient de luminance (Sobel, |gx| + |gy| divisé par 4 : 0 à 510 sur une
     /// image 8 bits ; un bord franc noir / blanc donne 255) au-delà duquel un pixel est
-    /// marqué. Plus bas : plus de contours, bruit compris. 32 (mesuré le 17/10/2026 sur
-    /// des JPEG boîtier X-T4) : lignes de la main et lèvres nettes marquées ; 48 : seulement
-    /// les bords francs.
+    /// marqué. Plus bas : plus de contours, bruit compris. 48 (17/10/2026, retour : 32
+    /// était trop permissif) : sur des RAF X-T4 ratés exprès, une photo molle n'est
+    /// presque plus marquée (1 % des pixels contre 4 % à 32), une nette le reste (8 %).
     pub threshold: u16,
     /// Épaississement des contours marqués, en pixels de chaque côté (0 : aucun). Un
     /// contour d'un pixel est à peine visible à 1:1 sur un écran haute densité.
@@ -75,7 +75,7 @@ pub struct SharpnessSettings {
 impl Default for SharpnessSettings {
     fn default() -> Self {
         SharpnessSettings {
-            threshold: 32,
+            threshold: 48,
             spread: 1,
             min_neighbours: 2,
             score_side: 1536,
@@ -311,18 +311,32 @@ pub fn judge(
         .collect()
 }
 
-/// Filtre « masquer les floues » : retire les photos jugées floues ([`judge`]). Une photo
-/// sans jugement (score pas encore calculé) est gardée : on ne cache pas ce qu'on n'a pas
-/// jugé.
+/// Ce que garde le filtre sur la netteté.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlurRule {
+    /// Masquer les photos jugées floues : une photo sans jugement (score pas encore
+    /// calculé) est gardée, on ne cache pas ce qu'on n'a pas jugé.
+    HideBlurry,
+    /// Seulement les photos jugées floues (pour les vérifier avant de les rejeter).
+    OnlyBlurry,
+}
+
+/// Filtre sur la netteté ([`judge`]).
 pub struct BlurFilter<'a> {
     /// Jugements, par chemin.
     pub judgements: &'a HashMap<PathBuf, Judgement>,
+    /// Ce qui est gardé.
+    pub rule: BlurRule,
 }
 
 impl Filter for BlurFilter<'_> {
     fn apply(&self, groups: Groups) -> Groups {
         retain(groups, |f| {
-            self.judgements.get(&f.path).is_none_or(|j| !j.blurry)
+            let blurry = self.judgements.get(&f.path).map(|j| j.blurry);
+            match self.rule {
+                BlurRule::HideBlurry => blurry != Some(true),
+                BlurRule::OnlyBlurry => blurry == Some(true),
+            }
         })
     }
 }
@@ -650,8 +664,20 @@ mod tests {
                 })
                 .collect(),
         ];
-        let kept = BlurFilter { judgements: &j }.apply(groups);
+        let kept = BlurFilter {
+            judgements: &j,
+            rule: BlurRule::HideBlurry,
+        }
+        .apply(groups.clone());
         assert_eq!(kept[0].len(), 13 - 5);
+        // Seulement les floues : les 5, sans la photo sans jugement.
+        let only = BlurFilter {
+            judgements: &j,
+            rule: BlurRule::OnlyBlurry,
+        }
+        .apply(groups);
+        assert_eq!(only[0].len(), 5);
+        assert!(only[0].iter().all(|f| j[&f.path].blurry));
     }
 
     #[test]
