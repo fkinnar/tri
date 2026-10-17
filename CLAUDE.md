@@ -564,6 +564,10 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [ ] **Fenêtre de réglages** (`Ctrl+,`, demandée le 17/10/2026) : les réglages sont
+      devenus nombreux (`doc/config.example.toml`) ; les modifier depuis l'interface,
+      écrits dans le fichier de configuration (sans perdre les commentaires ni les clés
+      inconnues de l'utilisateur), rangés par section, avec recherche comme l'aide.
 - [ ] **Jeu d'icônes** (proposé par l'utilisateur le 17/10/2026, pas urgent) : les
       icônes sont aujourd'hui dessinées en formes simples (`gui/src/marks.rs` : étoiles,
       pastilles coche / croix, goutte de netteté, panneaux, éjection…). L'utilisateur
