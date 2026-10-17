@@ -167,6 +167,9 @@ pub struct TriApp {
     /// Rectangles des cellules dessinées (pour les tests).
     #[cfg(test)]
     cell_rects: Vec<(usize, Rect)>,
+    /// « Quitter » demandé (tests : le harnais ne ferme rien).
+    #[cfg(test)]
+    quit_requested: bool,
     /// Déplacements clavier d'une image zoomée pas encore appliqués, en fractions de la
     /// vue (appliqués au dessin, quand la taille de l'image est connue).
     pan: Vec2,
@@ -308,6 +311,8 @@ impl TriApp {
             hovered: None,
             #[cfg(test)]
             cell_rects: Vec::new(),
+            #[cfg(test)]
+            quit_requested: false,
             pan: Vec2::ZERO,
             textures: Lru::new(gui.grid.textures),
             metadata_panel: gui.metadata.visible,
@@ -861,7 +866,13 @@ impl TriApp {
 
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let chords = ctx.input(|i| self.keymap.chords(&i.events));
+        let mut chords = ctx.input(|i| self.keymap.chords(&i.events));
+        // Saisie dans un champ de texte (nom de dossier, recherche) : les touches sont du
+        // texte, pas des raccourcis ; seule Échap agit. Sans cela, taper « q » dans le nom
+        // d'un dossier quittait l'application.
+        if ctx.egui_wants_keyboard_input() {
+            chords.retain(|c| c.trigger == crate::actions::Trigger::Key(egui::Key::Escape));
+        }
         if !chords.is_empty() {
             self.mouse_active = false; // on tape : pointeur masqué
         }
@@ -921,7 +932,13 @@ impl TriApp {
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
         match action {
-            Action::Quit => ctx.send_viewport_cmd(ViewportCommand::Close),
+            Action::Quit => {
+                #[cfg(test)]
+                {
+                    self.quit_requested = true;
+                }
+                ctx.send_viewport_cmd(ViewportCommand::Close)
+            }
             Action::Help => self.help = !self.help,
             Action::Back => {
                 if self.help {
@@ -3251,6 +3268,48 @@ mod tests {
         press(&mut h, Key::E, Modifiers::SHIFT);
         press(&mut h, Key::E, Modifiers::SHIFT);
         assert!(!h.state().histogram_large, "la même touche la ferme");
+    }
+
+    #[test]
+    fn typing_in_a_text_field_triggers_no_shortcut() {
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM")).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(card.join("DCIM/A.jpg"))
+            .unwrap();
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card,
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Décharger").is_none() {
+            assert!(Instant::now() < deadline);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Clic dans le champ du dossier de la séance, puis « q » et « 3 ».
+        h.ctx
+            .memory_mut(|m| m.request_focus(crate::offload::folder_field_id()));
+        h.run_steps(2);
+        assert!(h.ctx.egui_wants_keyboard_input(), "le champ a le focus");
+        press(&mut h, Key::Q, Modifiers::NONE);
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        assert!(!h.state().quit_requested, "« q » n'a pas quitté");
+        let photos = dir.path().join("photos");
+        assert_eq!(
+            tri::xmp::read(&photos.join("img0.jpg")).unwrap().stars,
+            0,
+            "« 3 » n'a pas noté"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
     }
 
     #[test]

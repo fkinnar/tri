@@ -388,11 +388,16 @@ impl OffloadDialog {
                             ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
                             ui.end_row();
                             ui.label("Dossier de la séance");
-                            ui.add(egui::TextEdit::singleline(folder).desired_width(300.0))
-                                .on_hover_text(
-                                    "Proposé : AAAA/AAAA-MM-JJ_ (date de la plus ancienne image) ; \
-                                 à compléter (« _Self ») ou à remplacer entièrement.",
-                                );
+                            ui.add(
+                                egui::TextEdit::singleline(folder)
+                                    .id(folder_field_id())
+                                    .desired_width(300.0),
+                            )
+                            .on_hover_text(
+                                "Proposé : AAAA-MM-JJ_ (date de la plus ancienne image), à \
+                                 compléter (« _Self ») ou à remplacer entièrement ; l'année, si \
+                                 on la veut, va dans le dossier racine.",
+                            );
                             ui.end_row();
                         });
                     if let Some(dest) = &dest {
@@ -536,6 +541,11 @@ impl OffloadDialog {
         }
         request
     }
+}
+
+/// Identifiant du champ « dossier de la séance » (tests : lui donner le focus).
+pub fn folder_field_id() -> egui::Id {
+    egui::Id::unique("offload_folder_field")
 }
 
 fn file_name(path: &Path) -> String {
