@@ -183,7 +183,8 @@ la plus récente, source mal formée signalée.
   dossier illisible signalé ; volumes Time Machine reconnus à leur contenu (APFS, HFS,
   option désactivée), exclusion par nom ou chemin, motifs `*` et `?` ; surveillance : volume
   « branché » puis retiré dans un dossier temporaire, signalé une seule fois, intervalle nul
-  sans fil ; périphérique d'un point de montage lu dans `/proc/mounts` (espaces).
+  sans fil ; volumes fixés non éjectables (casse ignorée, seuls les volumes s'éjectent,
+  `Row::ejectable`, `Tree::can_eject`) ; périphérique d'un point de montage lu dans `/proc/mounts` (espaces).
 
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 

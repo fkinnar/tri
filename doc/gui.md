@@ -48,7 +48,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   volumes et dossiers. Chaque volume a une icône « éjecter » : confirmation (modale), le
   dossier ouvert est fermé s'il est sur ce volume (sinon le système refuse), puis
   éjection en fond (`places::eject`) ; le résultat, ou le message du système, s'affiche
-  dans la barre d'état. Le
+  dans la barre d'état. Un volume **fixé** (`[places] fixed`, ex. le disque de travail
+  toujours branché) n'a pas d'icône d'éjection mais une icône de disque, non cliquable :
+  pas d'éjection par accident (idée de l'utilisateur, 17/10/2026). Le
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` s'ouvre sur le panneau. La barre de filtres passe à la
@@ -91,12 +93,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     vignettes, alors que la note allait à l'image cliquée. Derrière la boîte, rien ne
     bouge : ni survol, ni navigation ; seules les touches de notation (pour cette image)
     et Échap agissent. Elle reste ouverte pour poser plusieurs notes, et se ferme par
-    Échap, « Fermer » ou un clic à côté ;
+    Échap, « Fermer » ou un clic à côté. Elle s'ouvre **au point du clic** (`modal_at`),
+    pas au centre : sur un grand écran, le trajet jusqu'au centre était long (retour du
+    17/10/2026, même chose pour la confirmation d'éjection, ouverte près de l'icône) ;
   - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
     cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
     (`marks::clickable`) ;
-  - chaque clic déclenche la même action que le clavier : recliquer la note active la
-    retire (étoiles, drapeau), une couleur s'ajoute ou se retire ;
+  - chaque clic déclenche la même action que le clavier. **Recliquer une note posée ne
+    l'efface pas** (retour du 17/10/2026 : recliquer « 2 étoiles » remettait à zéro, un
+    vrai danger en tri rapide ; Lightroom et Capture One ont un contrôle à part) : un
+    contrôle « ⊘ » (« Retirer les étoiles », comme la touche 0) et un cercle vide
+    (« Ni acceptée ni rejetée », comme Maj+U). Seules les couleurs s'ajoutent ou se
+    retirent au clic, comme au clavier ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
 - **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,

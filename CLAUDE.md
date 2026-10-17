@@ -398,7 +398,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       écran), écriture immédiate, erreurs dans la barre d'état. Filtres (choix du
       17/10/2026) : préfixe `f` au clavier + barre de filtres masquable à la souris
       (Maj+F) ; noter le RAF note aussi le JPG de la paire. Notation à la souris : bandeau
-      masquable (Maj+N) et boîte modale au clic droit, survol visible (17/10/2026). À discuter plus tard : filtres
+      masquable (Maj+N) et boîte modale au clic droit (ouverte au point du clic), survol
+      visible (17/10/2026). Recliquer une note posée ne l'efface pas : contrôles « 0
+      étoile » et « sans drapeau » à part (retour : danger en tri rapide). Notes vérifiées
+      dans darktable par l'utilisateur ; autres logiciels : testeurs à trouver. À discuter plus tard : filtres
       complexes (fenêtre modale ou panneau latéral). Conversion de
       convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
 - Feuille de route décidée avec l'utilisateur le 17/10/2026, dans cet ordre :
@@ -409,7 +412,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      filtres combinés). Volumes Time Machine masqués et exclusions (`[places]`),
      disque branché détecté de lui-même (`places::Monitor`), F5. Éjection d'un volume
      (`places::eject` : `diskutil eject`, `gio mount -e` / `udisksctl`, PowerShell non
-     testé ; icône dans le panneau, confirmation). Restent : mémoriser le dernier
+     testé ; icône dans le panneau, confirmation près de l'icône) ; volumes fixés
+     (`[places] fixed`) sans éjection. Restent : mémoriser le dernier
      dossier, navigation clavier dans l'arborescence, favoris.
   2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
      données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans

@@ -44,6 +44,10 @@ pub struct PlaceSettings {
     /// (`"Backup"`) ou au chemin (`"/mnt/*"`) ; `*` : n'importe quelle suite de caractères,
     /// `?` : un caractère.
     pub exclude: Vec<String>,
+    /// Volumes **fixés** : disques externes toujours branchés (disque de travail, de
+    /// sauvegarde), qu'on ne propose pas d'éjecter, pour éviter un accident (idée de
+    /// l'utilisateur, 17/10/2026). Mêmes motifs que `exclude`.
+    pub fixed: Vec<String>,
     /// Intervalle de surveillance des volumes (ms) : un disque branché ou débranché
     /// apparaît ou disparaît de lui-même (voir [`Monitor`]). 0 : pas de surveillance.
     pub watch_ms: u64,
@@ -54,6 +58,7 @@ impl Default for PlaceSettings {
         Self {
             hide_backups: true,
             exclude: Vec::new(),
+            fixed: Vec::new(),
             watch_ms: 2000,
         }
     }
@@ -62,12 +67,22 @@ impl Default for PlaceSettings {
 impl PlaceSettings {
     /// Vrai si `place` doit être masqué.
     pub fn hides(&self, place: &Place) -> bool {
-        let path = place.path.to_string_lossy();
-        self.exclude
-            .iter()
-            .any(|pattern| wildcard(pattern, &place.name) || wildcard(pattern, &path))
+        matches_any(&self.exclude, place)
             || (self.hide_backups && place.kind == PlaceKind::Volume && is_backup(&place.path))
     }
+
+    /// Vrai si `place` est un volume qu'on peut proposer d'éjecter : un volume, pas fixé.
+    pub fn ejectable(&self, place: &Place) -> bool {
+        place.kind == PlaceKind::Volume && !matches_any(&self.fixed, place)
+    }
+}
+
+/// `place` correspond-il à l'un des `patterns` (par son nom ou son chemin) ?
+fn matches_any(patterns: &[String], place: &Place) -> bool {
+    let path = place.path.to_string_lossy();
+    patterns
+        .iter()
+        .any(|pattern| wildcard(pattern, &place.name) || wildcard(pattern, &path))
 }
 
 /// Vrai si `dir` est un volume de sauvegarde Time Machine (voir [`PlaceSettings`]).
@@ -381,6 +396,8 @@ pub struct Row {
     /// Nature de l'emplacement, pour une ligne de profondeur 0 (un volume peut être
     /// éjecté).
     pub kind: Option<PlaceKind>,
+    /// Emplacement qu'on peut éjecter (volume non fixé, voir [`PlaceSettings::fixed`]).
+    pub ejectable: bool,
 }
 
 /// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
@@ -472,6 +489,14 @@ impl Tree {
         true
     }
 
+    /// Vrai si `path` est un emplacement qu'on peut éjecter (volume affiché, non fixé) : à
+    /// vérifier avant [`eject`].
+    pub fn can_eject(&self, path: &Path) -> bool {
+        self.places
+            .iter()
+            .any(|p| p.path == path && self.filter.ejectable(p))
+    }
+
     /// Remplace les emplacements (liste fournie par un [`Monitor`]) ; ce qui était déplié
     /// le reste.
     pub fn set_places(&mut self, places: Vec<Place>) {
@@ -501,6 +526,7 @@ impl Tree {
             let first = rows.len();
             self.push_rows(&mut rows, &place.path, place.name.clone(), 0);
             rows[first].kind = Some(place.kind);
+            rows[first].ejectable = self.filter.ejectable(place);
         }
         rows
     }
@@ -518,6 +544,7 @@ impl Tree {
                 _ => None,
             },
             kind: None,
+            ejectable: false,
         });
         if let Some(Ok(children)) = children {
             for child in children {

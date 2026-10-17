@@ -33,7 +33,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[cache]` | Dossier, qualité JPEG | moteur |
 | `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord | moteur |
 | `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs | moteur |
-| `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, intervalle de surveillance des volumes | moteur |
+| `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
 | `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée, cadre du survol | interface |
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |

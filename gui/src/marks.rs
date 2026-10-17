@@ -7,7 +7,7 @@
 use std::f32::consts::{FRAC_PI_2, PI};
 
 use eframe::egui::{
-    Color32, CursorIcon, Mesh, Painter, Pos2, Rect, Response, Role, Sense, Shape, Stroke, Ui,
+    self, Color32, CursorIcon, Mesh, Painter, Pos2, Rect, Response, Role, Sense, Shape, Stroke, Ui,
     WidgetInfo, pos2, vec2,
 };
 use tri::xmp::{Color, Flag, Notes};
@@ -191,19 +191,26 @@ pub fn eject(painter: &Painter, rect: Rect, color: Color32) {
 /// une couleur s'ajoute ou se retire.
 pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Option<Action> {
     let weak = ui.visuals().weak_text_color();
+    let strong = ui.visuals().strong_text_color();
     let mut clicked = None;
     let cell = |ui: &mut Ui, tip: &str| {
         let (rect, response) = clickable(ui, size, tip);
         (rect, response.clicked())
     };
+    // Drapeau : trois contrôles, comme les touches Maj+P / Maj+X / Maj+U. Recliquer le
+    // drapeau posé ne le retire pas (retour du 17/10/2026 : un double clic involontaire
+    // effaçait une note).
     for (flag, color) in [
         (Flag::Accepted, colors.accepted),
         (Flag::Rejected, colors.rejected),
     ] {
-        let active = notes.flag == flag;
-        let action = Action::Flag(if active { Flag::None } else { flag });
+        let action = Action::Flag(flag);
         let (rect, hit) = cell(ui, action.label());
-        let fill = if active { Color32::from(color) } else { weak };
+        let fill = if notes.flag == flag {
+            Color32::from(color)
+        } else {
+            weak
+        };
         badge(
             ui.painter(),
             rect.center(),
@@ -215,9 +222,30 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
             clicked = Some(action);
         }
     }
+    let action = Action::Flag(Flag::None);
+    let (rect, hit) = cell(ui, action.label());
+    let ring = if notes.flag == Flag::None {
+        strong
+    } else {
+        weak
+    };
+    ui.painter()
+        .circle_stroke(rect.center(), size * 0.38, Stroke::new(1.5, ring));
+    if hit {
+        clicked = Some(action);
+    }
     ui.add_space(size * 0.5);
+    // Étoiles : un contrôle « 0 » à part, comme la touche 0 (Lightroom, Capture One) ;
+    // recliquer l'étoile posée ne remet plus à zéro (même retour).
+    let action = Action::Stars(0);
+    let (rect, hit) = cell(ui, action.label());
+    let color = if notes.stars == 0 { strong } else { weak };
+    none_sign(ui.painter(), rect, color);
+    if hit {
+        clicked = Some(action);
+    }
     for n in 1..=5u8 {
-        let action = Action::Stars(if n == notes.stars { 0 } else { n });
+        let action = Action::Stars(n);
         let (rect, hit) = cell(ui, action.label());
         let fill = if n <= notes.stars {
             Color32::from(colors.stars)
@@ -238,11 +266,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         let painter = ui.painter();
         if active {
             painter.circle_filled(rect.center(), size * 0.4, fill);
-            painter.circle_stroke(
-                rect.center(),
-                size * 0.48,
-                Stroke::new(2.0, ui.visuals().strong_text_color()),
-            );
+            painter.circle_stroke(rect.center(), size * 0.48, Stroke::new(2.0, strong));
         } else {
             painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(0.4));
         }
@@ -251,6 +275,30 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         }
     }
     clicked
+}
+
+/// Signe « aucun » (cercle barré) dans `rect`.
+fn none_sign(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width() * 0.32;
+    let stroke = Stroke::new(1.5, color);
+    painter.circle_stroke(c, r, stroke);
+    let d = r * std::f32::consts::FRAC_1_SQRT_2;
+    painter.line_segment([c + vec2(-d, d), c + vec2(d, -d)], stroke);
+}
+
+/// Icône « disque externe » dans `rect` : boîtier arrondi et voyant.
+pub fn drive(painter: &Painter, rect: Rect, color: Color32) {
+    let body = Rect::from_center_size(
+        rect.center(),
+        vec2(rect.width() * 0.7, rect.height() * 0.42),
+    );
+    painter.rect_stroke(body, 2.0, Stroke::new(1.5, color), egui::StrokeKind::Inside);
+    painter.circle_filled(
+        pos2(body.max.x - body.height() * 0.4, body.center().y),
+        body.height() * 0.15,
+        color,
+    );
 }
 
 #[cfg(test)]

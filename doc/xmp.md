@@ -119,8 +119,11 @@ virtuelles avec ~750 lignes d'historique de développement) :
 
 ## À vérifier en conditions réelles
 
-- darktable ne relit un XMP modifié ailleurs que si l'option « rechercher les fichiers XMP
-  mis à jour au démarrage » est active ; s'il tourne pendant le tri, il peut réécrire le
-  sidecar depuis sa base et effacer nos notes ;
+- darktable : **vérifié par l'utilisateur le 17/10/2026**, les notes posées par `tri`
+  passent dans darktable (avec un délai avant qu'il les prenne en compte). Il ne relit un
+  XMP modifié ailleurs que si l'option « rechercher les fichiers XMP mis à jour au
+  démarrage » est active ; s'il tourne pendant le tri, il peut réécrire le sidecar depuis
+  sa base et effacer nos notes ;
+- Lightroom, Capture One, digiKam : à faire vérifier par des testeurs ;
 - Capture One : comportement avec `xmp:Rating = -1` et `xmp:Label` non documenté ;
 - Lightroom : bug connu (13.2) si `xmpDM:pick` est absent du fichier.

@@ -67,8 +67,11 @@ système est renvoyé tel quel. Un disque USB « fixe » (disque dur externe) s'
 une carte, comme dans le Finder. Vérifié sur macOS avec une image disque : éjectée en
 0,36 s ; volume absent : « diskutil : Failed to find disk ».
 
-Les lignes d'emplacement de `Tree::rows` portent leur nature (`Row::kind`) : seuls les
-volumes proposent l'éjection.
+Les lignes d'emplacement de `Tree::rows` portent leur nature (`Row::kind`) et
+`Row::ejectable` : seuls les volumes non **fixés** proposent l'éjection. `[places] fixed`
+(mêmes motifs qu'`exclude`) désigne les disques externes toujours branchés (travail,
+sauvegarde) ; `PlaceSettings::ejectable`, et `Tree::can_eject` à vérifier avant `eject`
+(l'interface le fait au moment de confirmer).
 
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 

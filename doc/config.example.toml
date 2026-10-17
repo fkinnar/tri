@@ -71,6 +71,10 @@ hide_backups = true
 # casse, avec * (n'importe quelle suite) et ? (un caractère). Exemple :
 # exclude = ["Backup", "/mnt/*"]
 exclude = []
+# Volumes fixés : disques externes toujours branchés (travail, sauvegarde), sans bouton
+# d'éjection pour éviter un accident ; mêmes motifs qu'exclude. Exemple :
+# fixed = ["Work", "Backup"]
+fixed = []
 # Surveillance des volumes (ms) : un disque ou une carte branchés apparaissent d'eux-mêmes
 # dans le panneau des dossiers ; 0 : pas de surveillance (F5 ou « Actualiser »).
 watch_ms = 2000

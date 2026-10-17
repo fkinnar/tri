@@ -114,7 +114,7 @@ pub struct TriApp {
     /// qu'elle envoie quand un disque est branché ou débranché.
     volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
     /// Volume dont l'éjection attend confirmation.
-    eject_dialog: Option<PathBuf>,
+    eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -139,7 +139,7 @@ pub struct TriApp {
     rating_bar: bool,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
-    rating_dialog: Option<PathBuf>,
+    rating_dialog: Option<(PathBuf, egui::Pos2)>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 3],
@@ -392,11 +392,23 @@ impl TriApp {
                         ui.colored_label(self.gui.colors.error, "illisible")
                             .on_hover_text(error);
                     }
-                    if row.kind == Some(PlaceKind::Volume) && self.ejecting.is_none() {
-                        let (rect, response) = marks::clickable(ui, size, "Éjecter");
-                        marks::eject(ui.painter(), rect, ui.visuals().text_color());
-                        if response.clicked() {
-                            eject = Some(row.path.clone());
+                    if row.kind == Some(PlaceKind::Volume) {
+                        let color = ui.visuals().text_color();
+                        if !row.ejectable {
+                            // Volume fixé ([places] fixed) : pas d'éjection, une icône
+                            // de disque à la place.
+                            let (rect, response) =
+                                ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            marks::drive(ui.painter(), rect, ui.visuals().weak_text_color());
+                            response.on_hover_text(
+                                "Disque fixé ([places] fixed) : pas d'éjection depuis tri",
+                            );
+                        } else if self.ejecting.is_none() {
+                            let (rect, response) = marks::clickable(ui, size, "Éjecter");
+                            marks::eject(ui.painter(), rect, color);
+                            if response.clicked() {
+                                eject = Some((row.path.clone(), rect.right_bottom()));
+                            }
                         }
                     }
                 });
@@ -416,13 +428,13 @@ impl TriApp {
     /// Confirmation d'éjection (modale), puis éjection dans un fil à part : l'outil du
     /// système prend une à quelques secondes.
     fn eject_dialog(&mut self, ctx: &egui::Context) {
-        let Some(path) = self.eject_dialog.clone() else {
+        let Some((path, at)) = self.eject_dialog.clone() else {
             return;
         };
         let name = folder_name(&path);
         let open_inside = !self.folder.is_none() && self.folder.dir.starts_with(&path);
         let (mut confirm, mut cancel) = (false, false);
-        let modal = egui::Modal::new(egui::Id::unique("eject_dialog")).show(ctx, |ui| {
+        let modal = modal_at("eject_dialog", at).show(ctx, |ui| {
             ui.strong(format!("Éjecter « {name} » ?"));
             if open_inside {
                 ui.label("Le dossier ouvert est sur ce volume : il sera fermé.");
@@ -433,7 +445,10 @@ impl TriApp {
                 cancel = ui.button("Annuler").clicked();
             });
         });
-        if confirm {
+        if confirm && !self.tree.can_eject(&path) {
+            // Fixé entre-temps (configuration relue) : on ne touche à rien.
+            self.eject_dialog = None;
+        } else if confirm {
             self.eject_dialog = None;
             if open_inside {
                 // Fermer le dossier : sinon le système refuse (fichiers ouverts).
@@ -642,7 +657,7 @@ impl TriApp {
                 continue;
             }
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
-            if let Some(path) = &self.rating_dialog {
+            if let Some((path, _)) = &self.rating_dialog {
                 match action {
                     Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
                         self.rate_path(path.clone(), action)
@@ -1254,22 +1269,26 @@ impl TriApp {
             && let Some(file) = self.files.get(index)
         {
             let path = file.path.clone();
+            // Près du clic : pas de long trajet jusqu'au centre d'un grand écran.
+            let at = response
+                .interact_pointer_pos()
+                .unwrap_or(response.rect.center());
             self.select(index);
-            self.rating_dialog = Some(path);
+            self.rating_dialog = Some((path, at));
         }
     }
 
     /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
     /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
     fn rating_dialog(&mut self, ctx: &egui::Context) {
-        let Some(path) = self.rating_dialog.clone() else {
+        let Some((path, at)) = self.rating_dialog.clone() else {
             return;
         };
         let notes = self.folder.notes.notes(&path).clone();
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 8.0);
         let mut clicked = None;
         let mut close = false;
-        let modal = egui::Modal::new(egui::Id::unique("rating_dialog")).show(ctx, |ui| {
+        let modal = modal_at("rating_dialog", at).show(ctx, |ui| {
             ui.strong(file_name(&path));
             ui.add_space(6.0);
             ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
@@ -1843,6 +1862,21 @@ fn folder_name(path: &Path) -> String {
     file_name(path)
 }
 
+/// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
+/// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
+/// 17/10/2026). Gardée dans la fenêtre ; derrière, le fond est grisé et bloqué comme pour
+/// toute modale.
+fn modal_at(id: &str, at: egui::Pos2) -> egui::Modal {
+    let area = egui::Area::new(egui::Id::unique(id))
+        .kind(egui::UiKind::Modal)
+        .sense(Sense::hover())
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .fixed_pos(at + vec2(4.0, 4.0))
+        .constrain(true);
+    egui::Modal::new(egui::Id::unique(id)).area(area)
+}
+
 /// Nom d'une couleur de notation.
 fn color_name(color: Color) -> &'static str {
     match color {
@@ -2020,7 +2054,18 @@ mod tests {
         assert_eq!(on_disk.stars, 3);
         assert_eq!(on_disk.flag, Flag::Rejected);
         assert_eq!(on_disk.colors, [Color::Green]);
-        // Recliquer l'étoile active retire les étoiles ; le drapeau actif, le drapeau.
+        // Recliquer la note posée ne l'efface pas (un double clic involontaire effaçait
+        // une note) : des contrôles à part le font, comme les touches 0 et Maj+U.
+        h.get_by_label("3 étoiles").click();
+        h.run_steps(3);
+        h.get_by_label("Rejeter").click();
+        h.run_steps(3);
+        let on_disk = tri::xmp::read(&image).unwrap();
+        assert_eq!(
+            (on_disk.stars, on_disk.flag),
+            (3, Flag::Rejected),
+            "inchangé"
+        );
         h.get_by_label("Retirer les étoiles").click();
         h.run_steps(3);
         h.get_by_label("Ni acceptée ni rejetée").click();
@@ -2060,6 +2105,11 @@ mod tests {
         });
         h.run_steps(5);
         assert_eq!(h.state().selected, 2, "le clic droit sélectionne");
+        let at = h.state().rating_dialog.as_ref().unwrap().1;
+        assert!(
+            rect.contains(at),
+            "boîte ouverte au point du clic, pas au centre"
+        );
         assert!(
             h.query_by_label("Fermer").is_some(),
             "boîte de notation ouverte"

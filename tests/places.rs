@@ -160,6 +160,40 @@ fn time_machine_volumes_are_recognised_by_their_content() {
 }
 
 #[test]
+fn fixed_volumes_are_not_ejectable() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["Work", "CARTE"] {
+        fs::create_dir(dir.path().join(name)).unwrap();
+    }
+    let settings = places::PlaceSettings {
+        fixed: vec!["work".into()],
+        ..places::PlaceSettings::default()
+    };
+    let work = volume(&dir.path().join("Work"));
+    let card = volume(&dir.path().join("CARTE"));
+    assert!(
+        !settings.ejectable(&work),
+        "fixé, sans tenir compte de la casse"
+    );
+    assert!(settings.ejectable(&card));
+    let home = places::Place {
+        kind: PlaceKind::Home,
+        ..card.clone()
+    };
+    assert!(!settings.ejectable(&home), "seuls les volumes s'éjectent");
+    // L'arborescence l'indique ligne par ligne, et le refuse par chemin.
+    let mut tree = places::Tree::new(settings, false);
+    tree.set_places(vec![work.clone(), card.clone()]);
+    let rows = tree.rows();
+    assert_eq!(
+        rows.iter().map(|r| r.ejectable).collect::<Vec<_>>(),
+        [false, true]
+    );
+    assert!(!tree.can_eject(&work.path));
+    assert!(tree.can_eject(&card.path));
+}
+
+#[test]
 fn excluded_places_match_name_or_path() {
     let filter = places::PlaceSettings {
         hide_backups: false,
