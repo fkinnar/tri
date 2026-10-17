@@ -120,6 +120,9 @@ pub struct TriApp {
     filter_bar: bool,
     /// Bandeau de notation affiché.
     rating_bar: bool,
+    /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
+    /// elle, rien ne change de sélection.
+    rating_dialog: Option<PathBuf>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 3],
@@ -222,6 +225,7 @@ impl TriApp {
             notes_rule: NotesRule::default(),
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
+            rating_dialog: None,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 3],
@@ -412,6 +416,17 @@ impl TriApp {
             if self.help && !action.works_over_overlay() {
                 continue;
             }
+            // Boîte de notation : seules les notes (pour son image) et la fermeture.
+            if let Some(path) = &self.rating_dialog {
+                match action {
+                    Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
+                        self.rate_path(path.clone(), action)
+                    }
+                    _ if action.works_over_overlay() => self.perform(ctx, action),
+                    _ => {}
+                }
+                continue;
+            }
             self.perform(ctx, action);
         }
     }
@@ -424,6 +439,8 @@ impl TriApp {
             Action::Back => {
                 if self.help {
                     self.help = false;
+                } else if self.rating_dialog.is_some() {
+                    self.rating_dialog = None;
                 } else if self.mode == Mode::View {
                     self.mode = Mode::Grid;
                     self.zoom = None;
@@ -521,11 +538,15 @@ impl TriApp {
     /// Note l'image `index` et écrit son sidecar. En cas d'échec, l'erreur est affichée
     /// dans la barre d'état et la note affichée reste celle du disque.
     fn rate(&mut self, index: usize, action: Action) {
-        let Some(file) = self.files.get(index) else {
-            return;
-        };
+        if let Some(file) = self.files.get(index) {
+            self.rate_path(file.path.clone(), action);
+        }
+    }
+
+    /// Note l'image `path` (voir [`TriApp::rate`]).
+    fn rate_path(&mut self, path: PathBuf, action: Action) {
         let multiple = self.settings.xmp.multiple_colors;
-        let result = self.notes.edit(&file.path, |n| match action {
+        let result = self.notes.edit(&path, |n| match action {
             Action::Stars(stars) => n.set_stars(stars),
             Action::Color(color) => n.toggle_color(color, multiple),
             Action::Flag(flag) => n.flag = flag,
@@ -818,7 +839,7 @@ impl TriApp {
             image_rect = Some(rect);
         }
 
-        self.rating_menu(&response, index);
+        self.open_rating_dialog(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
         if response.double_clicked() {
             self.zoom_anchor = None;
@@ -984,20 +1005,43 @@ impl TriApp {
         });
     }
 
-    /// Menu du clic droit sur `response` : contrôles de notation de l'image `index`.
-    fn rating_menu(&mut self, response: &egui::Response, index: usize) {
-        let Some(file) = self.files.get(index) else {
+    /// Clic droit sur `response` (image `index`) : la sélectionne et ouvre la boîte de
+    /// notation.
+    fn open_rating_dialog(&mut self, response: &egui::Response, index: usize) {
+        if response.secondary_clicked()
+            && let Some(file) = self.files.get(index)
+        {
+            let path = file.path.clone();
+            self.select(index);
+            self.rating_dialog = Some(path);
+        }
+    }
+
+    /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
+    /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
+    fn rating_dialog(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.rating_dialog.clone() else {
             return;
         };
-        let notes = self.notes.notes(&file.path).clone();
-        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 6.0);
+        let notes = self.notes.notes(&path).clone();
+        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 8.0);
         let mut clicked = None;
-        response.context_menu(|ui| {
-            ui.label(file_name(&file.path));
+        let mut close = false;
+        let modal = egui::Modal::new(egui::Id::unique("rating_dialog")).show(ctx, |ui| {
+            ui.strong(file_name(&path));
+            ui.add_space(6.0);
             ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                close = ui.button("Fermer").clicked();
+                ui.weak("ou Échap");
+            });
         });
         if let Some(action) = clicked {
-            self.rate(index, action);
+            self.rate_path(path, action);
+        }
+        if close || modal.should_close() {
+            self.rating_dialog = None;
         }
     }
 
@@ -1077,19 +1121,19 @@ impl TriApp {
             };
             let size = self.gui.grid.marks + 4.0;
             for n in 1..=5u8 {
-                let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+                let tip = if n == current {
+                    "Étoiles indifférentes"
+                } else {
+                    Action::FilterStars(n).label()
+                };
+                let (rect, response) = marks::clickable(ui, size, tip);
                 let color = if n <= current {
                     Color32::from(colors.stars)
                 } else {
                     ui.visuals().weak_text_color()
                 };
                 marks::star(ui.painter(), rect.center(), size / 2.0, color);
-                let tip = if n == current {
-                    "Étoiles indifférentes"
-                } else {
-                    Action::FilterStars(n).label()
-                };
-                if response.on_hover_text(tip).clicked() {
+                if response.clicked() {
                     // Recliquer l'étoile du filtre actif l'efface.
                     clicked.push(Action::FilterStars(if n == current { 0 } else { n }));
                 }
@@ -1104,7 +1148,7 @@ impl TriApp {
             ui.separator();
             ui.label("Couleurs");
             for color in Color::ALL {
-                let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+                let (rect, response) = marks::clickable(ui, size, color_name(color));
                 let active = self
                     .notes_rule
                     .colors
@@ -1119,7 +1163,7 @@ impl TriApp {
                         egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
                     );
                 }
-                if response.on_hover_text(color_name(color)).clicked() {
+                if response.clicked() {
                     clicked.push(Action::FilterColor(color));
                 }
             }
@@ -1182,15 +1226,13 @@ impl TriApp {
         #[cfg(test)]
         self.cell_rects.push((index, rect));
         // Un seul curseur : le survol sélectionne, sur un vrai mouvement de la souris.
-        if self.pointer_moved && response.hovered() {
+        if self.pointer_moved && response.hovered() && self.rating_dialog.is_none() {
             self.select_with(index, false);
         }
-        if response.clicked() || response.secondary_clicked() {
+        if response.clicked() {
             self.select(index);
         }
-        // Clic droit : notation de cette image (et pas de celle que le pointeur survolerait
-        // en allant vers le menu).
-        self.rating_menu(&response, index);
+        self.open_rating_dialog(&response, index);
         if response.double_clicked() {
             self.select(index);
             self.mode = Mode::View;
@@ -1430,6 +1472,7 @@ impl eframe::App for TriApp {
         if self.help {
             self.help_window(&ctx);
         }
+        self.rating_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
             ctx.set_cursor_icon(egui::CursorIcon::None);
@@ -1747,17 +1790,43 @@ mod tests {
         });
         h.run_steps(5);
         assert_eq!(h.state().selected, 2, "le clic droit sélectionne");
-        assert_eq!(
-            h.query_all_by_label("4 étoiles").count(),
-            2,
-            "menu ouvert, en plus du bandeau"
+        assert!(
+            h.query_by_label("Fermer").is_some(),
+            "boîte de notation ouverte"
         );
-        // Le bandeau et le menu proposent tous deux « 4 étoiles » : celui du menu est le
-        // dernier dessiné.
+        // La souris passe sur une autre vignette : derrière la boîte, rien ne bouge.
+        let other = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 0)
+            .unwrap()
+            .1;
+        h.event(UiEvent::PointerMoved(other.center() + vec2(1.0, 1.0)));
+        h.event(UiEvent::PointerMoved(other.center()));
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 2, "sélection figée par la boîte modale");
+        // Le bandeau et la boîte proposent tous deux « 4 étoiles » : celui de la boîte est
+        // le dernier dessiné.
         h.get_all_by_label("4 étoiles").last().unwrap().click();
         h.run_steps(3);
+        assert!(
+            h.state().rating_dialog.is_some(),
+            "reste ouverte pour d'autres notes"
+        );
+        press(&mut h, Key::Num8, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, 2, "navigation bloquée par la boîte");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().rating_dialog.is_none(), "Échap ferme la boîte");
+        assert_eq!(h.state().mode, Mode::Grid);
         let photos = dir.path().join("photos");
         assert_eq!(tri::xmp::read(&photos.join("img2.jpg")).unwrap().stars, 4);
+        assert_eq!(
+            tri::xmp::read(&photos.join("img2.jpg")).unwrap().colors,
+            [Color::Green],
+            "le clavier note aussi l'image de la boîte"
+        );
         assert_eq!(tri::xmp::read(&photos.join("img0.jpg")).unwrap().stars, 0);
     }
 

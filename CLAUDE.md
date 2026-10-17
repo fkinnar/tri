@@ -397,8 +397,26 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       écran), écriture immédiate, erreurs dans la barre d'état. Filtres (choix du
       17/10/2026) : préfixe `f` au clavier + barre de filtres masquable à la souris
       (Maj+F) ; noter le RAF note aussi le JPG de la paire. Notation à la souris : bandeau
-      masquable (Maj+N) et clic droit (17/10/2026). À discuter plus tard : filtres
+      masquable (Maj+N) et boîte modale au clic droit, survol visible (17/10/2026). À discuter plus tard : filtres
       complexes (fenêtre modale ou panneau latéral). Conversion de
       convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
+- Feuille de route décidée avec l'utilisateur le 17/10/2026, dans cet ordre :
+  1. **Panneau des dossiers** à gauche (grille, masquable) : choisir un dossier depuis
+     l'interface ; sans lui, l'outil ne s'utilise pas au quotidien. À décider : racines de
+     l'arborescence (dossier personnel, cartes SD montées, favoris), mémoriser le dernier
+     dossier. Moteur : changer de dossier sans redémarrer (scheduler, notes).
+  2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
+     données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans
+     dématriçage ; JPEG 8 bits ; autres formats selon leur profondeur d'enregistrement —
+     `flat` ramène aujourd'hui tout en 8 bits). Calcul coûteux : à mesurer, puis cache
+     d'*analyse* (pas XMP).
+  3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
+     pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
+  4. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
+     copier les acceptées), éditeur externe configurable, avance automatique après une
+     note (option), surveillance du dossier (fichiers ajoutés, XMP modifiés ailleurs).
+  - **Annuler** (`u`, réservé) : pas une petite tâche (historique à concevoir : paires,
+    filtres actifs, XMP modifiés ailleurs entre-temps ; session seule ou persistant) ; à
+    reprendre plus tard.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

@@ -7,7 +7,8 @@
 use std::f32::consts::{FRAC_PI_2, PI};
 
 use eframe::egui::{
-    Color32, Mesh, Painter, Pos2, Rect, Role, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2,
+    Color32, CursorIcon, Mesh, Painter, Pos2, Rect, Response, Role, Sense, Shape, Stroke, Ui,
+    WidgetInfo, pos2, vec2,
 };
 use tri::xmp::{Color, Flag, Notes};
 
@@ -125,6 +126,24 @@ pub fn row(
     )
 }
 
+/// Case cliquable de côté `size` pour un symbole dessiné (étoile, pastille) : nom
+/// accessible et bulle `tip`, et réaction au survol (pointeur en main, fond surligné), pour
+/// qu'on voie que c'est cliquable. Le fond est peint avant le symbole, que l'appelant
+/// dessine ensuite dans le rectangle renvoyé.
+pub fn clickable(ui: &mut Ui, size: f32, tip: &str) -> (Rect, Response) {
+    let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+    // Nom lisible pour l'accessibilité (et les tests d'interface).
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, tip));
+    let response = response
+        .on_hover_text(tip)
+        .on_hover_cursor(CursorIcon::PointingHand);
+    if response.hovered() {
+        let fill = ui.visuals().widgets.hovered.weak_bg_fill;
+        ui.painter().rect_filled(rect.expand(2.0), 4.0, fill);
+    }
+    (rect, response)
+}
+
 /// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
 /// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
 /// la même que celle du clavier : recliquer la note active la retire (drapeau, étoiles),
@@ -133,10 +152,8 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     let weak = ui.visuals().weak_text_color();
     let mut clicked = None;
     let cell = |ui: &mut Ui, tip: &str| {
-        let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
-        // Nom lisible pour l'accessibilité (et les tests d'interface).
-        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, tip));
-        (rect, response.on_hover_text(tip).clicked())
+        let (rect, response) = clickable(ui, size, tip);
+        (rect, response.clicked())
     };
     for (flag, color) in [
         (Flag::Accepted, colors.accepted),

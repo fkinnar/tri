@@ -85,7 +85,7 @@ load_budget_ms = 8
 filter_bar = true
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
-# les mêmes contrôles.
+# une boîte avec les mêmes contrôles.
 rating_bar = true
 
 [gui.grid]

@@ -68,9 +68,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
     estompés quand ils ne sont pas posés ; `Maj+N` l'affiche ou le masque
     (`[gui] rating_bar`) ;
-  - **clic droit** sur une vignette ou en plein écran : menu avec les mêmes contrôles. Il
-    sélectionne la vignette et note *cette* image, même si le pointeur survole d'autres
-    vignettes en allant vers le menu ; le menu reste ouvert pour poser plusieurs notes ;
+  - **clic droit** sur une vignette ou en plein écran : **boîte modale** avec les mêmes
+    contrôles, pour l'image cliquée (sélectionnée). Un simple menu ne suffisait pas
+    (retour du 17/10/2026) : la souris qui sortait du menu sélectionnait d'autres
+    vignettes, alors que la note allait à l'image cliquée. Derrière la boîte, rien ne
+    bouge : ni survol, ni navigation ; seules les touches de notation (pour cette image)
+    et Échap agissent. Elle reste ouverte pour poser plusieurs notes, et se ferme par
+    Échap, « Fermer » ou un clic à côté ;
+  - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
+    cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
+    (`marks::clickable`) ;
   - chaque clic déclenche la même action que le clavier : recliquer la note active la
     retire (étoiles, drapeau), une couleur s'ajoute ou se retire ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
@@ -350,8 +357,10 @@ Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) e
 
 Notation à la souris (17/10/2026) : clics dans le bandeau (3 étoiles, rejeter, vert, puis
 retrait des étoiles et du drapeau en recliquant), relus du disque ; Maj+N masque le
-bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, le menu s'ouvre, et
-« 4 étoiles » note cette image et pas la première.
+bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la boîte s'ouvre ;
+la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
+touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
+la grille.
 
 Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
 `f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre
