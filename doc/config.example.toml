@@ -79,6 +79,21 @@ fixed = []
 # dans le panneau des dossiers ; 0 : pas de surveillance (F5 ou « Actualiser »).
 watch_ms = 2000
 
+[exposure]
+# Histogramme et alertes d'exposition, calculés sur les données du capteur pour un RAW.
+# Seuil de saturation en IL sous le blanc du capteur (0 : seulement au blanc ; -0.1 : aussi
+# à moins de 0,1 IL, pour un boîtier qui sature un peu sous son blanc théorique).
+over_ev = 0.0
+# Seuil des ombres bouchées, en IL sous le blanc (-10 : moins de 1/1024 de la plage).
+under_ev = -10.0
+# Cases de l'histogramme linéaire.
+linear_bins = 1024
+# Étendue de l'histogramme en IL sous la saturation, et cases par IL.
+ev_range = 16.0
+ev_bins_per_stop = 8
+# Côté long du masque des zones saturées / bouchées (cases).
+mask_size = 1024
+
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"

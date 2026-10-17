@@ -50,6 +50,17 @@ let bitmap = raw.render(&RenderOptions::default())?; // développement complet
   l'ouverture. Elles servent à décider si `half_size` suffit pour l'aperçu demandé.
 - `render_cancellable(&options, &cancel)` : comme `render`, mais renvoie
   `RawError::Cancelled` si le drapeau `AtomicBool` passe à `true` (voir « Annulation »).
+- `sensor()` : `libraw_unpack` seul (sans dématriçage), puis vue `Sensor` sur la mosaïque
+  du capteur, empruntée à LibRaw (valide tant que le `RawFile` n'est pas modifié) : lignes
+  de la zone visible (`row`), canal du filtre (`channel`, 0 rouge, 1 vert, 2 bleu ; le
+  second vert Bayer est ramené au vert), **noir par pixel** (`black` : noir général + noir
+  du canal + motif de noir du boîtier, Fuji : 6 × 6 à ~1022), blanc (`white`), profondeur
+  (`bits`). Canaux et noirs sont précalculés dans une table 24 × 24 (période commune à
+  Bayer 8 × 2 et X-Trans 6 × 6, que `pattern(row)` donne ligne par ligne) : pas d'appel à
+  LibRaw par pixel. Les champs viennent du shim (`tri_libraw_raw_info`, niveaux lus dans
+  `rawdata.color`, la copie faite par `unpack`) et de `libraw_COLOR`. Erreur
+  `RawError::NoMosaic` pour un RAW sans mosaïque (DNG linéaire, Foveon). Base de
+  l'histogramme RAW ([exposure.md](exposure.md)).
 - **Threads** : `RawFile` est `Send` (une instance LibRaw n'est liée à aucun thread, on peut la
   déplacer vers un thread de travail) mais pas `Sync` (deux threads ne doivent pas l'utiliser
   en même temps). Des instances distinctes peuvent travailler en parallèle.

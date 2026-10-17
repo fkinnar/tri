@@ -34,6 +34,25 @@ pub struct ProcessedImage {
     pub data: [c_uchar; 1],
 }
 
+/// Équivalent de `tri_raw_info` (shim) : données brutes du capteur après `unpack`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RawInfo {
+    pub raw_image: *const c_ushort,
+    pub raw_width: c_uint,
+    pub raw_height: c_uint,
+    pub raw_pitch: c_uint,
+    pub left_margin: c_uint,
+    pub top_margin: c_uint,
+    pub width: c_uint,
+    pub height: c_uint,
+    pub black: c_uint,
+    pub maximum: c_uint,
+    pub cblack: *const c_uint,
+    pub cblack_len: c_uint,
+    pub filters: c_uint,
+}
+
 unsafe extern "C" {
     pub fn libraw_version() -> *const c_char;
     pub fn libraw_strerror(err: c_int) -> *const c_char;
@@ -59,10 +78,12 @@ unsafe extern "C" {
         data: *mut c_void,
     );
     pub fn libraw_close(lr: *mut LibRawData);
+    pub fn libraw_COLOR(lr: *mut LibRawData, row: c_int, col: c_int) -> c_int;
 
     // Shim C : champs de `params` sans setter dans l'API C.
     pub fn tri_libraw_set_use_camera_wb(lr: *mut LibRawData, value: c_int);
     pub fn tri_libraw_set_half_size(lr: *mut LibRawData, value: c_int);
     pub fn tri_libraw_get_flip(lr: *mut LibRawData) -> c_int;
     pub fn tri_libraw_get_size(lr: *mut LibRawData, width: *mut c_int, height: *mut c_int);
+    pub fn tri_libraw_raw_info(lr: *mut LibRawData, out: *mut RawInfo);
 }

@@ -19,6 +19,7 @@ existe.
 | [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
+| [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
 | [notes.md](notes.md) | Module `tri::notes` : notes d'un dossier en mémoire, modification, filtres sur les notes |

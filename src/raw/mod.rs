@@ -64,6 +64,9 @@ pub enum RawError {
     Cancelled,
     /// Image nulle sans code d'erreur.
     EmptyImage,
+    /// Pas de mosaïque de filtres couleur (DNG linéaire, capteur Foveon) : pas de données
+    /// capteur à lire pixel par pixel (voir [`RawFile::sensor`]).
+    NoMosaic,
     /// Image produite dans un format que `Bitmap` ne gère pas.
     UnsupportedImage {
         /// Type LibRaw (1 = JPEG, 2 = bitmap).
@@ -85,6 +88,10 @@ impl fmt::Display for RawError {
             Self::LibRaw { code, message } => write!(f, "LibRaw erreur {code} : {message}"),
             Self::Cancelled => write!(f, "traitement LibRaw annulé"),
             Self::EmptyImage => write!(f, "LibRaw a renvoyé une image nulle sans code d'erreur"),
+            Self::NoMosaic => write!(
+                f,
+                "RAW sans mosaïque de filtres couleur (DNG linéaire, Foveon)"
+            ),
             Self::UnsupportedImage { kind, colors, bits } => {
                 write!(
                     f,
@@ -250,6 +257,74 @@ impl RawFile {
         (w.max(0) as u32, h.max(0) as u32)
     }
 
+    /// Données brutes du capteur : décompresse le RAW (`libraw_unpack`, sans
+    /// dématriçage) et donne accès aux valeurs de la mosaïque, à leur profondeur réelle
+    /// (12, 14 ou 16 bits selon le boîtier), avec les niveaux de noir et de blanc. Base de
+    /// l'histogramme RAW. Erreur [`RawError::NoMosaic`] pour un RAW sans mosaïque.
+    pub fn sensor(&mut self) -> Result<Sensor<'_>> {
+        check(unsafe { ffi::libraw_unpack(self.ptr) })?;
+        let mut info = std::mem::MaybeUninit::<ffi::RawInfo>::uninit();
+        let info = unsafe {
+            ffi::tri_libraw_raw_info(self.ptr, info.as_mut_ptr());
+            info.assume_init()
+        };
+        if info.raw_image.is_null() || info.filters == 0 {
+            return Err(RawError::NoMosaic);
+        }
+        let pitch = info.raw_pitch as usize / 2;
+        let len = pitch * info.raw_height as usize;
+        // Sûr : buffer de LibRaw, valide tant que `self` n'est ni modifié ni fermé, ce que
+        // garantit l'emprunt de `self` par `Sensor`.
+        let pixels = unsafe { std::slice::from_raw_parts(info.raw_image, len) };
+        // Sûr : tableau de LibRaw de `cblack_len` entrées, même durée de vie que `pixels`.
+        let cblack = unsafe { std::slice::from_raw_parts(info.cblack, info.cblack_len as usize) };
+        // Motif de noir (LibRaw : cblack[4] × cblack[5] valeurs à partir de cblack[6] ;
+        // Fuji : 6 × 6). Replié dans la table 24 × 24 s'il en divise la période (1, 2, 3,
+        // 4, 6, 8, 12, 24) ; sinon sa moyenne, faute de mieux (aucun cas connu).
+        let (prows, pcols) = (cblack[4] as usize, cblack[5] as usize);
+        let plen = prows * pcols;
+        let pattern_ok = plen > 0 && 6 + plen <= cblack.len();
+        let folds = pattern_ok && PATTERN.is_multiple_of(prows) && PATTERN.is_multiple_of(pcols);
+        let mean = if pattern_ok && !folds {
+            (cblack[6..6 + plen].iter().map(|&v| v as u64).sum::<u64>() / plen as u64) as u32
+        } else {
+            0
+        };
+        let mut channels = [[0u8; PATTERN]; PATTERN];
+        let mut blacks = [[0u16; PATTERN]; PATTERN];
+        for row in 0..PATTERN {
+            for col in 0..PATTERN {
+                let c = unsafe { ffi::libraw_COLOR(self.ptr, row as c_int, col as c_int) };
+                let c = c.clamp(0, 3) as usize;
+                let local = if folds {
+                    cblack[6 + (row % prows) * pcols + col % pcols]
+                } else {
+                    mean
+                };
+                let black = info.black + cblack[c] + local;
+                blacks[row][col] = black.min(u16::MAX as u32) as u16;
+                // 0 rouge, 1 vert, 2 bleu, 3 second vert (Bayer) : ramené au vert.
+                channels[row][col] = match c {
+                    0 => 0,
+                    2 => 2,
+                    _ => 1,
+                };
+            }
+        }
+        Ok(Sensor {
+            pixels,
+            pitch,
+            left: info.left_margin as usize,
+            top: info.top_margin as usize,
+            width: (info.width as usize).min(pitch.saturating_sub(info.left_margin as usize)),
+            height: (info.height as usize)
+                .min((info.raw_height as usize).saturating_sub(info.top_margin as usize)),
+            white: info.maximum.min(u16::MAX as u32) as u16,
+            channels,
+            blacks,
+        })
+    }
+
     /// Développement complet des données RAW en RGB 8 bits (orientation appliquée).
     pub fn render(&mut self, options: &RenderOptions) -> Result<Bitmap> {
         self.render_cancellable(options, &AtomicBool::new(false))
@@ -326,6 +401,61 @@ fn rotation_from_flip(flip: c_int) -> Rotation {
 impl Drop for RawFile {
     fn drop(&mut self) {
         unsafe { ffi::libraw_close(self.ptr) };
+    }
+}
+
+/// Période de la table du motif de filtres : 24 couvre Bayer (8 × 2) et X-Trans (6 × 6).
+const PATTERN: usize = 24;
+
+/// Données brutes du capteur (mosaïque) d'un RAW décompressé, empruntées à LibRaw : voir
+/// [`RawFile::sensor`]. Coordonnées dans la zone visible (marges du capteur exclues).
+pub struct Sensor<'a> {
+    pixels: &'a [u16],
+    pitch: usize,
+    left: usize,
+    top: usize,
+    /// Largeur de la zone visible.
+    pub width: usize,
+    /// Hauteur de la zone visible.
+    pub height: usize,
+    /// Niveau de saturation du capteur (blanc), en valeur brute.
+    pub white: u16,
+    channels: [[u8; PATTERN]; PATTERN],
+    blacks: [[u16; PATTERN]; PATTERN],
+}
+
+impl Sensor<'_> {
+    /// Ligne `row` de la zone visible.
+    pub fn row(&self, row: usize) -> &[u16] {
+        let start = (self.top + row) * self.pitch + self.left;
+        &self.pixels[start..start + self.width]
+    }
+
+    /// Canal (0 rouge, 1 vert, 2 bleu) du filtre au pixel (`row`, `col`).
+    pub fn channel(&self, row: usize, col: usize) -> usize {
+        self.channels[row % PATTERN][col % PATTERN] as usize
+    }
+
+    /// Niveau de noir au pixel (`row`, `col`), en valeur brute : noir général, par canal
+    /// et motif de noir du boîtier (Fuji : 6 × 6, ~1022 en 14 bits).
+    pub fn black(&self, row: usize, col: usize) -> u16 {
+        self.blacks[row % PATTERN][col % PATTERN]
+    }
+
+    /// Canaux et noirs d'une ligne, à répéter tous les 24 pixels (motif) : pour parcourir
+    /// une ligne sans calcul de motif par pixel.
+    pub fn pattern(&self, row: usize) -> (&[u8; PATTERN], &[u16; PATTERN]) {
+        (&self.channels[row % PATTERN], &self.blacks[row % PATTERN])
+    }
+
+    /// Plus petit noir du capteur (tous canaux et positions confondus).
+    pub fn min_black(&self) -> u16 {
+        self.blacks.iter().flatten().copied().min().unwrap_or(0)
+    }
+
+    /// Profondeur utile en bits, déduite du blanc (14 pour un blanc de 16383).
+    pub fn bits(&self) -> u32 {
+        u16::BITS - self.white.leading_zeros()
     }
 }
 

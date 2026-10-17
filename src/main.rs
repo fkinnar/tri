@@ -10,6 +10,9 @@
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau ;
+//!   tri <dossier> --exposure [--raw|--flat] [--depth N]
+//!       exposition de chaque image (données du capteur pour un RAW) : marge avant
+//!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
@@ -37,6 +40,7 @@ const USAGE: &str = "usage :
   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
   tri --cache-usage [--cache DOSSIER]
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
+  tri <dossier> --exposure [--raw|--flat] [--depth N]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -57,6 +61,7 @@ struct Args {
     config: Option<PathBuf>,
     convert: Option<Convention>,
     dry_run: bool,
+    exposure: bool,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -99,6 +104,7 @@ fn parse() -> AnyResult<Args> {
                 })
             }
             "--dry-run" => args.dry_run = true,
+            "--exposure" => args.exposure = true,
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -261,6 +267,44 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     print_usage(&cache)
 }
 
+/// Exposition de chaque image : marge avant saturation (IL), pixels saturés et bouchés
+/// (canal le plus touché), durée du calcul.
+fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyResult<()> {
+    let s = &settings.exposure;
+    println!("fichier\tsource\tmarge (IL)\tsaturés\tbouchés\tdurée");
+    for file in files {
+        let start = Instant::now();
+        let result = match file.kind {
+            MediaKind::Raw => {
+                tri::exposure::Exposure::from_raw(&file.path, s).map_err(|e| e.to_string())
+            }
+            MediaKind::Flat => tri::flat::decode(&file.path)
+                .map(|b| tri::exposure::Exposure::from_bitmap(&b, s))
+                .map_err(|e| e.to_string()),
+        };
+        let name = file.path.file_name().unwrap_or_default().to_string_lossy();
+        match result {
+            Ok(e) => {
+                let source = match e.source {
+                    tri::exposure::Source::Raw { bits, black, white } => {
+                        format!("RAW {bits} bits, noir {black}, blanc {white}")
+                    }
+                    tri::exposure::Source::Flat => "8 bits".into(),
+                };
+                println!(
+                    "{name}\t{source}\t{:.2}\t{:.3} %\t{:.3} %\t{:.0} ms",
+                    e.headroom_ev(),
+                    e.over_fraction() * 100.0,
+                    e.under_fraction() * 100.0,
+                    start.elapsed().as_secs_f64() * 1000.0
+                );
+            }
+            Err(e) => eprintln!("{name}\terreur : {e}"),
+        }
+    }
+    Ok(())
+}
+
 /// Conversion des sidecars vers la convention `target`, avec bilan.
 fn convert_xmp(
     files: &[tri::media::MediaFile],
@@ -318,6 +362,10 @@ fn run() -> AnyResult<()> {
     let groups = args
         .kind
         .apply(ungrouped(scan(&dir, args.depth.unwrap_or(1))?));
+    if args.exposure {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return exposure(&settings, &files);
+    }
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return convert_xmp(&files, target, args.dry_run);

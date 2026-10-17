@@ -5,6 +5,7 @@
 //! - [`cache`] : cache persistant des vignettes et aperçus ;
 //! - [`flat`] : décodage des images plates (JPEG, PNG, TIFF, WebP, HEIF) ;
 //! - [`jpeg`] : décodage / encodage JPEG rapides (libjpeg-turbo, repli pur Rust) ;
+//! - [`exposure`] : histogrammes sur les vraies données, pixels saturés / bouchés, masque ;
 //! - [`filter`] : filtres sur la liste des images à afficher ;
 //! - [`folder`] : dossier ouvert (images, notes, liste filtrée) ;
 //! - [`raw`] : lecture et développement des RAW via LibRaw ;
@@ -21,6 +22,7 @@
 
 pub mod bitmap;
 pub mod cache;
+pub mod exposure;
 pub mod filter;
 pub mod flat;
 pub mod folder;

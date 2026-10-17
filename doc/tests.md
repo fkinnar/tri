@@ -186,6 +186,16 @@ la plus récente, source mal formée signalée.
   sans fil ; volumes fixés non éjectables (casse ignorée, seuls les volumes s'éjectent,
   `Row::ejectable`, `Tree::can_eject`) ; périphérique d'un point de montage lu dans `/proc/mounts` (espaces).
 
+### `exposure` (unitaires `src/exposure.rs`, intégration `tests/exposure.rs`)
+
+- Image synthétique : comptes par canal, saturés / bouchés, cases de l'histogramme en IL
+  (128/255 = -0,994 IL), masque (saturé en haut à gauche, bouché en bas à droite), seuil
+  de saturation en IL, rotations du masque (aller-retour sur un masque non carré),
+  marge avant saturation, aller-retour binaire et refus d'un cache illisible ou tronqué.
+- Image plate écrite sur disque puis décodée : moitié saturée, masque, marge nulle.
+- Avec `TRI_TEST_RAW` : données capteur (12 à 16 bits, blanc > noir, plage = blanc −
+  noir), masque dans la taille demandée, aller-retour binaire.
+
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 
 Aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et

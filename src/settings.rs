@@ -99,6 +99,8 @@ pub struct EngineSettings {
     pub xmp: XmpSection,
     /// Emplacements proposés pour choisir un dossier.
     pub places: crate::places::PlaceSettings,
+    /// Calcul de l'exposition (histogrammes, saturés / bouchés).
+    pub exposure: crate::exposure::ExposureSettings,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir

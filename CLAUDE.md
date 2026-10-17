@@ -420,6 +420,20 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      dématriçage ; JPEG 8 bits ; autres formats selon leur profondeur d'enregistrement —
      `flat` ramène aujourd'hui tout en 8 bits). Calcul coûteux : à mesurer, puis cache
      d'*analyse* (pas XMP).
+     Mesuré le 17/10/2026 (RAF X-T4, 26 Mpx) : `unpack` 0,35–0,55 s, histogramme complet
+     14 bits ~40 ms ; noir Fuji = motif 6 × 6 (`cblack[6..]`, ~1022), blanc 16383. Comme
+     les rendus, `unpack` est parallélisé par LibRaw (OpenMP) : 2 fils = 1,7 s par
+     fichier, 8 fils = 9 s → **un seul worker LibRaw** pour les histogrammes aussi.
+     Décisions de l'utilisateur (17/10/2026) : un RAW affiche **toujours l'histogramme
+     RAW** (même quand le JPEG boîtier est à l'écran) ; échelle **en IL depuis la
+     saturation** par défaut, bascule vers le linéaire ; alertes = **indicateurs**
+     (pourcentages saturés / bouchés par canal) **et zones superposées sur l'image** en
+     plein écran (touche) ; **badge** sur les vignettes brûlées / bouchées (seuils
+     réglables). Étapes : A moteur (`src/exposure.rs`), B cache d'analyse + scheduler, C
+     interface. **A fait** (17/10/2026) : `raw::Sensor` (mosaïque, noir par pixel),
+     `exposure::Exposure` (histogrammes linéaire et en IL, saturés / bouchés, marge
+     avant saturation, masque pivoté, format binaire), `tri <dossier> --exposure` ;
+     0,38 s par RAF en moyenne, vérifié sur une vraie séance.
   3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
      pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
   4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le
