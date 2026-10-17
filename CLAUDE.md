@@ -436,7 +436,13 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      0,38 s par RAF en moyenne, vérifié sur une vraie séance. **B fait** (17/10/2026) :
      niveau de cache `Exposure` (entrées binaires ~14 Ko), `preview::exposure`,
      scheduler (worker lourd pour un RAW, après les aperçus boîtier et avant les rendus
-     RAW de fond, `[scheduler] exposure`), progression « histogrammes ».
+     RAW de fond, `[scheduler] exposure`), progression « histogrammes ». **C fait**
+     (17/10/2026) : histogramme en plein écran (`i`, `Maj+I` IL / linéaire), zones
+     superposées (`o`, masque en texture ; bouché = majorité des pixels d'une case),
+     badges dans la grille (`[gui.histogram]`), vérifié sur une vraie séance. Reste à
+     voir : histogramme dans la grille (panneau de droite, avec les métadonnées ?),
+     profondeur réelle des TIFF / PNG 16 bits, analyse produite au passage par le rendu
+     RAW (même décompression).
   3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
      pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
   4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le

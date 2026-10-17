@@ -96,6 +96,9 @@ ev_range = 16.0
 ev_bins_per_stop = 8
 # Côté long du masque des zones saturées / bouchées (cases).
 mask_size = 1024
+# Part des pixels d'une case qui doivent être bouchés pour la marquer (0 à 1) : pas
+# tous, le bruit du capteur près du noir en remonte presque toujours un.
+mask_under_share = 0.5
 
 [gui]
 # "dark", "light" ou "system".
@@ -163,6 +166,24 @@ width = 240.0
 indent = 14.0
 hidden = false
 
+[gui.histogram]
+# Histogramme du plein écran (données du capteur pour un RAW) : affiché au démarrage
+# (touche i), échelle "ev" (IL sous la saturation) ou "linear" (Maj+I bascule), taille
+# en points (indicateurs compris), IL montrés en échelle IL.
+visible = true
+scale = "ev"
+width = 320.0
+height = 130.0
+ev_shown = 12.0
+# Zones saturées (rouge) et bouchées (bleu) superposées à l'image au démarrage (touche o),
+# et leur opacité.
+clipping = false
+clipping_opacity = 0.7
+# Badges de la grille : part des pixels saturés / bouchés (canal le plus touché, 0 à 1)
+# au-delà de laquelle une vignette est signalée.
+badge_over = 0.005
+badge_under = 0.05
+
 [gui.colors]
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
@@ -181,6 +202,12 @@ yellow = "#e6c832"
 green = "#46b450"
 blue = "#4182e1"
 purple = "#a555d2"
+# Histogramme (canaux), zones et badges (saturé, bouché).
+hist_red = "#eb4646"
+hist_green = "#50c85a"
+hist_blue = "#5082f0"
+clip_over = "#ff2828"
+clip_under = "#286eff"
 
 [keys]
 # Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une

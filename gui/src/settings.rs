@@ -96,6 +96,8 @@ pub struct GuiSettings {
     pub colors: Colors,
     /// `[gui.folders]`.
     pub folders: FolderSettings,
+    /// `[gui.histogram]`.
+    pub histogram: HistogramSettings,
 }
 
 impl Default for GuiSettings {
@@ -115,6 +117,7 @@ impl Default for GuiSettings {
             view: ViewSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
+            histogram: HistogramSettings::default(),
         }
     }
 }
@@ -265,6 +268,69 @@ impl Default for FolderSettings {
     }
 }
 
+/// Échelle horizontale de l'histogramme. Dans le fichier : `"ev"` ou `"linear"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HistogramScale {
+    /// En IL sous la saturation (0 = blanc du capteur, -1, -2…) : la marge avant de
+    /// brûler se lit directement, les ombres ne sont pas écrasées à gauche.
+    #[default]
+    Ev,
+    /// Valeurs brutes, du noir au blanc.
+    Linear,
+}
+
+impl HistogramScale {
+    /// L'autre échelle.
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Ev => Self::Linear,
+            Self::Linear => Self::Ev,
+        }
+    }
+}
+
+/// Section `[gui.histogram]` : histogramme et alertes d'exposition.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HistogramSettings {
+    /// Histogramme affiché en plein écran au démarrage (touche `i`).
+    pub visible: bool,
+    /// Échelle au démarrage (`Maj+I` bascule).
+    pub scale: HistogramScale,
+    /// Taille de l'histogramme (points).
+    pub width: f32,
+    /// Hauteur de l'histogramme, indicateurs compris (points).
+    pub height: f32,
+    /// IL montrés sous la saturation, en échelle IL.
+    pub ev_shown: f32,
+    /// Zones saturées / bouchées superposées à l'image au démarrage (touche `o`).
+    pub clipping: bool,
+    /// Opacité des zones superposées (0 à 1).
+    pub clipping_opacity: f32,
+    /// Badge « brûlée » sur une vignette au-delà de cette part de pixels saturés (canal
+    /// le plus touché, 0 à 1).
+    pub badge_over: f64,
+    /// Badge « bouchée » au-delà de cette part de pixels bouchés.
+    pub badge_under: f64,
+}
+
+impl Default for HistogramSettings {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            scale: HistogramScale::Ev,
+            width: 320.0,
+            height: 130.0,
+            ev_shown: 12.0,
+            clipping: false,
+            clipping_opacity: 0.7,
+            badge_over: 0.005,
+            badge_under: 0.05,
+        }
+    }
+}
+
 /// Section `[gui.colors]` : couleurs `"#rrggbb"`. Sélection absente : couleur du thème.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -297,6 +363,16 @@ pub struct Colors {
     pub blue: Color,
     /// Violet.
     pub purple: Color,
+    /// Histogramme : canal rouge.
+    pub hist_red: Color,
+    /// Histogramme : canal vert.
+    pub hist_green: Color,
+    /// Histogramme : canal bleu.
+    pub hist_blue: Color,
+    /// Zones et badges : saturé (brûlé).
+    pub clip_over: Color,
+    /// Zones et badges : bouché.
+    pub clip_under: Color,
 }
 
 impl Default for Colors {
@@ -316,6 +392,11 @@ impl Default for Colors {
             green: Color([70, 180, 80]),
             blue: Color([65, 130, 225]),
             purple: Color([165, 85, 210]),
+            hist_red: Color([235, 70, 70]),
+            hist_green: Color([80, 200, 90]),
+            hist_blue: Color([80, 130, 240]),
+            clip_over: Color([255, 40, 40]),
+            clip_under: Color([40, 110, 255]),
         }
     }
 }

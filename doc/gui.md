@@ -107,6 +107,22 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     retirent au clic, comme au clavier ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
+- **Histogramme et alertes d'exposition** (17/10/2026), calculés par le moteur sur les
+  **données du capteur** pour un RAW, même quand le JPEG boîtier est à l'écran (voir
+  [exposure.md](exposure.md)) ; le dessin est dans `histogram.rs` :
+  - **histogramme** en bas à droite du plein écran (`i`) : canaux R, V, B superposés,
+    une barre par case (pas par pixel, sinon un « peigne »), échelle **en IL sous la
+    saturation** par défaut (`Maj+I` : linéaire), graduations, pastilles rouge / bleue si
+    des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant
+    saturation, parts saturées et bouchées ;
+  - **zones** superposées à l'image (`o`) : masque du moteur en texture (échantillonnage au
+    plus proche), rouge = saturé, bleu = bouché, étiré sur l'image (aussi à 100 %) ;
+  - **badges** dans la grille : pastille rouge (brûlée) / bleue (bouchée) en haut à droite
+    de la vignette au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
+    survol ; analyses lues dans le cache dans le budget de chargement de l'image ;
+  - vérifié sur une vraie séance : photo entièrement brûlée (rouge partout, badge),
+    portrait au pull noir (zones bleues dans les plis, badge bleu, -3,5 IL de marge),
+    portraits sur fond blanc (rien, -0,45 IL de marge).
 - **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,
   17/10/2026), voir [notes.md](notes.md).
 - **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
@@ -257,7 +273,8 @@ Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplaceme
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
-Maj+D ; `core.view.refresh_folders` : F5.
+Maj+D ; `core.view.refresh_folders` : F5 ; `core.view.histogram` : i ;
+`core.view.histogram_scale` : Maj+I ; `core.view.clipping` : o.
 
 Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant
 pas « ° ») **puis** comme caractère, parfois dans une image suivante (constaté le
@@ -392,6 +409,12 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Exposition (17/10/2026) : une image blanche ajoutée au dossier donne une part saturée
+> 99 % (badge) ; en plein écran, histogramme affiché par défaut, `i` le masque, `Maj+I`
+passe en linéaire, `o` affiche les zones (masque en texture). Unitaires (`histogram.rs`) :
+regroupement en colonnes sans perte de pixel, placement en IL (blanc dans la dernière
+colonne, noir dans la première), couleurs du masque, nombres à la française.
 
 Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
 `f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre

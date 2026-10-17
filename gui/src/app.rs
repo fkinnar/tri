@@ -13,6 +13,7 @@ use eframe::egui::{
     TextureOptions, Ui, Vec2, ViewportCommand, pos2, vec2,
 };
 use tri::cache::{Cache, Level};
+use tri::exposure::Exposure;
 use tri::filter::KindFilter;
 use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
@@ -25,9 +26,10 @@ use tri::xmp::{Color, Flag};
 
 use crate::actions::{Action, FlagFilter, Keymap, Sequencer};
 use crate::grid::{self, Layout};
+use crate::histogram;
 use crate::loader::Loader;
 use crate::marks;
-use crate::settings::{AppSettings, GuiSettings};
+use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
@@ -161,6 +163,18 @@ pub struct TriApp {
     /// vue (appliqués au dessin, quand la taille de l'image est connue).
     pan: Vec2,
     textures: Lru<PathBuf, TextureHandle>,
+    /// Histogramme affiché en plein écran.
+    histogram: bool,
+    /// Échelle de l'histogramme.
+    histogram_scale: HistogramScale,
+    /// Zones saturées / bouchées superposées à l'image.
+    clipping: bool,
+    /// Analyses d'exposition lues dans le cache (images affichées récemment).
+    exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Masques des zones, en textures.
+    mask_textures: Lru<PathBuf, TextureHandle>,
+    /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
+    clip_summary: std::collections::HashMap<PathBuf, (f64, f64)>,
     selected: usize,
     layout: Layout,
     scroll_offset: f32,
@@ -268,6 +282,12 @@ impl TriApp {
             cell_rects: Vec::new(),
             pan: Vec2::ZERO,
             textures: Lru::new(gui.grid.textures),
+            histogram: gui.histogram.visible,
+            histogram_scale: gui.histogram.scale,
+            clipping: gui.histogram.clipping,
+            exposures: Lru::new(gui.view.textures),
+            mask_textures: Lru::new(gui.view.textures),
+            clip_summary: std::collections::HashMap::new(),
             selected,
             layout: Layout::fit(0.0, gui.grid.cell, gui.grid.gap),
             scroll_offset: 0.0,
@@ -769,6 +789,9 @@ impl TriApp {
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
             Action::RefreshFolders => self.tree.refresh(),
+            Action::ToggleHistogram => self.histogram = !self.histogram,
+            Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
+            Action::ToggleClipping => self.clipping = !self.clipping,
             Action::ToggleFolderPanel => {
                 self.folder_panel = !self.folder_panel;
                 self.reveal_folder = self.folder_panel;
@@ -1084,6 +1107,18 @@ impl TriApp {
             };
             painter.image(texture.id(), rect, uv, Color32::WHITE);
             image_rect = Some(rect);
+            // Zones saturées / bouchées, étirées sur l'image (aussi zoomée).
+            if self.clipping
+                && let Some(texture) = self.mask_texture(&ctx, index)
+            {
+                let opacity = self.gui.histogram.clipping_opacity;
+                painter.image(
+                    texture.id(),
+                    rect,
+                    uv,
+                    Color32::WHITE.gamma_multiply(opacity),
+                );
+            }
         }
 
         self.open_rating_dialog(&response, index);
@@ -1150,9 +1185,36 @@ impl TriApp {
             painter.rect_filled(back, 4.0, Color32::from_black_alpha(170));
             marks::row(&painter, left_center, notes, size, &self.gui.colors);
         }
+        // Histogramme en bas à droite (données du capteur pour un RAW, quel que soit
+        // l'aperçu affiché).
+        if self.histogram {
+            let h = self.gui.histogram;
+            let rect = Rect::from_min_size(
+                view_rect.right_bottom() - vec2(h.width + 10.0, h.height + 10.0),
+                vec2(h.width, h.height),
+            );
+            match self.exposure_of(index) {
+                Some(e) => histogram::draw(
+                    &painter,
+                    rect,
+                    &e,
+                    self.histogram_scale,
+                    &h,
+                    &self.gui.colors,
+                ),
+                None => overlay(
+                    &painter,
+                    rect.right_bottom(),
+                    Align2::RIGHT_BOTTOM,
+                    "histogramme en cours de calcul",
+                ),
+            }
+        }
         let hint = match file.kind {
-            MediaKind::Raw => "b : JPEG boîtier / RAW   z : 1:1   Échap : grille",
-            MediaKind::Flat => "z : 1:1   Échap : grille",
+            MediaKind::Raw => {
+                "b : JPEG boîtier / RAW   z : 1:1   i : histogramme   o : zones   Échap : grille"
+            }
+            MediaKind::Flat => "z : 1:1   i : histogramme   o : zones   Échap : grille",
         };
         overlay(
             &painter,
@@ -1160,6 +1222,66 @@ impl TriApp {
             Align2::RIGHT_TOP,
             hint,
         );
+    }
+
+    /// Analyse d'exposition de l'image `index`, lue dans le cache ; demandée au moteur si
+    /// elle n'y est pas encore (`None` en attendant).
+    fn exposure_of(&mut self, index: usize) -> Option<Arc<Exposure>> {
+        let path = self.files.get(index)?.path.clone();
+        if let Some(e) = self.exposures.get(&path) {
+            return Some(e.clone());
+        }
+        if !self.ready(index, Level::Exposure) {
+            self.request(index, Level::Exposure);
+            return None;
+        }
+        let engine = self.engine.as_ref()?;
+        let e = Arc::new(preview::exposure(
+            &engine.cache,
+            &self.files[index],
+            &engine.preview,
+        )?);
+        self.clip_summary
+            .insert(path.clone(), (e.over_fraction(), e.under_fraction()));
+        self.exposures.insert(path, e.clone());
+        Some(e)
+    }
+
+    /// Masque des zones de l'image `index`, en texture (créée à la première demande).
+    fn mask_texture(&mut self, ctx: &egui::Context, index: usize) -> Option<TextureHandle> {
+        let path = self.files.get(index)?.path.clone();
+        if let Some(t) = self.mask_textures.get(&path) {
+            return Some(t.clone());
+        }
+        let e = self.exposure_of(index)?;
+        let colors = self.gui.colors;
+        let image =
+            histogram::mask_image(&e.mask, colors.clip_over.into(), colors.clip_under.into());
+        // Au plus proche : des cases nettes, pas un dégradé flou.
+        let texture = ctx.load_texture(
+            format!("{}#zones", path.display()),
+            image,
+            TextureOptions::NEAREST,
+        );
+        self.mask_textures.insert(path, texture.clone());
+        Some(texture)
+    }
+
+    /// Parts de pixels saturés / bouchés de l'image `index` (badges de la grille), lues
+    /// dans le cache si l'analyse est prête et que le budget de l'image le permet.
+    fn clip_fractions(&mut self, index: usize, deadline: Instant) -> Option<(f64, f64)> {
+        let path = &self.files.get(index)?.path;
+        if let Some(&fractions) = self.clip_summary.get(path) {
+            return Some(fractions);
+        }
+        if !self.ready(index, Level::Exposure) || Instant::now() > deadline {
+            return None;
+        }
+        let engine = self.engine.as_ref()?;
+        let e = preview::exposure(&engine.cache, &self.files[index], &engine.preview)?;
+        let fractions = (e.over_fraction(), e.under_fraction());
+        self.clip_summary.insert(path.clone(), fractions);
+        Some(fractions)
     }
 
     /// Texture de la vignette `index`, chargée depuis le cache si besoin et si le budget de
@@ -1596,6 +1718,34 @@ impl TriApp {
             let painter = ui.painter();
             painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
             marks::row(painter, left_center, notes, size, &colors);
+        }
+        // Badges d'exposition en haut à droite : brûlée (rouge), bouchée (bleu).
+        if let Some((over, under)) = self.clip_fractions(index, deadline) {
+            let h = self.gui.histogram;
+            let radius = g.marks * 0.4;
+            let mut center = pos2(
+                image_area.max.x - radius - 2.0,
+                image_area.min.y + radius + 2.0,
+            );
+            let mut tips = Vec::new();
+            for (fraction, threshold, color, what) in [
+                (over, h.badge_over, colors.clip_over, "saturés (brûlée)"),
+                (under, h.badge_under, colors.clip_under, "bouchés"),
+            ] {
+                if fraction > threshold {
+                    let painter = ui.painter();
+                    painter.circle_filled(center, radius + 1.5, Color32::from_black_alpha(160));
+                    painter.circle_filled(center, radius, color);
+                    center.x -= radius * 2.0 + 4.0;
+                    tips.push(format!(
+                        "{} % de pixels {what}",
+                        (fraction * 1000.0).round() / 10.0
+                    ));
+                }
+            }
+            if !tips.is_empty() {
+                response.on_hover_text(tips.join("\n"));
+            }
         }
     }
 
@@ -2332,6 +2482,52 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn histogram_zones_and_badges() {
+        let (mut h, dir) = harness();
+        // Une image entièrement blanche : saturée, donc badge et zones.
+        let photos = dir.path().join("photos");
+        image::RgbImage::from_pixel(64, 48, image::Rgb([255, 255, 255]))
+            .save(photos.join("img9.jpg"))
+            .unwrap();
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| {
+            (0..app.files.len()).all(|i| app.ready(i, Level::Exposure))
+        });
+        h.run_steps(3);
+        let white = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path.ends_with("img9.jpg"))
+            .unwrap();
+        let white_path = photos.join("img9.jpg");
+        let (over, _) = h.state().clip_summary[&white_path];
+        assert!(over > 0.99, "image blanche : {over}");
+        assert!(over > h.state().gui.histogram.badge_over, "badge affiché");
+        // Plein écran sur l'image blanche : histogramme et zones.
+        h.state_mut().select(white);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.exposures.contains(&white_path));
+        assert!(h.state().histogram, "histogramme affiché par défaut");
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert!(!h.state().histogram, "i le masque");
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        assert_eq!(
+            h.state().histogram_scale,
+            HistogramScale::Linear,
+            "Maj+I : linéaire"
+        );
+        assert!(!h.state().clipping);
+        press(&mut h, Key::O, Modifiers::NONE);
+        assert!(h.state().clipping, "o : zones");
+        h.run_steps(2);
+        assert!(
+            h.state().mask_textures.contains(&white_path),
+            "masque en texture"
+        );
     }
 
     #[test]

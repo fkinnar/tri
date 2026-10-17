@@ -17,6 +17,7 @@
 mod actions;
 mod app;
 mod grid;
+mod histogram;
 mod loader;
 mod marks;
 mod settings;

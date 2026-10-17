@@ -78,6 +78,9 @@ pub fn navigate(
         | Action::ToggleRatingBar
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
+        | Action::ToggleHistogram
+        | Action::HistogramScale
+        | Action::ToggleClipping
         | Action::Open
         | Action::ToggleZoom
         | Action::ToggleSource

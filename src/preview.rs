@@ -171,8 +171,15 @@ pub fn params(level: Level, settings: &Settings) -> String {
         Level::Exposure => {
             let e = &settings.exposure;
             format!(
-                "r{RULES_VERSION};over={};under={};lin={};evr={};evb={};mask={}",
-                e.over_ev, e.under_ev, e.linear_bins, e.ev_range, e.ev_bins_per_stop, e.mask_size
+                "r{RULES_VERSION};v{};over={};under={};lin={};evr={};evb={};mask={};share={}",
+                crate::exposure::VERSION,
+                e.over_ev,
+                e.under_ev,
+                e.linear_bins,
+                e.ev_range,
+                e.ev_bins_per_stop,
+                e.mask_size,
+                e.mask_under_share
             )
         }
     }

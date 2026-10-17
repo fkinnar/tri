@@ -87,6 +87,12 @@ pub enum Action {
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
     RefreshFolders,
+    /// Plein écran : afficher / masquer l'histogramme.
+    ToggleHistogram,
+    /// Histogramme : basculer entre IL et linéaire.
+    HistogramScale,
+    /// Plein écran : afficher / masquer les zones saturées / bouchées.
+    ToggleClipping,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -117,7 +123,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 52] = [
+    pub const ALL: [Action; 55] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -146,6 +152,9 @@ impl Action {
         Action::ToggleRatingBar,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
+        Action::ToggleHistogram,
+        Action::HistogramScale,
+        Action::ToggleClipping,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -208,6 +217,9 @@ impl Action {
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
             Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
+            Action::ToggleHistogram => "Afficher / masquer l'histogramme",
+            Action::HistogramScale => "Histogramme : IL / linéaire",
+            Action::ToggleClipping => "Afficher / masquer les zones brûlées et bouchées",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -271,6 +283,9 @@ impl Action {
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleFolderPanel => "core.view.folders",
             Action::RefreshFolders => "core.view.refresh_folders",
+            Action::ToggleHistogram => "core.view.histogram",
+            Action::HistogramScale => "core.view.histogram_scale",
+            Action::ToggleClipping => "core.view.clipping",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -474,6 +489,9 @@ const RATING: &[Binding] = {
         (&[shifted(Key::N)], ToggleRatingBar),
         (&[shifted(Key::D)], ToggleFolderPanel),
         (&[plain(Key::F5)], RefreshFolders),
+        (&[plain(Key::I)], ToggleHistogram),
+        (&[shifted(Key::I)], HistogramScale),
+        (&[plain(Key::O)], ToggleClipping),
     ]
 };
 

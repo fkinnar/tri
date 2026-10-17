@@ -40,8 +40,13 @@ et par canal) et le masque ; tout le reste en est dérivé :
   sur l'histogramme complet : une première version sur l'histogramme réduit donnait
   -0,004 IL pour une image blanche ;
 - `mask` : `mask_size` cases sur le côté long, bits `OVER_R/G/B` (au moins un pixel saturé
-  dans la case) et `UNDER` (tous les pixels de la case sous le seuil des ombres) ; **déjà
-  pivoté** selon l'orientation du boîtier, pour être superposé tel quel à l'image affichée.
+  dans la case : un reflet brûlé doit se voir) et `UNDER` (au moins `mask_under_share`, la
+  moitié, des pixels de la case sous le seuil des ombres) ; **déjà pivoté** selon
+  l'orientation du boîtier, pour être superposé tel quel à l'image affichée. Première
+  version : `UNDER` seulement si *tous* les pixels étaient bouchés ; le bruit du capteur
+  près du noir en remontant presque toujours un, le pull noir n'avait aucune zone (vu en
+  capture le 17/10/2026). `VERSION` (2) entre dans la clé du cache : le calcul a changé
+  sans que les réglages changent.
 
 ## Coût (RAF X-T4, 26 Mpx, Mac Apple Silicon, 17/10/2026)
 

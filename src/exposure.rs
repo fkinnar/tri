@@ -17,6 +17,10 @@ use crate::raw::{RawFile, Sensor};
 /// Canaux : rouge, vert, bleu.
 pub const CHANNELS: usize = 3;
 
+/// Version de l'algorithme, dans la clé du cache d'analyse : à incrémenter quand le calcul
+/// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels).
+pub const VERSION: u32 = 2;
+
 /// Réglages du calcul (section `[exposure]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -37,6 +41,9 @@ pub struct ExposureSettings {
     pub ev_bins_per_stop: u32,
     /// Côté long du masque des zones (cases) ; chaque case couvre plusieurs pixels.
     pub mask_size: u32,
+    /// Part des pixels d'une case qui doivent être bouchés pour la marquer (0 à 1). Pas
+    /// « tous » : près du noir, le bruit du capteur en remonte presque toujours un.
+    pub mask_under_share: f32,
 }
 
 impl Default for ExposureSettings {
@@ -48,6 +55,7 @@ impl Default for ExposureSettings {
             ev_range: 16.0,
             ev_bins_per_stop: 8,
             mask_size: 1024,
+            mask_under_share: 0.5,
         }
     }
 }
@@ -78,7 +86,8 @@ pub mod mask {
     pub const OVER_B: u8 = 4;
     /// Un canal au moins saturé.
     pub const OVER: u8 = OVER_R | OVER_G | OVER_B;
-    /// Bouché : tous les pixels de la case sous le seuil des ombres.
+    /// Bouché : au moins `mask_under_share` des pixels de la case sous le seuil des
+    /// ombres.
     pub const UNDER: u8 = 8;
 }
 
@@ -194,7 +203,10 @@ struct Accumulator {
     mask_w: usize,
     mask_h: usize,
     over_cells: Vec<u8>,
-    cell_max: Vec<u16>,
+    under_level: u32,
+    /// Par case : pixels bouchés, et pixels en tout.
+    cell_under: Vec<u32>,
+    cell_total: Vec<u32>,
 }
 
 impl Accumulator {
@@ -219,7 +231,9 @@ impl Accumulator {
             mask_w,
             mask_h,
             over_cells: vec![0; mask_w * mask_h],
-            cell_max: vec![0; mask_w * mask_h],
+            under_level: level(range, settings.under_ev),
+            cell_under: vec![0; mask_w * mask_h],
+            cell_total: vec![0; mask_w * mask_h],
         }
     }
 
@@ -235,14 +249,15 @@ impl Accumulator {
         if v >= self.over_level {
             self.over_cells[cell] |= 1 << channel;
         }
-        if v as u16 > self.cell_max[cell] {
-            self.cell_max[cell] = v as u16;
+        self.cell_total[cell] += 1;
+        if v <= self.under_level {
+            self.cell_under[cell] += 1;
         }
     }
 
     fn finish(self, source: Source, rotation: Rotation, settings: &ExposureSettings) -> Exposure {
         let range = self.range;
-        let under_level = level(range, settings.under_ev);
+        let under_level = self.under_level;
         let lin_bins = settings.linear_bins.max(1) as usize;
         let per_stop = settings.ev_bins_per_stop.max(1);
         let ev_bins = ((settings.ev_range.max(1.0) * per_stop as f32).ceil() as usize).max(1);
@@ -284,16 +299,14 @@ impl Accumulator {
                 }
             }
         }
+        let share = settings.mask_under_share.clamp(0.0, 1.0) as f64;
         let cells = self
             .over_cells
             .iter()
-            .zip(&self.cell_max)
-            .map(|(&o, &m)| {
-                o | if (m as u32) <= under_level {
-                    mask::UNDER
-                } else {
-                    0
-                }
+            .zip(self.cell_under.iter().zip(&self.cell_total))
+            .map(|(&o, (&u, &t))| {
+                let under = t > 0 && u as f64 >= share * t as f64;
+                o | if under { mask::UNDER } else { 0 }
             })
             .collect();
         let mask = Mask {

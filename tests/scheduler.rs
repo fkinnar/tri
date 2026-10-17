@@ -834,7 +834,11 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
     );
     let generation = scheduler.set_folder(all);
     assert!(scheduler.wait_idle(LONG));
-    assert_eq!(scheduler.progress(Level::Exposure), complete(10), "RAW et plates");
+    assert_eq!(
+        scheduler.progress(Level::Exposure),
+        complete(10),
+        "RAW et plates"
+    );
     let mut analysed = ready(&events, generation, Level::Exposure);
     analysed.sort();
     assert_eq!(analysed, (0..10).collect::<Vec<_>>());
