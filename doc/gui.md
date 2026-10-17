@@ -23,7 +23,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Grille de vignettes** du dossier, alimentée en tâche de fond par le
   [scheduler](scheduler.md) ; seules les lignes visibles sont dessinées
   (`ScrollArea::show_rows`), ce qui tient des milliers d'images.
-- **Barre d'état** : dossier, nombre d'images (dont RAW), filtre, progression des vignettes,
+- **Icônes des panneaux** (17/10/2026) dans la barre d'état : à gauche, panneau des
+  dossiers, barre de filtres, bandeau de notation ; à droite, panneau des métadonnées.
+  Chaque icône dessine une fenêtre et la bande du panneau, pleine quand il est affiché ;
+  le raccourci est rappelé au survol. Mêmes actions que le clavier.
+- **Barre d'état** : progression en **gris discret** (`[gui.colors] progress`, gris du
+  thème par défaut) plutôt qu'en couleur d'accent, qui attirait le regard sur une
+  information de fond (retour du 17/10/2026) ; dossier, nombre d'images (dont RAW), filtre, progression des vignettes,
   des aperçus « JPEG boîtier » (masquée s'il n'y a aucun RAW) et des aperçus standard, nom
   de l'image sélectionnée.
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc

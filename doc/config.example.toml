@@ -225,6 +225,8 @@ histogram_height = 120.0
 [gui.colors]
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
+# Barres de progression de la barre d'état ; absent : gris discret du thème. Exemple :
+# progress = "#3c3c3c"
 # Cadre de la vignette survolée (le survol ne sélectionne pas).
 hover = "#b4b4b4"
 badge = "#78aae6"

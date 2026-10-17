@@ -165,6 +165,50 @@ pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
+/// Côté d'un panneau, pour [`panel`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    /// Gauche (dossiers).
+    Left,
+    /// Droite (métadonnées).
+    Right,
+    /// Haut (barre de filtres).
+    Top,
+    /// Bas (bandeau de notation).
+    Bottom,
+}
+
+/// Icône d'un panneau dans `rect` : une fenêtre (cadre) et la bande du panneau, pleine s'il
+/// est affiché, en contour sinon.
+pub fn panel(painter: &Painter, rect: Rect, side: Side, shown: bool, color: Color32) {
+    let frame = rect.shrink(rect.width() * 0.18);
+    let stroke = Stroke::new(1.2, color);
+    painter.rect_stroke(frame, 1.5, stroke, egui::StrokeKind::Inside);
+    let band = match side {
+        Side::Left => Rect::from_min_max(
+            frame.min,
+            pos2(frame.min.x + frame.width() * 0.32, frame.max.y),
+        ),
+        Side::Right => Rect::from_min_max(
+            pos2(frame.max.x - frame.width() * 0.32, frame.min.y),
+            frame.max,
+        ),
+        Side::Top => Rect::from_min_max(
+            frame.min,
+            pos2(frame.max.x, frame.min.y + frame.height() * 0.3),
+        ),
+        Side::Bottom => Rect::from_min_max(
+            pos2(frame.min.x, frame.max.y - frame.height() * 0.3),
+            frame.max,
+        ),
+    };
+    if shown {
+        painter.rect_filled(band, 1.0, color);
+    } else {
+        painter.rect_stroke(band, 1.0, stroke, egui::StrokeKind::Inside);
+    }
+}
+
 /// Icône « décharger » dans `rect` : flèche vers le bas au-dessus d'un bac.
 pub fn offload(painter: &Painter, rect: Rect, color: Color32) {
     let c = rect.center();

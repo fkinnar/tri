@@ -380,6 +380,9 @@ impl Default for HistogramSettings {
 pub struct Colors {
     /// Fond de la cellule sélectionnée (au clic ou au clavier).
     pub selection: Option<Color>,
+    /// Barres de progression de la barre d'état ; absent : gris du thème (discret, pas la
+    /// couleur d'accent).
+    pub progress: Option<Color>,
     /// Cadre de la cellule survolée par la souris (le survol ne sélectionne pas).
     pub hover: Color,
     /// Badge « RAW » des cellules.
@@ -429,6 +432,7 @@ impl Default for Colors {
     fn default() -> Self {
         Self {
             selection: None,
+            progress: None,
             hover: Color([180, 180, 180]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),

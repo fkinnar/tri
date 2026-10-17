@@ -63,13 +63,23 @@ typedef struct {
 #include <string.h>
 #include <time.h>
 
+/* Copie bornée d'une chaîne, toujours terminée par un zéro. Pas strncpy : il ne garantit
+ * pas le zéro final, et GCC le signale (-Wstringop-truncation). */
+static void copy_text(char *dst, size_t size, const char *src) {
+    size_t n = 0;
+    while (n + 1 < size && src[n])
+        n++;
+    memcpy(dst, src, n);
+    dst[n] = 0;
+}
+
 void tri_libraw_metadata(libraw_data_t *lr, tri_metadata *out) {
     const char *lens;
     memset(out, 0, sizeof(*out));
-    strncpy(out->make, lr->idata.make, sizeof(out->make) - 1);
-    strncpy(out->model, lr->idata.model, sizeof(out->model) - 1);
+    copy_text(out->make, sizeof(out->make), lr->idata.make);
+    copy_text(out->model, sizeof(out->model), lr->idata.model);
     lens = lr->lens.Lens[0] ? lr->lens.Lens : lr->lens.makernotes.Lens;
-    strncpy(out->lens, lens, sizeof(out->lens) - 1);
+    copy_text(out->lens, sizeof(out->lens), lens);
     out->iso = lr->other.iso_speed;
     out->shutter = lr->other.shutter;
     out->aperture = lr->other.aperture;

@@ -1472,8 +1472,45 @@ impl TriApp {
         Some(texture)
     }
 
-    fn status_bar(&self, ui: &mut Ui) {
+    /// Barre d'état ; renvoie l'action d'une icône cliquée (afficher / masquer un
+    /// panneau).
+    fn status_bar(&self, ui: &mut Ui) -> Option<Action> {
+        let mut clicked = None;
+        let size = ui.text_style_height(&egui::TextStyle::Body) + 2.0;
+        let color = ui.visuals().text_color();
+        // Icône d'un panneau : cadre, bande du panneau pleine quand il est affiché.
+        let mut toggle = |ui: &mut Ui, side: marks::Side, shown: bool, action: Action| {
+            let tip = format!(
+                "{} ({})",
+                action.label(),
+                self.keymap.keys_for(action).join(" / ")
+            );
+            let (rect, response) = marks::clickable(ui, size, &tip);
+            marks::panel(ui.painter(), rect, side, shown, color);
+            if response.clicked() {
+                clicked = Some(action);
+            }
+        };
         ui.horizontal(|ui| {
+            toggle(
+                ui,
+                marks::Side::Left,
+                self.folder_panel,
+                Action::ToggleFolderPanel,
+            );
+            toggle(
+                ui,
+                marks::Side::Top,
+                self.filter_bar,
+                Action::ToggleFilterBar,
+            );
+            toggle(
+                ui,
+                marks::Side::Bottom,
+                self.rating_bar,
+                Action::ToggleRatingBar,
+            );
+            ui.separator();
             let raws = self
                 .files
                 .iter()
@@ -1500,9 +1537,17 @@ impl TriApp {
                 if p.total == 0 {
                     continue; // rien à calculer en fond pour ce niveau
                 }
+                // Gris discret, pas la couleur d'accent : une information de fond, qui ne
+                // doit pas attirer le regard (retour du 17/10/2026).
+                let fill = self
+                    .gui
+                    .colors
+                    .progress
+                    .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
                 ui.add(
                     egui::ProgressBar::new(p.fraction())
                         .desired_width(160.0)
+                        .fill(fill)
                         .text(format!("{name} {}/{}", p.done, p.total)),
                 );
             }
@@ -1540,7 +1585,16 @@ impl TriApp {
                 )
                 .on_hover_text(egui::RichText::new(warning).monospace());
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                toggle(
+                    ui,
+                    marks::Side::Right,
+                    self.metadata_panel,
+                    Action::ToggleMetadata,
+                );
+            });
         });
+        clicked
     }
 
     /// Clic droit sur `response` (image `index`) : la sélectionne et ouvre la boîte de
@@ -2033,7 +2087,12 @@ impl eframe::App for TriApp {
         self.handle_keys(&ctx);
         self.update_loads(&ctx);
 
-        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        let status_action = egui::Panel::bottom("status")
+            .show(ui, |ui| self.status_bar(ui))
+            .inner;
+        if let Some(action) = status_action {
+            self.perform(&ctx, action);
+        }
         if self.metadata_panel && self.error.is_none() && !self.folder.is_none() {
             egui::Panel::right("metadata")
                 .resizable(true)
@@ -2813,6 +2872,27 @@ mod tests {
         );
         let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
         assert_eq!(history.lines().count(), 2, "historique écrit");
+    }
+
+    #[test]
+    fn status_bar_icons_toggle_the_panels() {
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let click = |h: &mut Harness<'_, TriApp>, what: &str| {
+            h.get_by_label_contains(what).click();
+            h.run_steps(2);
+        };
+        assert!(h.state().folder_panel && h.state().metadata_panel);
+        click(&mut h, "panneau des dossiers");
+        assert!(!h.state().folder_panel);
+        click(&mut h, "panneau des métadonnées");
+        assert!(!h.state().metadata_panel);
+        click(&mut h, "barre de filtres");
+        assert!(!h.state().filter_bar);
+        click(&mut h, "bandeau de notation");
+        assert!(!h.state().rating_bar);
+        click(&mut h, "panneau des dossiers");
+        assert!(h.state().folder_panel, "et retour");
     }
 
     #[test]
