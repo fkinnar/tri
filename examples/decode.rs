@@ -4,7 +4,11 @@
 //!   cargo run --release --example decode -- thumb  <fichier RAW> <sortie>
 //!   cargo run --release --example decode -- render <fichier RAW> <sortie.png> [--half] [--daylight] [--bright X] [--auto-bright] [--fit N]
 //!   cargo run --release --example decode -- flat   <image plate> <sortie.png> [--fit N]
+//!   cargo run --release --example decode -- peaking <image plate> <sortie.png> [--threshold N] [--fit N]
 //!
+//! `peaking` : carte de netteté (`tri::sharpness`) sur l'image (un JPEG boîtier extrait par
+//! `thumb`, par exemple), contours marqués en rouge, avec le temps de calcul et la part de
+//! pixels marqués : pour régler `[sharpness] threshold`.
 //! `--fit N` réduit le résultat pour que son plus grand côté fasse au plus N pixels.
 
 use std::path::Path;
@@ -14,8 +18,8 @@ use std::time::Instant;
 use tri::bitmap::Bitmap;
 use tri::raw::{RawFile, RenderOptions, Thumbnail};
 
-const USAGE: &str = "usage : decode <thumb|render|flat> <fichier> <sortie> \
-                     [--half] [--daylight] [--bright X] [--auto-bright] [--fit N]";
+const USAGE: &str = "usage : decode <thumb|render|flat|peaking> <fichier> <sortie> \
+                     [--half] [--daylight] [--bright X] [--auto-bright] [--fit N] [--threshold N]";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -61,6 +65,7 @@ fn run() -> AnyResult<()> {
 
     let mut options = RenderOptions::default();
     let mut fit = None;
+    let mut sharpness = tri::sharpness::SharpnessSettings::default();
     let mut flags = flags.iter();
     while let Some(flag) = flags.next() {
         match flag.as_str() {
@@ -69,8 +74,31 @@ fn run() -> AnyResult<()> {
             "--bright" => options.bright = flags.next().ok_or(USAGE)?.parse()?,
             "--auto-bright" => options.auto_bright = true,
             "--fit" => fit = Some(flags.next().ok_or(USAGE)?.parse()?),
+            "--threshold" => sharpness.threshold = flags.next().ok_or(USAGE)?.parse()?,
             other => return Err(format!("option inconnue : {other}\n{USAGE}").into()),
         }
+    }
+
+    if mode == "peaking" {
+        let mut bitmap = tri::flat::decode(input)?;
+        let start = Instant::now();
+        let map = tri::sharpness::peaking(&bitmap, &sharpness);
+        println!(
+            "{}x{} : carte en {:?}, seuil {}, {:.2} % de pixels marqués",
+            map.width,
+            map.height,
+            start.elapsed(),
+            sharpness.threshold,
+            map.fraction() * 100.0
+        );
+        for (px, &m) in bitmap.data.as_chunks_mut::<3>().0.iter_mut().zip(&map.mask) {
+            if m > 0 {
+                px.copy_from_slice(&[255, 0, 0]);
+            }
+        }
+        finish(bitmap, fit, output)?;
+        println!("écrit dans {}", output.display());
+        return Ok(());
     }
 
     if mode == "flat" {

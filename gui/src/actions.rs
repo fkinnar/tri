@@ -194,6 +194,10 @@ pub enum Action {
     ToggleAutoAdvance,
     /// Comparer les images sélectionnées côte à côte.
     Compare,
+    /// Afficher / masquer la carte de netteté (1:1).
+    TogglePeaking,
+    /// Carte de netteté : couleur suivante.
+    PeakingColor,
     /// Sélectionner / désélectionner l'image courante.
     SelectToggle,
     /// Mode visuel : la plage suit l'image courante.
@@ -254,7 +258,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 67] = [
+    pub const ALL: [Action; 69] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -285,6 +289,8 @@ impl Action {
         Action::SelectToggle,
         Action::SelectVisual,
         Action::Compare,
+        Action::TogglePeaking,
+        Action::PeakingColor,
         Action::SelectAll,
         Action::SelectClear,
         Action::FileRename,
@@ -360,6 +366,8 @@ impl Action {
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
             Action::Compare => "Comparer les images sélectionnées côte à côte",
+            Action::TogglePeaking => "Afficher / masquer la netteté (contours nets, en 1:1)",
+            Action::PeakingColor => "Netteté : couleur suivante",
             Action::SelectToggle => "Sélectionner / désélectionner l'image",
             Action::SelectVisual => "Mode visuel : sélectionner une plage (v pour valider)",
             Action::SelectAll => "Tout sélectionner",
@@ -415,7 +423,9 @@ impl Action {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back => Group::Navigation,
             ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | ToggleClipping => Group::View,
+            | HistogramScale | HistogramLarge | ToggleClipping | TogglePeaking | PeakingColor => {
+                Group::View
+            }
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear => {
                 Group::Filters
@@ -464,6 +474,8 @@ impl Action {
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
             Action::Compare => "core.view.compare",
+            Action::TogglePeaking => "core.view.peaking",
+            Action::PeakingColor => "core.view.peaking_color",
             Action::SelectToggle => "core.select.toggle",
             Action::SelectVisual => "core.select.visual",
             Action::SelectAll => "core.select.all",
@@ -733,6 +745,8 @@ const RATING: &[Binding] = {
         (&[shifted(Key::I)], HistogramScale),
         (&[shifted(Key::E)], HistogramLarge),
         (&[plain(Key::O)], ToggleClipping),
+        (&[plain(Key::P)], TogglePeaking),
+        (&[ctrl(Key::P)], PeakingColor),
         (&[shifted(Key::M)], ToggleMetadata),
     ]
 };

@@ -29,12 +29,26 @@ pub struct Loaded {
     /// Pour le 1:1 du JPEG boîtier : part du capteur qu'il représente (côté long du JPEG /
     /// côté long du rendu complet), pour un affichage honnête.
     pub sensor_ratio: Option<f32>,
+    /// Vrai si `image` est une carte de netteté ([`Loader::want_peaking`]) : blanc, opacité =
+    /// contour, à teinter au dessin.
+    pub peaking: bool,
 }
+
+/// Carte de netteté demandée : l'image (fichier, niveau) et le réglage du calcul.
+pub type PeakingJob = (MediaFile, Level, tri::sharpness::SharpnessSettings);
 
 #[derive(Default)]
 struct State {
     wanted: Vec<(MediaFile, Level)>,
+    /// Après les images : la carte de netteté de l'image affichée.
+    peaking: Option<PeakingJob>,
     shutdown: bool,
+}
+
+/// Tâche du thread : une image, ou une carte de netteté.
+enum Job {
+    Image(MediaFile, Level),
+    Peaking(PeakingJob),
 }
 
 struct Shared {
@@ -77,6 +91,15 @@ impl Loader {
         self.shared.wake.notify_one();
     }
 
+    /// Demande la carte de netteté d'une image (calculée après les images voulues) ; `None`
+    /// : plus besoin (une demande pas encore commencée est abandonnée).
+    pub fn want_peaking(&self, job: Option<PeakingJob>) {
+        let mut s = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.peaking = job;
+        drop(s);
+        self.shared.wake.notify_one();
+    }
+
     /// Images chargées depuis le dernier appel.
     pub fn drain(&self) -> Vec<Loaded> {
         self.results.try_iter().collect()
@@ -106,16 +129,31 @@ fn run(
     ctx: &egui::Context,
 ) {
     loop {
-        let (file, level) = {
+        let job = {
             let mut s = shared.state.lock().unwrap_or_else(|e| e.into_inner());
             loop {
                 if s.shutdown {
                     return;
                 }
                 if !s.wanted.is_empty() {
-                    break s.wanted.remove(0);
+                    let (file, level) = s.wanted.remove(0);
+                    break Job::Image(file, level);
+                }
+                if let Some(job) = s.peaking.take() {
+                    break Job::Peaking(job);
                 }
                 s = shared.wake.wait(s).unwrap_or_else(|e| e.into_inner());
+            }
+        };
+        let (file, level) = match job {
+            Job::Image(file, level) => (file, level),
+            Job::Peaking(job) => {
+                let loaded = peaking(cache, settings, max_side, job);
+                if tx.send(loaded).is_err() {
+                    return;
+                }
+                ctx.request_repaint();
+                continue;
             }
         };
         let started = std::time::Instant::now();
@@ -150,10 +188,46 @@ fn run(
             image,
             original,
             sensor_ratio,
+            peaking: false,
         };
         if tx.send(loaded).is_err() {
             return; // l'interface est partie
         }
         ctx.request_repaint();
+    }
+}
+
+/// Carte de netteté de l'image en cache (`tri::sharpness`), en texture blanche dont
+/// l'opacité marque les contours : la couleur s'applique au dessin, en changer ne coûte
+/// rien. Plus grande que la texture maximale du GPU : pas de carte (une carte réduite
+/// perdrait ses contours d'un pixel).
+fn peaking(cache: &Cache, settings: &Settings, max_side: usize, job: PeakingJob) -> Loaded {
+    let (file, level, sharpness) = job;
+    let started = std::time::Instant::now();
+    let bitmap = preview::key(&file, level, settings)
+        .ok()
+        .and_then(|k| cache.get(&k));
+    let original = bitmap
+        .as_ref()
+        .map_or([0, 0], |b| [b.width as usize, b.height as usize]);
+    let image = bitmap
+        .filter(|b| b.width.max(b.height) as usize <= max_side)
+        .map(|b| {
+            let map = tri::sharpness::peaking(&b, &sharpness);
+            let pixels = map
+                .mask
+                .iter()
+                .map(|&a| egui::Color32::from_white_alpha(a))
+                .collect();
+            ColorImage::new([map.width as usize, map.height as usize], pixels)
+        });
+    crate::trace::trace(|| format!("chargeur : netteté {level:?} en {:.1?}", started.elapsed()));
+    Loaded {
+        path: file.path,
+        level,
+        image,
+        original,
+        sensor_ratio: None,
+        peaking: true,
     }
 }

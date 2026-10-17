@@ -42,6 +42,8 @@ pub struct AppSettings {
     pub data: tri::settings::DataSection,
     /// `[files]` (moteur).
     pub files: tri::files::FileSettings,
+    /// `[sharpness]` (moteur).
+    pub sharpness: tri::sharpness::SharpnessSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -63,6 +65,7 @@ impl AppSettings {
             offload: self.offload.clone(),
             data: self.data.clone(),
             files: self.files.clone(),
+            sharpness: self.sharpness,
         }
     }
 
@@ -116,6 +119,8 @@ pub struct GuiSettings {
     pub histogram: HistogramSettings,
     /// `[gui.metadata]`.
     pub metadata: MetadataSettings,
+    /// `[gui.sharpness]`.
+    pub sharpness: SharpnessDisplay,
 }
 
 impl Default for GuiSettings {
@@ -140,6 +145,7 @@ impl Default for GuiSettings {
             folders: FolderSettings::default(),
             histogram: HistogramSettings::default(),
             metadata: MetadataSettings::default(),
+            sharpness: SharpnessDisplay::default(),
         }
     }
 }
@@ -312,6 +318,33 @@ impl Default for FolderSettings {
             width: 240.0,
             indent: 14.0,
             hidden: false,
+        }
+    }
+}
+
+/// Section `[gui.sharpness]` : affichage de la carte de netteté (calcul : `[sharpness]`).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SharpnessDisplay {
+    /// Carte affichée au démarrage (`p` l'affiche ou la masque ; en 1:1 seulement).
+    pub visible: bool,
+    /// Couleurs proposées, dans l'ordre de la rotation (`Ctrl+P`) : selon l'image, l'une
+    /// ressort mieux que l'autre (une couleur proche de celle du sujet se perd).
+    pub colors: Vec<Color>,
+    /// Opacité des contours (0 à 1).
+    pub opacity: f32,
+}
+
+impl Default for SharpnessDisplay {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            colors: vec![
+                Color([255, 40, 40]),
+                Color([40, 255, 80]),
+                Color([40, 180, 255]),
+            ],
+            opacity: 1.0,
         }
     }
 }

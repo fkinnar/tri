@@ -88,6 +88,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Netteté** (17/10/2026, moteur : `tri::sharpness`, voir `sharpness.md`) : en 1:1, `p`
+  surligne les contours nets (focus peaking), `Ctrl+P` change de couleur (3 couleurs
+  réglables, `[gui.sharpness] colors`). Calculée par le chargeur, teintée au dessin.
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
@@ -506,6 +509,8 @@ touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boît
 la grille.
 
 Sélection multiple (17/10/2026) : voir [selection.md](selection.md#tests).
+
+Netteté (17/10/2026) : voir [sharpness.md](sharpness.md#tests).
 
 Comparaison (17/10/2026) : `c` refusé avec une seule image (indication dans la barre
 d'état) ; trois images en mode visuel puis `c` : l'image courante reste active, les

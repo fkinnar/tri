@@ -36,6 +36,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |
 | `[exposure]` | Seuils de saturation et d'ombres bouchées (IL), cases des histogrammes, taille du masque | moteur |
 | `[offload]` | Déchargement des cartes : racine, vérification, fichiers déjà déchargés, historique | moteur |
+| `[sharpness]` | Carte de netteté : seuil, épaississement, points isolés (`sharpness.md`) | moteur |
 | `[files]` | Actions sur les fichiers : paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |
 | `[data]` | Dossier des données (historique des déchargements, dernier dossier ouvert) | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
@@ -44,6 +45,8 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
 | `[gui.histogram]` | Histogramme (affiché, échelle IL / linéaire, taille du grand histogramme, IL montrés), zones (affichées, opacité), seuils des badges | interface |
 | `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur | interface |
+| `[gui.sharpness]` | Carte de netteté affichée au démarrage, couleurs de la rotation, opacité | interface |
+| `[gui.compare]` | Comparaison : images au plus, espace, cadre de l'image active | interface |
 | `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, barres de progression, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
 | `[keys]` | Raccourcis par action, qui remplacent ceux des profils (voir [gui.md](gui.md#actions-et-raccourcis-actionsrs)) | interface |
 

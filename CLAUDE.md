@@ -540,6 +540,9 @@ explicitement par l'utilisateur comme important.
       cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux. Décidé le
       17/10/2026 : overlay **en 1:1 seulement** (en grille, trop gourmand et peu lisible) ;
       **2-3 couleurs configurables**, rotation de l'une à l'autre par un raccourci.
+      **Overlay fait** le 17/10/2026 : `src/sharpness.rs` (`doc/sharpness.md`), Sobel à
+      seuil fixe, points isolés retirés, `p` / `Ctrl+P`. Restent : score par image et
+      filtre (cache d'analyse, sur la mosaïque RAW), netteté en comparaison.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).

@@ -45,6 +45,14 @@ enum Mode {
     Compare,
 }
 
+/// État de la carte de netteté pour l'image affichée.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Peaking {
+    Shown,
+    Computing,
+    NotAtOneToOne,
+}
+
 /// Une grande texture, avec les dimensions d'origine de l'image (la texture a pu être
 /// réduite pour tenir dans les limites du GPU).
 #[derive(Clone)]
@@ -155,6 +163,14 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Carte de netteté affichée en 1:1 (`p`).
+    peaking: bool,
+    /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
+    peaking_color: usize,
+    /// Carte de netteté chargée (une seule : celle de l'image affichée).
+    peaking_texture: Option<((PathBuf, Level), TextureHandle)>,
+    /// Carte demandée au chargeur, pas encore reçue.
+    peaking_asked: Option<(PathBuf, Level)>,
     /// Images comparées côte à côte (`c`), dans l'ordre de la liste.
     compare: Vec<PathBuf>,
     /// Colonnes de la dernière disposition de la comparaison (navigation haut / bas).
@@ -323,6 +339,10 @@ impl TriApp {
             file_dialog: None,
             file_error: None,
             selection: Default::default(),
+            peaking: gui.sharpness.visible,
+            peaking_color: 0,
+            peaking_texture: None,
+            peaking_asked: None,
             compare: Vec::new(),
             compare_cols: 1,
             hint: None,
@@ -1022,6 +1042,13 @@ impl TriApp {
                 self.request_zoom();
             }
             Action::Compare => self.start_compare(),
+            Action::TogglePeaking => self.peaking = !self.peaking,
+            Action::PeakingColor => {
+                // Changer de couleur montre la carte si elle était masquée.
+                let n = self.gui.sharpness.colors.len().max(1);
+                self.peaking_color = (self.peaking_color + 1) % n;
+                self.peaking = true;
+            }
             Action::ToggleZoom => {
                 if matches!(self.mode, Mode::View | Mode::Compare) {
                     self.zoom = match self.zoom {
@@ -1489,6 +1516,16 @@ impl TriApp {
                 )
             });
             let key = (loaded.path.clone(), loaded.level);
+            if loaded.peaking {
+                if self.peaking_asked.as_ref() == Some(&key) {
+                    self.peaking_asked = None;
+                }
+                self.peaking_texture = loaded.image.map(|image| {
+                    let name = format!("{}#netteté", loaded.path.display());
+                    (key, ctx.load_texture(name, image, TextureOptions::NEAREST))
+                });
+                continue;
+            }
             self.wanted.retain(|w| *w != key);
             match loaded.image {
                 Some(image) => {
@@ -1551,6 +1588,50 @@ impl TriApp {
             self.wanted = keys;
             engine.loader.want(wanted);
         }
+    }
+
+    /// Carte de netteté de `file` sur son 1:1 affiché en `rect` (`at_one_to_one` : c'est
+    /// le 1:1 qui est affiché) : dessinée si elle est chargée, demandée au chargeur sinon ;
+    /// sans objet, la demande en cours est retirée.
+    fn peaking_overlay(
+        &mut self,
+        painter: &egui::Painter,
+        file: &MediaFile,
+        at_one_to_one: bool,
+        rect: Option<Rect>,
+    ) -> Peaking {
+        let wanted = (self.peaking && at_one_to_one)
+            .then(|| (file.path.clone(), view::zoom_level(file.kind, self.source)));
+        let Some(key) = wanted else {
+            if self.peaking_asked.take().is_some()
+                && let Some(engine) = &self.engine
+            {
+                engine.loader.want_peaking(None);
+            }
+            return Peaking::NotAtOneToOne;
+        };
+        if let (Some((loaded, texture)), Some(rect)) = (&self.peaking_texture, rect)
+            && *loaded == key
+        {
+            let colors = &self.gui.sharpness.colors;
+            let color = colors
+                .get(self.peaking_color % colors.len().max(1))
+                .map_or(Color32::RED, |&c| Color32::from(c))
+                .gamma_multiply(self.gui.sharpness.opacity);
+            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            painter.image(texture.id(), rect, uv, color);
+            return Peaking::Shown;
+        }
+        if self.peaking_asked.as_ref() != Some(&key)
+            && let Some(engine) = &self.engine
+        {
+            engine
+                .loader
+                .want_peaking(Some((file.clone(), key.1, self.settings.sharpness)));
+            self.peaking_asked = Some(key);
+        }
+        self.view_waiting = true;
+        Peaking::Computing
     }
 
     /// Comparaison : les images comparées côte à côte, ajustées ou à 1:1 au même endroit
@@ -1799,6 +1880,13 @@ impl TriApp {
                 );
             }
         }
+        // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
+        let peaking = self.peaking_overlay(
+            &painter,
+            &file,
+            shown == Some(zoom_level) && zoomed,
+            image_rect,
+        );
 
         self.open_rating_dialog(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
@@ -1825,6 +1913,13 @@ impl TriApp {
         );
         if self.selection.contains(&file.path) {
             info.push_str(" · sélectionnée");
+        }
+        if self.peaking {
+            info.push_str(match peaking {
+                Peaking::Shown => " · netteté",
+                Peaking::Computing => " · netteté en calcul",
+                Peaking::NotAtOneToOne => " · netteté : en 1:1 (z)",
+            });
         }
         match shown {
             Some(level) => {
@@ -3563,6 +3658,41 @@ mod tests {
         press(&mut h, Key::C, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
+    }
+
+    #[test]
+    fn peaking_shows_at_one_to_one_only_and_rotates_colours() {
+        let (mut h, _dir) = harness_with(200, 150);
+        h.run_steps(3);
+        press(&mut h, Key::P, Modifiers::NONE);
+        assert!(h.state().peaking);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(5);
+        assert!(
+            h.state().peaking_asked.is_none() && h.state().peaking_texture.is_none(),
+            "ajusté : la carte attend le 1:1"
+        );
+        press(&mut h, Key::Z, Modifiers::NONE);
+        run_until(&mut h, |s| s.peaking_texture.is_some());
+        let ((path, level), texture) = h.state().peaking_texture.clone().unwrap();
+        assert!(path.ends_with("img0.jpg"));
+        assert_eq!(level, Level::Full, "le 1:1 d'une image plate");
+        assert_eq!(texture.size(), [200, 150], "pixel pour pixel");
+        // Retour à l'ajusté : plus de demande en cours.
+        press(&mut h, Key::Z, Modifiers::NONE);
+        assert!(h.state().peaking_asked.is_none());
+        press(&mut h, Key::Z, Modifiers::NONE);
+        // Ctrl+P : couleur suivante, en boucle sur les couleurs configurées.
+        let n = h.state().gui.sharpness.colors.len();
+        for i in 1..=n {
+            press(&mut h, Key::P, Modifiers::CTRL);
+            assert_eq!(h.state().peaking_color, i % n);
+        }
+        // Masquée, Ctrl+P la remontre.
+        press(&mut h, Key::P, Modifiers::NONE);
+        assert!(!h.state().peaking);
+        press(&mut h, Key::P, Modifiers::CTRL);
+        assert!(h.state().peaking);
     }
 
     #[test]

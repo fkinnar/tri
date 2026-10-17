@@ -79,6 +79,8 @@ pub fn navigate(
         | Action::ToggleAutoAdvance
         | Action::SelectToggle
         | Action::Compare
+        | Action::TogglePeaking
+        | Action::PeakingColor
         | Action::SelectVisual
         | Action::SelectAll
         | Action::SelectClear

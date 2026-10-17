@@ -143,6 +143,21 @@ trash = true
 # ["darktable"], ["open", "-a", "darktable"] (macOS), ["gimp", "{files}"].
 editor = []
 
+[sharpness]
+# Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de
+# luminance (Sobel, 0 à 510 ; un bord franc noir / blanc donne 255) dépasse ce seuil. Fixe,
+# pas relatif à l'image : dans une rafale, la photo la plus nette montre plus de contours.
+# Plus bas : plus de contours, bruit compris. 32 : lignes de la main, lèvres nettes ; 48 :
+# seulement les bords francs.
+threshold = 32
+# Épaississement des contours marqués (pixels de chaque côté ; 0 : aucun) : un contour d'un
+# pixel est à peine visible à 1:1 sur un écran haute densité.
+spread = 1
+# Voisins marqués (sur 8) qu'un pixel marqué doit avoir pour rester marqué : un contour est
+# une ligne (2 voisins au moins), le bruit à ISO élevé fait des points isolés. 0 : tout
+# garder.
+min_neighbours = 2
+
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.
@@ -256,6 +271,16 @@ clipping_channels = true
 # au-delà de laquelle une vignette est signalée.
 badge_over = 0.005
 badge_under = 0.05
+
+[gui.sharpness]
+# Carte de netteté (focus peaking) en 1:1 : affichée au démarrage (p l'affiche ou la
+# masque). Calcul : section [sharpness].
+visible = false
+# Couleurs proposées, dans l'ordre de la rotation (Ctrl+P) : selon l'image, l'une ressort
+# mieux que l'autre.
+colors = ["#ff2828", "#28ff50", "#28b4ff"]
+# Opacité des contours (0 à 1).
+opacity = 1.0
 
 [gui.metadata]
 # Panneau des métadonnées, à droite : affiché au démarrage (Maj+M l'affiche ou le masque),

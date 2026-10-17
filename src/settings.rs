@@ -105,6 +105,8 @@ pub struct EngineSettings {
     pub offload: crate::offload::OffloadSettings,
     /// Actions sur les fichiers (renommer, supprimer, éditeur externe).
     pub files: crate::files::FileSettings,
+    /// Carte de netteté (focus peaking).
+    pub sharpness: crate::sharpness::SharpnessSettings,
     /// Dossier des données.
     pub data: DataSection,
 }
