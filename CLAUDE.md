@@ -530,7 +530,8 @@ explicitement par l'utilisateur comme important.
 ### Analyse d'image
 - [ ] ★ **Netteté** : carte superposée (focus peaking) et score par image, filtrable ;
       cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux.
-- [ ] Histogramme des TIFF / PNG 16 bits à leur profondeur (aujourd'hui 8 bits).
+- [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
+      le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).
 
 ### Affichage

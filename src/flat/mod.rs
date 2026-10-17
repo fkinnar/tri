@@ -132,6 +132,46 @@ pub fn is_heif(path: &Path) -> bool {
         .is_some_and(|e| HEIF_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
+/// Image RGB 16 bits par canal.
+pub type Rgb16 = image::ImageBuffer<image::Rgb<u16>, Vec<u16>>;
+
+/// Image plate décodée à sa profondeur d'enregistrement (analyse d'exposition), orientation
+/// appliquée.
+#[derive(Debug)]
+pub enum Deep {
+    /// 8 bits par canal (JPEG, PNG / TIFF 8 bits, WebP, HEIF).
+    Bits8(Bitmap),
+    /// Plus de 8 bits par canal (TIFF, PNG 16 bits ; flottants ramenés sur 16 bits).
+    Bits16(Rgb16),
+}
+
+/// Comme [`decode`], mais à la profondeur du fichier : un TIFF ou PNG 16 bits donne
+/// [`Deep::Bits16`] (65 536 niveaux au lieu de 256), le reste [`Deep::Bits8`]. HEIF : 8 bits
+/// pour l'instant (un HEIC 10 bits est ramené à 8 bits par libheif).
+pub fn decode_deep(path: impl AsRef<Path>) -> Result<Deep> {
+    let path = path.as_ref();
+    if is_heif(path) {
+        return decode_heif(path).map(Deep::Bits8);
+    }
+    let bytes = std::fs::read(path)?;
+    let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format()?;
+    if reader.format() == Some(ImageFormat::Jpeg) {
+        drop(reader);
+        return decode_image(path, 0).map(Deep::Bits8);
+    }
+    let mut decoder = reader.into_decoder()?;
+    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    let deep =
+        decoder.color_type().bits_per_pixel() / decoder.color_type().channel_count() as u16 > 8;
+    let mut img = DynamicImage::from_decoder(decoder)?;
+    img.apply_orientation(orientation);
+    Ok(if deep {
+        Deep::Bits16(img.into_rgb16())
+    } else {
+        Deep::Bits8(img.into_rgb8().into())
+    })
+}
+
 fn decode_image(path: &Path, max_side: u32) -> Result<Bitmap> {
     let bytes = std::fs::read(path)?;
     let reader = ImageReader::new(Cursor::new(&bytes)).with_guessed_format()?;

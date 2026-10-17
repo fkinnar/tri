@@ -19,8 +19,9 @@ pub const CHANNELS: usize = 3;
 
 /// Version de l'algorithme, dans la clé du cache d'analyse : à incrémenter quand le calcul
 /// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels ;
-/// 3 : images plates en lumière linéaire, plage utile).
-pub const VERSION: u32 = 3;
+/// 3 : images plates en lumière linéaire, plage utile ; 4 : TIFF / PNG 16 bits à leur
+/// profondeur).
+pub const VERSION: u32 = 4;
 
 /// Réglages du calcul (section `[exposure]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -75,8 +76,11 @@ pub enum Source {
         /// Blanc du capteur (valeur brute).
         white: u16,
     },
-    /// Valeurs 8 bits d'une image plate.
-    Flat,
+    /// Valeurs d'une image plate.
+    Flat {
+        /// Profondeur des valeurs analysées : 8, ou 16 pour un TIFF / PNG 16 bits.
+        bits: u32,
+    },
 }
 
 /// Bits d'une case du masque : saturé dans le canal 0, 1, 2 ; bouché (tous canaux).
@@ -442,18 +446,43 @@ impl Exposure {
 
     /// Exposition d'une image plate (RGB 8 bits, déjà dans son orientation).
     pub fn from_bitmap(b: &Bitmap, settings: &ExposureSettings) -> Exposure {
-        let (w, h) = (b.width as usize, b.height as usize);
-        let mut acc = Accumulator::new(255, Transfer::Srgb, w, h, settings);
+        Exposure::from_rgb(b.width, b.height, &b.data, 8, settings)
+    }
+
+    /// Exposition d'une image plate en RGB 16 bits (TIFF, PNG), déjà dans son orientation.
+    pub fn from_rgb16(b: &crate::flat::Rgb16, settings: &ExposureSettings) -> Exposure {
+        Exposure::from_rgb(b.width(), b.height(), b.as_raw(), 16, settings)
+    }
+
+    /// Exposition d'une image plate décodée à sa profondeur ([`crate::flat::decode_deep`]).
+    pub fn from_deep(image: &crate::flat::Deep, settings: &ExposureSettings) -> Exposure {
+        match image {
+            crate::flat::Deep::Bits8(b) => Exposure::from_bitmap(b, settings),
+            crate::flat::Deep::Bits16(b) => Exposure::from_rgb16(b, settings),
+        }
+    }
+
+    /// Valeurs RGB entrelacées sur `bits` bits, en sRGB.
+    fn from_rgb<T: Copy + Into<u32>>(
+        width: u32,
+        height: u32,
+        data: &[T],
+        bits: u32,
+        settings: &ExposureSettings,
+    ) -> Exposure {
+        let (w, h) = (width as usize, height as usize);
+        let range = (1u32 << bits) - 1;
+        let mut acc = Accumulator::new(range, Transfer::Srgb, w, h, settings);
         let cols = acc.column_cells(w);
-        for (row, line) in b.data.chunks_exact(w * 3).enumerate() {
+        for (row, line) in data.chunks_exact(w * 3).enumerate() {
             let base = row * acc.mask_h / h * acc.mask_w;
             for (col, px) in line.as_chunks::<3>().0.iter().enumerate() {
                 for (c, &v) in px.iter().enumerate() {
-                    acc.add(c, v as u32, base + cols[col]);
+                    acc.add(c, v.into(), base + cols[col]);
                 }
             }
         }
-        acc.finish(Source::Flat, Rotation::None, settings)
+        acc.finish(Source::Flat { bits }, Rotation::None, settings)
     }
 
     /// Part des pixels saturés dans le canal le plus touché (0 à 1).
@@ -475,7 +504,7 @@ impl Exposure {
         }
         let transfer = match self.source {
             Source::Raw { .. } => Transfer::Linear,
-            Source::Flat => Transfer::Srgb,
+            Source::Flat { .. } => Transfer::Srgb,
         };
         (transfer.light(top, self.range).log2() as f32).clamp(-self.ev_range, 0.0)
     }
@@ -499,7 +528,7 @@ impl Exposure {
         out.extend_from_slice(MAGIC);
         let (kind, bits, black, white) = match self.source {
             Source::Raw { bits, black, white } => (1u8, bits, black, white),
-            Source::Flat => (0u8, 8, 0, 255),
+            Source::Flat { bits } => (0u8, bits, 0, ((1u32 << bits) - 1) as u16),
         };
         out.push(kind);
         put_u32(&mut out, bits);
@@ -545,7 +574,7 @@ impl Exposure {
         let white = r.u32()? as u16;
         let source = match kind {
             1 => Source::Raw { bits, black, white },
-            _ => Source::Flat,
+            _ => Source::Flat { bits },
         };
         let range = r.u32()?;
         let ev_range = f32::from_le_bytes(r.take(4)?.try_into().unwrap());
@@ -660,7 +689,7 @@ mod tests {
     #[test]
     fn flat_image_counts_and_mask() {
         let e = Exposure::from_bitmap(&sample(), &settings());
-        assert_eq!(e.source, Source::Flat);
+        assert_eq!(e.source, Source::Flat { bits: 8 });
         assert_eq!(e.range, 255);
         assert_eq!(e.total, [8, 8, 8]);
         assert_eq!(e.over, [1, 1, 1]);

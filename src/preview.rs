@@ -335,7 +335,7 @@ pub fn compute_exposure(
     }
     Ok(match file.kind {
         MediaKind::Raw => Exposure::from_raw(&file.path, &settings.exposure)?,
-        MediaKind::Flat => Exposure::from_bitmap(&flat::decode(&file.path)?, &settings.exposure),
+        MediaKind::Flat => Exposure::from_deep(&flat::decode_deep(&file.path)?, &settings.exposure),
     })
 }
 

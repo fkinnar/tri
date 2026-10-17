@@ -172,3 +172,26 @@ fn real_iphone_heic_decodes() {
     assert_eq!(bmp.data.len(), bmp.width as usize * bmp.height as usize * 3);
     assert!(bmp.data.iter().any(|&b| b != 0), "image entièrement noire");
 }
+
+#[test]
+fn sixteen_bit_images_keep_their_depth() {
+    let dir = tempfile::tempdir().unwrap();
+    // Deux valeurs voisines en 16 bits, confondues en 8 bits.
+    let img =
+        tri::flat::Rgb16::from_fn(4, 2, |x, _| image::Rgb([30_000 + x as u16, 40_000, 50_000]));
+    for name in ["deep.png", "deep.tif"] {
+        let path = dir.path().join(name);
+        img.save(&path).unwrap();
+        match tri::flat::decode_deep(&path).unwrap() {
+            tri::flat::Deep::Bits16(b) => assert_eq!(b, img, "{name}"),
+            other => panic!("{name} : {other:?}"),
+        }
+        // L'affichage reste en 8 bits.
+        assert_eq!(tri::flat::decode(&path).unwrap().width, 4);
+    }
+    let path = save(dir.path(), "plate.png");
+    assert!(matches!(
+        tri::flat::decode_deep(&path).unwrap(),
+        tri::flat::Deep::Bits8(_)
+    ));
+}

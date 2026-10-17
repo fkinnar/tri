@@ -77,7 +77,7 @@ pub fn draw(
     // (panneau des métadonnées), le graphe prend le reste de la hauteur.
     let source = match e.source {
         Source::Raw { bits, .. } => format!("RAW {bits} bits"),
-        Source::Flat => "8 bits".into(),
+        Source::Flat { bits } => format!("{bits} bits"),
     };
     let text = format!(
         "{source} · marge {} IL · saturés {} % · bouchés {} %",

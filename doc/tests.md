@@ -77,6 +77,8 @@ l'interface sont décrits dans [gui.md](gui.md#tests).
 - HEIC (fixture) : dimensions et couleur de chaque quadrant ; extension en majuscules et
   chemin non ASCII ;
 - fichier absent → `Io` ; contenu invalide → `Image` ou `Heif` ;
+- `decode_deep` : PNG et TIFF 16 bits relus à l'identique (deux valeurs voisines
+  distinctes), PNG 8 bits en `Bits8` ;
 - sans la feature `heif` : la fixture HEIC donne `HeifNotCompiled` ;
 - avec `TRI_TEST_HEIC` : un vrai HEIC d'iPhone se décode en RGB8 cohérent.
 
@@ -219,6 +221,8 @@ la plus récente, source mal formée signalée.
   de saturation en IL, rotations du masque (aller-retour sur un masque non carré),
   marge avant saturation, aller-retour binaire et refus d'un cache illisible ou tronqué.
 - Image plate écrite sur disque puis décodée : moitié saturée, masque, marge nulle.
+- PNG 16 bits : analysé en 16 bits (plage 65 535, plus de 15 IL), un presque-noir non
+  bouché en 16 bits l'est une fois ramené en 8 bits ; aller-retour binaire.
 - Avec `TRI_TEST_RAW` : données capteur (12 à 16 bits, blanc > noir, plage = blanc −
   noir), masque dans la taille demandée, aller-retour binaire.
 

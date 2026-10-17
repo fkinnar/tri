@@ -37,6 +37,14 @@ elle :
 
 ## API
 
+### `decode_deep(path) -> Result<Deep>`
+
+Comme `decode`, mais **à la profondeur du fichier**, pour l'analyse d'exposition :
+`Deep::Bits16(Rgb16)` pour un TIFF ou un PNG de plus de 8 bits par canal (flottants
+ramenés sur 16 bits), `Deep::Bits8(Bitmap)` sinon. Profondeur lue dans l'en-tête avant le
+décodage ; JPEG par le même chemin que `decode`. HEIF : 8 bits pour l'instant.
+L'affichage, lui, reste en 8 bits (`decode`).
+
 ### `decode(path) -> Result<Bitmap>`
 
 Décode le fichier et **applique l'orientation** : le `Bitmap` renvoyé est dans le bon sens,

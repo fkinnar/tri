@@ -434,8 +434,8 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
             MediaKind::Raw => {
                 tri::exposure::Exposure::from_raw(&file.path, s).map_err(|e| e.to_string())
             }
-            MediaKind::Flat => tri::flat::decode(&file.path)
-                .map(|b| tri::exposure::Exposure::from_bitmap(&b, s))
+            MediaKind::Flat => tri::flat::decode_deep(&file.path)
+                .map(|b| tri::exposure::Exposure::from_deep(&b, s))
                 .map_err(|e| e.to_string()),
         };
         let name = file.path.file_name().unwrap_or_default().to_string_lossy();
@@ -445,7 +445,7 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
                     tri::exposure::Source::Raw { bits, black, white } => {
                         format!("RAW {bits} bits, noir {black}, blanc {white}")
                     }
-                    tri::exposure::Source::Flat => "8 bits".into(),
+                    tri::exposure::Source::Flat { bits } => format!("{bits} bits"),
                 };
                 println!(
                     "{name}\t{source}\t{:.2}\t{:.3} %\t{:.3} %\t{:.0} ms",
