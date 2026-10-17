@@ -439,7 +439,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      RAW de fond, `[scheduler] exposure`), progression « histogrammes ». **C fait**
      (17/10/2026) : histogramme en plein écran (`i`, `Maj+I` IL / linéaire), zones
      superposées (`o`, masque en texture ; bouché = majorité des pixels d'une case),
-     badges dans la grille (`[gui.histogram]`), vérifié sur une vraie séance. Reste à
+     badges dans la grille (`[gui.histogram]`), vérifié sur une vraie séance. Zones
+     colorées par canal (demandé le 17/10/2026) ; elles ont révélé que les RAF X-T4
+     enregistrent un rouge / bleu saturé sous le blanc vers les bords (vignetage corrigé
+     par le boîtier) : seuil de saturation par défaut à -0,02 IL. Reste à
      voir : histogramme dans la grille (panneau de droite, avec les métadonnées ?),
      profondeur réelle des TIFF / PNG 16 bits, analyse produite au passage par le rendu
      RAW (même décompression).

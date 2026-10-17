@@ -84,9 +84,10 @@ watch_ms = 2000
 
 [exposure]
 # Histogramme et alertes d'exposition, calculés sur les données du capteur pour un RAW.
-# Seuil de saturation en IL sous le blanc du capteur (0 : seulement au blanc ; -0.1 : aussi
-# à moins de 0,1 IL, pour un boîtier qui sature un peu sous son blanc théorique).
-over_ev = 0.0
+# Seuil de saturation en IL sous le blanc du capteur (0 : seulement au blanc). -0.02 (1,4 %)
+# par défaut : un RAF X-T4 enregistre un rouge ou un bleu saturé un peu sous le blanc vers
+# les bords de l'image (correction de vignetage du boîtier).
+over_ev = -0.02
 # Seuil des ombres bouchées, en IL sous le blanc (-10 : moins de 1/1024 de la plage).
 under_ev = -10.0
 # Cases de l'histogramme linéaire.
@@ -175,10 +176,12 @@ scale = "ev"
 width = 320.0
 height = 130.0
 ev_shown = 12.0
-# Zones saturées (rouge) et bouchées (bleu) superposées à l'image au démarrage (touche o),
-# et leur opacité.
+# Zones saturées et bouchées superposées à l'image au démarrage (touche o), et leur
+# opacité. Zones saturées colorées par canal (clip_red / clip_green / clip_blue, mélangées
+# si deux canaux, clip_over si les trois) ; false : clip_over pour toute saturation.
 clipping = false
 clipping_opacity = 0.7
+clipping_channels = true
 # Badges de la grille : part des pixels saturés / bouchés (canal le plus touché, 0 à 1)
 # au-delà de laquelle une vignette est signalée.
 badge_over = 0.005
@@ -202,12 +205,16 @@ yellow = "#e6c832"
 green = "#46b450"
 blue = "#4182e1"
 purple = "#a555d2"
-# Histogramme (canaux), zones et badges (saturé, bouché).
+# Histogramme (canaux). Zones et badges : saturé dans les trois canaux, saturé dans un seul
+# canal (rouge, vert, bleu ; deux canaux : couleurs additionnées), bouché.
 hist_red = "#eb4646"
 hist_green = "#50c85a"
 hist_blue = "#5082f0"
-clip_over = "#ff2828"
-clip_under = "#286eff"
+clip_over = "#ff28ff"
+clip_red = "#ff3232"
+clip_green = "#32e632"
+clip_blue = "#3278ff"
+clip_under = "#00d2ff"
 
 [keys]
 # Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une

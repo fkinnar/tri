@@ -1254,9 +1254,14 @@ impl TriApp {
             return Some(t.clone());
         }
         let e = self.exposure_of(index)?;
-        let colors = self.gui.colors;
-        let image =
-            histogram::mask_image(&e.mask, colors.clip_over.into(), colors.clip_under.into());
+        let c = self.gui.colors;
+        let zones = histogram::ZoneColors {
+            channels: [c.clip_red.into(), c.clip_green.into(), c.clip_blue.into()],
+            all: c.clip_over.into(),
+            under: c.clip_under.into(),
+            per_channel: self.gui.histogram.clipping_channels,
+        };
+        let image = histogram::mask_image(&e.mask, &zones);
         // Au plus proche : des cases nettes, pas un dégradé flou.
         let texture = ctx.load_texture(
             format!("{}#zones", path.display()),

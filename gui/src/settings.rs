@@ -308,6 +308,10 @@ pub struct HistogramSettings {
     pub clipping: bool,
     /// Opacité des zones superposées (0 à 1).
     pub clipping_opacity: f32,
+    /// Zones saturées colorées par canal (`clip_red`, `clip_green`, `clip_blue`,
+    /// mélangées si deux canaux, `clip_over` si les trois) ; sinon `clip_over` pour toute
+    /// saturation.
+    pub clipping_channels: bool,
     /// Badge « brûlée » sur une vignette au-delà de cette part de pixels saturés (canal
     /// le plus touché, 0 à 1).
     pub badge_over: f64,
@@ -325,6 +329,7 @@ impl Default for HistogramSettings {
             ev_shown: 12.0,
             clipping: false,
             clipping_opacity: 0.7,
+            clipping_channels: true,
             badge_over: 0.005,
             badge_under: 0.05,
         }
@@ -369,8 +374,15 @@ pub struct Colors {
     pub hist_green: Color,
     /// Histogramme : canal bleu.
     pub hist_blue: Color,
-    /// Zones et badges : saturé (brûlé).
+    /// Zones et badges : saturé dans les trois canaux (brûlé), ou dans un canal
+    /// quelconque sans couleur par canal.
     pub clip_over: Color,
+    /// Zones : saturé dans le seul canal rouge.
+    pub clip_red: Color,
+    /// Zones : saturé dans le seul canal vert.
+    pub clip_green: Color,
+    /// Zones : saturé dans le seul canal bleu.
+    pub clip_blue: Color,
     /// Zones et badges : bouché.
     pub clip_under: Color,
 }
@@ -395,8 +407,11 @@ impl Default for Colors {
             hist_red: Color([235, 70, 70]),
             hist_green: Color([80, 200, 90]),
             hist_blue: Color([80, 130, 240]),
-            clip_over: Color([255, 40, 40]),
-            clip_under: Color([40, 110, 255]),
+            clip_over: Color([255, 40, 255]),
+            clip_red: Color([255, 50, 50]),
+            clip_green: Color([50, 230, 50]),
+            clip_blue: Color([50, 120, 255]),
+            clip_under: Color([0, 210, 255]),
         }
     }
 }

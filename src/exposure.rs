@@ -26,8 +26,10 @@ pub const VERSION: u32 = 2;
 #[serde(default, deny_unknown_fields)]
 pub struct ExposureSettings {
     /// Seuil de saturation, en IL sous le blanc du capteur : 0 = seulement les pixels au
-    /// blanc ; -0,1 = aussi ceux à moins de 0,1 IL (boîtiers qui saturent un peu sous leur
-    /// blanc théorique).
+    /// blanc ; -0,02 (défaut) = aussi ceux à moins de 0,02 IL (1,4 %). Pas 0 : sur un RAF
+    /// X-T4, un rouge ou un bleu saturé est enregistré de 16383 au centre à 16323 vers
+    /// les bords (correction de vignetage du boîtier, en paliers) ; au seuil exact, seule
+    /// une zone rectangulaire au centre comptait comme saturée (vu le 17/10/2026).
     pub over_ev: f32,
     /// Seuil des ombres bouchées, en IL sous le blanc : -10 = moins de 1/1024 de la plage
     /// (bruit sur un capteur 14 bits).
@@ -49,7 +51,7 @@ pub struct ExposureSettings {
 impl Default for ExposureSettings {
     fn default() -> Self {
         Self {
-            over_ev: 0.0,
+            over_ev: -0.02,
             under_ev: -10.0,
             linear_bins: 1024,
             ev_range: 16.0,

@@ -34,7 +34,12 @@ et par canal) et le masque ; tout le reste en est dérivé :
   de `-ev_range` à 0, `ev_bins_per_stop` cases par IL ; le noir et tout ce qui est plus
   sombre vont dans la première case ;
 - `total`, `over`, `under` par canal : pixels, saturés (≥ blanc × 2^`over_ev`), bouchés
-  (≤ blanc × 2^`under_ev`) ; `over_fraction` / `under_fraction` : canal le plus touché ;
+  (≤ blanc × 2^`under_ev`). `over_ev` vaut **-0,02 IL** par défaut, pas 0 : sur un RAF
+  X-T4, un rouge ou un bleu saturé est enregistré de 16383 au centre à 16323 vers les
+  bords, en paliers (correction de vignetage du boîtier sur les données brutes). Au seuil
+  exact, seul un rectangle central comptait comme saturé dans les trois canaux : défaut
+  révélé par l'affichage des zones par canal (17/10/2026). Aucune image normale de la
+  séance n'est touchée par cette marge (ni même par -0,05 IL) ; `over_fraction` / `under_fraction` : canal le plus touché ;
 - `high` : valeur exacte au 99,9e centile par canal ; `headroom_ev()` : marge avant
   saturation du canal le plus exposé, en IL (« exposer à droite » ; 0 = au blanc). Calculée
   sur l'histogramme complet : une première version sur l'histogramme réduit donnait

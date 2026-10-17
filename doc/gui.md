@@ -116,7 +116,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant
     saturation, parts saturées et bouchées ;
   - **zones** superposées à l'image (`o`) : masque du moteur en texture (échantillonnage au
-    plus proche), rouge = saturé, bleu = bouché, étiré sur l'image (aussi à 100 %) ;
+    plus proche), étiré sur l'image (aussi à 100 %). Saturé **par canal** (demandé le
+    17/10/2026, comme FastRawViewer) : un seul canal → sa couleur (`clip_red`,
+    `clip_green`, `clip_blue`), deux canaux → couleurs additionnées (rouge + vert =
+    jaune), les trois → `clip_over` (magenta) ; bouché → `clip_under` (cyan : le bleu se
+    confondait avec « bleu seul saturé » et se voyait mal sur les ombres).
+    `[gui.histogram] clipping_channels = false` : une seule couleur pour toute
+    saturation. Couleurs et opacité réglables ;
   - **badges** dans la grille : pastille rouge (brûlée) / bleue (bouchée) en haut à droite
     de la vignette au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
     survol ; analyses lues dans le cache dans le budget de chargement de l'image ;

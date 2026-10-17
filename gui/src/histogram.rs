@@ -174,22 +174,50 @@ pub fn draw(
     );
 }
 
-/// Masque des zones en image : saturé (un canal au moins) en `over`, bouché en `under`,
-/// transparent ailleurs. À afficher étiré sur l'image, en échantillonnage au plus proche.
-pub fn mask_image(m: &Mask, over: Color32, under: Color32) -> ColorImage {
-    let pixels = m
-        .cells
-        .iter()
-        .map(|&cell| {
-            if cell & mask::OVER != 0 {
-                over
-            } else if cell & mask::UNDER != 0 {
-                under
-            } else {
-                Color32::TRANSPARENT
+/// Couleurs des zones.
+#[derive(Clone, Copy, Debug)]
+pub struct ZoneColors {
+    /// Saturé dans le seul canal rouge, vert, bleu.
+    pub channels: [Color32; CHANNELS],
+    /// Saturé dans les trois canaux (ou dans un canal quelconque, sans couleur par canal).
+    pub all: Color32,
+    /// Bouché.
+    pub under: Color32,
+    /// Couleur par canal saturé ; sinon `all` pour toute saturation.
+    pub per_channel: bool,
+}
+
+impl ZoneColors {
+    /// Couleur d'une case du masque, transparente si rien à signaler. Deux canaux
+    /// saturés : leurs couleurs additionnées (rouge + vert = jaune).
+    pub fn of(&self, cell: u8) -> Color32 {
+        let over = cell & mask::OVER;
+        if over != 0 {
+            if !self.per_channel || over == mask::OVER {
+                return self.all;
             }
-        })
-        .collect();
+            let mut rgb = [0u8; 3];
+            for (c, color) in self.channels.iter().enumerate() {
+                if over & (1 << c) != 0 {
+                    for (v, k) in rgb.iter_mut().zip(color.to_array()) {
+                        *v = (*v).max(k);
+                    }
+                }
+            }
+            return Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
+        }
+        if cell & mask::UNDER != 0 {
+            self.under
+        } else {
+            Color32::TRANSPARENT
+        }
+    }
+}
+
+/// Masque des zones en image (voir [`ZoneColors`]), transparent là où il n'y a rien à
+/// signaler. À afficher étiré sur l'image, en échantillonnage au plus proche.
+pub fn mask_image(m: &Mask, colors: &ZoneColors) -> ColorImage {
+    let pixels = m.cells.iter().map(|&cell| colors.of(cell)).collect();
     ColorImage::new([m.width as usize, m.height as usize], pixels)
 }
 
@@ -233,6 +261,19 @@ mod tests {
         assert_eq!(columns(&grey(0), HistogramScale::Ev, 12.0, 120)[0][2], 16);
     }
 
+    fn zones(per_channel: bool) -> ZoneColors {
+        ZoneColors {
+            channels: [
+                Color32::from_rgb(255, 0, 0),
+                Color32::from_rgb(0, 255, 0),
+                Color32::from_rgb(0, 0, 255),
+            ],
+            all: Color32::from_rgb(255, 0, 255),
+            under: Color32::from_rgb(0, 200, 255),
+            per_channel,
+        }
+    }
+
     #[test]
     fn mask_colors() {
         let m = Mask {
@@ -240,12 +281,35 @@ mod tests {
             height: 1,
             cells: vec![0, mask::OVER_G, mask::UNDER],
         };
-        let image = mask_image(&m, Color32::RED, Color32::BLUE);
+        let image = mask_image(&m, &zones(true));
         assert_eq!(image.size, [3, 1]);
         assert_eq!(
             image.pixels,
-            [Color32::TRANSPARENT, Color32::RED, Color32::BLUE]
+            [
+                Color32::TRANSPARENT,
+                Color32::from_rgb(0, 255, 0),
+                Color32::from_rgb(0, 200, 255)
+            ]
         );
+    }
+
+    #[test]
+    fn channel_zones_mix_and_saturate_all() {
+        let z = zones(true);
+        assert_eq!(z.of(mask::OVER_R), Color32::from_rgb(255, 0, 0));
+        assert_eq!(
+            z.of(mask::OVER_R | mask::OVER_G),
+            Color32::from_rgb(255, 255, 0),
+            "rouge + vert = jaune"
+        );
+        assert_eq!(z.of(mask::OVER), z.all, "trois canaux");
+        assert_eq!(
+            z.of(mask::OVER_B | mask::UNDER),
+            Color32::from_rgb(0, 0, 255),
+            "saturé l'emporte"
+        );
+        let single = zones(false);
+        assert_eq!(single.of(mask::OVER_R), single.all, "une seule couleur");
     }
 
     #[test]
