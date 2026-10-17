@@ -392,6 +392,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
             failed.extend(offload::delete_left(&report));
         }
         let attempted = report.copied.len()
+            + report.already_there.len()
             + if args.delete_left {
                 report.left.len()
             } else {

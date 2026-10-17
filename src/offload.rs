@@ -358,6 +358,10 @@ pub struct Report {
     pub copied: Vec<(PathBuf, PathBuf)>,
     /// Ignorés : déjà déchargés (historique), ou copie identique déjà présente.
     pub skipped: Vec<PathBuf>,
+    /// Parmi les ignorés, ceux dont une copie **identique** (empreinte comparée) est dans
+    /// la destination : (original, copie). Supprimables de la carte comme les copiés ;
+    /// pas ceux que seul l'historique global connaît (vérifiés nulle part).
+    pub already_there: Vec<(PathBuf, PathBuf)>,
     /// Laissés sur la carte par choix (`raw_only` : les images plates).
     pub left: Vec<PathBuf>,
     /// Échecs : (original, message).
@@ -430,6 +434,7 @@ pub fn run(
                 Ok(Outcome::AlreadyThere(copy)) => {
                     let _ = history.record(item, &copy);
                     report.skipped.push(item.source.clone());
+                    report.already_there.push((item.source.clone(), copy));
                 }
                 Err(e) if cancel.load(Ordering::Relaxed) => {
                     let _ = e;
@@ -555,13 +560,16 @@ pub fn delete_left(report: &Report) -> Vec<(PathBuf, String)> {
         .collect()
 }
 
-/// Supprime de la carte les originaux des copies réussies de `report` (et seulement
-/// eux : ni les ignorés, ni les échecs). À ne proposer qu'après confirmation. Renvoie les
-/// échecs (carte protégée en écriture…).
+/// Supprime de la carte les originaux dont une copie vérifiée est dans la destination :
+/// copiés pendant ce déchargement, et déjà présents à l'identique (empreinte comparée,
+/// carte déchargée une seconde fois au même endroit). Jamais les échecs, les images
+/// laissées (`raw_only`), ni celles que seul l'historique global connaît. À ne proposer
+/// qu'après confirmation. Renvoie les échecs (carte protégée en écriture…).
 pub fn delete_sources(report: &Report) -> Vec<(PathBuf, String)> {
     report
         .copied
         .iter()
+        .chain(&report.already_there)
         .filter_map(|(source, copy)| {
             // Dernière sécurité : la copie doit toujours être là, de même taille.
             let same = fs::metadata(source)

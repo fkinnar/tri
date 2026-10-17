@@ -41,7 +41,7 @@ fn settings() -> OffloadSettings {
     OffloadSettings {
         destination: String::new(),
         verify: true,
-        skip_known: true,
+        skip_known: false,
         history: String::new(),
         ..OffloadSettings::default()
     }
@@ -108,26 +108,39 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         "date d'origine conservée"
     );
 
-    // Second déchargement, même vers un autre dossier : tout est déjà connu.
-    let history = History::open(tmp.path().join("data/offload-history.tsv")).unwrap();
+    // Historique global (option) : relu du disque, tout est connu, même ailleurs.
+    let mut history = History::open(tmp.path().join("data/offload-history.tsv")).unwrap();
     let again = offload::plan(&src, &history).unwrap();
     assert!(
         again.items.iter().all(|i| i.known),
         "historique relu du disque"
     );
-    assert_eq!(again.bytes(&settings()), 0);
-    let mut history = history;
-    let other = tmp.path().join("photos/ailleurs");
-    let report = offload::run(
-        &again,
-        &other,
-        &settings(),
-        &mut history,
-        &AtomicBool::new(false),
-        |_| {},
+    assert_eq!(again.bytes(&with_history()), 0, "historique global : rien");
+    assert_eq!(
+        again.bytes(&settings()),
+        22,
+        "par défaut : tout, jugé sur la cible"
     );
+    let other = tmp.path().join("photos/ailleurs");
+    let stop = AtomicBool::new(false);
+    let report = offload::run(&again, &other, &with_history(), &mut history, &stop, |_| {});
     assert_eq!(report.skipped.len(), 3);
+    assert!(
+        report.already_there.is_empty(),
+        "rien vérifié dans « ailleurs »"
+    );
     assert!(names(&other).is_empty());
+
+    // Par défaut : même carte, second endroit → tout copié ; même endroit → doublons
+    // reconnus (contenus comparés).
+    assert_eq!(offload::already_in(&again, &settings(), &dst), (3, 22));
+    assert_eq!(offload::already_in(&again, &settings(), &other), (0, 0));
+    let report = offload::run(&again, &other, &settings(), &mut history, &stop, |_| {});
+    assert_eq!(report.copied.len(), 3, "second endroit");
+    let report = offload::run(&again, &dst, &settings(), &mut history, &stop, |_| {});
+    assert!(report.copied.is_empty());
+    assert_eq!(report.skipped.len(), 3, "même endroit : doublons ignorés");
+    assert_eq!(report.already_there.len(), 3, "copies identiques vérifiées");
 }
 
 #[test]
@@ -179,6 +192,43 @@ fn only_verified_copies_are_deleted_from_the_card() {
         "la vidéo n'est pas touchée"
     );
     assert_eq!(names(&dst).len(), 3, "copies intactes");
+}
+
+#[test]
+fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (src, dst) = (tmp.path().join("carte"), tmp.path().join("dest"));
+    card(&src);
+    let stop = AtomicBool::new(false);
+    let mut history = History::in_memory();
+    let plan = offload::plan(&src, &history).unwrap();
+    offload::run(&plan, &dst, &settings(), &mut history, &stop, |_| {});
+    // Seconde fois, même destination : rien de copié, tout « déjà là » et vérifié.
+    let plan = offload::plan(&src, &history).unwrap();
+    let report = offload::run(&plan, &dst, &settings(), &mut history, &stop, |_| {});
+    assert!(report.copied.is_empty());
+    assert!(offload::delete_sources(&report).is_empty());
+    assert!(
+        !src.join("DCIM/100_FUJI/DSCF0001.RAF").exists(),
+        "doublon vérifié supprimé"
+    );
+    assert!(
+        src.join("DCIM/101_FUJI/DSCF0003.MOV").exists(),
+        "vidéo jamais touchée"
+    );
+    assert_eq!(names(&dst).len(), 3, "copies intactes");
+    // Historique global seul (autre destination, rien vérifié) : rien n'est supprimé.
+    card(&src);
+    let plan = offload::plan(&src, &history).unwrap();
+    let other = tmp.path().join("ailleurs");
+    let report = offload::run(&plan, &other, &with_history(), &mut history, &stop, |_| {});
+    assert_eq!(report.skipped.len(), 3);
+    assert!(report.already_there.is_empty());
+    assert!(offload::delete_sources(&report).is_empty());
+    assert!(
+        src.join("DCIM/100_FUJI/DSCF0001.RAF").exists(),
+        "connu de l'historique : gardé"
+    );
 }
 
 #[test]
@@ -252,23 +302,26 @@ fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
         offload::root(&defaults, Some(&data)),
         "~/Photos/Sources/2026"
     );
-    // Carte déjà entièrement déchargée : rien à copier, mais un nom quand même.
+    // Carte déjà entièrement déchargée (historique global) : rien à copier, mais un nom
+    // quand même.
+    let global = with_history();
     let src = tmp.path().join("carte");
     card(&src);
     let mut history = History::in_memory();
     let plan = offload::plan(&src, &history).unwrap();
+    let stop = AtomicBool::new(false);
     offload::run(
         &plan,
         &tmp.path().join("d"),
-        &defaults,
+        &global,
         &mut history,
-        &AtomicBool::new(false),
+        &stop,
         |_| {},
     );
     let again = offload::plan(&src, &history).unwrap();
-    assert_eq!(again.to_copy(&defaults).count(), 0);
+    assert_eq!(again.to_copy(&global).count(), 0);
     assert_eq!(
-        offload::suggest_folder(&again, &defaults).as_deref(),
+        offload::suggest_folder(&again, &global).as_deref(),
         Some("2026-10-16_")
     );
 }

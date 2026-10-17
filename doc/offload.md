@@ -47,7 +47,11 @@ besoins de tous, pas seulement les siens.
   - **éjecter la carte à la fin** (`eject_after`, oui), sauf si la copie a été
     interrompue ;
   - **supprimer de la carte les fichiers copiés et vérifiés** (`delete_after`, non) :
-    `delete_sources`, seulement eux ; chaque copie est encore contrôlée — présente, même
+    `delete_sources` — ceux copiés pendant ce déchargement **et** ceux déjà présents à
+    l'identique dans la destination (`Report::already_there`, empreinte comparée : carte
+    déchargée une seconde fois au même endroit ; ajouté le 17/10/2026, ils restaient
+    sur la carte), jamais ceux que seul l'historique global connaît (vérifiés nulle
+    part), ni les erreurs, ni les vidéos ; chaque copie est encore contrôlée — présente, même
     taille — juste avant ; pas après une interruption.
 
   - **supprimer aussi les JPEG laissés sur la carte** (`delete_left`, non ; proposé

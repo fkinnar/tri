@@ -319,209 +319,212 @@ impl OffloadDialog {
             || source.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let modal =
-            crate::app::modal_at("offload_dialog", self.at).show(ctx, |ui| {
-                ui.set_max_width(460.0);
-                ui.strong(format!("Décharger « {name} »"));
-                ui.add_space(6.0);
-                match &mut self.stage {
-                    Stage::Planning(_) => {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label("inventaire de la carte…");
-                        });
+        let modal = crate::app::modal_at("offload_dialog", self.at).show(ctx, |ui| {
+            ui.set_max_width(460.0);
+            ui.strong(format!("Décharger « {name} »"));
+            ui.add_space(6.0);
+            match &mut self.stage {
+                Stage::Planning(_) => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label("inventaire de la carte…");
+                    });
+                }
+                Stage::Failed(e) => {
+                    ui.label(e.as_str());
+                }
+                Stage::Ready {
+                    plan,
+                    root,
+                    folder,
+                    error,
+                    present,
+                    ..
+                } => {
+                    let settings = &mut self.settings;
+                    let dest =
+                        offload::destination(&tri::settings::expand_home(root.trim()), folder).ok();
+                    // Doublons jugés sur la destination choisie (même nom, même taille ;
+                    // la copie compare ensuite les contenus).
+                    let fresh = match (&dest, &*present) {
+                        (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
+                        (Some(_), None) => true,
+                        (None, _) => false,
+                    };
+                    if fresh && let Some(d) = &dest {
+                        let found = offload::already_in(plan, settings, d);
+                        *present = Some((d.clone(), settings.raw_only, found));
                     }
-                    Stage::Failed(e) => {
-                        ui.label(e.as_str());
+                    let (there, there_bytes) = match (&dest, &*present) {
+                        (Some(d), Some((p, _, found))) if p == d => *found,
+                        _ => (0, 0),
+                    };
+                    let selected = plan.to_copy(settings).count();
+                    let count = selected - there;
+                    let mut text = format!("{} images", plan.items.len());
+                    if settings.skip_known {
+                        let known = plan.items.iter().filter(|i| i.known).count();
+                        text.push_str(&format!(", dont {known} déjà déchargées"));
                     }
-                    Stage::Ready {
-                        plan,
-                        root,
-                        folder,
-                        error,
-                        present,
-                        ..
-                    } => {
-                        let settings = &mut self.settings;
-                        let dest =
-                            offload::destination(&tri::settings::expand_home(root.trim()), folder)
-                                .ok();
-                        // Doublons jugés sur la destination choisie (même nom, même taille ;
-                        // la copie compare ensuite les contenus).
-                        let fresh = match (&dest, &*present) {
-                            (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
-                            (Some(_), None) => true,
-                            (None, _) => false,
-                        };
-                        if fresh && let Some(d) = &dest {
-                            let found = offload::already_in(plan, settings, d);
-                            *present = Some((d.clone(), settings.raw_only, found));
-                        }
-                        let (there, there_bytes) = match (&dest, &*present) {
-                            (Some(d), Some((p, _, found))) if p == d => *found,
-                            _ => (0, 0),
-                        };
-                        let selected = plan.to_copy(settings).count();
-                        let count = selected - there;
-                        let mut text = format!("{} images", plan.items.len());
-                        if settings.skip_known {
-                            let known = plan.items.iter().filter(|i| i.known).count();
-                            text.push_str(&format!(", dont {known} déjà déchargées"));
-                        }
-                        if there > 0 {
-                            text.push_str(&format!(", {there} déjà dans la destination"));
-                        }
-                        text.push_str(&format!(
-                            " ; {count} à copier ({} Mo).",
-                            french_mb(plan.bytes(settings) - there_bytes)
-                        ));
-                        ui.label(text);
-                        if plan.ignored > 0 {
-                            ui.weak(format!(
+                    if there > 0 {
+                        text.push_str(&format!(", {there} déjà dans la destination"));
+                    }
+                    text.push_str(&format!(
+                        " ; {count} à copier ({} Mo).",
+                        french_mb(plan.bytes(settings) - there_bytes)
+                    ));
+                    ui.label(text);
+                    if plan.ignored > 0 {
+                        ui.weak(format!(
                             "{} autres fichiers (vidéos, fichiers du boîtier) ne sont pas copiés.",
                             plan.ignored
                         ));
-                        }
-                        ui.add_space(6.0);
-                        egui::Grid::new("offload_fields")
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                ui.label("Dossier racine");
-                                ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
-                                ui.end_row();
-                                ui.label("Dossier de la séance");
-                                ui.add(egui::TextEdit::singleline(folder).desired_width(300.0))
-                            .on_hover_text(
-                                "Proposé : AAAA/AAAA-MM-JJ_ (date de la plus ancienne image) ; \
+                    }
+                    ui.add_space(6.0);
+                    egui::Grid::new("offload_fields")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("Dossier racine");
+                            ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
+                            ui.end_row();
+                            ui.label("Dossier de la séance");
+                            ui.add(egui::TextEdit::singleline(folder).desired_width(300.0))
+                                .on_hover_text(
+                                    "Proposé : AAAA/AAAA-MM-JJ_ (date de la plus ancienne image) ; \
                                  à compléter (« _Self ») ou à remplacer entièrement.",
-                            );
-                                ui.end_row();
-                            });
-                        if let Some(dest) = &dest {
-                            ui.weak(format!("Destination : {}", dest.display()));
-                        }
-                        if let Some(e) = error {
-                            ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
-                        }
-                        // Choix faits avant la copie, enchaînés à la fin (retour du
-                        // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
-                        ui.add_space(6.0);
-                        ui.checkbox(&mut settings.raw_only, "RAW seulement")
-                            .on_hover_text("Les JPEG du boîtier restent sur la carte.");
-                        ui.checkbox(&mut settings.open_after, "Ouvrir le dossier à la fin");
-                        ui.checkbox(&mut settings.eject_after, "Éjecter la carte à la fin");
-                        ui.checkbox(
-                            &mut settings.delete_after,
-                            "Supprimer de la carte les fichiers copiés et vérifiés",
-                        )
-                        .on_hover_text(
-                            "Seulement ceux copiés (et vérifiés) pendant ce déchargement ; \
-                         les autres (ignorés, en erreur, laissés, vidéos) restent.",
-                        );
-                        // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
-                        if settings.raw_only && settings.delete_after {
-                            ui.indent("delete_left", |ui| {
-                                ui.checkbox(
-                                    &mut settings.delete_left,
-                                    "Supprimer aussi les JPEG laissés sur la carte",
-                                )
-                                .on_hover_text("Ils ne sont pas copiés : ils seront perdus.");
-                            });
-                        }
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            start = ui
-                                .add_enabled(count > 0, egui::Button::new("Décharger"))
-                                .clicked();
-                            if ui.button("Annuler").clicked() {
-                                request = Some(Request::Close);
-                            }
+                                );
+                            ui.end_row();
+                        });
+                    if let Some(dest) = &dest {
+                        ui.weak(format!("Destination : {}", dest.display()));
+                    }
+                    if let Some(e) = error {
+                        ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
+                    }
+                    // Choix faits avant la copie, enchaînés à la fin (retour du
+                    // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
+                    ui.add_space(6.0);
+                    ui.checkbox(&mut settings.raw_only, "RAW seulement")
+                        .on_hover_text("Les JPEG du boîtier restent sur la carte.");
+                    ui.checkbox(&mut settings.open_after, "Ouvrir le dossier à la fin");
+                    ui.checkbox(&mut settings.eject_after, "Éjecter la carte à la fin");
+                    ui.checkbox(
+                        &mut settings.delete_after,
+                        "Supprimer de la carte les fichiers copiés et vérifiés",
+                    )
+                    .on_hover_text(
+                        "Ceux copiés et vérifiés pendant ce déchargement, et ceux déjà présents \
+                         à l'identique dans la destination. Restent : erreurs, images \
+                         laissées, vidéos et fichiers du boîtier.",
+                    );
+                    // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
+                    if settings.raw_only && settings.delete_after {
+                        ui.indent("delete_left", |ui| {
+                            ui.checkbox(
+                                &mut settings.delete_left,
+                                "Supprimer aussi les JPEG laissés sur la carte",
+                            )
+                            .on_hover_text("Ils ne sont pas copiés : ils seront perdus.");
                         });
                     }
-                    Stage::Running {
-                        progress, cancel, ..
-                    } => {
-                        let fraction = if progress.bytes_total > 0 {
-                            progress.bytes_done as f32 / progress.bytes_total as f32
-                        } else {
-                            0.0
-                        };
-                        ui.add(egui::ProgressBar::new(fraction).text(format!(
-                            "{} / {} fichiers · {} / {} Mo",
-                            progress.files_done,
-                            progress.files_total,
-                            french_mb(progress.bytes_done),
-                            french_mb(progress.bytes_total)
-                        )));
-                        if let Some(current) = &progress.current {
-                            ui.weak(file_name(current));
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        start = ui
+                            .add_enabled(count > 0, egui::Button::new("Décharger"))
+                            .clicked();
+                        if ui.button("Annuler").clicked() {
+                            request = Some(Request::Close);
                         }
-                        ui.horizontal(|ui| {
-                            if ui.button("Continuer en arrière-plan").clicked() {
-                                background = true;
-                            }
-                            if ui.button("Interrompre").clicked() {
-                                cancel.store(true, Ordering::Relaxed);
-                            }
-                        });
+                    });
+                }
+                Stage::Running {
+                    progress, cancel, ..
+                } => {
+                    let fraction = if progress.bytes_total > 0 {
+                        progress.bytes_done as f32 / progress.bytes_total as f32
+                    } else {
+                        0.0
+                    };
+                    ui.add(egui::ProgressBar::new(fraction).text(format!(
+                        "{} / {} fichiers · {} / {} Mo",
+                        progress.files_done,
+                        progress.files_total,
+                        french_mb(progress.bytes_done),
+                        french_mb(progress.bytes_total)
+                    )));
+                    if let Some(current) = &progress.current {
+                        ui.weak(file_name(current));
                     }
-                    Stage::Done {
-                        report,
-                        finished,
-                        deleted,
-                        opened,
-                        ejected,
-                    } => {
-                        let settings = &self.settings;
-                        let _ = finished;
-                        let verified = if settings.verify {
-                            " et vérifiés"
-                        } else {
-                            ""
-                        };
-                        ui.label(format!(
+                    ui.horizontal(|ui| {
+                        if ui.button("Continuer en arrière-plan").clicked() {
+                            background = true;
+                        }
+                        if ui.button("Interrompre").clicked() {
+                            cancel.store(true, Ordering::Relaxed);
+                        }
+                    });
+                }
+                Stage::Done {
+                    report,
+                    finished,
+                    deleted,
+                    opened,
+                    ejected,
+                } => {
+                    let settings = &self.settings;
+                    let _ = finished;
+                    let verified = if settings.verify {
+                        " et vérifiés"
+                    } else {
+                        ""
+                    };
+                    ui.label(format!(
                         "{} fichiers copiés{verified}, {} ignorés (déjà déchargés), {} erreurs{}.",
                         report.copied.len(),
                         report.skipped.len(),
                         report.errors.len(),
-                        if report.cancelled { " — interrompu" } else { "" }
+                        if report.cancelled {
+                            " — interrompu"
+                        } else {
+                            ""
+                        }
                     ));
-                        if !report.left.is_empty() {
-                            ui.weak(format!("{} JPEG laissés sur la carte.", report.left.len()));
-                        }
-                        ui.weak(format!("Destination : {}", report.destination.display()));
-                        for (file, e) in report.errors.iter().take(5) {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(230, 90, 90),
-                                format!("{} : {e}", file_name(file)),
-                            );
-                        }
-                        if let Some(errors) = deleted {
-                            ui.label(if errors.is_empty() {
-                                "Fichiers copiés supprimés de la carte.".to_string()
-                            } else {
-                                format!("{} fichiers n'ont pas pu être supprimés.", errors.len())
-                            });
-                        }
-                        if *ejected {
-                            ui.weak("Éjection de la carte : voir la barre d'état.");
-                        }
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            // Ce qui n'a pas été coché reste possible ici.
-                            if !*opened && ui.button("Ouvrir le dossier").clicked() {
-                                request = Some(Request::Open(report.destination.clone()));
-                            }
-                            if !*ejected && ui.button("Éjecter la carte").clicked() {
-                                request = Some(Request::Eject(source.clone()));
-                            }
-                            if ui.button("Fermer").clicked() {
-                                request = Some(Request::Close);
-                            }
+                    if !report.left.is_empty() {
+                        ui.weak(format!("{} JPEG laissés sur la carte.", report.left.len()));
+                    }
+                    ui.weak(format!("Destination : {}", report.destination.display()));
+                    for (file, e) in report.errors.iter().take(5) {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(230, 90, 90),
+                            format!("{} : {e}", file_name(file)),
+                        );
+                    }
+                    if let Some(errors) = deleted {
+                        ui.label(if errors.is_empty() {
+                            "Fichiers copiés supprimés de la carte.".to_string()
+                        } else {
+                            format!("{} fichiers n'ont pas pu être supprimés.", errors.len())
                         });
                     }
+                    if *ejected {
+                        ui.weak("Éjection de la carte : voir la barre d'état.");
+                    }
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        // Ce qui n'a pas été coché reste possible ici.
+                        if !*opened && ui.button("Ouvrir le dossier").clicked() {
+                            request = Some(Request::Open(report.destination.clone()));
+                        }
+                        if !*ejected && ui.button("Éjecter la carte").clicked() {
+                            request = Some(Request::Eject(source.clone()));
+                        }
+                        if ui.button("Fermer").clicked() {
+                            request = Some(Request::Close);
+                        }
+                    });
                 }
-            });
+            }
+        });
         if start {
             self.start(ctx);
         }

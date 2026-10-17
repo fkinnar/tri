@@ -181,7 +181,9 @@ la plus récente, source mal formée signalée.
   proposé, copie à plat sans fichier temporaire, contenu et date d'origine conservés,
   historique relu du disque (second passage, autre destination : tout ignoré) ; nom pris
   par un autre fichier → suffixe, rien écrasé, copie identique ignorée ; suppression des
-  seuls originaux copiés (vidéo intacte) ; annulation : rien copié.
+  seuls originaux copiés (vidéo intacte) ; doublons vérifiés supprimés aussi, pas ceux
+  que seul l'historique global connaît ; même carte à deux endroits (copiée deux fois)
+  et deux fois au même endroit (doublons reconnus) ; annulation : rien copié.
 - `settings` : dossier de données par OS, `~` développé.
 
 ### `notes` (unitaires `src/notes.rs`, intégration `tests/notes.rs`)
