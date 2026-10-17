@@ -9,10 +9,16 @@ interface : la ligne de commande et l'interface graphique s'en servent tels quel
 Les défauts suivent l'usage de l'utilisateur, tout est réglable ; principe : couvrir les
 besoins de tous, pas seulement les siens.
 
-- **Destination** : `[offload] destination` (`~/Pictures` par défaut, `~` accepté) +
-  dossier de la séance. Proposé : `AAAA/AAAA-MM-JJ_` (`suggest_folder`, date de prise de
-  vue de la plus ancienne image, lue dans ses métadonnées en heure locale ; à défaut, sa
-  date de modification en UTC), à compléter (« _Self ») ou à remplacer entièrement. Un
+- **Destination** : racine + dossier de la séance. La racine est **mémorisée** d'un
+  déchargement à l'autre (`root` / `remember_root`, fichier `offload-root` du dossier de
+  données) ; `[offload] destination` (`~/Pictures`, `~` accepté) ne sert qu'au premier.
+  Dossier de la séance proposé : `AAAA-MM-JJ_` (`suggest_folder`, date de prise de vue
+  de la plus ancienne image à copier, lue dans ses métadonnées en heure locale ; à
+  défaut, sa date de modification en UTC ; carte déjà déchargée : la plus ancienne de la
+  carte), à compléter (« _Self ») ou à remplacer entièrement. L'année, si on la veut,
+  va dans la racine (`…/Sources/2026`) : retour du 17/10/2026, la proposition
+  `AAAA/AAAA-MM-JJ_` mélangeait les deux, et restait vide pour une carte déjà
+  déchargée. Un
   `_` laissé seul en fin de nom est retiré. Le nom ne peut ni être absolu ni remonter
   (`..`) : on ne copie que sous la racine. Plus tard : gabarits (placeholders).
 - **Noms d'origine**, à plat : les sous-dossiers de la carte (`DCIM/100_FUJI`…) ne sont

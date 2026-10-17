@@ -71,7 +71,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     assert_eq!(plan.bytes(&settings()), 5 + 5 + 12);
     assert_eq!(
         offload::suggest_folder(&plan, &settings()).as_deref(),
-        Some("2026/2026-10-16_"),
+        Some("2026-10-16_"),
         "date de la plus ancienne image"
     );
 
@@ -223,6 +223,38 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
     // Le JPEG laissé n'est pas « déjà déchargé » : un déchargement complet le prendra.
     let plan = offload::plan(&src, &history).unwrap();
     assert_eq!(plan.to_copy(&settings()).count(), 1);
+}
+
+#[test]
+fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let defaults = settings();
+    assert_eq!(offload::root(&defaults, Some(&data)), defaults.destination);
+    offload::remember_root(&data, " ~/Photos/Sources/2026 ").unwrap();
+    assert_eq!(
+        offload::root(&defaults, Some(&data)),
+        "~/Photos/Sources/2026"
+    );
+    // Carte déjà entièrement déchargée : rien à copier, mais un nom quand même.
+    let src = tmp.path().join("carte");
+    card(&src);
+    let mut history = History::in_memory();
+    let plan = offload::plan(&src, &history).unwrap();
+    offload::run(
+        &plan,
+        &tmp.path().join("d"),
+        &defaults,
+        &mut history,
+        &AtomicBool::new(false),
+        |_| {},
+    );
+    let again = offload::plan(&src, &history).unwrap();
+    assert_eq!(again.to_copy(&defaults).count(), 0);
+    assert_eq!(
+        offload::suggest_folder(&again, &defaults).as_deref(),
+        Some("2026-10-16_")
+    );
 }
 
 #[test]

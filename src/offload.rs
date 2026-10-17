@@ -239,12 +239,17 @@ pub fn plan(source: &Path, history: &History) -> io::Result<Plan> {
     })
 }
 
-/// Nom de dossier proposé : `AAAA/AAAA-MM-JJ_`, d'après la date de prise de vue de la
-/// plus ancienne image à copier (lue dans ses métadonnées, heure locale ; à défaut, sa
-/// date de modification en UTC). Le `_` final invite à compléter (« _Self ») ; il est
-/// retiré s'il reste seul ([`destination`]). `None` si rien à copier.
+/// Nom de dossier de séance proposé : `AAAA-MM-JJ_`, d'après la date de prise de vue de
+/// la plus ancienne image à copier (lue dans ses métadonnées, heure locale ; à défaut, sa
+/// date de modification en UTC) ; s'il n'y a rien à copier (carte déjà déchargée), de la
+/// plus ancienne de la carte. Le `_` final invite à compléter (« _Self ») ; il est retiré
+/// s'il reste seul ([`destination`]). L'année, si on la veut, va dans la racine
+/// (`…/Sources/2026`, retour du 17/10/2026). `None` si la carte est vide.
 pub fn suggest_folder(plan: &Plan, settings: &OffloadSettings) -> Option<String> {
-    let first = plan.to_copy(settings).min_by_key(|i| i.modified)?;
+    let first = plan
+        .to_copy(settings)
+        .min_by_key(|i| i.modified)
+        .or_else(|| plan.items.iter().min_by_key(|i| i.modified))?;
     let file = MediaFile {
         path: first.source.clone(),
         kind: first.kind,
@@ -254,7 +259,23 @@ pub fn suggest_folder(plan: &Plan, settings: &OffloadSettings) -> Option<String>
         .and_then(|m| m.date)
         .and_then(|d| d.get(0..10).map(str::to_string))
         .unwrap_or_else(|| utc_date(first.modified));
-    Some(format!("{}/{date}_", &date[0..4]))
+    Some(format!("{date}_"))
+}
+
+/// Racine des déchargements : celle du dernier déchargement (fichier `offload-root` du
+/// dossier de données `data`), sinon `[offload] destination`. Persistante d'un
+/// déchargement à l'autre (retour du 17/10/2026).
+pub fn root(settings: &OffloadSettings, data: Option<&Path>) -> String {
+    data.and_then(|d| fs::read_to_string(d.join("offload-root")).ok())
+        .map(|r| r.trim().to_string())
+        .filter(|r| !r.is_empty())
+        .unwrap_or_else(|| settings.destination.clone())
+}
+
+/// Mémorise `root` comme racine des prochains déchargements (voir [`root`]).
+pub fn remember_root(data: &Path, root: &str) -> io::Result<()> {
+    fs::create_dir_all(data)?;
+    fs::write(data.join("offload-root"), root.trim())
 }
 
 /// Date UTC « AAAA-MM-JJ » (calendrier grégorien, sans dépendance de dates).

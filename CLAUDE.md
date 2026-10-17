@@ -456,7 +456,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      l'histogramme de l'image sélectionnée.
   4. [x] **Déchargement d'une carte** (fait le 17/10/2026, `src/offload.rs`,
      `doc/offload.md`) : choix de l'utilisateur — défauts = son usage, tout réglable ;
-     dossier proposé `AAAA/AAAA-MM-JJ_` + champ libre (gabarits plus tard), noms
+     dossier de séance proposé `AAAA-MM-JJ_` + champ libre, racine mémorisée d'un
+     déchargement à l'autre (l'année va dans la racine ; gabarits plus tard), noms
      d'origine (renommage par gabarits plus tard), fichiers déjà déchargés ignorés
      (historique dans le dossier de données), copie vérifiée (BLAKE3), puis ouvrir /
      éjecter / supprimer de la carte les fichiers vérifiés — choisis par cases à cocher

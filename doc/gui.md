@@ -116,7 +116,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     d'interface de cliquer « 3 étoiles ».
 - **Déchargement d'une carte** (17/10/2026) : icône « décharger » sur chaque volume non
   fixé du panneau des dossiers ; boîte près du clic : inventaire en fond, racine et
-  dossier de la séance (proposé `AAAA/AAAA-MM-JJ_`), cases à cocher (RAW seulement,
+  dossier de la séance (proposé `AAAA-MM-JJ_` ; racine mémorisée), cases à cocher (RAW seulement,
   ouvrir le dossier, éjecter la carte, supprimer de la carte les fichiers copiés et
   vérifiés), copie vérifiée en fond avec progression et « Interrompre », puis suites
   cochées enchaînées (suppression, ouverture, éjection) et bilan. Le travail est dans

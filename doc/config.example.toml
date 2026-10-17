@@ -106,8 +106,9 @@ mask_size = 1024
 mask_under_share = 0.5
 
 [offload]
-# Déchargement d'une carte : dossier racine (~ accepté), sous lequel est créé le dossier de
-# la séance (proposé : AAAA/AAAA-MM-JJ_, à compléter ou remplacer).
+# Déchargement d'une carte : dossier racine (~ accepté) du premier déchargement ; ensuite,
+# la racine du dernier déchargement est retenue. Le dossier de la séance y est créé
+# (proposé : AAAA-MM-JJ_, à compléter ou remplacer ; l'année va dans la racine).
 destination = "~/Pictures"
 # Relire chaque copie et comparer son empreinte à l'original.
 verify = true

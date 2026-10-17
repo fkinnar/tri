@@ -69,6 +69,8 @@ pub struct OffloadDialog {
     source: PathBuf,
     at: Pos2,
     settings: OffloadSettings,
+    /// Dossier des données (historique, racine mémorisée).
+    data: Option<PathBuf>,
     stage: Stage,
 }
 
@@ -83,8 +85,9 @@ impl OffloadDialog {
     ) -> Self {
         let (tx, rx) = mpsc::channel();
         let (dir, s, repaint) = (source.clone(), settings.clone(), ctx.clone());
+        let data_dir = data.clone();
         std::thread::spawn(move || {
-            let result = History::open_configured(&s, data.as_deref())
+            let result = History::open_configured(&s, data_dir.as_deref())
                 .map_err(|e| format!("historique illisible : {e}"))
                 .and_then(|history| {
                     offload::plan(&dir, &history)
@@ -98,6 +101,7 @@ impl OffloadDialog {
             source,
             at,
             settings,
+            data,
             stage: Stage::Planning(rx),
         }
     }
@@ -118,7 +122,7 @@ impl OffloadDialog {
                             Stage::Ready {
                                 plan,
                                 history: Some(history),
-                                root: self.settings.destination.clone(),
+                                root: offload::root(&self.settings, self.data.as_deref()),
                                 folder,
                                 error: None,
                             }
@@ -167,6 +171,10 @@ impl OffloadDialog {
                     return;
                 }
             };
+        // Racine retenue pour les prochains déchargements.
+        if let Some(data) = &self.data {
+            let _ = offload::remember_root(data, root);
+        }
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let (plan, mut history) = (plan.clone(), history.take().unwrap_or_default());

@@ -2900,6 +2900,20 @@ mod tests {
         h.get_by_label("Fermer").click();
         h.run_steps(2);
         assert!(h.state().offload.is_none());
+        let remembered = std::fs::read_to_string(dir.path().join("data/offload-root")).unwrap();
+        assert!(
+            remembered.ends_with("photos-local"),
+            "racine mémorisée : {remembered}"
+        );
+        assert!(
+            opened
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("20"),
+            "nom de séance sans dossier d'année : {opened:?}"
+        );
+        assert_eq!(opened.parent().unwrap(), dir.path().join("photos-local"));
         let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
         assert_eq!(history.lines().count(), 2, "historique écrit");
     }

@@ -322,10 +322,9 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         History::open_configured(s, settings.data_dir().as_deref())?
     };
     let plan = offload::plan(card, &history)?;
-    let root = args
-        .to
-        .clone()
-        .unwrap_or_else(|| settings::expand_home(&s.destination));
+    let root = args.to.clone().unwrap_or_else(|| {
+        settings::expand_home(&offload::root(s, settings.data_dir().as_deref()))
+    });
     let folder = match &args.folder {
         Some(f) => f.clone(),
         None => offload::suggest_folder(&plan, s).unwrap_or_default(),
@@ -343,6 +342,11 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         return Ok(());
     }
     let dest = offload::destination(&root, &folder)?;
+    if !args.dry_run
+        && let Some(data) = settings.data_dir()
+    {
+        let _ = offload::remember_root(&data, &root.to_string_lossy());
+    }
     println!("destination : {}", dest.display());
     if args.dry_run {
         for item in plan.to_copy(s) {
