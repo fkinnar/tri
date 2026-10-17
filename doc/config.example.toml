@@ -145,4 +145,4 @@ purple = "#a555d2"
 # au démarrage (barre d'état). Exemples :
 # "core.flag.accept" = ["Maj+P", "a"]
 # "core.nav.first" = ["Début", "g g"]
-# "core.rate.color.purple" = ["°", ","]
+# "core.rate.color.purple" = ["°", ",", "."]

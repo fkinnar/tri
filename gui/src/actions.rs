@@ -428,8 +428,8 @@ const VIM: &[Binding] = {
 };
 
 /// Notation, commune aux deux profils, pensée aussi pour l'AZERTY : chiffres avec ou sans Maj
-/// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY) et
-/// « , » (pavé numérique), drapeaux sur Maj + P / X / U (`u` seul est réservé à
+/// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY),
+/// « , » et « . » (séparateur décimal du pavé numérique selon le système), drapeaux sur Maj + P / X / U (`u` seul est réservé à
 /// l'annulation).
 const RATING: &[Binding] = {
     use Action::*;
@@ -456,6 +456,8 @@ const RATING: &[Binding] = {
         (&[shifted(Key::Num9)], Color(tri::xmp::Color::Blue)),
         (&[Chord::char('°')], Color(tri::xmp::Color::Purple)),
         (&[plain(Key::Comma)], Color(tri::xmp::Color::Purple)),
+        // Séparateur décimal du pavé numérique : « , » sur macOS, « . » sous Linux Mint.
+        (&[plain(Key::Period)], Color(tri::xmp::Color::Purple)),
         (&[shifted(Key::P)], Flag(tri::xmp::Flag::Accepted)),
         (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
@@ -499,6 +501,7 @@ const FILTERS: &[Binding] = {
         (&[F, shifted(Key::Num9)], FilterColor(C::Blue)),
         (&[F, Chord::char('°')], FilterColor(C::Purple)),
         (&[F, plain(Key::Comma)], FilterColor(C::Purple)),
+        (&[F, plain(Key::Period)], FilterColor(C::Purple)),
         (&[F, plain(Key::Escape)], FilterClear),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
@@ -844,6 +847,7 @@ pub fn key_label(key: Key) -> String {
         Key::Space => "Espace".into(),
         Key::Questionmark => "?".into(),
         Key::Comma => ",".into(),
+        Key::Period => ".".into(),
         other => {
             let name = other.name();
             // Lettres en minuscules, comme on les tape (g et Maj+G sont deux touches).
@@ -1030,7 +1034,12 @@ mod tests {
             ["3"],
             "Maj+3 implicite dans l'aide"
         );
-        assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ","]);
+        assert_eq!(
+            km.action(Key::Period, Modifiers::NONE),
+            Some(Action::Color(Color::Purple)),
+            "pavé numérique sous Linux"
+        );
+        assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ",", "."]);
     }
 
     #[test]

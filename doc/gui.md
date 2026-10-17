@@ -50,7 +50,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - Clavier : préfixe `f` (choix de l'utilisateur), suivi de la touche de notation
     correspondante : `f f` type suivant, `f 1`…`f 5` au moins n étoiles, `f 0` étoiles
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
-    séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,` couleurs (ajouter / retirer),
+    séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
     `f Échap` tout effacer. Chiffres et lettres avec ou sans Maj.
   - Souris : **barre de filtres** en haut de la grille (`Maj+F` l'affiche ou la masque,
     `[gui] filter_bar`) : chaque clic déclenche la même action que le clavier (recliquer
@@ -199,7 +199,7 @@ Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 |---|---|
 | `core.rate.star.0` … `core.rate.star.5` | 0 … 5, avec ou sans Maj |
 | `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9, avec ou sans Maj |
-| `core.rate.color.purple` | ° / , |
+| `core.rate.color.purple` | ° / , / . |
 | `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
 
 Pourquoi : sur l'AZERTY, les chiffres de la rangée du haut demandent Maj, ceux du pavé
@@ -208,8 +208,10 @@ numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît 
 l'AZERTY est « - », reconnu comme `Minus`, d'où Maj sur la rangée du haut. Le violet est sur
 « ° » (Maj + la touche à droite du 0 en AZERTY), qu'egui ne nomme pas : c'est un
 **caractère**, reçu par l'événement `Text` ; seuls les caractères liés à un raccourci sont
-pris en compte (les autres interrompraient une séquence). La virgule (`Comma`) couvre le
-pavé numérique français (egui ne distingue pas le pavé) et celle de la rangée du bas. `u`
+pris en compte (les autres interrompraient une séquence). La virgule (`Comma`) et le
+point (`Period`) couvrent le séparateur décimal du pavé numérique, « , » sur macOS mais
+« . » sous Linux Mint (constaté le 17/10/2026 ; egui ne distingue pas le pavé), ainsi que
+les touches de la rangée du bas. `u`
 seul reste libre pour l'annulation (à venir), comme dans vim.
 
 Une couleur déjà posée est retirée par la même touche ; en mode une couleur (défaut), une
@@ -221,7 +223,7 @@ Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd. Pas
 Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplacement.
 
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
-`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f Échap`) ;
+`f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N.
 
 Caractères : egui-winit livre la touche (Maj + `Minus`, physique) **et** le caractère

@@ -276,8 +276,8 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   notes relues à l'identique par ExifTool, tout le reste inchangé.
 - **Raccourcis de notation par défaut** (17/10/2026, pensés pour l'AZERTY aussi) : étoiles
   `0`–`5` et couleurs `6`–`9` (rouge, jaune, vert, bleu) **avec ou sans Maj** (rangée du
-  haut AZERTY = Maj, pavé numérique = sans) ; violet `°` et `,` (virgule du pavé
-  numérique) ; accepté / rejeté / sans drapeau `Maj+P` / `Maj+X` / `Maj+U`. Profil vim
+  haut AZERTY = Maj, pavé numérique = sans) ; violet `°`, `,` et `.` (séparateur
+  décimal du pavé numérique : « , » sur macOS, « . » sous Linux Mint) ; accepté / rejeté / sans drapeau `Maj+P` / `Maj+X` / `Maj+U`. Profil vim
   aligné sur nvim : `Ctrl+U` / `Ctrl+D` pour page précédente / suivante, `u` réservé à
   l'annulation (à venir). Ctrl + lettre autorisé (seuls Cmd, Alt et Ctrl + flèches restent
   au système).
