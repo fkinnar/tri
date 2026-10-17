@@ -36,6 +36,8 @@ pub struct AppSettings {
     pub places: tri::places::PlaceSettings,
     /// `[exposure]` (moteur).
     pub exposure: tri::exposure::ExposureSettings,
+    /// `[offload]` (moteur).
+    pub offload: tri::offload::OffloadSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -54,6 +56,7 @@ impl AppSettings {
             xmp: self.xmp,
             places: self.places.clone(),
             exposure: self.exposure,
+            offload: self.offload.clone(),
         }
     }
 

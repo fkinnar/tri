@@ -101,6 +101,8 @@ pub struct EngineSettings {
     pub places: crate::places::PlaceSettings,
     /// Calcul de l'exposition (histogrammes, saturés / bouchés).
     pub exposure: crate::exposure::ExposureSettings,
+    /// Déchargement des cartes.
+    pub offload: crate::offload::OffloadSettings,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir
@@ -294,6 +296,54 @@ fn default_path_for(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<
     Some(base.join("tri").join("config.toml"))
 }
 
+/// Dossier des données de `tri` (ce qui n'est ni réglage ni cache : historique des
+/// déchargements de cartes…), selon le système :
+/// - Linux et autres Unix : `$XDG_DATA_HOME/tri` (si absolu), sinon `~/.local/share/tri` ;
+/// - macOS : `~/Library/Application Support/tri` ;
+/// - Windows : `%APPDATA%\tri`.
+///
+/// Pas le cache : on peut le vider sans rien perdre, pas ces données.
+pub fn data_dir() -> Option<PathBuf> {
+    data_dir_for(std::env::consts::OS, |name| std::env::var_os(name))
+}
+
+/// Logique de [`data_dir`], avec l'OS et l'environnement injectés (pour les tests).
+fn data_dir_for(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    let absolute = |name: &str| env(name).map(PathBuf::from).filter(|p| p.is_absolute());
+    let base = match os {
+        "windows" => absolute("APPDATA")?,
+        "macos" => absolute("HOME")?
+            .join("Library")
+            .join("Application Support"),
+        _ => absolute("XDG_DATA_HOME")
+            .or_else(|| Some(absolute("HOME")?.join(".local").join("share")))?,
+    };
+    Some(base.join("tri"))
+}
+
+/// Remplace un `~` initial par le dossier personnel (`HOME`, ou `USERPROFILE` sous
+/// Windows) : les chemins du fichier de configuration s'écrivent `"~/Pictures"`.
+pub fn expand_home(path: &str) -> PathBuf {
+    expand_home_with(path, |name| std::env::var_os(name))
+}
+
+fn expand_home_with(path: &str, env: impl Fn(&str) -> Option<OsString>) -> PathBuf {
+    let home = || {
+        env("HOME")
+            .or_else(|| env("USERPROFILE"))
+            .map(PathBuf::from)
+    };
+    match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') || rest.starts_with('\\') => {
+            match home() {
+                Some(home) => home.join(rest.trim_start_matches(['/', '\\'])),
+                None => PathBuf::from(path),
+            }
+        }
+        _ => PathBuf::from(path),
+    }
+}
+
 /// Réglages lus par [`load`].
 #[derive(Clone, Debug)]
 pub struct Loaded<T> {
@@ -395,6 +445,37 @@ mod tests {
         );
         assert_eq!(default_path_for("linux", env(&[])), None);
         assert_eq!(default_path_for("windows", env(&home)), None);
+    }
+
+    #[test]
+    fn data_dir_per_os() {
+        let home = [("HOME", "/home/u")];
+        assert_eq!(
+            data_dir_for("linux", env(&home)),
+            Some("/home/u/.local/share/tri".into())
+        );
+        let xdg = [("HOME", "/home/u"), ("XDG_DATA_HOME", "/data/u")];
+        assert_eq!(data_dir_for("linux", env(&xdg)), Some("/data/u/tri".into()));
+        assert_eq!(
+            data_dir_for("macos", env(&home)),
+            Some("/home/u/Library/Application Support/tri".into())
+        );
+        assert_eq!(data_dir_for("linux", env(&[])), None);
+    }
+
+    #[test]
+    fn home_is_expanded() {
+        let home = [("HOME", "/home/u")];
+        assert_eq!(
+            expand_home_with("~/Pictures", env(&home)),
+            PathBuf::from("/home/u/Pictures")
+        );
+        assert_eq!(expand_home_with("~", env(&home)), PathBuf::from("/home/u"));
+        assert_eq!(expand_home_with("/abs", env(&home)), PathBuf::from("/abs"));
+        assert_eq!(
+            expand_home_with("~autre", env(&home)),
+            PathBuf::from("~autre")
+        );
     }
 
     #[test]

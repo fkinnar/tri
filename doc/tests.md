@@ -173,6 +173,17 @@ la plus récente, source mal formée signalée.
   champs, orientation 6 → dimensions échangées ; PNG sans EXIF (champs vides, dimensions
   de l'en-tête) ; avec `TRI_TEST_RAW` : appareil, exposition, dimensions.
 
+### `offload` (unitaires `src/offload.rs`, intégration `tests/offload.rs`)
+
+- Dates UTC (bissextile), destinations gardées sous la racine (`..`, absolu, vide
+  refusés ; suffixe vide retiré).
+- Fausse carte (deux dossiers du boîtier, une vidéo) : inventaire (vidéo ignorée), nom
+  proposé, copie à plat sans fichier temporaire, contenu et date d'origine conservés,
+  historique relu du disque (second passage, autre destination : tout ignoré) ; nom pris
+  par un autre fichier → suffixe, rien écrasé, copie identique ignorée ; suppression des
+  seuls originaux copiés (vidéo intacte) ; annulation : rien copié.
+- `settings` : dossier de données par OS, `~` développé.
+
 ### `notes` (unitaires `src/notes.rs`, intégration `tests/notes.rs`)
 
 - Règles d'étoiles, de couleurs (dont « sans couleur »), combinaison des critères, règle

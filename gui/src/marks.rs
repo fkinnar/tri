@@ -165,6 +165,32 @@ pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
+/// Icône « décharger » dans `rect` : flèche vers le bas au-dessus d'un bac.
+pub fn offload(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width() * 0.3;
+    let stroke = Stroke::new(1.6, color);
+    painter.line_segment([c + vec2(0.0, -r), c + vec2(0.0, r * 0.35)], stroke);
+    painter.add(Shape::convex_polygon(
+        vec![
+            c + vec2(-r * 0.45, r * 0.05),
+            c + vec2(r * 0.45, r * 0.05),
+            c + vec2(0.0, r * 0.55),
+        ],
+        color,
+        Stroke::NONE,
+    ));
+    painter.line(
+        vec![
+            c + vec2(-r, r * 0.35),
+            c + vec2(-r, r * 0.8),
+            c + vec2(r, r * 0.8),
+            c + vec2(r, r * 0.35),
+        ],
+        stroke,
+    );
+}
+
 /// Icône « éjecter » dans `rect` : triangle pointe en haut sur une barre.
 pub fn eject(painter: &Painter, rect: Rect, color: Color32) {
     let c = rect.center();

@@ -15,6 +15,10 @@
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --metadata [--raw|--flat] [--depth N]
 //!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
+//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--dry-run] [--previews]
+//!       décharge une carte : copie vérifiée des images vers <racine>/<nom> (défauts :
+//!       `[offload] destination`, nom proposé AAAA/AAAA-MM-JJ), sans les fichiers déjà
+//!       déchargés ; `--previews` calcule ensuite vignettes et aperçus ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
@@ -44,6 +48,7 @@ const USAGE: &str = "usage :
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
   tri <dossier> --exposure [--raw|--flat] [--depth N]
   tri <dossier> --metadata [--raw|--flat] [--depth N]
+  tri --offload <carte> [--to <racine>] [--folder <nom>] [--dry-run] [--previews]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -66,6 +71,9 @@ struct Args {
     dry_run: bool,
     exposure: bool,
     metadata: bool,
+    offload: Option<PathBuf>,
+    to: Option<PathBuf>,
+    folder: Option<String>,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -111,6 +119,9 @@ fn parse() -> AnyResult<Args> {
             "--dry-run" => args.dry_run = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
+            "--offload" => args.offload = Some(value()?.into()),
+            "--to" => args.to = Some(value()?.into()),
+            "--folder" => args.folder = Some(value()?),
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -282,6 +293,78 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     print_usage(&cache)
 }
 
+/// Déchargement d'une carte, avec progression et bilan ; puis aperçus si demandé.
+fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> AnyResult<()> {
+    use tri::offload::{self, History};
+    let s = &settings.offload;
+    let mut history = if args.dry_run {
+        History::open_configured(s).unwrap_or_else(|_| History::in_memory())
+    } else {
+        History::open_configured(s)?
+    };
+    let plan = offload::plan(card, &history)?;
+    let root = args
+        .to
+        .clone()
+        .unwrap_or_else(|| settings::expand_home(&s.destination));
+    let folder = match &args.folder {
+        Some(f) => f.clone(),
+        None => offload::suggest_folder(&plan, s.skip_known).unwrap_or_default(),
+    };
+    let known = plan.items.iter().filter(|i| i.known).count();
+    println!(
+        "{} : {} images ({known} déjà déchargées), {} autres fichiers ignorés, {:.1} Mo à copier",
+        card.display(),
+        plan.items.len(),
+        plan.ignored,
+        plan.bytes(s.skip_known) as f64 / 1e6
+    );
+    if plan.to_copy(s.skip_known).next().is_none() {
+        println!("rien à copier");
+        return Ok(());
+    }
+    let dest = offload::destination(&root, &folder)?;
+    println!("destination : {}", dest.display());
+    if args.dry_run {
+        for item in plan.to_copy(s.skip_known) {
+            println!("à copier\t{}", item.source.display());
+        }
+        return Ok(());
+    }
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let report = offload::run(&plan, &dest, s, &mut history, &cancel, |p| {
+        print!(
+            "\r  {}/{} fichiers   {:.0}/{:.0} Mo",
+            p.files_done,
+            p.files_total,
+            p.bytes_done as f64 / 1e6,
+            p.bytes_total as f64 / 1e6
+        );
+        let _ = std::io::stdout().flush();
+    });
+    println!();
+    for (file, error) in &report.errors {
+        eprintln!("erreur\t{} : {error}", file.display());
+    }
+    println!(
+        "{} copiés{}, {} ignorés, {} erreurs, en {:.1?}",
+        report.copied.len(),
+        if s.verify { " et vérifiés" } else { "" },
+        report.skipped.len(),
+        report.errors.len(),
+        report.elapsed
+    );
+    if args.previews {
+        let files = scan(&dest, 1)?;
+        previews(settings, files)?;
+    }
+    if report.errors.is_empty() {
+        Ok(())
+    } else {
+        Err("certains fichiers n'ont pas été copiés".into())
+    }
+}
+
 /// Exposition de chaque image : marge avant saturation (IL), pixels saturés et bouchés
 /// (canal le plus touché), durée du calcul.
 fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyResult<()> {
@@ -373,6 +456,9 @@ fn run() -> AnyResult<()> {
         return print_usage(&settings.open_cache()?);
     }
 
+    if let Some(card) = &args.offload {
+        return offload(&settings, &args, card);
+    }
     let dir = args.dir.clone().ok_or(USAGE)?;
     let groups = args
         .kind

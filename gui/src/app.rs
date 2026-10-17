@@ -30,6 +30,7 @@ use crate::histogram;
 use crate::loader::Loader;
 use crate::marks;
 use crate::meta::MetaLoader;
+use crate::offload::{OffloadDialog, Request as OffloadRequest};
 use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
@@ -117,6 +118,8 @@ pub struct TriApp {
     /// Surveillance des volumes (moteur), démarrée à la première image, et la liste
     /// qu'elle envoie quand un disque est branché ou débranché.
     volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
+    /// Boîte de déchargement d'une carte.
+    offload: Option<OffloadDialog>,
     /// Volume dont l'éjection attend confirmation.
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -262,6 +265,7 @@ impl TriApp {
             reveal_folder: true,
             places: settings.places.clone(),
             volumes: None,
+            offload: None,
             eject_dialog: None,
             ejecting: None,
             notice: None,
@@ -443,6 +447,7 @@ impl TriApp {
         let mut toggle = None;
         let mut open = None;
         let mut eject = None;
+        let mut offload = None;
         ui.horizontal(|ui| {
             ui.strong("Dossiers");
             if ui
@@ -497,6 +502,12 @@ impl TriApp {
                                 "Disque fixé ([places] fixed) : pas d'éjection depuis tri",
                             );
                         } else if self.ejecting.is_none() {
+                            let (rect, response) =
+                                marks::clickable(ui, size, "Décharger la carte…");
+                            marks::offload(ui.painter(), rect, color);
+                            if response.clicked() {
+                                offload = Some((row.path.clone(), rect.right_bottom()));
+                            }
                             let (rect, response) = marks::clickable(ui, size, "Éjecter");
                             marks::eject(ui.painter(), rect, color);
                             if response.clicked() {
@@ -515,6 +526,14 @@ impl TriApp {
         }
         if eject.is_some() {
             self.eject_dialog = eject;
+        }
+        if let Some((source, at)) = offload {
+            self.offload = Some(OffloadDialog::new(
+                source,
+                at,
+                self.settings.offload.clone(),
+                ui.ctx(),
+            ));
         }
     }
 
@@ -558,6 +577,29 @@ impl TriApp {
             self.ejecting = Some((path, rx));
         } else if cancel || modal.should_close() {
             self.eject_dialog = None;
+        }
+    }
+
+    /// Boîte de déchargement : affichage, et suites demandées (ouvrir la séance, éjecter).
+    fn offload_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = &mut self.offload else {
+            return;
+        };
+        match dialog.show(ctx) {
+            None => {}
+            Some(OffloadRequest::Close) => self.offload = None,
+            Some(OffloadRequest::Open(dir)) => {
+                self.offload = None;
+                self.tree.reload();
+                self.tree.reveal(&dir);
+                self.reveal_folder = true;
+                self.open_folder(&dir);
+            }
+            Some(OffloadRequest::Eject(volume)) => {
+                self.offload = None;
+                let at = ctx.content_rect().center();
+                self.eject_dialog = Some((volume, at));
+            }
         }
     }
 
@@ -738,6 +780,15 @@ impl TriApp {
         for action in actions {
             // L'aide est modale : derrière elle, la grille ne bouge pas.
             if self.help && !action.works_over_overlay() {
+                continue;
+            }
+            // Boîte de déchargement : seule la fermeture (pas pendant la copie).
+            if let Some(dialog) = &self.offload {
+                if action == Action::Back && !dialog.is_running() {
+                    self.offload = None;
+                } else if action.works_over_overlay() && action != Action::Back {
+                    self.perform(ctx, action);
+                }
                 continue;
             }
             // Confirmation d'éjection : seule la fermeture.
@@ -2000,6 +2051,7 @@ impl eframe::App for TriApp {
         }
         self.rating_dialog(&ctx);
         self.eject_dialog(&ctx);
+        self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
             ctx.set_cursor_icon(egui::CursorIcon::None);
@@ -2109,7 +2161,7 @@ fn folder_name(path: &Path) -> String {
 /// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
 /// 17/10/2026). Gardée dans la fenêtre ; derrière, le fond est grisé et bloqué comme pour
 /// toute modale.
-fn modal_at(id: &str, at: egui::Pos2) -> egui::Modal {
+pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> egui::Modal {
     let area = egui::Area::new(egui::Id::unique(id))
         .kind(egui::UiKind::Modal)
         .sense(Sense::hover())
@@ -2176,6 +2228,9 @@ mod tests {
         settings.cache.dir = Some(dir.path().join("cache"));
         // Pas de surveillance des volumes : les tests fixent leur propre arborescence.
         settings.places.watch_ms = 0;
+        // Déchargements : historique et racine dans le dossier temporaire.
+        settings.offload.history = dir.path().join("history.tsv").display().to_string();
+        settings.offload.destination = dir.path().join("photos-local").display().to_string();
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
@@ -2628,9 +2683,69 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(h.query_by_label_contains("64 × 48").is_some(), "dimensions de img0");
+        assert!(
+            h.query_by_label_contains("64 × 48").is_some(),
+            "dimensions de img0"
+        );
         press(&mut h, Key::M, Modifiers::SHIFT);
-        assert!(h.query_by_label("Dimensions").is_none(), "Maj+M masque le panneau");
+        assert!(
+            h.query_by_label("Dimensions").is_none(),
+            "Maj+M masque le panneau"
+        );
+    }
+
+    #[test]
+    fn a_card_is_offloaded_from_the_folder_panel() {
+        let (mut h, dir) = harness();
+        // Fausse carte : deux JPEG dans DCIM.
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM/100_TEST")).unwrap();
+        for i in 0..2 {
+            image::RgbImage::from_pixel(32, 24, image::Rgb([90, 90, 90]))
+                .save(card.join(format!("DCIM/100_TEST/IMG{i}.jpg")))
+                .unwrap();
+        }
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let wait_for = |h: &mut Harness<'_, TriApp>, label: &str| {
+            while h.query_by_label(label).is_none() {
+                assert!(Instant::now() < deadline, "jamais vu : {label}");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        wait_for(&mut h, "Décharger");
+        assert!(h.query_by_label_contains("2 à copier").is_some());
+        h.get_by_label("Décharger").click();
+        wait_for(&mut h, "Ouvrir le dossier");
+        assert!(
+            h.query_by_label_contains("2 fichiers copiés et vérifiés")
+                .is_some()
+        );
+        h.get_by_label("Ouvrir le dossier").click();
+        h.run_steps(3);
+        assert!(h.state().offload.is_none(), "boîte fermée");
+        let opened = h.state().folder.dir.clone();
+        assert!(
+            opened.starts_with(dir.path().join("photos-local")),
+            "{opened:?}"
+        );
+        assert_eq!(
+            names(&h),
+            ["IMG0.jpg", "IMG1.jpg"],
+            "séance ouverte, à plat"
+        );
+        let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
+        assert_eq!(history.lines().count(), 2, "historique écrit");
     }
 
     #[test]

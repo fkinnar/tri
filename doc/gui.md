@@ -107,6 +107,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     retirent au clic, comme au clavier ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
+- **Déchargement d'une carte** (17/10/2026) : icône « décharger » sur chaque volume non
+  fixé du panneau des dossiers ; boîte près du clic : inventaire en fond, racine et
+  dossier de la séance (proposé `AAAA/AAAA-MM-JJ_`), copie vérifiée en fond avec
+  progression et « Interrompre », bilan, puis ouvrir la séance, éjecter la carte ou
+  supprimer de la carte les fichiers copiés (seconde confirmation). Le travail est dans
+  le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
   (`Maj+M`, `[gui.metadata]`) : lignes du moteur (`Metadata::rows`, voir
   [metadata.md](metadata.md)) pour l'image sélectionnée, valeurs à la ligne plutôt que
@@ -424,6 +430,11 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Déchargement (17/10/2026) : fausse carte (deux JPEG dans `DCIM`) déclarée comme volume,
+icône « décharger », inventaire (« 2 à copier »), copie (« 2 fichiers copiés et
+vérifiés »), « Ouvrir le dossier » : la séance s'ouvre à plat, historique écrit. Ce test a
+trouvé un glyphe manquant (« → ») dans la boîte.
 
 Métadonnées (17/10/2026) : la ligne « Dimensions » de l'image sélectionnée apparaît après
 lecture en fond (64 × 48), `Maj+M` masque le panneau.

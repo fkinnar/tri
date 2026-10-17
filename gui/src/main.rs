@@ -21,6 +21,7 @@ mod histogram;
 mod loader;
 mod marks;
 mod meta;
+mod offload;
 mod settings;
 mod textures;
 mod trace;

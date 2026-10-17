@@ -101,6 +101,19 @@ mask_size = 1024
 # tous, le bruit du capteur près du noir en remonte presque toujours un.
 mask_under_share = 0.5
 
+[offload]
+# Déchargement d'une carte : dossier racine (~ accepté), sous lequel est créé le dossier de
+# la séance (proposé : AAAA/AAAA-MM-JJ_, à compléter ou remplacer).
+destination = "~/Pictures"
+# Relire chaque copie et comparer son empreinte à l'original.
+verify = true
+# Ignorer les fichiers déjà déchargés (historique), même vers un autre dossier.
+skip_known = true
+# Fichier de l'historique des déchargements (~ accepté) ; vide : offload-history.tsv dans le
+# dossier de données (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
+# Windows %APPDATA%\tri).
+history = ""
+
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"

@@ -15,6 +15,7 @@
 //! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP ;
 //! - [`metadata`] : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher ;
 //! - [`notes`] : notes d'un dossier en mémoire, modification, filtres sur les notes ;
+//! - [`offload`] : déchargement d'une carte vers un dossier local (copie vérifiée) ;
 //! - [`places`] : emplacements (volumes montés, dossier personnel, racine) et sous-dossiers.
 //!
 //! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/README.md`.
@@ -31,6 +32,7 @@ pub mod jpeg;
 pub mod media;
 pub mod metadata;
 pub mod notes;
+pub mod offload;
 pub mod places;
 pub mod preview;
 pub mod raw;

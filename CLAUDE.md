@@ -452,10 +452,14 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      BSD-2-Clause, pour les images plates ; lignes en français), lecture en fond dans
      l'interface, `tri <dossier> --metadata`. En grille, le panneau montre aussi
      l'histogramme de l'image sélectionnée.
-  4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le
-     contenu d'un volume amovible vers un dossier local, puis trier dans le même outil
-     (workflow de l'utilisateur : vider la carte, trier, développer). Doit aussi marcher
-     **en ligne de commande, sans interface**, aperçus compris.
+  4. [x] **Déchargement d'une carte** (fait le 17/10/2026, `src/offload.rs`,
+     `doc/offload.md`) : choix de l'utilisateur — défauts = son usage, tout réglable ;
+     dossier proposé `AAAA/AAAA-MM-JJ_` + champ libre (gabarits plus tard), noms
+     d'origine (renommage par gabarits plus tard), fichiers déjà déchargés ignorés
+     (historique dans le dossier de données), copie vérifiée (BLAKE3), puis ouvrir /
+     éjecter / supprimer de la carte les fichiers vérifiés. En ligne de commande :
+     `tri --offload <carte> [--to] [--folder] [--dry-run] [--previews]`. À venir :
+     gabarits de dossier et de noms, séances de plusieurs jours (un dossier par jour ?).
   5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
      copier les acceptées), éditeur externe configurable, avance automatique après une
      note (option), surveillance du dossier (fichiers ajoutés, XMP modifiés ailleurs).

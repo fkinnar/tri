@@ -21,6 +21,7 @@ existe.
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
+| [offload.md](offload.md) | Module `tri::offload` : déchargement d'une carte (copie vérifiée, historique, suppression) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
 | [metadata.md](metadata.md) | Module `tri::metadata` : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher |
 | [notes.md](notes.md) | Module `tri::notes` : notes d'un dossier en mémoire, modification, filtres sur les notes |
