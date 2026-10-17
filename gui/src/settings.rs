@@ -288,8 +288,8 @@ pub struct MetadataSettings {
     pub visible: bool,
     /// Largeur initiale (points) ; le bord se tire à la souris.
     pub width: f32,
-    /// Histogramme de l'image sélectionnée dans le panneau, en grille (en plein écran, il
-    /// est en surimpression sur l'image).
+    /// Histogramme de l'image sélectionnée en haut du panneau, en grille comme en plein
+    /// écran (panneau masqué : en surimpression sur l'image en plein écran).
     pub histogram: bool,
     /// Hauteur de cet histogramme (points).
     pub histogram_height: f32,
@@ -340,7 +340,8 @@ pub struct HistogramSettings {
     pub width: f32,
     /// Hauteur de l'histogramme, indicateurs compris (points).
     pub height: f32,
-    /// IL montrés sous la saturation, en échelle IL.
+    /// IL montrés sous la saturation, en échelle IL : 0 (défaut) = plage utile de
+    /// l'image (~13,9 IL pour un RAW 14 bits, ~11,7 pour un JPEG) ; positif : plafond.
     pub ev_shown: f32,
     /// Zones saturées / bouchées superposées à l'image au démarrage (touche `o`).
     pub clipping: bool,
@@ -364,7 +365,7 @@ impl Default for HistogramSettings {
             scale: HistogramScale::Ev,
             width: 320.0,
             height: 130.0,
-            ev_shown: 12.0,
+            ev_shown: 0.0,
             clipping: false,
             clipping_opacity: 0.7,
             clipping_channels: true,

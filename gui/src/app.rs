@@ -122,6 +122,8 @@ pub struct TriApp {
     offload: Option<OffloadDialog>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
+    /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
+    eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -280,6 +282,7 @@ impl TriApp {
             volumes: None,
             offload: None,
             offloaded: None,
+            eject_failed: None,
             eject_dialog: None,
             ejecting: None,
             notice: None,
@@ -384,6 +387,31 @@ impl TriApp {
         };
         ui.strong(file_name(&file.path));
         ui.add_space(4.0);
+        // Histogramme en haut du panneau, en grille comme en plein écran (retour du
+        // 17/10/2026) ; panneau masqué : en plein écran, il est sur l'image.
+        let settings = self.gui.metadata;
+        if settings.histogram && self.histogram {
+            match self.exposure_of(self.selected) {
+                Some(e) => {
+                    let (rect, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), settings.histogram_height),
+                        Sense::hover(),
+                    );
+                    histogram::draw(
+                        ui.painter(),
+                        rect,
+                        &e,
+                        self.histogram_scale,
+                        &self.gui.histogram,
+                        &self.gui.colors,
+                    );
+                }
+                None => {
+                    ui.weak("histogramme en cours de calcul");
+                }
+            }
+            ui.add_space(8.0);
+        }
         let read = self
             .meta
             .get_or_insert_with(|| MetaLoader::new(ui.ctx().clone()))
@@ -408,31 +436,6 @@ impl TriApp {
                             ui.end_row();
                         }
                     });
-            }
-        }
-        // En grille : histogramme de l'image sélectionnée (en plein écran, il est sur
-        // l'image).
-        let settings = self.gui.metadata;
-        if self.mode == Mode::Grid && settings.histogram {
-            ui.add_space(10.0);
-            match self.exposure_of(self.selected) {
-                Some(e) => {
-                    let (rect, _) = ui.allocate_exact_size(
-                        vec2(ui.available_width(), settings.histogram_height),
-                        Sense::hover(),
-                    );
-                    histogram::draw(
-                        ui.painter(),
-                        rect,
-                        &e,
-                        self.histogram_scale,
-                        &self.gui.histogram,
-                        &self.gui.colors,
-                    );
-                }
-                None => {
-                    ui.weak("histogramme en cours de calcul");
-                }
             }
         }
     }
@@ -674,6 +677,9 @@ impl TriApp {
             return;
         };
         let name = folder_name(path);
+        // Refus (volume utilisé par une autre application, ex. un gestionnaire de
+        // fichiers ouvert dessus) : proposer de réessayer, une fois l'application fermée.
+        self.eject_failed = result.is_err().then(|| path.clone());
         self.notice = Some(match result {
             Ok(()) => (
                 format!("« {name} » éjecté : vous pouvez le retirer."),
@@ -1384,7 +1390,8 @@ impl TriApp {
         }
         // Histogramme en bas à droite (données du capteur pour un RAW, quel que soit
         // l'aperçu affiché).
-        if self.histogram {
+        // Dans le panneau des métadonnées s'il est affiché, sinon sur l'image.
+        if self.histogram && !(self.metadata_panel && self.gui.metadata.histogram) {
             let h = self.gui.histogram;
             let rect = Rect::from_min_size(
                 view_rect.right_bottom() - vec2(h.width + 10.0, h.height + 10.0),
@@ -1670,6 +1677,12 @@ impl TriApp {
                     if bar.clicked() {
                         clicked = Some(StatusClick::RevealOffload);
                     }
+                }
+                if self.eject_failed.is_some()
+                    && self.ejecting.is_none()
+                    && ui.button("Réessayer l'éjection").clicked()
+                {
+                    clicked = Some(StatusClick::RetryEject);
                 }
                 // Séance déchargée en arrière-plan : proposée, pas ouverte d'office.
                 if let Some(dir) = &self.offloaded {
@@ -2194,6 +2207,11 @@ impl eframe::App for TriApp {
                 }
             }
             Some(StatusClick::DismissOffloaded) => self.offloaded = None,
+            Some(StatusClick::RetryEject) => {
+                if let Some(volume) = self.eject_failed.take() {
+                    self.start_eject(&ctx, volume);
+                }
+            }
             None => {}
         }
         if self.metadata_panel && self.error.is_none() && !self.folder.is_none() {
@@ -2357,6 +2375,8 @@ enum StatusClick {
     OpenOffloaded,
     /// Ne plus la proposer.
     DismissOffloaded,
+    /// Réessayer une éjection refusée.
+    RetryEject,
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la

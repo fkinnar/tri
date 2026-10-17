@@ -18,8 +18,9 @@ use crate::raw::{RawFile, Sensor};
 pub const CHANNELS: usize = 3;
 
 /// Version de l'algorithme, dans la clé du cache d'analyse : à incrémenter quand le calcul
-/// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels).
-pub const VERSION: u32 = 2;
+/// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels ;
+/// 3 : images plates en lumière linéaire, plage utile).
+pub const VERSION: u32 = 3;
 
 /// Réglages du calcul (section `[exposure]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -157,6 +158,10 @@ pub struct Exposure {
     pub ev: [Vec<u32>; CHANNELS],
     /// Étendue de l'histogramme en IL.
     pub ev_range: f32,
+    /// Plage utile des données, en IL sous le blanc : log₂ de la plage d'un RAW (13,9 en
+    /// 14 bits, 11,8 en 12 bits) ; ~11,7 pour une image 8 bits sRGB (plus petite valeur
+    /// non nulle, ramenée en lumière linéaire). L'histogramme en IL montre cette plage.
+    pub stops: f32,
     /// Pixels par canal.
     pub total: [u64; CHANNELS],
     /// Pixels saturés par canal.
@@ -196,10 +201,53 @@ impl From<crate::raw::RawError> for ExposureError {
     }
 }
 
+/// Codage des valeurs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Transfer {
+    /// Proportionnelles à la lumière (données du capteur).
+    Linear,
+    /// Encodées sRGB (« gamma ») : images plates. 128 sur 255 n'est pas la moitié de la
+    /// lumière mais ~22 % (-2,2 IL) ; il faut les ramener en lumière linéaire avant de
+    /// parler d'IL (retour du 17/10/2026 : un gris moyen apparaissait à -1 IL).
+    Srgb,
+}
+
+impl Transfer {
+    /// Part de la lumière du blanc (0 à 1) d'une valeur `v` sur `range`.
+    fn light(self, v: u32, range: u32) -> f64 {
+        let x = v as f64 / range.max(1) as f64;
+        match self {
+            Transfer::Linear => x,
+            Transfer::Srgb if x <= 0.04045 => x / 12.92,
+            Transfer::Srgb => ((x + 0.055) / 1.055).powf(2.4),
+        }
+    }
+
+    /// Plus petite valeur dont la lumière atteint `2^stops` du blanc (seuil de
+    /// saturation).
+    fn level_at_least(self, range: u32, stops: f32) -> u32 {
+        let target = 2f64.powf(stops as f64);
+        (0..=range)
+            .find(|&v| self.light(v, range) >= target - 1e-12)
+            .unwrap_or(range)
+    }
+
+    /// Plus grande valeur dont la lumière ne dépasse pas `2^stops` du blanc (seuil des
+    /// ombres bouchées).
+    fn level_at_most(self, range: u32, stops: f32) -> u32 {
+        let target = 2f64.powf(stops as f64);
+        (0..=range)
+            .rev()
+            .find(|&v| self.light(v, range) <= target + 1e-12)
+            .unwrap_or(0)
+    }
+}
+
 /// Accumulation en un seul passage : histogramme complet (une case par valeur) et
 /// masque ; tout le reste en est dérivé.
 struct Accumulator {
     range: u32,
+    transfer: Transfer,
     over_level: u32,
     full: [Vec<u32>; CHANNELS],
     mask_w: usize,
@@ -212,7 +260,13 @@ struct Accumulator {
 }
 
 impl Accumulator {
-    fn new(range: u32, width: usize, height: usize, settings: &ExposureSettings) -> Self {
+    fn new(
+        range: u32,
+        transfer: Transfer,
+        width: usize,
+        height: usize,
+        settings: &ExposureSettings,
+    ) -> Self {
         let long = settings.mask_size.max(1) as usize;
         let (mask_w, mask_h) = if width >= height {
             (
@@ -226,14 +280,27 @@ impl Accumulator {
             )
         };
         let full = std::array::from_fn(|_| vec![0u32; range as usize + 1]);
+        // Seuils en lumière : formule directe en linéaire (rapide sur 65 536 valeurs),
+        // recherche sur les 256 valeurs d'une image sRGB.
+        let (over_level, under_level) = match transfer {
+            Transfer::Linear => (
+                level(range, settings.over_ev).max(1),
+                level(range, settings.under_ev),
+            ),
+            Transfer::Srgb => (
+                transfer.level_at_least(range, settings.over_ev).max(1),
+                transfer.level_at_most(range, settings.under_ev),
+            ),
+        };
         Accumulator {
             range,
-            over_level: level(range, settings.over_ev).max(1),
+            transfer,
+            over_level,
             full,
             mask_w,
             mask_h,
             over_cells: vec![0; mask_w * mask_h],
-            under_level: level(range, settings.under_ev),
+            under_level,
             cell_under: vec![0; mask_w * mask_h],
             cell_total: vec![0; mask_w * mask_h],
         }
@@ -268,11 +335,12 @@ impl Accumulator {
         let (mut total, mut over, mut under) = ([0u64; 3], [0u64; 3], [0u64; 3]);
         let mut high = [0u32; CHANNELS];
         // Case en IL de chaque valeur : une seule fois par valeur, pas par pixel.
+        let transfer = self.transfer;
         let ev_bin = |v: u32| -> usize {
             if v == 0 {
                 return 0;
             }
-            let stops = (v as f32 / range as f32).log2() + settings.ev_range;
+            let stops = transfer.light(v, range).log2() as f32 + settings.ev_range;
             ((stops * per_stop as f32).floor().max(0.0) as usize).min(ev_bins - 1)
         };
         for c in 0..CHANNELS {
@@ -323,6 +391,7 @@ impl Accumulator {
             linear,
             ev,
             ev_range: settings.ev_range,
+            stops: (-transfer.light(1, range).log2()) as f32,
             total,
             over,
             under,
@@ -352,7 +421,7 @@ impl Exposure {
     pub fn from_sensor(s: &Sensor, rotation: Rotation, settings: &ExposureSettings) -> Exposure {
         let black = s.min_black();
         let range = s.white.saturating_sub(black).max(1) as u32;
-        let mut acc = Accumulator::new(range, s.width, s.height, settings);
+        let mut acc = Accumulator::new(range, Transfer::Linear, s.width, s.height, settings);
         let cols = acc.column_cells(s.width);
         for row in 0..s.height {
             let base = row * acc.mask_h / s.height * acc.mask_w;
@@ -374,7 +443,7 @@ impl Exposure {
     /// Exposition d'une image plate (RGB 8 bits, déjà dans son orientation).
     pub fn from_bitmap(b: &Bitmap, settings: &ExposureSettings) -> Exposure {
         let (w, h) = (b.width as usize, b.height as usize);
-        let mut acc = Accumulator::new(255, w, h, settings);
+        let mut acc = Accumulator::new(255, Transfer::Srgb, w, h, settings);
         let cols = acc.column_cells(w);
         for (row, line) in b.data.chunks_exact(w * 3).enumerate() {
             let base = row * acc.mask_h / h * acc.mask_w;
@@ -404,7 +473,11 @@ impl Exposure {
         if top == 0 {
             return -self.ev_range;
         }
-        ((top as f64 / self.range as f64).log2() as f32).clamp(-self.ev_range, 0.0)
+        let transfer = match self.source {
+            Source::Raw { .. } => Transfer::Linear,
+            Source::Flat => Transfer::Srgb,
+        };
+        (transfer.light(top, self.range).log2() as f32).clamp(-self.ev_range, 0.0)
     }
 }
 
@@ -417,7 +490,7 @@ fn fraction(counts: &[u64; CHANNELS], total: &[u64; CHANNELS]) -> f64 {
 
 // Format binaire du cache d'analyse : petit-boutiste, entête versionné, masque compressé
 // par plages (il est presque toujours vide). Changer le format = changer `MAGIC`.
-const MAGIC: &[u8; 8] = b"TRIEXP01";
+const MAGIC: &[u8; 8] = b"TRIEXP02";
 
 impl Exposure {
     /// Sérialise pour le cache d'analyse (quelques Ko).
@@ -434,6 +507,7 @@ impl Exposure {
         put_u32(&mut out, white as u32);
         put_u32(&mut out, self.range);
         out.extend_from_slice(&self.ev_range.to_le_bytes());
+        out.extend_from_slice(&self.stops.to_le_bytes());
         for c in 0..CHANNELS {
             put_vec(&mut out, &self.linear[c]);
             put_vec(&mut out, &self.ev[c]);
@@ -475,6 +549,7 @@ impl Exposure {
         };
         let range = r.u32()?;
         let ev_range = f32::from_le_bytes(r.take(4)?.try_into().unwrap());
+        let stops = f32::from_le_bytes(r.take(4)?.try_into().unwrap());
         let mut linear: [Vec<u32>; CHANNELS] = Default::default();
         let mut ev: [Vec<u32>; CHANNELS] = Default::default();
         let (mut total, mut over, mut under) = ([0u64; 3], [0u64; 3], [0u64; 3]);
@@ -504,6 +579,7 @@ impl Exposure {
             linear,
             ev,
             ev_range,
+            stops,
             total,
             over,
             under,
@@ -599,13 +675,18 @@ mod tests {
             assert_eq!(e.linear[c].iter().map(|&n| n as u64).sum::<u64>(), 8);
             assert_eq!(e.ev[c].iter().map(|&n| n as u64).sum::<u64>(), 8);
         }
-        // 128 / 255 = -0,994 IL : juste au-dessus de -1 IL, dans la case qui commence à
-        // -1 IL (la première de la dernière IL).
+        // 128 sur 255 en sRGB = 21,6 % de la lumière du blanc = -2,21 IL (pas -1 :
+        // valeurs encodées « gamma »), case floor((16 - 2,21) × 8) = 110.
         let per_stop = 8;
         let bins = e.ev[0].len();
         assert_eq!(bins, 16 * per_stop);
         let mid = e.ev[0].iter().position(|&n| n == 6).unwrap();
-        assert_eq!(mid, bins - per_stop);
+        assert_eq!(mid, 110);
+        assert!(
+            (e.stops - 11.68).abs() < 0.01,
+            "plage d'une image 8 bits sRGB : {}",
+            e.stops
+        );
         assert_eq!(e.ev[0][bins - 1], 1, "le blanc dans la dernière case");
         assert_eq!(e.ev[0][0], 1, "le noir dans la première");
     }
@@ -613,11 +694,16 @@ mod tests {
     #[test]
     fn over_threshold_in_stops() {
         let loose = ExposureSettings {
-            over_ev: -1.0,
+            over_ev: -2.5,
             ..settings()
         };
-        // 128 ≥ 255 × 2^-1 = 127 : saturé avec une marge d'un IL.
+        // 128 en sRGB = -2,21 IL : saturé avec une marge de 2,5 IL, pas de 2 IL.
         assert_eq!(Exposure::from_bitmap(&sample(), &loose).over, [7, 7, 7]);
+        let two = ExposureSettings {
+            over_ev: -2.0,
+            ..settings()
+        };
+        assert_eq!(Exposure::from_bitmap(&sample(), &two).over, [1, 1, 1]);
     }
 
     #[test]
@@ -667,7 +753,7 @@ mod tests {
             data: vec![64; 12],
         };
         let e = Exposure::from_bitmap(&grey, &settings());
-        // 64 / 255 : environ 2 IL sous le blanc.
-        assert!((e.headroom_ev() + 2.0).abs() < 0.05, "{}", e.headroom_ev());
+        // 64 sur 255 en sRGB : 5,1 % de la lumière du blanc, soit -4,28 IL.
+        assert!((e.headroom_ev() + 4.28).abs() < 0.02, "{}", e.headroom_ev());
     }
 }

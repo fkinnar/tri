@@ -21,7 +21,16 @@ mosaïque du capteur (décision de l'utilisateur, 17/10/2026), comme FastRawView
   X-Trans lu par `libraw_COLOR`.
 
 Une image plate est analysée sur ses valeurs 8 bits (les TIFF / PNG 16 bits sont
-aujourd'hui ramenés en 8 bits par `flat` : à faire évoluer).
+aujourd'hui ramenés en 8 bits par `flat` : à faire évoluer), **ramenées en lumière
+linéaire** (décodage sRGB) avant tout calcul en IL et des seuils saturé / bouché : 128 sur
+255 n'est pas la moitié de la lumière mais ~22 % (-2,2 IL). Avant le 17/10/2026, un gris
+moyen apparaissait à -1 IL. L'histogramme linéaire, lui, reste sur les valeurs du fichier
+(0 à 255), comme les histogrammes habituels.
+
+**Plage utile** (`Exposure::stops`) : log₂ de la plage d'un RAW (13,9 IL en 14 bits, 11,8
+en 12 bits), ~11,7 IL pour une image 8 bits sRGB (plus petite valeur non nulle, ramenée
+en lumière linéaire). L'interface montre cette plage par défaut (retour du 17/10/2026 : un
+JPEG s'affichait sur 12 IL comme un RAW).
 
 ## Ce qui est calculé (`Exposure`)
 

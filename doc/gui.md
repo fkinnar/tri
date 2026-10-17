@@ -135,7 +135,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Histogramme et alertes d'exposition** (17/10/2026), calculés par le moteur sur les
   **données du capteur** pour un RAW, même quand le JPEG boîtier est à l'écran (voir
   [exposure.md](exposure.md)) ; le dessin est dans `histogram.rs` :
-  - **histogramme** en bas à droite du plein écran (`i`) : canaux R, V, B superposés,
+  - **histogramme** en haut du panneau des métadonnées (grille et plein écran), ou en bas
+    à droite du plein écran si le panneau est masqué (`i` l'affiche ou le masque) ;
+    étendue = **plage utile de l'image** (~13,9 IL pour un RAW 14 bits, ~11,7 pour un
+    JPEG ; `[gui.histogram] ev_shown` : plafond, 0 = automatique) ; canaux R, V, B superposés,
     une barre par case (pas par pixel, sinon un « peigne »), échelle **en IL sous la
     saturation** par défaut (`Maj+I` : linéaire), graduations, pastilles rouge / bleue si
     des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant

@@ -228,6 +228,14 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
     assert_eq!(report.copied.len(), 2);
     assert_eq!(report.left, [src.join("DCIM/100_FUJI/DSCF0001.JPG")]);
     assert_eq!(names(&dst), ["DSCF0001.RAF", "DSCF0002.RAF"]);
+    // Suppression des JPEG laissés, sur demande : seulement eux.
+    assert!(offload::delete_left(&report).is_empty());
+    assert!(!src.join("DCIM/100_FUJI/DSCF0001.JPG").exists());
+    assert!(
+        src.join("DCIM/100_FUJI/DSCF0001.RAF").exists(),
+        "le RAW n'est pas touché ici"
+    );
+    write(&src.join("DCIM/100_FUJI/DSCF0001.JPG"), b"jpg-1", SHOT);
     // Le JPEG laissé n'est pas « déjà déchargé » : un déchargement complet le prendra.
     let plan = offload::plan(&src, &history).unwrap();
     assert_eq!(plan.to_copy(&with_history()).count(), 1);

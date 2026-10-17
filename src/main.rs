@@ -15,12 +15,13 @@
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
 //!   tri <dossier> --metadata [--raw|--flat] [--depth N]
 //!       métadonnées de prise de vue de chaque image, voir `tri::metadata` ;
-//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
+//!   tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
 //!       décharge une carte : copie vérifiée des images vers <racine>/<nom> (défauts :
 //!       `[offload] destination`, nom proposé AAAA/AAAA-MM-JJ), sans les fichiers déjà
 //!       déchargés ; `--raw-only` laisse les JPEG sur la carte ; `--previews` calcule
 //!       ensuite vignettes et aperçus ; `--delete-copied` supprime de la carte les
-//!       fichiers copiés et vérifiés, `--eject` éjecte la carte ;
+//!       fichiers copiés et vérifiés (`--delete-left` : aussi les JPEG laissés par
+//!       `--raw-only`), `--eject` éjecte la carte ;
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
@@ -50,7 +51,7 @@ const USAGE: &str = "usage :
   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
   tri <dossier> --exposure [--raw|--flat] [--depth N]
   tri <dossier> --metadata [--raw|--flat] [--depth N]
-  tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied] [--eject]
+  tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -79,6 +80,7 @@ struct Args {
     raw_only: bool,
     eject: bool,
     delete_copied: bool,
+    delete_left: bool,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -130,6 +132,7 @@ fn parse() -> AnyResult<Args> {
             "--raw-only" => args.raw_only = true,
             "--eject" => args.eject = true,
             "--delete-copied" => args.delete_copied = true,
+            "--delete-left" => args.delete_left = true,
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -384,10 +387,19 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     );
     // En ligne de commande, rien ne se fait sur la carte sans option explicite.
     if args.delete_copied {
-        let failed = offload::delete_sources(&report);
+        let mut failed = offload::delete_sources(&report);
+        if args.delete_left {
+            failed.extend(offload::delete_left(&report));
+        }
+        let attempted = report.copied.len()
+            + if args.delete_left {
+                report.left.len()
+            } else {
+                0
+            };
         println!(
             "{} fichiers supprimés de la carte",
-            report.copied.len() - failed.len()
+            attempted - failed.len()
         );
         for (file, e) in &failed {
             eprintln!("non supprimé\t{} : {e}", file.display());

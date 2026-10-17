@@ -27,7 +27,7 @@ pub fn columns(
             }
         }
         HistogramScale::Ev => {
-            let shown = ev_shown.clamp(1.0, e.ev_range);
+            let shown = shown_stops(e, ev_shown);
             for (c, channel) in e.ev.iter().enumerate() {
                 let bins = channel.len().max(1);
                 let per_stop = bins as f32 / e.ev_range;
@@ -44,6 +44,18 @@ pub fn columns(
         }
     }
     out
+}
+
+/// IL montrés sous la saturation : la plage utile des données (`Exposure::stops` : ~13,9
+/// pour un RAW 14 bits, ~11,7 pour une image 8 bits sRGB), plafonnée par `setting` s'il
+/// est positif (0 : automatique).
+pub fn shown_stops(e: &Exposure, setting: f32) -> f32 {
+    let data = e.stops.clamp(1.0, e.ev_range);
+    if setting > 0.0 {
+        setting.min(data)
+    } else {
+        data
+    }
 }
 
 /// Nombre à la française, `decimals` chiffres après la virgule.
@@ -96,7 +108,7 @@ pub fn draw(
     let count = match scale {
         HistogramScale::Ev => {
             let per_stop = e.ev[0].len() as f32 / e.ev_range;
-            (settings.ev_shown.clamp(1.0, e.ev_range) * per_stop).round() as usize
+            (shown_stops(e, settings.ev_shown) * per_stop).round() as usize
         }
         HistogramScale::Linear => e.linear[0].len(),
     }
@@ -143,7 +155,7 @@ pub fn draw(
     };
     match scale {
         HistogramScale::Ev => {
-            let shown = settings.ev_shown.clamp(1.0, e.ev_range);
+            let shown = shown_stops(e, settings.ev_shown);
             let stops = shown.floor() as i32;
             for k in 0..=stops {
                 let x = graph.max.x - k as f32 / shown * graph.width();
@@ -253,10 +265,21 @@ mod tests {
 
     #[test]
     fn ev_columns_place_values_by_stops() {
-        // 64 / 255 : -2 IL ; sur 12 IL et 120 colonnes (10 par IL), colonne 99.
+        // 64 sur 255 en sRGB : -4,28 IL. Plafond de 12 IL, mais la plage d'une image
+        // 8 bits sRGB n'est que de 11,68 IL : 120 colonnes pour 11,68 IL, colonne
+        // (11,68 - 4,28) / 11,68 × 120 ≈ 76.
         let cols = columns(&grey(64), HistogramScale::Ev, 12.0, 120);
         let col = cols.iter().position(|v| v[0] > 0).unwrap();
-        assert!((99..=100).contains(&col), "colonne {col}");
+        assert!((74..=78).contains(&col), "colonne {col}");
+        assert!(
+            (shown_stops(&grey(64), 12.0) - 11.68).abs() < 0.01,
+            "plafonné à la plage"
+        );
+        assert!(
+            (shown_stops(&grey(64), 0.0) - 11.68).abs() < 0.01,
+            "automatique"
+        );
+        assert_eq!(shown_stops(&grey(64), 6.0), 6.0, "plafond plus petit");
         // Le blanc tout à droite, le noir tout à gauche.
         assert_eq!(
             columns(&grey(255), HistogramScale::Ev, 12.0, 120)[119][1],

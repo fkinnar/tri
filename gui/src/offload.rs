@@ -182,7 +182,11 @@ impl OffloadDialog {
         let settings = &self.settings;
         let complete = !report.cancelled;
         if complete && settings.delete_after && !report.copied.is_empty() {
-            *deleted = Some(offload::delete_sources(report));
+            let mut failed = offload::delete_sources(report);
+            if settings.raw_only && settings.delete_left {
+                failed.extend(offload::delete_left(report));
+            }
+            *deleted = Some(failed);
         }
         let session = (settings.open_after
             && (!report.copied.is_empty() || !report.skipped.is_empty()))
@@ -414,6 +418,16 @@ impl OffloadDialog {
                             "Seulement ceux copiés (et vérifiés) pendant ce déchargement ; \
                          les autres (ignorés, en erreur, laissés, vidéos) restent.",
                         );
+                        // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
+                        if settings.raw_only && settings.delete_after {
+                            ui.indent("delete_left", |ui| {
+                                ui.checkbox(
+                                    &mut settings.delete_left,
+                                    "Supprimer aussi les JPEG laissés sur la carte",
+                                )
+                                .on_hover_text("Ils ne sont pas copiés : ils seront perdus.");
+                            });
+                        }
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             start = ui

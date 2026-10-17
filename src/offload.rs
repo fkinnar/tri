@@ -44,6 +44,9 @@ pub struct OffloadSettings {
     pub eject_after: bool,
     /// À la fin : supprimer de la carte les fichiers copiés et vérifiés.
     pub delete_after: bool,
+    /// Avec `raw_only` et `delete_after` : supprimer aussi les images laissées sur la
+    /// carte (les JPEG du boîtier, non copiés).
+    pub delete_left: bool,
 }
 
 impl Default for OffloadSettings {
@@ -57,6 +60,7 @@ impl Default for OffloadSettings {
             open_after: true,
             eject_after: true,
             delete_after: false,
+            delete_left: false,
         }
     }
 }
@@ -534,6 +538,21 @@ fn copy_one(
         let _ = fs::remove_file(&tmp);
     }
     result.map(|()| Outcome::Copied(target))
+}
+
+/// Supprime de la carte les images *laissées* par choix (`Report::left` : les JPEG avec
+/// `raw_only`), qui n'ont pas été copiées. À ne faire que sur demande explicite
+/// (`delete_left`). Renvoie les échecs.
+pub fn delete_left(report: &Report) -> Vec<(PathBuf, String)> {
+    report
+        .left
+        .iter()
+        .filter_map(|file| {
+            fs::remove_file(file)
+                .err()
+                .map(|e| (file.clone(), e.to_string()))
+        })
+        .collect()
 }
 
 /// Supprime de la carte les originaux des copies réussies de `report` (et seulement

@@ -50,7 +50,14 @@ besoins de tous, pas seulement les siens.
     `delete_sources`, seulement eux ; chaque copie est encore contrôlée — présente, même
     taille — juste avant ; pas après une interruption.
 
-  Ordre : suppression, ouverture, éjection ; le bilan reste affiché, avec des boutons
+  - **supprimer aussi les JPEG laissés sur la carte** (`delete_left`, non ; proposé
+    seulement avec « RAW seulement » et la suppression cochées) : `delete_left`, pour ceux
+    qui ne gardent que les RAW (ils ne sont pas copiés : perdus).
+
+  Ordre : suppression, ouverture, éjection. Si le système refuse l'éjection (volume
+  utilisé par une autre application : vu le 17/10/2026 avec ForkLift ouvert sur la
+  carte, « Unmount was dissented by PID … ForkLift »), le message s'affiche avec un
+  bouton « Réessayer l'éjection » dans la barre d'état ; le bilan reste affiché, avec des boutons
   pour ce qui n'a pas été coché.
 - Seules les images (RAW et plates) sont copiées ; vidéos et fichiers du boîtier sont
   comptés (`Plan::ignored`) et laissés.

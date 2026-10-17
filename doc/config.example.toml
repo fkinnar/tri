@@ -129,6 +129,8 @@ raw_only = false
 open_after = true
 eject_after = true
 delete_after = false
+# Avec raw_only et delete_after : supprimer aussi les JPEG laissés sur la carte (non copiés).
+delete_left = false
 
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
@@ -208,12 +210,14 @@ hidden = false
 [gui.histogram]
 # Histogramme du plein écran (données du capteur pour un RAW) : affiché au démarrage
 # (touche i), échelle "ev" (IL sous la saturation) ou "linear" (Maj+I bascule), taille
-# en points (indicateurs compris), IL montrés en échelle IL.
+# en points (indicateurs compris).
 visible = true
 scale = "ev"
 width = 320.0
 height = 130.0
-ev_shown = 12.0
+# IL montrés en échelle IL : 0 = plage utile de l'image (~13,9 IL pour un RAW 14 bits,
+# ~11,7 pour un JPEG, valeurs sRGB ramenées en lumière linéaire) ; positif : plafond.
+ev_shown = 0.0
 # Zones saturées et bouchées superposées à l'image au démarrage (touche o), et leur
 # opacité. Zones saturées colorées par canal (clip_red / clip_green / clip_blue, mélangées
 # si deux canaux, clip_over si les trois) ; false : clip_over pour toute saturation.
@@ -228,7 +232,8 @@ badge_under = 0.05
 [gui.metadata]
 # Panneau des métadonnées, à droite : affiché au démarrage (Maj+M l'affiche ou le masque),
 # largeur initiale (points, le bord se tire à la souris), histogramme de l'image
-# sélectionnée dans le panneau en grille, et sa hauteur.
+# sélectionnée en haut du panneau (grille et plein écran ; panneau masqué : sur l'image),
+# et sa hauteur.
 visible = true
 width = 280.0
 histogram = true
