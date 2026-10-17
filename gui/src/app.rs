@@ -2896,6 +2896,30 @@ mod tests {
     }
 
     #[test]
+    fn fixed_volumes_offer_neither_offload_nor_eject() {
+        let (mut h, dir) = harness();
+        let (work, card) = (dir.path().join("Work"), dir.path().join("CARTE"));
+        std::fs::create_dir(&work).unwrap();
+        std::fs::create_dir(&card).unwrap();
+        let volume = |path: &std::path::Path| tri::places::Place {
+            name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            path: path.to_path_buf(),
+            kind: tri::places::PlaceKind::Volume,
+        };
+        let settings = tri::places::PlaceSettings {
+            fixed: vec!["Work".into()],
+            ..tri::places::PlaceSettings::default()
+        };
+        let mut tree = Tree::new(settings, false);
+        tree.set_places(vec![volume(&work), volume(&card)]);
+        h.state_mut().tree = tree;
+        h.run_steps(2);
+        // Une seule paire d'icônes : celle de la carte ; Work, fixé, n'en a aucune.
+        assert_eq!(h.query_all_by_label("Décharger la carte…").count(), 1);
+        assert_eq!(h.query_all_by_label("Éjecter").count(), 1);
+    }
+
+    #[test]
     fn enter_opens_fullscreen_and_escape_goes_back() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
