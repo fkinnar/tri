@@ -85,6 +85,8 @@ pub enum Action {
     ToggleRatingBar,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
+    /// Relire les volumes (disque branché) et les dossiers du panneau.
+    RefreshFolders,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -115,7 +117,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 51] = [
+    pub const ALL: [Action; 52] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -143,6 +145,7 @@ impl Action {
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleFolderPanel,
+        Action::RefreshFolders,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -204,6 +207,7 @@ impl Action {
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
+            Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -266,6 +270,7 @@ impl Action {
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleFolderPanel => "core.view.folders",
+            Action::RefreshFolders => "core.view.refresh_folders",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -468,6 +473,7 @@ const RATING: &[Binding] = {
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
         (&[shifted(Key::N)], ToggleRatingBar),
         (&[shifted(Key::D)], ToggleFolderPanel),
+        (&[plain(Key::F5)], RefreshFolders),
     ]
 };
 

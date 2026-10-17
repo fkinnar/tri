@@ -17,7 +17,7 @@ use tri::filter::KindFilter;
 use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
 use tri::notes::{ColorRule, NotesRule, StarsRule};
-use tri::places::Tree;
+use tri::places::{Monitor, Place, PlaceSettings, Tree};
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
@@ -108,6 +108,11 @@ pub struct TriApp {
     folder_panel: bool,
     /// Faire défiler le panneau jusqu'au dossier ouvert (au démarrage, à l'ouverture).
     reveal_folder: bool,
+    /// Réglages des emplacements, pour démarrer la surveillance des volumes.
+    places: PlaceSettings,
+    /// Surveillance des volumes (moteur), démarrée à la première image, et la liste
+    /// qu'elle envoie quand un disque est branché ou débranché.
+    volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
     /// Réglages du moteur (fichier de configuration).
     settings: EngineSettings,
     /// Réglages de l'interface (section `[gui]`).
@@ -229,6 +234,8 @@ impl TriApp {
             tree,
             folder_panel: gui.folders.visible,
             reveal_folder: true,
+            places: settings.places.clone(),
+            volumes: None,
             settings: settings.engine(),
             warning,
             key_warnings,
@@ -306,6 +313,27 @@ impl TriApp {
         self.apply_filter();
     }
 
+    /// Surveillance des volumes : démarrée au premier appel (il faut le contexte pour
+    /// redessiner), puis intègre la nouvelle liste quand un disque est branché ou
+    /// débranché.
+    fn watch_volumes(&mut self, ctx: &egui::Context) {
+        if self.volumes.is_none() {
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            let monitor = Monitor::start(self.places.clone(), move |places| {
+                let _ = tx.send(places);
+                repaint.request_repaint();
+            });
+            self.volumes = Some((monitor, rx));
+        }
+        if let Some((_, rx)) = &self.volumes
+            && let Some(places) = rx.try_iter().last()
+        {
+            trace(|| format!("volumes : {}", places.len()));
+            self.tree.set_places(places);
+        }
+    }
+
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
@@ -316,7 +344,10 @@ impl TriApp {
             ui.strong("Dossiers");
             if ui
                 .small_button("Actualiser")
-                .on_hover_text("Relire les volumes (carte insérée) et les dossiers")
+                .on_hover_text(
+                    "Relire les volumes et les dossiers (F5). Un disque branché apparaît \
+                     aussi de lui-même en quelques secondes.",
+                )
                 .clicked()
             {
                 self.tree.refresh();
@@ -622,6 +653,7 @@ impl TriApp {
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
+            Action::RefreshFolders => self.tree.refresh(),
             Action::ToggleFolderPanel => {
                 self.folder_panel = !self.folder_panel;
                 self.reveal_folder = self.folder_panel;
@@ -1557,6 +1589,7 @@ impl eframe::App for TriApp {
             self.start_engine(&ctx);
         }
         self.drain_events();
+        self.watch_volumes(&ctx);
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
@@ -1755,6 +1788,8 @@ mod tests {
         }
         let mut settings = AppSettings::default();
         settings.cache.dir = Some(dir.path().join("cache"));
+        // Pas de surveillance des volumes : les tests fixent leur propre arborescence.
+        settings.places.watch_ms = 0;
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
@@ -1987,6 +2022,16 @@ mod tests {
         // La notation suit le nouveau dossier.
         press(&mut h, Key::Num4, Modifiers::NONE);
         assert_eq!(tri::xmp::read(&other.join("x0.jpg")).unwrap().stars, 4);
+        // F5 relit les dossiers : un dossier créé entre-temps apparaît.
+        std::fs::create_dir(dir.path().join("nouveau")).unwrap();
+        h.run_steps(2);
+        assert!(h.query_by_label("nouveau").is_none());
+        // F5 relit aussi les emplacements de la machine : on garde ceux du test.
+        let place = h.state().tree.places().to_vec();
+        press(&mut h, Key::F5, Modifiers::NONE);
+        h.state_mut().tree.set_places(place);
+        h.run_steps(2);
+        assert!(h.query_by_label("nouveau").is_some(), "F5 : dossier relu");
         // Maj+D masque le panneau.
         press(&mut h, Key::D, Modifiers::SHIFT);
         assert!(h.query_by_label("Dossiers").is_none());

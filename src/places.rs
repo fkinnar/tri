@@ -31,10 +31,11 @@ pub struct Place {
     pub kind: PlaceKind,
 }
 
-/// Emplacements à masquer (section `[places]` du fichier de configuration).
+/// Réglages des emplacements (section `[places]` du fichier de configuration) : lesquels
+/// masquer, et la surveillance des volumes.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct PlaceFilter {
+pub struct PlaceSettings {
     /// Masquer les volumes de sauvegarde Time Machine, reconnus à leur contenu (pas à leur
     /// nom, choisi par chacun) : `backup_manifest.plist` à la racine (disque APFS) ou
     /// `Backups.backupdb` (disque HFS, instantanés locaux).
@@ -43,18 +44,22 @@ pub struct PlaceFilter {
     /// (`"Backup"`) ou au chemin (`"/mnt/*"`) ; `*` : n'importe quelle suite de caractères,
     /// `?` : un caractère.
     pub exclude: Vec<String>,
+    /// Intervalle de surveillance des volumes (ms) : un disque branché ou débranché
+    /// apparaît ou disparaît de lui-même (voir [`Monitor`]). 0 : pas de surveillance.
+    pub watch_ms: u64,
 }
 
-impl Default for PlaceFilter {
+impl Default for PlaceSettings {
     fn default() -> Self {
         Self {
             hide_backups: true,
             exclude: Vec::new(),
+            watch_ms: 2000,
         }
     }
 }
 
-impl PlaceFilter {
+impl PlaceSettings {
     /// Vrai si `place` doit être masqué.
     pub fn hides(&self, place: &Place) -> bool {
         let path = place.path.to_string_lossy();
@@ -65,7 +70,7 @@ impl PlaceFilter {
     }
 }
 
-/// Vrai si `dir` est un volume de sauvegarde Time Machine (voir [`PlaceFilter`]).
+/// Vrai si `dir` est un volume de sauvegarde Time Machine (voir [`PlaceSettings`]).
 pub fn is_backup(dir: &Path) -> bool {
     dir.join("backup_manifest.plist").is_file() || dir.join("Backups.backupdb").is_dir()
 }
@@ -87,7 +92,7 @@ fn wildcard(pattern: &str, text: &str) -> bool {
 }
 
 /// Emplacements de cette machine, sauf ceux que `filter` masque.
-pub fn places_filtered(filter: &PlaceFilter) -> Vec<Place> {
+pub fn places_filtered(filter: &PlaceSettings) -> Vec<Place> {
     places().into_iter().filter(|p| !filter.hides(p)).collect()
 }
 
@@ -218,6 +223,75 @@ pub fn ancestors_from(root: &Path, path: &Path) -> Option<Vec<PathBuf>> {
     Some(chain)
 }
 
+/// Surveillance des volumes, dans un fil d'exécution à part : toutes les `watch_ms`, la
+/// liste des emplacements est relue, et `on_change` est appelé quand elle change (disque
+/// branché ou débranché). Relire `/Volumes` ne coûte presque rien ; le fil à part protège
+/// l'appelant d'un volume réseau qui ne répond plus. Pas de notifications du système :
+/// une dépendance et trois comportements différents (macOS, Linux, Windows) pour un gain
+/// de deux secondes au plus. Arrêtée quand elle est détruite.
+#[derive(Debug)]
+pub struct Monitor {
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Monitor {
+    /// Démarre la surveillance (rien si `settings.watch_ms` vaut 0). La liste de départ est
+    /// celle du moment : seuls les changements suivants sont signalés.
+    pub fn start(
+        settings: PlaceSettings,
+        on_change: impl Fn(Vec<Place>) + Send + 'static,
+    ) -> Monitor {
+        let interval = std::time::Duration::from_millis(settings.watch_ms);
+        Monitor::with_source(interval, move || places_filtered(&settings), on_change)
+    }
+
+    /// Surveillance d'une liste d'emplacements quelconque, relue par `source` toutes les
+    /// `interval` (rien si `interval` est nul). Sert aux tests, et à surveiller autre chose
+    /// que les volumes de la machine.
+    pub fn with_source(
+        interval: std::time::Duration,
+        source: impl Fn() -> Vec<Place> + Send + 'static,
+        on_change: impl Fn(Vec<Place>) + Send + 'static,
+    ) -> Monitor {
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        if interval.is_zero() {
+            return Monitor { stop, thread: None };
+        }
+        let flag = stop.clone();
+        // Liste de départ lue ici, avant le fil : un volume branché juste après l'appel est
+        // bien signalé comme un changement.
+        let mut last = source();
+        let thread = std::thread::Builder::new()
+            .name("tri-volumes".into())
+            .spawn(move || {
+                loop {
+                    std::thread::park_timeout(interval);
+                    if flag.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+                    let now = source();
+                    if now != last {
+                        on_change(now.clone());
+                        last = now;
+                    }
+                }
+            })
+            .ok();
+        Monitor { stop, thread }
+    }
+}
+
+impl Drop for Monitor {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            thread.thread().unpark();
+            let _ = thread.join();
+        }
+    }
+}
+
 /// Une ligne de l'arborescence affichée : un emplacement (profondeur 0) ou un dossier.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
@@ -241,7 +315,7 @@ pub struct Row {
 #[derive(Clone, Debug)]
 pub struct Tree {
     places: Vec<Place>,
-    filter: PlaceFilter,
+    filter: PlaceSettings,
     hidden: bool,
     expanded: std::collections::HashSet<PathBuf>,
     children: std::collections::HashMap<PathBuf, Result<Vec<PathBuf>, String>>,
@@ -250,7 +324,7 @@ pub struct Tree {
 impl Tree {
     /// Arborescence des emplacements de cette machine, sauf ceux que `filter` masque ;
     /// dossiers cachés seulement si `hidden`.
-    pub fn new(filter: PlaceFilter, hidden: bool) -> Tree {
+    pub fn new(filter: PlaceSettings, hidden: bool) -> Tree {
         let mut tree = Tree::with_places(places_filtered(&filter), hidden);
         tree.filter = filter;
         tree
@@ -260,7 +334,7 @@ impl Tree {
     pub fn with_places(places: Vec<Place>, hidden: bool) -> Tree {
         Tree {
             places,
-            filter: PlaceFilter::default(),
+            filter: PlaceSettings::default(),
             hidden,
             expanded: Default::default(),
             children: Default::default(),
@@ -320,6 +394,12 @@ impl Tree {
             self.expand(dir);
         }
         true
+    }
+
+    /// Remplace les emplacements (liste fournie par un [`Monitor`]) ; ce qui était déplié
+    /// le reste.
+    pub fn set_places(&mut self, places: Vec<Place>) {
+        self.places = places;
     }
 
     /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
@@ -430,6 +510,47 @@ mod tests {
             ancestors_from(Path::new("/home"), Path::new("/Volumes/SD")),
             None
         );
+    }
+
+    #[test]
+    fn the_monitor_reports_a_plugged_volume() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let monitor = Monitor::with_source(
+            std::time::Duration::from_millis(20),
+            move || volumes_in(std::slice::from_ref(&root)),
+            move |places| {
+                let _ = tx.send(places);
+            },
+        );
+        std::fs::create_dir(dir.path().join("SD_CARD")).unwrap();
+        let places = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("changement signalé");
+        assert_eq!(places.len(), 1);
+        assert_eq!(places[0].name, "SD_CARD");
+        // Rien de neuf : pas de nouveau message.
+        assert!(
+            rx.recv_timeout(std::time::Duration::from_millis(100))
+                .is_err()
+        );
+        std::fs::remove_dir(dir.path().join("SD_CARD")).unwrap();
+        let places = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        assert!(places.is_empty(), "débranché");
+        drop(monitor); // s'arrête sans attendre l'intervalle
+    }
+
+    #[test]
+    fn a_zero_interval_watches_nothing() {
+        let monitor = Monitor::start(
+            PlaceSettings {
+                watch_ms: 0,
+                ..PlaceSettings::default()
+            },
+            |_| panic!("pas de surveillance"),
+        );
+        assert!(monitor.thread.is_none());
     }
 
     #[test]

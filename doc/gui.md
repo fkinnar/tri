@@ -43,7 +43,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   moteur (`places::Tree`, voir [places.md](places.md)). Le triangle déplie ou replie (le
   double-clic sur le nom aussi), un clic sur le nom ouvre le dossier sans redémarrer
   (`folder::Folder`, voir [folder.md](folder.md)) : les filtres sont gardés, la sélection
-  repart de la première image. « Actualiser » relit les volumes (carte insérée). Le
+  repart de la première image. Un disque ou une carte branchés apparaissent d'eux-mêmes en quelques secondes
+  (surveillance du moteur, `places::Monitor`) ; « Actualiser » ou `F5` relit tout de suite
+  volumes et dossiers. Le
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` s'ouvre sur le panneau. La barre de filtres passe à la
@@ -244,7 +246,7 @@ Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplaceme
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
-Maj+D.
+Maj+D ; `core.view.refresh_folders` : F5.
 
 Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant
 pas « ° ») **puis** comme caractère, parfois dans une image suivante (constaté le

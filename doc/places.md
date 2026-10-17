@@ -19,7 +19,7 @@ donne l'arborescence complète. Les liens symboliques de `/Volumes` sont écart�
 internes (`volume_dirs`, `home_dir`) pour être testés sur toutes les plateformes, comme
 `settings::default_path`.
 
-## Emplacements masqués (`PlaceFilter`, section `[places]`)
+## Emplacements masqués (`PlaceSettings`, section `[places]`)
 
 - `hide_backups` (défaut : vrai) : les volumes de sauvegarde **Time Machine** sont
   masqués, reconnus à leur **contenu** et pas à leur nom (choisi par chacun) :
@@ -32,6 +32,28 @@ internes (`volume_dirs`, `home_dir`) pour être testés sur toutes les plateform
   s'applique à tous les emplacements (on peut masquer la racine) ;
 - `places_filtered(&filtre)` ; `Tree::new(filtre, cachés)` garde le filtre pour
   `refresh`.
+
+## Surveillance des volumes (`Monitor`)
+
+Un disque ou une carte branchés apparaissent d'eux-mêmes (demandé le 17/10/2026) :
+`Monitor::start(réglages, on_change)` relit la liste des emplacements toutes les
+`[places] watch_ms` (2000 ms ; 0 : pas de surveillance) dans un fil d'exécution à part, et
+appelle `on_change` seulement quand elle change. L'interface y répond par
+`Tree::set_places` (ce qui était déplié le reste).
+
+- **Pourquoi relire plutôt qu'écouter le système** : les notifications de montage
+  diffèrent sur macOS, Linux et Windows et demandent une dépendance ; relire `/Volumes`
+  coûte quelques appels système, pour au plus deux secondes de retard.
+- **Pourquoi un fil à part** : un volume réseau qui ne répond plus peut bloquer une
+  lecture plusieurs secondes ; c'est alors le fil qui attend, pas l'interface.
+- La liste de départ est lue **avant** de lancer le fil : un volume branché juste après
+  l'appel est bien signalé (course trouvée par le test).
+- Arrêt à la destruction (`Drop`) : le fil est réveillé (`unpark`) et attendu, sans
+  attendre la fin de l'intervalle.
+- `Monitor::with_source(intervalle, source, on_change)` surveille une liste quelconque
+  (tests : un dossier temporaire où l'on « branche » un volume).
+- Vérifié sur macOS (17/10/2026) avec une image disque montée par `hdiutil attach` :
+  apparition en moins de 2 s, disparition au `detach`.
 
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 

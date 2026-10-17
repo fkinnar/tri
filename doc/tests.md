@@ -181,7 +181,9 @@ la plus récente, source mal formée signalée.
   la machine (personnel, racine, chemins absolus) ; arborescence dépliée à la demande,
   repliée puis redépliée (le sous-niveau reste déplié), `reveal`, `reload` après création,
   dossier illisible signalé ; volumes Time Machine reconnus à leur contenu (APFS, HFS,
-  option désactivée), exclusion par nom ou chemin, motifs `*` et `?`.
+  option désactivée), exclusion par nom ou chemin, motifs `*` et `?` ; surveillance : volume
+  « branché » puis retiré dans un dossier temporaire, signalé une seule fois, intervalle nul
+  sans fil.
 
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 

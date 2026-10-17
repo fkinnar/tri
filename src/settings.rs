@@ -98,7 +98,7 @@ pub struct EngineSettings {
     /// Notes dans les sidecars XMP.
     pub xmp: XmpSection,
     /// Emplacements proposés pour choisir un dossier.
-    pub places: crate::places::PlaceFilter,
+    pub places: crate::places::PlaceSettings,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir

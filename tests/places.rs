@@ -148,22 +148,23 @@ fn time_machine_volumes_are_recognised_by_their_content() {
     }
     fs::write(apfs.join("backup_manifest.plist"), b"").unwrap();
     fs::create_dir(hfs.join("Backups.backupdb")).unwrap();
-    let filter = places::PlaceFilter::default();
+    let filter = places::PlaceSettings::default();
     assert!(filter.hides(&volume(&apfs)), "APFS, quel que soit le nom");
     assert!(filter.hides(&volume(&hfs)));
     assert!(!filter.hides(&volume(&photos)));
-    let shown = places::PlaceFilter {
+    let shown = places::PlaceSettings {
         hide_backups: false,
-        ..places::PlaceFilter::default()
+        ..places::PlaceSettings::default()
     };
     assert!(!shown.hides(&volume(&apfs)), "option désactivée");
 }
 
 #[test]
 fn excluded_places_match_name_or_path() {
-    let filter = places::PlaceFilter {
+    let filter = places::PlaceSettings {
         hide_backups: false,
         exclude: vec!["backup".into(), "/mnt/*".into()],
+        ..places::PlaceSettings::default()
     };
     let place = |name: &str, path: &str| places::Place {
         name: name.into(),

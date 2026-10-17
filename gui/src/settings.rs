@@ -33,7 +33,7 @@ pub struct AppSettings {
     /// `[xmp]` (moteur).
     pub xmp: XmpSection,
     /// `[places]` (moteur).
-    pub places: tri::places::PlaceFilter,
+    pub places: tri::places::PlaceSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
