@@ -458,8 +458,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      `doc/offload.md`) : choix de l'utilisateur — défauts = son usage, tout réglable ;
      dossier de séance proposé `AAAA-MM-JJ_` + champ libre, racine mémorisée d'un
      déchargement à l'autre (l'année va dans la racine ; gabarits plus tard), noms
-     d'origine (renommage par gabarits plus tard), fichiers déjà déchargés ignorés
-     (historique dans le dossier de données), copie vérifiée (BLAKE3), puis ouvrir /
+     d'origine (renommage par gabarits plus tard), doublons jugés sur le dossier de
+     destination (une carte peut être déchargée à deux endroits ; historique global en
+     option), copie vérifiée (BLAKE3), puis ouvrir /
      éjecter / supprimer de la carte les fichiers vérifiés — choisis par cases à cocher
      avant la copie et enchaînés à la fin (retour du 17/10/2026), plus « RAW
      seulement ». En ligne de commande :

@@ -2964,6 +2964,48 @@ mod tests {
     }
 
     #[test]
+    fn the_same_card_twice_counts_duplicates_in_the_chosen_folder() {
+        let (mut h, dir) = harness();
+        let card = dir.path().join("CARTE");
+        std::fs::create_dir_all(card.join("DCIM")).unwrap();
+        for i in 0..2 {
+            image::RgbImage::new(16, 16)
+                .save(card.join(format!("DCIM/IMG{i}.jpg")))
+                .unwrap();
+        }
+        let place = tri::places::Place {
+            name: "CARTE".into(),
+            path: card.clone(),
+            kind: tri::places::PlaceKind::Volume,
+        };
+        let wait_for = |h: &mut Harness<'_, TriApp>, text: &str| {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label_contains(text).is_none() {
+                assert!(Instant::now() < deadline, "jamais vu : {text}");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        for round in 0..2 {
+            h.state_mut().tree = Tree::with_places(vec![place.clone()], false);
+            h.run_steps(2);
+            h.get_by_label("Décharger la carte…").click();
+            if round == 0 {
+                wait_for(&mut h, "2 à copier");
+                h.get_by_label("Décharger").click();
+                wait_for(&mut h, "Fermer");
+                h.get_by_label("Fermer").click();
+                h.run_steps(2);
+            } else {
+                // Même dossier de séance proposé : tout y est déjà.
+                wait_for(&mut h, "2 déjà dans la destination ; 0 à copier");
+                h.get_by_label("Annuler").click();
+                h.run_steps(2);
+            }
+        }
+    }
+
+    #[test]
     fn enter_opens_fullscreen_and_escape_goes_back() {
         let (mut h, _dir) = harness();
         h.run_steps(3);

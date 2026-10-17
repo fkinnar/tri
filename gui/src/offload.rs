@@ -43,6 +43,9 @@ enum Stage {
         root: String,
         folder: String,
         error: Option<String>,
+        /// Déjà présentes dans la destination : (destination, RAW seulement, (nombre,
+        /// octets)), recalculé seulement quand la destination ou le choix RAW changent.
+        present: Option<(PathBuf, bool, (usize, u64))>,
     },
     /// Copie en cours.
     Running {
@@ -125,6 +128,7 @@ impl OffloadDialog {
                                 root: offload::root(&self.settings, self.data.as_deref()),
                                 folder,
                                 error: None,
+                                present: None,
                             }
                         }
                         Err(e) => Stage::Failed(e),
@@ -159,6 +163,7 @@ impl OffloadDialog {
             root,
             folder,
             error,
+            ..
         } = &mut self.stage
         else {
             return;
@@ -226,16 +231,43 @@ impl OffloadDialog {
                         root,
                         folder,
                         error,
+                        present,
                         ..
                     } => {
                         let settings = &mut self.settings;
-                        let known = plan.items.iter().filter(|i| i.known).count();
-                        let count = plan.to_copy(settings).count();
-                        ui.label(format!(
-                            "{} images, dont {known} déjà déchargées ; {count} à copier ({} Mo).",
-                            plan.items.len(),
-                            french_mb(plan.bytes(settings))
+                        let dest =
+                            offload::destination(&tri::settings::expand_home(root.trim()), folder)
+                                .ok();
+                        // Doublons jugés sur la destination choisie (même nom, même taille ;
+                        // la copie compare ensuite les contenus).
+                        let fresh = match (&dest, &*present) {
+                            (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
+                            (Some(_), None) => true,
+                            (None, _) => false,
+                        };
+                        if fresh && let Some(d) = &dest {
+                            let found = offload::already_in(plan, settings, d);
+                            *present = Some((d.clone(), settings.raw_only, found));
+                        }
+                        let (there, there_bytes) = match (&dest, &*present) {
+                            (Some(d), Some((p, _, found))) if p == d => *found,
+                            _ => (0, 0),
+                        };
+                        let selected = plan.to_copy(settings).count();
+                        let count = selected - there;
+                        let mut text = format!("{} images", plan.items.len());
+                        if settings.skip_known {
+                            let known = plan.items.iter().filter(|i| i.known).count();
+                            text.push_str(&format!(", dont {known} déjà déchargées"));
+                        }
+                        if there > 0 {
+                            text.push_str(&format!(", {there} déjà dans la destination"));
+                        }
+                        text.push_str(&format!(
+                            " ; {count} à copier ({} Mo).",
+                            french_mb(plan.bytes(settings) - there_bytes)
                         ));
+                        ui.label(text);
                         if plan.ignored > 0 {
                             ui.weak(format!(
                             "{} autres fichiers (vidéos, fichiers du boîtier) ne sont pas copiés.",
@@ -257,9 +289,7 @@ impl OffloadDialog {
                             );
                                 ui.end_row();
                             });
-                        if let Ok(dest) =
-                            offload::destination(&tri::settings::expand_home(root.trim()), folder)
-                        {
+                        if let Some(dest) = &dest {
                             ui.weak(format!("Destination : {}", dest.display()));
                         }
                         if let Some(e) = error {

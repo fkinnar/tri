@@ -28,7 +28,10 @@ pub struct OffloadSettings {
     pub destination: String,
     /// Relire chaque copie et comparer son empreinte à celle de l'original.
     pub verify: bool,
-    /// Ignorer les fichiers déjà déchargés (historique), même vers un autre dossier.
+    /// Ignorer les fichiers déjà déchargés **n'importe où** (historique global). Non par
+    /// défaut : les doublons se jugent sur le dossier de destination (une copie identique
+    /// déjà présente est ignorée), et une même carte peut être déchargée à deux endroits
+    /// (retour du 17/10/2026).
     pub skip_known: bool,
     /// Fichier de l'historique (`~` accepté) ; vide : `offload-history.tsv` dans le
     /// dossier de données (`settings::data_dir`).
@@ -48,7 +51,7 @@ impl Default for OffloadSettings {
         Self {
             destination: "~/Pictures".into(),
             verify: true,
-            skip_known: true,
+            skip_known: false,
             history: String::new(),
             raw_only: false,
             open_after: true,
@@ -260,6 +263,19 @@ pub fn suggest_folder(plan: &Plan, settings: &OffloadSettings) -> Option<String>
         .and_then(|d| d.get(0..10).map(str::to_string))
         .unwrap_or_else(|| utc_date(first.modified));
     Some(format!("{date}_"))
+}
+
+/// Images à copier déjà présentes dans `destination` (même nom, même taille) : (nombre,
+/// octets). Indication rapide avant la copie (pas d'empreinte : la copie, elle, compare
+/// les contenus et ignore les vrais doublons).
+pub fn already_in(plan: &Plan, settings: &OffloadSettings, destination: &Path) -> (usize, u64) {
+    plan.to_copy(settings)
+        .filter(|item| {
+            item.source.file_name().is_some_and(|name| {
+                fs::metadata(destination.join(name)).is_ok_and(|m| m.len() == item.size)
+            })
+        })
+        .fold((0, 0), |(n, bytes), item| (n + 1, bytes + item.size))
 }
 
 /// Racine des déchargements : celle du dernier déchargement (fichier `offload-root` du

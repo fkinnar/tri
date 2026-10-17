@@ -47,6 +47,14 @@ fn settings() -> OffloadSettings {
     }
 }
 
+/// Réglages avec l'historique global (ignorer ce qui a déjà été déchargé n'importe où).
+fn with_history() -> OffloadSettings {
+    OffloadSettings {
+        skip_known: true,
+        ..settings()
+    }
+}
+
 fn names(dir: &Path) -> Vec<String> {
     let mut v: Vec<String> = fs::read_dir(dir)
         .unwrap()
@@ -222,7 +230,7 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
     assert_eq!(names(&dst), ["DSCF0001.RAF", "DSCF0002.RAF"]);
     // Le JPEG laissé n'est pas « déjà déchargé » : un déchargement complet le prendra.
     let plan = offload::plan(&src, &history).unwrap();
-    assert_eq!(plan.to_copy(&settings()).count(), 1);
+    assert_eq!(plan.to_copy(&with_history()).count(), 1);
 }
 
 #[test]

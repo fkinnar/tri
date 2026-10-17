@@ -348,6 +348,10 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         let _ = offload::remember_root(&data, &root.to_string_lossy());
     }
     println!("destination : {}", dest.display());
+    let (there, _) = offload::already_in(&plan, s, &dest);
+    if there > 0 {
+        println!("{there} images déjà dans la destination (ignorées si identiques)");
+    }
     if args.dry_run {
         for item in plan.to_copy(s) {
             println!("à copier\t{}", item.source.display());

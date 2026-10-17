@@ -112,8 +112,10 @@ mask_under_share = 0.5
 destination = "~/Pictures"
 # Relire chaque copie et comparer son empreinte à l'original.
 verify = true
-# Ignorer les fichiers déjà déchargés (historique), même vers un autre dossier.
-skip_known = true
+# Les doublons se jugent sur le dossier de destination (une copie identique déjà présente
+# est ignorée) : une même carte peut être déchargée à deux endroits. true : ignorer aussi ce
+# qui a déjà été déchargé n'importe où (historique global).
+skip_known = false
 # Fichier de l'historique des déchargements (~ accepté) ; vide : offload-history.tsv dans le
 # dossier de données (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
 # Windows %APPDATA%\tri).

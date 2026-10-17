@@ -25,13 +25,16 @@ besoins de tous, pas seulement les siens.
   pas reproduits. Un nom déjà pris par un *autre* fichier reçoit un suffixe
   (`DSCF0001-2.RAF`, compteur du boîtier remis à zéro) ; rien n'est jamais écrasé.
   Plus tard : renommage par gabarits.
-- **Doublons** : les fichiers déjà déchargés sont ignorés, même vers un autre dossier,
-  grâce à un **historique** (`offload-history.tsv` dans le dossier de données :
-  `~/.local/share/tri`, `~/Library/Application Support/tri`, `%APPDATA%\tri` ; ou
-  `[offload] history`). Pas dans le cache, qu'on peut vider sans rien perdre. Un fichier
-  y est identifié par nom, taille et date (les numéros repartent à zéro : le nom seul ne
-  suffit pas). Une copie identique déjà présente à l'arrivée est aussi ignorée (et
-  inscrite). RAW et JPEG du boîtier ne sont pas censés changer : ce critère suffit.
+- **Doublons**, jugés sur le **dossier de destination** (retour du 17/10/2026 : une même
+  carte doit pouvoir être déchargée deux fois, à deux endroits) : une copie identique
+  déjà présente (même contenu, empreinte comparée) est ignorée ; la boîte annonce avant
+  la copie combien d'images sont déjà dans la destination choisie (`already_in` : même
+  nom, même taille ; recalculé quand le dossier change). En option (`[offload]
+  skip_known`, non par défaut), un **historique global** (`offload-history.tsv` dans le
+  dossier de données, ou `[offload] history`) fait ignorer ce qui a déjà été déchargé
+  n'importe où ; un fichier y est identifié par nom, taille et date (les numéros
+  repartent à zéro : le nom seul ne suffit pas). L'historique est tenu dans tous les
+  cas.
 - **Vérification** (`[offload] verify`) : empreinte BLAKE3 calculée pendant la copie,
   puis copie relue et comparée ; date de modification d'origine conservée ; écriture
   atomique (fichier temporaire caché, puis renommage).
