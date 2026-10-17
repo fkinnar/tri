@@ -470,6 +470,30 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
      copier les acceptées), éditeur externe configurable, avance automatique après une
      note (option), surveillance du dossier (fichiers ajoutés, XMP modifiés ailleurs).
+  - **Demandé le 17/10/2026 (fin de journée), à faire ensuite :**
+    - **Actions sur fichiers et dossiers** (supprimer, renommer, envoyer…). Pas de menu
+      contextuel natif de l'OS accessible depuis egui/winit (ni Finder, ni Nautilus, ni
+      Explorateur) : notre propre menu, avec « Révéler dans le gestionnaire de fichiers »
+      (`open -R` macOS, `xdg-open` du dossier Linux, `explorer /select,` Windows),
+      « Mettre à la corbeille » (crate `trash`, à vérifier : maintenance, licence),
+      renommer, copier / déplacer vers…, ouvrir avec l'éditeur externe. Le moteur doit
+      faire suivre les **sidecars XMP** et les **paires RAW+JPEG**, et le cache (clé =
+      chemin) sera recalculé. Fonctions du moteur, utilisables en ligne de commande.
+    - **Multilingue** : toutes les chaînes sont en français et codées en dur (interface
+      *et* moteur : `Metadata::rows`, messages d'erreur). Vrai système : identifiants de
+      chaînes dans le code, catalogues au moins français et anglais, langue du système
+      par défaut, réglable. Piste : Fluent (`fluent-bundle`, Mozilla : pluriels et
+      genres gérés, « 1 image » / « 2 images ») — à vérifier (maintenance, licence).
+    - **Netteté** : overlay (carte de netteté, façon focus peaking) et score par image
+      (cache d'*analyse*, comme l'exposition ; filtre « nettes seulement »). Piste :
+      énergie du gradient / variance du laplacien par zone, sur la mosaïque RAW (canal
+      vert) plutôt que sur le JPEG boîtier (accentuation du boîtier). Plus tard :
+      visages / yeux (portrait).
+    - **Passage automatique à l'image suivante après une note** (option). Piège connu
+      (bug de Capture One à une époque) : sous un filtre (ex. 2 étoiles), une photo qui
+      sort du filtre (2 → 1 étoile) disparaît déjà de la liste et la sélection passe
+      d'elle-même à la suivante (`refilter` garde l'index) ; avancer en plus en sauterait
+      une. Règle : n'avancer que si l'image notée est toujours dans la liste filtrée.
   - **Zoom continu** (demandé le 17/10/2026, pas urgent, « un confort de temps en
     temps ») : pas seulement ajusté / 1:1 ; touches `+`, `-`, `*`, `/` comme Lightroom,
     geste de pince au pavé tactile, et au-delà de 100 % au besoin. À rapprocher du
