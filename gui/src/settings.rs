@@ -107,6 +107,10 @@ pub struct GuiSettings {
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
     pub reopen_last: bool,
+    /// Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
+    /// carte de netteté, zones, histogramme, panneaux, barres, avance automatique) ; les
+    /// valeurs de la configuration ne servent qu'au premier lancement.
+    pub remember_display: bool,
     /// Bandeau de notation à la souris affiché au démarrage (Maj+N l'affiche ou le masque).
     pub rating_bar: bool,
     /// Après une note au clavier ou au bandeau, passer à l'image suivante (Maj+A l'active
@@ -147,6 +151,7 @@ impl Default for GuiSettings {
             progress_hide_done: true,
             filter_bar: true,
             reopen_last: true,
+            remember_display: true,
             rating_bar: true,
             auto_advance: false,
             grid: GridSettings::default(),

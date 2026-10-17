@@ -126,3 +126,11 @@ couleurs du thème. Une liste de profils de raccourcis vide revient aux profils 
   pas encore son déclenchement.
 - Le fichier de raccourcis personnalisés (touche → action) : seuls les profils livrés sont
   sélectionnables pour l'instant.
+
+## État d'affichage (`gui-state.toml`)
+
+À côté du dernier dossier ouvert, dans le dossier de données, l'interface garde ce qu'on
+affiche ou masque d'une touche (collimateur, carte de netteté, zones, histogramme,
+panneaux, barres, avance automatique) : ces valeurs l'emportent sur la configuration à
+partir du deuxième lancement. `[gui] remember_display = false` pour toujours partir de la
+configuration ; effacer `gui-state.toml` pour y revenir une fois.

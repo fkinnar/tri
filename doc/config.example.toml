@@ -217,6 +217,11 @@ filter_bar = true
 # Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
 # données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
+# carte de netteté, zones, histogramme, panneaux, barres, avance automatique), dans
+# gui-state.toml du dossier de données ; les valeurs ci-dessous ne servent alors qu'au
+# premier lancement. false : toujours les valeurs de ce fichier.
+remember_display = true
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.

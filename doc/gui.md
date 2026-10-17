@@ -100,6 +100,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en comparaison (`m`), lu dans le RAW (Fujifilm pour l'instant) ; carré, croix, cercle ou
   cœur (`[gui.view] focus_marker`), couleur `[gui.colors] focus`, liseré sombre dessous
   pour rester visible sur tout fond.
+- **État d'affichage gardé** (17/10/2026, `gui/src/state.rs`) : ce qu'on affiche ou
+  masque d'une touche (collimateur, carte de netteté, zones, histogramme, panneaux,
+  barres, avance automatique) est repris au lancement suivant, depuis `gui-state.toml`
+  du dossier de données ; la configuration ne donne que la valeur du premier lancement
+  (`[gui] remember_display = false` : toujours elle). Écrit seulement quand l'état change
+  (fichier temporaire puis renommage), jamais pendant une capture automatique ni dans les
+  tests (dossier de données temporaire).
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
   retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
   grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur

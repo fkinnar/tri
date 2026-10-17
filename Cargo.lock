@@ -3604,6 +3604,7 @@ dependencies = [
  "image",
  "serde",
  "tempfile",
+ "toml",
  "tri",
 ]
 

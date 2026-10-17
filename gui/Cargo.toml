@@ -13,6 +13,7 @@ tri = { path = "..", default-features = false }
 eframe = "0.37"
 image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1", features = ["derive"] }
+toml = "1"
 
 [features]
 # Mêmes features que le moteur, transmises telles quelles.

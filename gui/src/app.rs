@@ -176,6 +176,10 @@ pub struct TriApp {
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
     focus_point: bool,
+    /// Dossier de données (dernier dossier, état d'affichage).
+    data_dir: Option<PathBuf>,
+    /// État d'affichage tel qu'écrit la dernière fois (`state.rs`).
+    display_saved: crate::state::DisplayState,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
@@ -357,6 +361,8 @@ impl TriApp {
             peaking: gui.sharpness.visible,
             peaking_color: 0,
             focus_point: gui.view.focus_point,
+            data_dir: data.clone(),
+            display_saved: Default::default(),
             peaking_texture: None,
             peaking_asked: None,
             compare: Vec::new(),
@@ -412,8 +418,68 @@ impl TriApp {
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
+        app.restore_display();
         app.apply_filter();
         app
+    }
+
+    /// État d'affichage courant (`state.rs`).
+    fn display(&self) -> crate::state::DisplayState {
+        crate::state::DisplayState {
+            focus_point: Some(self.focus_point),
+            peaking: Some(self.peaking),
+            clipping: Some(self.clipping),
+            histogram: Some(self.histogram),
+            folder_panel: Some(self.folder_panel),
+            metadata_panel: Some(self.metadata_panel),
+            filter_bar: Some(self.filter_bar),
+            rating_bar: Some(self.rating_bar),
+            auto_advance: Some(self.auto_advance),
+        }
+    }
+
+    /// Reprend l'état d'affichage du lancement précédent (`[gui] remember_display`).
+    fn restore_display(&mut self) {
+        if !self.gui.remember_display {
+            return;
+        }
+        let Some(data) = &self.data_dir else { return };
+        let s = crate::state::load(data);
+        let pairs = [
+            (&mut self.focus_point, s.focus_point),
+            (&mut self.peaking, s.peaking),
+            (&mut self.clipping, s.clipping),
+            (&mut self.histogram, s.histogram),
+            (&mut self.folder_panel, s.folder_panel),
+            (&mut self.metadata_panel, s.metadata_panel),
+            (&mut self.filter_bar, s.filter_bar),
+            (&mut self.rating_bar, s.rating_bar),
+            (&mut self.auto_advance, s.auto_advance),
+        ];
+        for (field, saved) in pairs {
+            if let Some(value) = saved {
+                *field = value;
+            }
+        }
+        self.display_saved = self.display();
+    }
+
+    /// Écrit l'état d'affichage s'il a changé depuis la dernière écriture.
+    fn save_display(&mut self) {
+        // Capture automatique (développement) : ses actions scriptées ne doivent pas
+        // changer l'état de l'utilisateur.
+        if !self.gui.remember_display || self.screenshot.is_some() {
+            return;
+        }
+        let now = self.display();
+        if now == self.display_saved {
+            return;
+        }
+        if let Some(data) = &self.data_dir
+            && crate::state::save(data, &now).is_ok()
+        {
+            self.display_saved = now;
+        }
     }
 
     /// Ouvre le dossier `dir` à la place du dossier courant (panneau des dossiers). Les
@@ -3255,6 +3321,7 @@ impl eframe::App for TriApp {
         if !self.mouse_active {
             ctx.set_cursor_icon(egui::CursorIcon::None);
         }
+        self.save_display();
         self.handle_screenshot(&ctx);
     }
 }
@@ -4094,6 +4161,31 @@ mod tests {
         let moved = h.get_by_label(title).rect().center();
         assert!((moved - after).length() < 2.0, "{before:?} → {moved:?}");
         assert!(h.state().file_dialog.is_some(), "toujours ouverte");
+    }
+
+    #[test]
+    fn the_display_state_survives_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = AppSettings::default();
+        settings.cache.dir = Some(dir.path().join("cache"));
+        settings.data.dir = Some(dir.path().join("data"));
+        settings.places.watch_ms = 0;
+        let mut first = TriApp::new(None, settings.clone(), None);
+        assert!(
+            first.focus_point,
+            "valeur de la configuration au premier lancement"
+        );
+        first.focus_point = false;
+        first.histogram = !first.histogram;
+        first.save_display();
+        let histogram = first.histogram;
+        let second = TriApp::new(None, settings.clone(), None);
+        assert!(!second.focus_point, "collimateur masqué gardé");
+        assert_eq!(second.histogram, histogram);
+        // Désactivé : toujours la configuration.
+        settings.gui.remember_display = false;
+        let third = TriApp::new(None, settings, None);
+        assert!(third.focus_point);
     }
 
     #[test]
