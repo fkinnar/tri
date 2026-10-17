@@ -1,7 +1,7 @@
 //! L'application egui : grille de vignettes et plein écran, alimentés par le scheduler du
 //! moteur.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,7 +14,7 @@ use eframe::egui::{
 };
 use tri::cache::{Cache, Level};
 use tri::exposure::Exposure;
-use tri::filter::KindFilter;
+use tri::filter::{Filter, KindFilter};
 use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
 use tri::notes::{ColorRule, NotesRule, StarsRule};
@@ -90,6 +90,7 @@ struct Status {
     embedded_full: Avail,
     full: Avail,
     exposure: Avail,
+    sharpness: Avail,
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
@@ -163,6 +164,14 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Scores de netteté connus (cache d'analyse), par chemin.
+    scores: HashMap<PathBuf, f32>,
+    /// Médiane de `scores` (photo floue : sous `[sharpness] blur_ratio` × la médiane).
+    score_median: Option<f32>,
+    /// Filtre « masquer les floues » (`f b`).
+    hide_blurry: bool,
+    /// Photos jugées floues au dernier filtrage (refiltrer seulement si ça change).
+    blurry_applied: HashSet<PathBuf>,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
@@ -185,7 +194,7 @@ pub struct TriApp {
     file_error: Option<String>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
-    progress: [Progress; 4],
+    progress: [Progress; 5],
     engine: Option<Engine>,
     error: Option<String>,
     keymap: Keymap,
@@ -339,6 +348,10 @@ impl TriApp {
             file_dialog: None,
             file_error: None,
             selection: Default::default(),
+            scores: HashMap::new(),
+            score_median: None,
+            hide_blurry: false,
+            blurry_applied: HashSet::new(),
             peaking: gui.sharpness.visible,
             peaking_color: 0,
             peaking_texture: None,
@@ -348,7 +361,7 @@ impl TriApp {
             hint: None,
             files: Vec::new(),
             status: Vec::new(),
-            progress: [Progress::default(); 4],
+            progress: [Progress::default(); 5],
             engine: None,
             error,
             keymap,
@@ -421,6 +434,9 @@ impl TriApp {
         }
         self.files.clear(); // la sélection ne survit pas au changement de dossier
         self.selection.clear();
+        self.scores.clear();
+        self.score_median = None;
+        self.blurry_applied.clear();
         self.selected = 0;
         self.mode = Mode::Grid;
         self.zoom = None;
@@ -501,6 +517,22 @@ impl TriApp {
                             ui.weak(label);
                             // À la ligne plutôt qu'élargir le panneau (noms d'objectif).
                             ui.add(egui::Label::new(value).wrap());
+                            ui.end_row();
+                        }
+                        if let (Some(&score), Some(median)) =
+                            (self.scores.get(&file.path), self.score_median)
+                        {
+                            ui.weak(t!("panel-sharpness"));
+                            let ratio = tri::sharpness::relative(score, median).unwrap_or(0.0);
+                            let mut text = t!(
+                                "panel-sharpness-value",
+                                score = tri::i18n::decimal(score as f64, 1),
+                                ratio = tri::i18n::decimal(ratio as f64, 2)
+                            );
+                            if self.is_blurry(&file.path) {
+                                text.push_str(&t!("panel-sharpness-blurry"));
+                            }
+                            ui.add(egui::Label::new(text).wrap());
                             ui.end_row();
                         }
                     });
@@ -780,15 +812,22 @@ impl TriApp {
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
-        self.files = self
-            .folder
-            .filtered(self.filter, &self.notes_rule)
-            .into_iter()
-            .flatten()
-            .collect();
+        let groups = self.folder.filtered(self.filter, &self.notes_rule);
+        // Photos floues : jugées par le moteur, d'après les scores connus.
+        let groups = if self.hide_blurry {
+            tri::sharpness::BlurFilter {
+                scores: &self.scores,
+                settings: &self.settings.sharpness,
+            }
+            .apply(groups)
+        } else {
+            groups
+        };
+        self.blurry_applied = self.blurry_now();
+        self.files = groups.into_iter().flatten().collect();
         self.status = vec![Status::default(); self.files.len()];
         self.requested.clear();
-        self.progress = [Progress::default(); 4];
+        self.progress = [Progress::default(); 5];
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path
             && let Some(index) = self.files.iter().position(|f| f.path == path)
@@ -863,8 +902,61 @@ impl TriApp {
         });
     }
 
+    /// Photos jugées floues d'après les scores connus.
+    fn blurry_now(&self) -> HashSet<PathBuf> {
+        let Some(median) = self.score_median else {
+            return HashSet::new();
+        };
+        self.scores
+            .iter()
+            .filter(|&(_, &s)| tri::sharpness::is_blurry(s, median, &self.settings.sharpness))
+            .map(|(p, _)| p.clone())
+            .collect()
+    }
+
+    /// Vrai si l'image `path` est jugée floue (score connu).
+    fn is_blurry(&self, path: &Path) -> bool {
+        match (self.scores.get(path), self.score_median) {
+            (Some(&s), Some(m)) => tri::sharpness::is_blurry(s, m, &self.settings.sharpness),
+            _ => false,
+        }
+    }
+
+    /// Lit les scores de netteté arrivés dans le cache ; filtre « masquer les floues »
+    /// actif : refiltre une fois tous les scores connus, si le jugement a changé (la
+    /// médiane bouge tant que des scores arrivent).
+    fn take_scores(&mut self, ready: Vec<usize>) {
+        let Some(engine) = &self.engine else { return };
+        let mut changed = false;
+        for index in ready {
+            if let Some(file) = self.files.get(index)
+                && let Some(score) = preview::sharpness(&engine.cache, file, &engine.preview)
+            {
+                self.scores.insert(file.path.clone(), score.value);
+                changed = true;
+            }
+        }
+        if changed {
+            self.score_median = tri::sharpness::median(self.scores.values().copied());
+        }
+        let p = self.progress[4];
+        if self.hide_blurry
+            && p.total > 0
+            && p.done == p.total
+            && self.blurry_now() != self.blurry_applied
+        {
+            self.refilter(Reveal::Minimal);
+        }
+    }
+
     /// Intègre les événements du moteur reçus depuis la dernière image.
     fn drain_events(&mut self) {
+        let mut scored = Vec::new();
+        self.drain_engine(&mut scored);
+        self.take_scores(scored);
+    }
+
+    fn drain_engine(&mut self, scored: &mut Vec<usize>) {
         let Some(engine) = &self.engine else { return };
         let generation = engine.generation;
         while let Ok(event) = engine.events.try_recv() {
@@ -882,6 +974,9 @@ impl TriApp {
                     if let Some(f) = self.files.get(index) {
                         self.missing.remove(&(f.path.clone(), level));
                         self.requested.remove(&(f.path.clone(), level));
+                    }
+                    if level == Level::Sharpness {
+                        scored.push(index);
                     }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
@@ -1142,6 +1237,11 @@ impl TriApp {
             Action::FilterClear => {
                 self.filter = KindFilter::All;
                 self.notes_rule = NotesRule::default();
+                self.hide_blurry = false;
+                self.apply_filter();
+            }
+            Action::FilterBlurry => {
+                self.hide_blurry = !self.hide_blurry;
                 self.apply_filter();
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
@@ -1481,6 +1581,7 @@ impl TriApp {
             Level::EmbeddedFull => &s.embedded_full,
             Level::Full => &s.full,
             Level::Exposure => &s.exposure,
+            Level::Sharpness => &s.sharpness,
         };
         *avail == Avail::Ready
     }
@@ -2141,9 +2242,11 @@ impl TriApp {
                 (t!("progress-embedded"), self.progress[1]),
                 (t!("progress-previews"), self.progress[2]),
                 (t!("progress-histograms"), self.progress[3]),
+                (t!("progress-sharpness"), self.progress[4]),
             ] {
-                if p.total == 0 {
-                    continue; // rien à calculer en fond pour ce niveau
+                // Rien à calculer en fond pour ce niveau, ou déjà fini.
+                if p.total == 0 || (self.gui.progress_hide_done && p.done >= p.total) {
+                    continue;
                 }
                 // Gris discret, pas la couleur d'accent : une information de fond, qui ne
                 // doit pas attirer le regard (retour du 17/10/2026).
@@ -2154,7 +2257,7 @@ impl TriApp {
                     .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
                 ui.add(
                     egui::ProgressBar::new(p.fraction())
-                        .desired_width(160.0)
+                        .desired_width(self.gui.progress_width)
                         .fill(fill)
                         .text(format!("{name} {}/{}", p.done, p.total)),
                 );
@@ -2518,6 +2621,9 @@ impl TriApp {
             let names: Vec<String> = colors.any_of.iter().map(|&c| color_name(c)).collect();
             parts.push(names.join(&t!("filter-summary-or")));
         }
+        if self.hide_blurry {
+            parts.push(t!("filter-bar-no-blurry"));
+        }
         if parts.is_empty() {
             t!("filter-all")
         } else {
@@ -2577,6 +2683,14 @@ impl TriApp {
                 }
             }
             ui.separator();
+            if ui
+                .selectable_label(self.hide_blurry, t!("filter-bar-no-blurry"))
+                .on_hover_text(self.action_tip(Action::FilterBlurry))
+                .clicked()
+            {
+                clicked.push(Action::FilterBlurry);
+            }
+            ui.separator();
             ui.label(t!("filter-bar-colors"));
             for color in Color::ALL {
                 let (rect, response) = marks::clickable(ui, size, &color_name(color));
@@ -2599,7 +2713,8 @@ impl TriApp {
                 }
             }
             ui.separator();
-            let any = self.filter != KindFilter::All || !self.notes_rule.is_empty();
+            let any =
+                self.filter != KindFilter::All || !self.notes_rule.is_empty() || self.hide_blurry;
             if ui
                 .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
                 .clicked()
@@ -2774,13 +2889,23 @@ impl TriApp {
             FontId::proportional(12.0),
             text_color,
         );
-        ui.painter().text(
+        let badge_rect = ui.painter().text(
             pos2(rect.max.x - g.padding, rect.max.y - 4.0),
             Align2::RIGHT_BOTTOM,
             badge,
             FontId::monospace(11.0),
             colors.badge.into(),
         );
+        // Photo jugée floue (score de netteté sous la médiane du dossier).
+        if g.blur_badge && self.is_blurry(&file.path) {
+            ui.painter().text(
+                pos2(badge_rect.min.x - 6.0, rect.max.y - 4.0),
+                Align2::RIGHT_BOTTOM,
+                t!("badge-blurry"),
+                FontId::proportional(11.0),
+                colors.warning.into(),
+            );
+        }
         // Notes en bas de la vignette, sur un fond sombre pour rester lisibles.
         let notes = self.folder.notes.notes(&file.path);
         if *notes != tri::xmp::Notes::EMPTY {
@@ -3101,6 +3226,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Embedded => Some(1),
         Level::Standard => Some(2),
         Level::Exposure => Some(3),
+        Level::Sharpness => Some(4),
         Level::EmbeddedFull | Level::Full => None,
     }
 }
@@ -3114,6 +3240,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::EmbeddedFull => s.embedded_full = avail,
             Level::Full => s.full = avail,
             Level::Exposure => s.exposure = avail,
+            Level::Sharpness => s.sharpness = avail,
         }
     }
 }
@@ -3264,13 +3391,26 @@ mod tests {
         w: u32,
         h: u32,
     ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        let images = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let pixel = image::Rgb([40 * i as u8, 100, 160]);
+                (*name, image::RgbImage::from_pixel(w, h, pixel))
+            })
+            .collect();
+        harness_images(images)
+    }
+
+    /// Application sur les images `images` (nom, pixels), avec un cache temporaire.
+    fn harness_images(
+        images: Vec<(&str, image::RgbImage)>,
+    ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir(&photos).unwrap();
-        for (i, name) in names.iter().enumerate() {
-            image::RgbImage::from_pixel(w, h, image::Rgb([40 * i as u8, 100, 160]))
-                .save(photos.join(name))
-                .unwrap();
+        for (name, img) in &images {
+            img.save(photos.join(name)).unwrap();
         }
         let mut settings = AppSettings::default();
         settings.cache.dir = Some(dir.path().join("cache"));
@@ -3682,6 +3822,48 @@ mod tests {
         assert!(!h.state().peaking);
         press(&mut h, Key::P, Modifiers::CTRL);
         assert!(h.state().peaking);
+    }
+
+    /// Damier de cases de `square` pixels, flouté `blur` fois (moyenne 3 × 3).
+    fn checkerboard(square: u32, blur: usize) -> image::RgbImage {
+        let mut img = image::RgbImage::from_fn(240, 160, |x, y| {
+            if (x / square + y / square).is_multiple_of(2) {
+                image::Rgb([220, 220, 220])
+            } else {
+                image::Rgb([30, 30, 30])
+            }
+        });
+        for _ in 0..blur {
+            img = image::imageops::blur(&img, 2.0);
+        }
+        img
+    }
+
+    #[test]
+    fn blurry_photos_are_flagged_and_can_be_hidden() {
+        let images = vec![
+            ("a.png", checkerboard(4, 0)),
+            ("b.png", checkerboard(4, 0)),
+            ("c.png", checkerboard(4, 3)),
+            ("d.png", checkerboard(4, 0)),
+        ];
+        let (mut h, dir) = harness_images(images);
+        run_until(&mut h, |s| s.scores.len() == 4);
+        let c = dir.path().join("photos").join("c.png");
+        assert!(h.state().is_blurry(&c), "scores : {:?}", h.state().scores);
+        assert!(
+            !h.state()
+                .is_blurry(&dir.path().join("photos").join("a.png"))
+        );
+        // f b : la floue disparaît ; f b encore : elle revient.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert!(h.state().hide_blurry);
+        assert_eq!(h.state().files.len(), 3);
+        assert!(h.state().files.iter().all(|f| f.path != c));
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::B, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 4);
     }
 
     #[test]

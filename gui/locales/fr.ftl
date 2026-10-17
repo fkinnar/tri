@@ -27,6 +27,7 @@ action-core-filter-color-green = Filtre : vert (ajouter / retirer)
 action-core-filter-color-blue = Filtre : bleu (ajouter / retirer)
 action-core-filter-color-purple = Filtre : violet (ajouter / retirer)
 action-core-filter-clear = Effacer tous les filtres
+action-core-filter-blurry = Filtre : masquer les floues
 action-core-view-filter_bar = Afficher / masquer la barre de filtres
 action-core-view-rating_bar = Afficher / masquer le bandeau de notation
 action-core-rate-auto_advance = Avance automatique après une note : oui / non
@@ -310,3 +311,12 @@ key-backspace = Retour arrière
 ## Réglages
 
 settings-bad-color = couleur « { $value } » : attendu "#rrggbb"
+
+## Score de netteté
+
+progress-sharpness = netteté
+filter-bar-no-blurry = sans les floues
+badge-blurry = floue
+panel-sharpness = Netteté
+panel-sharpness-value = { $score } ({ $ratio } × la médiane du dossier)
+panel-sharpness-blurry = { " " }· floue

@@ -91,6 +91,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Netteté** (17/10/2026, moteur : `tri::sharpness`, voir `sharpness.md`) : en 1:1, `p`
   surligne les contours nets (focus peaking), `Ctrl+P` change de couleur (3 couleurs
   réglables, `[gui.sharpness] colors`). Calculée par le chargeur, teintée au dessin.
+- **Photos floues** (17/10/2026, moteur : score de `tri::sharpness`, voir `sharpness.md`) :
+  mention « floue » sur la vignette, ligne « Netteté » du panneau des métadonnées, filtre
+  « sans les floues » (`f b`) ; jugement relatif à la médiane du dossier. Les barres de
+  progression terminées sont masquées (`[gui] progress_hide_done`), la barre d'état reste
+  courte.
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus

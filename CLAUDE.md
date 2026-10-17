@@ -543,6 +543,12 @@ explicitement par l'utilisateur comme important.
       **Overlay fait** le 17/10/2026 : `src/sharpness.rs` (`doc/sharpness.md`), Sobel à
       seuil fixe, points isolés retirés, `p` / `Ctrl+P`. Restent : score par image et
       filtre (cache d'analyse, sur la mosaïque RAW), netteté en comparaison.
+      **Score sans IA fait** le 17/10/2026 (demande de l'utilisateur : « déjà virer des
+      photos objectivement floues », mettre en place le mécanisme) : par cases, luminance
+      étirée, jugement relatif à la médiane du dossier, cache `Level::Sharpness`, filtre
+      `f b`, badge, `tri --sharpness`. **À affiner** avec les photos ratées exprès de
+      l'utilisateur (bougé, mise au point ratée, fond flou volontaire, mur uni, ISO
+      élevé). Pistes : mosaïque RAW (sans accentuation), comparaison dans la rafale.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).

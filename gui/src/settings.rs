@@ -99,6 +99,10 @@ pub struct GuiSettings {
     /// Temps maximal passé à charger des vignettes par image affichée (ms) : au-delà, on
     /// reprend à l'image suivante pour ne pas figer l'interface.
     pub load_budget_ms: u64,
+    /// Largeur des barres de progression de la barre d'état (points).
+    pub progress_width: f32,
+    /// Masquer les barres de progression terminées (la barre d'état reste courte).
+    pub progress_hide_done: bool,
     /// Barre de filtres affichée au démarrage (Maj+F l'affiche ou la masque).
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
@@ -137,6 +141,8 @@ impl Default for GuiSettings {
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
             load_budget_ms: 8,
+            progress_width: 160.0,
+            progress_hide_done: true,
             filter_bar: true,
             reopen_last: true,
             rating_bar: true,
@@ -221,6 +227,8 @@ pub struct GridSettings {
     pub hover_frame: f32,
     /// Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
     pub marked_frame: f32,
+    /// Mention « floue » sur les vignettes des photos jugées floues (score de netteté).
+    pub blur_badge: bool,
 }
 
 impl Default for GridSettings {
@@ -236,6 +244,7 @@ impl Default for GridSettings {
             rejected_opacity: 0.35,
             hover_frame: 2.0,
             marked_frame: 3.0,
+            blur_badge: true,
         }
     }
 }

@@ -74,6 +74,7 @@ pub fn navigate(
         | Action::FilterFlag(_)
         | Action::FilterColor(_)
         | Action::FilterClear
+        | Action::FilterBlurry
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleAutoAdvance

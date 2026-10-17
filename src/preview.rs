@@ -57,6 +57,8 @@ pub struct Settings {
     pub min_embedded_full: u32,
     /// Analyse de l'exposition (niveau [`Level::Exposure`]).
     pub exposure: ExposureSettings,
+    /// Score de netteté (niveau [`Level::Sharpness`]).
+    pub sharpness: crate::sharpness::SharpnessSettings,
 }
 
 impl Default for Settings {
@@ -68,6 +70,7 @@ impl Default for Settings {
             embedded_min_ratio: 0.5,
             min_embedded_full: 1024,
             exposure: ExposureSettings::default(),
+            sharpness: crate::sharpness::SharpnessSettings::default(),
         }
     }
 }
@@ -182,6 +185,16 @@ pub fn params(level: Level, settings: &Settings) -> String {
                 e.mask_under_share
             )
         }
+        Level::Sharpness => {
+            let s = &settings.sharpness;
+            format!(
+                "r{RULES_VERSION};v{};side={};tiles={};top={}",
+                crate::sharpness::SCORE_VERSION,
+                s.score_side,
+                s.score_tiles,
+                s.score_top_share
+            )
+        }
     }
 }
 
@@ -243,7 +256,7 @@ pub fn compute(
         }
         // Pas de JPEG « embarqué » distinct pour une image plate : c'est l'image elle-même.
         (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => Ok(flat::decode(&file.path)?),
-        (_, Level::Exposure) => Err(PreviewError::NotAnImage),
+        (_, Level::Exposure | Level::Sharpness) => Err(PreviewError::NotAnImage),
     }
 }
 
@@ -317,6 +330,11 @@ pub fn ensure(
         cache.put_bytes(&key, &exposure.to_bytes())?;
         return Ok(Outcome::Computed);
     }
+    if level == Level::Sharpness {
+        let score = compute_sharpness(file, settings, cancel)?;
+        cache.put_bytes(&key, &score.to_bytes())?;
+        return Ok(Outcome::Computed);
+    }
     let bitmap = compute(file, level, settings, cancel)?;
     cache.put(&key, &bitmap)?;
     Ok(Outcome::Computed)
@@ -337,6 +355,44 @@ pub fn compute_exposure(
         MediaKind::Raw => Exposure::from_raw(&file.path, &settings.exposure)?,
         MediaKind::Flat => Exposure::from_deep(&flat::decode_deep(&file.path)?, &settings.exposure),
     })
+}
+
+/// Score de netteté de `file`, sans cache : sur le JPEG boîtier d'un RAW (réduit à
+/// `score_side` au décodage), sur l'image elle-même pour une image plate.
+pub fn compute_sharpness(
+    file: &MediaFile,
+    settings: &Settings,
+    cancel: &AtomicBool,
+) -> Result<crate::sharpness::Score> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(PreviewError::Cancelled);
+    }
+    let s = &settings.sharpness;
+    let side = s.score_side.max(16);
+    let image = match file.kind {
+        // Un JPEG embarqué trop petit (vignette de 160 px) ne dit rien de la netteté.
+        MediaKind::Raw => raw_embedded(file, side, side / 2)?,
+        MediaKind::Flat => flat::decode_fit(&file.path, side)?,
+    };
+    Ok(crate::sharpness::score(&image, s))
+}
+
+/// Score de netteté de `file` lu dans le cache, `None` s'il n'y est pas (encore) ou si
+/// l'entrée est illisible (elle est alors supprimée, pour être recalculée).
+pub fn sharpness(
+    cache: &Cache,
+    file: &MediaFile,
+    settings: &Settings,
+) -> Option<crate::sharpness::Score> {
+    let key = key(file, Level::Sharpness, settings).ok()?;
+    let bytes = cache.get_bytes(&key)?;
+    match crate::sharpness::Score::from_bytes(&bytes) {
+        Some(s) => Some(s),
+        None => {
+            let _ = cache.remove(&key);
+            None
+        }
+    }
 }
 
 /// Analyse d'exposition de `file` lue dans le cache, `None` si elle n'y est pas (encore)

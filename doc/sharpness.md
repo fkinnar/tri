@@ -40,6 +40,57 @@ Outil de réglage : `cargo run --release --example decode -- peaking <image> <so
 le visage : 48 ne marque que les bords francs ; 32 marque aussi les lignes de la main et
 les lèvres.
 
+## Score de netteté : repérer les photos floues (17/10/2026)
+
+But : écarter les photos **objectivement** floues (mise au point ratée, bougé), sans IA
+pour commencer, et poser le circuit (calcul en fond, cache d'analyse, filtre) qu'une
+méthode plus fine (yeux nets sur un portrait…) reprendra plus tard. À affiner avec des
+photos ratées exprès (l'utilisateur en prépare).
+
+`score(&Bitmap, &SharpnessSettings) -> Score` :
+
+1. **Taille fixe** : l'image est réduite au décodage à `score_side` (1536 px de côté long),
+   pour que les boîtiers se comparent et que le bruit pèse moins. RAW : le JPEG boîtier
+   (`preview::compute_sharpness`, workers légers, ~120 ms) ; image plate : elle-même.
+2. **Luminance étirée** entre ses centiles 1 % et 99 % (`score_stretch`) : sans cela, une
+   photo sous-exposée mais nette passait pour floue (mesuré sur un portrait sombre : 0,21
+   × la médiane avant, 0,42 après). Écart de luminance sous `score_min_range` : pas de
+   détail (image toute blanche), score nul.
+3. **Par cases** (`score_tiles` = 16 sur le côté long) : gradient moyen (Sobel, racine de
+   l'énergie) de chaque case.
+4. **Les cases les plus nettes** font le score (`score_top_share` = 5 %) : la question est
+   « y a-t-il quelque chose de net quelque part ? ». Un portrait au fond flou volontaire
+   garde un bon score ; un bougé ou une mise au point ratée fait tout chuter.
+
+**Jugement relatif** : le score ne veut rien dire dans l'absolu (ISO, objectif,
+accentuation du boîtier). Une photo est **floue** sous `blur_ratio` (0,5) × la **médiane
+des scores du dossier** (`is_blurry`, `relative`, `median`). Plus tard, le regroupement en
+rafales permettra de comparer une photo à ses voisines, plus juste encore.
+
+**Circuit** : niveau de cache d'analyse `Level::Sharpness` (entrée binaire, `Score::to_bytes`,
+~1 Ko, version `SCORE_VERSION` dans la clé), calculé en fond par le scheduler pour tout le
+dossier (`[sharpness] background`, workers légers, après vignettes et aperçus boîtier),
+lu par `preview::sharpness`. Filtre `BlurFilter` (trait `Filter`, comme les autres) : une
+photo sans score encore calculé est gardée.
+
+Interface : mention « floue » sur la vignette (`[gui.grid] blur_badge`), ligne
+« Netteté » dans le panneau des métadonnées (score et rapport à la médiane), filtre « sans
+les floues » (barre de filtres, `f b`), barre de progression « netteté ». Le filtre
+s'applique une fois tous les scores connus (la médiane bouge tant qu'ils arrivent), et
+seulement si le jugement a changé.
+
+Ligne de commande : `tri <dossier> --sharpness` (score, rapport à la médiane, jugement,
+durée) : l'outil de réglage du seuil.
+
+Mesuré le 17/10/2026 sur le dossier de test (26 RAF X-T4) : 24 photos entre 0,80 et 1,08 ×
+la médiane ; signalées : une photo blanche (score nul) et un portrait sous-exposé (0,42),
+effectivement mou à 100 % (cils et contours des yeux pas francs) — à confirmer sur des
+photos ratées exprès.
+
+Limites connues : le jugement relatif suppose des sujets comparables dans le dossier (un
+dossier de paysages et de portraits mêlés est moins fiable) ; le JPEG boîtier est
+accentué ; le bruit à ISO très élevé ressemble à du détail.
+
 ## Réglages
 
 | Section | Clé | Défaut | Rôle |
@@ -47,6 +98,13 @@ les lèvres.
 | `[sharpness]` | `threshold` | 32 | seuil du gradient |
 | | `spread` | 1 | épaississement (pixels) |
 | | `min_neighbours` | 2 | voisins marqués requis (0 : tout garder) |
+| | `score_side` | 1536 | score : côté long de l'image analysée |
+| | `score_tiles` | 16 | score : cases sur le côté long |
+| | `score_top_share` | 0.05 | score : part des cases les plus nettes |
+| | `score_stretch` | 0.01 | score : centiles d'étirement de la luminance |
+| | `score_min_range` | 8 | score : écart minimal de luminance (sinon score nul) |
+| | `blur_ratio` | 0.5 | floue sous cette fraction de la médiane du dossier |
+| | `background` | `true` | scores de tout le dossier en fond |
 | `[gui.sharpness]` | `visible` | `false` | carte affichée au démarrage |
 | | `colors` | rouge, vert, bleu | couleurs de la rotation |
 | | `opacity` | 1.0 | opacité des contours |
@@ -63,7 +121,14 @@ retire la demande en cours.
 
 ## Tests
 
-Unitaires (`src/sharpness.rs`) : un bord franc est marqué des deux côtés, une zone
+Score (`src/sharpness.rs`) : un flou divise le score par plus de deux, un sujet net sur un
+fond uni garde le score d'une image nette partout ; une image quatre fois plus sombre a le
+même score, une image blanche un score nul ; aller-retour binaire, données tronquées
+refusées ; médiane, jugement relatif, filtre (les images sans score restent). Scheduler :
+travail léger de fond, après l'aperçu boîtier. Interface : sur des damiers nets et un
+damier flou, la floue est jugée telle, `f b` la masque puis la remontre.
+
+Carte (`src/sharpness.rs`) : un bord franc est marqué des deux côtés, une zone
 uniforme et les bords de l'image jamais ; le seuil est absolu ; points isolés retirés,
 lignes gardées ; épaississement ; petites images sans panique. Interface : `p` en ajusté
 ne demande rien, en 1:1 la carte arrive à la taille de l'image (pixel pour pixel), quitter

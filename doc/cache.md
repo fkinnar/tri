@@ -79,7 +79,7 @@ valeur de référence pour détecter tout changement accidentel.
 | `with_quality(q)` | Même cache, qualité JPEG `q` (1 à 100, défaut `DEFAULT_JPEG_QUALITY` = 90) pour les entrées écrites désormais ; hors de la clé, voir [settings.md](settings.md#réglages-et-cache) |
 | `contains(&key)` | L'entrée existe-t-elle ? (sans la décoder) |
 | `get(&key) -> Option<Bitmap>` | Lit et décode l'entrée |
-| `get_bytes(&key)` / `put_bytes(&key, &bytes)` | Entrée binaire d'une analyse (`Level::Exposure`, fichier `.bin`), même écriture atomique ; `Level::is_image` distingue les deux sortes |
+| `get_bytes(&key)` / `put_bytes(&key, &bytes)` | Entrée binaire d'une analyse (`Level::Exposure`, `Level::Sharpness`, fichier `.bin`), même écriture atomique ; `Level::is_image` distingue les deux sortes |
 | `put(&key, &bitmap)` | Écrit l'entrée (JPEG à la qualité du cache, via [`jpeg`](jpeg.md) : 4:4:4 pour le 1:1, 4:2:0 ailleurs), en écrasant l'ancienne |
 | `remove(&key)` | Supprime une entrée (sans erreur si absente) |
 | `clear(Some(level))` / `clear(None)` | Vide un niveau / tout le cache |

@@ -37,23 +37,26 @@ pub enum Level {
     /// Analyse de l'exposition ([`crate::exposure::Exposure`]) : histogrammes, saturés /
     /// bouchés, masque. Entrée binaire, pas une image (voir [`Cache::get_bytes`]).
     Exposure,
+    /// Score de netteté ([`crate::sharpness::Score`]). Entrée binaire.
+    Sharpness,
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 6] = [
+    pub const ALL: [Level; 7] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
         Level::EmbeddedFull,
         Level::Full,
         Level::Exposure,
+        Level::Sharpness,
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
     /// (binaire).
     pub fn is_image(self) -> bool {
-        self != Level::Exposure
+        !matches!(self, Level::Exposure | Level::Sharpness)
     }
 
     fn dir_name(self) -> &'static str {
@@ -64,6 +67,7 @@ impl Level {
             Self::Standard => "standard",
             Self::Full => "full",
             Self::Exposure => "exposure",
+            Self::Sharpness => "sharpness",
         }
     }
 }

@@ -88,6 +88,7 @@ cli-usage =
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
+      tri <folder> --sharpness [--raw|--flat] [--depth N]
       tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
       tri --rename <image> <name> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
@@ -146,3 +147,9 @@ cli-dry-run = (--dry-run: nothing was changed)
 cli-cache-cleared = cache cleared ({ $level })
 cli-cache-all = all
 cli-group = GROUP { $index } ({ $n } images)
+
+## Sharpness (command line)
+
+cli-sharpness-header = file	score	× median	verdict	time
+cli-sharpness-blurry = BLURRY
+cli-sharpness-summary = { $n } images, median { $median }: { $blurry } blurry (below { $ratio } × the median)

@@ -27,6 +27,7 @@ action-core-filter-color-green = Filter: green (add / remove)
 action-core-filter-color-blue = Filter: blue (add / remove)
 action-core-filter-color-purple = Filter: purple (add / remove)
 action-core-filter-clear = Clear all filters
+action-core-filter-blurry = Filter: hide blurry
 action-core-view-filter_bar = Show / hide the filter bar
 action-core-view-rating_bar = Show / hide the rating bar
 action-core-rate-auto_advance = Auto-advance after rating: on / off
@@ -305,3 +306,12 @@ key-backspace = Backspace
 ## Settings
 
 settings-bad-color = colour "{ $value }": expected "#rrggbb"
+
+## Sharpness score
+
+progress-sharpness = sharpness
+filter-bar-no-blurry = without blurry
+badge-blurry = blurry
+panel-sharpness = Sharpness
+panel-sharpness-value = { $score } ({ $ratio } × the folder median)
+panel-sharpness-blurry = { " " }· blurry

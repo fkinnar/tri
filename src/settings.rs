@@ -265,6 +265,7 @@ impl EngineSettings {
             embedded_min_ratio: p.embedded_min_ratio,
             min_embedded_full: p.min_embedded_full,
             exposure: self.exposure,
+            sharpness: self.sharpness,
         }
     }
 
@@ -282,6 +283,7 @@ impl EngineSettings {
             thumbnails_first: self.scheduler.thumbnails_first,
             raw_previews,
             exposure: self.scheduler.exposure,
+            sharpness: self.sharpness.background,
         }
     }
 

@@ -91,6 +91,7 @@ struct Args {
     dry_run: bool,
     exposure: bool,
     metadata: bool,
+    sharpness: bool,
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
     folder: Option<String>,
@@ -146,6 +147,7 @@ fn parse() -> AnyResult<Args> {
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
+            "--sharpness" => args.sharpness = true,
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
             "--folder" => args.folder = Some(value()?),
@@ -530,6 +532,54 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
     Ok(())
 }
 
+/// Score de netteté de chaque image, rapporté à la médiane du dossier ; les photos jugées
+/// floues sont signalées (voir `tri::sharpness`).
+fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyResult<()> {
+    let preview = settings.preview(None);
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let mut scores = Vec::new();
+    for file in files {
+        let start = Instant::now();
+        let name = file.path.file_name().unwrap_or_default().to_string_lossy();
+        match tri::preview::compute_sharpness(file, &preview, &cancel) {
+            Ok(s) => scores.push((name.into_owned(), s.value, start.elapsed())),
+            Err(e) => eprintln!("{name}\t{}", t!("cli-error-detail", error = e.to_string())),
+        }
+    }
+    let median = tri::sharpness::median(scores.iter().map(|s| s.1)).unwrap_or(0.0);
+    println!("{}", t!("cli-sharpness-header"));
+    for (name, value, elapsed) in &scores {
+        let ratio = tri::sharpness::relative(*value, median).unwrap_or(0.0);
+        let blurry = tri::sharpness::is_blurry(*value, median, &settings.sharpness);
+        println!(
+            "{name}\t{:.1}\t{:.2}\t{}\t{:.0} ms",
+            value,
+            ratio,
+            if blurry {
+                t!("cli-sharpness-blurry")
+            } else {
+                String::new()
+            },
+            elapsed.as_secs_f64() * 1000.0
+        );
+    }
+    let blurry = scores
+        .iter()
+        .filter(|s| tri::sharpness::is_blurry(s.1, median, &settings.sharpness))
+        .count();
+    println!(
+        "{}",
+        t!(
+            "cli-sharpness-summary",
+            n = scores.len(),
+            median = format!("{median:.1}"),
+            blurry = blurry,
+            ratio = format!("{}", settings.sharpness.blur_ratio)
+        )
+    );
+    Ok(())
+}
+
 /// Conversion des sidecars vers la convention `target`, avec bilan.
 fn convert_xmp(
     files: &[tri::media::MediaFile],
@@ -685,6 +735,10 @@ fn run() -> AnyResult<()> {
     if args.exposure {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return exposure(&settings, &files);
+    }
+    if args.sharpness {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return sharpness(&settings, &files);
     }
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();

@@ -17,6 +17,11 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
      fond : elles alimentent les badges de la grille), puis autres aperçus standard, par
      distance (en avant d'abord).
 
+  **Score de netteté** (`Level::Sharpness`, 17/10/2026) : calculé en fond pour tout le
+  dossier (`[sharpness] background`), par les **workers légers** (JPEG boîtier réduit,
+  ~120 ms), même classe de priorité que l'analyse d'exposition ; progression
+  « netteté ». Voir [sharpness.md](sharpness.md).
+
   **Analyse d'exposition** (`Level::Exposure`, 17/10/2026) : calculée en fond pour tout le
   dossier (`[scheduler] exposure`, défaut vrai), RAW comme images plates ; celle d'un RAW
   passe par le **worker lourd** (décompression LibRaw, déjà parallélisée en interne,

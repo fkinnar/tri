@@ -153,6 +153,7 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
             light_workers,
             thumbnails_first: false,
             exposure: false,
+            sharpness: false,
             ..Config::default()
         },
     )
@@ -342,6 +343,7 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
             light_workers: 2,
             thumbnails_first: true,
             exposure: false,
+            sharpness: false,
             ..Config::default()
         },
     );
@@ -402,6 +404,7 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
             light_workers: 1, // ordre des tâches légères déterministe
             thumbnails_first: true,
             exposure: false,
+            sharpness: false,
             ..Config::default()
         },
     );
@@ -587,6 +590,7 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
             exposure: false,
+            sharpness: false,
         },
     );
     let generation = scheduler.set_folder(all);
@@ -634,6 +638,7 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
             thumbnails_first: true,
             raw_previews: RawPreviews::OnDemand,
             exposure: false,
+            sharpness: false,
         },
     );
     scheduler.set_paused(true);
@@ -754,6 +759,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
             producer,
             Config {
                 exposure: false,
+                sharpness: false,
                 ..Config::default()
             },
             |_| {},
@@ -821,6 +827,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
             producer,
             Config {
                 exposure: false,
+                sharpness: false,
                 ..Config::default()
             },
             |_| {},
@@ -861,6 +868,7 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
             thumbnails_first: true,
             raw_previews: RawPreviews::Background,
             exposure: true,
+            sharpness: false,
         },
     );
     let generation = scheduler.set_folder(all);

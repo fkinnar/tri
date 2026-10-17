@@ -157,6 +157,22 @@ spread = 1
 # une ligne (2 voisins au moins), le bruit à ISO élevé fait des points isolés. 0 : tout
 # garder.
 min_neighbours = 2
+# Score de netteté (repérer les photos floues, filtre f b) : l'image est réduite à ce côté
+# long (pixels), découpée en cases (sur le côté long), et le score est le gradient moyen de
+# la part des cases les plus nettes (un fond flou volontaire ne pénalise pas un sujet net).
+score_side = 1536
+score_tiles = 16
+score_top_share = 0.05
+# Luminance étirée entre ces centiles avant la mesure (0,01 : 1 % et 99 %) : une photo
+# sous-exposée mais nette ne passe pas pour floue. Écart minimal (0 à 255) entre eux ; en
+# dessous, l'image n'a pas de détail (toute blanche ou noire) et son score est nul.
+score_stretch = 0.01
+score_min_range = 8
+# Photo jugée floue sous cette fraction de la médiane des scores du dossier : le score ne
+# se juge pas dans l'absolu (ISO, objectif, accentuation du boîtier).
+blur_ratio = 0.5
+# Scores de tout le dossier calculés en fond (cache d'analyse).
+background = true
 
 [i18n]
 # Langue des textes (interface, ligne de commande, messages) : "auto" (langue du système ;
@@ -186,6 +202,10 @@ raw_previews = "on-demand"
 # Temps maximal de chargement des vignettes par image affichée (ms) : au-delà, la suite
 # attend l'image suivante, pour ne pas figer l'interface.
 load_budget_ms = 8
+# Barres de progression de la barre d'état : largeur (points), et masquées une fois
+# terminées (false : toujours affichées).
+progress_width = 160.0
+progress_hide_done = true
 # Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
 # l'affiche ou la masque.
 filter_bar = true
@@ -222,6 +242,9 @@ rejected_opacity = 0.35
 hover_frame = 2.0
 # Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
 marked_frame = 3.0
+# Mention « floue » sur les vignettes des photos jugées floues (score de netteté, voir
+# [sharpness]).
+blur_badge = true
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement

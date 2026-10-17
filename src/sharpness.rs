@@ -6,11 +6,28 @@
 //! un pixel est marqué si le gradient de luminance (filtre de Sobel) y dépasse un seuil
 //! fixe — fixe et non relatif à l'image, pour que deux photos d'une rafale se comparent : la
 //! plus nette montre plus de contours. Le JPEG boîtier est accentué par le boîtier, ce qui
-//! gonfle un peu la carte ; le rendu RAW ne l'est pas. Voir `doc/sharpness.md`.
+//! gonfle un peu la carte ; le rendu RAW ne l'est pas.
+//!
+//! **Score de netteté** ([`score`]) : pour repérer les photos franchement floues (mise au
+//! point ratée, bougé), sans IA. L'image, réduite à une taille fixe (les boîtiers se
+//! comparent, le bruit pèse moins), est découpée en cases ; l'énergie du gradient de
+//! chaque case est mesurée, et le score est celle des cases **les plus nettes** : un
+//! portrait au fond flou garde un bon score, un bougé fait tout chuter. Le score ne se
+//! juge pas dans l'absolu (ISO, objectif, accentuation du boîtier) mais **par rapport à la
+//! médiane du dossier** ([`BlurFilter`]). Voir `doc/sharpness.md`.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 
 use crate::bitmap::Bitmap;
+use crate::filter::{Filter, Groups, retain};
+
+/// Version du calcul du score, dans la clé du cache d'analyse : à incrémenter quand le
+/// calcul change sans que les réglages changent.
+/// (2 : luminance étirée avant la mesure, le score ne dépend plus de l'exposition.)
+pub const SCORE_VERSION: u32 = 2;
 
 /// Section `[sharpness]` du fichier de configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -29,6 +46,25 @@ pub struct SharpnessSettings {
     /// est une ligne (au moins 2 voisins), le bruit du capteur à ISO élevé fait des points
     /// isolés. 0 : tout garder.
     pub min_neighbours: u8,
+    /// Score : côté long (pixels) de l'image analysée, réduite à cette taille.
+    pub score_side: u32,
+    /// Score : cases sur le côté long de l'image (le côté court en a proportionnellement
+    /// moins).
+    pub score_tiles: u32,
+    /// Score : part des cases les plus nettes dont la moyenne fait le score (0 à 1).
+    pub score_top_share: f32,
+    /// Score : la luminance est étirée entre ses centiles `stretch` et `1 - stretch` avant
+    /// la mesure (0,01 : 1 % et 99 %), pour qu'une photo sous-exposée mais nette ne passe
+    /// pas pour floue (mesuré le 17/10/2026 : un portrait sombre et net était à 0,21 × la
+    /// médiane).
+    pub score_stretch: f32,
+    /// Score : écart de luminance minimal (0 à 255) entre ces centiles ; en dessous,
+    /// l'image n'a pas de détail (toute blanche, toute noire) et son score est nul.
+    pub score_min_range: u8,
+    /// Photo jugée floue sous cette fraction de la médiane des scores du dossier.
+    pub blur_ratio: f32,
+    /// Calcul du score de tout le dossier en fond (cache d'analyse).
+    pub background: bool,
 }
 
 impl Default for SharpnessSettings {
@@ -37,7 +73,205 @@ impl Default for SharpnessSettings {
             threshold: 32,
             spread: 1,
             min_neighbours: 2,
+            score_side: 1536,
+            score_tiles: 16,
+            score_top_share: 0.05,
+            score_stretch: 0.01,
+            score_min_range: 8,
+            blur_ratio: 0.5,
+            background: true,
         }
+    }
+}
+
+/// Score de netteté d'une image.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Score {
+    /// Score : gradient moyen (racine de l'énergie, 0 à ~255) des cases les plus nettes.
+    pub value: f32,
+    /// Cases en largeur.
+    pub cols: u32,
+    /// Cases en hauteur.
+    pub rows: u32,
+    /// Gradient moyen de chaque case, ligne par ligne (carte grossière, pour plus tard).
+    pub tiles: Vec<f32>,
+}
+
+/// Score de netteté de `image` (déjà réduite à `score_side`, voir [`SharpnessSettings`]).
+pub fn score(image: &Bitmap, settings: &SharpnessSettings) -> Score {
+    let (w, h) = (image.width as usize, image.height as usize);
+    let long = w.max(h).max(1);
+    let n = settings.score_tiles.max(1) as usize;
+    let cols = ((w * n).div_ceil(long)).max(1);
+    let rows = ((h * n).div_ceil(long)).max(1);
+    let raw: Vec<u8> = image
+        .data
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|p| ((p[0] as u32 + 2 * p[1] as u32 + p[2] as u32) / 4) as u8)
+        .collect();
+    let luma = stretched(&raw, settings);
+    let mut energy = vec![0f64; cols * rows];
+    let mut count = vec![0u32; cols * rows];
+    if w >= 3 && h >= 3 {
+        for y in 1..h - 1 {
+            let (up, row, down) = ((y - 1) * w, y * w, (y + 1) * w);
+            let tile_row = y * rows / h;
+            for x in 1..w - 1 {
+                let p = |base: usize, dx: isize| luma[(base as isize + x as isize + dx) as usize];
+                let gx = (p(up, 1) + 2 * p(row, 1) + p(down, 1))
+                    - (p(up, -1) + 2 * p(row, -1) + p(down, -1));
+                let gy = (p(down, -1) + 2 * p(down, 0) + p(down, 1))
+                    - (p(up, -1) + 2 * p(up, 0) + p(up, 1));
+                // /4 (Sobel) et /16 (luminance étirée en ×16) : 0 à ~255.
+                let (gx, gy) = (gx as f64 / 64.0, gy as f64 / 64.0);
+                let t = tile_row * cols + x * cols / w;
+                energy[t] += gx * gx + gy * gy;
+                count[t] += 1;
+            }
+        }
+    }
+    let tiles: Vec<f32> = energy
+        .iter()
+        .zip(&count)
+        .map(|(&e, &c)| {
+            if c == 0 {
+                0.0
+            } else {
+                (e / c as f64).sqrt() as f32
+            }
+        })
+        .collect();
+    let mut sorted = tiles.clone();
+    sorted.sort_by(|a, b| b.total_cmp(a));
+    let top =
+        ((sorted.len() as f32 * settings.score_top_share).round() as usize).clamp(1, sorted.len());
+    let value = sorted[..top].iter().sum::<f32>() / top as f32;
+    Score {
+        value,
+        cols: cols as u32,
+        rows: rows as u32,
+        tiles,
+    }
+}
+
+/// Luminance étirée sur 0–255 entre ses centiles `score_stretch` et `1 - score_stretch`
+/// (en valeurs ×16, pour garder de la précision) ; tout à 0 si l'écart est sous
+/// `score_min_range`.
+fn stretched(luma: &[u8], settings: &SharpnessSettings) -> Vec<i32> {
+    let mut histogram = [0u64; 256];
+    for &v in luma {
+        histogram[v as usize] += 1;
+    }
+    let n = luma.len() as u64;
+    let cut = ((n as f64) * settings.score_stretch.clamp(0.0, 0.49) as f64) as u64;
+    let centile = |from_top: bool| -> i32 {
+        let mut seen = 0;
+        for i in 0..256 {
+            let v = if from_top { 255 - i } else { i };
+            seen += histogram[v];
+            if seen > cut {
+                return v as i32;
+            }
+        }
+        0
+    };
+    let (low, high) = (centile(false), centile(true));
+    let range = high - low;
+    if range < settings.score_min_range as i32 || range <= 0 {
+        return vec![0; luma.len()];
+    }
+    luma.iter()
+        .map(|&v| ((v as i32 - low).clamp(0, range) * 255 * 16) / range)
+        .collect()
+}
+
+// Format binaire du cache d'analyse : petit-boutiste, entête versionné.
+const MAGIC: &[u8; 8] = b"TRISHP01";
+
+impl Score {
+    /// Sérialise pour le cache d'analyse (~1 Ko).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = MAGIC.to_vec();
+        out.extend_from_slice(&self.value.to_le_bytes());
+        out.extend_from_slice(&self.cols.to_le_bytes());
+        out.extend_from_slice(&self.rows.to_le_bytes());
+        for t in &self.tiles {
+            out.extend_from_slice(&t.to_le_bytes());
+        }
+        out
+    }
+
+    /// Relit des données de [`Score::to_bytes`] ; `None` si elles sont illisibles.
+    pub fn from_bytes(bytes: &[u8]) -> Option<Score> {
+        let rest = bytes.strip_prefix(MAGIC)?;
+        let word = |i: usize| -> Option<[u8; 4]> { rest.get(i * 4..i * 4 + 4)?.try_into().ok() };
+        let value = f32::from_le_bytes(word(0)?);
+        let cols = u32::from_le_bytes(word(1)?);
+        let rows = u32::from_le_bytes(word(2)?);
+        let n = (cols as usize).checked_mul(rows as usize)?;
+        if rest.len() != (3 + n) * 4 {
+            return None;
+        }
+        let tiles = (0..n)
+            .map(|i| word(3 + i).map(f32::from_le_bytes))
+            .collect::<Option<Vec<f32>>>()?;
+        Some(Score {
+            value,
+            cols,
+            rows,
+            tiles,
+        })
+    }
+}
+
+/// Médiane des scores (`None` sans score).
+pub fn median(scores: impl IntoIterator<Item = f32>) -> Option<f32> {
+    let mut v: Vec<f32> = scores.into_iter().filter(|s| s.is_finite()).collect();
+    if v.is_empty() {
+        return None;
+    }
+    v.sort_by(f32::total_cmp);
+    let m = v.len() / 2;
+    Some(if v.len() % 2 == 1 {
+        v[m]
+    } else {
+        (v[m - 1] + v[m]) / 2.0
+    })
+}
+
+/// Score rapporté à la médiane du dossier (1 : comme la médiane ; 0,5 : deux fois moins
+/// net). `None` si la médiane est nulle.
+pub fn relative(score: f32, median: f32) -> Option<f32> {
+    (median > 0.0).then(|| score / median)
+}
+
+/// Vrai si une photo de score `score` est jugée floue dans un dossier de médiane `median`.
+pub fn is_blurry(score: f32, median: f32, settings: &SharpnessSettings) -> bool {
+    relative(score, median).is_some_and(|r| r < settings.blur_ratio)
+}
+
+/// Filtre « masquer les floues » : retire les photos jugées floues par rapport à la
+/// médiane des scores connus. Une photo sans score (pas encore calculé) est gardée : on ne
+/// cache pas ce qu'on n'a pas jugé.
+pub struct BlurFilter<'a> {
+    /// Scores connus, par chemin.
+    pub scores: &'a HashMap<PathBuf, f32>,
+    /// Réglages (seuil relatif).
+    pub settings: &'a SharpnessSettings,
+}
+
+impl Filter for BlurFilter<'_> {
+    fn apply(&self, groups: Groups) -> Groups {
+        let Some(median) = median(self.scores.values().copied()) else {
+            return groups;
+        };
+        retain(groups, |f| {
+            self.scores
+                .get(&f.path)
+                .is_none_or(|&s| !is_blurry(s, median, self.settings))
+        })
     }
 }
 
@@ -242,5 +476,139 @@ mod tests {
             assert_eq!(p.marked, 0);
             assert_eq!(p.mask.len(), (w * h) as usize);
         }
+    }
+
+    /// Image de mire : un damier de `square` pixels dans le rectangle (x0, y0)–(x1, y1),
+    /// gris uniforme ailleurs ; `blur` : moyennes successives 3 × 3 (flou).
+    fn scene(w: u32, h: u32, square: u32, area: (u32, u32, u32, u32), blur: usize) -> Bitmap {
+        let mut luma: Vec<u8> = (0..h)
+            .flat_map(|y| {
+                (0..w).map(move |x| {
+                    let inside = x >= area.0 && x < area.2 && y >= area.1 && y < area.3;
+                    if inside && ((x / square + y / square).is_multiple_of(2)) {
+                        230
+                    } else if inside {
+                        30
+                    } else {
+                        128
+                    }
+                })
+            })
+            .collect();
+        for _ in 0..blur {
+            let src = luma.clone();
+            for y in 1..h as usize - 1 {
+                for x in 1..w as usize - 1 {
+                    let mut sum = 0u32;
+                    for dy in 0..3 {
+                        for dx in 0..3 {
+                            sum += src[(y + dy - 1) * w as usize + x + dx - 1] as u32;
+                        }
+                    }
+                    luma[y * w as usize + x] = (sum / 9) as u8;
+                }
+            }
+        }
+        Bitmap {
+            width: w,
+            height: h,
+            data: luma.iter().flat_map(|&v| [v, v, v]).collect(),
+        }
+    }
+
+    #[test]
+    fn blur_lowers_the_score_and_a_sharp_subject_on_a_plain_background_keeps_it() {
+        let settings = SharpnessSettings::default();
+        let full = (0, 0, 256, 192);
+        let sharp = score(&scene(256, 192, 4, full, 0), &settings);
+        let blurred = score(&scene(256, 192, 4, full, 4), &settings);
+        assert!(
+            blurred.value < sharp.value * 0.5,
+            "{} / {}",
+            blurred.value,
+            sharp.value
+        );
+        // Sujet net sur un quart de l'image, fond uni : les cases nettes font le score.
+        let subject = score(&scene(256, 192, 4, (64, 48, 128, 96), 0), &settings);
+        assert!(
+            subject.value > sharp.value * 0.8,
+            "{} / {}",
+            subject.value,
+            sharp.value
+        );
+        assert_eq!((sharp.cols, sharp.rows), (16, 12));
+        assert_eq!(sharp.tiles.len(), 16 * 12);
+    }
+
+    #[test]
+    fn scores_round_trip_and_reject_garbage() {
+        let s = score(
+            &scene(64, 48, 4, (0, 0, 64, 48), 0),
+            &SharpnessSettings::default(),
+        );
+        assert_eq!(Score::from_bytes(&s.to_bytes()), Some(s.clone()));
+        let bytes = s.to_bytes();
+        assert_eq!(
+            Score::from_bytes(&bytes[..bytes.len() - 1]),
+            None,
+            "tronqué"
+        );
+        assert_eq!(Score::from_bytes(b"pas un score"), None);
+    }
+
+    #[test]
+    fn blurry_is_relative_to_the_folder_median() {
+        let settings = SharpnessSettings::default();
+        assert_eq!(median([3.0, 1.0, 2.0]), Some(2.0));
+        assert_eq!(median([4.0, 1.0, 2.0, 3.0]), Some(2.5));
+        assert_eq!(median([]), None);
+        assert!(is_blurry(0.9, 2.0, &settings));
+        assert!(!is_blurry(1.1, 2.0, &settings));
+        assert!(
+            !is_blurry(1.0, 0.0, &settings),
+            "médiane nulle : on ne juge pas"
+        );
+        // Filtre : les floues partent, les images sans score restent.
+        use crate::media::{MediaFile, MediaKind};
+        let file = |n: &str| MediaFile {
+            path: n.into(),
+            kind: MediaKind::Flat,
+        };
+        let scores: HashMap<PathBuf, f32> = [("a", 10.0), ("b", 11.0), ("c", 3.0)]
+            .map(|(n, s)| (n.into(), s))
+            .into();
+        let groups = vec![vec![file("a"), file("b"), file("c"), file("d")]];
+        let kept = BlurFilter {
+            scores: &scores,
+            settings: &settings,
+        }
+        .apply(groups);
+        let names: Vec<_> = kept[0]
+            .iter()
+            .map(|f| f.path.display().to_string())
+            .collect();
+        assert_eq!(names, ["a", "b", "d"]);
+    }
+
+    #[test]
+    fn exposure_does_not_change_the_score_and_a_blank_image_has_none() {
+        let settings = SharpnessSettings::default();
+        let full = (0, 0, 256, 192);
+        let normal = scene(256, 192, 4, full, 0);
+        // Même scène quatre fois plus sombre (sous-exposée).
+        let dark = Bitmap {
+            data: normal.data.iter().map(|v| v / 4).collect(),
+            ..normal.clone()
+        };
+        let (a, b) = (
+            score(&normal, &settings).value,
+            score(&dark, &settings).value,
+        );
+        assert!((b / a - 1.0).abs() < 0.15, "{a} / {b}");
+        let blank = Bitmap {
+            data: vec![250; normal.data.len()],
+            ..normal
+        };
+        assert_eq!(score(&blank, &settings).value, 0.0);
     }
 }

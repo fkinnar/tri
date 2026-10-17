@@ -178,6 +178,8 @@ pub enum Action {
     FilterColor(Color),
     /// Effacer tous les filtres (type compris).
     FilterClear,
+    /// Filtre : masquer les photos jugées floues.
+    FilterBlurry,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -250,7 +252,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 69] = [
+    pub const ALL: [Action; 70] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -275,6 +277,7 @@ impl Action {
         Action::FilterColor(Color::Blue),
         Action::FilterColor(Color::Purple),
         Action::FilterClear,
+        Action::FilterBlurry,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleAutoAdvance,
@@ -345,9 +348,8 @@ impl Action {
                 Group::View
             }
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
-            FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear => {
-                Group::Filters
-            }
+            FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
+            | FilterBlurry => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
@@ -388,6 +390,7 @@ impl Action {
             Action::FilterColor(Color::Blue) => "core.filter.color.blue",
             Action::FilterColor(Color::Purple) => "core.filter.color.purple",
             Action::FilterClear => "core.filter.clear",
+            Action::FilterBlurry => "core.filter.blurry",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
@@ -707,6 +710,7 @@ const FILTERS: &[Binding] = {
         (&[F, plain(Key::Comma)], FilterColor(C::Purple)),
         (&[F, plain(Key::Period)], FilterColor(C::Purple)),
         (&[F, plain(Key::Escape)], FilterClear),
+        (&[F, plain(Key::B)], FilterBlurry),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };
