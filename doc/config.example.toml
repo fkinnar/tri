@@ -97,9 +97,9 @@ textures = 8
 pan_step = 0.2
 
 [gui.colors]
-# Couleurs "#rrggbb". Sélection et survol absents : couleurs du thème. Exemple :
+# Couleurs "#rrggbb". Sélection absente : couleur du thème (le survol de la souris
+# sélectionne, il n'a pas de couleur à part). Exemple :
 # selection = "#1e6f7f"
-# hover = "#2a2a2a"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

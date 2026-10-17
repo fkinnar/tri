@@ -112,6 +112,15 @@ pub struct TriApp {
     keymap: Keymap,
     /// Séquences de touches en cours (`g g`).
     sequencer: Sequencer,
+    /// La souris est l'outil en cours : vrai dès qu'elle bouge, faux dès qu'on tape. Le
+    /// pointeur est masqué quand c'est le clavier.
+    mouse_active: bool,
+    /// La souris a bougé depuis l'image précédente (le survol ne sélectionne que sur un
+    /// vrai mouvement : pas quand la grille défile sous un pointeur immobile).
+    pointer_moved: bool,
+    /// Rectangles des cellules dessinées (pour les tests).
+    #[cfg(test)]
+    cell_rects: Vec<(usize, Rect)>,
     /// Déplacements clavier d'une image zoomée pas encore appliqués, en fractions de la
     /// vue (appliqués au dessin, quand la taille de l'image est connue).
     pan: Vec2,
@@ -193,6 +202,10 @@ impl TriApp {
             error,
             keymap: gui.keymap(),
             sequencer: Sequencer::new(gui.key_sequence_timeout()),
+            mouse_active: false,
+            pointer_moved: false,
+            #[cfg(test)]
+            cell_rects: Vec::new(),
             pan: Vec2::ZERO,
             textures: Lru::new(gui.grid.textures),
             selected,
@@ -362,6 +375,9 @@ impl TriApp {
                 })
                 .collect()
         });
+        if !chords.is_empty() {
+            self.mouse_active = false; // on tape : pointeur masqué
+        }
         let now = Instant::now();
         let actions: Vec<Action> = chords
             .into_iter()
@@ -442,6 +458,13 @@ impl TriApp {
     }
 
     fn select(&mut self, index: usize) {
+        self.select_with(index, true);
+    }
+
+    /// Sélectionne `index` ; `reveal` : faire défiler la grille pour qu'il soit visible
+    /// (pas pour le survol de la souris : la grille bougerait sous le pointeur, et la
+    /// sélection avec elle).
+    fn select_with(&mut self, index: usize, reveal: bool) {
         if index == self.selected || index >= self.files.len() {
             return;
         }
@@ -450,7 +473,9 @@ impl TriApp {
         if let Some(engine) = &self.engine {
             engine.scheduler.set_focus(index);
         }
-        self.reveal = Some(Reveal::Minimal);
+        if reveal {
+            self.reveal = Some(Reveal::Minimal);
+        }
         self.request_zoom();
     }
 
@@ -851,6 +876,8 @@ impl TriApp {
 
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
+        #[cfg(test)]
+        self.cell_rects.clear();
         let g = self.gui.grid;
         self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
         let rows = self.layout.rows(self.files.len());
@@ -890,6 +917,12 @@ impl TriApp {
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
         let (g, colors) = (self.gui.grid, self.gui.colors);
         let (rect, response) = ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click());
+        #[cfg(test)]
+        self.cell_rects.push((index, rect));
+        // Un seul curseur : le survol sélectionne, sur un vrai mouvement de la souris.
+        if self.pointer_moved && response.hovered() {
+            self.select_with(index, false);
+        }
         if response.clicked() {
             self.select(index);
         }
@@ -903,10 +936,6 @@ impl TriApp {
             colors
                 .selection
                 .map_or(visuals.selection.bg_fill, Color32::from)
-        } else if response.hovered() {
-            colors
-                .hover
-                .map_or(visuals.widgets.hovered.bg_fill, Color32::from)
         } else {
             visuals.extreme_bg_color
         };
@@ -1081,6 +1110,10 @@ impl eframe::App for TriApp {
         }
         self.drain_events();
         self.run_script(&ctx);
+        self.pointer_moved = ctx.input(|i| i.pointer.delta() != Vec2::ZERO);
+        if self.pointer_moved {
+            self.mouse_active = true;
+        }
         self.handle_keys(&ctx);
         self.update_loads(&ctx);
 
@@ -1098,6 +1131,10 @@ impl eframe::App for TriApp {
         });
         if self.help {
             self.help_window(&ctx);
+        }
+        // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
+        if !self.mouse_active {
+            ctx.set_cursor_icon(egui::CursorIcon::None);
         }
         self.handle_screenshot(&ctx);
     }
@@ -1447,6 +1484,45 @@ mod tests {
         let back = h.state().zoom.unwrap();
         assert!((back - start).length() < 1e-4, "retour au point de départ");
         assert_eq!(h.state().selected, 0, "se déplacer ne change pas d'image");
+    }
+
+    fn cursor(h: &Harness<'_, TriApp>) -> egui::CursorIcon {
+        h.output().platform_output.cursor_icon
+    }
+
+    #[test]
+    fn hovering_a_thumbnail_selects_it_and_typing_hides_the_pointer() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 0);
+        // La souris bouge sur la 3e vignette : elle est sélectionnée, pointeur visible.
+        let third = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 2)
+            .unwrap()
+            .1;
+        // Deux positions : au tout premier événement, egui n'a pas de position précédente
+        // et le déplacement vaut zéro.
+        h.hover_at(third.center() - vec2(3.0, 3.0));
+        h.run_steps(1);
+        h.hover_at(third.center());
+        h.run_steps(2);
+        assert_eq!(h.state().selected, 2, "le survol sélectionne");
+        assert_ne!(cursor(&h), egui::CursorIcon::None);
+        // Le clavier repart de là, et masque le pointeur.
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(h.state().selected, 1);
+        assert_eq!(cursor(&h), egui::CursorIcon::None, "pointeur masqué");
+        // Pointeur immobile : la sélection clavier n'est pas reprise par le survol.
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 1);
+        // Il suffit de bouger la souris pour le retrouver.
+        h.hover_at(third.center() + vec2(5.0, 5.0));
+        h.run_steps(2);
+        assert_ne!(cursor(&h), egui::CursorIcon::None);
+        assert_eq!(h.state().selected, 2);
     }
 
     #[test]

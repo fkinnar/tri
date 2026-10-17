@@ -200,15 +200,13 @@ impl ViewSettings {
     }
 }
 
-/// Section `[gui.colors]` : couleurs `"#rrggbb"`. Sélection et survol absents : couleurs
-/// du thème.
+/// Section `[gui.colors]` : couleurs `"#rrggbb"`. Sélection absente : couleur du thème.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Colors {
-    /// Fond de la cellule sélectionnée.
+    /// Fond de la cellule sélectionnée (le survol de la souris sélectionne : pas de couleur
+    /// de survol distincte).
     pub selection: Option<Color>,
-    /// Fond de la cellule survolée.
-    pub hover: Option<Color>,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -223,7 +221,6 @@ impl Default for Colors {
     fn default() -> Self {
         Self {
             selection: None,
-            hover: None,
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

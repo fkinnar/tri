@@ -334,11 +334,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       stderr). Chaque réglage de calcul n'entre que dans la clé de cache des niveaux qu'il
       influence. Restent non réglables (assumé, listé dans `doc/settings.md`) : priorités du
       scheduler, polices et marges du texte en surimpression.
-- [ ] Grille : le survol de la souris (fond gris moyen) et la sélection (fond turquoise) se
-      ressemblent trop, on croit voir deux images sélectionnées (retour du 16/10/2026).
-      Rendre le survol nettement plus discret (léger éclaircissement ou fin contour) et la
-      sélection sans ambiguïté. Les couleurs sont déjà réglables (`[gui.colors]`
-      `selection`, `hover`) : reste à choisir de meilleures valeurs par défaut (et/ou un
-      contour plutôt qu'un fond pour le survol).
+- [x] Grille : survol et sélection se ressemblaient trop (retour du 16/10/2026). Choix de
+      l'utilisateur (17/10/2026) : un seul curseur, le survol sélectionne (sur un vrai
+      mouvement de souris), pointeur masqué dès qu'on tape ; plus de couleur de survol
+      (réglage `hover` supprimé).
+- [x] Clavier (17/10/2026) : déplacement dans une image zoomée (Maj + flèches / Maj + hjkl),
+      `gg` pour la première image (séquences de touches, délai réglable).
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

@@ -28,6 +28,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   de l'image sélectionnée.
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
+- **Un seul curseur, clavier ou souris** (17/10/2026) : bouger la souris sur une vignette la
+  sélectionne, et le clavier repart de là. Seul un vrai mouvement compte (déplacement du
+  pointeur non nul) : la grille qui défile à la molette sous un pointeur immobile ne change
+  pas la sélection. Le pointeur est **masqué dès qu'on tape** et réapparaît au premier
+  mouvement de la souris, dans la grille comme en plein écran. Pas de surbrillance de survol
+  distincte : avant, survol (gris) et sélection (turquoise) donnaient l'impression de deux
+  images sélectionnées. Le survol ne fait pas défiler la grille (la sélection bougerait avec
+  elle) ; le clic et le clavier, si.
 - **Filtre par type** (touche `f`) : tout → RAW → plates. La sélection est conservée si
   l'image reste visible.
 - **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
