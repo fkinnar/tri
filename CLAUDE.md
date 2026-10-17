@@ -35,7 +35,11 @@ vers l'architecture cible décrite plus bas :
 Seul filtre requis dès le MVP : par type de fichier — RAW seuls, plates seules, ou les deux
 (ex. une carte RAW+JPEG doit pouvoir s'afficher en entier, ou juste l'un des deux).
 
-Pas de filtrage avancé, pas de notation XMP, pas de dynamique/plugins/libloading à ce stade.
+**Élargissement validé le 17/10/2026 (MVP terminé) : notation et filtres.** Étoiles (0–5),
+couleurs, accepté/rejeté, stockés en XMP, et les filtres correspondants (même trait `Filter`
+que le filtre par type). Décisions dans « Notation XMP » plus bas.
+
+Pas de filtrage avancé, pas de dynamique/plugins/libloading à ce stade.
 L'objectif est de valider la chaîne complète dossier → vignettes → rendu RAW affiché, et de
 juger la vitesse/l'ergonomie avant de complexifier.
 
@@ -240,6 +244,34 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - Pistes non vérifiées : crates `libraw-rs` / `rsraw` existent sur crates.io mais leur
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
+
+## Notation XMP (décidé le 17/10/2026, pas encore implémenté)
+
+- **Sidecars, les deux conventions** : `IMAGE.RAF.xmp` (darktable, digiKam) et `IMAGE.xmp`
+  (Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire). Lire **et**
+  écrire dans le plus récent s'ils coexistent, sinon dans celui qui existe ; sans sidecar,
+  convention de la configuration (défaut : darktable). Un utilisateur de Capture One règle
+  une fois et `tri` écrit directement au bon format. Conversion de l'un vers l'autre en ligne
+  de commande (pas forcément dans l'interface).
+- **Ne jamais rien perdre** : modifier seulement nos champs, conserver tout le reste
+  (historique darktable, mots-clés, droits…), accepter les deux formes XML (attribut ou
+  élément), relire le fichier juste avant d'écrire. darktable ne relit les XMP modifiés
+  ailleurs que si son option « rechercher les XMP mis à jour au démarrage » est active.
+- **Étoiles** : `xmp:Rating` 0–5 (standard ISO 16684-1).
+- **Rejeté** : `xmp:Rating = -1` (standard : -1 = rejeté, 0 = non noté), plus les champs
+  « accepté » ci-dessous. Les étoiles d'une photo rejetée sont mémorisées dans un champ
+  propre à `tri`, pour les restaurer si on annule le rejet (à valider à l'usage).
+- **Accepté** (pas de champ standard) : `xmpDM:pick` (Lightroom Classic ≥ 13.2 : 1 / 0 / -1)
+  et `digiKam:PickLabel` (0 rien, 1 rejeté, 2 en attente, 3 accepté). Capture One : pas de
+  documentation trouvée.
+- **Couleurs** : une par défaut, plusieurs en option (configuration). darktable lit
+  `xmp:Label` (« Red », « Yellow », « Green », « Blue », « Purple ») **en priorité** sur
+  `darktable:colorlabels` (séquence de 0 = rouge à 4 = violet ; vérifié dans son code
+  source) : en mode une couleur, écrire les deux ; en mode plusieurs couleurs, seulement
+  `darktable:colorlabels` (et `xmp:Label` s'il n'y en a qu'une), sinon darktable n'en
+  verrait qu'une.
+- Sources : spécification XMP (rating -1), exiv2 (schéma digiKam), forums Adobe et
+  ExifTool (xmpDM:pick, LR 13.2), code source darktable (`src/common/exif.cc`).
 
 ## Idées pour plus tard (non urgentes, notées pour mémoire)
 
