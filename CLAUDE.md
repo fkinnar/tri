@@ -554,6 +554,11 @@ explicitement par l'utilisateur comme important.
       avant / 3 après) → 14 rouges sur 15, 0 verte. Non détectable sans IA : mise au point
       sur l'arrière-plan (le collimateur était sur l'arrière-plan). Netteté au collimateur
       testée et écartée (dépend du contenu de la zone). Détails : `doc/sharpness.md`.
+      **Faux positifs constatés** le 17/10/2026 (photos libres du manuel) : sur un
+      dossier aux sujets variés, des gros plans nets sur fond très flou (papillon,
+      coccinelle, oie) étaient marqués « floue » parmi des paysages très détaillés. Le
+      jugement relatif suppose des scènes comparables : regroupement en rafales, ou
+      normalisation par le contenu, à étudier.
       Ajouté le 17/10/2026 (retours) : filtre « floues seulement » (`f B`), carte de
       netteté resserrée (seuil 48 au lieu de 32), repère du collimateur (`m`, Fujifilm,
       carré / croix / cercle / cœur). À affiner à l'usage (l'utilisateur a étiqueté vite).
@@ -564,6 +569,12 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [~] **Manuel des testeurs** (demandé le 17/10/2026) : `doc/manuel.md` et
+      `doc/manual.md`, courts exprès (« laisser de la liberté de penser » : savoir si
+      l'interface est intuitive) ; captures par `scripts/manual-screenshots.sh`. Faites
+      avec des photos libres (Wikimedia Commons, CC0) ; **à refaire avec de vraies
+      photos de l'utilisateur** (RAW, collimateur, histogramme RAW) : relancer le script
+      sur son dossier, en `--lang fr` puis `--lang en`.
 - [ ] **Fenêtre de réglages** (`Ctrl+,`, demandée le 17/10/2026) : les réglages sont
       devenus nombreux (`doc/config.example.toml`) ; les modifier depuis l'interface,
       écrits dans le fichier de configuration (sans perdre les commentaires ni les clés

@@ -9,6 +9,7 @@ existe.
 
 | Document | Contenu |
 |---|---|
+| [manuel.md](manuel.md) / [manual.md](manual.md) | Premiers pas pour les testeurs (captures, volontairement court) ; captures produites par `scripts/manual-screenshots.sh` |
 | [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [settings.md](settings.md) | Fichier de configuration (TOML) : emplacement, sections, erreurs ; module `tri::settings` |

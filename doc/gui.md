@@ -525,6 +525,16 @@ moitié transparente.
   moteur, image prête, abandonnée, lecture et décodage, image affichée) sur la sortie
   d'erreur. C'est elle qui a permis de mesurer les délais ci-dessus.
 
+**Captures du manuel des testeurs** (`doc/manuel.md`, `doc/manual.md`) :
+`scripts/manual-screenshots.sh <dossier de photos> [--lang fr|en]` copie les photos sur un
+volume de démonstration (image disque « Photos » sur macOS : le panneau des dossiers ne
+montre qu'elle), lance l'interface avec sa propre configuration, son cache et son dossier
+de données (rien de l'utilisateur n'est touché), enchaîne les captures (grille, plein
+écran, clic droit, comparaison, aide), numérote les zones et convertit en JPEG dans
+`doc/manual-images/<langue>/`. Le jugement de netteté y est désactivé : sur un dossier de
+sujets variés (gros plans sur fond flou parmi des paysages), il marquait à tort des
+photos nettes.
+
 ## Tests
 
 **Tests d'interface** avec [egui_kittest](https://crates.io/crates/egui_kittest) (banc de
