@@ -192,7 +192,7 @@ impl std::fmt::Display for ExposureError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Raw(e) => write!(f, "{e}"),
-            Self::Format => write!(f, "données d'exposition illisibles"),
+            Self::Format => write!(f, "{}", crate::t!("exposure-unreadable")),
         }
     }
 }

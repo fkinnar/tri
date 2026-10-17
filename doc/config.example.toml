@@ -158,6 +158,11 @@ spread = 1
 # garder.
 min_neighbours = 2
 
+[i18n]
+# Langue des textes (interface, ligne de commande, messages) : "auto" (langue du système ;
+# l'anglais si elle n'est pas disponible), "fr" ou "en".
+language = "auto"
+
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

@@ -58,16 +58,16 @@ pub fn pick(
 }
 
 /// Ce qui est affiché, en clair.
-pub fn label(kind: MediaKind, level: Level) -> &'static str {
+pub fn label(kind: MediaKind, level: Level) -> String {
     match (kind, level) {
-        (_, Level::Thumbnail) => "Vignette (aperçu en cours de calcul)",
-        (MediaKind::Raw, Level::Embedded) => "JPEG boîtier",
-        (MediaKind::Raw, Level::Standard) => "Rendu RAW",
-        (MediaKind::Raw, Level::Full) => "Rendu RAW · 100 %",
-        (MediaKind::Raw, Level::EmbeddedFull) => "JPEG boîtier · 1:1",
-        (MediaKind::Flat, Level::Full) => "Image · 100 %",
-        (_, Level::Exposure) => "Analyse d'exposition",
-        (MediaKind::Flat, _) => "Image",
+        (_, Level::Thumbnail) => t!("shown-thumbnail"),
+        (MediaKind::Raw, Level::Embedded) => t!("shown-embedded"),
+        (MediaKind::Raw, Level::Standard) => t!("shown-raw"),
+        (MediaKind::Raw, Level::Full) => t!("shown-raw-full"),
+        (MediaKind::Raw, Level::EmbeddedFull) => t!("shown-embedded-full"),
+        (MediaKind::Flat, Level::Full) => t!("shown-image-full"),
+        (_, Level::Exposure) => t!("shown-exposure"),
+        (MediaKind::Flat, _) => t!("shown-image"),
     }
 }
 

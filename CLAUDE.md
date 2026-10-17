@@ -570,9 +570,12 @@ explicitement par l'utilisateur comme important.
 - [ ] Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs).
 
 ### Internationalisation
-- [ ] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais
+- [x] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais
       (interface *et* moteur), langue du système par défaut, réglable ; piste Fluent.
-      Choix technique laissé à Claude (17/10/2026).
+      Choix technique laissé à Claude (17/10/2026). **Fait** le 17/10/2026 : Fluent
+      (`src/i18n.rs`, `doc/i18n.md`), catalogues `locales/` et `gui/locales/`, `t!`,
+      `[i18n] language` ; interface, ligne de commande, erreurs et métadonnées traduites ;
+      noms de touches lus dans toutes les langues.
 
 ### Plateformes et outillage
 - [ ] **Windows** : jamais compilé ni testé (build LibRaw, lettres de lecteur, éjection

@@ -4,6 +4,7 @@
 
 use eframe::egui::{Align2, Color32, ColorImage, FontId, Mesh, Painter, Rect, Stroke, pos2, vec2};
 use tri::exposure::{CHANNELS, Exposure, Mask, Source, mask};
+use tri::i18n::decimal;
 
 use crate::settings::{Colors, HistogramScale, HistogramSettings};
 
@@ -58,11 +59,6 @@ pub fn shown_stops(e: &Exposure, setting: f32) -> f32 {
     }
 }
 
-/// Nombre à la française, `decimals` chiffres après la virgule.
-fn french(value: f64, decimals: usize) -> String {
-    format!("{value:.decimals$}").replace('.', ",")
-}
-
 /// Histogramme dans `rect` : fond, canaux superposés, graduations, indicateurs.
 pub fn draw(
     painter: &Painter,
@@ -79,11 +75,12 @@ pub fn draw(
         Source::Raw { bits, .. } => format!("RAW {bits} bits"),
         Source::Flat { bits } => format!("{bits} bits"),
     };
-    let text = format!(
-        "{source} · marge {} IL · saturés {} % · bouchés {} %",
-        french(e.headroom_ev() as f64, 2),
-        french(e.over_fraction() * 100.0, 2),
-        french(e.under_fraction() * 100.0, 2)
+    let text = t!(
+        "histogram-indicators",
+        source = source,
+        headroom = decimal(e.headroom_ev() as f64, 2),
+        over = decimal(e.over_fraction() * 100.0, 2),
+        under = decimal(e.under_fraction() * 100.0, 2)
     );
     let galley = painter.layout(
         text,
@@ -164,7 +161,7 @@ pub fn draw(
                     label(
                         x,
                         if k == 0 {
-                            "0 IL".into()
+                            t!("histogram-zero-ev")
                         } else {
                             format!("-{k}")
                         },
@@ -340,7 +337,9 @@ mod tests {
     }
 
     #[test]
-    fn french_decimals() {
-        assert_eq!(french(-0.456, 2), "-0,46");
+    fn decimals_follow_the_language() {
+        crate::i18n::register();
+        tri::i18n::set_language(tri::i18n::Language::Fr);
+        assert_eq!(decimal(-0.456, 2), "-0,46");
     }
 }

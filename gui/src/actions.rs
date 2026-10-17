@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+use tri::i18n::Language;
 
 use eframe::egui::{Event, Key, Modifiers};
 use tri::xmp::{Color, Flag};
@@ -46,18 +47,9 @@ impl Group {
         Group::App,
     ];
 
-    /// Titre dans l'aide.
-    pub fn label(self) -> &'static str {
-        match self {
-            Group::Navigation => "Navigation",
-            Group::View => "Affichage",
-            Group::Rating => "Notation",
-            Group::Filters => "Filtres",
-            Group::Panels => "Panneaux",
-            Group::Files => "Fichiers",
-            Group::Selection => "Sélection",
-            Group::App => "Application",
-        }
+    /// Titre dans l'aide, dans la langue de l'interface.
+    pub fn label(self) -> String {
+        t!(&format!("group-{self:?}").to_lowercase())
     }
 }
 
@@ -148,11 +140,11 @@ impl FlagFilter {
     }
 
     /// Nom court (barre de filtres, barre d'état).
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            FlagFilter::Accepted => "acceptées",
-            FlagFilter::NotRejected => "sans les rejetées",
-            FlagFilter::Rejected => "rejetées",
+            FlagFilter::Accepted => t!("flag-filter-accepted"),
+            FlagFilter::NotRejected => t!("flag-filter-not-rejected"),
+            FlagFilter::Rejected => t!("flag-filter-rejected"),
         }
     }
 }
@@ -335,85 +327,11 @@ impl Action {
         Action::ALL.into_iter().find(|a| a.id() == id)
     }
 
-    /// Libellé pour l'utilisateur (aide, menus).
-    pub fn label(self) -> &'static str {
-        match self {
-            Action::NavPrev => "Image précédente",
-            Action::NavNext => "Image suivante",
-            Action::NavUp => "Ligne du dessus",
-            Action::NavDown => "Ligne du dessous",
-            Action::NavFirst => "Première image",
-            Action::NavLast => "Dernière image",
-            Action::NavPageUp => "Page précédente",
-            Action::NavPageDown => "Page suivante",
-            Action::FilterCycle => "Filtre de type : tout, RAW, plates",
-            Action::FilterStars(0) => "Filtre : étoiles indifférentes",
-            Action::FilterStars(1) => "Filtre : au moins 1 étoile",
-            Action::FilterStars(2) => "Filtre : au moins 2 étoiles",
-            Action::FilterStars(3) => "Filtre : au moins 3 étoiles",
-            Action::FilterStars(4) => "Filtre : au moins 4 étoiles",
-            Action::FilterStars(_) => "Filtre : 5 étoiles",
-            Action::FilterFlag(FlagFilter::Accepted) => "Filtre : acceptées seulement",
-            Action::FilterFlag(FlagFilter::NotRejected) => "Filtre : masquer les rejetées",
-            Action::FilterFlag(FlagFilter::Rejected) => "Filtre : rejetées seulement",
-            Action::FilterColor(Color::Red) => "Filtre : rouge (ajouter / retirer)",
-            Action::FilterColor(Color::Yellow) => "Filtre : jaune (ajouter / retirer)",
-            Action::FilterColor(Color::Green) => "Filtre : vert (ajouter / retirer)",
-            Action::FilterColor(Color::Blue) => "Filtre : bleu (ajouter / retirer)",
-            Action::FilterColor(Color::Purple) => "Filtre : violet (ajouter / retirer)",
-            Action::FilterClear => "Effacer tous les filtres",
-            Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
-            Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
-            Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
-            Action::Compare => "Comparer les images sélectionnées côte à côte",
-            Action::TogglePeaking => "Afficher / masquer la netteté (contours nets, en 1:1)",
-            Action::PeakingColor => "Netteté : couleur suivante",
-            Action::SelectToggle => "Sélectionner / désélectionner l'image",
-            Action::SelectVisual => "Mode visuel : sélectionner une plage (v pour valider)",
-            Action::SelectAll => "Tout sélectionner",
-            Action::SelectClear => "Tout désélectionner",
-            Action::FileRename => "Renommer…",
-            Action::FileDelete => "Mettre à la corbeille…",
-            Action::FileReveal => {
-                if cfg!(target_os = "macos") {
-                    "Afficher dans le Finder"
-                } else {
-                    "Afficher dans le gestionnaire de fichiers"
-                }
-            }
-            Action::FileEdit => "Ouvrir dans l'éditeur externe",
-            Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
-            Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
-            Action::ToggleHistogram => "Afficher / masquer l'histogramme",
-            Action::HistogramScale => "Histogramme : IL / linéaire",
-            Action::HistogramLarge => "Histogramme en grand",
-            Action::ToggleClipping => "Afficher / masquer les zones brûlées et bouchées",
-            Action::ToggleMetadata => "Afficher / masquer le panneau des métadonnées",
-            Action::Open => "Ouvrir en plein écran",
-            Action::ToggleZoom => "Zoom 100 % / ajusté",
-            Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
-            Action::PanLeft => "Image zoomée : aller à gauche",
-            Action::PanRight => "Image zoomée : aller à droite",
-            Action::PanUp => "Image zoomée : aller en haut",
-            Action::PanDown => "Image zoomée : aller en bas",
-            Action::Back => "Fermer / revenir",
-            Action::Help => "Afficher ou masquer cette aide",
-            Action::Quit => "Quitter",
-            Action::Stars(0) => "Retirer les étoiles",
-            Action::Stars(1) => "1 étoile",
-            Action::Stars(2) => "2 étoiles",
-            Action::Stars(3) => "3 étoiles",
-            Action::Stars(4) => "4 étoiles",
-            Action::Stars(_) => "5 étoiles",
-            Action::Color(Color::Red) => "Couleur rouge (ajouter / retirer)",
-            Action::Color(Color::Yellow) => "Couleur jaune (ajouter / retirer)",
-            Action::Color(Color::Green) => "Couleur verte (ajouter / retirer)",
-            Action::Color(Color::Blue) => "Couleur bleue (ajouter / retirer)",
-            Action::Color(Color::Purple) => "Couleur violette (ajouter / retirer)",
-            Action::Flag(Flag::Accepted) => "Accepter",
-            Action::Flag(Flag::Rejected) => "Rejeter",
-            Action::Flag(Flag::None) => "Ni acceptée ni rejetée",
-        }
+    /// Libellé compréhensible (aide, bulles, boutons), dans la langue de l'interface :
+    /// identifiant `action-<identifiant de l'action>` des catalogues (`gui/locales`).
+    pub fn label(self) -> String {
+        let id = format!("action-{}", self.id().replace('.', "-"));
+        t!(&id, os = crate::i18n::os())
     }
 
     /// Thème de l'action (aide).
@@ -871,7 +789,7 @@ impl Keymap {
             for spec in specs {
                 match parse_keys(spec) {
                     Ok(keys) => custom.push((keys, action, spec)),
-                    Err(e) => warnings.push(format!("[keys] {id} : {e}")),
+                    Err(e) => warnings.push(t!("keys-error", id = id, error = e)),
                 }
             }
         }
@@ -880,20 +798,21 @@ impl Keymap {
         for (keys, action, spec) in custom {
             if let Some((_, other)) = added.iter().find(|(k, _)| *k == keys) {
                 if *other != action {
-                    warnings.push(format!(
-                        "[keys] « {spec} » attribué à {} et à {} : gardé pour {}",
-                        other.id(),
-                        action.id(),
-                        other.id()
+                    warnings.push(t!(
+                        "keys-conflict",
+                        spec = spec,
+                        first = other.id(),
+                        second = action.id()
                     ));
                 }
                 continue;
             }
             if let Some(i) = self.bindings.iter().position(|(k, _)| *k == keys) {
-                warnings.push(format!(
-                    "[keys] « {spec} » ({}) remplace le raccourci de {}",
-                    action.id(),
-                    self.bindings[i].1.id()
+                warnings.push(t!(
+                    "keys-replaces",
+                    spec = spec,
+                    action = action.id(),
+                    other = self.bindings[i].1.id()
                 ));
                 self.bindings.remove(i);
             }
@@ -906,11 +825,11 @@ impl Keymap {
                 .iter()
                 .find(|(l, _)| l.len() > keys.len() && l.starts_with(keys))
             {
-                warnings.push(format!(
-                    "« {} » ({}) ne se déclenche jamais : c'est le début de « {} »",
-                    sequence_label(keys),
-                    action.id(),
-                    sequence_label(longer)
+                warnings.push(t!(
+                    "keys-shadowed",
+                    keys = sequence_label(keys),
+                    action = action.id(),
+                    longer = sequence_label(longer)
                 ));
             }
         }
@@ -1010,10 +929,15 @@ impl Keymap {
 /// compte de la casse.
 fn key_named(name: &str) -> Option<Key> {
     let lower = name.to_lowercase();
+    // Noms de toutes les langues : une configuration reste valable si la langue change.
     Key::ALL
         .iter()
         .copied()
-        .find(|&k| key_label(k).to_lowercase() == lower)
+        .find(|&k| {
+            Language::ALL
+                .iter()
+                .any(|&l| key_label_in(l, k).to_lowercase() == lower)
+        })
         .or_else(|| Key::from_name(name))
         .or_else(|| {
             Key::ALL
@@ -1036,9 +960,19 @@ fn strip_prefix_ignore_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
 /// [`Trigger::Char`] (sans modificateur).
 fn parse_chord(text: &str) -> Result<Chord, String> {
     let (mut rest, mut shift, mut ctrl) = (text, false, false);
+    // « Maj+ », « Shift+ » : préfixes de toutes les langues.
+    let shift_prefixes: Vec<String> = Language::ALL
+        .iter()
+        .map(|&l| {
+            crate::i18n::ensure();
+            tri::i18n::translate_in(l, "key-shift-prefix", None)
+        })
+        .chain(["Shift+".to_string()])
+        .collect();
     loop {
-        if let Some(r) = strip_prefix_ignore_case(rest, "Maj+")
-            .or_else(|| strip_prefix_ignore_case(rest, "Shift+"))
+        if let Some(r) = shift_prefixes
+            .iter()
+            .find_map(|p| strip_prefix_ignore_case(rest, p))
         {
             (rest, shift) = (r, true);
         } else if let Some(r) = strip_prefix_ignore_case(rest, "Ctrl+") {
@@ -1063,7 +997,7 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
         }),
         None => match single {
             Some(c) if !shift && !ctrl => Ok(Chord::char(c)),
-            _ => Err(format!("touche inconnue « {text} »")),
+            _ => Err(t!("keys-unknown-key", text = text)),
         },
     }
 }
@@ -1074,7 +1008,7 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
 pub fn parse_keys(text: &str) -> Result<Vec<Chord>, String> {
     let words: Vec<&str> = text.split_whitespace().collect();
     if words.is_empty() {
-        return Err("raccourci vide".into());
+        return Err(t!("keys-empty"));
     }
     let mut chords = Vec::new();
     let mut i = 0;
@@ -1103,7 +1037,7 @@ fn chord_label(c: &Chord) -> String {
         label.push_str("Ctrl+");
     }
     if c.shift && c.trigger != Trigger::Key(Key::Questionmark) {
-        label.push_str("Maj+");
+        label.push_str(&t!("key-shift-prefix"));
     }
     label + &name
 }
@@ -1115,26 +1049,41 @@ fn sequence_label(keys: &[Chord]) -> String {
     if labels.iter().all(|l| l.chars().count() == 1) {
         labels.concat()
     } else {
-        labels.join(" puis ")
+        labels.join(&t!("key-sequence-then"))
     }
 }
 
-/// Nom lisible d'une touche, en français. Volontairement indépendant des noms d'egui et sans
-/// symboles : « ⏴ » et même « ← » manquent dans la police par défaut d'egui (les tests
-/// d'interface le vérifient), et les polices du système ne sont pas garanties.
+/// Nom lisible d'une touche, dans la langue de l'interface. Volontairement indépendant des
+/// noms d'egui et sans symboles : « ⏴ » et même « ← » manquent dans la police par défaut
+/// d'egui (les tests d'interface le vérifient), et les polices du système ne sont pas
+/// garanties.
 pub fn key_label(key: Key) -> String {
+    key_label_in(tri::i18n::language(), key)
+}
+
+/// [`key_label`] dans la langue `language`.
+fn key_label_in(language: Language, key: Key) -> String {
+    let id = match key {
+        Key::ArrowLeft => Some("key-arrow-left"),
+        Key::ArrowRight => Some("key-arrow-right"),
+        Key::ArrowUp => Some("key-arrow-up"),
+        Key::ArrowDown => Some("key-arrow-down"),
+        Key::Home => Some("key-home"),
+        Key::End => Some("key-end"),
+        Key::PageUp => Some("key-page-up"),
+        Key::PageDown => Some("key-page-down"),
+        Key::Escape => Some("key-escape"),
+        Key::Enter => Some("key-enter"),
+        Key::Space => Some("key-space"),
+        Key::Delete => Some("key-delete"),
+        Key::Backspace => Some("key-backspace"),
+        _ => None,
+    };
+    if let Some(id) = id {
+        crate::i18n::ensure();
+        return tri::i18n::translate_in(language, id, None);
+    }
     match key {
-        Key::ArrowLeft => "Flèche gauche".into(),
-        Key::ArrowRight => "Flèche droite".into(),
-        Key::ArrowUp => "Flèche haut".into(),
-        Key::ArrowDown => "Flèche bas".into(),
-        Key::Home => "Début".into(),
-        Key::End => "Fin".into(),
-        Key::PageUp => "Page préc.".into(),
-        Key::PageDown => "Page suiv.".into(),
-        Key::Escape => "Échap".into(),
-        Key::Enter => "Entrée".into(),
-        Key::Space => "Espace".into(),
         Key::Questionmark => "?".into(),
         Key::Comma => ",".into(),
         Key::Period => ".".into(),
@@ -1408,7 +1357,7 @@ mod tests {
 
     #[test]
     fn labels_are_distinct_and_readable() {
-        let mut labels: Vec<&str> = Action::ALL.iter().map(|a| a.label()).collect();
+        let mut labels: Vec<String> = Action::ALL.iter().map(|a| a.label()).collect();
         assert!(labels.iter().all(|l| !l.contains('.') || l.contains(' ')));
         labels.sort();
         labels.dedup();
@@ -1676,5 +1625,14 @@ mod tests {
         // Lettres consécutives et débuts de mots passent devant les correspondances éparses.
         assert!(s("zoom", "Zoom 100 % / ajusté") > s("zoom", "z o o m éparpillé"));
         assert!(s("fil", "Filtre de type") > s("fil", "Afficher le profil"));
+    }
+
+    #[test]
+    fn key_names_are_read_in_every_language() {
+        assert_eq!(parse_keys("Shift+P"), parse_keys("Maj+P"));
+        assert_eq!(parse_keys("Left arrow"), parse_keys("Flèche gauche"));
+        assert_eq!(parse_keys("Esc g"), parse_keys("Échap g"));
+        assert_eq!(key_label_in(Language::En, Key::ArrowLeft), "Left arrow");
+        assert_eq!(key_label_in(Language::Fr, Key::ArrowLeft), "Flèche gauche");
     }
 }

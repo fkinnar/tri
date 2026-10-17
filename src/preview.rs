@@ -94,10 +94,10 @@ impl fmt::Display for PreviewError {
         match self {
             Self::Raw(e) => e.fmt(f),
             Self::Flat(e) => e.fmt(f),
-            Self::Io(e) => write!(f, "accès fichier impossible : {e}"),
-            Self::NoEmbeddedPreview => write!(f, "pas d'aperçu embarqué exploitable"),
-            Self::Cancelled => write!(f, "calcul annulé"),
-            Self::NotAnImage => write!(f, "ce niveau n'est pas une image"),
+            Self::Io(e) => write!(f, "{}", crate::t!("preview-io", error = e.to_string())),
+            Self::NoEmbeddedPreview => write!(f, "{}", crate::t!("preview-no-embedded")),
+            Self::Cancelled => write!(f, "{}", crate::t!("preview-cancelled")),
+            Self::NotAnImage => write!(f, "{}", crate::t!("preview-not-an-image")),
         }
     }
 }

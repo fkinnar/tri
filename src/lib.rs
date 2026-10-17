@@ -29,6 +29,7 @@ pub mod files;
 pub mod filter;
 pub mod flat;
 pub mod folder;
+pub mod i18n;
 pub mod jpeg;
 pub mod media;
 pub mod metadata;

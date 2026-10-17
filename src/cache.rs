@@ -155,10 +155,7 @@ impl Cache {
     /// Ouvre le cache à son emplacement par défaut (voir [`default_dir`]).
     pub fn open_default() -> io::Result<Cache> {
         let dir = default_dir().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "dossier de cache utilisateur introuvable",
-            )
+            io::Error::new(io::ErrorKind::NotFound, crate::t!("cache-no-user-dir"))
         })?;
         Cache::open(dir)
     }

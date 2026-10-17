@@ -1,0 +1,148 @@
+# Catalogue du moteur et de la ligne de commande — français (langue de référence).
+# Chaque identifiant doit exister aussi dans en.ftl (vérifié par les tests).
+
+images-count = { $n ->
+    [one] { $n } image
+   *[other] { $n } images
+}
+
+# Messages généraux
+warning-prefix = attention : { $message }
+
+## Métadonnées
+
+metadata-unreadable = fichier illisible : { $error }
+metadata-camera = Appareil
+metadata-lens = Objectif
+metadata-exposure = Exposition
+metadata-bias = Correction
+metadata-bias-value = { $value } IL
+metadata-mode = Mode
+metadata-focal = Focale
+metadata-focal-equivalent = { $focal } mm (éq. 24 × 36 : { $equivalent } mm)
+metadata-focal-value = { $focal } mm
+metadata-flash = Flash
+metadata-flash-fired = déclenché
+metadata-flash-not-fired = non déclenché
+metadata-date = Date
+metadata-date-value = { $day }/{ $month }/{ $year } à { $time }
+metadata-dimensions = Dimensions
+metadata-dimensions-value = { $width } × { $height } ({ $mpx } Mpx)
+metadata-file = Fichier
+metadata-size-kb = { $size } ko
+metadata-size-mb = { $size } Mo
+program-manual = Manuel
+program-normal = Programme
+program-aperture = Priorité ouverture
+program-shutter = Priorité vitesse
+program-creative = Créatif (profondeur de champ)
+program-action = Action (vitesse rapide)
+program-portrait = Portrait
+program-landscape = Paysage
+
+## Erreurs
+
+raw-init-failed = libraw_init a échoué
+raw-invalid-path = chemin non transmissible à LibRaw : { $path }
+raw-libraw-error = LibRaw erreur { $code } : { $message }
+raw-cancelled = traitement LibRaw annulé
+raw-empty-image = LibRaw a renvoyé une image nulle sans code d'erreur
+raw-no-mosaic = RAW sans mosaïque de filtres couleur (DNG linéaire, Foveon)
+raw-unsupported-image = image non gérée (type { $kind }, { $colors } canaux, { $bits } bits)
+flat-read-failed = lecture impossible : { $error }
+flat-decode-failed = décodage impossible : { $error }
+flat-heif-not-compiled = HEIF non pris en charge (compilé sans « heif »)
+flat-heif-failed = décodage HEIF impossible : { $error }
+flat-heif-layout = libheif n'a pas renvoyé de RGB 8 bits
+files-invalid-name = nom invalide : « { $name } »
+files-exists = { $path } existe déjà
+files-trash-failed = mise à la corbeille impossible : { $error }
+files-launch-failed = lancement de « { $program } » impossible : { $error }
+preview-io = accès fichier impossible : { $error }
+preview-no-embedded = pas d'aperçu embarqué exploitable
+preview-cancelled = calcul annulé
+preview-not-an-image = ce niveau n'est pas une image
+exposure-unreadable = données d'exposition illisibles
+cache-no-user-dir = dossier de cache utilisateur introuvable
+xmp-io = sidecar XMP : { $error }
+xmp-malformed = sidecar XMP mal formé (non modifié) : { $error }
+xmp-no-description = sidecar XMP sans rdf:Description (non modifié)
+settings-auto-or-integer = "auto" ou un entier positif
+offload-no-data-dir = dossier de données introuvable (HOME absent)
+offload-unnamed-file = fichier sans nom
+offload-verify-failed = la copie relue diffère de l'original (support défectueux ?)
+offload-copy-missing = copie absente ou différente : conservé
+places-home = Dossier personnel
+places-root = Racine (/)
+settings-defaults-used = { $warning } ; réglages par défaut utilisés
+settings-file-error = configuration { $path } : { $error }
+
+## Ligne de commande
+
+cli-usage = 
+    usage :
+      tri <dossier> [--raw|--flat] [--depth N]
+      tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
+      tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
+      tri --cache-usage [--cache DOSSIER]
+      tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --exposure [--raw|--flat] [--depth N]
+      tri <dossier> --metadata [--raw|--flat] [--depth N]
+      tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
+      tri --rename <image> <nom> [--dry-run]
+      tri --delete <image>... [--permanent] [--dry-run]
+      tri --reveal <image>
+      tri --edit <image>...
+    option commune : --config FICHIER (réglages ; défaut : emplacement du système)
+cli-unknown-convention = convention inconnue : { $value } (darktable ou adobe)
+cli-unknown-option = option inconnue : { $option }
+cli-extra-argument = argument en trop : { $argument }
+cli-cache = cache : { $path }
+cli-cache-level = { $entries } entrées  { $mib } Mio  (moyenne { $average } Kio)
+cli-previews-start = { $n } images ({ $raws } RAW), vignettes { $thumbnail } px, aperçus { $standard } px, { $workers } workers légers + 1 lourd, { $order ->
+    [thumbnails] vignettes d'abord
+   *[mixed] mélangé
+}
+cli-previews-progress = vignettes { $thumbnails }   JPEG boîtier { $embedded }   histogrammes { $histograms }   aperçus { $previews } { $percent } %   { $seconds } s
+cli-thumbnails-done = vignettes terminées en { $time }
+cli-embedded-done = aperçus boîtier terminés en { $time } (tout le dossier consultable)
+cli-all-done = terminé en { $time } ({ $ms } ms par image en moyenne)
+cli-failure = échec : { $error }
+cli-trimmed = limite des 1:1 : { $n } entrées anciennes supprimées ({ $mb } Mo)
+cli-offload-plan = { $card } : { $n } images ({ $known } déjà déchargées), { $ignored } autres fichiers ignorés, { $mb } Mo à copier
+cli-nothing-to-copy = rien à copier
+cli-destination = destination : { $path }
+cli-already-there = { $n } images déjà dans la destination (ignorées si identiques)
+cli-to-copy = à copier
+cli-offload-progress = { $done }/{ $total } fichiers   { $mb }/{ $total_mb } Mo
+cli-error = erreur
+cli-offload-done = { $verified ->
+    [yes] { $copied } copiés et vérifiés
+   *[no] { $copied } copiés
+}, { $skipped } ignorés, { $left } laissés sur la carte, { $errors } erreurs, en { $time }
+cli-deleted = { $n } fichiers supprimés de la carte
+cli-not-deleted = non supprimé
+cli-ejected = carte éjectée
+cli-eject-failed = éjection impossible : { $error }
+cli-some-not-copied = certains fichiers n'ont pas été copiés
+cli-exposure-header = fichier	source	marge (IL)	saturés	bouchés	durée
+cli-exposure-raw-source = RAW { $bits } bits, noir { $black }, blanc { $white }
+cli-error-detail = erreur : { $error }
+cli-xmp-written = { $mode ->
+    [dry-run] à écrire
+   *[write] écrit
+}
+cli-xmp-conflict = conflit	{ $image } : notes différentes de l'image qui partage le même sidecar, ignorée
+cli-xmp-summary = { $n } images : { $written } sidecars { $mode ->
+    [dry-run] à écrire
+   *[write] écrits
+}, { $unchanged } inchangées, { $conflicts } conflits, { $errors } erreurs
+cli-xmp-some-failed = certains sidecars n'ont pas pu être convertis
+cli-rename-shared-copy = (copie : partagé)
+cli-delete-trash = corbeille :
+cli-delete-permanent = supprimé :
+cli-delete-kept = gardé (partagé) :
+cli-dry-run = (--dry-run : rien n'a été modifié)
+cli-cache-cleared = cache vidé ({ $level })
+cli-cache-all = tout
+cli-group = GROUPE { $index } ({ $n } images)

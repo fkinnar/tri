@@ -120,14 +120,14 @@ pub fn places() -> Vec<Place> {
     }
     if let Some(home) = home_dir(std::env::consts::OS, env) {
         places.push(Place {
-            name: "Dossier personnel".into(),
+            name: crate::t!("places-home"),
             path: home,
             kind: PlaceKind::Home,
         });
     }
     if std::env::consts::OS != "windows" {
         places.push(Place {
-            name: "Racine (/)".into(),
+            name: crate::t!("places-root"),
             path: PathBuf::from("/"),
             kind: PlaceKind::Root,
         });

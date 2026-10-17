@@ -50,22 +50,13 @@ use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaKind, scan};
 use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
 use tri::settings::{self, Auto, EngineSettings};
+use tri::t;
 use tri::xmp::{self, Convention};
 
-const USAGE: &str = "usage :
-  tri <dossier> [--raw|--flat] [--depth N]
-  tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
-  tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
-  tri --cache-usage [--cache DOSSIER]
-  tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
-  tri <dossier> --exposure [--raw|--flat] [--depth N]
-  tri <dossier> --metadata [--raw|--flat] [--depth N]
-  tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
-  tri --rename <image> <nom> [--dry-run]
-  tri --delete <image>... [--permanent] [--dry-run]
-  tri --reveal <image>
-  tri --edit <image>...
-option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
+/// Mode d'emploi, dans la langue choisie.
+fn usage() -> String {
+    t!("cli-usage")
+}
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -124,7 +115,7 @@ fn parse() -> AnyResult<Args> {
     let mut args = Args::default();
     let mut it = std::env::args().skip(1).peekable();
     while let Some(arg) = it.next() {
-        let mut value = || it.next().ok_or(USAGE);
+        let mut value = || it.next().ok_or_else(usage);
         match arg.as_str() {
             "--raw" => args.kind = KindFilter::RawOnly,
             "--flat" => args.kind = KindFilter::FlatOnly,
@@ -142,10 +133,8 @@ fn parse() -> AnyResult<Args> {
                     "darktable" => Convention::Darktable,
                     "adobe" => Convention::Adobe,
                     other => {
-                        return Err(format!(
-                            "convention inconnue : {other} (darktable ou adobe)\n{USAGE}"
-                        )
-                        .into());
+                        let message = t!("cli-unknown-convention", value = other);
+                        return Err(format!("{message}\n{}", usage()).into());
                     }
                 })
             }
@@ -172,7 +161,9 @@ fn parse() -> AnyResult<Args> {
                 args.clear = Some(level);
             }
             other if other.starts_with("--") => {
-                return Err(format!("option inconnue : {other}\n{USAGE}").into());
+                return Err(
+                    format!("{}\n{}", t!("cli-unknown-option", option = other), usage()).into(),
+                );
             }
             dir if args.dir.is_none() => args.dir = Some(dir.into()),
             other => args.rest.push(other.into()),
@@ -181,7 +172,12 @@ fn parse() -> AnyResult<Args> {
     if args.file_action.is_none()
         && let Some(other) = args.rest.first()
     {
-        return Err(format!("argument en trop : {other}\n{USAGE}").into());
+        return Err(format!(
+            "{}\n{}",
+            t!("cli-extra-argument", argument = other),
+            usage()
+        )
+        .into());
     }
     Ok(args)
 }
@@ -190,7 +186,7 @@ fn parse() -> AnyResult<Args> {
 fn settings(args: &Args) -> EngineSettings {
     let loaded = settings::load::<EngineSettings>(args.config.as_deref());
     if let Some(warning) = &loaded.warning {
-        eprintln!("attention : {warning}");
+        eprintln!("{}", t!("warning-prefix", message = warning));
     }
     let mut s = loaded.settings;
     if let Some(side) = args.side {
@@ -216,7 +212,10 @@ fn mib(bytes: u64) -> f64 {
 }
 
 fn print_usage(cache: &Cache) -> AnyResult<()> {
-    println!("cache : {}", cache.root().display());
+    println!(
+        "{}",
+        t!("cli-cache", path = cache.root().display().to_string())
+    );
     for level in Level::ALL {
         let u = cache.usage(level)?;
         let avg = if u.entries == 0 {
@@ -225,10 +224,14 @@ fn print_usage(cache: &Cache) -> AnyResult<()> {
             u.bytes / u.entries as u64
         };
         println!(
-            "  {level:<9?} {:>6} entrées  {:>9.1} Mio  (moyenne {:.0} Kio)",
-            u.entries,
-            mib(u.bytes),
-            avg as f64 / 1024.0
+            "  {:<13} {}",
+            format!("{level:?}"),
+            t!(
+                "cli-cache-level",
+                entries = format!("{:>6}", u.entries),
+                mib = format!("{:>9.1}", mib(u.bytes)),
+                average = format!("{:.0}", avg as f64 / 1024.0)
+            )
         );
     }
     Ok(())
@@ -244,17 +247,25 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     let preview = settings.preview(None);
     let config = settings.scheduler(RawPreviews::Background);
     println!(
-        "{n} images ({raws} RAW), vignettes {} px, aperçus {} px, {} workers légers + 1 lourd, {}",
-        preview.sizes.thumbnail,
-        preview.sizes.standard,
-        config.light_workers,
-        if config.thumbnails_first {
-            "vignettes d'abord"
-        } else {
-            "mélangé"
-        }
+        "{}",
+        t!(
+            "cli-previews-start",
+            n = n,
+            raws = raws,
+            thumbnail = preview.sizes.thumbnail,
+            standard = preview.sizes.standard,
+            workers = config.light_workers,
+            order = if config.thumbnails_first {
+                "thumbnails"
+            } else {
+                "mixed"
+            }
+        )
     );
-    println!("cache : {}", cache.root().display());
+    println!(
+        "{}",
+        t!("cli-cache", path = cache.root().display().to_string())
+    );
 
     let (tx, rx) = mpsc::channel();
     let producer = CachedPreviews {
@@ -300,18 +311,18 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
         if embedded_done_at.is_none() && finished(embedded, raws) {
             embedded_done_at = Some(start.elapsed());
         }
+        let count = |p: Progress| format!("{:>4}/{:<4}", p.done, p.total);
         print!(
-            "\r  vignettes {:>4}/{:<4}   JPEG boîtier {:>4}/{:<4}   histogrammes {:>4}/{:<4}   aperçus {:>4}/{:<4} {:>3.0} %   {:>6.1} s",
-            thumbs.done,
-            thumbs.total,
-            embedded.done,
-            embedded.total,
-            exposures.done,
-            exposures.total,
-            standards.done,
-            standards.total,
-            standards.fraction() * 100.0,
-            start.elapsed().as_secs_f64()
+            "\r  {}",
+            t!(
+                "cli-previews-progress",
+                thumbnails = count(thumbs),
+                embedded = count(embedded),
+                histograms = count(exposures),
+                previews = count(standards),
+                percent = format!("{:>3.0}", standards.fraction() * 100.0),
+                seconds = format!("{:>6.1}", start.elapsed().as_secs_f64())
+            )
         );
         std::io::stdout().flush()?;
         if finished(thumbs, n)
@@ -325,24 +336,31 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     let total = start.elapsed();
     println!();
     if let Some(t) = thumbs_done_at {
-        println!("vignettes terminées en {t:.2?}");
+        println!("{}", t!("cli-thumbnails-done", time = format!("{t:.2?}")));
     }
     if let Some(t) = embedded_done_at {
-        println!("aperçus boîtier terminés en {t:.2?} (tout le dossier consultable)");
+        println!("{}", t!("cli-embedded-done", time = format!("{t:.2?}")));
     }
     println!(
-        "terminé en {total:.2?} ({:.0} ms par image en moyenne)",
-        total.as_secs_f64() * 1000.0 / n.max(1) as f64
+        "{}",
+        t!(
+            "cli-all-done",
+            time = format!("{total:.2?}"),
+            ms = format!("{:.0}", total.as_secs_f64() * 1000.0 / n.max(1) as f64)
+        )
     );
     for f in &failures {
-        eprintln!("échec : {f}");
+        eprintln!("{}", t!("cli-failure", error = f.to_string()));
     }
     let freed = settings.trim_cache(&cache)?;
     if freed.entries > 0 {
         println!(
-            "limite des 1:1 : {} entrées anciennes supprimées ({:.0} Mo)",
-            freed.entries,
-            freed.bytes as f64 / 1e6
+            "{}",
+            t!(
+                "cli-trimmed",
+                n = freed.entries,
+                mb = format!("{:.0}", freed.bytes as f64 / 1e6)
+            )
         );
     }
     print_usage(&cache)
@@ -370,14 +388,18 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     };
     let known = plan.items.iter().filter(|i| i.known).count();
     println!(
-        "{} : {} images ({known} déjà déchargées), {} autres fichiers ignorés, {:.1} Mo à copier",
-        card.display(),
-        plan.items.len(),
-        plan.ignored,
-        plan.bytes(s) as f64 / 1e6
+        "{}",
+        t!(
+            "cli-offload-plan",
+            card = card.display().to_string(),
+            n = plan.items.len(),
+            known = known,
+            ignored = plan.ignored,
+            mb = tri::i18n::decimal(plan.bytes(s) as f64 / 1e6, 1)
+        )
     );
     if plan.to_copy(s).next().is_none() {
-        println!("rien à copier");
+        println!("{}", t!("cli-nothing-to-copy"));
         return Ok(());
     }
     let dest = offload::destination(&root, &folder)?;
@@ -386,40 +408,49 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     {
         let _ = offload::remember_root(&data, &root.to_string_lossy());
     }
-    println!("destination : {}", dest.display());
+    println!(
+        "{}",
+        t!("cli-destination", path = dest.display().to_string())
+    );
     let (there, _) = offload::already_in(&plan, s, &dest);
     if there > 0 {
-        println!("{there} images déjà dans la destination (ignorées si identiques)");
+        println!("{}", t!("cli-already-there", n = there));
     }
     if args.dry_run {
         for item in plan.to_copy(s) {
-            println!("à copier\t{}", item.source.display());
+            println!("{}\t{}", t!("cli-to-copy"), item.source.display());
         }
         return Ok(());
     }
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let report = offload::run(&plan, &dest, s, &mut history, &cancel, |p| {
         print!(
-            "\r  {}/{} fichiers   {:.0}/{:.0} Mo",
-            p.files_done,
-            p.files_total,
-            p.bytes_done as f64 / 1e6,
-            p.bytes_total as f64 / 1e6
+            "\r  {}",
+            t!(
+                "cli-offload-progress",
+                done = p.files_done,
+                total = p.files_total,
+                mb = format!("{:.0}", p.bytes_done as f64 / 1e6),
+                total_mb = format!("{:.0}", p.bytes_total as f64 / 1e6)
+            )
         );
         let _ = std::io::stdout().flush();
     });
     println!();
     for (file, error) in &report.errors {
-        eprintln!("erreur\t{} : {error}", file.display());
+        eprintln!("{}\t{} : {error}", t!("cli-error"), file.display());
     }
     println!(
-        "{} copiés{}, {} ignorés, {} laissés sur la carte, {} erreurs, en {:.1?}",
-        report.copied.len(),
-        if s.verify { " et vérifiés" } else { "" },
-        report.skipped.len(),
-        report.left.len(),
-        report.errors.len(),
-        report.elapsed
+        "{}",
+        t!(
+            "cli-offload-done",
+            copied = report.copied.len(),
+            verified = if s.verify { "yes" } else { "no" },
+            skipped = report.skipped.len(),
+            left = report.left.len(),
+            errors = report.errors.len(),
+            time = format!("{:.1?}", report.elapsed)
+        )
     );
     // En ligne de commande, rien ne se fait sur la carte sans option explicite.
     if args.delete_copied {
@@ -434,18 +465,15 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
             } else {
                 0
             };
-        println!(
-            "{} fichiers supprimés de la carte",
-            attempted - failed.len()
-        );
+        println!("{}", t!("cli-deleted", n = attempted - failed.len()));
         for (file, e) in &failed {
-            eprintln!("non supprimé\t{} : {e}", file.display());
+            eprintln!("{}\t{} : {e}", t!("cli-not-deleted"), file.display());
         }
     }
     if args.eject {
         match tri::places::eject(card) {
-            Ok(()) => println!("carte éjectée"),
-            Err(e) => eprintln!("éjection impossible : {e}"),
+            Ok(()) => println!("{}", t!("cli-ejected")),
+            Err(e) => eprintln!("{}", t!("cli-eject-failed", error = e)),
         }
     }
     if args.previews {
@@ -455,7 +483,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     if report.errors.is_empty() {
         Ok(())
     } else {
-        Err("certains fichiers n'ont pas été copiés".into())
+        Err(t!("cli-some-not-copied").into())
     }
 }
 
@@ -463,7 +491,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
 /// (canal le plus touché), durée du calcul.
 fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyResult<()> {
     let s = &settings.exposure;
-    println!("fichier\tsource\tmarge (IL)\tsaturés\tbouchés\tdurée");
+    println!("{}", t!("cli-exposure-header"));
     for file in files {
         let start = Instant::now();
         let result = match file.kind {
@@ -479,7 +507,12 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
             Ok(e) => {
                 let source = match e.source {
                     tri::exposure::Source::Raw { bits, black, white } => {
-                        format!("RAW {bits} bits, noir {black}, blanc {white}")
+                        t!(
+                            "cli-exposure-raw-source",
+                            bits = bits,
+                            black = black,
+                            white = white
+                        )
                     }
                     tri::exposure::Source::Flat { bits } => format!("{bits} bits"),
                 };
@@ -491,7 +524,7 @@ fn exposure(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyRe
                     start.elapsed().as_secs_f64() * 1000.0
                 );
             }
-            Err(e) => eprintln!("{name}\terreur : {e}"),
+            Err(e) => eprintln!("{name}\t{}", t!("cli-error-detail", error = e)),
         }
     }
     Ok(())
@@ -504,50 +537,58 @@ fn convert_xmp(
     dry_run: bool,
 ) -> AnyResult<()> {
     let report = xmp::convert(files.iter().map(|f| f.path.as_path()), target, dry_run);
-    let verb = if dry_run { "à écrire" } else { "écrit" };
-    let verbs = if dry_run { "à écrire" } else { "écrits" };
+    let mode = if dry_run { "dry-run" } else { "write" };
     for path in &report.written {
-        println!("{verb}\t{}", path.display());
+        println!("{}\t{}", t!("cli-xmp-written", mode = mode), path.display());
     }
     for image in &report.conflicts {
         println!(
-            "conflit\t{} : notes différentes de l'image qui partage le même sidecar, ignorée",
-            image.display()
+            "{}",
+            t!("cli-xmp-conflict", image = image.display().to_string())
         );
     }
     for (image, error) in &report.errors {
-        eprintln!("erreur\t{} : {error}", image.display());
+        eprintln!("{}\t{} : {error}", t!("cli-error"), image.display());
     }
     println!(
-        "{} images : {} sidecars {verbs}, {} inchangées, {} conflits, {} erreurs",
-        files.len(),
-        report.written.len(),
-        report.unchanged,
-        report.conflicts.len(),
-        report.errors.len()
+        "{}",
+        t!(
+            "cli-xmp-summary",
+            n = files.len(),
+            written = report.written.len(),
+            mode = mode,
+            unchanged = report.unchanged,
+            conflicts = report.conflicts.len(),
+            errors = report.errors.len()
+        )
     );
     if report.errors.is_empty() {
         Ok(())
     } else {
-        Err("certains sidecars n'ont pas pu être convertis".into())
+        Err(t!("cli-xmp-some-failed").into())
     }
 }
 
 /// `--rename`, `--delete`, `--reveal`, `--edit` : voir `tri::files`.
 fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> AnyResult<()> {
     let s = &settings.files;
-    let first = args.dir.clone().ok_or(USAGE)?;
+    let first = args.dir.clone().ok_or_else(usage)?;
     match action {
         FileAction::Rename => {
             let [name] = args.rest.as_slice() else {
-                return Err(USAGE.into());
+                return Err(usage().into());
             };
             let plan = tri::files::plan_rename(&first, name, s)?;
             for (from, to) in &plan.moves {
                 println!("{} → {}", from.display(), to.display());
             }
             for (from, to) in &plan.copies {
-                println!("{} → {} (copie : partagé)", from.display(), to.display());
+                println!(
+                    "{} → {} {}",
+                    from.display(),
+                    to.display(),
+                    t!("cli-rename-shared-copy")
+                );
             }
             if !args.dry_run {
                 tri::files::rename(&plan)?;
@@ -560,14 +601,15 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
             let group = tri::files::plan_delete(&images, s);
             let trash = s.trash && !args.permanent;
             for file in group.files() {
-                println!(
-                    "{} {}",
-                    if trash { "corbeille :" } else { "supprimé :" },
-                    file.display()
-                );
+                let what = if trash {
+                    t!("cli-delete-trash")
+                } else {
+                    t!("cli-delete-permanent")
+                };
+                println!("{what} {}", file.display());
             }
             for file in &group.shared {
-                println!("gardé (partagé) : {}", file.display());
+                println!("{} {}", t!("cli-delete-kept"), file.display());
             }
             if !args.dry_run {
                 tri::files::delete(&group, trash)?;
@@ -582,21 +624,28 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
         }
     }
     if args.dry_run {
-        println!("(--dry-run : rien n'a été modifié)");
+        println!("{}", t!("cli-dry-run"));
     }
     Ok(())
 }
 
 fn run() -> AnyResult<()> {
+    // Langue du système pour les arguments et la lecture de la configuration, puis celle
+    // qu'elle choisit.
+    tri::i18n::set_language(tri::i18n::Language::system());
     let args = parse()?;
     let settings = settings(&args);
+    tri::i18n::set_language(settings.i18n.language.resolve());
 
     if let Some(level) = args.clear {
         let cache = settings.open_cache()?;
         cache.clear(level)?;
         println!(
-            "cache vidé ({})",
-            level.map_or("tout".into(), |l| format!("{l:?}"))
+            "{}",
+            t!(
+                "cli-cache-cleared",
+                level = level.map_or(t!("cli-cache-all"), |l| format!("{l:?}"))
+            )
         );
         return print_usage(&cache);
     }
@@ -610,7 +659,7 @@ fn run() -> AnyResult<()> {
     if let Some(action) = args.file_action {
         return file_action(&settings, &args, action);
     }
-    let dir = args.dir.clone().ok_or(USAGE)?;
+    let dir = args.dir.clone().ok_or_else(usage)?;
     let groups = args
         .kind
         .apply(ungrouped(scan(&dir, args.depth.unwrap_or(1))?));
@@ -645,7 +694,7 @@ fn run() -> AnyResult<()> {
         return previews(&settings, groups.into_iter().flatten().collect());
     }
     for (index, group) in groups.iter().enumerate() {
-        println!("===== GROUPE {index} ({} images)", group.len());
+        println!("===== {}", t!("cli-group", index = index, n = group.len()));
         for file in group {
             println!("{:?}\t{}", file.kind, file.path.display());
         }

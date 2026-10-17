@@ -311,7 +311,7 @@ impl TriApp {
             .unwrap_or(0);
         let (keymap, key_warnings) = settings.keymap();
         for warning in &key_warnings {
-            eprintln!("attention : {warning}");
+            eprintln!("{}", t!("warning-prefix", message = warning));
         }
         let mut app = TriApp {
             folder,
@@ -439,7 +439,7 @@ impl TriApp {
     /// grille son histogramme.
     fn metadata_panel(&mut self, ui: &mut Ui) {
         let Some(file) = self.files.get(self.selected).cloned() else {
-            ui.weak("Aucune image sélectionnée.");
+            ui.weak(t!("panel-no-image"));
             return;
         };
         ui.strong(file_name(&file.path));
@@ -454,9 +454,9 @@ impl TriApp {
                         vec2(ui.available_width(), settings.histogram_height),
                         Sense::click(),
                     );
-                    let tip = format!(
-                        "Agrandir ({})",
-                        self.keymap.keys_for(Action::HistogramLarge).join(" / ")
+                    let tip = t!(
+                        "histogram-enlarge",
+                        keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
                     );
                     if response
                         .on_hover_cursor(egui::CursorIcon::ZoomIn)
@@ -475,7 +475,7 @@ impl TriApp {
                     );
                 }
                 None => {
-                    ui.weak("histogramme en cours de calcul");
+                    ui.weak(t!("histogram-computing"));
                 }
             }
             ui.add_space(8.0);
@@ -487,7 +487,7 @@ impl TriApp {
             .cloned();
         match read {
             None => {
-                ui.weak("lecture…");
+                ui.weak(t!("panel-reading"));
             }
             Some(Err(e)) => {
                 ui.colored_label(self.gui.colors.error, e);
@@ -538,13 +538,10 @@ impl TriApp {
         let mut eject = None;
         let mut offload = None;
         ui.horizontal(|ui| {
-            ui.strong("Dossiers");
+            ui.strong(t!("folders-title"));
             if ui
-                .small_button("Actualiser")
-                .on_hover_text(
-                    "Relire les volumes et les dossiers (F5). Un disque branché apparaît \
-                     aussi de lui-même en quelques secondes.",
-                )
+                .small_button(t!("folders-refresh"))
+                .on_hover_text(t!("folders-refresh-tip"))
                 .clicked()
             {
                 self.tree.refresh();
@@ -557,9 +554,13 @@ impl TriApp {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     ui.add_space(row.depth as f32 * f.indent);
-                    let tip = if row.expanded { "Replier" } else { "Déplier" };
+                    let tip = if row.expanded {
+                        t!("folders-collapse")
+                    } else {
+                        t!("folders-expand")
+                    };
                     let size = ui.text_style_height(&egui::TextStyle::Body);
-                    let (rect, response) = marks::clickable(ui, size, tip);
+                    let (rect, response) = marks::clickable(ui, size, &tip);
                     marks::disclosure(ui.painter(), rect, row.expanded, ui.visuals().text_color());
                     if response.clicked() {
                         toggle = Some(row.path.clone());
@@ -576,7 +577,7 @@ impl TriApp {
                         label.scroll_to_me(Some(egui::Align::Center));
                     }
                     if let Some(error) = &row.error {
-                        ui.colored_label(self.gui.colors.error, "illisible")
+                        ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
                             .on_hover_text(error);
                     }
                     if row.kind == Some(PlaceKind::Volume) {
@@ -587,20 +588,18 @@ impl TriApp {
                             let (rect, response) =
                                 ui.allocate_exact_size(vec2(size, size), Sense::hover());
                             marks::drive(ui.painter(), rect, ui.visuals().weak_text_color());
-                            response.on_hover_text(
-                                "Disque fixé ([places] fixed) : pas d'éjection depuis tri",
-                            );
+                            response.on_hover_text(t!("folders-fixed-drive"));
                         } else if self.ejecting.is_none() {
                             // Un seul déchargement à la fois.
                             if self.offload.is_none() {
                                 let (rect, response) =
-                                    marks::clickable(ui, size, "Décharger la carte…");
+                                    marks::clickable(ui, size, &t!("folders-offload"));
                                 marks::offload(ui.painter(), rect, color);
                                 if response.clicked() {
                                     offload = Some((row.path.clone(), rect.right_bottom()));
                                 }
                             }
-                            let (rect, response) = marks::clickable(ui, size, "Éjecter");
+                            let (rect, response) = marks::clickable(ui, size, &t!("eject"));
                             marks::eject(ui.painter(), rect, color);
                             if response.clicked() {
                                 eject = Some((row.path.clone(), rect.right_bottom()));
@@ -640,14 +639,14 @@ impl TriApp {
         let open_inside = !self.folder.is_none() && self.folder.dir.starts_with(&path);
         let (mut confirm, mut cancel) = (false, false);
         let modal = modal_at("eject_dialog", at).show(ctx, |ui| {
-            ui.strong(format!("Éjecter « {name} » ?"));
+            ui.strong(t!("eject-question", name = &name));
             if open_inside {
-                ui.label("Le dossier ouvert est sur ce volume : il sera fermé.");
+                ui.label(t!("eject-open-folder"));
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                confirm = ui.button("Éjecter").clicked();
-                cancel = ui.button("Annuler").clicked();
+                confirm = ui.button(t!("eject")).clicked();
+                cancel = ui.button(t!("cancel")).clicked();
             });
         });
         if confirm && !self.tree.can_eject(&path) {
@@ -678,7 +677,7 @@ impl TriApp {
             let _ = tx.send(tri::places::eject(&target));
             repaint.request_repaint();
         });
-        self.notice = Some((format!("Éjection de « {} »…", folder_name(&volume)), false));
+        self.notice = Some((t!("ejecting", name = folder_name(&volume)), false));
         self.ejecting = Some((volume, rx));
     }
 
@@ -749,11 +748,11 @@ impl TriApp {
         // fichiers ouvert dessus) : proposer de réessayer, une fois l'application fermée.
         self.eject_failed = result.is_err().then(|| path.clone());
         self.notice = Some(match result {
-            Ok(()) => (
-                format!("« {name} » éjecté : vous pouvez le retirer."),
-                false,
+            Ok(()) => (t!("ejected", name = &name), false),
+            Err(e) => (
+                t!("eject-failed", name = &name, error = e.to_string()),
+                true,
             ),
-            Err(e) => (format!("« {name} » non éjecté : {e}"), true),
         });
         self.ejecting = None;
         self.tree.refresh();
@@ -824,7 +823,7 @@ impl TriApp {
         let cache = match self.settings.open_cache() {
             Ok(c) => c,
             Err(e) => {
-                self.error = Some(format!("cache inaccessible : {e}"));
+                self.error = Some(t!("cache-unavailable", error = e.to_string()));
                 return;
             }
         };
@@ -1245,7 +1244,7 @@ impl TriApp {
                 _ => {}
             });
             if let Err(e) = result {
-                error.get_or_insert(format!("note non enregistrée : {e}"));
+                error.get_or_insert(t!("rating-not-saved", error = e.to_string()));
             }
         }
         self.note_error = error;
@@ -1269,7 +1268,7 @@ impl TriApp {
                 trace(|| format!("notes écrites : {changed:?}"));
                 None
             }
-            Err(e) => Some(format!("note non enregistrée : {e}")),
+            Err(e) => Some(t!("rating-not-saved", error = e.to_string())),
         };
         // Filtre sur les notes : l'image peut ne plus y correspondre.
         if !self.notes_rule.is_empty() {
@@ -1345,16 +1344,12 @@ impl TriApp {
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
         if targets.len() < 2 {
-            self.hint = Some(
-                "comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic)".into(),
-            );
+            self.hint = Some(t!("compare-needs-two"));
             return;
         }
         let max = self.gui.compare.max.max(2);
         if targets.len() > max {
-            self.hint = Some(format!(
-                "comparaison limitée aux {max} premières ([gui.compare] max)"
-            ));
+            self.hint = Some(t!("compare-limited", max = max));
             targets.truncate(max);
         }
         // Image active : l'image courante si elle est comparée, sinon la première.
@@ -1728,7 +1723,7 @@ impl TriApp {
             let mut label = file_name(&file.path);
             if let Some(level) = shown {
                 label.push_str(" · ");
-                label.push_str(view::label(file.kind, level));
+                label.push_str(&view::label(file.kind, level));
             }
             let font = egui::FontId::proportional(13.0);
             let galley = painter.layout_no_wrap(label, font, Color32::WHITE);
@@ -1912,24 +1907,27 @@ impl TriApp {
             file_name(&file.path)
         );
         if self.selection.contains(&file.path) {
-            info.push_str(" · sélectionnée");
+            info.push_str(&t!("view-info-selected"));
         }
         if self.peaking {
-            info.push_str(match peaking {
-                Peaking::Shown => " · netteté",
-                Peaking::Computing => " · netteté en calcul",
-                Peaking::NotAtOneToOne => " · netteté : en 1:1 (z)",
+            info.push_str(&match peaking {
+                Peaking::Shown => t!("view-info-peaking"),
+                Peaking::Computing => t!("view-info-peaking-computing"),
+                Peaking::NotAtOneToOne => t!("view-info-peaking-one-to-one"),
             });
         }
         match shown {
             Some(level) => {
                 info.push_str(" · ");
-                info.push_str(view::label(file.kind, level));
+                info.push_str(&view::label(file.kind, level));
                 if let Some(ratio) = sensor_ratio {
-                    info.push_str(&format!(" ({:.0} % du capteur)", ratio * 100.0));
+                    info.push_str(&t!(
+                        "view-info-sensor",
+                        percent = (ratio * 100.0).round() as i64
+                    ));
                 }
             }
-            None => info.push_str(" · aperçu en cours de calcul"),
+            None => info.push_str(&t!("view-info-preview-computing")),
         }
         // Mode RAW, mais faute de mieux c'est encore le JPEG qui est affiché : le dire.
         let raw_pending = self.source == Source::Raw
@@ -1939,11 +1937,11 @@ impl TriApp {
                 Some(Level::Thumbnail | Level::Embedded | Level::EmbeddedFull)
             );
         if raw_pending {
-            info.push_str(" · rendu RAW en cours");
+            info.push_str(&t!("view-info-raw-pending"));
         } else if zoomed && shown != Some(zoom_level) {
-            info.push_str(match zoom_level {
-                Level::Full => " · calcul du 100 % en cours",
-                _ => " · chargement du 1:1",
+            info.push_str(&match zoom_level {
+                Level::Full => t!("view-info-full-computing"),
+                _ => t!("view-info-one-to-one-loading"),
             });
         }
         overlay(
@@ -1965,16 +1963,14 @@ impl TriApp {
         // Histogramme en bas à droite (données du capteur pour un RAW, quel que soit
         // l'aperçu affiché).
         let hint = match file.kind {
-            MediaKind::Raw => {
-                "b : JPEG boîtier / RAW   z : 1:1   i : histogramme   o : zones   Échap : grille"
-            }
-            MediaKind::Flat => "z : 1:1   i : histogramme   o : zones   Échap : grille",
+            MediaKind::Raw => t!("view-hint-raw"),
+            MediaKind::Flat => t!("view-hint-flat"),
         };
         overlay(
             &painter,
             view_rect.right_top() + vec2(-10.0, 10.0),
             Align2::RIGHT_TOP,
-            hint,
+            &hint,
         );
     }
 
@@ -2119,36 +2115,32 @@ impl TriApp {
                 .filter(|f| f.kind == MediaKind::Raw)
                 .count();
             ui.label(if self.folder.is_none() {
-                "aucun dossier".to_string()
+                t!("status-no-folder")
             } else {
                 folder_name(&self.folder.dir)
             });
             ui.separator();
-            ui.label(format!(
-                "{} images ({raws} RAW) · filtre : {}",
-                self.files.len(),
-                self.filter_summary()
+            ui.label(t!(
+                "status-images",
+                n = self.files.len(),
+                raws = raws,
+                filter = self.filter_summary()
             ));
             let marked = self.selection.visible(&self.files);
             if marked > 0 || self.selection.is_visual() {
                 ui.separator();
-                let text = format!(
-                    "{marked} sélectionnée{}{}",
-                    if marked > 1 { "s" } else { "" },
-                    if self.selection.is_visual() {
-                        " · mode visuel"
-                    } else {
-                        ""
-                    }
-                );
+                let mut text = t!("status-selected", n = marked);
+                if self.selection.is_visual() {
+                    text.push_str(&t!("status-visual-mode"));
+                }
                 ui.colored_label(Color32::from(self.gui.colors.marked), text);
             }
             ui.separator();
             for (name, p) in [
-                ("vignettes", self.progress[0]),
-                ("JPEG boîtier", self.progress[1]),
-                ("aperçus", self.progress[2]),
-                ("histogrammes", self.progress[3]),
+                (t!("progress-thumbnails"), self.progress[0]),
+                (t!("progress-embedded"), self.progress[1]),
+                (t!("progress-previews"), self.progress[2]),
+                (t!("progress-histograms"), self.progress[3]),
             ] {
                 if p.total == 0 {
                     continue; // rien à calculer en fond pour ce niveau
@@ -2191,7 +2183,7 @@ impl TriApp {
                 ui.separator();
                 ui.colored_label(
                     self.gui.colors.error,
-                    format!("raccourcis : {} problème(s)", self.key_warnings.len()),
+                    t!("status-key-problems", n = self.key_warnings.len()),
                 )
                 .on_hover_text(self.key_warnings.join("\n"));
             }
@@ -2199,11 +2191,8 @@ impl TriApp {
                 // Le message de toml tient sur plusieurs lignes (extrait du fichier) : résumé
                 // ici, détail au survol, en chasse fixe pour que le « ^^^ » reste aligné.
                 ui.separator();
-                ui.colored_label(
-                    self.gui.colors.error,
-                    "configuration invalide : réglages par défaut",
-                )
-                .on_hover_text(egui::RichText::new(warning).monospace());
+                ui.colored_label(self.gui.colors.error, t!("status-invalid-config"))
+                    .on_hover_text(egui::RichText::new(warning).monospace());
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // De droite à gauche : icône du panneau des métadonnées, puis déchargement.
@@ -2236,24 +2225,24 @@ impl TriApp {
                         )
                         .interact(Sense::click())
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text("Afficher le déchargement");
+                        .on_hover_text(t!("status-show-offload"));
                     if bar.clicked() {
                         clicked = Some(StatusClick::RevealOffload);
                     }
                 }
                 if self.eject_failed.is_some()
                     && self.ejecting.is_none()
-                    && ui.button("Réessayer l'éjection").clicked()
+                    && ui.button(t!("status-retry-eject")).clicked()
                 {
                     clicked = Some(StatusClick::RetryEject);
                 }
                 // Séance déchargée en arrière-plan : proposée, pas ouverte d'office.
                 if let Some(dir) = &self.offloaded {
-                    if ui.small_button("ignorer").clicked() {
+                    if ui.small_button(t!("status-dismiss")).clicked() {
                         clicked = Some(StatusClick::DismissOffloaded);
                     }
                     if ui
-                        .button(format!("Ouvrir la séance « {} »", folder_name(dir)))
+                        .button(t!("status-open-session", name = folder_name(dir)))
                         .clicked()
                     {
                         clicked = Some(StatusClick::OpenOffloaded);
@@ -2301,10 +2290,10 @@ impl TriApp {
             ui.horizontal(|ui| {
                 ui.strong(name);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = ui.button("Fermer").clicked();
+                    close = ui.button(t!("close")).clicked();
                     let label = match self.histogram_scale {
-                        HistogramScale::Ev => "Échelle linéaire",
-                        HistogramScale::Linear => "Échelle en IL",
+                        HistogramScale::Ev => t!("histogram-linear-scale"),
+                        HistogramScale::Linear => t!("histogram-ev-scale"),
                     };
                     scale = ui.button(label).clicked();
                 });
@@ -2323,7 +2312,7 @@ impl TriApp {
                     ui.painter().text(
                         rect.center(),
                         Align2::CENTER_CENTER,
-                        "histogramme en cours de calcul",
+                        t!("histogram-computing"),
                         FontId::proportional(14.0),
                         ui.visuals().weak_text_color(),
                     );
@@ -2455,8 +2444,8 @@ impl TriApp {
             });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                close = ui.button("Fermer").clicked();
-                ui.weak("ou Échap");
+                close = ui.button(t!("close")).clicked();
+                ui.weak(t!("or-escape"));
             });
         });
         if let Some(action) = clicked {
@@ -2483,18 +2472,18 @@ impl TriApp {
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
         ui.horizontal(|ui| {
-            ui.label("Notes");
+            ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size);
             ui.weak(name);
             // En comparaison, seule l'image active est notée.
             if marked > 1 && self.mode != Mode::Compare {
                 ui.colored_label(
                     Color32::from(self.gui.colors.marked),
-                    format!("notes appliquées aux {marked} images sélectionnées"),
+                    t!("rating-bar-applies", n = marked),
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let label = "avance auto";
+                let label = t!("rating-bar-auto-advance");
                 if ui
                     .selectable_label(self.auto_advance, label)
                     .on_hover_text(self.action_tip(Action::ToggleAutoAdvance))
@@ -2515,25 +2504,22 @@ impl TriApp {
     fn filter_summary(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
         if self.filter != KindFilter::All {
-            parts.push(filter_name(self.filter).into());
+            parts.push(filter_name(self.filter));
         }
         if let Some(StarsRule::AtLeast(n)) = self.notes_rule.stars {
-            parts.push(match n {
-                5 => "5 étoiles".into(),
-                n => format!("{n} étoile{} et plus", if n > 1 { "s" } else { "" }),
-            });
+            parts.push(t!("filter-summary-stars", n = n));
         }
         if let Some(flags) = &self.notes_rule.flags
             && let Some(choice) = FlagFilter::ALL.into_iter().find(|c| c.flags() == *flags)
         {
-            parts.push(choice.label().into());
+            parts.push(choice.label());
         }
         if let Some(colors) = &self.notes_rule.colors {
-            let names: Vec<&str> = colors.any_of.iter().map(|&c| color_name(c)).collect();
-            parts.push(names.join(" ou "));
+            let names: Vec<String> = colors.any_of.iter().map(|&c| color_name(c)).collect();
+            parts.push(names.join(&t!("filter-summary-or")));
         }
         if parts.is_empty() {
-            "tout".into()
+            t!("filter-all")
         } else {
             parts.join(" · ")
         }
@@ -2545,11 +2531,11 @@ impl TriApp {
         let colors = self.gui.colors;
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         ui.horizontal_wrapped(|ui| {
-            ui.label("Type");
+            ui.label(t!("filter-bar-type"));
             for (kind, label) in [
-                (KindFilter::All, "Tout"),
-                (KindFilter::RawOnly, "RAW"),
-                (KindFilter::FlatOnly, "Plates"),
+                (KindFilter::All, t!("filter-bar-all")),
+                (KindFilter::RawOnly, "RAW".to_string()),
+                (KindFilter::FlatOnly, t!("filter-bar-flat")),
             ] {
                 if ui.selectable_label(self.filter == kind, label).clicked() {
                     // Le type tourne en boucle : autant de crans que nécessaire.
@@ -2562,19 +2548,16 @@ impl TriApp {
                 }
             }
             ui.separator();
-            ui.label("Étoiles");
+            ui.label(t!("filter-bar-stars"));
             let current = match self.notes_rule.stars {
                 Some(StarsRule::AtLeast(n)) => n,
                 _ => 0,
             };
             let size = self.gui.grid.marks + 4.0;
             for n in 1..=5u8 {
-                let tip = if n == current {
-                    "Étoiles indifférentes"
-                } else {
-                    Action::FilterStars(n).label()
-                };
-                let (rect, response) = marks::clickable(ui, size, tip);
+                // Recliquer l'étoile du filtre en cours l'efface.
+                let tip = Action::FilterStars(if n == current { 0 } else { n }).label();
+                let (rect, response) = marks::clickable(ui, size, &tip);
                 let color = if n <= current {
                     Color32::from(colors.stars)
                 } else {
@@ -2594,9 +2577,9 @@ impl TriApp {
                 }
             }
             ui.separator();
-            ui.label("Couleurs");
+            ui.label(t!("filter-bar-colors"));
             for color in Color::ALL {
-                let (rect, response) = marks::clickable(ui, size, color_name(color));
+                let (rect, response) = marks::clickable(ui, size, &color_name(color));
                 let active = self
                     .notes_rule
                     .colors
@@ -2617,13 +2600,16 @@ impl TriApp {
             }
             ui.separator();
             let any = self.filter != KindFilter::All || !self.notes_rule.is_empty();
-            if ui.add_enabled(any, egui::Button::new("Effacer")).clicked() {
+            if ui
+                .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
+                .clicked()
+            {
                 clicked.push(Action::FilterClear);
             }
-            ui.weak(format!(
-                "{} / {} images",
-                self.files.len(),
-                self.folder.files.len()
+            ui.weak(t!(
+                "filter-bar-count",
+                shown = self.files.len(),
+                n = self.folder.files.len()
             ));
         });
         let ctx = ui.ctx().clone();
@@ -2817,18 +2803,16 @@ impl TriApp {
             );
             let mut tips = Vec::new();
             for (fraction, threshold, color, what) in [
-                (over, h.badge_over, colors.clip_over, "saturés (brûlée)"),
-                (under, h.badge_under, colors.clip_under, "bouchés"),
+                (over, h.badge_over, colors.clip_over, "badge-over"),
+                (under, h.badge_under, colors.clip_under, "badge-under"),
             ] {
                 if fraction > threshold {
                     let painter = ui.painter();
                     painter.circle_filled(center, radius + 1.5, Color32::from_black_alpha(160));
                     painter.circle_filled(center, radius, color);
                     center.x -= radius * 2.0 + 4.0;
-                    tips.push(format!(
-                        "{} % de pixels {what}",
-                        (fraction * 1000.0).round() / 10.0
-                    ));
+                    let percent = tri::i18n::decimal((fraction * 1000.0).round() / 10.0, 1);
+                    tips.push(t!(what, percent = percent));
                 }
             }
             if !tips.is_empty() {
@@ -2872,7 +2856,7 @@ impl TriApp {
         let mut open = self.help;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
-        egui::Window::new("Raccourcis")
+        egui::Window::new(t!("help-title"))
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -2882,7 +2866,7 @@ impl TriApp {
                 let search = ui.add(
                     egui::TextEdit::singleline(&mut query)
                         .id(help_search_id())
-                        .hint_text("Rechercher (ex. « pnd », « etoile 3 »)…")
+                        .hint_text(t!("help-search-hint"))
                         .desired_width(f32::INFINITY),
                 );
                 if opening {
@@ -2896,7 +2880,7 @@ impl TriApp {
                     .max_height(max_height)
                     .show(ui, |ui| {
                         if rows.is_empty() {
-                            ui.weak("Aucune action ne correspond.");
+                            ui.weak(t!("help-no-match"));
                         }
                         egui::Grid::new("help").striped(true).show(ui, |ui| {
                             let mut group = None;
@@ -2917,7 +2901,7 @@ impl TriApp {
                         });
                     });
                 ui.add_space(6.0);
-                ui.weak("Échap ou F1 pour fermer.");
+                ui.weak(t!("help-close-hint"));
             });
         self.help_search = Some(query);
         self.help = open;
@@ -3036,11 +3020,11 @@ impl eframe::App for TriApp {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {
                 ui.label(if self.folder.is_none() {
-                    "Choisissez un dossier dans le panneau de gauche (Maj+D l'affiche)."
+                    t!("empty-no-folder")
                 } else if self.folder.files.is_empty() {
-                    "Aucune image dans ce dossier."
+                    t!("empty-folder")
                 } else {
-                    "Aucune image pour ces filtres (f puis Échap pour les effacer)."
+                    t!("empty-filtered")
                 });
             } else if self.mode == Mode::View {
                 self.viewer(ui);
@@ -3196,21 +3180,21 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> egui::Modal {
 }
 
 /// Nom d'une couleur de notation.
-fn color_name(color: Color) -> &'static str {
+fn color_name(color: Color) -> String {
     match color {
-        Color::Red => "rouge",
-        Color::Yellow => "jaune",
-        Color::Green => "vert",
-        Color::Blue => "bleu",
-        Color::Purple => "violet",
+        Color::Red => t!("color-red"),
+        Color::Yellow => t!("color-yellow"),
+        Color::Green => t!("color-green"),
+        Color::Blue => t!("color-blue"),
+        Color::Purple => t!("color-purple"),
     }
 }
 
-fn filter_name(filter: KindFilter) -> &'static str {
+fn filter_name(filter: KindFilter) -> String {
     match filter {
-        KindFilter::All => "tout",
-        KindFilter::RawOnly => "RAW",
-        KindFilter::FlatOnly => "plates",
+        KindFilter::All => t!("filter-all"),
+        KindFilter::RawOnly => "RAW".into(),
+        KindFilter::FlatOnly => t!("filter-flat"),
     }
 }
 
@@ -3238,7 +3222,8 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
         .iter()
         .filter_map(|&action| {
             let keys = keymap.keys_for(action).join(" / ");
-            let score = [action.label(), keys.as_str(), action.id()]
+            let label = action.label();
+            let score = [label.as_str(), keys.as_str(), action.id()]
                 .iter()
                 .filter_map(|text| crate::actions::fuzzy_score(query, text))
                 .max()?;
@@ -3300,6 +3285,10 @@ mod tests {
         // Données (dernier dossier…) dans le dossier temporaire : jamais celles de
         // l'utilisateur.
         settings.data.dir = Some(dir.path().join("data"));
+        // Textes en français (les tests cherchent les libellés), quelle que soit la langue
+        // du système.
+        settings.i18n.language = tri::i18n::LanguageSetting::Fr;
+        crate::i18n::init(settings.i18n.language);
         // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
         // temporaire.
         settings.files.trash = false;
@@ -3919,6 +3908,10 @@ mod tests {
         let mut settings = AppSettings::default();
         settings.cache.dir = Some(dir.path().join("cache"));
         settings.data.dir = Some(dir.path().join("data"));
+        // Textes en français (les tests cherchent les libellés), quelle que soit la langue
+        // du système.
+        settings.i18n.language = tri::i18n::LanguageSetting::Fr;
+        crate::i18n::init(settings.i18n.language);
         // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
         // temporaire.
         settings.files.trash = false;

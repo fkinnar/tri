@@ -95,7 +95,7 @@ fn rename_dialog(
         .is_ok_and(|p| p.moves.is_empty() && p.copies.is_empty());
     let (mut confirm, mut cancel) = (false, false);
     let modal = crate::app::modal_at("rename_dialog", at).show(ctx, |ui| {
-        ui.strong(format!("Renommer « {} »", file_name(image)));
+        ui.strong(t!("rename-title", name = file_name(image)));
         ui.add_space(6.0);
         let field = ui.add(
             egui::TextEdit::singleline(name)
@@ -119,13 +119,17 @@ fn rename_dialog(
         match &plan {
             Ok(plan) => {
                 for (from, to) in &plan.moves {
-                    ui.weak(format!("{} devient {}", file_name(from), file_name(to)));
+                    ui.weak(t!(
+                        "rename-becomes",
+                        from = file_name(from),
+                        to = file_name(to)
+                    ));
                 }
                 for (from, to) in &plan.copies {
-                    ui.weak(format!(
-                        "{} copié en {} (partagé avec la paire)",
-                        file_name(from),
-                        file_name(to)
+                    ui.weak(t!(
+                        "rename-copied",
+                        from = file_name(from),
+                        to = file_name(to)
                     ));
                 }
             }
@@ -136,9 +140,12 @@ fn rename_dialog(
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             let ok = plan.is_ok() && !unchanged;
-            confirm = ui.add_enabled(ok, egui::Button::new("Renommer")).clicked() || (enter && ok);
-            cancel = ui.button("Annuler").clicked();
-            ui.weak("Entrée / Échap");
+            confirm = ui
+                .add_enabled(ok, egui::Button::new(t!("rename-button")))
+                .clicked()
+                || (enter && ok);
+            cancel = ui.button(t!("cancel")).clicked();
+            ui.weak(t!("enter-or-escape"));
         });
     });
     if confirm && let Ok(plan) = plan {
@@ -149,7 +156,7 @@ fn rename_dialog(
             .map(|(_, to)| to.clone());
         return match files::rename(&plan) {
             Ok(()) => Outcome::Done { select },
-            Err(e) => Outcome::Failed(format!("renommage impossible : {e}")),
+            Err(e) => Outcome::Failed(t!("rename-failed", error = e.to_string())),
         };
     }
     if cancel || modal.should_close() {
@@ -162,16 +169,17 @@ fn rename_dialog(
 fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at: Pos2) -> Outcome {
     let (mut confirm, mut cancel) = (false, false);
     let verb = if settings.trash {
-        "Mettre à la corbeille"
+        t!("delete-to-trash")
     } else {
-        "Supprimer définitivement"
+        t!("delete-permanently")
     };
     let modal = crate::app::modal_at("delete_dialog", at).show(ctx, |ui| {
         let n = group.files().count();
-        ui.strong(format!(
-            "{verb} {n} fichier{} ?",
-            if n > 1 { "s" } else { "" }
-        ));
+        ui.strong(if settings.trash {
+            t!("delete-trash-question", n = n)
+        } else {
+            t!("delete-permanently-question", n = n)
+        });
         ui.add_space(6.0);
         ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
             for file in group.files() {
@@ -179,16 +187,16 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
             }
         });
         for file in &group.shared {
-            ui.weak(format!("{} gardé (partagé avec la paire)", file_name(file)));
+            ui.weak(t!("delete-kept-shared", name = file_name(file)));
         }
         if !settings.trash {
-            ui.colored_label(ui.visuals().error_fg_color, "Irréversible.");
+            ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
         }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             confirm = ui.button(verb).clicked();
-            cancel = ui.button("Annuler").clicked();
-            ui.weak("Entrée / Échap");
+            cancel = ui.button(t!("cancel")).clicked();
+            ui.weak(t!("enter-or-escape"));
         });
     });
     // Entrée confirme (pas de champ de saisie ici).
@@ -196,7 +204,7 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
     if confirm {
         return match files::delete(group, settings.trash) {
             Ok(()) => Outcome::Done { select: None },
-            Err(e) => Outcome::Failed(format!("suppression impossible : {e}")),
+            Err(e) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
         };
     }
     if cancel || modal.should_close() {

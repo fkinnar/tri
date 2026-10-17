@@ -81,23 +81,30 @@ pub enum RawError {
 impl fmt::Display for RawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Init => write!(f, "libraw_init a échoué"),
-            Self::InvalidPath(p) => {
-                write!(f, "chemin non transmissible à LibRaw : {}", p.display())
-            }
-            Self::LibRaw { code, message } => write!(f, "LibRaw erreur {code} : {message}"),
-            Self::Cancelled => write!(f, "traitement LibRaw annulé"),
-            Self::EmptyImage => write!(f, "LibRaw a renvoyé une image nulle sans code d'erreur"),
-            Self::NoMosaic => write!(
+            Self::Init => write!(f, "{}", crate::t!("raw-init-failed")),
+            Self::InvalidPath(p) => write!(
                 f,
-                "RAW sans mosaïque de filtres couleur (DNG linéaire, Foveon)"
+                "{}",
+                crate::t!("raw-invalid-path", path = p.display().to_string())
             ),
-            Self::UnsupportedImage { kind, colors, bits } => {
-                write!(
-                    f,
-                    "image non gérée (type {kind}, {colors} canaux, {bits} bits)"
+            Self::LibRaw { code, message } => write!(
+                f,
+                "{}",
+                crate::t!("raw-libraw-error", code = *code, message = message.as_str())
+            ),
+            Self::Cancelled => write!(f, "{}", crate::t!("raw-cancelled")),
+            Self::EmptyImage => write!(f, "{}", crate::t!("raw-empty-image")),
+            Self::NoMosaic => write!(f, "{}", crate::t!("raw-no-mosaic")),
+            Self::UnsupportedImage { kind, colors, bits } => write!(
+                f,
+                "{}",
+                crate::t!(
+                    "raw-unsupported-image",
+                    kind = *kind as i64,
+                    colors = *colors as i64,
+                    bits = *bits as i64
                 )
-            }
+            ),
         }
     }
 }

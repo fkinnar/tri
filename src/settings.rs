@@ -53,7 +53,7 @@ impl<'de, T: TryFrom<u64>> Deserialize<'de> for Auto<T> {
             type Value = Auto<T>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("\"auto\" ou un entier positif")
+                f.write_str(&crate::t!("settings-auto-or-integer"))
             }
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
@@ -107,6 +107,8 @@ pub struct EngineSettings {
     pub files: crate::files::FileSettings,
     /// Carte de netteté (focus peaking).
     pub sharpness: crate::sharpness::SharpnessSettings,
+    /// Langue des textes.
+    pub i18n: crate::i18n::I18nSettings,
     /// Dossier des données.
     pub data: DataSection,
 }
@@ -419,7 +421,7 @@ pub fn load<T: DeserializeOwned + Default>(path: Option<&Path>) -> Loaded<T> {
     let failed = |warning: String, path: Option<PathBuf>| Loaded {
         settings: T::default(),
         path,
-        warning: Some(format!("{warning} ; réglages par défaut utilisés")),
+        warning: Some(crate::t!("settings-defaults-used", warning = warning)),
     };
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -430,7 +432,14 @@ pub fn load<T: DeserializeOwned + Default>(path: Option<&Path>) -> Loaded<T> {
                 warning: None,
             };
         }
-        Err(e) => return failed(format!("configuration {} : {e}", path.display()), None),
+        Err(e) => {
+            let message = crate::t!(
+                "settings-file-error",
+                path = path.display().to_string(),
+                error = e.to_string()
+            );
+            return failed(message, None);
+        }
     };
     match parse(&text) {
         Ok(settings) => Loaded {
@@ -439,7 +448,11 @@ pub fn load<T: DeserializeOwned + Default>(path: Option<&Path>) -> Loaded<T> {
             warning: None,
         },
         Err(e) => failed(
-            format!("configuration {} : {e}", path.display()),
+            crate::t!(
+                "settings-file-error",
+                path = path.display().to_string(),
+                error = e
+            ),
             Some(path),
         ),
     }

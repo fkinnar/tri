@@ -275,7 +275,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         (Flag::Rejected, colors.rejected),
     ] {
         let action = Action::Flag(flag);
-        let (rect, hit) = cell(ui, action.label());
+        let (rect, hit) = cell(ui, &action.label());
         let fill = if notes.flag == flag {
             Color32::from(color)
         } else {
@@ -293,7 +293,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         }
     }
     let action = Action::Flag(Flag::None);
-    let (rect, hit) = cell(ui, action.label());
+    let (rect, hit) = cell(ui, &action.label());
     let ring = if notes.flag == Flag::None {
         strong
     } else {
@@ -308,7 +308,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     // Étoiles : un contrôle « 0 » à part, comme la touche 0 (Lightroom, Capture One) ;
     // recliquer l'étoile posée ne remet plus à zéro (même retour).
     let action = Action::Stars(0);
-    let (rect, hit) = cell(ui, action.label());
+    let (rect, hit) = cell(ui, &action.label());
     let color = if notes.stars == 0 { strong } else { weak };
     none_sign(ui.painter(), rect, color);
     if hit {
@@ -316,7 +316,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     }
     for n in 1..=5u8 {
         let action = Action::Stars(n);
-        let (rect, hit) = cell(ui, action.label());
+        let (rect, hit) = cell(ui, &action.label());
         let fill = if n <= notes.stars {
             Color32::from(colors.stars)
         } else {
@@ -330,7 +330,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     ui.add_space(size * 0.5);
     for color in Color::ALL {
         let action = Action::Color(color);
-        let (rect, hit) = cell(ui, action.label());
+        let (rect, hit) = cell(ui, &action.label());
         let active = notes.has_color(color);
         let fill = color_of(colors, color);
         let painter = ui.painter();

@@ -55,7 +55,11 @@ plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` so
 BSD-2-Clause ; `trash` — corbeille du système, maintenu, version du 13/09/2026 — sous
 MIT, avec `objc2`, `objc2-foundation`, `objc2-encode`, `urlencoding` sous MIT et
 `percent-encoding`, `scopeguard`, `once_cell`, `chrono`, `windows` sous MIT OR
-Apache-2.0) : les 77 crates de l'arbre de
+Apache-2.0 ; `fluent-bundle`, `fluent-syntax`, `fluent-langneg`, `intl-memoizer`,
+`intl_pluralrules`, `unic-langid` — traductions — sous MIT OR Apache-2.0, avec `tinystr`
+sous Unicode-3.0 et `self_cell` sous Apache-2.0 OR GPL-2.0-only, dont on retient
+l'Apache-2.0 ; `sys-locale` — langue du système — sous MIT OR Apache-2.0) : les 89 crates
+de l'arbre de
 dépendances du moteur sur macOS (`cargo tree -p tri -e normal,build`, recompté le
 17/10/2026) sont sous licences
 permissives : MIT, Apache-2.0, BSD, Zlib, Unlicense, presque toujours en double licence

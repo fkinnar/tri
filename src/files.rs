@@ -63,11 +63,19 @@ pub enum FileError {
 impl fmt::Display for FileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidName(n) => write!(f, "nom invalide : « {n} »"),
-            Self::Exists(p) => write!(f, "{} existe déjà", p.display()),
+            Self::InvalidName(n) => write!(f, "{}", crate::t!("files-invalid-name", name = n)),
+            Self::Exists(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-exists", path = p.display().to_string())
+            ),
             Self::Io(p, e) => write!(f, "{} : {e}", p.display()),
-            Self::Trash(e) => write!(f, "mise à la corbeille impossible : {e}"),
-            Self::Launch(p, e) => write!(f, "lancement de « {p} » impossible : {e}"),
+            Self::Trash(e) => write!(f, "{}", crate::t!("files-trash-failed", error = e)),
+            Self::Launch(p, e) => write!(
+                f,
+                "{}",
+                crate::t!("files-launch-failed", program = p, error = e.to_string())
+            ),
         }
     }
 }
@@ -270,17 +278,6 @@ pub fn delete(group: &Group, trash: bool) -> Result<()> {
         std::fs::remove_file(file).map_err(|e| FileError::Io(file.clone(), e))?;
     }
     Ok(())
-}
-
-/// Nom du gestionnaire de fichiers du système, pour les libellés.
-pub fn file_manager_name() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "le Finder"
-    } else if cfg!(windows) {
-        "l'Explorateur"
-    } else {
-        "le gestionnaire de fichiers"
-    }
 }
 
 /// Montre `path` dans le gestionnaire de fichiers, sélectionné quand le système le permet

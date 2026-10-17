@@ -14,12 +14,22 @@
 //! sélectionnée au démarrage) et `TRI_GUI_ACTIONS=<id>,<id>...` (actions exécutées au
 //! démarrage, ex. `core.app.help`).
 
+/// Texte traduit (voir `tri::t!`), catalogues de l'interface compris : ils sont ajoutés à
+/// la première utilisation (tests unitaires compris, sans passer par `main`).
+macro_rules! t {
+    ($($arg:tt)*) => {{
+        $crate::i18n::ensure();
+        tri::t!($($arg)*)
+    }};
+}
+
 mod actions;
 mod app;
 mod compare;
 mod files;
 mod grid;
 mod histogram;
+mod i18n;
 mod loader;
 mod marks;
 mod meta;
@@ -43,9 +53,13 @@ fn main() -> eframe::Result {
             dir = Some(PathBuf::from(arg));
         }
     }
+    // Langue du système pour les messages de lecture de la configuration, puis celle
+    // qu'elle choisit.
+    i18n::init(tri::i18n::LanguageSetting::Auto);
     let loaded = tri::settings::load::<settings::AppSettings>(config.as_deref());
+    i18n::init(loaded.settings.i18n.language);
     if let Some(warning) = &loaded.warning {
-        eprintln!("attention : {warning}");
+        eprintln!("{}", tri::t!("warning-prefix", message = warning));
     }
     let mut settings = loaded.settings;
     if cache.is_some() {

@@ -45,14 +45,30 @@ pub enum FlatError {
 impl fmt::Display for FlatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "lecture impossible : {e}"),
-            Self::Image(e) => write!(f, "décodage impossible : {e}"),
-            Self::Jpeg(e) => write!(f, "décodage impossible : {e}"),
-            Self::HeifNotCompiled => write!(f, "HEIF non pris en charge (compilé sans « heif »)"),
+            Self::Io(e) => write!(
+                f,
+                "{}",
+                crate::t!("flat-read-failed", error = e.to_string())
+            ),
+            Self::Image(e) => write!(
+                f,
+                "{}",
+                crate::t!("flat-decode-failed", error = e.to_string())
+            ),
+            Self::Jpeg(e) => write!(
+                f,
+                "{}",
+                crate::t!("flat-decode-failed", error = e.to_string())
+            ),
+            Self::HeifNotCompiled => write!(f, "{}", crate::t!("flat-heif-not-compiled")),
             #[cfg(feature = "heif")]
-            Self::Heif(e) => write!(f, "décodage HEIF impossible : {e}"),
+            Self::Heif(e) => write!(
+                f,
+                "{}",
+                crate::t!("flat-heif-failed", error = e.to_string())
+            ),
             #[cfg(feature = "heif")]
-            Self::UnexpectedHeifLayout => write!(f, "libheif n'a pas renvoyé de RGB 8 bits"),
+            Self::UnexpectedHeifLayout => write!(f, "{}", crate::t!("flat-heif-layout")),
         }
     }
 }

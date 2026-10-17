@@ -64,7 +64,11 @@ pub enum MetadataError {
 impl std::fmt::Display for MetadataError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "fichier illisible : {e}"),
+            Self::Io(e) => write!(
+                f,
+                "{}",
+                crate::t!("metadata-unreadable", error = e.to_string())
+            ),
             Self::Raw(e) => write!(f, "{e}"),
         }
     }
@@ -230,7 +234,7 @@ impl Metadata {
     pub fn shutter_text(&self) -> Option<String> {
         let s = self.shutter?;
         Some(if s >= 0.3 {
-            format!("{} s", french(s as f64, 1))
+            format!("{} s", decimal_text(s as f64, 1))
         } else {
             format!("1/{} s", (1.0 / s).round() as u32)
         })
@@ -240,7 +244,8 @@ impl Metadata {
     pub fn exposure_text(&self) -> Option<String> {
         let parts: Vec<String> = [
             self.shutter_text(),
-            self.aperture.map(|a| format!("f/{}", french(a as f64, 1))),
+            self.aperture
+                .map(|a| format!("f/{}", decimal_text(a as f64, 1))),
             self.iso.map(|i| format!("ISO {}", i.round() as u32)),
         ]
         .into_iter()
@@ -249,56 +254,73 @@ impl Metadata {
         (!parts.is_empty()).then(|| parts.join(" · "))
     }
 
-    /// Lignes à afficher (libellé, valeur), dans l'ordre ; les champs inconnus sont omis.
-    pub fn rows(&self) -> Vec<(&'static str, String)> {
+    /// Lignes à afficher (libellé, valeur), dans l'ordre, dans la langue choisie
+    /// ([`crate::i18n`]) ; les champs inconnus sont omis.
+    pub fn rows(&self) -> Vec<(String, String)> {
         let mut rows = Vec::new();
-        let mut push = |label: &'static str, value: Option<String>| {
+        let mut push = |label: String, value: Option<String>| {
             if let Some(v) = value {
                 rows.push((label, v));
             }
         };
-        push("Appareil", self.camera());
-        push("Objectif", self.lens.clone());
-        push("Exposition", self.exposure_text());
+        push(crate::t!("metadata-camera"), self.camera());
+        push(crate::t!("metadata-lens"), self.lens.clone());
+        push(crate::t!("metadata-exposure"), self.exposure_text());
         push(
-            "Correction",
+            crate::t!("metadata-bias"),
             self.exposure_bias.map(|b| {
                 let sign = if b > 0.0 { "+" } else { "" };
-                format!("{sign}{} IL", french(b as f64, 1))
+                crate::t!(
+                    "metadata-bias-value",
+                    value = format!("{sign}{}", decimal_text(b as f64, 1))
+                )
             }),
         );
-        push("Mode", self.program.clone());
+        push(crate::t!("metadata-mode"), self.program.clone());
         push(
-            "Focale",
+            crate::t!("metadata-focal"),
             self.focal.map(|f| match self.focal_35mm {
-                Some(eq) if (eq - f).abs() >= 1.0 => {
-                    format!(
-                        "{} mm (éq. 24 × 36 : {} mm)",
-                        french(f as f64, 1),
-                        eq.round()
-                    )
-                }
-                _ => format!("{} mm", french(f as f64, 1)),
+                Some(eq) if (eq - f).abs() >= 1.0 => crate::t!(
+                    "metadata-focal-equivalent",
+                    focal = decimal_text(f as f64, 1),
+                    equivalent = eq.round() as i64
+                ),
+                _ => crate::t!("metadata-focal-value", focal = decimal_text(f as f64, 1)),
             }),
         );
         push(
-            "Flash",
-            self.flash
-                .map(|f| if f { "déclenché" } else { "non déclenché" }.to_string()),
+            crate::t!("metadata-flash"),
+            self.flash.map(|f| {
+                if f {
+                    crate::t!("metadata-flash-fired")
+                } else {
+                    crate::t!("metadata-flash-not-fired")
+                }
+            }),
         );
-        push("Date", self.date.as_deref().map(french_date));
         push(
-            "Dimensions",
+            crate::t!("metadata-date"),
+            self.date.as_deref().map(date_text),
+        );
+        push(
+            crate::t!("metadata-dimensions"),
             self.size.map(|(w, h)| {
                 let mpx = w as f64 * h as f64 / 1e6;
-                format!("{w} × {h} ({} Mpx)", french(mpx, 1))
+                crate::t!(
+                    "metadata-dimensions-value",
+                    width = w,
+                    height = h,
+                    mpx = decimal_text(mpx, 1)
+                )
             }),
         );
         push(
-            "Fichier",
+            crate::t!("metadata-file"),
             (self.file_size > 0).then(|| match self.file_size {
-                n if n < 1_000_000 => format!("{} ko", french(n as f64 / 1e3, 0)),
-                n => format!("{} Mo", french(n as f64 / 1e6, 1)),
+                n if n < 1_000_000 => {
+                    crate::t!("metadata-size-kb", size = decimal_text(n as f64 / 1e3, 0))
+                }
+                n => crate::t!("metadata-size-mb", size = decimal_text(n as f64 / 1e6, 1)),
             }),
         );
         rows
@@ -307,45 +329,54 @@ impl Metadata {
 
 /// Mode d'exposition EXIF (`ExposureProgram`).
 fn program_name(code: u32) -> Option<String> {
-    Some(
-        match code {
-            1 => "Manuel",
-            2 => "Programme",
-            3 => "Priorité ouverture",
-            4 => "Priorité vitesse",
-            5 => "Créatif (profondeur de champ)",
-            6 => "Action (vitesse rapide)",
-            7 => "Portrait",
-            8 => "Paysage",
-            _ => return None,
-        }
-        .to_string(),
-    )
+    let id = match code {
+        1 => "program-manual",
+        2 => "program-normal",
+        3 => "program-aperture",
+        4 => "program-shutter",
+        5 => "program-creative",
+        6 => "program-action",
+        7 => "program-portrait",
+        8 => "program-landscape",
+        _ => return None,
+    };
+    Some(crate::i18n::translate(id, None))
 }
 
-/// « AAAA-MM-JJ HH:MM:SS » → « JJ/MM/AAAA à HH:MM:SS » ; inchangée si autre forme.
-fn french_date(date: &str) -> String {
+/// « AAAA-MM-JJ HH:MM:SS » mise en forme selon la langue (« JJ/MM/AAAA à HH:MM:SS » en
+/// français) ; inchangée si autre forme.
+fn date_text(date: &str) -> String {
     match (
         date.get(0..4),
         date.get(5..7),
         date.get(8..10),
         date.get(11..),
     ) {
-        (Some(y), Some(m), Some(d), Some(t)) if date.len() >= 19 => format!("{d}/{m}/{y} à {t}"),
+        (Some(y), Some(m), Some(d), Some(t)) if date.len() >= 19 => {
+            crate::t!(
+                "metadata-date-value",
+                year = y,
+                month = m,
+                day = d,
+                time = t
+            )
+        }
         _ => date.to_string(),
     }
 }
 
-/// Nombre à la française, `decimals` chiffres après la virgule, sans zéro final inutile
-/// (« 2,8 », « 4 », « 1,3 »).
-fn french(value: f64, decimals: usize) -> String {
-    let text = format!("{value:.decimals$}");
-    let text = if text.contains('.') {
-        text.trim_end_matches('0').trim_end_matches('.').to_string()
+/// Nombre avec au plus `decimals` chiffres après la séparation, sans zéro final inutile
+/// (« 2,8 », « 4 », « 1,3 » en français), à la façon de la langue.
+fn decimal_text(value: f64, decimals: usize) -> String {
+    let text = crate::i18n::decimal(value, decimals);
+    let separator = if text.contains(',') { ',' } else { '.' };
+    if text.contains(separator) {
+        text.trim_end_matches('0')
+            .trim_end_matches(separator)
+            .to_string()
     } else {
         text
-    };
-    text.replace('.', ",")
+    }
 }
 
 #[cfg(test)]
@@ -397,7 +428,7 @@ mod tests {
             ..Metadata::default()
         }
         .rows();
-        assert_eq!(rows, [("Fichier", "1 Mo".to_string())]);
+        assert_eq!(rows, [("Fichier".to_string(), "1 Mo".to_string())]);
     }
 
     #[test]
@@ -436,7 +467,10 @@ mod tests {
         };
         assert_eq!(
             m.rows(),
-            [("Focale", "5,7 mm (éq. 24 × 36 : 26 mm)".to_string())]
+            [(
+                "Focale".to_string(),
+                "5,7 mm (éq. 24 × 36 : 26 mm)".to_string()
+            )]
         );
     }
 
@@ -447,6 +481,6 @@ mod tests {
             focal_35mm: Some(50.0),
             ..Metadata::default()
         };
-        assert_eq!(m.rows(), [("Focale", "50 mm".to_string())]);
+        assert_eq!(m.rows(), [("Focale".to_string(), "50 mm".to_string())]);
     }
 }

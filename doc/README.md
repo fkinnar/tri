@@ -20,6 +20,7 @@ existe.
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
+| [i18n.md](i18n.md) | Module `tri::i18n` : langues (Fluent), catalogues `.ftl`, pluriels, `t!` |
 | [files.md](files.md) | Module `tri::files` : renommer, corbeille, afficher, éditeur externe (paires et sidecars suivent) |
 | [sharpness.md](sharpness.md) | Module `tri::sharpness` : carte de netteté (focus peaking) en 1:1 |
 | [selection.md](selection.md) | Module `tri::selection` : sélection multiple (marques, mode visuel, cibles des actions) |
@@ -47,6 +48,7 @@ tri/
 │   ├── media.rs          parcours de dossier, classification RAW / plate
 │   ├── filter.rs         trait Filter, groupes, KindFilter
 │   ├── files.rs          renommer, corbeille, afficher, éditeur externe
+│   ├── i18n.rs           langues : catalogues Fluent (locales/, gui/locales/), t!
 │   ├── bitmap.rs         Bitmap : image RGB8 commune
 │   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
 │   ├── preview.rs        calcul des vignettes, aperçus et 1:1 (réglages de calcul)

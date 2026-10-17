@@ -44,6 +44,8 @@ pub struct AppSettings {
     pub files: tri::files::FileSettings,
     /// `[sharpness]` (moteur).
     pub sharpness: tri::sharpness::SharpnessSettings,
+    /// `[i18n]` (moteur) : langue des textes.
+    pub i18n: tri::i18n::I18nSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -66,6 +68,7 @@ impl AppSettings {
             data: self.data.clone(),
             files: self.files.clone(),
             sharpness: self.sharpness,
+            i18n: self.i18n,
         }
     }
 
@@ -545,7 +548,7 @@ impl std::str::FromStr for Color {
         let hex = s
             .strip_prefix('#')
             .filter(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()))
-            .ok_or_else(|| format!("couleur « {s} » : attendu \"#rrggbb\""))?;
+            .ok_or_else(|| t!("settings-bad-color", value = s))?;
         let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).expect("hexadécimal vérifié");
         Ok(Color([byte(0), byte(2), byte(4)]))
     }

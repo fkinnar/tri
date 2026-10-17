@@ -185,9 +185,11 @@ pub enum XmpError {
 impl fmt::Display for XmpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "sidecar XMP : {e}"),
-            Self::Malformed(e) => write!(f, "sidecar XMP mal formé (non modifié) : {e}"),
-            Self::NoDescription => write!(f, "sidecar XMP sans rdf:Description (non modifié)"),
+            Self::Io(e) => write!(f, "{}", crate::t!("xmp-io", error = e.to_string())),
+            Self::Malformed(e) => {
+                write!(f, "{}", crate::t!("xmp-malformed", error = e.to_string()))
+            }
+            Self::NoDescription => write!(f, "{}", crate::t!("xmp-no-description")),
             Self::Image { image, message } => write!(f, "{} : {message}", image.display()),
         }
     }

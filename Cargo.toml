@@ -17,6 +17,10 @@ toml = "1"
 trash = "5"
 turbojpeg = { version = "1", default-features = false, features = ["cmake", "pkg-config", "require-simd"], optional = true }
 walkdir = "2.5.0"
+fluent-bundle = "0.16"
+unic-langid = "0.9"
+sys-locale = "0.3"
+fluent-syntax = "0.12"
 
 [features]
 default = ["heif", "turbojpeg"]

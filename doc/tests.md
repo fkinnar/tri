@@ -226,6 +226,11 @@ la plus récente, source mal formée signalée.
 - Avec `TRI_TEST_RAW` : données capteur (12 à 16 bits, blanc > noir, plage = blanc −
   noir), masque dans la taille demandée, aller-retour binaire.
 
+### `i18n` (unitaires `src/i18n.rs`, intégration `tests/i18n.rs`, interface `gui/src/i18n.rs`)
+
+Voir [i18n.md](i18n.md#tests) : chaque identifiant utilisé dans le code existe dans toutes
+les langues, catalogues identiques, pluriels.
+
 ### `sharpness` (unitaires `src/sharpness.rs`, interface `gui/src/app.rs`)
 
 Voir [sharpness.md](sharpness.md#tests).

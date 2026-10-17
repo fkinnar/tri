@@ -182,8 +182,7 @@ impl History {
         if !settings.history.trim().is_empty() {
             return History::open(crate::settings::expand_home(settings.history.trim()));
         }
-        let dir =
-            data.ok_or_else(|| io::Error::other("dossier de données introuvable (HOME absent)"))?;
+        let dir = data.ok_or_else(|| io::Error::other(crate::t!("offload-no-data-dir")))?;
         History::open(dir.join("offload-history.tsv"))
     }
 
@@ -486,7 +485,7 @@ fn copy_one(
     let name = item
         .source
         .file_name()
-        .ok_or_else(|| io::Error::other("fichier sans nom"))?;
+        .ok_or_else(|| io::Error::other(crate::t!("offload-unnamed-file")))?;
     // Nom libre : le nom d'origine, ou un suffixe si un autre fichier l'occupe déjà.
     let mut target = dir.join(name);
     let mut n = 1;
@@ -533,9 +532,7 @@ fn copy_one(
         output.set_modified(item.modified)?;
         drop(output);
         if verify && hash_file(&tmp)? != hasher.finalize() {
-            return Err(io::Error::other(
-                "la copie relue diffère de l'original (support défectueux ?)",
-            ));
+            return Err(io::Error::other(crate::t!("offload-verify-failed")));
         }
         fs::rename(&tmp, &target)
     })();
@@ -576,10 +573,7 @@ pub fn delete_sources(report: &Report) -> Vec<(PathBuf, String)> {
                 .and_then(|s| fs::metadata(copy).map(|c| s.len() == c.len()))
                 .unwrap_or(false);
             if !same {
-                return Some((
-                    source.clone(),
-                    "copie absente ou différente : conservé".into(),
-                ));
+                return Some((source.clone(), crate::t!("offload-copy-missing")));
             }
             fs::remove_file(source)
                 .err()

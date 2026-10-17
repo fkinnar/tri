@@ -99,7 +99,7 @@ impl OffloadDialog {
         let data_dir = data.clone();
         std::thread::spawn(move || {
             let result = History::open_configured(&s, data_dir.as_deref())
-                .map_err(|e| format!("historique illisible : {e}"))
+                .map_err(|e| t!("offload-history-unreadable", error = e.to_string()))
                 .and_then(|history| {
                     offload::plan(&dir, &history)
                         .map(|plan| (plan, history))
@@ -145,11 +145,11 @@ impl OffloadDialog {
             0.0
         };
         Some((
-            format!(
-                "déchargement de « {} » {}/{}",
-                file_name(&self.source),
-                progress.files_done,
-                progress.files_total
+            t!(
+                "offload-status",
+                name = file_name(&self.source),
+                done = progress.files_done,
+                total = progress.files_total
             ),
             fraction,
         ))
@@ -199,14 +199,16 @@ impl OffloadDialog {
         let eject = (complete && settings.eject_after).then(|| self.source.clone());
         *opened = open.is_some();
         *ejected = eject.is_some();
-        let summary = format!(
-            "« {} » : {} copiés, {} ignorés, {} erreurs{}",
-            file_name(&self.source),
-            report.copied.len(),
-            report.skipped.len(),
-            report.errors.len(),
-            if report.cancelled { ", interrompu" } else { "" }
+        let mut summary = t!(
+            "offload-summary",
+            name = file_name(&self.source),
+            copied = report.copied.len(),
+            skipped = report.skipped.len(),
+            errors = report.errors.len()
         );
+        if report.cancelled {
+            summary.push_str(&t!("offload-summary-cancelled"));
+        }
         Some(Request::Finished {
             open,
             offer,
@@ -321,13 +323,13 @@ impl OffloadDialog {
         );
         let modal = crate::app::modal_at("offload_dialog", self.at).show(ctx, |ui| {
             ui.set_max_width(460.0);
-            ui.strong(format!("Décharger « {name} »"));
+            ui.strong(t!("offload-title", name = &name));
             ui.add_space(6.0);
             match &mut self.stage {
                 Stage::Planning(_) => {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("inventaire de la carte…");
+                        ui.label(t!("offload-planning"));
                     });
                 }
                 Stage::Failed(e) => {
@@ -361,47 +363,41 @@ impl OffloadDialog {
                     };
                     let selected = plan.to_copy(settings).count();
                     let count = selected - there;
-                    let mut text = format!("{} images", plan.items.len());
+                    let mut text = t!("offload-images", n = plan.items.len());
                     if settings.skip_known {
                         let known = plan.items.iter().filter(|i| i.known).count();
-                        text.push_str(&format!(", dont {known} déjà déchargées"));
+                        text.push_str(&t!("offload-known", n = known));
                     }
                     if there > 0 {
-                        text.push_str(&format!(", {there} déjà dans la destination"));
+                        text.push_str(&t!("offload-already-there", n = there));
                     }
-                    text.push_str(&format!(
-                        " ; {count} à copier ({} Mo).",
-                        french_mb(plan.bytes(settings) - there_bytes)
+                    text.push_str(&t!(
+                        "offload-to-copy",
+                        n = count,
+                        mb = megabytes(plan.bytes(settings) - there_bytes)
                     ));
                     ui.label(text);
                     if plan.ignored > 0 {
-                        ui.weak(format!(
-                            "{} autres fichiers (vidéos, fichiers du boîtier) ne sont pas copiés.",
-                            plan.ignored
-                        ));
+                        ui.weak(t!("offload-ignored", n = plan.ignored));
                     }
                     ui.add_space(6.0);
                     egui::Grid::new("offload_fields")
                         .num_columns(2)
                         .show(ui, |ui| {
-                            ui.label("Dossier racine");
+                            ui.label(t!("offload-root"));
                             ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
                             ui.end_row();
-                            ui.label("Dossier de la séance");
+                            ui.label(t!("offload-session"));
                             ui.add(
                                 egui::TextEdit::singleline(folder)
                                     .id(folder_field_id())
                                     .desired_width(300.0),
                             )
-                            .on_hover_text(
-                                "Proposé : AAAA-MM-JJ_ (date de la plus ancienne image), à \
-                                 compléter (« _Self ») ou à remplacer entièrement ; l'année, si \
-                                 on la veut, va dans le dossier racine.",
-                            );
+                            .on_hover_text(t!("offload-session-tip"));
                             ui.end_row();
                         });
                     if let Some(dest) = &dest {
-                        ui.weak(format!("Destination : {}", dest.display()));
+                        ui.weak(t!("offload-destination", path = dest.display().to_string()));
                     }
                     if let Some(e) = error {
                         ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
@@ -409,35 +405,25 @@ impl OffloadDialog {
                     // Choix faits avant la copie, enchaînés à la fin (retour du
                     // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
                     ui.add_space(6.0);
-                    ui.checkbox(&mut settings.raw_only, "RAW seulement")
-                        .on_hover_text("Les JPEG du boîtier restent sur la carte.");
-                    ui.checkbox(&mut settings.open_after, "Ouvrir le dossier à la fin");
-                    ui.checkbox(&mut settings.eject_after, "Éjecter la carte à la fin");
-                    ui.checkbox(
-                        &mut settings.delete_after,
-                        "Supprimer de la carte les fichiers copiés et vérifiés",
-                    )
-                    .on_hover_text(
-                        "Ceux copiés et vérifiés pendant ce déchargement, et ceux déjà présents \
-                         à l'identique dans la destination. Restent : erreurs, images \
-                         laissées, vidéos et fichiers du boîtier.",
-                    );
+                    ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
+                        .on_hover_text(t!("offload-raw-only-tip"));
+                    ui.checkbox(&mut settings.open_after, t!("offload-open-after"));
+                    ui.checkbox(&mut settings.eject_after, t!("offload-eject-after"));
+                    ui.checkbox(&mut settings.delete_after, t!("offload-delete-after"))
+                        .on_hover_text(t!("offload-delete-after-tip"));
                     // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
                     if settings.raw_only && settings.delete_after {
                         ui.indent("delete_left", |ui| {
-                            ui.checkbox(
-                                &mut settings.delete_left,
-                                "Supprimer aussi les JPEG laissés sur la carte",
-                            )
-                            .on_hover_text("Ils ne sont pas copiés : ils seront perdus.");
+                            ui.checkbox(&mut settings.delete_left, t!("offload-delete-left"))
+                                .on_hover_text(t!("offload-delete-left-tip"));
                         });
                     }
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         start = ui
-                            .add_enabled(count > 0, egui::Button::new("Décharger"))
+                            .add_enabled(count > 0, egui::Button::new(t!("offload-start")))
                             .clicked();
-                        if ui.button("Annuler").clicked() {
+                        if ui.button(t!("cancel")).clicked() {
                             request = Some(Request::Close);
                         }
                     });
@@ -450,21 +436,21 @@ impl OffloadDialog {
                     } else {
                         0.0
                     };
-                    ui.add(egui::ProgressBar::new(fraction).text(format!(
-                        "{} / {} fichiers · {} / {} Mo",
-                        progress.files_done,
-                        progress.files_total,
-                        french_mb(progress.bytes_done),
-                        french_mb(progress.bytes_total)
+                    ui.add(egui::ProgressBar::new(fraction).text(t!(
+                        "offload-progress",
+                        done = progress.files_done,
+                        total = progress.files_total,
+                        mb = megabytes(progress.bytes_done),
+                        total_mb = megabytes(progress.bytes_total)
                     )));
                     if let Some(current) = &progress.current {
                         ui.weak(file_name(current));
                     }
                     ui.horizontal(|ui| {
-                        if ui.button("Continuer en arrière-plan").clicked() {
+                        if ui.button(t!("offload-background")).clicked() {
                             background = true;
                         }
-                        if ui.button("Interrompre").clicked() {
+                        if ui.button(t!("offload-interrupt")).clicked() {
                             cancel.store(true, Ordering::Relaxed);
                         }
                     });
@@ -478,26 +464,24 @@ impl OffloadDialog {
                 } => {
                     let settings = &self.settings;
                     let _ = finished;
-                    let verified = if settings.verify {
-                        " et vérifiés"
-                    } else {
-                        ""
-                    };
-                    ui.label(format!(
-                        "{} fichiers copiés{verified}, {} ignorés (déjà déchargés), {} erreurs{}.",
-                        report.copied.len(),
-                        report.skipped.len(),
-                        report.errors.len(),
-                        if report.cancelled {
-                            " — interrompu"
-                        } else {
-                            ""
-                        }
-                    ));
-                    if !report.left.is_empty() {
-                        ui.weak(format!("{} JPEG laissés sur la carte.", report.left.len()));
+                    let mut text = t!(
+                        "offload-done",
+                        copied = report.copied.len(),
+                        verified = if settings.verify { "yes" } else { "no" },
+                        skipped = report.skipped.len(),
+                        errors = report.errors.len()
+                    );
+                    if report.cancelled {
+                        text.push_str(&t!("offload-done-cancelled"));
                     }
-                    ui.weak(format!("Destination : {}", report.destination.display()));
+                    ui.label(text);
+                    if !report.left.is_empty() {
+                        ui.weak(t!("offload-left", n = report.left.len()));
+                    }
+                    ui.weak(t!(
+                        "offload-destination",
+                        path = report.destination.display().to_string()
+                    ));
                     for (file, e) in report.errors.iter().take(5) {
                         ui.colored_label(
                             egui::Color32::from_rgb(230, 90, 90),
@@ -506,24 +490,24 @@ impl OffloadDialog {
                     }
                     if let Some(errors) = deleted {
                         ui.label(if errors.is_empty() {
-                            "Fichiers copiés supprimés de la carte.".to_string()
+                            t!("offload-deleted")
                         } else {
-                            format!("{} fichiers n'ont pas pu être supprimés.", errors.len())
+                            t!("offload-not-deleted", n = errors.len())
                         });
                     }
                     if *ejected {
-                        ui.weak("Éjection de la carte : voir la barre d'état.");
+                        ui.weak(t!("offload-ejecting"));
                     }
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         // Ce qui n'a pas été coché reste possible ici.
-                        if !*opened && ui.button("Ouvrir le dossier").clicked() {
+                        if !*opened && ui.button(t!("offload-open")).clicked() {
                             request = Some(Request::Open(report.destination.clone()));
                         }
-                        if !*ejected && ui.button("Éjecter la carte").clicked() {
+                        if !*ejected && ui.button(t!("offload-eject")).clicked() {
                             request = Some(Request::Eject(source.clone()));
                         }
-                        if ui.button("Fermer").clicked() {
+                        if ui.button(t!("close")).clicked() {
                             request = Some(Request::Close);
                         }
                     });
@@ -555,7 +539,7 @@ fn file_name(path: &Path) -> String {
     )
 }
 
-/// Mégaoctets à la française (« 109,4 »).
-fn french_mb(bytes: u64) -> String {
-    format!("{:.1}", bytes as f64 / 1e6).replace('.', ",")
+/// Mégaoctets, une décimale, à la façon de la langue (« 109,4 » en français).
+fn megabytes(bytes: u64) -> String {
+    tri::i18n::decimal(bytes as f64 / 1e6, 1)
 }
