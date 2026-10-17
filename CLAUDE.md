@@ -507,3 +507,55 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   un bac à sable pour apprendre Rust.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
+
+## À faire (liste tenue à jour, 17/10/2026)
+
+Vue d'ensemble de ce qui reste, par thème ; le détail et le *pourquoi* sont dans
+« Prochaine étape immédiate » ci-dessus. Cocher au fil de l'eau. ★ = demandé
+explicitement par l'utilisateur comme important.
+
+### Tri et notation
+- [ ] ★ **Passage automatique à l'image suivante après une note** (option) — sans sauter
+      d'image sous un filtre : n'avancer que si l'image notée est toujours dans la liste.
+- [ ] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
+      images d'un coup.
+- [ ] **Comparaison côte à côte** de 2 à 4 images (rafales), zoom et position liés.
+- [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).
+- [ ] **Annuler** (`u`, réservé) : historique à concevoir (paires, filtres actifs, XMP
+      modifiés ailleurs ; session seule ou persistant).
+- [ ] Filtres complexes (fenêtre modale ou panneau latéral, à discuter).
+
+### Analyse d'image
+- [ ] ★ **Netteté** : carte superposée (focus peaking) et score par image, filtrable ;
+      cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux.
+- [ ] Histogramme des TIFF / PNG 16 bits à leur profondeur (aujourd'hui 8 bits).
+- [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).
+
+### Affichage
+- [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
+- [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [ ] **Aide** : regroupée par thème (56 actions à plat aujourd'hui), avec une
+      **recherche floue « à la fzf »** pour retrouver une action ou une touche.
+
+### Fichiers et dossiers
+- [ ] ★ **Actions sur fichiers et dossiers** : notre propre menu (pas de menu natif de
+      l'OS possible) — révéler dans le gestionnaire de fichiers, corbeille, renommer,
+      copier / déplacer vers…, ouvrir avec l'éditeur externe ; sidecars XMP et paires
+      RAW+JPEG suivent ; aussi en ligne de commande.
+- [ ] **Éditeur externe** configurable.
+- [ ] Panneau des dossiers : navigation au clavier, favoris.
+- [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours
+      (un dossier par jour ?), vidéos (aujourd'hui ignorées).
+- [ ] Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs).
+
+### Internationalisation
+- [ ] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais
+      (interface *et* moteur), langue du système par défaut, réglable ; piste Fluent.
+
+### Plateformes et outillage
+- [ ] **Windows** : jamais compilé ni testé (build LibRaw, lettres de lecteur, éjection
+      PowerShell, chemins).
+- [ ] Notes XMP à faire vérifier dans digiKam, RawTherapee, ART, RapidRaw (l'utilisateur
+      s'en charge) ; Lightroom et Capture One : testeurs à trouver.
+- [ ] Architecture cible (LibRaw en bibliothèque dynamique, JSON à la frontière, TUI) :
+      à reprendre une fois l'outil stabilisé.
