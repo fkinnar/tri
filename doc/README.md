@@ -19,6 +19,7 @@ existe.
 | [preview.md](preview.md) | Module `tri::preview` : calcul des vignettes et aperçus |
 | [scheduler.md](scheduler.md) | Module `tri::scheduler` : file de travail en fond |
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
+| [xmp.md](xmp.md) | Module `tri::xmp` : notes (étoiles, couleurs, accepté/rejeté) dans les sidecars XMP |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |
 | [raw.md](raw.md) | Module `tri::raw` : lecture et développement des RAW via LibRaw |

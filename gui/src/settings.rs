@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use tri::scheduler::RawPreviews;
 use tri::settings::{
-    CacheSection, EngineSettings, PreviewSection, RenderSection, SchedulerSection,
+    CacheSection, EngineSettings, PreviewSection, RenderSection, SchedulerSection, XmpSection,
 };
 
 use crate::actions::{Keymap, Profile};
@@ -29,6 +29,8 @@ pub struct AppSettings {
     pub cache: CacheSection,
     /// `[scheduler]` (moteur).
     pub scheduler: SchedulerSection,
+    /// `[xmp]` (moteur).
+    pub xmp: XmpSection,
     /// `[gui]`.
     pub gui: GuiSettings,
 }
@@ -41,6 +43,7 @@ impl AppSettings {
             render: self.render,
             cache: self.cache.clone(),
             scheduler: self.scheduler,
+            xmp: self.xmp,
         }
     }
 }

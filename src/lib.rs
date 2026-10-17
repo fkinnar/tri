@@ -9,7 +9,8 @@
 //! - [`raw`] : lecture et développement des RAW via LibRaw ;
 //! - [`preview`] : calcul des vignettes, aperçus et rendus 1:1 ;
 //! - [`scheduler`] : file de travail en tâche de fond, priorités, progression ;
-//! - [`settings`] : fichier de configuration (TOML), emplacement et lecture.
+//! - [`settings`] : fichier de configuration (TOML), emplacement et lecture ;
+//! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP.
 //!
 //! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/README.md`.
 
@@ -25,3 +26,4 @@ pub mod preview;
 pub mod raw;
 pub mod scheduler;
 pub mod settings;
+pub mod xmp;

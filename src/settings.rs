@@ -83,7 +83,7 @@ impl<'de, T: TryFrom<u64>> Deserialize<'de> for Auto<T> {
 }
 
 /// Réglages du moteur lus dans le fichier : sections `[preview]`, `[render]`, `[cache]`,
-/// `[scheduler]`. Les autres sections (`[gui]`) sont ignorées ici.
+/// `[scheduler]`, `[xmp]`. Les autres sections (`[gui]`) sont ignorées ici.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct EngineSettings {
@@ -95,6 +95,22 @@ pub struct EngineSettings {
     pub cache: CacheSection,
     /// Travail en tâche de fond.
     pub scheduler: SchedulerSection,
+    /// Notes dans les sidecars XMP.
+    pub xmp: XmpSection,
+}
+
+/// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir
+/// [`crate::xmp`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct XmpSection {
+    /// Nom d'un **nouveau** sidecar : `"darktable"` (`IMAGE.RAF.xmp`, défaut) ou `"adobe"`
+    /// (`IMAGE.xmp`, Lightroom, Capture One). Un sidecar existant est toujours réutilisé (le
+    /// plus récent si les deux existent).
+    pub sidecar: crate::xmp::Convention,
+    /// Plusieurs couleurs par image (comme darktable) ; sinon une seule, une nouvelle
+    /// couleur remplaçant la précédente (comme Lightroom).
+    pub multiple_colors: bool,
 }
 
 /// Section `[preview]` : voir [`preview::Settings`].

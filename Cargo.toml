@@ -10,6 +10,7 @@ edition = "2024"
 blake3 = "1"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
 libheif-rs = { version = "3", default-features = false, features = ["v1_17"], optional = true }
+quick-xml = "0.42"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 turbojpeg = { version = "1", default-features = false, features = ["cmake", "pkg-config", "require-simd"], optional = true }

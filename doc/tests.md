@@ -139,6 +139,22 @@ prouve rien.
 - `ungrouped`, `KindFilter` (tout / RAW / plates), suppression des groupes vidés, valeur par
   défaut, chaînage `apply_all`.
 
+### `xmp` (unitaires, `src/xmp.rs`)
+
+- Réécriture sans changement identique octet par octet (sidecar darktable réaliste) ; une
+  seule valeur changée ne modifie qu'elle ; mise à jour complète en gardant historique,
+  mots-clés et champs inconnus ; rejet qui mémorise et restaure les étoiles ; plusieurs
+  couleurs (darktable seul) ; préfixe `xap:` et forme élément ; valeurs écrites par
+  d'autres logiciels (Lightroom, digiKam, « 3.0 ») ; `rdf:Description` vide ; XML mal formé
+  refusé ; nouveau paquet ; noms de sidecar des deux conventions.
+
+### `xmp` (intégration, `tests/xmp.rs`)
+
+Dans un dossier temporaire : nouveau sidecar selon la convention, sidecar le plus récent
+choisi, extension `.XMP` en majuscules, notes inchangées ⇒ fichier non réécrit (date
+intacte), sidecar mal formé jamais écrasé, sidecar Adobe partagé par un RAF et son JPG,
+aucun fichier temporaire laissé.
+
 ### `media` + `filter` (intégration, `tests/media.rs`)
 
 Sur une fausse carte SD temporaire (paires RAW+JPEG, casse mixte, AppleDouble, `.xmp`,

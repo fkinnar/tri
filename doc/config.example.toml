@@ -54,6 +54,15 @@ light_workers = "auto"
 # Vignettes d'abord, puis aperçus boîtier, puis rendus RAW (false : tout mélangé).
 thumbnails_first = true
 
+[xmp]
+# Nom d'un NOUVEAU sidecar : "darktable" (IMAGE.RAF.xmp, un par fichier) ou "adobe"
+# (IMAGE.xmp, Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire).
+# Un sidecar existant est toujours réutilisé, le plus récent si les deux existent.
+sidecar = "darktable"
+# Plusieurs couleurs par image (comme darktable) ; false : une seule, une nouvelle couleur
+# remplace la précédente (comme Lightroom).
+multiple_colors = false
+
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"

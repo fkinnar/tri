@@ -245,7 +245,7 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
 
-## Notation XMP (décidé le 17/10/2026, pas encore implémenté)
+## Notation XMP (décidé le 17/10/2026 ; moteur : `src/xmp.rs`, `doc/xmp.md`)
 
 - **Sidecars, les deux conventions** : `IMAGE.RAF.xmp` (darktable, digiKam) et `IMAGE.xmp`
   (Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire). Lire **et**
@@ -260,16 +260,20 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - **Étoiles** : `xmp:Rating` 0–5 (standard ISO 16684-1).
 - **Rejeté** : `xmp:Rating = -1` (standard : -1 = rejeté, 0 = non noté), plus les champs
   « accepté » ci-dessous. Les étoiles d'une photo rejetée sont mémorisées dans un champ
-  propre à `tri`, pour les restaurer si on annule le rejet (à valider à l'usage).
-- **Accepté** (pas de champ standard) : `xmpDM:pick` (Lightroom Classic ≥ 13.2 : 1 / 0 / -1)
-  et `digiKam:PickLabel` (0 rien, 1 rejeté, 2 en attente, 3 accepté). Capture One : pas de
+  propre à `tri` (`tri:RatingBeforeReject`, espace de noms `urn:tri:xmp:1.0`), pour les
+  restaurer si on annule le rejet (à valider à l'usage).
+- **Accepté** (pas de champ standard) : `xmpDM:pick` (Lightroom Classic ≥ 13.2 : 1 / 0 / -1, avec
+  `xmpDM:good` True / False) et `digiKam:PickLabel` (0 rien, 1 rejeté, 2 en attente, 3 accepté). Capture One : pas de
   documentation trouvée.
 - **Couleurs** : une par défaut, plusieurs en option (configuration). darktable lit
   `xmp:Label` (« Red », « Yellow », « Green », « Blue », « Purple ») **en priorité** sur
   `darktable:colorlabels` (séquence de 0 = rouge à 4 = violet ; vérifié dans son code
   source) : en mode une couleur, écrire les deux ; en mode plusieurs couleurs, seulement
   `darktable:colorlabels` (et `xmp:Label` s'il n'y en a qu'une), sinon darktable n'en
-  verrait qu'une.
+  verrait qu'une. Avec une seule couleur, aussi `digiKam:ColorLabel` (1 rouge, 3 jaune,
+  4 vert, 5 bleu, 6 magenta). Un champ à 0 n'est ajouté que s'il existait déjà (pas de
+  bruit). Vérifié sur 131 vrais sidecars darktable : réécriture identique octet par octet,
+  notes relues à l'identique par ExifTool, tout le reste inchangé.
 - **Raccourcis de notation par défaut** (17/10/2026, pensés pour l'AZERTY aussi) : étoiles
   `0`–`5` et couleurs `6`–`9` (rouge, jaune, vert, bleu) **avec ou sans Maj** (rangée du
   haut AZERTY = Maj, pavé numérique = sans) ; violet `°` et `,` (virgule du pavé
