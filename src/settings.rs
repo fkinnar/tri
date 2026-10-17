@@ -97,6 +97,8 @@ pub struct EngineSettings {
     pub scheduler: SchedulerSection,
     /// Notes dans les sidecars XMP.
     pub xmp: XmpSection,
+    /// Emplacements proposés pour choisir un dossier.
+    pub places: crate::places::PlaceFilter,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir

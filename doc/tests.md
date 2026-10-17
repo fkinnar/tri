@@ -180,7 +180,8 @@ la plus récente, source mal formée signalée.
   fichiers écartés, lien vers un dossier suivi, dossier absent en erreur ; emplacements de
   la machine (personnel, racine, chemins absolus) ; arborescence dépliée à la demande,
   repliée puis redépliée (le sous-niveau reste déplié), `reveal`, `reload` après création,
-  dossier illisible signalé.
+  dossier illisible signalé ; volumes Time Machine reconnus à leur contenu (APFS, HFS,
+  option désactivée), exclusion par nom ou chemin, motifs `*` et `?`.
 
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 

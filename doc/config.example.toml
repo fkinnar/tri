@@ -63,6 +63,15 @@ sidecar = "darktable"
 # remplace la précédente (comme Lightroom).
 multiple_colors = false
 
+[places]
+# Emplacements proposés par le panneau des dossiers. Masquer les sauvegardes Time Machine,
+# reconnues à leur contenu (pas à leur nom) :
+hide_backups = true
+# Emplacements à masquer : motifs comparés au nom ou au chemin, sans tenir compte de la
+# casse, avec * (n'importe quelle suite) et ? (un caractère). Exemple :
+# exclude = ["Backup", "/mnt/*"]
+exclude = []
+
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"

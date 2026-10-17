@@ -205,7 +205,7 @@ impl TriApp {
             },
             None => (Folder::default(), None),
         };
-        let mut tree = Tree::new(gui.folders.hidden);
+        let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if !folder.is_none() {
             tree.reveal(&folder.dir);
         }

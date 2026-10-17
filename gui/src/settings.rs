@@ -32,6 +32,8 @@ pub struct AppSettings {
     pub scheduler: SchedulerSection,
     /// `[xmp]` (moteur).
     pub xmp: XmpSection,
+    /// `[places]` (moteur).
+    pub places: tri::places::PlaceFilter,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -48,6 +50,7 @@ impl AppSettings {
             cache: self.cache.clone(),
             scheduler: self.scheduler,
             xmp: self.xmp,
+            places: self.places.clone(),
         }
     }
 

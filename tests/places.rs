@@ -128,3 +128,52 @@ fn an_unreadable_folder_shows_an_error() {
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
     assert!(row.error.is_some());
 }
+
+fn volume(path: &std::path::Path) -> places::Place {
+    places::Place {
+        name: path.file_name().unwrap().to_string_lossy().into_owned(),
+        path: path.to_path_buf(),
+        kind: PlaceKind::Volume,
+    }
+}
+
+#[test]
+fn time_machine_volumes_are_recognised_by_their_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let apfs = dir.path().join("MesSauvegardes");
+    let hfs = dir.path().join("Ancien");
+    let photos = dir.path().join("Photos");
+    for d in [&apfs, &hfs, &photos] {
+        fs::create_dir(d).unwrap();
+    }
+    fs::write(apfs.join("backup_manifest.plist"), b"").unwrap();
+    fs::create_dir(hfs.join("Backups.backupdb")).unwrap();
+    let filter = places::PlaceFilter::default();
+    assert!(filter.hides(&volume(&apfs)), "APFS, quel que soit le nom");
+    assert!(filter.hides(&volume(&hfs)));
+    assert!(!filter.hides(&volume(&photos)));
+    let shown = places::PlaceFilter {
+        hide_backups: false,
+        ..places::PlaceFilter::default()
+    };
+    assert!(!shown.hides(&volume(&apfs)), "option désactivée");
+}
+
+#[test]
+fn excluded_places_match_name_or_path() {
+    let filter = places::PlaceFilter {
+        hide_backups: false,
+        exclude: vec!["backup".into(), "/mnt/*".into()],
+    };
+    let place = |name: &str, path: &str| places::Place {
+        name: name.into(),
+        path: path.into(),
+        kind: PlaceKind::Volume,
+    };
+    assert!(
+        filter.hides(&place("Backup", "/Volumes/Backup")),
+        "nom, sans casse"
+    );
+    assert!(filter.hides(&place("nas", "/mnt/nas")), "chemin");
+    assert!(!filter.hides(&place("Work", "/Volumes/Work")));
+}

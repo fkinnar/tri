@@ -31,6 +31,66 @@ pub struct Place {
     pub kind: PlaceKind,
 }
 
+/// Emplacements à masquer (section `[places]` du fichier de configuration).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PlaceFilter {
+    /// Masquer les volumes de sauvegarde Time Machine, reconnus à leur contenu (pas à leur
+    /// nom, choisi par chacun) : `backup_manifest.plist` à la racine (disque APFS) ou
+    /// `Backups.backupdb` (disque HFS, instantanés locaux).
+    pub hide_backups: bool,
+    /// Motifs d'emplacements à masquer, comparés sans tenir compte de la casse au nom
+    /// (`"Backup"`) ou au chemin (`"/mnt/*"`) ; `*` : n'importe quelle suite de caractères,
+    /// `?` : un caractère.
+    pub exclude: Vec<String>,
+}
+
+impl Default for PlaceFilter {
+    fn default() -> Self {
+        Self {
+            hide_backups: true,
+            exclude: Vec::new(),
+        }
+    }
+}
+
+impl PlaceFilter {
+    /// Vrai si `place` doit être masqué.
+    pub fn hides(&self, place: &Place) -> bool {
+        let path = place.path.to_string_lossy();
+        self.exclude
+            .iter()
+            .any(|pattern| wildcard(pattern, &place.name) || wildcard(pattern, &path))
+            || (self.hide_backups && place.kind == PlaceKind::Volume && is_backup(&place.path))
+    }
+}
+
+/// Vrai si `dir` est un volume de sauvegarde Time Machine (voir [`PlaceFilter`]).
+pub fn is_backup(dir: &Path) -> bool {
+    dir.join("backup_manifest.plist").is_file() || dir.join("Backups.backupdb").is_dir()
+}
+
+/// `text` correspond-il à `pattern` (`*` : n'importe quelle suite, `?` : un caractère),
+/// sans tenir compte de la casse ?
+fn wildcard(pattern: &str, text: &str) -> bool {
+    fn go(p: &[char], t: &[char]) -> bool {
+        match (p.first(), t.first()) {
+            (None, None) => true,
+            (Some('*'), _) => go(&p[1..], t) || (!t.is_empty() && go(p, &t[1..])),
+            (Some('?'), Some(_)) => go(&p[1..], &t[1..]),
+            (Some(a), Some(b)) => a == b && go(&p[1..], &t[1..]),
+            _ => false,
+        }
+    }
+    let lower = |s: &str| s.to_lowercase().chars().collect::<Vec<char>>();
+    go(&lower(pattern), &lower(text))
+}
+
+/// Emplacements de cette machine, sauf ceux que `filter` masque.
+pub fn places_filtered(filter: &PlaceFilter) -> Vec<Place> {
+    places().into_iter().filter(|p| !filter.hides(p)).collect()
+}
+
 /// Emplacements de cette machine : volumes montés, dossier personnel, racine(s).
 pub fn places() -> Vec<Place> {
     let env = |name: &str| std::env::var_os(name);
@@ -181,22 +241,26 @@ pub struct Row {
 #[derive(Clone, Debug)]
 pub struct Tree {
     places: Vec<Place>,
+    filter: PlaceFilter,
     hidden: bool,
     expanded: std::collections::HashSet<PathBuf>,
     children: std::collections::HashMap<PathBuf, Result<Vec<PathBuf>, String>>,
 }
 
 impl Tree {
-    /// Arborescence des emplacements de cette machine ([`places`]) ; dossiers cachés
-    /// seulement si `hidden`.
-    pub fn new(hidden: bool) -> Tree {
-        Tree::with_places(places(), hidden)
+    /// Arborescence des emplacements de cette machine, sauf ceux que `filter` masque ;
+    /// dossiers cachés seulement si `hidden`.
+    pub fn new(filter: PlaceFilter, hidden: bool) -> Tree {
+        let mut tree = Tree::with_places(places_filtered(&filter), hidden);
+        tree.filter = filter;
+        tree
     }
 
     /// Arborescence à partir d'emplacements donnés (tests, emplacements choisis).
     pub fn with_places(places: Vec<Place>, hidden: bool) -> Tree {
         Tree {
             places,
+            filter: PlaceFilter::default(),
             hidden,
             expanded: Default::default(),
             children: Default::default(),
@@ -260,7 +324,7 @@ impl Tree {
 
     /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
     pub fn refresh(&mut self) {
-        self.places = places();
+        self.places = places_filtered(&self.filter);
         self.reload();
     }
 
@@ -366,6 +430,20 @@ mod tests {
             ancestors_from(Path::new("/home"), Path::new("/Volumes/SD")),
             None
         );
+    }
+
+    #[test]
+    fn wildcards() {
+        assert!(wildcard("Backup", "backup"));
+        assert!(wildcard("/mnt/*", "/mnt/nas"));
+        assert!(wildcard(
+            "com.apple.TimeMachine.*",
+            "com.apple.TimeMachine.localsnapshots"
+        ));
+        assert!(wildcard("SD-??", "sd-01"));
+        assert!(!wildcard("SD-??", "sd-1"));
+        assert!(!wildcard("Work", "Workspace"));
+        assert!(wildcard("*", ""));
     }
 
     #[test]

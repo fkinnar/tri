@@ -19,6 +19,20 @@ donne l'arborescence complète. Les liens symboliques de `/Volumes` sont écart�
 internes (`volume_dirs`, `home_dir`) pour être testés sur toutes les plateformes, comme
 `settings::default_path`.
 
+## Emplacements masqués (`PlaceFilter`, section `[places]`)
+
+- `hide_backups` (défaut : vrai) : les volumes de sauvegarde **Time Machine** sont
+  masqués, reconnus à leur **contenu** et pas à leur nom (choisi par chacun) :
+  `backup_manifest.plist` à la racine (disque APFS), `Backups.backupdb` (disque HFS,
+  volume des instantanés locaux `com.apple.TimeMachine.localsnapshots`). Vérifié sur la
+  machine de développement (17/10/2026) : « TimeMachine » et les instantanés disparaissent,
+  « Backup » (un disque ordinaire) et « Work » restent ;
+- `exclude` : motifs comparés au **nom** (`"Backup"`) ou au **chemin** (`"/mnt/*"`), sans
+  tenir compte de la casse, avec `*` et `?` (petite fonction `wildcard`, sans dépendance) ;
+  s'applique à tous les emplacements (on peut masquer la racine) ;
+- `places_filtered(&filtre)` ; `Tree::new(filtre, cachés)` garde le filtre pour
+  `refresh`.
+
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 
 Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seulement si
