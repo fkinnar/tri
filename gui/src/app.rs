@@ -674,8 +674,8 @@ impl TriApp {
         let name = folder_name(&path);
         let open_inside = !self.folder.is_none() && self.folder.dir.starts_with(&path);
         let (mut confirm, mut cancel) = (false, false);
-        let modal = modal_at("eject_dialog", at).show(ctx, |ui| {
-            ui.heading(t!("eject-question", name = &name));
+        let title = t!("eject-question", name = &name);
+        let modal = modal_at("eject_dialog", at).title(title).show(ctx, |ui| {
             if open_inside {
                 ui.label(t!("eject-open-folder"));
             }
@@ -2568,35 +2568,36 @@ impl TriApp {
         let mut clicked = None;
         let mut file_action = None;
         let mut close = false;
-        let modal = modal_at("rating_dialog", at).show(ctx, |ui| {
-            ui.heading(file_name(&path));
-            ui.add_space(6.0);
-            ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
-            ui.add_space(6.0);
-            ui.separator();
-            // Actions sur le fichier.
-            ui.horizontal_wrapped(|ui| {
-                for action in [
-                    Action::FileRename,
-                    Action::FileDelete,
-                    Action::FileReveal,
-                    Action::FileEdit,
-                ] {
-                    if ui
-                        .button(action.label())
-                        .on_hover_text(self.action_tip(action))
-                        .clicked()
-                    {
-                        file_action = Some(action);
+        let modal = modal_at("rating_dialog", at)
+            .title(file_name(&path))
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
+                ui.add_space(6.0);
+                ui.separator();
+                // Actions sur le fichier.
+                ui.horizontal_wrapped(|ui| {
+                    for action in [
+                        Action::FileRename,
+                        Action::FileDelete,
+                        Action::FileReveal,
+                        Action::FileEdit,
+                    ] {
+                        if ui
+                            .button(action.label())
+                            .on_hover_text(self.action_tip(action))
+                            .clicked()
+                        {
+                            file_action = Some(action);
+                        }
                     }
-                }
+                });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    close = ui.button(t!("close")).clicked();
+                    ui.weak(t!("or-escape"));
+                });
             });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                close = ui.button(t!("close")).clicked();
-                ui.weak(t!("or-escape"));
-            });
-        });
         if let Some(action) = clicked {
             self.rate_path(path.clone(), action);
         }
@@ -2742,23 +2743,28 @@ impl TriApp {
                 }
             }
             ui.separator();
-            for (rule, label, action) in [
+            // Goutte barrée : masquer les floues ; goutte : seulement les floues.
+            for (rule, action, barred) in [
                 (
                     tri::sharpness::BlurRule::HideBlurry,
-                    t!("filter-bar-sharp-short"),
                     Action::FilterBlurry,
+                    true,
                 ),
                 (
                     tri::sharpness::BlurRule::OnlyBlurry,
-                    t!("filter-bar-blurry-short"),
                     Action::FilterOnlyBlurry,
+                    false,
                 ),
             ] {
-                if ui
-                    .selectable_label(self.blur_rule == Some(rule), label)
-                    .on_hover_text(self.action_tip(action))
-                    .clicked()
-                {
+                let tip = self.action_tip(action);
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                if self.blur_rule == Some(rule) {
+                    ui.painter()
+                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
+                }
+                let color = Color32::from(colors.blur_drop);
+                marks::blur_drop(ui.painter(), rect, color, barred);
+                if response.clicked() {
                     clicked.push(action);
                 }
             }
@@ -3377,6 +3383,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
     Dialog {
         id,
         start: at + vec2(4.0, 4.0),
+        title: None,
     }
 }
 
@@ -3385,9 +3392,17 @@ pub(crate) struct Dialog {
     id: egui::Id,
     /// Position initiale (coin haut gauche).
     start: egui::Pos2,
+    /// Titre, dessiné en couleur d'accent au-dessus d'une ligne de séparation.
+    title: Option<String>,
 }
 
 impl Dialog {
+    /// Titre de la boîte.
+    pub(crate) fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
     /// Affiche la boîte, mise en forme selon `[gui.dialogs]` (réglages déposés dans le
     /// contexte à chaque image, voir [`dialog_settings_id`]). La `Modal` d'egui n'est pas
     /// déplaçable (sa zone couvre aussi le fond grisé) : la position est gardée ici et
@@ -3434,6 +3449,11 @@ impl Dialog {
                         spacing.button_padding = vec2(d.button_padding, d.button_padding / 2.0);
                         ui.set_min_width(d.min_width);
                         ui.set_max_width(d.max_width.max(d.min_width));
+                        if let Some(title) = &self.title {
+                            let color = Color32::from(d.title_color);
+                            ui.label(egui::RichText::new(title).size(d.title_size).color(color));
+                            ui.separator();
+                        }
                         add(ui)
                     })
                     .inner

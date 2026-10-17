@@ -564,6 +564,11 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [ ] **Jeu d'icônes** (proposé par l'utilisateur le 17/10/2026, pas urgent) : les
+      icônes sont aujourd'hui dessinées en formes simples (`gui/src/marks.rs` : étoiles,
+      pastilles coche / croix, goutte de netteté, panneaux, éjection…). L'utilisateur
+      pourrait fournir des icônes (SVG) ; à charger alors via `egui_extras` (licence,
+      maintenance à vérifier) en gardant les formes dessinées en repli.
 - [x] **Aide** regroupée par thème, avec une **recherche floue « à la fzf »** (libellé,
       touches, identifiant), fait le 17/10/2026.
 

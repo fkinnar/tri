@@ -102,15 +102,17 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pour rester visible sur tout fond.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
   retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
-  grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs, taille des titres).
+  grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur
+  d'accent, `title_color`, souligné d'une ligne de séparation).
   La `Modal` d'egui ne se déplace pas (sa zone couvre aussi le fond grisé) : `Dialog`
   garde la position et la décale au glissement ; le cadre est dans la zone de
   glissement, et les textes n'y sont pas sélectionnables (sinon glisser le titre
   sélectionnait du texte). Boutons et champs restent prioritaires.
 - **Barre de filtres compacte** (retour du 17/10/2026 : elle débordait sur un écran de
-  portable) : icônes (étoiles, drapeaux — acceptées, rejetées barrées pour « sans les
-  rejetées », rejetées —, couleurs) et textes courts (« nettes », « floues », « 26/26 »),
-  le détail et le raccourci de chaque bouton au survol.
+  portable) : icônes dessinées (étoiles ; drapeaux : coche verte = acceptées, croix grise
+  = masquer les rejetées, croix rouge = rejetées seulement ; goutte d'eau barrée =
+  masquer les floues, goutte = floues seulement, `[gui.colors] blur_drop` ; couleurs),
+  compteur « 26/26 » ; le libellé complet et le raccourci de chaque bouton au survol.
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus

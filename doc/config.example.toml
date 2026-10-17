@@ -281,6 +281,8 @@ button_padding = 10.0
 min_width = 340.0
 max_width = 520.0
 title_size = 17.0
+# Couleur des titres (accent, turquoise), soulignés d'une ligne de séparation.
+title_color = "#50bedc"
 
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
@@ -355,6 +357,8 @@ hover = "#b4b4b4"
 marked = "#ffaa28"
 # Repère du collimateur de mise au point.
 focus = "#3cff6e"
+# Goutte des filtres de netteté (barrée : masquer les floues ; seule : floues seulement).
+blur_drop = "#6eaae6"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

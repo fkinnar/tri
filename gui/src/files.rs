@@ -94,60 +94,62 @@ fn rename_dialog(
         .as_ref()
         .is_ok_and(|p| p.moves.is_empty() && p.copies.is_empty());
     let (mut confirm, mut cancel) = (false, false);
-    let modal = crate::app::modal_at("rename_dialog", at).show(ctx, |ui| {
-        ui.heading(t!("rename-title", name = file_name(image)));
-        ui.add_space(6.0);
-        let field = ui.add(
-            egui::TextEdit::singleline(name)
-                .id(name_field_id())
-                .desired_width(320.0),
-        );
-        if std::mem::take(fresh) {
-            field.request_focus();
-            // Tout le nom sélectionné : on tape directement le nouveau.
-            let id = name_field_id();
-            let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
-            let all = egui::text::CCursorRange::two(
-                egui::text::CCursor::new(0),
-                egui::text::CCursor::new(name.chars().count()),
+    let title = t!("rename-title", name = file_name(image));
+    let modal = crate::app::modal_at("rename_dialog", at)
+        .title(title)
+        .show(ctx, |ui| {
+            ui.add_space(6.0);
+            let field = ui.add(
+                egui::TextEdit::singleline(name)
+                    .id(name_field_id())
+                    .desired_width(320.0),
             );
-            state.cursor.set_char_range(Some(all));
-            state.store(ctx, id);
-        }
-        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        ui.add_space(6.0);
-        match &plan {
-            Ok(plan) => {
-                for (from, to) in &plan.moves {
-                    ui.weak(t!(
-                        "rename-becomes",
-                        from = file_name(from),
-                        to = file_name(to)
-                    ));
+            if std::mem::take(fresh) {
+                field.request_focus();
+                // Tout le nom sélectionné : on tape directement le nouveau.
+                let id = name_field_id();
+                let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
+                let all = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(0),
+                    egui::text::CCursor::new(name.chars().count()),
+                );
+                state.cursor.set_char_range(Some(all));
+                state.store(ctx, id);
+            }
+            let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+            ui.add_space(6.0);
+            match &plan {
+                Ok(plan) => {
+                    for (from, to) in &plan.moves {
+                        ui.weak(t!(
+                            "rename-becomes",
+                            from = file_name(from),
+                            to = file_name(to)
+                        ));
+                    }
+                    for (from, to) in &plan.copies {
+                        ui.weak(t!(
+                            "rename-copied",
+                            from = file_name(from),
+                            to = file_name(to)
+                        ));
+                    }
                 }
-                for (from, to) in &plan.copies {
-                    ui.weak(t!(
-                        "rename-copied",
-                        from = file_name(from),
-                        to = file_name(to)
-                    ));
+                Err(e) => {
+                    ui.colored_label(ui.visuals().error_fg_color, e.to_string());
                 }
             }
-            Err(e) => {
-                ui.colored_label(ui.visuals().error_fg_color, e.to_string());
-            }
-        }
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            let ok = plan.is_ok() && !unchanged;
-            confirm = ui
-                .add_enabled(ok, egui::Button::new(t!("rename-button")))
-                .clicked()
-                || (enter && ok);
-            cancel = ui.button(t!("cancel")).clicked();
-            ui.weak(t!("enter-or-escape"));
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let ok = plan.is_ok() && !unchanged;
+                confirm = ui
+                    .add_enabled(ok, egui::Button::new(t!("rename-button")))
+                    .clicked()
+                    || (enter && ok);
+                cancel = ui.button(t!("cancel")).clicked();
+                ui.weak(t!("enter-or-escape"));
+            });
         });
-    });
     if confirm && let Ok(plan) = plan {
         let select = plan
             .moves
@@ -173,32 +175,34 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
     } else {
         t!("delete-permanently")
     };
-    let modal = crate::app::modal_at("delete_dialog", at).show(ctx, |ui| {
-        let n = group.files().count();
-        ui.heading(if settings.trash {
-            t!("delete-trash-question", n = n)
-        } else {
-            t!("delete-permanently-question", n = n)
-        });
-        ui.add_space(6.0);
-        ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
-            for file in group.files() {
-                ui.weak(file_name(file));
+    let n = group.files().count();
+    let title = if settings.trash {
+        t!("delete-trash-question", n = n)
+    } else {
+        t!("delete-permanently-question", n = n)
+    };
+    let modal = crate::app::modal_at("delete_dialog", at)
+        .title(title)
+        .show(ctx, |ui| {
+            ui.add_space(6.0);
+            ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
+                for file in group.files() {
+                    ui.weak(file_name(file));
+                }
+            });
+            for file in &group.shared {
+                ui.weak(t!("delete-kept-shared", name = file_name(file)));
             }
+            if !settings.trash {
+                ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                confirm = ui.button(verb).clicked();
+                cancel = ui.button(t!("cancel")).clicked();
+                ui.weak(t!("enter-or-escape"));
+            });
         });
-        for file in &group.shared {
-            ui.weak(t!("delete-kept-shared", name = file_name(file)));
-        }
-        if !settings.trash {
-            ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
-        }
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            confirm = ui.button(verb).clicked();
-            cancel = ui.button(t!("cancel")).clicked();
-            ui.weak(t!("enter-or-escape"));
-        });
-    });
     // Entrée confirme (pas de champ de saisie ici).
     confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
     if confirm {

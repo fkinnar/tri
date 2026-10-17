@@ -269,6 +269,8 @@ pub struct DialogSettings {
     pub max_width: f32,
     /// Taille du texte des titres (points).
     pub title_size: f32,
+    /// Couleur des titres (accent).
+    pub title_color: Color,
 }
 
 impl Default for DialogSettings {
@@ -280,6 +282,7 @@ impl Default for DialogSettings {
             min_width: 340.0,
             max_width: 520.0,
             title_size: 17.0,
+            title_color: Color([80, 190, 220]),
         }
     }
 }
@@ -532,6 +535,8 @@ pub struct Colors {
     pub marked: Color,
     /// Repère du collimateur de mise au point.
     pub focus: Color,
+    /// Goutte des filtres de netteté (barre de filtres).
+    pub blur_drop: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -583,6 +588,7 @@ impl Default for Colors {
             hover: Color([180, 180, 180]),
             marked: Color([255, 170, 40]),
             focus: Color([60, 255, 110]),
+            blur_drop: Color([110, 170, 230]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

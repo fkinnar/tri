@@ -74,8 +74,8 @@ fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Col
     }
 }
 
-/// Icône d'un filtre sur le drapeau, dans `rect` : pastille « acceptée », « rejetée », ou
-/// « rejetée » barrée (sans les rejetées).
+/// Icône d'un filtre sur le drapeau, dans `rect` : coche verte (acceptées), croix rouge
+/// (rejetées seulement), la même croix en gris (masquer les rejetées).
 pub fn flag_filter(
     painter: &Painter,
     rect: Rect,
@@ -87,13 +87,34 @@ pub fn flag_filter(
     match choice {
         FlagFilter::Accepted => flag(painter, center, radius, Flag::Accepted, colors),
         FlagFilter::Rejected => flag(painter, center, radius, Flag::Rejected, colors),
-        FlagFilter::NotRejected => {
-            let faded = Color32::from(colors.rejected).gamma_multiply(0.45);
-            badge(painter, center, radius, false, faded);
-            // Barre diagonale : « pas de rejetées ».
-            let r = radius * 1.15;
-            let stroke = Stroke::new((radius * 0.3).max(1.5), Color32::from_gray(235));
-            painter.line_segment([center + vec2(-r, r), center + vec2(r, -r)], stroke);
+        FlagFilter::NotRejected => badge(painter, center, radius, false, Color32::from_gray(120)),
+    }
+}
+
+/// Goutte d'eau (le flou) dans `rect` ; `barred` : barrée (masquer les floues).
+pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32, barred: bool) {
+    // Cercle en bas, pointe en haut : deux tangentes du sommet au cercle.
+    let r = rect.width() * 0.28;
+    let c = rect.center() + vec2(0.0, rect.height() * 0.12);
+    let tip = pos2(rect.center().x, rect.top() + rect.height() * 0.08);
+    let d = c.y - tip.y;
+    // Angle des points de tangence, depuis la verticale.
+    let a = (r / d).clamp(-1.0, 1.0).acos();
+    let mut points = vec![tip];
+    let steps = 24;
+    for i in 0..=steps {
+        // De la tangence droite à la tangence gauche, par le bas.
+        let t = -FRAC_PI_2 + a + (2.0 * PI - 2.0 * a) * i as f32 / steps as f32;
+        points.push(c + vec2(t.cos(), t.sin()) * r);
+    }
+    painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
+    if barred {
+        let s = rect.width() * 0.42;
+        let o = rect.center();
+        let back = Stroke::new(rect.width() * 0.2, Color32::from_black_alpha(200));
+        let line = Stroke::new(rect.width() * 0.1, Color32::from_gray(235));
+        for stroke in [back, line] {
+            painter.line_segment([o + vec2(-s, s), o + vec2(s, -s)], stroke);
         }
     }
 }

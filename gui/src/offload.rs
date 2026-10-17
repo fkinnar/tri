@@ -321,198 +321,201 @@ impl OffloadDialog {
             || source.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let modal = crate::app::modal_at("offload_dialog", self.at).show(ctx, |ui| {
-            ui.heading(t!("offload-title", name = &name));
-            ui.add_space(6.0);
-            match &mut self.stage {
-                Stage::Planning(_) => {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(t!("offload-planning"));
-                    });
-                }
-                Stage::Failed(e) => {
-                    ui.label(e.as_str());
-                }
-                Stage::Ready {
-                    plan,
-                    root,
-                    folder,
-                    error,
-                    present,
-                    ..
-                } => {
-                    let settings = &mut self.settings;
-                    let dest =
-                        offload::destination(&tri::settings::expand_home(root.trim()), folder).ok();
-                    // Doublons jugés sur la destination choisie (même nom, même taille ;
-                    // la copie compare ensuite les contenus).
-                    let fresh = match (&dest, &*present) {
-                        (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
-                        (Some(_), None) => true,
-                        (None, _) => false,
-                    };
-                    if fresh && let Some(d) = &dest {
-                        let found = offload::already_in(plan, settings, d);
-                        *present = Some((d.clone(), settings.raw_only, found));
-                    }
-                    let (there, there_bytes) = match (&dest, &*present) {
-                        (Some(d), Some((p, _, found))) if p == d => *found,
-                        _ => (0, 0),
-                    };
-                    let selected = plan.to_copy(settings).count();
-                    let count = selected - there;
-                    let mut text = t!("offload-images", n = plan.items.len());
-                    if settings.skip_known {
-                        let known = plan.items.iter().filter(|i| i.known).count();
-                        text.push_str(&t!("offload-known", n = known));
-                    }
-                    if there > 0 {
-                        text.push_str(&t!("offload-already-there", n = there));
-                    }
-                    text.push_str(&t!(
-                        "offload-to-copy",
-                        n = count,
-                        mb = megabytes(plan.bytes(settings) - there_bytes)
-                    ));
-                    ui.label(text);
-                    if plan.ignored > 0 {
-                        ui.weak(t!("offload-ignored", n = plan.ignored));
-                    }
-                    ui.add_space(6.0);
-                    egui::Grid::new("offload_fields")
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            ui.label(t!("offload-root"));
-                            ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
-                            ui.end_row();
-                            ui.label(t!("offload-session"));
-                            ui.add(
-                                egui::TextEdit::singleline(folder)
-                                    .id(folder_field_id())
-                                    .desired_width(300.0),
-                            )
-                            .on_hover_text(t!("offload-session-tip"));
-                            ui.end_row();
-                        });
-                    if let Some(dest) = &dest {
-                        ui.weak(t!("offload-destination", path = dest.display().to_string()));
-                    }
-                    if let Some(e) = error {
-                        ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
-                    }
-                    // Choix faits avant la copie, enchaînés à la fin (retour du
-                    // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
-                    ui.add_space(6.0);
-                    ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
-                        .on_hover_text(t!("offload-raw-only-tip"));
-                    ui.checkbox(&mut settings.open_after, t!("offload-open-after"));
-                    ui.checkbox(&mut settings.eject_after, t!("offload-eject-after"));
-                    ui.checkbox(&mut settings.delete_after, t!("offload-delete-after"))
-                        .on_hover_text(t!("offload-delete-after-tip"));
-                    // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
-                    if settings.raw_only && settings.delete_after {
-                        ui.indent("delete_left", |ui| {
-                            ui.checkbox(&mut settings.delete_left, t!("offload-delete-left"))
-                                .on_hover_text(t!("offload-delete-left-tip"));
+        let title = t!("offload-title", name = &name);
+        let modal = crate::app::modal_at("offload_dialog", self.at)
+            .title(title)
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                match &mut self.stage {
+                    Stage::Planning(_) => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(t!("offload-planning"));
                         });
                     }
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        start = ui
-                            .add_enabled(count > 0, egui::Button::new(t!("offload-start")))
-                            .clicked();
-                        if ui.button(t!("cancel")).clicked() {
-                            request = Some(Request::Close);
+                    Stage::Failed(e) => {
+                        ui.label(e.as_str());
+                    }
+                    Stage::Ready {
+                        plan,
+                        root,
+                        folder,
+                        error,
+                        present,
+                        ..
+                    } => {
+                        let settings = &mut self.settings;
+                        let dest =
+                            offload::destination(&tri::settings::expand_home(root.trim()), folder)
+                                .ok();
+                        // Doublons jugés sur la destination choisie (même nom, même taille ;
+                        // la copie compare ensuite les contenus).
+                        let fresh = match (&dest, &*present) {
+                            (Some(d), Some((p, raw, _))) => p != d || *raw != settings.raw_only,
+                            (Some(_), None) => true,
+                            (None, _) => false,
+                        };
+                        if fresh && let Some(d) = &dest {
+                            let found = offload::already_in(plan, settings, d);
+                            *present = Some((d.clone(), settings.raw_only, found));
                         }
-                    });
-                }
-                Stage::Running {
-                    progress, cancel, ..
-                } => {
-                    let fraction = if progress.bytes_total > 0 {
-                        progress.bytes_done as f32 / progress.bytes_total as f32
-                    } else {
-                        0.0
-                    };
-                    ui.add(egui::ProgressBar::new(fraction).text(t!(
-                        "offload-progress",
-                        done = progress.files_done,
-                        total = progress.files_total,
-                        mb = megabytes(progress.bytes_done),
-                        total_mb = megabytes(progress.bytes_total)
-                    )));
-                    if let Some(current) = &progress.current {
-                        ui.weak(file_name(current));
-                    }
-                    ui.horizontal(|ui| {
-                        if ui.button(t!("offload-background")).clicked() {
-                            background = true;
+                        let (there, there_bytes) = match (&dest, &*present) {
+                            (Some(d), Some((p, _, found))) if p == d => *found,
+                            _ => (0, 0),
+                        };
+                        let selected = plan.to_copy(settings).count();
+                        let count = selected - there;
+                        let mut text = t!("offload-images", n = plan.items.len());
+                        if settings.skip_known {
+                            let known = plan.items.iter().filter(|i| i.known).count();
+                            text.push_str(&t!("offload-known", n = known));
                         }
-                        if ui.button(t!("offload-interrupt")).clicked() {
-                            cancel.store(true, Ordering::Relaxed);
+                        if there > 0 {
+                            text.push_str(&t!("offload-already-there", n = there));
                         }
-                    });
-                }
-                Stage::Done {
-                    report,
-                    finished,
-                    deleted,
-                    opened,
-                    ejected,
-                } => {
-                    let settings = &self.settings;
-                    let _ = finished;
-                    let mut text = t!(
-                        "offload-done",
-                        copied = report.copied.len(),
-                        verified = if settings.verify { "yes" } else { "no" },
-                        skipped = report.skipped.len(),
-                        errors = report.errors.len()
-                    );
-                    if report.cancelled {
-                        text.push_str(&t!("offload-done-cancelled"));
+                        text.push_str(&t!(
+                            "offload-to-copy",
+                            n = count,
+                            mb = megabytes(plan.bytes(settings) - there_bytes)
+                        ));
+                        ui.label(text);
+                        if plan.ignored > 0 {
+                            ui.weak(t!("offload-ignored", n = plan.ignored));
+                        }
+                        ui.add_space(6.0);
+                        egui::Grid::new("offload_fields")
+                            .num_columns(2)
+                            .show(ui, |ui| {
+                                ui.label(t!("offload-root"));
+                                ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
+                                ui.end_row();
+                                ui.label(t!("offload-session"));
+                                ui.add(
+                                    egui::TextEdit::singleline(folder)
+                                        .id(folder_field_id())
+                                        .desired_width(300.0),
+                                )
+                                .on_hover_text(t!("offload-session-tip"));
+                                ui.end_row();
+                            });
+                        if let Some(dest) = &dest {
+                            ui.weak(t!("offload-destination", path = dest.display().to_string()));
+                        }
+                        if let Some(e) = error {
+                            ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
+                        }
+                        // Choix faits avant la copie, enchaînés à la fin (retour du
+                        // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
+                        ui.add_space(6.0);
+                        ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
+                            .on_hover_text(t!("offload-raw-only-tip"));
+                        ui.checkbox(&mut settings.open_after, t!("offload-open-after"));
+                        ui.checkbox(&mut settings.eject_after, t!("offload-eject-after"));
+                        ui.checkbox(&mut settings.delete_after, t!("offload-delete-after"))
+                            .on_hover_text(t!("offload-delete-after-tip"));
+                        // RAW seulement + suppression : les JPEG laissés aussi, sur demande.
+                        if settings.raw_only && settings.delete_after {
+                            ui.indent("delete_left", |ui| {
+                                ui.checkbox(&mut settings.delete_left, t!("offload-delete-left"))
+                                    .on_hover_text(t!("offload-delete-left-tip"));
+                            });
+                        }
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            start = ui
+                                .add_enabled(count > 0, egui::Button::new(t!("offload-start")))
+                                .clicked();
+                            if ui.button(t!("cancel")).clicked() {
+                                request = Some(Request::Close);
+                            }
+                        });
                     }
-                    ui.label(text);
-                    if !report.left.is_empty() {
-                        ui.weak(t!("offload-left", n = report.left.len()));
-                    }
-                    ui.weak(t!(
-                        "offload-destination",
-                        path = report.destination.display().to_string()
-                    ));
-                    for (file, e) in report.errors.iter().take(5) {
-                        ui.colored_label(
-                            egui::Color32::from_rgb(230, 90, 90),
-                            format!("{} : {e}", file_name(file)),
-                        );
-                    }
-                    if let Some(errors) = deleted {
-                        ui.label(if errors.is_empty() {
-                            t!("offload-deleted")
+                    Stage::Running {
+                        progress, cancel, ..
+                    } => {
+                        let fraction = if progress.bytes_total > 0 {
+                            progress.bytes_done as f32 / progress.bytes_total as f32
                         } else {
-                            t!("offload-not-deleted", n = errors.len())
+                            0.0
+                        };
+                        ui.add(egui::ProgressBar::new(fraction).text(t!(
+                            "offload-progress",
+                            done = progress.files_done,
+                            total = progress.files_total,
+                            mb = megabytes(progress.bytes_done),
+                            total_mb = megabytes(progress.bytes_total)
+                        )));
+                        if let Some(current) = &progress.current {
+                            ui.weak(file_name(current));
+                        }
+                        ui.horizontal(|ui| {
+                            if ui.button(t!("offload-background")).clicked() {
+                                background = true;
+                            }
+                            if ui.button(t!("offload-interrupt")).clicked() {
+                                cancel.store(true, Ordering::Relaxed);
+                            }
                         });
                     }
-                    if *ejected {
-                        ui.weak(t!("offload-ejecting"));
+                    Stage::Done {
+                        report,
+                        finished,
+                        deleted,
+                        opened,
+                        ejected,
+                    } => {
+                        let settings = &self.settings;
+                        let _ = finished;
+                        let mut text = t!(
+                            "offload-done",
+                            copied = report.copied.len(),
+                            verified = if settings.verify { "yes" } else { "no" },
+                            skipped = report.skipped.len(),
+                            errors = report.errors.len()
+                        );
+                        if report.cancelled {
+                            text.push_str(&t!("offload-done-cancelled"));
+                        }
+                        ui.label(text);
+                        if !report.left.is_empty() {
+                            ui.weak(t!("offload-left", n = report.left.len()));
+                        }
+                        ui.weak(t!(
+                            "offload-destination",
+                            path = report.destination.display().to_string()
+                        ));
+                        for (file, e) in report.errors.iter().take(5) {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(230, 90, 90),
+                                format!("{} : {e}", file_name(file)),
+                            );
+                        }
+                        if let Some(errors) = deleted {
+                            ui.label(if errors.is_empty() {
+                                t!("offload-deleted")
+                            } else {
+                                t!("offload-not-deleted", n = errors.len())
+                            });
+                        }
+                        if *ejected {
+                            ui.weak(t!("offload-ejecting"));
+                        }
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            // Ce qui n'a pas été coché reste possible ici.
+                            if !*opened && ui.button(t!("offload-open")).clicked() {
+                                request = Some(Request::Open(report.destination.clone()));
+                            }
+                            if !*ejected && ui.button(t!("offload-eject")).clicked() {
+                                request = Some(Request::Eject(source.clone()));
+                            }
+                            if ui.button(t!("close")).clicked() {
+                                request = Some(Request::Close);
+                            }
+                        });
                     }
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        // Ce qui n'a pas été coché reste possible ici.
-                        if !*opened && ui.button(t!("offload-open")).clicked() {
-                            request = Some(Request::Open(report.destination.clone()));
-                        }
-                        if !*ejected && ui.button(t!("offload-eject")).clicked() {
-                            request = Some(Request::Eject(source.clone()));
-                        }
-                        if ui.button(t!("close")).clicked() {
-                            request = Some(Request::Close);
-                        }
-                    });
                 }
-            }
-        });
+            });
         if start {
             self.start(ctx);
         }
