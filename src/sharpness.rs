@@ -63,6 +63,11 @@ pub struct SharpnessSettings {
     pub score_min_range: u8,
     /// Photo jugée floue sous cette fraction de la médiane des scores du dossier.
     pub blur_ratio: f32,
+    /// Voisines comparées de chaque côté (photos avant et après, dans l'ordre du dossier ;
+    /// 0 : pas de comparaison aux voisines).
+    pub neighbours: u32,
+    /// Photo jugée floue sous cette fraction de la médiane de ses voisines.
+    pub neighbour_ratio: f32,
     /// Calcul du score de tout le dossier en fond (cache d'analyse).
     pub background: bool,
 }
@@ -79,6 +84,8 @@ impl Default for SharpnessSettings {
             score_stretch: 0.01,
             score_min_range: 8,
             blur_ratio: 0.5,
+            neighbours: 3,
+            neighbour_ratio: 0.8,
             background: true,
         }
     }
@@ -247,30 +254,75 @@ pub fn relative(score: f32, median: f32) -> Option<f32> {
     (median > 0.0).then(|| score / median)
 }
 
-/// Vrai si une photo de score `score` est jugée floue dans un dossier de médiane `median`.
-pub fn is_blurry(score: f32, median: f32, settings: &SharpnessSettings) -> bool {
-    relative(score, median).is_some_and(|r| r < settings.blur_ratio)
+/// Jugement d'une photo : son score rapporté au dossier et à ses voisines.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Judgement {
+    /// Score de netteté.
+    pub score: f32,
+    /// Score / médiane du dossier.
+    pub folder_ratio: Option<f32>,
+    /// Score / médiane des voisines (même scène, même rafale le plus souvent).
+    pub neighbour_ratio: Option<f32>,
+    /// Jugée floue : sous `blur_ratio` × la médiane du dossier, **ou** sous
+    /// `neighbour_ratio` × celle de ses voisines.
+    pub blurry: bool,
 }
 
-/// Filtre « masquer les floues » : retire les photos jugées floues par rapport à la
-/// médiane des scores connus. Une photo sans score (pas encore calculé) est gardée : on ne
-/// cache pas ce qu'on n'a pas jugé.
+/// Juge les photos d'un dossier, dans l'ordre du dossier (`ordered` : chemin et score, `None`
+/// si le score n'est pas encore connu ; ces photos-là ne sont ni jugées ni comptées).
+///
+/// Deux règles, mesurées le 17/10/2026 sur 94 photos ratées exprès et étiquetées par
+/// l'utilisateur, se complètent :
+/// - **dossier** : les longues séries floues (leurs voisines sont floues aussi) ;
+/// - **voisines** (`neighbours` photos avant et après) : une photo ratée isolée dans une
+///   série nette, qui reste au niveau du dossier parce que la scène est très texturée.
+pub fn judge(
+    ordered: &[(PathBuf, Option<f32>)],
+    settings: &SharpnessSettings,
+) -> HashMap<PathBuf, Judgement> {
+    let scored: Vec<(&PathBuf, f32)> = ordered
+        .iter()
+        .filter_map(|(p, s)| s.filter(|v| v.is_finite()).map(|v| (p, v)))
+        .collect();
+    let folder = median(scored.iter().map(|s| s.1));
+    let k = settings.neighbours as usize;
+    scored
+        .iter()
+        .enumerate()
+        .map(|(i, &(path, score))| {
+            let folder_ratio = folder.and_then(|m| relative(score, m));
+            let around = (i.saturating_sub(k)..(i + k + 1).min(scored.len()))
+                .filter(|&j| j != i)
+                .map(|j| scored[j].1);
+            let neighbour_ratio = (k > 0)
+                .then(|| median(around))
+                .flatten()
+                .and_then(|m| relative(score, m));
+            let blurry = folder_ratio.is_some_and(|r| r < settings.blur_ratio)
+                || neighbour_ratio.is_some_and(|r| r < settings.neighbour_ratio);
+            let judgement = Judgement {
+                score,
+                folder_ratio,
+                neighbour_ratio,
+                blurry,
+            };
+            (path.clone(), judgement)
+        })
+        .collect()
+}
+
+/// Filtre « masquer les floues » : retire les photos jugées floues ([`judge`]). Une photo
+/// sans jugement (score pas encore calculé) est gardée : on ne cache pas ce qu'on n'a pas
+/// jugé.
 pub struct BlurFilter<'a> {
-    /// Scores connus, par chemin.
-    pub scores: &'a HashMap<PathBuf, f32>,
-    /// Réglages (seuil relatif).
-    pub settings: &'a SharpnessSettings,
+    /// Jugements, par chemin.
+    pub judgements: &'a HashMap<PathBuf, Judgement>,
 }
 
 impl Filter for BlurFilter<'_> {
     fn apply(&self, groups: Groups) -> Groups {
-        let Some(median) = median(self.scores.values().copied()) else {
-            return groups;
-        };
         retain(groups, |f| {
-            self.scores
-                .get(&f.path)
-                .is_none_or(|&s| !is_blurry(s, median, self.settings))
+            self.judgements.get(&f.path).is_none_or(|j| !j.blurry)
         })
     }
 }
@@ -557,37 +609,49 @@ mod tests {
     }
 
     #[test]
-    fn blurry_is_relative_to_the_folder_median() {
+    fn blurry_is_relative_to_the_folder_and_to_the_neighbours() {
         let settings = SharpnessSettings::default();
         assert_eq!(median([3.0, 1.0, 2.0]), Some(2.0));
         assert_eq!(median([4.0, 1.0, 2.0, 3.0]), Some(2.5));
         assert_eq!(median([]), None);
-        assert!(is_blurry(0.9, 2.0, &settings));
-        assert!(!is_blurry(1.1, 2.0, &settings));
-        assert!(
-            !is_blurry(1.0, 0.0, &settings),
-            "médiane nulle : on ne juge pas"
-        );
-        // Filtre : les floues partent, les images sans score restent.
-        use crate::media::{MediaFile, MediaKind};
-        let file = |n: &str| MediaFile {
-            path: n.into(),
-            kind: MediaKind::Flat,
-        };
-        let scores: HashMap<PathBuf, f32> = [("a", 10.0), ("b", 11.0), ("c", 3.0)]
-            .map(|(n, s)| (n.into(), s))
-            .into();
-        let groups = vec![vec![file("a"), file("b"), file("c"), file("d")]];
-        let kept = BlurFilter {
-            scores: &scores,
-            settings: &settings,
-        }
-        .apply(groups);
-        let names: Vec<_> = kept[0]
+        let p = |i: usize| PathBuf::from(format!("img{i}"));
+        // Série nette (10) avec une ratée isolée (7 : au niveau du dossier, mais sous ses
+        // voisines), puis une longue série floue (2 : ses voisines aussi), une photo sans
+        // score.
+        let scores = [
+            10.0, 10.0, 10.0, 7.0, 10.0, 10.0, 10.0, 10.0, 2.0, 2.0, 2.0, 2.0,
+        ];
+        let mut ordered: Vec<(PathBuf, Option<f32>)> = scores
             .iter()
-            .map(|f| f.path.display().to_string())
+            .enumerate()
+            .map(|(i, &s)| (p(i), Some(s)))
             .collect();
-        assert_eq!(names, ["a", "b", "d"]);
+        ordered.push((p(99), None));
+        let j = judge(&ordered, &settings);
+        assert!(j[&p(3)].blurry, "ratée isolée : {:?}", j[&p(3)]);
+        assert!((j[&p(3)].neighbour_ratio.unwrap() - 0.7).abs() < 1e-6);
+        assert!(!j[&p(0)].blurry && !j[&p(7)].blurry);
+        assert!(j[&p(10)].blurry, "série floue : {:?}", j[&p(10)]);
+        assert!(!j.contains_key(&p(99)), "pas de score, pas de jugement");
+        // Sans comparaison aux voisines, la ratée isolée passe.
+        let folder_only = SharpnessSettings {
+            neighbours: 0,
+            ..settings
+        };
+        assert!(!judge(&ordered, &folder_only)[&p(3)].blurry);
+        // Filtre : les floues partent, les photos sans jugement restent.
+        use crate::media::{MediaFile, MediaKind};
+        let groups = vec![
+            (0..12)
+                .chain([99])
+                .map(|i| MediaFile {
+                    path: p(i),
+                    kind: MediaKind::Flat,
+                })
+                .collect(),
+        ];
+        let kept = BlurFilter { judgements: &j }.apply(groups);
+        assert_eq!(kept[0].len(), 13 - 5);
     }
 
     #[test]

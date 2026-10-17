@@ -549,6 +549,11 @@ explicitement par l'utilisateur comme important.
       `f b`, badge, `tri --sharpness`. **À affiner** avec les photos ratées exprès de
       l'utilisateur (bougé, mise au point ratée, fond flou volontaire, mur uni, ISO
       élevé). Pistes : mosaïque RAW (sans accentuation), comparaison dans la rafale.
+      **Calibré le 17/10/2026** sur 94 photos ratées exprès (`2026-10-17_MISS`, vert /
+      rouge / jaune) : règle dossier (< 0,5) **ou** voisines (< 0,8 × la médiane des 3
+      avant / 3 après) → 14 rouges sur 15, 0 verte. Non détectable sans IA : mise au point
+      sur l'arrière-plan (le collimateur était sur l'arrière-plan). Netteté au collimateur
+      testée et écartée (dépend du contenu de la zone). Détails : `doc/sharpness.md`.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).

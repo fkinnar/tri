@@ -546,16 +546,21 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
             Err(e) => eprintln!("{name}\t{}", t!("cli-error-detail", error = e.to_string())),
         }
     }
-    let median = tri::sharpness::median(scores.iter().map(|s| s.1)).unwrap_or(0.0);
+    let ordered: Vec<(PathBuf, Option<f32>)> = scores
+        .iter()
+        .map(|(name, value, _)| (PathBuf::from(name), Some(*value)))
+        .collect();
+    let judgements = tri::sharpness::judge(&ordered, &settings.sharpness);
+    let ratio = |r: Option<f32>| r.map_or("-".to_string(), |r| format!("{r:.2}"));
     println!("{}", t!("cli-sharpness-header"));
     for (name, value, elapsed) in &scores {
-        let ratio = tri::sharpness::relative(*value, median).unwrap_or(0.0);
-        let blurry = tri::sharpness::is_blurry(*value, median, &settings.sharpness);
+        let j = judgements[&PathBuf::from(name)];
         println!(
-            "{name}\t{:.1}\t{:.2}\t{}\t{:.0} ms",
+            "{name}\t{:.1}\t{}\t{}\t{}\t{:.0} ms",
             value,
-            ratio,
-            if blurry {
+            ratio(j.folder_ratio),
+            ratio(j.neighbour_ratio),
+            if j.blurry {
                 t!("cli-sharpness-blurry")
             } else {
                 String::new()
@@ -563,18 +568,18 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
             elapsed.as_secs_f64() * 1000.0
         );
     }
-    let blurry = scores
-        .iter()
-        .filter(|s| tri::sharpness::is_blurry(s.1, median, &settings.sharpness))
-        .count();
+    let median = tri::sharpness::median(scores.iter().map(|s| s.1)).unwrap_or(0.0);
+    let s = &settings.sharpness;
     println!(
         "{}",
         t!(
             "cli-sharpness-summary",
             n = scores.len(),
             median = format!("{median:.1}"),
-            blurry = blurry,
-            ratio = format!("{}", settings.sharpness.blur_ratio)
+            blurry = judgements.values().filter(|j| j.blurry).count(),
+            ratio = format!("{}", s.blur_ratio),
+            neighbours = s.neighbours,
+            neighbour_ratio = format!("{}", s.neighbour_ratio)
         )
     );
     Ok(())

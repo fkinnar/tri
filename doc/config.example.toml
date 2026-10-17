@@ -171,6 +171,11 @@ score_min_range = 8
 # Photo jugée floue sous cette fraction de la médiane des scores du dossier : le score ne
 # se juge pas dans l'absolu (ISO, objectif, accentuation du boîtier).
 blur_ratio = 0.5
+# Ou sous cette fraction de la médiane de ses voisines (photos avant et après dans le
+# dossier : même scène, même rafale) : attrape une ratée isolée dans une série nette.
+# neighbours = 0 : pas de comparaison aux voisines.
+neighbours = 3
+neighbour_ratio = 0.8
 # Scores de tout le dossier calculés en fond (cache d'analyse).
 background = true
 

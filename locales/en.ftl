@@ -150,6 +150,6 @@ cli-group = GROUP { $index } ({ $n } images)
 
 ## Sharpness (command line)
 
-cli-sharpness-header = file	score	× median	verdict	time
+cli-sharpness-header = file	score	× folder	× neighbours	verdict	time
 cli-sharpness-blurry = BLURRY
-cli-sharpness-summary = { $n } images, median { $median }: { $blurry } blurry (below { $ratio } × the median)
+cli-sharpness-summary = { $n } images, median { $median }: { $blurry } blurry (below { $ratio } × the folder median, or { $neighbour_ratio } × that of the { $neighbours } neighbours on each side)

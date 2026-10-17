@@ -62,10 +62,35 @@ photos ratées exprès (l'utilisateur en prépare).
    « y a-t-il quelque chose de net quelque part ? ». Un portrait au fond flou volontaire
    garde un bon score ; un bougé ou une mise au point ratée fait tout chuter.
 
-**Jugement relatif** : le score ne veut rien dire dans l'absolu (ISO, objectif,
-accentuation du boîtier). Une photo est **floue** sous `blur_ratio` (0,5) × la **médiane
-des scores du dossier** (`is_blurry`, `relative`, `median`). Plus tard, le regroupement en
-rafales permettra de comparer une photo à ses voisines, plus juste encore.
+**Jugement relatif** (`judge`) : le score ne veut rien dire dans l'absolu (ISO, objectif,
+accentuation du boîtier). Une photo est **floue** si elle est sous `blur_ratio` (0,5) × la
+**médiane du dossier**, **ou** sous `neighbour_ratio` (0,8) × la médiane de ses
+**voisines** (`neighbours` = 3 photos avant et 3 après, dans l'ordre du dossier : même
+scène, même rafale le plus souvent). Les deux règles se complètent : la première attrape
+les longues séries floues (leurs voisines sont floues aussi), la seconde une ratée isolée
+dans une série nette et très texturée, qui reste au niveau du dossier.
+
+**Calibrage du 17/10/2026** sur 94 RAF X-T4 ratés exprès et étiquetés par l'utilisateur
+(vert : nette, rouge : floue, jaune : limite ; dossier `2026-10-17_MISS`) :
+
+| | Dossier seul (< 0,5) | Dossier + voisines (< 0,8) |
+|---|---|---|
+| Rouges attrapées | 12 / 15 | **14 / 15** |
+| Vertes accusées à tort | 0 / 56 | **0 / 56** (la plus basse à 0,95 × ses voisines) |
+| Jaunes signalées | 1 / 15 | 1 / 15 |
+
+Enseignements :
+- **Mise au point sur l'arrière-plan** (DSCF0361 : sujet flou, poteau net) :
+  indétectable sans savoir où est le sujet. Le collimateur (`FocusPixel`, enregistré par
+  Fuji dans le repère du JPEG embarqué) ne suffit pas : il était sur le poteau, net — le
+  boîtier a fait ce qu'on lui demandait. Il faudra une détection du sujet (personne,
+  visage) : l'étape « IA ».
+- **Netteté au collimateur** (prototype) : pas meilleure que le score global, car elle
+  dépend du contenu de la zone (une joue lisse paraît floue) ; comparer des zones de
+  scènes différentes n'a pas de sens.
+- Les **jaunes** (limites) restent pour la plupart au niveau des vertes : écarts trop
+  fins pour un score sans IA à cette taille d'analyse.
+- Une photo sans étiquette signalée (DSCF0347) était bien floue à 100 %.
 
 **Circuit** : niveau de cache d'analyse `Level::Sharpness` (entrée binaire, `Score::to_bytes`,
 ~1 Ko, version `SCORE_VERSION` dans la clé), calculé en fond par le scheduler pour tout le
@@ -79,8 +104,8 @@ les floues » (barre de filtres, `f b`), barre de progression « netteté ». Le
 s'applique une fois tous les scores connus (la médiane bouge tant qu'ils arrivent), et
 seulement si le jugement a changé.
 
-Ligne de commande : `tri <dossier> --sharpness` (score, rapport à la médiane, jugement,
-durée) : l'outil de réglage du seuil.
+Ligne de commande : `tri <dossier> --sharpness` (score, rapports au dossier et aux
+voisines, jugement, durée) : l'outil de réglage des seuils.
 
 Mesuré le 17/10/2026 sur le dossier de test (26 RAF X-T4) : 24 photos entre 0,80 et 1,08 ×
 la médiane ; signalées : une photo blanche (score nul) et un portrait sous-exposé (0,42),
@@ -104,6 +129,8 @@ accentué ; le bruit à ISO très élevé ressemble à du détail.
 | | `score_stretch` | 0.01 | score : centiles d'étirement de la luminance |
 | | `score_min_range` | 8 | score : écart minimal de luminance (sinon score nul) |
 | | `blur_ratio` | 0.5 | floue sous cette fraction de la médiane du dossier |
+| | `neighbours` | 3 | voisines comparées de chaque côté (0 : aucune) |
+| | `neighbour_ratio` | 0.8 | floue sous cette fraction de la médiane des voisines |
 | | `background` | `true` | scores de tout le dossier en fond |
 | `[gui.sharpness]` | `visible` | `false` | carte affichée au démarrage |
 | | `colors` | rouge, vert, bleu | couleurs de la rotation |

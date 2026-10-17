@@ -318,5 +318,5 @@ progress-sharpness = netteté
 filter-bar-no-blurry = sans les floues
 badge-blurry = floue
 panel-sharpness = Netteté
-panel-sharpness-value = { $score } ({ $ratio } × la médiane du dossier)
+panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
 panel-sharpness-blurry = { " " }· floue

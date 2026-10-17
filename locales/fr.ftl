@@ -150,6 +150,6 @@ cli-group = GROUPE { $index } ({ $n } images)
 
 ## Netteté (ligne de commande)
 
-cli-sharpness-header = fichier	score	× médiane	jugement	durée
+cli-sharpness-header = fichier	score	× dossier	× voisines	jugement	durée
 cli-sharpness-blurry = FLOUE
-cli-sharpness-summary = { $n } images, médiane { $median } : { $blurry } floues (sous { $ratio } × la médiane)
+cli-sharpness-summary = { $n } images, médiane { $median } : { $blurry } floues (sous { $ratio } × la médiane du dossier, ou { $neighbour_ratio } × celle des { $neighbours } voisines de chaque côté)

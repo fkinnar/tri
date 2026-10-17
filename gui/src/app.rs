@@ -166,8 +166,8 @@ pub struct TriApp {
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Scores de netteté connus (cache d'analyse), par chemin.
     scores: HashMap<PathBuf, f32>,
-    /// Médiane de `scores` (photo floue : sous `[sharpness] blur_ratio` × la médiane).
-    score_median: Option<f32>,
+    /// Jugement de chaque photo notée (dossier et voisines, voir `tri::sharpness::judge`).
+    judgements: HashMap<PathBuf, tri::sharpness::Judgement>,
     /// Filtre « masquer les floues » (`f b`).
     hide_blurry: bool,
     /// Photos jugées floues au dernier filtrage (refiltrer seulement si ça change).
@@ -349,7 +349,7 @@ impl TriApp {
             file_error: None,
             selection: Default::default(),
             scores: HashMap::new(),
-            score_median: None,
+            judgements: HashMap::new(),
             hide_blurry: false,
             blurry_applied: HashSet::new(),
             peaking: gui.sharpness.visible,
@@ -435,7 +435,7 @@ impl TriApp {
         self.files.clear(); // la sélection ne survit pas au changement de dossier
         self.selection.clear();
         self.scores.clear();
-        self.score_median = None;
+        self.judgements.clear();
         self.blurry_applied.clear();
         self.selected = 0;
         self.mode = Mode::Grid;
@@ -519,17 +519,18 @@ impl TriApp {
                             ui.add(egui::Label::new(value).wrap());
                             ui.end_row();
                         }
-                        if let (Some(&score), Some(median)) =
-                            (self.scores.get(&file.path), self.score_median)
-                        {
+                        if let Some(j) = self.judgements.get(&file.path) {
                             ui.weak(t!("panel-sharpness"));
-                            let ratio = tri::sharpness::relative(score, median).unwrap_or(0.0);
+                            let ratio = |r: Option<f32>| {
+                                r.map_or("-".to_string(), |r| tri::i18n::decimal(r as f64, 2))
+                            };
                             let mut text = t!(
                                 "panel-sharpness-value",
-                                score = tri::i18n::decimal(score as f64, 1),
-                                ratio = tri::i18n::decimal(ratio as f64, 2)
+                                score = tri::i18n::decimal(j.score as f64, 1),
+                                folder = ratio(j.folder_ratio),
+                                neighbours = ratio(j.neighbour_ratio)
                             );
-                            if self.is_blurry(&file.path) {
+                            if j.blurry {
                                 text.push_str(&t!("panel-sharpness-blurry"));
                             }
                             ui.add(egui::Label::new(text).wrap());
@@ -816,8 +817,7 @@ impl TriApp {
         // Photos floues : jugées par le moteur, d'après les scores connus.
         let groups = if self.hide_blurry {
             tri::sharpness::BlurFilter {
-                scores: &self.scores,
-                settings: &self.settings.sharpness,
+                judgements: &self.judgements,
             }
             .apply(groups)
         } else {
@@ -904,22 +904,16 @@ impl TriApp {
 
     /// Photos jugées floues d'après les scores connus.
     fn blurry_now(&self) -> HashSet<PathBuf> {
-        let Some(median) = self.score_median else {
-            return HashSet::new();
-        };
-        self.scores
+        self.judgements
             .iter()
-            .filter(|&(_, &s)| tri::sharpness::is_blurry(s, median, &self.settings.sharpness))
+            .filter(|(_, j)| j.blurry)
             .map(|(p, _)| p.clone())
             .collect()
     }
 
     /// Vrai si l'image `path` est jugée floue (score connu).
     fn is_blurry(&self, path: &Path) -> bool {
-        match (self.scores.get(path), self.score_median) {
-            (Some(&s), Some(m)) => tri::sharpness::is_blurry(s, m, &self.settings.sharpness),
-            _ => false,
-        }
+        self.judgements.get(path).is_some_and(|j| j.blurry)
     }
 
     /// Lit les scores de netteté arrivés dans le cache ; filtre « masquer les floues »
@@ -937,7 +931,15 @@ impl TriApp {
             }
         }
         if changed {
-            self.score_median = tri::sharpness::median(self.scores.values().copied());
+            // Dans l'ordre du dossier, quels que soient les filtres : les voisines d'une
+            // photo sont celles prises juste avant et juste après.
+            let ordered: Vec<(PathBuf, Option<f32>)> = self
+                .folder
+                .files
+                .iter()
+                .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
+                .collect();
+            self.judgements = tri::sharpness::judge(&ordered, &self.settings.sharpness);
         }
         let p = self.progress[4];
         if self.hide_blurry

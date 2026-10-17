@@ -313,5 +313,5 @@ progress-sharpness = sharpness
 filter-bar-no-blurry = without blurry
 badge-blurry = blurry
 panel-sharpness = Sharpness
-panel-sharpness-value = { $score } ({ $ratio } × the folder median)
+panel-sharpness-value = { $score } (× { $folder } the folder, × { $neighbours } the neighbours)
 panel-sharpness-blurry = { " " }· blurry
