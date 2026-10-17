@@ -36,6 +36,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
 | `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée, cadre du survol | interface |
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
+| `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
 | `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
 | `[keys]` | Raccourcis par action, qui remplacent ceux des profils (voir [gui.md](gui.md#actions-et-raccourcis-actionsrs)) | interface |
 

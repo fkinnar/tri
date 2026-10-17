@@ -172,6 +172,21 @@ la plus récente, source mal formée signalée.
   `reload` après une modification extérieure, filtres sur un dossier parcouru par
   `media::scan`.
 
+### `places` (unitaires `src/places.rs`, intégration `tests/places.rs`)
+
+- Dossiers des volumes par OS (macOS, Linux avec et sans `USER`, Windows), dossier
+  personnel, parents à déplier, noms cachés.
+- Dans un dossier temporaire : sous-dossiers triés sans casse, cachés exclus ou non,
+  fichiers écartés, lien vers un dossier suivi, dossier absent en erreur ; emplacements de
+  la machine (personnel, racine, chemins absolus) ; arborescence dépliée à la demande,
+  repliée puis redépliée (le sous-niveau reste déplié), `reveal`, `reload` après création,
+  dossier illisible signalé.
+
+### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
+
+Aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et
+par notes combinés, note relue après réouverture, dossier absent en erreur.
+
 ### `media` + `filter` (intégration, `tests/media.rs`)
 
 Sur une fausse carte SD temporaire (paires RAW+JPEG, casse mixte, AppleDouble, `.xmp`,

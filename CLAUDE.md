@@ -402,10 +402,12 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       complexes (fenêtre modale ou panneau latéral). Conversion de
       convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
 - Feuille de route décidée avec l'utilisateur le 17/10/2026, dans cet ordre :
-  1. **Panneau des dossiers** à gauche (grille, masquable) : choisir un dossier depuis
-     l'interface ; sans lui, l'outil ne s'utilise pas au quotidien. À décider : racines de
-     l'arborescence (dossier personnel, cartes SD montées, favoris), mémoriser le dernier
-     dossier. Moteur : changer de dossier sans redémarrer (scheduler, notes).
+  1. [x] **Panneau des dossiers** à gauche (grille, masquable, Maj+D), fait le
+     17/10/2026 : emplacements (volumes montés — une carte SD est dans `/Volumes`, pas
+     dans `~` —, dossier personnel, racine) et arborescence lue à la demande, dans le
+     moteur (`src/places.rs`, `Tree`) ; dossier ouvert = `src/folder.rs` (images, notes,
+     filtres combinés). Restent : mémoriser le dernier dossier, navigation clavier dans
+     l'arborescence, favoris.
   2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
      données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans
      dématriçage ; JPEG 8 bits ; autres formats selon leur profondeur d'enregistrement —
@@ -413,11 +415,19 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      d'*analyse* (pas XMP).
   3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
      pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
-  4. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
+  4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le
+     contenu d'un volume amovible vers un dossier local, puis trier dans le même outil
+     (workflow de l'utilisateur : vider la carte, trier, développer). Doit aussi marcher
+     **en ligne de commande, sans interface**, aperçus compris.
+  5. Ensuite, à prioriser : actions sur les fichiers en fin de tri (déplacer les rejetées,
      copier les acceptées), éditeur externe configurable, avance automatique après une
      note (option), surveillance du dossier (fichiers ajoutés, XMP modifiés ailleurs).
   - **Annuler** (`u`, réservé) : pas une petite tâche (historique à concevoir : paires,
     filtres actifs, XMP modifiés ailleurs entre-temps ; session seule ou persistant) ; à
     reprendre plus tard.
+- **Principe rappelé le 17/10/2026** : l'interface ne fait que de l'interface ; le vrai
+  travail (dossiers, notes, filtres, futur déchargement) est dans le moteur, indépendant
+  de l'affichage, pour un futur TUI et des commandes sans interface. Le projet est aussi
+  un bac à sable pour apprendre Rust.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

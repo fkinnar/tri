@@ -88,6 +88,8 @@ pub struct GuiSettings {
     pub view: ViewSettings,
     /// `[gui.colors]`.
     pub colors: Colors,
+    /// `[gui.folders]`.
+    pub folders: FolderSettings,
 }
 
 impl Default for GuiSettings {
@@ -106,6 +108,7 @@ impl Default for GuiSettings {
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             colors: Colors::default(),
+            folders: FolderSettings::default(),
         }
     }
 }
@@ -228,6 +231,31 @@ impl ViewSettings {
     /// Attente avant un 100 % RAW.
     pub fn full_raw_dwell(&self) -> Duration {
         Duration::from_millis(self.full_raw_dwell_ms)
+    }
+}
+
+/// Section `[gui.folders]` : panneau des dossiers, à gauche de la grille.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FolderSettings {
+    /// Panneau affiché au démarrage (Maj+D l'affiche ou le masque).
+    pub visible: bool,
+    /// Largeur initiale (points) ; le bord se tire à la souris.
+    pub width: f32,
+    /// Retrait par niveau de l'arborescence (points).
+    pub indent: f32,
+    /// Montrer les dossiers cachés (`.xxx`).
+    pub hidden: bool,
+}
+
+impl Default for FolderSettings {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            width: 240.0,
+            indent: 14.0,
+            hidden: false,
+        }
     }
 }
 

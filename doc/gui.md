@@ -38,6 +38,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   contre fond plein) règlent le premier problème sans créer le second. Le pointeur, et
   avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
   la souris, dans la grille comme en plein écran.
+- **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements (volumes
+  montés, dossier personnel, racine) dépliables en arborescence, lue à la demande par le
+  moteur (`places::Tree`, voir [places.md](places.md)). Le triangle déplie ou replie (le
+  double-clic sur le nom aussi), un clic sur le nom ouvre le dossier sans redémarrer
+  (`folder::Folder`, voir [folder.md](folder.md)) : les filtres sont gardés, la sélection
+  repart de la première image. « Actualiser » relit les volumes (carte insérée). Le
+  dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
+  panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
+  dossier en argument, `tri-gui` s'ouvre sur le panneau. La barre de filtres passe à la
+  ligne quand la place manque.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),
   [notes.md](notes.md)). Notes chargées à l'ouverture du dossier, avec celles déjà posées
@@ -233,7 +243,8 @@ Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplaceme
 
 Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*` : `f f`,
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
-`core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N.
+`core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
+Maj+D.
 
 Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant
 pas « ° ») **puis** comme caractère, parfois dans une image suivante (constaté le

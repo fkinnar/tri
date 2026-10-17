@@ -1,0 +1,376 @@
+//! Emplacements à proposer pour choisir un dossier : volumes montés (cartes SD, disques,
+//! NAS), dossier personnel, racine ; et lecture des sous-dossiers d'un dossier.
+//!
+//! Rien n'est parcouru d'avance : l'interface lit un dossier quand on le déplie, ce qui
+//! reste instantané même sur un NAS. Voir `doc/places.md`.
+
+use std::ffi::OsString;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+/// Nature d'un emplacement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaceKind {
+    /// Volume monté : carte SD, disque externe ou interne, partage réseau.
+    Volume,
+    /// Dossier personnel.
+    Home,
+    /// Racine du système de fichiers (arborescence complète).
+    Root,
+}
+
+/// Un emplacement : point de départ d'une arborescence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Place {
+    /// Nom affiché (nom du volume, « Dossier personnel »...).
+    pub name: String,
+    /// Dossier.
+    pub path: PathBuf,
+    /// Nature.
+    pub kind: PlaceKind,
+}
+
+/// Emplacements de cette machine : volumes montés, dossier personnel, racine(s).
+pub fn places() -> Vec<Place> {
+    let env = |name: &str| std::env::var_os(name);
+    let mut places = volumes_in(&volume_dirs(std::env::consts::OS, env));
+    if std::env::consts::OS == "windows" {
+        places.extend(windows_drives());
+    }
+    if let Some(home) = home_dir(std::env::consts::OS, env) {
+        places.push(Place {
+            name: "Dossier personnel".into(),
+            path: home,
+            kind: PlaceKind::Home,
+        });
+    }
+    if std::env::consts::OS != "windows" {
+        places.push(Place {
+            name: "Racine (/)".into(),
+            path: PathBuf::from("/"),
+            kind: PlaceKind::Root,
+        });
+    }
+    places
+}
+
+/// Dossier personnel (`HOME`, ou `USERPROFILE` sous Windows), s'il est absolu.
+fn home_dir(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    let name = if os == "windows" {
+        "USERPROFILE"
+    } else {
+        "HOME"
+    };
+    env(name).map(PathBuf::from).filter(|p| p.is_absolute())
+}
+
+/// Dossiers dont chaque sous-dossier est un volume monté, selon l'OS : `/Volumes` (macOS) ;
+/// `/media/<utilisateur>`, `/run/media/<utilisateur>` (montage automatique des
+/// distributions) et `/mnt` (Linux et autres Unix). Aucun sous Windows (lettres de
+/// lecteur, voir [`windows_drives`]).
+fn volume_dirs(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    match os {
+        "windows" => Vec::new(),
+        "macos" => vec![PathBuf::from("/Volumes")],
+        _ => {
+            let mut dirs = Vec::new();
+            if let Some(user) = env("USER").filter(|u| !u.is_empty()) {
+                dirs.push(Path::new("/media").join(&user));
+                dirs.push(Path::new("/run/media").join(&user));
+            }
+            dirs.push(PathBuf::from("/mnt"));
+            dirs
+        }
+    }
+}
+
+/// Volumes : sous-dossiers de `dirs`, triés par nom. Les liens symboliques sont écartés
+/// (sur macOS, `/Volumes/Macintosh HD` est un lien vers `/`, déjà proposé comme racine) ;
+/// un dossier absent ou illisible ne donne rien.
+fn volumes_in(dirs: &[PathBuf]) -> Vec<Place> {
+    let mut volumes = Vec::new();
+    for dir in dirs {
+        let mut found: Vec<Place> = fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .map(|e| Place {
+                name: e.file_name().to_string_lossy().into_owned(),
+                path: e.path(),
+                kind: PlaceKind::Volume,
+            })
+            .filter(|p| !is_hidden(&p.path))
+            .collect();
+        found.sort_by_key(|p| p.name.to_lowercase());
+        volumes.extend(found);
+    }
+    volumes
+}
+
+/// Lettres de lecteur présentes (`C:\`...), sous Windows.
+fn windows_drives() -> Vec<Place> {
+    (b'A'..=b'Z')
+        .map(|letter| format!("{}:\\", letter as char))
+        .filter(|root| Path::new(root).is_dir())
+        .map(|root| Place {
+            name: root.clone(),
+            path: PathBuf::from(root),
+            kind: PlaceKind::Volume,
+        })
+        .collect()
+}
+
+/// Vrai si le nom de `path` commence par un point (dossier caché sous Unix).
+pub fn is_hidden(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+}
+
+/// Sous-dossiers de `dir`, triés par nom sans tenir compte de la casse ; les dossiers
+/// cachés seulement si `hidden`. Un lien symbolique vers un dossier est gardé (il est
+/// suivi). Les entrées illisibles sont ignorées ; erreur si `dir` lui-même est illisible.
+pub fn subfolders(dir: &Path, hidden: bool) -> io::Result<Vec<PathBuf>> {
+    let mut folders: Vec<PathBuf> = fs::read_dir(dir)?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && (hidden || !is_hidden(p)))
+        .collect();
+    folders.sort_by_key(|p| {
+        p.file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    });
+    Ok(folders)
+}
+
+/// Dossiers de `path` à déplier pour l'atteindre depuis `root` (de `root` exclu à `path`
+/// inclus), ou `None` si `path` n'est pas sous `root`.
+pub fn ancestors_from(root: &Path, path: &Path) -> Option<Vec<PathBuf>> {
+    let rest = path.strip_prefix(root).ok()?;
+    let mut current = root.to_path_buf();
+    let mut chain = Vec::new();
+    for part in rest.components() {
+        current.push(part);
+        chain.push(current.clone());
+    }
+    Some(chain)
+}
+
+/// Une ligne de l'arborescence affichée : un emplacement (profondeur 0) ou un dossier.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    /// Dossier.
+    pub path: PathBuf,
+    /// Nom affiché.
+    pub name: String,
+    /// Profondeur (0 : emplacement).
+    pub depth: usize,
+    /// Déplié.
+    pub expanded: bool,
+    /// Dossier illisible (droits...), une fois déplié.
+    pub error: Option<String>,
+}
+
+/// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
+/// qui est déplié, les sous-dossiers déjà lus (lecture seulement au dépliage), et les
+/// lignes visibles à plat ([`Tree::rows`]), qu'une interface graphique ou un TUI n'ont
+/// plus qu'à dessiner. Un dossier présent sous deux emplacements (`/Volumes/SD` sous
+/// « Volumes » et sous la racine) est déplié aux deux endroits.
+#[derive(Clone, Debug)]
+pub struct Tree {
+    places: Vec<Place>,
+    hidden: bool,
+    expanded: std::collections::HashSet<PathBuf>,
+    children: std::collections::HashMap<PathBuf, Result<Vec<PathBuf>, String>>,
+}
+
+impl Tree {
+    /// Arborescence des emplacements de cette machine ([`places`]) ; dossiers cachés
+    /// seulement si `hidden`.
+    pub fn new(hidden: bool) -> Tree {
+        Tree::with_places(places(), hidden)
+    }
+
+    /// Arborescence à partir d'emplacements donnés (tests, emplacements choisis).
+    pub fn with_places(places: Vec<Place>, hidden: bool) -> Tree {
+        Tree {
+            places,
+            hidden,
+            expanded: Default::default(),
+            children: Default::default(),
+        }
+    }
+
+    /// Emplacements.
+    pub fn places(&self) -> &[Place] {
+        &self.places
+    }
+
+    /// Vrai si `path` est déplié.
+    pub fn is_expanded(&self, path: &Path) -> bool {
+        self.expanded.contains(path)
+    }
+
+    /// Déplie `path` (ses sous-dossiers sont lus la première fois).
+    pub fn expand(&mut self, path: &Path) {
+        if !self.children.contains_key(path) {
+            let read = subfolders(path, self.hidden).map_err(|e| e.to_string());
+            self.children.insert(path.to_path_buf(), read);
+        }
+        self.expanded.insert(path.to_path_buf());
+    }
+
+    /// Replie `path`.
+    pub fn collapse(&mut self, path: &Path) {
+        self.expanded.remove(path);
+    }
+
+    /// Déplie ou replie `path`.
+    pub fn toggle(&mut self, path: &Path) {
+        if self.is_expanded(path) {
+            self.collapse(path);
+        } else {
+            self.expand(path);
+        }
+    }
+
+    /// Déplie ce qu'il faut pour montrer `path`, sous le premier emplacement qui le
+    /// contient (le plus précis : un volume avant la racine). Vrai si un emplacement le
+    /// contient.
+    pub fn reveal(&mut self, path: &Path) -> bool {
+        let best = self
+            .places
+            .iter()
+            .filter(|p| path.starts_with(&p.path))
+            .max_by_key(|p| p.path.components().count())
+            .map(|p| p.path.clone());
+        let Some(root) = best else {
+            return false;
+        };
+        let chain = ancestors_from(&root, path).unwrap_or_default();
+        self.expand(&root);
+        // Tous sauf le dossier lui-même : on le montre, sans forcément le déplier.
+        for dir in chain.iter().take(chain.len().saturating_sub(1)) {
+            self.expand(dir);
+        }
+        true
+    }
+
+    /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
+    pub fn refresh(&mut self) {
+        self.places = places();
+        self.reload();
+    }
+
+    /// Relit les dossiers dépliés (dossier créé ou supprimé entre-temps).
+    pub fn reload(&mut self) {
+        self.children.clear();
+        let expanded: Vec<PathBuf> = self.expanded.iter().cloned().collect();
+        for path in expanded {
+            self.expand(&path);
+        }
+    }
+
+    /// Lignes visibles, dans l'ordre d'affichage : chaque emplacement, puis, s'il est
+    /// déplié, ses sous-dossiers, récursivement.
+    pub fn rows(&self) -> Vec<Row> {
+        let mut rows = Vec::new();
+        for place in &self.places {
+            self.push_rows(&mut rows, &place.path, place.name.clone(), 0);
+        }
+        rows
+    }
+
+    fn push_rows(&self, rows: &mut Vec<Row>, path: &Path, name: String, depth: usize) {
+        let expanded = self.is_expanded(path);
+        let children = self.children.get(path).filter(|_| expanded);
+        rows.push(Row {
+            path: path.to_path_buf(),
+            name,
+            depth,
+            expanded,
+            error: match children {
+                Some(Err(e)) => Some(e.clone()),
+                _ => None,
+            },
+        });
+        if let Some(Ok(children)) = children {
+            for child in children {
+                let name = child.file_name().map_or_else(
+                    || child.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                );
+                self.push_rows(rows, child, name, depth + 1);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
+        move |name| {
+            vars.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| OsString::from(v))
+        }
+    }
+
+    #[test]
+    fn volume_dirs_per_os() {
+        let user = [("USER", "fab")];
+        assert_eq!(
+            volume_dirs("macos", env(&user)),
+            [PathBuf::from("/Volumes")]
+        );
+        assert_eq!(
+            volume_dirs("linux", env(&user)),
+            [
+                PathBuf::from("/media/fab"),
+                PathBuf::from("/run/media/fab"),
+                PathBuf::from("/mnt")
+            ]
+        );
+        assert_eq!(volume_dirs("linux", env(&[])), [PathBuf::from("/mnt")]);
+        assert!(volume_dirs("windows", env(&user)).is_empty());
+    }
+
+    #[test]
+    fn home_per_os() {
+        let vars = [("HOME", "/home/fab"), ("USERPROFILE", "C:\\Users\\fab")];
+        assert_eq!(
+            home_dir("linux", env(&vars)),
+            Some(PathBuf::from("/home/fab"))
+        );
+        assert_eq!(home_dir("linux", env(&[("HOME", "relatif")])), None);
+    }
+
+    #[test]
+    fn ancestors_to_unfold() {
+        assert_eq!(
+            ancestors_from(Path::new("/Volumes"), Path::new("/Volumes/SD/DCIM")),
+            Some(vec![
+                PathBuf::from("/Volumes/SD"),
+                PathBuf::from("/Volumes/SD/DCIM")
+            ])
+        );
+        assert_eq!(
+            ancestors_from(Path::new("/Volumes"), Path::new("/Volumes")),
+            Some(vec![])
+        );
+        assert_eq!(
+            ancestors_from(Path::new("/home"), Path::new("/Volumes/SD")),
+            None
+        );
+    }
+
+    #[test]
+    fn hidden_names() {
+        assert!(is_hidden(Path::new("/a/.git")));
+        assert!(!is_hidden(Path::new("/a/DCIM")));
+    }
+}

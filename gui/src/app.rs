@@ -13,9 +13,11 @@ use eframe::egui::{
     TextureOptions, Ui, Vec2, ViewportCommand, pos2, vec2,
 };
 use tri::cache::{Cache, Level};
-use tri::filter::{Filter, KindFilter, ungrouped};
+use tri::filter::KindFilter;
+use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
-use tri::notes::{ColorRule, NoteBook, NotesRule, StarsRule};
+use tri::notes::{ColorRule, NotesRule, StarsRule};
+use tri::places::Tree;
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
@@ -98,7 +100,14 @@ struct Screenshot {
 
 /// État de l'application.
 pub struct TriApp {
-    dir: PathBuf,
+    /// Dossier ouvert : images et notes (moteur).
+    folder: Folder,
+    /// Arborescence du panneau des dossiers (moteur).
+    tree: Tree,
+    /// Panneau des dossiers affiché.
+    folder_panel: bool,
+    /// Faire défiler le panneau jusqu'au dossier ouvert (au démarrage, à l'ouverture).
+    reveal_folder: bool,
     /// Réglages du moteur (fichier de configuration).
     settings: EngineSettings,
     /// Réglages de l'interface (section `[gui]`).
@@ -108,9 +117,6 @@ pub struct TriApp {
     /// Problèmes dans la section `[keys]` (touche inconnue, conflit...), dans la barre
     /// d'état.
     key_warnings: Vec<String>,
-    all: Vec<MediaFile>,
-    /// Notes (étoiles, couleurs, drapeau) de toutes les images du dossier.
-    notes: NoteBook,
     /// Dernière note impossible à écrire (sidecar mal formé, disque en lecture seule...).
     note_error: Option<String>,
     filter: KindFilter,
@@ -190,12 +196,19 @@ impl TriApp {
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
     /// image), avec les réglages `settings`. `warning` : problème de configuration à
     /// afficher.
-    pub fn new(dir: PathBuf, settings: AppSettings, warning: Option<String>) -> TriApp {
+    pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
         let gui = settings.gui.clone();
-        let (all, error) = match tri::media::scan(&dir, 1) {
-            Ok(files) => (files, None),
-            Err(e) => (Vec::new(), Some(format!("{} : {e}", dir.display()))),
+        let (folder, error) = match &dir {
+            Some(dir) => match Folder::open(dir, 1, settings.xmp.sidecar) {
+                Ok(folder) => (folder, None),
+                Err(e) => (Folder::default(), Some(format!("{} : {e}", dir.display()))),
+            },
+            None => (Folder::default(), None),
         };
+        let mut tree = Tree::new(gui.folders.hidden);
+        if !folder.is_none() {
+            tree.reveal(&folder.dir);
+        }
         let screenshot = std::env::var_os("TRI_GUI_SCREENSHOT").map(|p| Screenshot {
             path: p.into(),
             forced: false,
@@ -207,18 +220,18 @@ impl TriApp {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        let notes = NoteBook::load_files(&all, settings.xmp.sidecar);
         let (keymap, key_warnings) = settings.keymap();
         for warning in &key_warnings {
             eprintln!("attention : {warning}");
         }
         let mut app = TriApp {
-            dir,
+            folder,
+            tree,
+            folder_panel: gui.folders.visible,
+            reveal_folder: true,
             settings: settings.engine(),
             warning,
             key_warnings,
-            all,
-            notes,
             note_error: None,
             filter: KindFilter::All,
             notes_rule: NotesRule::default(),
@@ -266,6 +279,89 @@ impl TriApp {
         app
     }
 
+    /// Ouvre le dossier `dir` à la place du dossier courant (panneau des dossiers). Les
+    /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
+    /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
+    fn open_folder(&mut self, dir: &Path) {
+        match Folder::open(dir, 1, self.settings.xmp.sidecar) {
+            Ok(folder) => {
+                trace(|| format!("dossier ouvert : {}", folder.dir.display()));
+                self.folder = folder;
+                self.error = None;
+            }
+            Err(e) => {
+                self.folder = Folder::default();
+                self.error = Some(format!("{} : {e}", dir.display()));
+            }
+        }
+        self.files.clear(); // la sélection ne survit pas au changement de dossier
+        self.selected = 0;
+        self.mode = Mode::Grid;
+        self.zoom = None;
+        self.zoom_anchor = None;
+        self.note_error = None;
+        self.rating_dialog = None;
+        self.wanted.clear();
+        self.missing.clear();
+        self.apply_filter();
+    }
+
+    /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
+    /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
+    fn folder_panel(&mut self, ui: &mut Ui) {
+        let f = self.gui.folders;
+        let mut toggle = None;
+        let mut open = None;
+        ui.horizontal(|ui| {
+            ui.strong("Dossiers");
+            if ui
+                .small_button("Actualiser")
+                .on_hover_text("Relire les volumes (carte insérée) et les dossiers")
+                .clicked()
+            {
+                self.tree.refresh();
+            }
+        });
+        ui.separator();
+        let reveal = std::mem::take(&mut self.reveal_folder);
+        ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+            for row in self.tree.rows() {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    ui.add_space(row.depth as f32 * f.indent);
+                    let tip = if row.expanded { "Replier" } else { "Déplier" };
+                    let size = ui.text_style_height(&egui::TextStyle::Body);
+                    let (rect, response) = marks::clickable(ui, size, tip);
+                    marks::disclosure(ui.painter(), rect, row.expanded, ui.visuals().text_color());
+                    if response.clicked() {
+                        toggle = Some(row.path.clone());
+                    }
+                    let current = row.path == self.folder.dir;
+                    let label = ui.selectable_label(current, &row.name);
+                    if label.clicked() && !current {
+                        open = Some(row.path.clone());
+                    }
+                    if label.double_clicked() {
+                        toggle = Some(row.path.clone());
+                    }
+                    if current && reveal {
+                        label.scroll_to_me(Some(egui::Align::Center));
+                    }
+                    if let Some(error) = &row.error {
+                        ui.colored_label(self.gui.colors.error, "illisible")
+                            .on_hover_text(error);
+                    }
+                });
+            }
+        });
+        if let Some(path) = toggle {
+            self.tree.toggle(&path);
+        }
+        if let Some(path) = open {
+            self.open_folder(&path);
+        }
+    }
+
     /// Recalcule la liste affichée selon les filtres, et la confie au scheduler. La ligne
     /// sélectionnée est remise en haut de la vue.
     fn apply_filter(&mut self) {
@@ -278,9 +374,9 @@ impl TriApp {
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
-        let notes_filter = self.notes_rule.filter(&self.notes);
-        self.files = notes_filter
-            .apply(self.filter.apply(ungrouped(self.all.clone())))
+        self.files = self
+            .folder
+            .filtered(self.filter, &self.notes_rule)
             .into_iter()
             .flatten()
             .collect();
@@ -526,6 +622,10 @@ impl TriApp {
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
+            Action::ToggleFolderPanel => {
+                self.folder_panel = !self.folder_panel;
+                self.reveal_folder = self.folder_panel;
+            }
             nav => {
                 let page = self.layout.rows_in(self.view_height);
                 let new = grid::navigate(self.selected, self.files.len(), &self.layout, page, nav);
@@ -545,7 +645,7 @@ impl TriApp {
     /// Note l'image `path` (voir [`TriApp::rate`]).
     fn rate_path(&mut self, path: PathBuf, action: Action) {
         let multiple = self.settings.xmp.multiple_colors;
-        let result = self.notes.edit(&path, |n| match action {
+        let result = self.folder.notes.edit(&path, |n| match action {
             Action::Stars(stars) => n.set_stars(stars),
             Action::Color(color) => n.toggle_color(color, multiple),
             Action::Flag(flag) => n.flag = flag,
@@ -892,7 +992,7 @@ impl TriApp {
             Align2::LEFT_TOP,
             &info,
         );
-        let notes = self.notes.notes(&file.path);
+        let notes = self.folder.notes.notes(&file.path);
         let size = self.gui.view.marks;
         if *notes != tri::xmp::Notes::EMPTY {
             let width = marks::row_width(notes, size);
@@ -953,7 +1053,11 @@ impl TriApp {
                 .iter()
                 .filter(|f| f.kind == MediaKind::Raw)
                 .count();
-            ui.label(folder_name(&self.dir));
+            ui.label(if self.folder.is_none() {
+                "aucun dossier".to_string()
+            } else {
+                folder_name(&self.folder.dir)
+            });
             ui.separator();
             ui.label(format!(
                 "{} images ({raws} RAW) · filtre : {}",
@@ -1022,7 +1126,7 @@ impl TriApp {
         let Some(path) = self.rating_dialog.clone() else {
             return;
         };
-        let notes = self.notes.notes(&path).clone();
+        let notes = self.folder.notes.notes(&path).clone();
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 8.0);
         let mut clicked = None;
         let mut close = false;
@@ -1049,7 +1153,7 @@ impl TriApp {
         let Some(file) = self.files.get(self.selected) else {
             return;
         };
-        let notes = self.notes.notes(&file.path).clone();
+        let notes = self.folder.notes.notes(&file.path).clone();
         let name = file_name(&file.path);
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
         let mut clicked = None;
@@ -1095,7 +1199,8 @@ impl TriApp {
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let colors = self.gui.colors;
-        ui.horizontal(|ui| {
+        // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
+        ui.horizontal_wrapped(|ui| {
             ui.label("Type");
             for (kind, label) in [
                 (KindFilter::All, "Tout"),
@@ -1171,7 +1276,11 @@ impl TriApp {
             if ui.add_enabled(any, egui::Button::new("Effacer")).clicked() {
                 clicked.push(Action::FilterClear);
             }
-            ui.weak(format!("{} / {} images", self.files.len(), self.all.len()));
+            ui.weak(format!(
+                "{} / {} images",
+                self.files.len(),
+                self.folder.files.len()
+            ));
         });
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -1273,7 +1382,7 @@ impl TriApp {
                 let dest = Rect::from_center_size(image_area.center(), size * scale);
                 let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
                 // Photo rejetée : estompée, comme dans Lightroom.
-                let tint = match self.notes.notes(&file.path).flag {
+                let tint = match self.folder.notes.notes(&file.path).flag {
                     Flag::Rejected => Color32::WHITE.gamma_multiply(g.rejected_opacity),
                     _ => Color32::WHITE,
                 };
@@ -1316,7 +1425,7 @@ impl TriApp {
             colors.badge.into(),
         );
         // Notes en bas de la vignette, sur un fond sombre pour rester lisibles.
-        let notes = self.notes.notes(&file.path);
+        let notes = self.folder.notes.notes(&file.path);
         if *notes != tri::xmp::Notes::EMPTY {
             let size = g.marks;
             let left_center = pos2(image_area.min.x + 3.0, image_area.max.y - 3.0 - size / 2.0);
@@ -1456,6 +1565,12 @@ impl eframe::App for TriApp {
         self.update_loads(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        if self.folder_panel && self.mode == Mode::Grid {
+            egui::Panel::left("folders")
+                .resizable(true)
+                .default_size(self.gui.folders.width)
+                .show(ui, |ui| self.folder_panel(ui));
+        }
         if self.rating_bar && !self.files.is_empty() && self.error.is_none() {
             egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
         }
@@ -1466,7 +1581,9 @@ impl eframe::App for TriApp {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {
-                ui.label(if self.all.is_empty() {
+                ui.label(if self.folder.is_none() {
+                    "Choisissez un dossier dans le panneau de gauche (Maj+D l'affiche)."
+                } else if self.folder.files.is_empty() {
                     "Aucune image dans ce dossier."
                 } else {
                     "Aucune image pour ces filtres (f puis Échap pour les effacer)."
@@ -1640,7 +1757,7 @@ mod tests {
         settings.cache.dir = Some(dir.path().join("cache"));
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
-            .build_eframe(move |_cc| TriApp::new(photos, settings, None));
+            .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
         (harness, dir)
     }
 
@@ -1668,7 +1785,7 @@ mod tests {
             "une seule couleur par défaut : le violet remplace le vert"
         );
         assert!(photos.join("img0.jpg.xmp").exists(), "convention darktable");
-        assert_eq!(h.state().notes.notes(&image), &on_disk);
+        assert_eq!(h.state().folder.notes.notes(&image), &on_disk);
         assert!(h.state().note_error.is_none());
         // L'image suivante n'est pas touchée.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -1840,6 +1957,56 @@ mod tests {
     }
 
     #[test]
+    fn the_folder_panel_opens_another_folder() {
+        let (mut h, dir) = harness();
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        for i in 0..2 {
+            image::RgbImage::from_pixel(64, 48, image::Rgb([200, 50, 50]))
+                .save(other.join(format!("x{i}.jpg")))
+                .unwrap();
+        }
+        // Arborescence limitée au dossier temporaire (pas celle de la machine).
+        h.state_mut().tree = Tree::with_places(
+            vec![tri::places::Place {
+                name: "Essai".into(),
+                path: dir.path().to_path_buf(),
+                kind: tri::places::PlaceKind::Volume,
+            }],
+            false,
+        );
+        h.run_steps(2);
+        assert!(h.query_by_label("autre").is_none(), "replié");
+        h.get_by_label("Déplier").click();
+        h.run_steps(2);
+        h.get_by_label("autre").click();
+        h.run_steps(3);
+        assert_eq!(h.state().folder.dir, other);
+        assert_eq!(names(&h), ["x0.jpg", "x1.jpg"]);
+        assert_eq!(h.state().selected, 0);
+        // La notation suit le nouveau dossier.
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&other.join("x0.jpg")).unwrap().stars, 4);
+        // Maj+D masque le panneau.
+        press(&mut h, Key::D, Modifiers::SHIFT);
+        assert!(h.query_by_label("Dossiers").is_none());
+    }
+
+    #[test]
+    fn without_a_folder_the_app_invites_to_pick_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = AppSettings::default();
+        settings.cache.dir = Some(dir.path().join("cache"));
+        let mut h = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, settings, None));
+        h.run_steps(3);
+        assert!(h.state().folder.is_none());
+        assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
+        assert!(h.query_by_label("Dossiers").is_some());
+    }
+
+    #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
         assert!(
@@ -1869,7 +2036,7 @@ mod tests {
         let (mut h, dir) = harness();
         let sidecar = dir.path().join("photos").join("img0.jpg.xmp");
         std::fs::write(&sidecar, "<pas du xml").unwrap();
-        h.state_mut().notes.reload();
+        h.state_mut().folder.notes.reload();
         press(&mut h, Key::Num2, Modifiers::NONE);
         assert!(h.state().note_error.is_some());
         assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), "<pas du xml");

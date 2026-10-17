@@ -144,6 +144,27 @@ pub fn clickable(ui: &mut Ui, size: f32, tip: &str) -> (Rect, Response) {
     (rect, response)
 }
 
+/// Triangle d'une branche d'arborescence, dans `rect` : vers le bas si `open`, sinon vers
+/// la droite (dessiné : « ▶ » manque dans la police d'egui).
+pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
+    let c = rect.center();
+    let r = rect.width() * 0.25;
+    let points = if open {
+        vec![
+            c + vec2(-r, -r * 0.6),
+            c + vec2(r, -r * 0.6),
+            c + vec2(0.0, r * 0.7),
+        ]
+    } else {
+        vec![
+            c + vec2(-r * 0.6, -r),
+            c + vec2(r * 0.7, 0.0),
+            c + vec2(-r * 0.6, r),
+        ]
+    };
+    painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
+}
+
 /// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
 /// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
 /// la même que celle du clavier : recliquer la note active la retire (drapeau, étoiles),

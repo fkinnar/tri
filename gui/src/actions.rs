@@ -83,6 +83,8 @@ pub enum Action {
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
     ToggleRatingBar,
+    /// Afficher / masquer le panneau des dossiers.
+    ToggleFolderPanel,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -113,7 +115,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 50] = [
+    pub const ALL: [Action; 51] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -140,6 +142,7 @@ impl Action {
         Action::FilterClear,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
+        Action::ToggleFolderPanel,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -200,6 +203,7 @@ impl Action {
             Action::FilterClear => "Effacer tous les filtres",
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
+            Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -261,6 +265,7 @@ impl Action {
             Action::FilterClear => "core.filter.clear",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
+            Action::ToggleFolderPanel => "core.view.folders",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -462,6 +467,7 @@ const RATING: &[Binding] = {
         (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
         (&[shifted(Key::N)], ToggleRatingBar),
+        (&[shifted(Key::D)], ToggleFolderPanel),
     ]
 };
 

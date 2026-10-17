@@ -1,8 +1,10 @@
 //! Interface graphique de tri.
 //!
 //! ```text
-//! tri-gui <dossier> [--cache <dossier du cache>] [--config <fichier>]
+//! tri-gui [<dossier>] [--cache <dossier du cache>] [--config <fichier>]
 //! ```
+//!
+//! Sans dossier, l'interface s'ouvre sur le panneau des dossiers.
 //!
 //! Réglages : fichier de configuration (`--config`, sinon l'emplacement par défaut, voir
 //! `tri::settings` et `doc/config.example.toml`) ; `--cache` l'emporte sur lui.
@@ -36,10 +38,6 @@ fn main() -> eframe::Result {
             dir = Some(PathBuf::from(arg));
         }
     }
-    let Some(dir) = dir else {
-        eprintln!("usage : tri-gui <dossier> [--cache <dossier du cache>] [--config <fichier>]");
-        std::process::exit(2);
-    };
     let loaded = tri::settings::load::<settings::AppSettings>(config.as_deref());
     if let Some(warning) = &loaded.warning {
         eprintln!("attention : {warning}");
