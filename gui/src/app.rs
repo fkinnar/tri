@@ -134,9 +134,8 @@ pub struct TriApp {
     /// La souris est l'outil en cours : vrai dès qu'elle bouge, faux dès qu'on tape. Le
     /// pointeur est masqué quand c'est le clavier.
     mouse_active: bool,
-    /// La souris a bougé depuis l'image précédente (le survol ne sélectionne que sur un
-    /// vrai mouvement : pas quand la grille défile sous un pointeur immobile).
-    pointer_moved: bool,
+    /// Vignette survolée par la souris (encadrée, pas sélectionnée).
+    hovered: Option<usize>,
     /// Rectangles des cellules dessinées (pour les tests).
     #[cfg(test)]
     cell_rects: Vec<(usize, Rect)>,
@@ -234,7 +233,7 @@ impl TriApp {
             keymap,
             sequencer: Sequencer::new(gui.key_sequence_timeout()),
             mouse_active: false,
-            pointer_moved: false,
+            hovered: None,
             #[cfg(test)]
             cell_rects: Vec::new(),
             pan: Vec2::ZERO,
@@ -1184,6 +1183,7 @@ impl TriApp {
         let ctx = ui.ctx().clone();
         #[cfg(test)]
         self.cell_rects.clear();
+        self.hovered = None;
         let g = self.gui.grid;
         self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
         let rows = self.layout.rows(self.files.len());
@@ -1225,10 +1225,8 @@ impl TriApp {
         let (rect, response) = ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click());
         #[cfg(test)]
         self.cell_rects.push((index, rect));
-        // Un seul curseur : le survol sélectionne, sur un vrai mouvement de la souris.
-        if self.pointer_moved && response.hovered() && self.rating_dialog.is_none() {
-            self.select_with(index, false);
-        }
+        // Le clic sélectionne ; le survol ne fait qu'encadrer (retour du 17/10/2026 : quand le
+        // survol sélectionnait, aller vers le bandeau de notation changeait d'image).
         if response.clicked() {
             self.select(index);
         }
@@ -1248,6 +1246,17 @@ impl TriApp {
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 4.0, background);
+        // Survol : cadre gris clair, bien distinct de la sélection (fond plein). Pas quand
+        // on tape : le pointeur est masqué, le cadre l'est aussi.
+        if response.hovered() && self.mouse_active && !selected {
+            self.hovered = Some(index);
+            painter.rect_stroke(
+                rect,
+                4.0,
+                egui::Stroke::new(g.hover_frame, Color32::from(colors.hover)),
+                egui::StrokeKind::Inside,
+            );
+        }
 
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
@@ -1440,8 +1449,7 @@ impl eframe::App for TriApp {
         }
         self.drain_events();
         self.run_script(&ctx);
-        self.pointer_moved = ctx.input(|i| i.pointer.delta() != Vec2::ZERO);
-        if self.pointer_moved {
+        if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
         }
         self.handle_keys(&ctx);
@@ -2068,38 +2076,62 @@ mod tests {
     }
 
     #[test]
-    fn hovering_a_thumbnail_selects_it_and_typing_hides_the_pointer() {
-        let (mut h, _dir) = harness();
+    fn hovering_frames_a_thumbnail_and_clicking_selects_it() {
+        let (mut h, dir) = harness();
         h.run_steps(3);
         assert_eq!(h.state().selected, 0);
-        // La souris bouge sur la 3e vignette : elle est sélectionnée, pointeur visible.
-        let third = h
-            .state()
-            .cell_rects
-            .iter()
-            .find(|(i, _)| *i == 2)
-            .unwrap()
-            .1;
+        let rect = |h: &Harness<'_, TriApp>, n: usize| {
+            h.state()
+                .cell_rects
+                .iter()
+                .find(|(i, _)| *i == n)
+                .unwrap()
+                .1
+        };
+        // La souris bouge sur la 3e vignette : encadrée, pas sélectionnée.
         // Deux positions : au tout premier événement, egui n'a pas de position précédente
         // et le déplacement vaut zéro.
+        let third = rect(&h, 2);
         h.hover_at(third.center() - vec2(3.0, 3.0));
         h.run_steps(1);
         h.hover_at(third.center());
         h.run_steps(2);
-        assert_eq!(h.state().selected, 2, "le survol sélectionne");
+        assert_eq!(h.state().selected, 0, "le survol ne sélectionne pas");
+        assert_eq!(h.state().hovered, Some(2), "il encadre");
         assert_ne!(cursor(&h), egui::CursorIcon::None);
-        // Le clavier repart de là, et masque le pointeur.
+        // Le bandeau de notation note la sélection, quel que soit le survol en chemin.
+        h.get_by_label("2 étoiles").click();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        assert_eq!(tri::xmp::read(&photos.join("img0.jpg")).unwrap().stars, 2);
+        assert_eq!(tri::xmp::read(&photos.join("img2.jpg")).unwrap().stars, 0);
+        // Le clic sélectionne.
+        h.hover_at(third.center());
+        h.event(UiEvent::PointerButton {
+            pos: third.center(),
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.event(UiEvent::PointerButton {
+            pos: third.center(),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 2, "le clic sélectionne");
+        // Le clavier repart de là, masque le pointeur et le cadre.
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(h.state().selected, 1);
         assert_eq!(cursor(&h), egui::CursorIcon::None, "pointeur masqué");
-        // Pointeur immobile : la sélection clavier n'est pas reprise par le survol.
-        h.run_steps(3);
-        assert_eq!(h.state().selected, 1);
-        // Il suffit de bouger la souris pour le retrouver.
+        assert_eq!(h.state().hovered, None, "cadre masqué avec le pointeur");
+        // Bouger la souris le fait réapparaître, sans changer la sélection.
         h.hover_at(third.center() + vec2(5.0, 5.0));
         h.run_steps(2);
         assert_ne!(cursor(&h), egui::CursorIcon::None);
-        assert_eq!(h.state().selected, 2);
+        assert_eq!(h.state().selected, 1);
+        assert_eq!(h.state().hovered, Some(2));
     }
 
     #[test]

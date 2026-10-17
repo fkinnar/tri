@@ -34,9 +34,9 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord | moteur |
 | `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
-| `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée | interface |
+| `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée, cadre du survol | interface |
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
-| `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
+| `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
 | `[keys]` | Raccourcis par action, qui remplacent ceux des profils (voir [gui.md](gui.md#actions-et-raccourcis-actionsrs)) | interface |
 
 ### Erreurs

@@ -28,14 +28,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   de l'image sélectionnée.
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
-- **Un seul curseur, clavier ou souris** (17/10/2026) : bouger la souris sur une vignette la
-  sélectionne, et le clavier repart de là. Seul un vrai mouvement compte (déplacement du
-  pointeur non nul) : la grille qui défile à la molette sous un pointeur immobile ne change
-  pas la sélection. Le pointeur est **masqué dès qu'on tape** et réapparaît au premier
-  mouvement de la souris, dans la grille comme en plein écran. Pas de surbrillance de survol
-  distincte : avant, survol (gris) et sélection (turquoise) donnaient l'impression de deux
-  images sélectionnées. Le survol ne fait pas défiler la grille (la sélection bougerait avec
-  elle) ; le clic et le clavier, si.
+- **Sélection au clic, survol encadré** (17/10/2026, deuxième version) : la sélection
+  (fond turquoise plein) ne change qu'au clic ou au clavier ; la vignette survolée par la
+  souris n'est qu'encadrée en gris clair (`[gui.colors] hover`, `[gui.grid] hover_frame`).
+  Historique : au départ, survol (fond gris) et sélection (turquoise) se ressemblaient au
+  point de faire croire à deux images sélectionnées ; on a d'abord essayé « le survol
+  sélectionne » (un seul curseur), mais aller vers le bandeau de notation en traversant
+  d'autres vignettes changeait alors l'image notée. Des styles bien distincts (cadre
+  contre fond plein) règlent le premier problème sans créer le second. Le pointeur, et
+  avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
+  la souris, dans la grille comme en plein écran.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),
   [notes.md](notes.md)). Notes chargées à l'ouverture du dossier, avec celles déjà posées

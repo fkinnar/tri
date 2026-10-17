@@ -383,10 +383,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       stderr). Chaque réglage de calcul n'entre que dans la clé de cache des niveaux qu'il
       influence. Restent non réglables (assumé, listé dans `doc/settings.md`) : priorités du
       scheduler, polices et marges du texte en surimpression.
-- [x] Grille : survol et sélection se ressemblaient trop (retour du 16/10/2026). Choix de
-      l'utilisateur (17/10/2026) : un seul curseur, le survol sélectionne (sur un vrai
-      mouvement de souris), pointeur masqué dès qu'on tape ; plus de couleur de survol
-      (réglage `hover` supprimé).
+- [x] Grille : survol et sélection se ressemblaient trop (retour du 16/10/2026). Premier
+      choix (17/10/2026) : le survol sélectionne ; abandonné le jour même, car aller vers le
+      bandeau de notation changeait l'image notée. Choix final de l'utilisateur : le clic
+      sélectionne (fond turquoise), le survol n'encadre qu'en gris clair (`hover`,
+      `hover_frame`) ; pointeur et cadre masqués dès qu'on tape.
 - [x] Clavier (17/10/2026) : déplacement dans une image zoomée (Maj + flèches / Maj + hjkl),
       `gg` pour la première image (séquences de touches, délai réglable).
 - [~] Notation XMP (17/10/2026). Fait, moteur : `src/xmp.rs` (lecture / écriture des

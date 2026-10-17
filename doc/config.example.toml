@@ -104,6 +104,8 @@ textures = 600
 marks = 12.0
 # Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
 rejected_opacity = 0.35
+# Épaisseur du cadre de la vignette survolée par la souris.
+hover_frame = 2.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -119,9 +121,10 @@ pan_step = 0.2
 marks = 18.0
 
 [gui.colors]
-# Couleurs "#rrggbb". Sélection absente : couleur du thème (le survol de la souris
-# sélectionne, il n'a pas de couleur à part). Exemple :
+# Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
+# Cadre de la vignette survolée (le survol ne sélectionne pas).
+hover = "#b4b4b4"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

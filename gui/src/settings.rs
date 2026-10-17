@@ -174,6 +174,8 @@ pub struct GridSettings {
     pub marks: f32,
     /// Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
     pub rejected_opacity: f32,
+    /// Épaisseur du cadre de la vignette survolée par la souris.
+    pub hover_frame: f32,
 }
 
 impl Default for GridSettings {
@@ -187,6 +189,7 @@ impl Default for GridSettings {
             textures: 600,
             marks: 12.0,
             rejected_opacity: 0.35,
+            hover_frame: 2.0,
         }
     }
 }
@@ -232,9 +235,10 @@ impl ViewSettings {
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Colors {
-    /// Fond de la cellule sélectionnée (le survol de la souris sélectionne : pas de couleur
-    /// de survol distincte).
+    /// Fond de la cellule sélectionnée (au clic ou au clavier).
     pub selection: Option<Color>,
+    /// Cadre de la cellule survolée par la souris (le survol ne sélectionne pas).
+    pub hover: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -265,6 +269,7 @@ impl Default for Colors {
     fn default() -> Self {
         Self {
             selection: None,
+            hover: Color([180, 180, 180]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
