@@ -69,9 +69,38 @@ Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
 Un nouveau sidecar est un paquet XMP minimal (`x:xmptk="tri"`). darktable, à l'import,
 lit nos notes puis réécrit le fichier à sa façon.
 
+## Conversion d'une convention à l'autre
+
+```
+tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
+```
+
+`xmp::convert(images, cible, simulation)` recopie les notes de chaque image, lues dans son
+sidecar le plus récent, dans le sidecar de la convention cible (créé s'il manque ; s'il
+existe, seuls nos champs changent) :
+
+- **aucun sidecar n'est supprimé** : celui de darktable garde l'historique de
+  développement ;
+- le sidecar cible devient le plus récent, donc celui que `tri` lit et écrit ensuite (s'il
+  était déjà à jour, seule sa date change) ;
+- pas de bruit : une image sans notes n'obtient pas de sidecar ;
+- vers Adobe, `IMG.RAF` et `IMG.JPG` partagent `IMG.xmp` : notés différemment, c'est un
+  **conflit**, la première image (le RAW, dans l'ordre de `media::scan`) l'emporte et
+  l'autre est signalée ; vers darktable, `IMG.xmp` est recopié dans `IMG.RAF.xmp` et
+  `IMG.JPG.xmp` ;
+- `--dry-run` liste ce qui serait écrit ; relancer une conversion ne change rien.
+
+Vérifié (17/10/2026) sur des copies des 131 sidecars darktable réels : 18 sidecars Adobe
+créés (les 113 autres photos n'ont pas de notes), notes relues à l'identique par ExifTool,
+fichiers valides, sidecars darktable inchangés octet par octet, seconde conversion sans
+effet.
+
 ## API
 
 - `read(image) -> Notes`, `write(image, &notes, convention) -> chemin du sidecar` ;
+  `read_sidecar(chemin)`, `write_sidecar(chemin, &notes)` : un sidecar précis ;
+- `convert(images, convention, simulation) -> Conversion` (bilan : écrits, inchangés,
+  conflits, erreurs) ;
 - `parse(xml) -> Notes`, `apply(xml, &notes) -> xml` : le même travail sur un texte ;
 - `SidecarIndex::new(dossier)`, `.sidecars(image)`, `.sidecar_path(image, convention)` ;
   `existing_sidecars`, `sidecar_path` (une image isolée) ;

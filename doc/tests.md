@@ -155,7 +155,10 @@ prouve rien.
 Dans un dossier temporaire : nouveau sidecar selon la convention, sidecar le plus récent
 choisi, extension `.XMP` en majuscules, notes inchangées ⇒ fichier non réécrit (date
 intacte), sidecar mal formé jamais écrasé, sidecar Adobe partagé par un RAF et son JPG,
-aucun fichier temporaire laissé.
+aucun fichier temporaire laissé. Conversion : darktable → Adobe (simulation sans
+écriture, source intacte, pas de sidecar vide), conflit d'une paire (le RAW l'emporte),
+Adobe → darktable (un sidecar partagé recopié pour les deux images), cible à jour rendue
+la plus récente, source mal formée signalée.
 
 ### `notes` (unitaires `src/notes.rs`, intégration `tests/notes.rs`)
 

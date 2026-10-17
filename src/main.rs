@@ -9,7 +9,10 @@
 //!   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
-//!       affiche la taille du cache par niveau.
+//!       affiche la taille du cache par niveau ;
+//!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
+//!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
+//!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert`.
 //!
 //! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
@@ -26,12 +29,14 @@ use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaKind, scan};
 use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
 use tri::settings::{self, Auto, EngineSettings};
+use tri::xmp::{self, Convention};
 
 const USAGE: &str = "usage :
   tri <dossier> [--raw|--flat] [--depth N]
   tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
   tri --clear-cache [thumbnail|embedded|standard|full] [--cache DOSSIER]
   tri --cache-usage [--cache DOSSIER]
+  tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 option commune : --config FICHIER (réglages ; défaut : emplacement du système)";
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -50,6 +55,8 @@ struct Args {
     mixed: bool,
     cache: Option<PathBuf>,
     config: Option<PathBuf>,
+    convert: Option<Convention>,
+    dry_run: bool,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -79,6 +86,19 @@ fn parse() -> AnyResult<Args> {
             "--mixed" => args.mixed = true,
             "--cache" => args.cache = Some(value()?.into()),
             "--cache-usage" => args.usage = true,
+            "--convert-xmp" => {
+                args.convert = Some(match value()?.as_str() {
+                    "darktable" => Convention::Darktable,
+                    "adobe" => Convention::Adobe,
+                    other => {
+                        return Err(format!(
+                            "convention inconnue : {other} (darktable ou adobe)\n{USAGE}"
+                        )
+                        .into());
+                    }
+                })
+            }
+            "--dry-run" => args.dry_run = true,
             "--clear-cache" => {
                 let level = it.peek().and_then(|n| parse_level(n));
                 if level.is_some() {
@@ -241,6 +261,42 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     print_usage(&cache)
 }
 
+/// Conversion des sidecars vers la convention `target`, avec bilan.
+fn convert_xmp(
+    files: &[tri::media::MediaFile],
+    target: Convention,
+    dry_run: bool,
+) -> AnyResult<()> {
+    let report = xmp::convert(files.iter().map(|f| f.path.as_path()), target, dry_run);
+    let verb = if dry_run { "à écrire" } else { "écrit" };
+    let verbs = if dry_run { "à écrire" } else { "écrits" };
+    for path in &report.written {
+        println!("{verb}\t{}", path.display());
+    }
+    for image in &report.conflicts {
+        println!(
+            "conflit\t{} : notes différentes de l'image qui partage le même sidecar, ignorée",
+            image.display()
+        );
+    }
+    for (image, error) in &report.errors {
+        eprintln!("erreur\t{} : {error}", image.display());
+    }
+    println!(
+        "{} images : {} sidecars {verbs}, {} inchangées, {} conflits, {} erreurs",
+        files.len(),
+        report.written.len(),
+        report.unchanged,
+        report.conflicts.len(),
+        report.errors.len()
+    );
+    if report.errors.is_empty() {
+        Ok(())
+    } else {
+        Err("certains sidecars n'ont pas pu être convertis".into())
+    }
+}
+
 fn run() -> AnyResult<()> {
     let args = parse()?;
     let settings = settings(&args);
@@ -262,6 +318,10 @@ fn run() -> AnyResult<()> {
     let groups = args
         .kind
         .apply(ungrouped(scan(&dir, args.depth.unwrap_or(1))?));
+    if let Some(target) = args.convert {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return convert_xmp(&files, target, args.dry_run);
+    }
     if args.previews {
         return previews(&settings, groups.into_iter().flatten().collect());
     }

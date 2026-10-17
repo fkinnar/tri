@@ -359,6 +359,99 @@ pub fn write_sidecar(path: &Path, notes: &Notes) -> Result<bool> {
     Ok(true)
 }
 
+/// Bilan d'une conversion de convention ([`convert`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Conversion {
+    /// Sidecars écrits (ou à écrire, en simulation).
+    pub written: Vec<PathBuf>,
+    /// Images déjà à jour dans la convention voulue, ou sans notes ni sidecar.
+    pub unchanged: usize,
+    /// Images dont les notes diffèrent de celles déjà écrites dans le même sidecar cible
+    /// (convention Adobe : `IMG.RAF` et `IMG.JPG` notés différemment) : la première image
+    /// (le RAW, dans l'ordre de `media::scan`) l'emporte, celle-ci est ignorée.
+    pub conflicts: Vec<PathBuf>,
+    /// Images dont le sidecar n'a pas pu être lu ou écrit.
+    pub errors: Vec<(PathBuf, String)>,
+}
+
+/// Recopie les notes de chaque image, lues dans son sidecar le plus récent, dans le sidecar
+/// de la convention `target` (créé s'il le faut ; s'il existe, seuls nos champs changent).
+/// **Aucun sidecar n'est supprimé** : celui de darktable garde l'historique de
+/// développement. Après conversion, le sidecar cible est le plus récent, donc celui que
+/// `tri` lit et écrit. `dry_run` : rien n'est écrit, le bilan dit ce qui le serait.
+pub fn convert<'a>(
+    images: impl IntoIterator<Item = &'a Path>,
+    target: Convention,
+    dry_run: bool,
+) -> Conversion {
+    let mut report = Conversion::default();
+    let mut indexes: std::collections::HashMap<PathBuf, SidecarIndex> =
+        std::collections::HashMap::new();
+    let mut done: std::collections::HashMap<PathBuf, Notes> = std::collections::HashMap::new();
+    for image in images {
+        let dir = image.parent().unwrap_or(Path::new(".")).to_path_buf();
+        let index = indexes
+            .entry(dir.clone())
+            .or_insert_with(|| SidecarIndex::new(&dir));
+        let existing = index.sidecars(image);
+        if existing.is_empty() {
+            report.unchanged += 1;
+            continue;
+        }
+        let source = index.sidecar_path(image, target);
+        let destination = existing
+            .iter()
+            .find(|p| Convention::of(image, p) == target)
+            .cloned()
+            .unwrap_or_else(|| target.sidecar(image));
+        let notes = match read_sidecar(&source) {
+            Ok(notes) => notes,
+            Err(e) => {
+                report.errors.push((image.to_path_buf(), e.to_string()));
+                continue;
+            }
+        };
+        if let Some(previous) = done.get(&destination) {
+            if *previous != notes {
+                report.conflicts.push(image.to_path_buf());
+            } else {
+                report.unchanged += 1;
+            }
+            continue;
+        }
+        done.insert(destination.clone(), notes.clone());
+        let current = if destination.exists() {
+            read_sidecar(&destination)
+        } else {
+            Ok(Notes::default())
+        };
+        match current {
+            Ok(current) if current == notes && (destination.exists() || notes == Notes::EMPTY) => {
+                // Déjà à jour, mais il doit devenir le plus récent pour être celui qu'on
+                // écrit ensuite : seule sa date change.
+                if destination != source && destination.exists() && !dry_run {
+                    let touched = fs::File::options()
+                        .write(true)
+                        .open(&destination)
+                        .and_then(|f| f.set_modified(SystemTime::now()));
+                    if let Err(e) = touched {
+                        report.errors.push((image.to_path_buf(), e.to_string()));
+                        continue;
+                    }
+                }
+                report.unchanged += 1;
+            }
+            Ok(_) if dry_run => report.written.push(destination),
+            Ok(_) => match write_sidecar(&destination, &notes) {
+                Ok(_) => report.written.push(destination),
+                Err(e) => report.errors.push((image.to_path_buf(), e.to_string())),
+            },
+            Err(e) => report.errors.push((image.to_path_buf(), e.to_string())),
+        }
+    }
+    report
+}
+
 /// Paquet XMP minimal d'un nouveau sidecar.
 const NEW_PACKET: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="tri">

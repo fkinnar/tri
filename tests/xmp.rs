@@ -138,3 +138,122 @@ fn no_temporary_file_is_left_behind() {
         .collect();
     assert!(names.iter().all(|n| !n.ends_with(".tmp")), "{names:?}");
 }
+
+mod convert {
+    use super::*;
+    use tri::xmp::convert;
+
+    #[test]
+    fn darktable_to_adobe_copies_notes_and_keeps_the_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let raf = image(dir.path(), "IMG.RAF");
+        let other = image(dir.path(), "NONE.RAF");
+        let notes = Notes {
+            stars: 4,
+            flag: Flag::Accepted,
+            colors: vec![Color::Blue],
+        };
+        let dt = tri::xmp::write(&raf, &notes, Convention::Darktable).unwrap();
+        let before = fs::read_to_string(&dt).unwrap();
+
+        let dry = convert([raf.as_path(), other.as_path()], Convention::Adobe, true);
+        assert_eq!(dry.written, [dir.path().join("IMG.xmp")]);
+        assert!(
+            !dir.path().join("IMG.xmp").exists(),
+            "simulation : rien écrit"
+        );
+
+        let report = convert([raf.as_path(), other.as_path()], Convention::Adobe, false);
+        assert_eq!(report.written, [dir.path().join("IMG.xmp")]);
+        assert_eq!(report.unchanged, 1, "image sans sidecar");
+        assert_eq!(
+            tri::xmp::read_sidecar(&dir.path().join("IMG.xmp")).unwrap(),
+            notes
+        );
+        assert_eq!(fs::read_to_string(&dt).unwrap(), before, "source intacte");
+        assert!(
+            !dir.path().join("NONE.xmp").exists(),
+            "pas de sidecar vide créé"
+        );
+    }
+
+    #[test]
+    fn adobe_pair_conflict_keeps_the_first_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let raf = image(dir.path(), "IMG.RAF");
+        let jpg = image(dir.path(), "IMG.JPG");
+        tri::xmp::write(
+            &raf,
+            &Notes {
+                stars: 5,
+                ..Notes::default()
+            },
+            Convention::Darktable,
+        )
+        .unwrap();
+        tri::xmp::write(
+            &jpg,
+            &Notes {
+                stars: 2,
+                ..Notes::default()
+            },
+            Convention::Darktable,
+        )
+        .unwrap();
+        let report = convert([raf.as_path(), jpg.as_path()], Convention::Adobe, false);
+        assert_eq!(report.conflicts, std::slice::from_ref(&jpg));
+        assert_eq!(
+            tri::xmp::read_sidecar(&dir.path().join("IMG.xmp"))
+                .unwrap()
+                .stars,
+            5
+        );
+    }
+
+    #[test]
+    fn adobe_to_darktable_splits_a_shared_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let raf = image(dir.path(), "IMG.RAF");
+        let jpg = image(dir.path(), "IMG.JPG");
+        let notes = Notes {
+            flag: Flag::Rejected,
+            stars: 3,
+            ..Notes::default()
+        };
+        tri::xmp::write(&raf, &notes, Convention::Adobe).unwrap();
+        let report = convert([raf.as_path(), jpg.as_path()], Convention::Darktable, false);
+        assert_eq!(report.written.len(), 2);
+        assert_eq!(tri::xmp::read(&raf).unwrap(), notes);
+        assert_eq!(tri::xmp::read(&jpg).unwrap(), notes);
+    }
+
+    #[test]
+    fn up_to_date_target_becomes_the_most_recent() {
+        let dir = tempfile::tempdir().unwrap();
+        let raf = image(dir.path(), "IMG.RAF");
+        let notes = Notes {
+            stars: 1,
+            ..Notes::default()
+        };
+        let adobe = tri::xmp::write(&raf, &notes, Convention::Adobe).unwrap();
+        set_mtime(&adobe, 60);
+        let dt = dir.path().join("IMG.RAF.xmp");
+        tri::xmp::write_sidecar(&dt, &notes).unwrap();
+        assert_eq!(tri::xmp::sidecar_path(&raf, Convention::Adobe), dt);
+
+        let report = convert([raf.as_path()], Convention::Adobe, false);
+        assert!(report.written.is_empty());
+        assert_eq!(report.unchanged, 1);
+        assert_eq!(tri::xmp::sidecar_path(&raf, Convention::Darktable), adobe);
+    }
+
+    #[test]
+    fn malformed_source_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let raf = image(dir.path(), "IMG.RAF");
+        fs::write(dir.path().join("IMG.RAF.xmp"), "<pas du xml").unwrap();
+        let report = convert([raf.as_path()], Convention::Adobe, false);
+        assert_eq!(report.errors.len(), 1);
+        assert!(!dir.path().join("IMG.xmp").exists());
+    }
+}

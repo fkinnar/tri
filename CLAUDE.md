@@ -393,7 +393,7 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       sidecars, vérifiée sur de vrais sidecars darktable et par ExifTool), `src/notes.rs`
       (notes d'un dossier en mémoire, `edit`, filtres `NotesRule` sur le trait `Filter`),
       section `[xmp]`. Restent : actions et raccourcis de notation, section `[keys]`,
-      affichage des notes (grille, plein écran), filtres dans l'interface, conversion de
-      convention en ligne de commande.
+      affichage des notes (grille, plein écran), filtres dans l'interface. Conversion de
+      convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
