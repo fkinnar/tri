@@ -103,6 +103,8 @@ pub struct EngineSettings {
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.
     pub offload: crate::offload::OffloadSettings,
+    /// Dossier des données.
+    pub data: DataSection,
 }
 
 /// Section `[xmp]` : notes (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP. Voir
@@ -185,6 +187,11 @@ pub struct CacheSection {
     pub dir: Option<PathBuf>,
     /// Qualité JPEG des entrées (1 à 100).
     pub jpeg_quality: u8,
+    /// Taille maximale de chaque niveau 1:1 (`Full`, `EmbeddedFull`), en Mo : au-delà,
+    /// les entrées les moins récemment utilisées sont supprimées (un 1:1 de 26 Mpx pèse
+    /// ~5 Mo). 0 : pas de limite. Les autres niveaux, bien plus légers, ne sont pas
+    /// limités.
+    pub zoom_max_mb: u64,
 }
 
 impl Default for CacheSection {
@@ -192,8 +199,18 @@ impl Default for CacheSection {
         Self {
             dir: None,
             jpeg_quality: cache::DEFAULT_JPEG_QUALITY,
+            zoom_max_mb: 2000,
         }
     }
+}
+
+/// Section `[data]` : dossier des données de `tri` (historique des déchargements, dernier
+/// dossier ouvert), ni réglages ni cache.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DataSection {
+    /// Dossier ; absent : celui du système ([`data_dir`]).
+    pub dir: Option<PathBuf>,
 }
 
 /// Section `[scheduler]` : voir [`scheduler::Config`].
@@ -260,6 +277,28 @@ impl EngineSettings {
             raw_previews,
             exposure: self.scheduler.exposure,
         }
+    }
+
+    /// Dossier des données : celui de `[data] dir`, sinon celui du système.
+    pub fn data_dir(&self) -> Option<PathBuf> {
+        self.data.dir.clone().or_else(data_dir)
+    }
+
+    /// Applique les limites de taille du cache (`zoom_max_mb`) : supprime les 1:1 les
+    /// moins récemment utilisés. Parcourt les dossiers du cache : à appeler hors du fil de
+    /// l'interface. Renvoie l'espace libéré.
+    pub fn trim_cache(&self, cache: &Cache) -> io::Result<cache::Usage> {
+        let mut freed = cache::Usage::default();
+        let max = self.cache.zoom_max_mb;
+        if max == 0 {
+            return Ok(freed);
+        }
+        for level in [cache::Level::Full, cache::Level::EmbeddedFull] {
+            let u = cache.evict(level, max * 1_000_000)?;
+            freed.bytes += u.bytes;
+            freed.entries += u.entries;
+        }
+        Ok(freed)
     }
 
     /// Ouvre le cache : dossier configuré (sinon celui du système), qualité configurée.

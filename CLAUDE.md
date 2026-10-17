@@ -190,7 +190,8 @@ de fond ; les aperçus 1:1 générés à la demande.
     son cache (assumé).
   - Format : JPEG qualité ~90 (compact, décodage rapide).
   - Effaçable : par niveau ou en entier ; taille maximale pour les 1:1 avec éviction des moins
-    récemment utilisés.
+    récemment utilisés (`[cache] zoom_max_mb`, 2000 Mo par niveau ; branché le
+    17/10/2026, au démarrage de l'interface).
   - Reprise naturelle : à la réouverture, seul ce qui manque est recalculé.
   - Pas de base de données pour l'instant (fichiers seuls). Distinct du cache d'*analyse*
     (scores de netteté, etc.) décrit plus haut.
@@ -413,8 +414,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      disque branché détecté de lui-même (`places::Monitor`), F5. Éjection d'un volume
      (`places::eject` : `diskutil eject`, `gio mount -e` / `udisksctl`, PowerShell non
      testé ; icône dans le panneau, confirmation près de l'icône) ; volumes fixés
-     (`[places] fixed`) sans éjection. Restent : mémoriser le dernier
-     dossier, navigation clavier dans l'arborescence, favoris.
+     (`[places] fixed`) sans éjection. Dernier dossier rouvert au lancement sans
+     argument (`[gui] reopen_last`, dossier de données `[data] dir`). Restent :
+     navigation clavier dans l'arborescence, favoris.
   2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
      données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans
      dématriçage ; JPEG 8 bits ; autres formats selon leur profondeur d'enregistrement —

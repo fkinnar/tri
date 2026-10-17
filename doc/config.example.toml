@@ -46,6 +46,10 @@ auto_bright = false
 # Qualité JPEG des entrées (1 à 100). Les entrées déjà écrites sont gardées : vider le
 # cache (tri --clear-cache) pour les réécrire.
 jpeg_quality = 90
+# Taille maximale de chaque niveau 1:1 (100 % RAW, 1:1 du JPEG boîtier), en Mo : au-delà,
+# les moins récemment utilisés sont supprimés au démarrage (~5 Mo par 1:1 de 26 Mpx).
+# 0 : pas de limite.
+zoom_max_mb = 2000
 
 [scheduler]
 # Workers parallèles pour les vignettes et images plates, ou "auto" : moitié des cœurs.
@@ -114,6 +118,12 @@ skip_known = true
 # Windows %APPDATA%\tri).
 history = ""
 
+[data]
+# Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
+# Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.
+# Exemple :
+# dir = "/chemin/vers/données"
+
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"
@@ -134,6 +144,9 @@ load_budget_ms = 8
 # Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
 # l'affiche ou la masque.
 filter_bar = true
+# Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
+# données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
+reopen_last = true
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.

@@ -84,7 +84,7 @@ valeur de référence pour détecter tout changement accidentel.
 | `remove(&key)` | Supprime une entrée (sans erreur si absente) |
 | `clear(Some(level))` / `clear(None)` | Vide un niveau / tout le cache |
 | `usage(level) -> Usage` | Octets et nombre d'entrées d'un niveau |
-| `evict(level, max_bytes) -> Usage` | Supprime les entrées les moins récemment utilisées jusqu'à `max_bytes`, renvoie ce qui a été libéré |
+| `evict(level, max_bytes) -> Usage` (branché le 17/10/2026 : `EngineSettings::trim_cache` limite chaque niveau 1:1 à `[cache] zoom_max_mb`, au démarrage de l'interface dans un fil à part et à la fin de `tri --previews` ; jusque-là, les 1:1 s'accumulaient sans limite) | Supprime les entrées les moins récemment utilisées jusqu'à `max_bytes`, renvoie ce qui a été libéré |
 
 ### Robustesse
 

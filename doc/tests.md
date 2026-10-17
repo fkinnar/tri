@@ -222,7 +222,7 @@ la plus récente, source mal formée signalée.
 
 ### `folder` (unitaires `src/folder.rs`, intégration `tests/folder.rs`)
 
-Aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et
+Dernier dossier mémorisé puis oublié s'il disparaît ; aucun dossier par défaut ; ouverture (chemin absolu, images, notes), filtres par type et
 par notes combinés, note relue après réouverture, dossier absent en erreur.
 
 ### `media` + `filter` (intégration, `tests/media.rs`)

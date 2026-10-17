@@ -147,14 +147,14 @@ impl History {
         })
     }
 
-    /// Historique des réglages : `settings.history`, sinon
-    /// `<données>/offload-history.tsv`.
-    pub fn open_configured(settings: &OffloadSettings) -> io::Result<History> {
+    /// Historique des réglages : `settings.history`, sinon `offload-history.tsv` dans le
+    /// dossier de données `data` (`EngineSettings::data_dir`).
+    pub fn open_configured(settings: &OffloadSettings, data: Option<&Path>) -> io::Result<History> {
         if !settings.history.trim().is_empty() {
             return History::open(crate::settings::expand_home(settings.history.trim()));
         }
-        let dir = crate::settings::data_dir()
-            .ok_or_else(|| io::Error::other("dossier de données introuvable (HOME absent)"))?;
+        let dir =
+            data.ok_or_else(|| io::Error::other("dossier de données introuvable (HOME absent)"))?;
         History::open(dir.join("offload-history.tsv"))
     }
 

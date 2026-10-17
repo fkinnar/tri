@@ -48,9 +48,59 @@ impl Folder {
     }
 }
 
+/// Mémorise `dir` comme dernier dossier ouvert (fichier `last-folder` du dossier de
+/// données `data`, voir `EngineSettings::data_dir`), pour le rouvrir au prochain
+/// lancement.
+pub fn remember(data: &Path, dir: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(data)?;
+    std::fs::write(data.join("last-folder"), path_bytes(dir))
+}
+
+/// Dernier dossier ouvert ([`remember`]) dans le dossier de données `data`, s'il existe
+/// toujours.
+pub fn last(data: &Path) -> Option<PathBuf> {
+    let bytes = std::fs::read(data.join("last-folder")).ok()?;
+    let path = bytes_path(bytes)?;
+    path.is_dir().then_some(path)
+}
+
+/// Octets d'un chemin : bruts sous Unix (les noms non UTF-8 survivent), UTF-8 ailleurs.
+#[cfg(unix)]
+fn path_bytes(path: &Path) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    path.as_os_str().as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn path_bytes(path: &Path) -> Vec<u8> {
+    path.to_string_lossy().into_owned().into_bytes()
+}
+
+#[cfg(unix)]
+fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStringExt;
+    Some(PathBuf::from(std::ffi::OsString::from_vec(bytes)))
+}
+
+#[cfg(not(unix))]
+fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
+    String::from_utf8(bytes).ok().map(PathBuf::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn last_folder_is_remembered_if_it_still_exists() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        assert_eq!(last(data.path()), None);
+        remember(data.path(), photos.path()).unwrap();
+        assert_eq!(last(data.path()).as_deref(), Some(photos.path()));
+        drop(photos);
+        assert_eq!(last(data.path()), None, "dossier disparu : rien");
+    }
 
     #[test]
     fn default_is_no_folder() {

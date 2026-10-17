@@ -10,6 +10,12 @@ manipule quand on « ouvre un dossier ».
   une fois pour toutes (avant : dans l'interface) ;
 - `Folder::default()` / `is_none()` : aucun dossier ouvert (interface lancée sans dossier).
 
+- `remember(données, dossier)` / `last(données)` : dernier dossier ouvert, mémorisé dans
+  le fichier `last-folder` du dossier de données (`EngineSettings::data_dir` :
+  `[data] dir`, sinon celui du système), relu seulement s'il existe toujours ; chemin en
+  octets bruts sous Unix (noms non UTF-8), UTF-8 ailleurs. L'interface rouvre ce dossier
+  quand elle est lancée sans argument (`[gui] reopen_last`).
+
 Champs publics (`dir`, `files`, `notes`) : un dossier ouvert n'a pas d'invariant à
 protéger entre eux, et l'interface modifie les notes (`folder.notes.edit`).
 

@@ -63,11 +63,17 @@ pub struct OffloadDialog {
 
 impl OffloadDialog {
     /// Ouvre la boîte pour `source`, près de `at`, et lance l'inventaire en fond.
-    pub fn new(source: PathBuf, at: Pos2, settings: OffloadSettings, ctx: &egui::Context) -> Self {
+    pub fn new(
+        source: PathBuf,
+        at: Pos2,
+        settings: OffloadSettings,
+        data: Option<PathBuf>,
+        ctx: &egui::Context,
+    ) -> Self {
         let (tx, rx) = mpsc::channel();
         let (dir, s, repaint) = (source.clone(), settings.clone(), ctx.clone());
         std::thread::spawn(move || {
-            let result = History::open_configured(&s)
+            let result = History::open_configured(&s, data.as_deref())
                 .map_err(|e| format!("historique illisible : {e}"))
                 .and_then(|history| {
                     offload::plan(&dir, &history)

@@ -63,3 +63,30 @@ fn configured_cache_dir_and_quality_are_used() {
     assert_eq!(cache.root(), dir.path().join("cache"));
     assert_eq!(cache.quality(), 70);
 }
+
+#[test]
+fn zoom_entries_are_trimmed_to_the_limit() {
+    use tri::cache::{Key, Level};
+    let dir = tempfile::tempdir().unwrap();
+    let mut settings = tri::settings::EngineSettings::default();
+    settings.cache.dir = Some(dir.path().join("cache"));
+    settings.cache.zoom_max_mb = 1;
+    let cache = settings.open_cache().unwrap();
+    // Trois 1:1 de 600 ko : au-delà d'1 Mo, les deux plus anciens partent.
+    for i in 0..3 {
+        let source = dir.path().join(format!("img{i}.RAF"));
+        std::fs::write(&source, b"raw").unwrap();
+        let key = Key::new(&source, Level::Full, "test").unwrap();
+        cache.put_bytes(&key, &vec![0u8; 600_000]).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let freed = settings.trim_cache(&cache).unwrap();
+    assert_eq!(freed.entries, 2);
+    assert_eq!(cache.usage(Level::Full).unwrap().entries, 1);
+    settings.cache.zoom_max_mb = 0;
+    assert_eq!(
+        settings.trim_cache(&cache).unwrap().entries,
+        0,
+        "0 : pas de limite"
+    );
+}

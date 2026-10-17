@@ -290,6 +290,14 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     for f in &failures {
         eprintln!("échec : {f}");
     }
+    let freed = settings.trim_cache(&cache)?;
+    if freed.entries > 0 {
+        println!(
+            "limite des 1:1 : {} entrées anciennes supprimées ({:.0} Mo)",
+            freed.entries,
+            freed.bytes as f64 / 1e6
+        );
+    }
     print_usage(&cache)
 }
 
@@ -298,9 +306,10 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     use tri::offload::{self, History};
     let s = &settings.offload;
     let mut history = if args.dry_run {
-        History::open_configured(s).unwrap_or_else(|_| History::in_memory())
+        History::open_configured(s, settings.data_dir().as_deref())
+            .unwrap_or_else(|_| History::in_memory())
     } else {
-        History::open_configured(s)?
+        History::open_configured(s, settings.data_dir().as_deref())?
     };
     let plan = offload::plan(card, &history)?;
     let root = args

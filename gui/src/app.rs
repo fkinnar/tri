@@ -232,9 +232,20 @@ impl TriApp {
     /// afficher.
     pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
         let gui = settings.gui.clone();
+        let data = settings.engine().data_dir();
+        let dir = dir.or_else(|| {
+            gui.reopen_last
+                .then(|| tri::folder::last(data.as_deref()?))
+                .flatten()
+        });
         let (folder, error) = match &dir {
             Some(dir) => match Folder::open(dir, 1, settings.xmp.sidecar) {
-                Ok(folder) => (folder, None),
+                Ok(folder) => {
+                    if let Some(data) = &data {
+                        let _ = tri::folder::remember(data, &folder.dir);
+                    }
+                    (folder, None)
+                }
                 Err(e) => (Folder::default(), Some(format!("{} : {e}", dir.display()))),
             },
             None => (Folder::default(), None),
@@ -334,6 +345,10 @@ impl TriApp {
         match Folder::open(dir, 1, self.settings.xmp.sidecar) {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
+                // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
+                if let Some(data) = self.settings.data_dir() {
+                    let _ = tri::folder::remember(&data, &folder.dir);
+                }
                 self.folder = folder;
                 self.error = None;
             }
@@ -532,6 +547,7 @@ impl TriApp {
                 source,
                 at,
                 self.settings.offload.clone(),
+                self.settings.data_dir(),
                 ui.ctx(),
             ));
         }
@@ -681,6 +697,17 @@ impl TriApp {
                 return;
             }
         };
+        // Limite des 1:1 en cache, dans un fil à part (parcours des dossiers du cache).
+        {
+            let (settings, cache) = (self.settings.clone(), cache.clone());
+            std::thread::spawn(move || {
+                if let Ok(freed) = settings.trim_cache(&cache)
+                    && freed.entries > 0
+                {
+                    trace(|| format!("cache : {} 1:1 anciens supprimés", freed.entries));
+                }
+            });
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let producer = CachedPreviews {
@@ -2231,6 +2258,9 @@ mod tests {
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
+        // Données (dernier dossier…) dans le dossier temporaire : jamais celles de
+        // l'utilisateur.
+        settings.data.dir = Some(dir.path().join("data"));
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
@@ -2514,6 +2544,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut settings = AppSettings::default();
         settings.cache.dir = Some(dir.path().join("cache"));
+        settings.data.dir = Some(dir.path().join("data"));
         let mut h = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(None, settings, None));
@@ -2521,6 +2552,42 @@ mod tests {
         assert!(h.state().folder.is_none());
         assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
         assert!(h.query_by_label("Dossiers").is_some());
+    }
+
+    #[test]
+    fn the_last_folder_is_reopened_without_an_argument() {
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("séance");
+        std::fs::create_dir(&photos).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(photos.join("a.jpg"))
+            .unwrap();
+        let settings = |reopen: bool| {
+            let mut s = AppSettings::default();
+            s.cache.dir = Some(dir.path().join("cache"));
+            s.data.dir = Some(dir.path().join("data"));
+            s.places.watch_ms = 0;
+            s.gui.reopen_last = reopen;
+            s
+        };
+        // Premier lancement, sur le dossier : il est mémorisé.
+        let s = settings(true);
+        let p = photos.clone();
+        let _first = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(p), s, None));
+        // Sans argument : rouvert.
+        let s = settings(true);
+        let again = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        assert_eq!(again.state().folder.dir, photos);
+        // Réglage désactivé : aucun dossier.
+        let s = settings(false);
+        let off = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        assert!(off.state().folder.is_none());
     }
 
     #[test]
