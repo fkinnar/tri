@@ -520,8 +520,10 @@ explicitement par l'utilisateur comme important.
       Fait le 17/10/2026 : `[gui] auto_advance` (désactivé par défaut), `Maj+A`, bouton
       « avance auto » du bandeau ; l'autre image d'une paire RAW+JPEG est sautée.
 - [ ] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
-      images d'un coup.
-- [ ] **Comparaison côte à côte** de 2 à 4 images (rafales), zoom et position liés.
+      images d'un coup. Décidé le 17/10/2026 : **les deux, et tout faisable au clavier**
+      (« c'est ma grande frustration avec les outils du marché »).
+- [ ] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
+      17/10/2026 : **plus de 2 images** possibles.
 - [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).
 - [ ] **Annuler** (`u`, réservé) : historique à concevoir (paires, filtres actifs, XMP
       modifiés ailleurs ; session seule ou persistant).
@@ -529,7 +531,9 @@ explicitement par l'utilisateur comme important.
 
 ### Analyse d'image
 - [ ] ★ **Netteté** : carte superposée (focus peaking) et score par image, filtrable ;
-      cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux.
+      cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux. Décidé le
+      17/10/2026 : overlay **en 1:1 seulement** (en grille, trop gourmand et peu lisible) ;
+      **2-3 couleurs configurables**, rotation de l'une à l'autre par un raccourci.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).
@@ -544,8 +548,10 @@ explicitement par l'utilisateur comme important.
 - [ ] ★ **Actions sur fichiers et dossiers** : notre propre menu (pas de menu natif de
       l'OS possible) — révéler dans le gestionnaire de fichiers, corbeille, renommer,
       copier / déplacer vers…, ouvrir avec l'éditeur externe ; sidecars XMP et paires
-      RAW+JPEG suivent ; aussi en ligne de commande.
-- [ ] **Éditeur externe** configurable.
+      RAW+JPEG suivent ; aussi en ligne de commande. Premier lot décidé le 17/10/2026 :
+      **renommer, supprimer, ouvrir dans un éditeur externe (configurable dans le TOML),
+      afficher dans le Finder** (« ce serait déjà super »).
+- [ ] **Éditeur externe** configurable (dans le premier lot ci-dessus).
 - [ ] Panneau des dossiers : navigation au clavier, favoris.
 - [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours
       (un dossier par jour ?), vidéos (aujourd'hui ignorées).
@@ -554,6 +560,7 @@ explicitement par l'utilisateur comme important.
 ### Internationalisation
 - [ ] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais
       (interface *et* moteur), langue du système par défaut, réglable ; piste Fluent.
+      Choix technique laissé à Claude (17/10/2026).
 
 ### Plateformes et outillage
 - [ ] **Windows** : jamais compilé ni testé (build LibRaw, lettres de lecteur, éjection
