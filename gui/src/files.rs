@@ -95,7 +95,7 @@ fn rename_dialog(
         .is_ok_and(|p| p.moves.is_empty() && p.copies.is_empty());
     let (mut confirm, mut cancel) = (false, false);
     let modal = crate::app::modal_at("rename_dialog", at).show(ctx, |ui| {
-        ui.strong(t!("rename-title", name = file_name(image)));
+        ui.heading(t!("rename-title", name = file_name(image)));
         ui.add_space(6.0);
         let field = ui.add(
             egui::TextEdit::singleline(name)
@@ -175,7 +175,7 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
     };
     let modal = crate::app::modal_at("delete_dialog", at).show(ctx, |ui| {
         let n = group.files().count();
-        ui.strong(if settings.trash {
+        ui.heading(if settings.trash {
             t!("delete-trash-question", n = n)
         } else {
             t!("delete-permanently-question", n = n)

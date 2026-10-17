@@ -74,6 +74,30 @@ fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Col
     }
 }
 
+/// Icône d'un filtre sur le drapeau, dans `rect` : pastille « acceptée », « rejetée », ou
+/// « rejetée » barrée (sans les rejetées).
+pub fn flag_filter(
+    painter: &Painter,
+    rect: Rect,
+    choice: crate::actions::FlagFilter,
+    colors: &Colors,
+) {
+    use crate::actions::FlagFilter;
+    let (center, radius) = (rect.center(), rect.width() * 0.4);
+    match choice {
+        FlagFilter::Accepted => flag(painter, center, radius, Flag::Accepted, colors),
+        FlagFilter::Rejected => flag(painter, center, radius, Flag::Rejected, colors),
+        FlagFilter::NotRejected => {
+            let faded = Color32::from(colors.rejected).gamma_multiply(0.45);
+            badge(painter, center, radius, false, faded);
+            // Barre diagonale : « pas de rejetées ».
+            let r = radius * 1.15;
+            let stroke = Stroke::new((radius * 0.3).max(1.5), Color32::from_gray(235));
+            painter.line_segment([center + vec2(-r, r), center + vec2(r, -r)], stroke);
+        }
+    }
+}
+
 /// Largeur occupée par [`row`] pour ces notes, à la taille `size`.
 pub fn row_width(notes: &Notes, size: f32) -> f32 {
     let gap = size * 0.25;

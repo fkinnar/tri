@@ -322,8 +322,7 @@ impl OffloadDialog {
             |n| n.to_string_lossy().into_owned(),
         );
         let modal = crate::app::modal_at("offload_dialog", self.at).show(ctx, |ui| {
-            ui.set_max_width(460.0);
-            ui.strong(t!("offload-title", name = &name));
+            ui.heading(t!("offload-title", name = &name));
             ui.add_space(6.0);
             match &mut self.stage {
                 Stage::Planning(_) => {

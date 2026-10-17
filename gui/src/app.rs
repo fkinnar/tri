@@ -675,7 +675,7 @@ impl TriApp {
         let open_inside = !self.folder.is_none() && self.folder.dir.starts_with(&path);
         let (mut confirm, mut cancel) = (false, false);
         let modal = modal_at("eject_dialog", at).show(ctx, |ui| {
-            ui.strong(t!("eject-question", name = &name));
+            ui.heading(t!("eject-question", name = &name));
             if open_inside {
                 ui.label(t!("eject-open-folder"));
             }
@@ -2569,7 +2569,7 @@ impl TriApp {
         let mut file_action = None;
         let mut close = false;
         let modal = modal_at("rating_dialog", at).show(ctx, |ui| {
-            ui.strong(file_name(&path));
+            ui.heading(file_name(&path));
             ui.add_space(6.0);
             ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
             ui.add_space(6.0);
@@ -2684,14 +2684,20 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         let colors = self.gui.colors;
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
+        // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
+        // de portable, la barre débordait).
         ui.horizontal_wrapped(|ui| {
-            ui.label(t!("filter-bar-type"));
+            let type_tip = self.action_tip(Action::FilterCycle);
             for (kind, label) in [
                 (KindFilter::All, t!("filter-bar-all")),
                 (KindFilter::RawOnly, "RAW".to_string()),
                 (KindFilter::FlatOnly, t!("filter-bar-flat")),
             ] {
-                if ui.selectable_label(self.filter == kind, label).clicked() {
+                if ui
+                    .selectable_label(self.filter == kind, label)
+                    .on_hover_text(&type_tip)
+                    .clicked()
+                {
                     // Le type tourne en boucle : autant de crans que nécessaire.
                     let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
                     let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
@@ -2702,7 +2708,6 @@ impl TriApp {
                 }
             }
             ui.separator();
-            ui.label(t!("filter-bar-stars"));
             let current = match self.notes_rule.stars {
                 Some(StarsRule::AtLeast(n)) => n,
                 _ => 0,
@@ -2719,14 +2724,20 @@ impl TriApp {
                 };
                 marks::star(ui.painter(), rect.center(), size / 2.0, color);
                 if response.clicked() {
-                    // Recliquer l'étoile du filtre actif l'efface.
                     clicked.push(Action::FilterStars(if n == current { 0 } else { n }));
                 }
             }
             ui.separator();
             for choice in FlagFilter::ALL {
                 let active = self.notes_rule.flags.as_ref() == Some(&choice.flags());
-                if ui.selectable_label(active, choice.label()).clicked() {
+                let tip = self.action_tip(Action::FilterFlag(choice));
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                if active {
+                    ui.painter()
+                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
+                }
+                marks::flag_filter(ui.painter(), rect, choice, &colors);
+                if response.clicked() {
                     clicked.push(Action::FilterFlag(choice));
                 }
             }
@@ -2734,12 +2745,12 @@ impl TriApp {
             for (rule, label, action) in [
                 (
                     tri::sharpness::BlurRule::HideBlurry,
-                    t!("filter-bar-no-blurry"),
+                    t!("filter-bar-sharp-short"),
                     Action::FilterBlurry,
                 ),
                 (
                     tri::sharpness::BlurRule::OnlyBlurry,
-                    t!("filter-bar-only-blurry"),
+                    t!("filter-bar-blurry-short"),
                     Action::FilterOnlyBlurry,
                 ),
             ] {
@@ -2752,9 +2763,9 @@ impl TriApp {
                 }
             }
             ui.separator();
-            ui.label(t!("filter-bar-colors"));
             for color in Color::ALL {
-                let (rect, response) = marks::clickable(ui, size, &color_name(color));
+                let tip = self.action_tip(Action::FilterColor(color));
+                let (rect, response) = marks::clickable(ui, size, &tip);
                 let active = self
                     .notes_rule
                     .colors
@@ -2779,6 +2790,7 @@ impl TriApp {
                 || self.blur_rule.is_some();
             if ui
                 .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
+                .on_hover_text(self.action_tip(Action::FilterClear))
                 .clicked()
             {
                 clicked.push(Action::FilterClear);
@@ -2787,7 +2799,8 @@ impl TriApp {
                 "filter-bar-count",
                 shown = self.files.len(),
                 n = self.folder.files.len()
-            ));
+            ))
+            .on_hover_text(t!("filter-bar-count-tip"));
         });
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -3144,6 +3157,7 @@ impl TriApp {
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
         if self.engine.is_none() && self.error.is_none() {
             self.start_engine(&ctx);
         }
@@ -3355,17 +3369,94 @@ enum StatusClick {
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
 /// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
-/// 17/10/2026). Gardée dans la fenêtre ; derrière, le fond est grisé et bloqué comme pour
-/// toute modale.
-pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> egui::Modal {
-    let area = egui::Area::new(egui::Id::unique(id))
-        .kind(egui::UiKind::Modal)
-        .sense(Sense::hover())
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .fixed_pos(at + vec2(4.0, 4.0))
-        .constrain(true);
-    egui::Modal::new(egui::Id::unique(id)).area(area)
+/// 17/10/2026). Gardée dans la fenêtre, **déplaçable** en glissant son fond, aérée
+/// (`[gui.dialogs]`) ; derrière, le fond est grisé et bloqué comme pour toute modale.
+pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
+    // Une position par ouverture : la boîte rouverte ailleurs repart de son nouveau clic.
+    let id = egui::Id::unique(id).with((at.x as i32, at.y as i32));
+    Dialog {
+        id,
+        start: at + vec2(4.0, 4.0),
+    }
+}
+
+/// Boîte de [`modal_at`].
+pub(crate) struct Dialog {
+    id: egui::Id,
+    /// Position initiale (coin haut gauche).
+    start: egui::Pos2,
+}
+
+impl Dialog {
+    /// Affiche la boîte, mise en forme selon `[gui.dialogs]` (réglages déposés dans le
+    /// contexte à chaque image, voir [`dialog_settings_id`]). La `Modal` d'egui n'est pas
+    /// déplaçable (sa zone couvre aussi le fond grisé) : la position est gardée ici et
+    /// décalée quand on glisse le fond de la boîte (les boutons et champs, créés après,
+    /// restent prioritaires).
+    pub(crate) fn show<R>(
+        self,
+        ctx: &egui::Context,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> egui::ModalResponse<R> {
+        let d: crate::settings::DialogSettings = ctx
+            .data(|data| data.get_temp(dialog_settings_id()))
+            .unwrap_or_default();
+        let pos_id = self.id.with("position");
+        let pos = ctx
+            .data(|data| data.get_temp::<egui::Pos2>(pos_id))
+            .unwrap_or(self.start);
+        let area = egui::Area::new(self.id)
+            .kind(egui::UiKind::Modal)
+            .sense(Sense::hover())
+            .order(egui::Order::Foreground)
+            .interactable(true)
+            .fixed_pos(pos)
+            .constrain(true);
+        let frame = egui::Frame::popup(&ctx.global_style()).inner_margin(d.margin);
+        let mut moved = egui::Vec2::ZERO;
+        // Le cadre est dessiné dans la zone de glissement : marges comprises, toute la boîte
+        // se saisit.
+        let modal = egui::Modal::new(self.id)
+            .area(area)
+            .frame(egui::Frame::NONE);
+        let response = modal.show(ctx, |ui| {
+            let scope = ui.scope_builder(egui::UiBuilder::new().sense(Sense::drag()), |ui| {
+                frame
+                    .show(ui, |ui| {
+                        let style = ui.style_mut();
+                        // Textes non sélectionnables : glisser le titre déplace la boîte.
+                        style.interaction.selectable_labels = false;
+                        style
+                            .text_styles
+                            .insert(egui::TextStyle::Heading, FontId::proportional(d.title_size));
+                        let spacing = ui.spacing_mut();
+                        spacing.item_spacing = vec2(d.spacing, d.spacing);
+                        spacing.button_padding = vec2(d.button_padding, d.button_padding / 2.0);
+                        ui.set_min_width(d.min_width);
+                        ui.set_max_width(d.max_width.max(d.min_width));
+                        add(ui)
+                    })
+                    .inner
+            });
+            if scope.response.dragged() {
+                moved = scope.response.drag_delta();
+            }
+            if scope.response.hovered() {
+                ctx.set_cursor_icon(egui::CursorIcon::Grab);
+            }
+            scope.inner
+        });
+        if moved != egui::Vec2::ZERO {
+            ctx.data_mut(|data| data.insert_temp(pos_id, pos + moved));
+            ctx.request_repaint();
+        }
+        response
+    }
+}
+
+/// Emplacement des réglages des boîtes dans les données du contexte egui.
+pub(crate) fn dialog_settings_id() -> egui::Id {
+    egui::Id::unique("tri-dialog-settings")
 }
 
 /// Nom d'une couleur de notation.
@@ -3949,6 +4040,40 @@ mod tests {
         assert!(!h.state().focus_point);
         press(&mut h, Key::M, Modifiers::NONE);
         assert!(h.state().focus_point);
+    }
+
+    #[test]
+    fn dialogs_can_be_moved_by_dragging_their_background() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F2, Modifiers::NONE);
+        let title = "Renommer « img0.jpg »";
+        let before = h.get_by_label(title).rect().center();
+        let after = before + vec2(-120.0, 90.0);
+        h.event(UiEvent::PointerMoved(before));
+        h.event(UiEvent::PointerButton {
+            pos: before,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(1);
+        for step in 1..=6 {
+            h.event(UiEvent::PointerMoved(
+                before + (after - before) * step as f32 / 6.0,
+            ));
+            h.run_steps(1);
+        }
+        h.event(UiEvent::PointerButton {
+            pos: after,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        let moved = h.get_by_label(title).rect().center();
+        assert!((moved - after).length() < 2.0, "{before:?} → {moved:?}");
+        assert!(h.state().file_dialog.is_some(), "toujours ouverte");
     }
 
     #[test]

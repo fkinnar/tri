@@ -271,6 +271,17 @@ focus_marker = "square"
 focus_marker_size = 28.0
 focus_marker_width = 2.0
 
+[gui.dialogs]
+# Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :
+# elles se déplacent en glissant leur fond. Marge intérieure, espace entre les éléments,
+# marge des boutons, largeurs minimale et maximale, taille des titres, en points.
+margin = 18.0
+spacing = 10.0
+button_padding = 10.0
+min_width = 340.0
+max_width = 520.0
+title_size = 17.0
+
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
 # les premières) : chacune garde un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique

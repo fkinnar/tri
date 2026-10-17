@@ -100,6 +100,17 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en comparaison (`m`), lu dans le RAW (Fujifilm pour l'instant) ; carré, croix, cercle ou
   cœur (`[gui.view] focus_marker`), couleur `[gui.colors] focus`, liseré sombre dessous
   pour rester visible sur tout fond.
+- **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
+  retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
+  grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs, taille des titres).
+  La `Modal` d'egui ne se déplace pas (sa zone couvre aussi le fond grisé) : `Dialog`
+  garde la position et la décale au glissement ; le cadre est dans la zone de
+  glissement, et les textes n'y sont pas sélectionnables (sinon glisser le titre
+  sélectionnait du texte). Boutons et champs restent prioritaires.
+- **Barre de filtres compacte** (retour du 17/10/2026 : elle débordait sur un écran de
+  portable) : icônes (étoiles, drapeaux — acceptées, rejetées barrées pour « sans les
+  rejetées », rejetées —, couleurs) et textes courts (« nettes », « floues », « 26/26 »),
+  le détail et le raccourci de chaque bouton au survol.
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
@@ -520,6 +531,9 @@ la grille.
 Sélection multiple (17/10/2026) : voir [selection.md](selection.md#tests).
 
 Netteté (17/10/2026) : voir [sharpness.md](sharpness.md#tests).
+
+Boîtes (17/10/2026) : la boîte « Renommer », saisie par son titre et glissée, suit le
+pointeur et reste ouverte.
 
 Comparaison (17/10/2026) : `c` refusé avec une seule image (indication dans la barre
 d'état) ; trois images en mode visuel puis `c` : l'image courante reste active, les

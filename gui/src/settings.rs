@@ -118,6 +118,8 @@ pub struct GuiSettings {
     pub view: ViewSettings,
     /// `[gui.compare]`.
     pub compare: CompareSettings,
+    /// `[gui.dialogs]`.
+    pub dialogs: DialogSettings,
     /// `[gui.colors]`.
     pub colors: Colors,
     /// `[gui.folders]`.
@@ -150,6 +152,7 @@ impl Default for GuiSettings {
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             compare: CompareSettings::default(),
+            dialogs: DialogSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
             histogram: HistogramSettings::default(),
@@ -245,6 +248,38 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
+        }
+    }
+}
+
+/// Section `[gui.dialogs]` : boîtes ouvertes près du clic (notation, éjection,
+/// déchargement, renommage, corbeille). Elles se déplacent en glissant leur fond.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DialogSettings {
+    /// Marge intérieure (points).
+    pub margin: f32,
+    /// Espace entre les éléments (points).
+    pub spacing: f32,
+    /// Marge intérieure des boutons, horizontale (points ; verticale : moitié).
+    pub button_padding: f32,
+    /// Largeur minimale (points).
+    pub min_width: f32,
+    /// Largeur maximale (points) : les textes longs passent à la ligne.
+    pub max_width: f32,
+    /// Taille du texte des titres (points).
+    pub title_size: f32,
+}
+
+impl Default for DialogSettings {
+    fn default() -> Self {
+        Self {
+            margin: 18.0,
+            spacing: 10.0,
+            button_padding: 10.0,
+            min_width: 340.0,
+            max_width: 520.0,
+            title_size: 17.0,
         }
     }
 }
