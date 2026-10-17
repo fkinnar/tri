@@ -148,6 +148,8 @@ pub struct TriApp {
     filter_bar: bool,
     /// Bandeau de notation affiché.
     rating_bar: bool,
+    /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
+    auto_advance: bool,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -302,6 +304,7 @@ impl TriApp {
             notes_rule: NotesRule::default(),
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
+            auto_advance: gui.auto_advance,
             rating_dialog: None,
             files: Vec::new(),
             status: Vec::new(),
@@ -990,9 +993,8 @@ impl TriApp {
             // En plein écran, seule la navigation image par image a un sens.
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
-            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => {
-                self.rate(self.selected, action)
-            }
+            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -1053,15 +1055,40 @@ impl TriApp {
         }
     }
 
-    /// Note l'image `index` et écrit son sidecar. En cas d'échec, l'erreur est affichée
-    /// dans la barre d'état et la note affichée reste celle du disque.
-    fn rate(&mut self, index: usize, action: Action) {
-        if let Some(file) = self.files.get(index) {
-            self.rate_path(file.path.clone(), action);
+    /// Bulle d'un contrôle : libellé de l'action et ses raccourcis.
+    fn action_tip(&self, action: Action) -> String {
+        format!(
+            "{} ({})",
+            action.label(),
+            self.keymap.keys_for(action).join(" / ")
+        )
+    }
+
+    /// Note l'image sélectionnée ; avec l'avance automatique, passe ensuite à la suivante.
+    /// Si la note a fait sortir l'image du filtre, la sélection est déjà sur la suivante
+    /// ([`TriApp::refilter`]) : on ne bouge pas, sinon on sauterait une image. L'autre image
+    /// d'une paire RAW+JPEG, notée en même temps, est sautée aussi.
+    fn rate_selected(&mut self, action: Action) {
+        let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) else {
+            return;
+        };
+        self.rate_path(path.clone(), action);
+        if !self.auto_advance
+            || self.note_error.is_some()
+            || self.files.get(self.selected).is_none_or(|f| f.path != path)
+        {
+            return;
+        }
+        let siblings = self.folder.notes.siblings(&path);
+        let next = (self.selected + 1..self.files.len())
+            .find(|&i| !siblings.contains(&self.files[i].path));
+        if let Some(next) = next {
+            self.select(next);
         }
     }
 
-    /// Note l'image `path` (voir [`TriApp::rate`]).
+    /// Note l'image `path` et écrit son sidecar. En cas d'échec, l'erreur est affichée
+    /// dans la barre d'état et la note affichée reste celle du disque.
     fn rate_path(&mut self, path: PathBuf, action: Action) {
         let multiple = self.settings.xmp.multiple_colors;
         let result = self.folder.notes.edit(&path, |n| match action {
@@ -1555,12 +1582,7 @@ impl TriApp {
         let color = ui.visuals().text_color();
         // Icône d'un panneau : cadre, bande du panneau pleine quand il est affiché.
         let toggle = |ui: &mut Ui, side: marks::Side, shown: bool, action: Action| {
-            let tip = format!(
-                "{} ({})",
-                action.label(),
-                self.keymap.keys_for(action).join(" / ")
-            );
-            let (rect, response) = marks::clickable(ui, size, &tip);
+            let (rect, response) = marks::clickable(ui, size, &self.action_tip(action));
             marks::panel(ui.painter(), rect, side, shown, color);
             response.clicked().then_some(StatusClick::Action(action))
         };
@@ -1838,9 +1860,21 @@ impl TriApp {
             ui.label("Notes");
             clicked = marks::controls(ui, &notes, &colors, size);
             ui.weak(name);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let label = "avance auto";
+                if ui
+                    .selectable_label(self.auto_advance, label)
+                    .on_hover_text(self.action_tip(Action::ToggleAutoAdvance))
+                    .clicked()
+                {
+                    clicked = Some(Action::ToggleAutoAdvance);
+                }
+            });
         });
-        if let Some(action) = clicked {
-            self.rate(self.selected, action);
+        match clicked {
+            Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
+            Some(action) => self.rate_selected(action),
+            None => {}
         }
     }
 
@@ -2572,12 +2606,22 @@ mod tests {
 
     /// Application sur 3 JPEG de `w`×`h` pixels, avec un cache temporaire.
     fn harness_with(w: u32, h: u32) -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        harness_files(&["img0.jpg", "img1.jpg", "img2.jpg"], w, h)
+    }
+
+    /// Application sur les images `names` (JPEG ou PNG selon l'extension) de `w`×`h`
+    /// pixels, avec un cache temporaire.
+    fn harness_files(
+        names: &[&str],
+        w: u32,
+        h: u32,
+    ) -> (Harness<'static, TriApp>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir(&photos).unwrap();
-        for i in 0..3 {
+        for (i, name) in names.iter().enumerate() {
             image::RgbImage::from_pixel(w, h, image::Rgb([40 * i as u8, 100, 160]))
-                .save(photos.join(format!("img{i}.jpg")))
+                .save(photos.join(name))
                 .unwrap();
         }
         let mut settings = AppSettings::default();
@@ -2698,6 +2742,53 @@ mod tests {
         );
         press(&mut h, Key::X, Modifiers::SHIFT);
         assert_eq!(names(&h), ["img2.jpg"]);
+    }
+
+    fn selected_name(h: &Harness<'_, TriApp>) -> String {
+        file_name(&h.state().files[h.state().selected].path)
+    }
+
+    #[test]
+    fn auto_advance_skips_the_pair_and_is_off_by_default() {
+        let names = ["img0.jpg", "img0.png", "img1.jpg", "img2.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0.jpg", "désactivée par défaut");
+        press(&mut h, Key::A, Modifiers::SHIFT);
+        assert!(h.state().auto_advance);
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        // La paire img0.jpg + img0.png est notée d'un coup : on passe à img1.jpg.
+        assert_eq!(selected_name(&h), "img1.jpg");
+        let photos = dir.path().join("photos");
+        assert_eq!(tri::xmp::read(&photos.join("img0.png")).unwrap().stars, 2);
+        press(&mut h, Key::Num8, Modifiers::NONE);
+        assert_eq!(
+            selected_name(&h),
+            "img2.jpg",
+            "une couleur fait avancer aussi"
+        );
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img2.jpg", "dernière image : on y reste");
+        assert_eq!(tri::xmp::read(&photos.join("img2.jpg")).unwrap().stars, 1);
+    }
+
+    #[test]
+    fn auto_advance_does_not_skip_an_image_when_the_rated_one_leaves_the_filter() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::A, Modifiers::SHIFT);
+        // Filtre « sans les rejetées », puis rejet de img0 : elle disparaît, img1 prend sa
+        // place sous la sélection ; avancer encore sauterait img1.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 3);
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(selected_name(&h), "img1.jpg");
+        // Image toujours dans le filtre : on avance normalement.
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img2.jpg");
     }
 
     #[test]

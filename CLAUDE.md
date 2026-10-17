@@ -515,8 +515,10 @@ Vue d'ensemble de ce qui reste, par thème ; le détail et le *pourquoi* sont da
 explicitement par l'utilisateur comme important.
 
 ### Tri et notation
-- [ ] ★ **Passage automatique à l'image suivante après une note** (option) — sans sauter
+- [x] ★ **Passage automatique à l'image suivante après une note** (option) — sans sauter
       d'image sous un filtre : n'avancer que si l'image notée est toujours dans la liste.
+      Fait le 17/10/2026 : `[gui] auto_advance` (désactivé par défaut), `Maj+A`, bouton
+      « avance auto » du bandeau ; l'autre image d'une paire RAW+JPEG est sautée.
 - [ ] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
       images d'un coup.
 - [ ] **Comparaison côte à côte** de 2 à 4 images (rafales), zoom et position liés.

@@ -76,6 +76,7 @@ pub fn navigate(
         | Action::FilterClear
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
+        | Action::ToggleAutoAdvance
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
         | Action::ToggleHistogram

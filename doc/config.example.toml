@@ -165,6 +165,11 @@ reopen_last = true
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
 rating_bar = true
+# Après une note (clavier ou bandeau), passer à l'image suivante ; Maj+A l'active ou le
+# désactive. Si la note fait sortir l'image d'un filtre, la suivante est déjà sélectionnée :
+# on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est
+# sautée.
+auto_advance = false
 
 [gui.grid]
 # Dimensions en points.

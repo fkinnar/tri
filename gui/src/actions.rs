@@ -182,6 +182,8 @@ pub enum Action {
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
     ToggleRatingBar,
+    /// Avance automatique à l'image suivante après une note : oui / non.
+    ToggleAutoAdvance,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -226,7 +228,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 57] = [
+    pub const ALL: [Action; 58] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -253,6 +255,7 @@ impl Action {
         Action::FilterClear,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
+        Action::ToggleAutoAdvance,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -320,6 +323,7 @@ impl Action {
             Action::FilterClear => "Effacer tous les filtres",
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
+            Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
             Action::ToggleFolderPanel => "Afficher / masquer le panneau des dossiers",
             Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
             Action::ToggleHistogram => "Afficher / masquer l'histogramme",
@@ -362,7 +366,7 @@ impl Action {
             | Open | Back => Group::Navigation,
             ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
             | HistogramScale | HistogramLarge | ToggleClipping => Group::View,
-            Stars(_) | Color(_) | Flag(_) => Group::Rating,
+            Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear => {
                 Group::Filters
             }
@@ -406,6 +410,7 @@ impl Action {
             Action::FilterClear => "core.filter.clear",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
+            Action::ToggleAutoAdvance => "core.rate.auto_advance",
             Action::ToggleFolderPanel => "core.view.folders",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
@@ -625,6 +630,7 @@ const RATING: &[Binding] = {
         (&[shifted(Key::P)], Flag(tri::xmp::Flag::Accepted)),
         (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
+        (&[shifted(Key::A)], ToggleAutoAdvance),
         (&[shifted(Key::N)], ToggleRatingBar),
         (&[shifted(Key::D)], ToggleFolderPanel),
         (&[plain(Key::F5)], RefreshFolders),

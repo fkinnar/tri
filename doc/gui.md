@@ -88,12 +88,23 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Avance automatique après une note** (`[gui] auto_advance`, désactivée par défaut ;
+  `Maj+A` ou le bouton « avance auto » du bandeau) : après une note au clavier ou au
+  bandeau, l'image suivante est sélectionnée (pas depuis la boîte du clic droit, qui note
+  l'image cliquée). Deux règles (`TriApp::rate_selected`) :
+  - **sous un filtre, ne jamais sauter d'image** : si la note fait sortir l'image du
+    filtre (rejet sous « sans les rejetées », 2 → 1 étoile sous « 2 étoiles et plus »),
+    elle disparaît et la suivante prend déjà sa place sous la sélection ; avancer en plus
+    en sauterait une (bug connu de Capture One à une époque). On n'avance donc que si
+    l'image notée est toujours dans la liste ;
+  - **l'autre image d'une paire RAW+JPEG**, notée en même temps, est sautée.
+  Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).
 - **Notation à la souris** (17/10/2026, demande de l'utilisateur : tout le monde ne veut
   pas tout faire au clavier) :
   - **bandeau de notation** en bas (au-dessus de la barre d'état), dans la grille et en
     plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
     estompés quand ils ne sont pas posés ; `Maj+N` l'affiche ou le masque
-    (`[gui] rating_bar`) ;
+    (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous) ;
   - **clic droit** sur une vignette ou en plein écran : **boîte modale** avec les mêmes
     contrôles, pour l'image cliquée (sélectionnée). Un simple menu ne suffisait pas
     (retour du 17/10/2026) : la souris qui sortait du menu sélectionnait d'autres
@@ -462,6 +473,11 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Avance automatique (17/10/2026) : désactivée par défaut ; avec Maj+A, une note passe à
+l'image suivante en sautant l'autre image de la paire (notée aussi, relue du disque), une
+couleur aussi, la dernière image reste sélectionnée ; sous « sans les rejetées », rejeter
+img0 laisse la sélection sur img1 (vérifié : sans la règle, le test échoue sur img2).
 
 Déchargement (17/10/2026) : fausse carte (deux JPEG dans `DCIM`) déclarée comme volume,
 icône « décharger », inventaire (« 2 à copier »), copie (« 2 fichiers copiés et

@@ -96,6 +96,9 @@ pub struct GuiSettings {
     pub reopen_last: bool,
     /// Bandeau de notation à la souris affiché au démarrage (Maj+N l'affiche ou le masque).
     pub rating_bar: bool,
+    /// Après une note au clavier ou au bandeau, passer à l'image suivante (Maj+A l'active
+    /// ou le désactive).
+    pub auto_advance: bool,
     /// `[gui.grid]`.
     pub grid: GridSettings,
     /// `[gui.view]`.
@@ -124,6 +127,7 @@ impl Default for GuiSettings {
             filter_bar: true,
             reopen_last: true,
             rating_bar: true,
+            auto_advance: false,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             colors: Colors::default(),
