@@ -93,6 +93,8 @@ pub enum Action {
     HistogramScale,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
+    /// Afficher / masquer le panneau des métadonnées.
+    ToggleMetadata,
     /// Ouvrir l'image sélectionnée en plein écran.
     Open,
     /// Plein écran : basculer entre ajusté à la fenêtre et 100 %.
@@ -123,7 +125,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 55] = [
+    pub const ALL: [Action; 56] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -155,6 +157,7 @@ impl Action {
         Action::ToggleHistogram,
         Action::HistogramScale,
         Action::ToggleClipping,
+        Action::ToggleMetadata,
         Action::Open,
         Action::ToggleZoom,
         Action::ToggleSource,
@@ -220,6 +223,7 @@ impl Action {
             Action::ToggleHistogram => "Afficher / masquer l'histogramme",
             Action::HistogramScale => "Histogramme : IL / linéaire",
             Action::ToggleClipping => "Afficher / masquer les zones brûlées et bouchées",
+            Action::ToggleMetadata => "Afficher / masquer le panneau des métadonnées",
             Action::Open => "Ouvrir en plein écran",
             Action::ToggleZoom => "Zoom 100 % / ajusté",
             Action::ToggleSource => "Basculer JPEG boîtier / rendu RAW",
@@ -286,6 +290,7 @@ impl Action {
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::ToggleClipping => "core.view.clipping",
+            Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
             Action::ToggleZoom => "core.view.zoom",
             Action::ToggleSource => "core.view.source",
@@ -492,6 +497,7 @@ const RATING: &[Binding] = {
         (&[plain(Key::I)], ToggleHistogram),
         (&[shifted(Key::I)], HistogramScale),
         (&[plain(Key::O)], ToggleClipping),
+        (&[shifted(Key::M)], ToggleMetadata),
     ]
 };
 

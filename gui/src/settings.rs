@@ -98,6 +98,8 @@ pub struct GuiSettings {
     pub folders: FolderSettings,
     /// `[gui.histogram]`.
     pub histogram: HistogramSettings,
+    /// `[gui.metadata]`.
+    pub metadata: MetadataSettings,
 }
 
 impl Default for GuiSettings {
@@ -118,6 +120,7 @@ impl Default for GuiSettings {
             colors: Colors::default(),
             folders: FolderSettings::default(),
             histogram: HistogramSettings::default(),
+            metadata: MetadataSettings::default(),
         }
     }
 }
@@ -264,6 +267,32 @@ impl Default for FolderSettings {
             width: 240.0,
             indent: 14.0,
             hidden: false,
+        }
+    }
+}
+
+/// Section `[gui.metadata]` : panneau des métadonnées, à droite.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MetadataSettings {
+    /// Panneau affiché au démarrage (Maj+M l'affiche ou le masque).
+    pub visible: bool,
+    /// Largeur initiale (points) ; le bord se tire à la souris.
+    pub width: f32,
+    /// Histogramme de l'image sélectionnée dans le panneau, en grille (en plein écran, il
+    /// est en surimpression sur l'image).
+    pub histogram: bool,
+    /// Hauteur de cet histogramme (points).
+    pub histogram_height: f32,
+}
+
+impl Default for MetadataSettings {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            width: 280.0,
+            histogram: true,
+            histogram_height: 120.0,
         }
     }
 }

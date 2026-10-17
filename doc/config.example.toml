@@ -187,6 +187,15 @@ clipping_channels = true
 badge_over = 0.005
 badge_under = 0.05
 
+[gui.metadata]
+# Panneau des métadonnées, à droite : affiché au démarrage (Maj+M l'affiche ou le masque),
+# largeur initiale (points, le bord se tire à la souris), histogramme de l'image
+# sélectionnée dans le panneau en grille, et sa hauteur.
+visible = true
+width = 280.0
+histogram = true
+histogram_height = 120.0
+
 [gui.colors]
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"

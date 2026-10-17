@@ -29,6 +29,7 @@ use crate::grid::{self, Layout};
 use crate::histogram;
 use crate::loader::Loader;
 use crate::marks;
+use crate::meta::MetaLoader;
 use crate::settings::{AppSettings, GuiSettings, HistogramScale};
 use crate::textures::Lru;
 use crate::trace::trace;
@@ -163,6 +164,10 @@ pub struct TriApp {
     /// vue (appliqués au dessin, quand la taille de l'image est connue).
     pan: Vec2,
     textures: Lru<PathBuf, TextureHandle>,
+    /// Panneau des métadonnées affiché.
+    metadata_panel: bool,
+    /// Lecture des métadonnées en fond (démarrée à la première image).
+    meta: Option<MetaLoader>,
     /// Histogramme affiché en plein écran.
     histogram: bool,
     /// Échelle de l'histogramme.
@@ -282,6 +287,8 @@ impl TriApp {
             cell_rects: Vec::new(),
             pan: Vec2::ZERO,
             textures: Lru::new(gui.grid.textures),
+            metadata_panel: gui.metadata.visible,
+            meta: None,
             histogram: gui.histogram.visible,
             histogram_scale: gui.histogram.scale,
             clipping: gui.histogram.clipping,
@@ -340,7 +347,72 @@ impl TriApp {
         self.rating_dialog = None;
         self.wanted.clear();
         self.missing.clear();
+        if let Some(meta) = &mut self.meta {
+            meta.clear();
+        }
         self.apply_filter();
+    }
+
+    /// Panneau des métadonnées : celles de l'image sélectionnée (lignes du moteur), et en
+    /// grille son histogramme.
+    fn metadata_panel(&mut self, ui: &mut Ui) {
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            ui.weak("Aucune image sélectionnée.");
+            return;
+        };
+        ui.strong(file_name(&file.path));
+        ui.add_space(4.0);
+        let read = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ui.ctx().clone()))
+            .get(&file)
+            .cloned();
+        match read {
+            None => {
+                ui.weak("lecture…");
+            }
+            Some(Err(e)) => {
+                ui.colored_label(self.gui.colors.error, e);
+            }
+            Some(Ok(m)) => {
+                egui::Grid::new("metadata")
+                    .num_columns(2)
+                    .spacing(vec2(10.0, 4.0))
+                    .show(ui, |ui| {
+                        for (label, value) in m.rows() {
+                            ui.weak(label);
+                            // À la ligne plutôt qu'élargir le panneau (noms d'objectif).
+                            ui.add(egui::Label::new(value).wrap());
+                            ui.end_row();
+                        }
+                    });
+            }
+        }
+        // En grille : histogramme de l'image sélectionnée (en plein écran, il est sur
+        // l'image).
+        let settings = self.gui.metadata;
+        if self.mode == Mode::Grid && settings.histogram {
+            ui.add_space(10.0);
+            match self.exposure_of(self.selected) {
+                Some(e) => {
+                    let (rect, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), settings.histogram_height),
+                        Sense::hover(),
+                    );
+                    histogram::draw(
+                        ui.painter(),
+                        rect,
+                        &e,
+                        self.histogram_scale,
+                        &self.gui.histogram,
+                        &self.gui.colors,
+                    );
+                }
+                None => {
+                    ui.weak("histogramme en cours de calcul");
+                }
+            }
+        }
     }
 
     /// Surveillance des volumes : démarrée au premier appel (il faut le contexte pour
@@ -792,6 +864,7 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::ToggleClipping => self.clipping = !self.clipping,
+            Action::ToggleMetadata => self.metadata_panel = !self.metadata_panel,
             Action::ToggleFolderPanel => {
                 self.folder_panel = !self.folder_panel;
                 self.reveal_folder = self.folder_panel;
@@ -1883,6 +1956,16 @@ impl eframe::App for TriApp {
         self.update_loads(&ctx);
 
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        if self.metadata_panel && self.error.is_none() && !self.folder.is_none() {
+            egui::Panel::right("metadata")
+                .resizable(true)
+                .default_size(self.gui.metadata.width)
+                .show(ui, |ui| {
+                    ScrollArea::vertical()
+                        .auto_shrink(false)
+                        .show(ui, |ui| self.metadata_panel(ui));
+                });
+        }
         if self.folder_panel && self.mode == Mode::Grid {
             egui::Panel::left("folders")
                 .resizable(true)
@@ -2533,6 +2616,21 @@ mod tests {
             h.state().mask_textures.contains(&white_path),
             "masque en texture"
         );
+    }
+
+    #[test]
+    fn the_metadata_panel_shows_the_selected_image() {
+        let (mut h, _dir) = harness();
+        // Lecture en fond : la ligne « Dimensions » finit par apparaître.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.query_by_label("Dimensions").is_none() {
+            assert!(Instant::now() < deadline, "métadonnées jamais affichées");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.query_by_label_contains("64 × 48").is_some(), "dimensions de img0");
+        press(&mut h, Key::M, Modifiers::SHIFT);
+        assert!(h.query_by_label("Dimensions").is_none(), "Maj+M masque le panneau");
     }
 
     #[test]

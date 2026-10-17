@@ -61,8 +61,32 @@ pub fn draw(
     colors: &Colors,
 ) {
     painter.rect_filled(rect, 4.0, Color32::from_black_alpha(190));
-    // Bandes réservées sous le graphe : graduations, puis indicateurs.
-    let (labels_h, text_h) = (12.0, 16.0);
+    // Indicateurs, mis en page d'abord : sur plusieurs lignes si la place manque
+    // (panneau des métadonnées), le graphe prend le reste de la hauteur.
+    let source = match e.source {
+        Source::Raw { bits, .. } => format!("RAW {bits} bits"),
+        Source::Flat => "8 bits".into(),
+    };
+    let text = format!(
+        "{source} · marge {} IL · saturés {} % · bouchés {} %",
+        french(e.headroom_ev() as f64, 2),
+        french(e.over_fraction() * 100.0, 2),
+        french(e.under_fraction() * 100.0, 2)
+    );
+    let galley = painter.layout(
+        text,
+        FontId::proportional(11.0),
+        Color32::from_gray(225),
+        (rect.width() - 12.0).max(10.0),
+    );
+    let text_h = galley.size().y + 4.0;
+    painter.galley(
+        pos2(rect.min.x + 6.0, rect.max.y - 4.0 - galley.size().y),
+        galley,
+        Color32::from_gray(225),
+    );
+    // Bande réservée aux graduations, sous le graphe.
+    let labels_h = 12.0;
     let graph = Rect::from_min_max(
         rect.min + vec2(6.0, 6.0),
         pos2(rect.max.x - 6.0, rect.max.y - text_h - labels_h - 6.0),
@@ -152,26 +176,6 @@ pub fn draw(
     if e.under.iter().any(|&n| n > 0) {
         painter.circle_filled(graph.left_top() + vec2(4.0, 4.0), 4.0, colors.clip_under);
     }
-    // Indicateurs.
-    let source = match e.source {
-        Source::Raw { bits, .. } => format!("RAW {bits} bits"),
-        Source::Flat => "8 bits".into(),
-    };
-    let over = e.over_fraction() * 100.0;
-    let under = e.under_fraction() * 100.0;
-    let text = format!(
-        "{source} · marge {} IL · saturés {} % · bouchés {} %",
-        french(e.headroom_ev() as f64, 2),
-        french(over, 2),
-        french(under, 2)
-    );
-    painter.text(
-        pos2(rect.min.x + 6.0, rect.max.y - 5.0),
-        Align2::LEFT_BOTTOM,
-        text,
-        FontId::proportional(11.0),
-        Color32::from_gray(225),
-    );
 }
 
 /// Couleurs des zones.

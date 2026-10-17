@@ -40,6 +40,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
 | `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
 | `[gui.histogram]` | Histogramme du plein écran (affiché, échelle IL / linéaire, taille, IL montrés), zones (affichées, opacité), seuils des badges | interface |
+| `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur | interface |
 | `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
 | `[keys]` | Raccourcis par action, qui remplacent ceux des profils (voir [gui.md](gui.md#actions-et-raccourcis-actionsrs)) | interface |
 

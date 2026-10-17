@@ -20,6 +20,7 @@ mod grid;
 mod histogram;
 mod loader;
 mod marks;
+mod meta;
 mod settings;
 mod textures;
 mod trace;

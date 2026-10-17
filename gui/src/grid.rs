@@ -81,6 +81,7 @@ pub fn navigate(
         | Action::ToggleHistogram
         | Action::HistogramScale
         | Action::ToggleClipping
+        | Action::ToggleMetadata
         | Action::Open
         | Action::ToggleZoom
         | Action::ToggleSource

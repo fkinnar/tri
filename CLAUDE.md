@@ -446,8 +446,12 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      voir : histogramme dans la grille (panneau de droite, avec les métadonnées ?),
      profondeur réelle des TIFF / PNG 16 bits, analyse produite au passage par le rendu
      RAW (même décompression).
-  3. **Panneau des métadonnées** à droite (grille et plein écran, masquable) : LibRaw
-     pour les RAW, lecteur EXIF à choisir (maintenance, licence) pour les autres.
+  3. [x] **Panneau des métadonnées** à droite (grille et plein écran, masquable,
+     Maj+M), fait le 17/10/2026 : `src/metadata.rs` (LibRaw dès l'ouverture, complété
+     par l'EXIF du JPEG embarqué pour la correction et le mode ; `kamadak-exif`,
+     BSD-2-Clause, pour les images plates ; lignes en français), lecture en fond dans
+     l'interface, `tri <dossier> --metadata`. En grille, le panneau montre aussi
+     l'histogramme de l'image sélectionnée.
   4. **Déchargement d'une carte** (demandé le 17/10/2026, pas urgent) : copier le
      contenu d'un volume amovible vers un dossier local, puis trier dans le même outil
      (workflow de l'utilisateur : vider la carte, trier, développer). Doit aussi marcher

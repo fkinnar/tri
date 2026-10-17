@@ -107,6 +107,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     retirent au clic, comme au clavier ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
+- **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
+  (`Maj+M`, `[gui.metadata]`) : lignes du moteur (`Metadata::rows`, voir
+  [metadata.md](metadata.md)) pour l'image sélectionnée, valeurs à la ligne plutôt que
+  d'élargir le panneau (noms d'objectif). Lecture dans un fil à part (`meta.rs`,
+  `MetaLoader`) : quelques ms en local, mais un NAS ne doit pas figer l'interface ;
+  résultats gardés en mémoire, oubliés au changement de dossier. En grille, le panneau
+  montre aussi l'**histogramme** de l'image sélectionnée (en plein écran, il est sur
+  l'image) ; ses indicateurs passent à la ligne quand le panneau est étroit.
 - **Histogramme et alertes d'exposition** (17/10/2026), calculés par le moteur sur les
   **données du capteur** pour un RAW, même quand le JPEG boîtier est à l'écran (voir
   [exposure.md](exposure.md)) ; le dessin est dans `histogram.rs` :
@@ -280,7 +288,8 @@ Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
 Maj+D ; `core.view.refresh_folders` : F5 ; `core.view.histogram` : i ;
-`core.view.histogram_scale` : Maj+I ; `core.view.clipping` : o.
+`core.view.histogram_scale` : Maj+I ; `core.view.clipping` : o ; `core.view.metadata` :
+Maj+M.
 
 Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant
 pas « ° ») **puis** comme caractère, parfois dans une image suivante (constaté le
@@ -415,6 +424,9 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Métadonnées (17/10/2026) : la ligne « Dimensions » de l'image sélectionnée apparaît après
+lecture en fond (64 × 48), `Maj+M` masque le panneau.
 
 Exposition (17/10/2026) : une image blanche ajoutée au dossier donne une part saturée
 > 99 % (badge) ; en plein écran, histogramme affiché par défaut, `i` le masque, `Maj+I`
