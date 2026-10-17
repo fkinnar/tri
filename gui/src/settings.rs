@@ -4,6 +4,7 @@
 //! Même fichier que le moteur (voir `tri::settings`) ; toutes les valeurs par défaut sont
 //! dans `doc/config.example.toml`, qu'un test compare au code.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use eframe::egui::{self, Color32};
@@ -33,6 +34,9 @@ pub struct AppSettings {
     pub xmp: XmpSection,
     /// `[gui]`.
     pub gui: GuiSettings,
+    /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
+    /// qui remplacent ceux des profils pour les actions citées.
+    pub keys: BTreeMap<String, Vec<String>>,
 }
 
 impl AppSettings {
@@ -45,6 +49,12 @@ impl AppSettings {
             scheduler: self.scheduler,
             xmp: self.xmp,
         }
+    }
+
+    /// Table des raccourcis : profils de `[gui] keys`, puis section `[keys]` ; avec les
+    /// problèmes à signaler (touche inconnue, conflit...).
+    pub fn keymap(&self) -> (Keymap, Vec<String>) {
+        self.gui.keymap().with_overrides(&self.keys)
     }
 }
 
@@ -154,6 +164,10 @@ pub struct GridSettings {
     pub name_chars: usize,
     /// Vignettes gardées en mémoire graphique au plus.
     pub textures: usize,
+    /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
+    pub marks: f32,
+    /// Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
+    pub rejected_opacity: f32,
 }
 
 impl Default for GridSettings {
@@ -165,6 +179,8 @@ impl Default for GridSettings {
             padding: 6.0,
             name_chars: 24,
             textures: 600,
+            marks: 12.0,
+            rejected_opacity: 0.35,
         }
     }
 }
@@ -184,6 +200,8 @@ pub struct ViewSettings {
     /// Déplacement d'une image zoomée par appui sur une touche (Maj + flèches, Maj + hjkl),
     /// en fraction de la largeur (ou hauteur) de la vue.
     pub pan_step: f32,
+    /// Taille des notes (étoiles, couleurs, drapeau) en plein écran.
+    pub marks: f32,
 }
 
 impl Default for ViewSettings {
@@ -192,6 +210,7 @@ impl Default for ViewSettings {
             full_raw_dwell_ms: 400,
             textures: 8,
             pan_step: 0.2,
+            marks: 18.0,
         }
     }
 }
@@ -218,6 +237,22 @@ pub struct Colors {
     pub error: Color,
     /// Fond du plein écran.
     pub view_background: Color,
+    /// Étoiles.
+    pub stars: Color,
+    /// Pastille « acceptée ».
+    pub accepted: Color,
+    /// Pastille « rejetée ».
+    pub rejected: Color,
+    /// Couleurs de notation, telles qu'affichées.
+    pub red: Color,
+    /// Jaune.
+    pub yellow: Color,
+    /// Vert.
+    pub green: Color,
+    /// Bleu.
+    pub blue: Color,
+    /// Violet.
+    pub purple: Color,
 }
 
 impl Default for Colors {
@@ -228,6 +263,14 @@ impl Default for Colors {
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
             view_background: Color([12, 12, 12]),
+            stars: Color([240, 196, 64]),
+            accepted: Color([70, 170, 90]),
+            rejected: Color([215, 70, 70]),
+            red: Color([225, 65, 65]),
+            yellow: Color([230, 200, 50]),
+            green: Color([70, 180, 80]),
+            blue: Color([65, 130, 225]),
+            purple: Color([165, 85, 210]),
         }
     }
 }
@@ -335,6 +378,28 @@ mod tests {
             let err = tri::settings::parse::<AppSettings>(text).unwrap_err();
             assert!(err.contains(culprit), "{text} : {err}");
         }
+    }
+
+    #[test]
+    fn keys_section_overrides_profile_keys() {
+        let parsed: AppSettings = tri::settings::parse(
+            r#"
+            [keys]
+            "core.flag.accept" = ["a"]
+            "core.nope" = ["z"]
+            "#,
+        )
+        .unwrap();
+        let (keymap, warnings) = parsed.keymap();
+        assert_eq!(
+            keymap.action(egui::Key::A, egui::Modifiers::NONE),
+            Some(crate::actions::Action::Flag(tri::xmp::Flag::Accepted))
+        );
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            AppSettings::default().keymap().1.is_empty(),
+            "défauts sans conflit"
+        );
     }
 
     #[test]

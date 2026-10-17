@@ -1,14 +1,16 @@
 //! Actions nommées et raccourcis clavier.
 //!
 //! Une touche ne déclenche jamais directement une fonction : elle est traduite en
-//! [`Action`], identifiée par un nom stable (`core.nav.next`...). Le futur fichier de
-//! raccourcis JSON associera des touches à ces noms ; les plugins auront leur propre espace
-//! (`plugin.<nom>.*`). Un raccourci peut être une séquence de touches (`g g`, comme dans
-//! vim) : voir [`Sequencer`]. Voir `doc/gui.md`.
+//! [`Action`], identifiée par un nom stable (`core.nav.next`...). La section `[keys]` du
+//! fichier de configuration associe des touches à ces noms ; les plugins auront leur propre
+//! espace (`plugin.<nom>.*`). Un raccourci peut être une séquence de touches (`g g`, comme
+//! dans vim) : voir [`Sequencer`]. Voir `doc/gui.md`.
 
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use eframe::egui::{Key, Modifiers};
+use tri::xmp::{Color, Flag};
 
 /// Ce que l'utilisateur demande, indépendamment de la touche (ou du clic) utilisée.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -49,13 +51,19 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
+    /// Noter : 0 à 5 étoiles.
+    Stars(u8),
+    /// Ajouter ou retirer une couleur.
+    Color(Color),
+    /// Accepter, rejeter, ou retirer le drapeau.
+    Flag(Flag),
     /// Quitter l'application.
     Quit,
 }
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 19] = [
+    pub const ALL: [Action; 33] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -75,6 +83,20 @@ impl Action {
         Action::Back,
         Action::Help,
         Action::Quit,
+        Action::Stars(0),
+        Action::Stars(1),
+        Action::Stars(2),
+        Action::Stars(3),
+        Action::Stars(4),
+        Action::Stars(5),
+        Action::Color(Color::Red),
+        Action::Color(Color::Yellow),
+        Action::Color(Color::Green),
+        Action::Color(Color::Blue),
+        Action::Color(Color::Purple),
+        Action::Flag(Flag::Accepted),
+        Action::Flag(Flag::Rejected),
+        Action::Flag(Flag::None),
     ];
 
     /// Action correspondant à un identifiant (fichier de raccourcis, scripts de capture).
@@ -104,6 +126,20 @@ impl Action {
             Action::Back => "Fermer / revenir",
             Action::Help => "Afficher ou masquer cette aide",
             Action::Quit => "Quitter",
+            Action::Stars(0) => "Retirer les étoiles",
+            Action::Stars(1) => "1 étoile",
+            Action::Stars(2) => "2 étoiles",
+            Action::Stars(3) => "3 étoiles",
+            Action::Stars(4) => "4 étoiles",
+            Action::Stars(_) => "5 étoiles",
+            Action::Color(Color::Red) => "Couleur rouge (ajouter / retirer)",
+            Action::Color(Color::Yellow) => "Couleur jaune (ajouter / retirer)",
+            Action::Color(Color::Green) => "Couleur verte (ajouter / retirer)",
+            Action::Color(Color::Blue) => "Couleur bleue (ajouter / retirer)",
+            Action::Color(Color::Purple) => "Couleur violette (ajouter / retirer)",
+            Action::Flag(Flag::Accepted) => "Accepter",
+            Action::Flag(Flag::Rejected) => "Rejeter",
+            Action::Flag(Flag::None) => "Ni acceptée ni rejetée",
         }
     }
 
@@ -134,43 +170,98 @@ impl Action {
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::Quit => "core.app.quit",
+            Action::Stars(0) => "core.rate.star.0",
+            Action::Stars(1) => "core.rate.star.1",
+            Action::Stars(2) => "core.rate.star.2",
+            Action::Stars(3) => "core.rate.star.3",
+            Action::Stars(4) => "core.rate.star.4",
+            Action::Stars(_) => "core.rate.star.5",
+            Action::Color(Color::Red) => "core.rate.color.red",
+            Action::Color(Color::Yellow) => "core.rate.color.yellow",
+            Action::Color(Color::Green) => "core.rate.color.green",
+            Action::Color(Color::Blue) => "core.rate.color.blue",
+            Action::Color(Color::Purple) => "core.rate.color.purple",
+            Action::Flag(Flag::Accepted) => "core.flag.accept",
+            Action::Flag(Flag::Rejected) => "core.flag.reject",
+            Action::Flag(Flag::None) => "core.flag.none",
         }
     }
 }
 
-/// Une combinaison de touches : une touche, avec ou sans Maj. Les autres modificateurs
-/// (Ctrl, Cmd, Alt) sont réservés au système et ne déclenchent rien ici (sur macOS,
-/// Ctrl + flèches change de bureau).
+/// Ce qui déclenche un raccourci : une touche, ou un caractère tapé. Les caractères servent
+/// aux touches qu'egui ne nomme pas (« ° » de l'AZERTY) ; une touche nommée par egui est
+/// toujours une [`Trigger::Key`], pour ne pas réagir deux fois à la même frappe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Trigger {
+    /// Touche.
+    Key(Key),
+    /// Caractère tapé.
+    Char(char),
+}
+
+/// Une combinaison : une touche avec ou sans Maj et Ctrl, ou un caractère. Cmd et Alt sont
+/// réservés au système et ne déclenchent rien ici ; Ctrl + flèches aussi, par convention
+/// (sur macOS, cela change de bureau).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Chord {
-    /// Touche.
-    pub key: Key,
-    /// Maj enfoncée.
+    /// Touche ou caractère.
+    pub trigger: Trigger,
+    /// Maj enfoncée (toujours faux pour un caractère : Maj fait partie du caractère).
     pub shift: bool,
+    /// Ctrl enfoncée.
+    pub ctrl: bool,
 }
 
 impl Chord {
-    /// Combinaison d'une touche pressée, `None` si Ctrl, Cmd ou Alt est enfoncé.
+    /// Combinaison d'une touche pressée, `None` si Cmd ou Alt est enfoncé. Sous Linux et
+    /// Windows, egui signale Ctrl aussi comme `command` : seul `mac_cmd`, ou `command` sans
+    /// Ctrl, désigne Cmd.
     pub fn from_event(key: Key, modifiers: Modifiers) -> Option<Chord> {
-        if modifiers.ctrl || modifiers.command || modifiers.alt || modifiers.mac_cmd {
+        if modifiers.alt || modifiers.mac_cmd || (modifiers.command && !modifiers.ctrl) {
             return None;
         }
         Some(Chord {
-            key,
+            trigger: Trigger::Key(key),
             shift: modifiers.shift,
+            ctrl: modifiers.ctrl,
         })
+    }
+
+    /// Combinaison d'un caractère tapé.
+    pub const fn char(c: char) -> Chord {
+        Chord {
+            trigger: Trigger::Char(c),
+            shift: false,
+            ctrl: false,
+        }
     }
 }
 
 const fn plain(key: Key) -> Chord {
-    Chord { key, shift: false }
+    Chord {
+        trigger: Trigger::Key(key),
+        shift: false,
+        ctrl: false,
+    }
 }
 
 const fn shifted(key: Key) -> Chord {
-    Chord { key, shift: true }
+    Chord {
+        trigger: Trigger::Key(key),
+        shift: true,
+        ctrl: false,
+    }
 }
 
-/// Un raccourci : une touche, ou une séquence de touches (`g g`).
+const fn ctrl(key: Key) -> Chord {
+    Chord {
+        trigger: Trigger::Key(key),
+        shift: false,
+        ctrl: true,
+    }
+}
+
+/// Un raccourci d'un profil : une touche, ou une séquence de touches (`g g`).
 type Binding = (&'static [Chord], Action);
 
 /// Profil de raccourcis livré par défaut. Dans le fichier de configuration : `"classic"`
@@ -180,8 +271,8 @@ type Binding = (&'static [Chord], Action);
 pub enum Profile {
     /// Flèches, Début / Fin, Page préc. / suiv. ; Maj + flèches dans une image zoomée.
     Classic,
-    /// hjkl, gg / G, u / d (à la place de Ctrl-u / Ctrl-d) ; Maj + hjkl dans une image
-    /// zoomée.
+    /// hjkl, gg / G, Ctrl+U / Ctrl+D ; Maj + hjkl dans une image zoomée. `u` reste libre
+    /// pour l'annulation (à venir), comme dans vim.
     Vim,
 }
 
@@ -219,8 +310,8 @@ const VIM: &[Binding] = {
         (&[plain(Key::J)], NavDown),
         (&[plain(Key::G), plain(Key::G)], NavFirst),
         (&[shifted(Key::G)], NavLast),
-        (&[plain(Key::U)], NavPageUp),
-        (&[plain(Key::D)], NavPageDown),
+        (&[ctrl(Key::U)], NavPageUp),
+        (&[ctrl(Key::D)], NavPageDown),
         (&[plain(Key::F)], FilterCycle),
         (&[plain(Key::Enter)], Open),
         (&[plain(Key::Z)], ToggleZoom),
@@ -237,20 +328,56 @@ const VIM: &[Binding] = {
     ]
 };
 
+/// Notation, commune aux deux profils, pensée aussi pour l'AZERTY : chiffres avec ou sans Maj
+/// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY) et
+/// « , » (pavé numérique), drapeaux sur Maj + P / X / U (`u` seul est réservé à
+/// l'annulation).
+const RATING: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::Num0)], Stars(0)),
+        (&[shifted(Key::Num0)], Stars(0)),
+        (&[plain(Key::Num1)], Stars(1)),
+        (&[shifted(Key::Num1)], Stars(1)),
+        (&[plain(Key::Num2)], Stars(2)),
+        (&[shifted(Key::Num2)], Stars(2)),
+        (&[plain(Key::Num3)], Stars(3)),
+        (&[shifted(Key::Num3)], Stars(3)),
+        (&[plain(Key::Num4)], Stars(4)),
+        (&[shifted(Key::Num4)], Stars(4)),
+        (&[plain(Key::Num5)], Stars(5)),
+        (&[shifted(Key::Num5)], Stars(5)),
+        (&[plain(Key::Num6)], Color(tri::xmp::Color::Red)),
+        (&[shifted(Key::Num6)], Color(tri::xmp::Color::Red)),
+        (&[plain(Key::Num7)], Color(tri::xmp::Color::Yellow)),
+        (&[shifted(Key::Num7)], Color(tri::xmp::Color::Yellow)),
+        (&[plain(Key::Num8)], Color(tri::xmp::Color::Green)),
+        (&[shifted(Key::Num8)], Color(tri::xmp::Color::Green)),
+        (&[plain(Key::Num9)], Color(tri::xmp::Color::Blue)),
+        (&[shifted(Key::Num9)], Color(tri::xmp::Color::Blue)),
+        (&[Chord::char('°')], Color(tri::xmp::Color::Purple)),
+        (&[plain(Key::Comma)], Color(tri::xmp::Color::Purple)),
+        (&[shifted(Key::P)], Flag(tri::xmp::Flag::Accepted)),
+        (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
+        (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
+    ]
+};
+
 impl Profile {
-    /// Raccourcis du profil.
-    pub fn bindings(self) -> &'static [Binding] {
-        match self {
+    /// Raccourcis du profil, notation comprise.
+    pub fn bindings(self) -> impl Iterator<Item = &'static Binding> {
+        let own = match self {
             Profile::Classic => CLASSIC,
             Profile::Vim => VIM,
-        }
+        };
+        own.iter().chain(RATING)
     }
 }
 
 /// Table raccourci → action.
 #[derive(Clone, Debug)]
 pub struct Keymap {
-    bindings: Vec<Binding>,
+    bindings: Vec<(Vec<Chord>, Action)>,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -267,11 +394,11 @@ enum Lookup {
 impl Keymap {
     /// Union de plusieurs profils (le premier l'emporte en cas de conflit).
     pub fn from_profiles(profiles: &[Profile]) -> Keymap {
-        let mut bindings: Vec<Binding> = Vec::new();
+        let mut bindings: Vec<(Vec<Chord>, Action)> = Vec::new();
         for profile in profiles {
             for &(keys, action) in profile.bindings() {
-                if !bindings.iter().any(|(k, _)| *k == keys) {
-                    bindings.push((keys, action));
+                if !bindings.iter().any(|(k, _)| k == keys) {
+                    bindings.push((keys.to_vec(), action));
                 }
             }
         }
@@ -288,6 +415,82 @@ impl Keymap {
         }
     }
 
+    /// Applique la section `[keys]` du fichier de configuration : pour chaque action citée
+    /// (par son identifiant), ses raccourcis **remplacent** ceux des profils (liste vide :
+    /// plus aucun). Renvoie aussi les problèmes à signaler : action ou touche inconnue,
+    /// raccourci attribué à deux actions (le premier dans l'ordre du fichier, trié par
+    /// identifiant, est gardé ; un raccourci du fichier l'emporte sur celui d'un profil),
+    /// raccourci qui ne peut pas se déclencher car il commence une séquence plus longue.
+    pub fn with_overrides(
+        mut self,
+        overrides: &BTreeMap<String, Vec<String>>,
+    ) -> (Keymap, Vec<String>) {
+        let mut warnings = Vec::new();
+        let mut custom: Vec<(Vec<Chord>, Action, &str)> = Vec::new();
+        let mut replaced: Vec<Action> = Vec::new();
+        for (id, specs) in overrides {
+            let Some(action) = Action::from_id(id) else {
+                warnings.push(format!("[keys] : action inconnue « {id} »"));
+                continue;
+            };
+            replaced.push(action);
+            for spec in specs {
+                match parse_keys(spec) {
+                    Ok(keys) => custom.push((keys, action, spec)),
+                    Err(e) => warnings.push(format!("[keys] {id} : {e}")),
+                }
+            }
+        }
+        self.bindings.retain(|(_, a)| !replaced.contains(a));
+        let mut added: Vec<(Vec<Chord>, Action)> = Vec::new();
+        for (keys, action, spec) in custom {
+            if let Some((_, other)) = added.iter().find(|(k, _)| *k == keys) {
+                if *other != action {
+                    warnings.push(format!(
+                        "[keys] « {spec} » attribué à {} et à {} : gardé pour {}",
+                        other.id(),
+                        action.id(),
+                        other.id()
+                    ));
+                }
+                continue;
+            }
+            if let Some(i) = self.bindings.iter().position(|(k, _)| *k == keys) {
+                warnings.push(format!(
+                    "[keys] « {spec} » ({}) remplace le raccourci de {}",
+                    action.id(),
+                    self.bindings[i].1.id()
+                ));
+                self.bindings.remove(i);
+            }
+            added.push((keys, action));
+        }
+        self.bindings.extend(added);
+        for (keys, action) in &self.bindings {
+            if let Some((longer, _)) = self
+                .bindings
+                .iter()
+                .find(|(l, _)| l.len() > keys.len() && l.starts_with(keys))
+            {
+                warnings.push(format!(
+                    "« {} » ({}) ne se déclenche jamais : c'est le début de « {} »",
+                    sequence_label(keys),
+                    action.id(),
+                    sequence_label(longer)
+                ));
+            }
+        }
+        (self, warnings)
+    }
+
+    /// Vrai si le caractère `c` sert dans un raccourci : seuls ceux-là sont passés au
+    /// [`Sequencer`] (les autres caractères tapés interrompraient une séquence).
+    pub fn uses_char(&self, c: char) -> bool {
+        self.bindings
+            .iter()
+            .any(|(k, _)| k.contains(&Chord::char(c)))
+    }
+
     fn lookup(&self, keys: &[Chord]) -> Lookup {
         if self
             .bindings
@@ -296,34 +499,136 @@ impl Keymap {
         {
             return Lookup::Prefix;
         }
-        match self.bindings.iter().find(|(k, _)| *k == keys) {
+        match self.bindings.iter().find(|(k, _)| k == keys) {
             Some(&(_, action)) => Lookup::Action(action),
             None => Lookup::None,
         }
     }
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
-    /// pour l'aide.
+    /// pour l'aide. Une touche liée avec et sans Maj n'apparaît qu'une fois (« 3 », pas
+    /// « 3, Maj+3 »).
     pub fn keys_for(&self, action: Action) -> Vec<String> {
-        let mut keys: Vec<String> = self
+        let mine: Vec<&Vec<Chord>> = self
             .bindings
             .iter()
             .filter(|(_, a)| *a == action)
-            .map(|(k, _)| sequence_label(k))
+            .map(|(k, _)| k)
             .collect();
-        keys.dedup();
+        let mut keys: Vec<String> = Vec::new();
+        for k in &mine {
+            let unshifted: Vec<Chord> = k.iter().map(|c| Chord { shift: false, ..*c }).collect();
+            let shift_variant = k.iter().any(|c| c.shift) && mine.contains(&&unshifted);
+            let label = sequence_label(k);
+            if !shift_variant && !keys.contains(&label) {
+                keys.push(label);
+            }
+        }
         keys
     }
 }
 
-/// Nom lisible d'une combinaison (« Maj+Flèche gauche », « g »).
-fn chord_label(c: &Chord) -> String {
-    let name = key_label(c.key);
-    if c.shift && c.key != Key::Questionmark {
-        format!("Maj+{name}")
-    } else {
-        name
+/// Touche désignée par `name` : nom affiché par l'aide (« Flèche gauche », « Échap »,
+/// « g »), ou nom d'egui (« ArrowLeft », « Escape », « PageUp », « 1 »...), sans tenir
+/// compte de la casse.
+fn key_named(name: &str) -> Option<Key> {
+    let lower = name.to_lowercase();
+    Key::ALL
+        .iter()
+        .copied()
+        .find(|&k| key_label(k).to_lowercase() == lower)
+        .or_else(|| Key::from_name(name))
+        .or_else(|| {
+            Key::ALL
+                .iter()
+                .copied()
+                .find(|k| k.name().to_lowercase() == lower)
+        })
+}
+
+/// Retire le préfixe `prefix` (« Maj+ ») de `s`, sans tenir compte de la casse.
+fn strip_prefix_ignore_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    // Un « + » seul est une touche, pas un modificateur vide.
+    (s.len() > prefix.len() && s.get(..prefix.len())?.eq_ignore_ascii_case(prefix))
+        .then(|| &s[prefix.len()..])
+}
+
+/// Une combinaison écrite dans le fichier de configuration : « Maj+P », « Ctrl+u »,
+/// « Flèche gauche », « PageUp », « ° ». Une majuscule seule vaut Maj + la lettre (« G »,
+/// comme dans vim). Un caractère qui n'est pas une touche connue d'egui devient un
+/// [`Trigger::Char`] (sans modificateur).
+fn parse_chord(text: &str) -> Result<Chord, String> {
+    let (mut rest, mut shift, mut ctrl) = (text, false, false);
+    loop {
+        if let Some(r) = strip_prefix_ignore_case(rest, "Maj+")
+            .or_else(|| strip_prefix_ignore_case(rest, "Shift+"))
+        {
+            (rest, shift) = (r, true);
+        } else if let Some(r) = strip_prefix_ignore_case(rest, "Ctrl+") {
+            (rest, ctrl) = (r, true);
+        } else {
+            break;
+        }
     }
+    let mut chars = rest.chars();
+    let single = match (chars.next(), chars.next()) {
+        (Some(c), None) => Some(c),
+        _ => None,
+    };
+    if single.is_some_and(|c| c.is_ascii_uppercase()) {
+        shift = true;
+    }
+    match key_named(rest) {
+        Some(key) => Ok(Chord {
+            trigger: Trigger::Key(key),
+            shift,
+            ctrl,
+        }),
+        None => match single {
+            Some(c) if !shift && !ctrl => Ok(Chord::char(c)),
+            _ => Err(format!("touche inconnue « {text} »")),
+        },
+    }
+}
+
+/// Un raccourci écrit dans le fichier de configuration : une combinaison, ou une séquence
+/// séparée par des espaces (« g g »). Les noms en deux mots (« Flèche gauche ») sont
+/// reconnus.
+pub fn parse_keys(text: &str) -> Result<Vec<Chord>, String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() {
+        return Err("raccourci vide".into());
+    }
+    let mut chords = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        if i + 1 < words.len()
+            && let Ok(chord) = parse_chord(&format!("{} {}", words[i], words[i + 1]))
+        {
+            chords.push(chord);
+            i += 2;
+            continue;
+        }
+        chords.push(parse_chord(words[i])?);
+        i += 1;
+    }
+    Ok(chords)
+}
+
+/// Nom lisible d'une combinaison (« Maj+Flèche gauche », « Ctrl+u », « g », « ° »).
+fn chord_label(c: &Chord) -> String {
+    let name = match c.trigger {
+        Trigger::Key(key) => key_label(key),
+        Trigger::Char(ch) => ch.to_string(),
+    };
+    let mut label = String::new();
+    if c.ctrl {
+        label.push_str("Ctrl+");
+    }
+    if c.shift && c.trigger != Trigger::Key(Key::Questionmark) {
+        label.push_str("Maj+");
+    }
+    label + &name
 }
 
 /// Nom lisible d'une séquence : « gg » comme on la tape quand ce ne sont que des lettres,
@@ -354,6 +659,7 @@ pub fn key_label(key: Key) -> String {
         Key::Enter => "Entrée".into(),
         Key::Space => "Espace".into(),
         Key::Questionmark => "?".into(),
+        Key::Comma => ",".into(),
         other => {
             let name = other.name();
             // Lettres en minuscules, comme on les tape (g et Maj+G sont deux touches).
@@ -476,15 +782,89 @@ mod tests {
             None,
             "Cmd+Q reste au système"
         );
-        assert_eq!(km.action(Key::L, Modifiers::CTRL), None);
+        assert_eq!(km.action(Key::Q, Modifiers::MAC_CMD), None);
+        assert_eq!(km.action(Key::L, Modifiers::CTRL), None, "Ctrl+L : libre");
         assert_eq!(km.action(Key::L, Modifiers::ALT), None);
-        assert_eq!(Chord::from_event(Key::ArrowLeft, Modifiers::CTRL), None);
+        assert_eq!(Chord::from_event(Key::ArrowLeft, Modifiers::ALT), None);
+    }
+
+    #[test]
+    fn vim_pages_with_ctrl_u_and_ctrl_d_and_keeps_u_free() {
+        let km = Keymap::default();
+        // Sous Linux et Windows, egui signale Ctrl aussi comme `command`.
+        let linux_ctrl = Modifiers {
+            ctrl: true,
+            command: true,
+            ..Modifiers::NONE
+        };
+        assert_eq!(km.action(Key::U, Modifiers::CTRL), Some(Action::NavPageUp));
+        assert_eq!(km.action(Key::D, linux_ctrl), Some(Action::NavPageDown));
+        assert_eq!(
+            km.action(Key::U, Modifiers::NONE),
+            None,
+            "réservé à l'annulation"
+        );
+        assert_eq!(km.action(Key::D, Modifiers::NONE), None);
+        assert_eq!(km.keys_for(Action::NavPageUp), ["Page préc.", "Ctrl+u"]);
+    }
+
+    #[test]
+    fn rating_keys_work_with_or_without_shift() {
+        let km = Keymap::default();
+        for (key, action) in [
+            (Key::Num0, Action::Stars(0)),
+            (Key::Num3, Action::Stars(3)),
+            (Key::Num5, Action::Stars(5)),
+            (Key::Num6, Action::Color(Color::Red)),
+            (Key::Num9, Action::Color(Color::Blue)),
+        ] {
+            assert_eq!(km.action(key, Modifiers::NONE), Some(action), "{key:?}");
+            assert_eq!(
+                km.action(key, Modifiers::SHIFT),
+                Some(action),
+                "Maj+{key:?}"
+            );
+        }
+        assert_eq!(
+            km.action(Key::Comma, Modifiers::NONE),
+            Some(Action::Color(Color::Purple))
+        );
+        assert_eq!(
+            km.action(Key::P, Modifiers::SHIFT),
+            Some(Action::Flag(Flag::Accepted))
+        );
+        assert_eq!(
+            km.action(Key::X, Modifiers::SHIFT),
+            Some(Action::Flag(Flag::Rejected))
+        );
+        assert_eq!(
+            km.action(Key::U, Modifiers::SHIFT),
+            Some(Action::Flag(Flag::None))
+        );
+        assert_eq!(
+            km.keys_for(Action::Stars(3)),
+            ["3"],
+            "Maj+3 implicite dans l'aide"
+        );
+        assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ","]);
+    }
+
+    #[test]
+    fn a_bound_character_triggers_its_action() {
+        let km = Keymap::default();
+        assert!(km.uses_char('°'));
+        assert!(!km.uses_char('g'), "g est une touche, pas un caractère");
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        assert_eq!(
+            seq.feed(&km, Chord::char('°'), Instant::now()),
+            Some(Action::Color(Color::Purple))
+        );
     }
 
     #[test]
     fn profiles_cover_every_action_and_have_no_internal_conflict() {
         for profile in [Profile::Classic, Profile::Vim] {
-            let b = profile.bindings();
+            let b: Vec<&Binding> = profile.bindings().collect();
             for a in Action::ALL {
                 assert!(
                     b.iter().any(|(_, x)| *x == a),
@@ -592,5 +972,134 @@ mod tests {
         assert!(!seq.is_pending(t));
         // Une touche seule passe directement, sans attente.
         assert_eq!(seq.feed(&km, plain(Key::L), t), Some(Action::NavNext));
+    }
+
+    fn chord(key: Key, shift: bool, ctrl: bool) -> Chord {
+        Chord {
+            trigger: Trigger::Key(key),
+            shift,
+            ctrl,
+        }
+    }
+
+    #[test]
+    fn key_specs_are_parsed() {
+        let ok = |s: &str| parse_keys(s).unwrap();
+        assert_eq!(ok("p"), [plain(Key::P)]);
+        assert_eq!(ok("Maj+P"), [shifted(Key::P)]);
+        assert_eq!(ok("shift+p"), [shifted(Key::P)]);
+        assert_eq!(
+            ok("G"),
+            [shifted(Key::G)],
+            "majuscule = Maj, comme dans vim"
+        );
+        assert_eq!(ok("Ctrl+u"), [ctrl(Key::U)]);
+        assert_eq!(ok("Ctrl+Maj+u"), [chord(Key::U, true, true)]);
+        assert_eq!(ok("g g"), [plain(Key::G), plain(Key::G)]);
+        assert_eq!(ok("Flèche gauche"), [plain(Key::ArrowLeft)]);
+        assert_eq!(ok("Maj+Flèche gauche"), [shifted(Key::ArrowLeft)]);
+        assert_eq!(ok("ArrowLeft"), [plain(Key::ArrowLeft)]);
+        assert_eq!(ok("Échap"), [plain(Key::Escape)]);
+        assert_eq!(ok("Escape g"), [plain(Key::Escape), plain(Key::G)]);
+        assert_eq!(ok("Page préc."), [plain(Key::PageUp)]);
+        assert_eq!(ok("3"), [plain(Key::Num3)]);
+        assert_eq!(ok(","), [plain(Key::Comma)]);
+        assert_eq!(ok("+"), [plain(Key::Plus)]);
+        assert_eq!(ok("°"), [Chord::char('°')]);
+        assert!(parse_keys("").is_err());
+        assert!(parse_keys("Maj+°").is_err(), "Maj fait partie du caractère");
+        assert!(parse_keys("Hyper").unwrap_err().contains("Hyper"));
+    }
+
+    #[test]
+    fn every_help_label_reads_back_as_the_same_keys() {
+        let km = Keymap::default();
+        for (keys, _) in &km.bindings {
+            // « ? » s'affiche sans Maj : selon la disposition, il vient avec ou sans.
+            if keys == &[shifted(Key::Questionmark)] {
+                continue;
+            }
+            // « gg » s'écrit « g g » dans le fichier.
+            let label = sequence_label(keys);
+            let spec = if keys.len() > 1 && label.chars().count() == keys.len() {
+                label
+                    .chars()
+                    .map(String::from)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            } else {
+                label.replace(" puis ", " ")
+            };
+            assert_eq!(&parse_keys(&spec).unwrap(), keys, "« {spec} »");
+        }
+    }
+
+    fn overrides(entries: &[(&str, &[&str])]) -> BTreeMap<String, Vec<String>> {
+        entries
+            .iter()
+            .map(|(id, keys)| (id.to_string(), keys.iter().map(|k| k.to_string()).collect()))
+            .collect()
+    }
+
+    #[test]
+    fn config_keys_replace_the_profile_keys_of_an_action() {
+        let (km, warnings) =
+            Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["a"])]));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(
+            km.action(Key::A, Modifiers::NONE),
+            Some(Action::Flag(Flag::Accepted))
+        );
+        assert_eq!(km.action(Key::P, Modifiers::SHIFT), None, "Maj+P remplacé");
+        assert_eq!(km.keys_for(Action::Flag(Flag::Accepted)), ["a"]);
+
+        let (km, _) = Keymap::default().with_overrides(&overrides(&[("core.app.quit", &[])]));
+        assert_eq!(
+            km.action(Key::Q, Modifiers::NONE),
+            None,
+            "liste vide : plus de touche"
+        );
+    }
+
+    #[test]
+    fn config_problems_are_reported() {
+        let (km, warnings) = Keymap::default().with_overrides(&overrides(&[
+            ("core.nope", &["x"]),
+            ("core.flag.accept", &["Hyper", "b"]),
+            ("core.rate.star.1", &["Maj+P"]),
+        ]));
+        let all = warnings.join("\n");
+        assert!(all.contains("core.nope"), "{all}");
+        assert!(all.contains("Hyper"), "{all}");
+        // « b » était la bascule JPEG / RAW : le fichier l'emporte, et le dit.
+        assert!(all.contains("core.view.source"), "{all}");
+        assert_eq!(
+            km.action(Key::B, Modifiers::NONE),
+            Some(Action::Flag(Flag::Accepted))
+        );
+        assert_eq!(km.action(Key::P, Modifiers::SHIFT), Some(Action::Stars(1)));
+    }
+
+    #[test]
+    fn two_actions_on_the_same_key_keep_the_first() {
+        let (km, warnings) = Keymap::default().with_overrides(&overrides(&[
+            ("core.flag.accept", &["a"]),
+            ("core.flag.reject", &["a"]),
+        ]));
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_eq!(
+            km.action(Key::A, Modifiers::NONE),
+            Some(Action::Flag(Flag::Accepted))
+        );
+    }
+
+    #[test]
+    fn a_key_hidden_by_a_sequence_is_reported() {
+        let (_, warnings) =
+            Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));
+        assert!(
+            warnings.iter().any(|w| w.contains("gg")),
+            "g ne peut plus se déclencher : {warnings:?}"
+        );
     }
 }

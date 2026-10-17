@@ -79,7 +79,10 @@ pub fn navigate(
         | Action::PanDown
         | Action::Back
         | Action::Help
-        | Action::Quit => selected,
+        | Action::Quit
+        | Action::Stars(_)
+        | Action::Color(_)
+        | Action::Flag(_) => selected,
     }
 }
 

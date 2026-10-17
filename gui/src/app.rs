@@ -15,13 +15,16 @@ use eframe::egui::{
 use tri::cache::{Cache, Level};
 use tri::filter::{Filter, KindFilter, ungrouped};
 use tri::media::{MediaFile, MediaKind};
+use tri::notes::NoteBook;
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
+use tri::xmp::Flag;
 
 use crate::actions::{Action, Chord, Keymap, Sequencer};
 use crate::grid::{self, Layout};
 use crate::loader::Loader;
+use crate::marks;
 use crate::settings::{AppSettings, GuiSettings};
 use crate::textures::Lru;
 use crate::trace::trace;
@@ -102,7 +105,14 @@ pub struct TriApp {
     gui: GuiSettings,
     /// Problème de configuration à signaler (fichier invalide...), dans la barre d'état.
     warning: Option<String>,
+    /// Problèmes dans la section `[keys]` (touche inconnue, conflit...), dans la barre
+    /// d'état.
+    key_warnings: Vec<String>,
     all: Vec<MediaFile>,
+    /// Notes (étoiles, couleurs, drapeau) de toutes les images du dossier.
+    notes: NoteBook,
+    /// Dernière note impossible à écrire (sidecar mal formé, disque en lecture seule...).
+    note_error: Option<String>,
     filter: KindFilter,
     files: Vec<MediaFile>,
     status: Vec<Status>,
@@ -189,18 +199,26 @@ impl TriApp {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
+        let notes = NoteBook::load_files(&all, settings.xmp.sidecar);
+        let (keymap, key_warnings) = settings.keymap();
+        for warning in &key_warnings {
+            eprintln!("attention : {warning}");
+        }
         let mut app = TriApp {
             dir,
             settings: settings.engine(),
             warning,
+            key_warnings,
             all,
+            notes,
+            note_error: None,
             filter: KindFilter::All,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 3],
             engine: None,
             error,
-            keymap: gui.keymap(),
+            keymap,
             sequencer: Sequencer::new(gui.key_sequence_timeout()),
             mouse_active: false,
             pointer_moved: false,
@@ -371,6 +389,15 @@ impl TriApp {
                         modifiers,
                         ..
                     } => Chord::from_event(*key, *modifiers),
+                    // Seuls les caractères liés à un raccourci (« ° ») : les autres
+                    // accompagnent une touche déjà traitée.
+                    UiEvent::Text(text) => {
+                        let mut chars = text.chars();
+                        match (chars.next(), chars.next()) {
+                            (Some(c), None) if self.keymap.uses_char(c) => Some(Chord::char(c)),
+                            _ => None,
+                        }
+                    }
                     _ => None,
                 })
                 .collect()
@@ -441,6 +468,7 @@ impl TriApp {
             // En plein écran, seule la navigation image par image a un sens.
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
+            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate(action),
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -455,6 +483,31 @@ impl TriApp {
                 self.select(new);
             }
         }
+    }
+
+    /// Note l'image sélectionnée et écrit son sidecar. En cas d'échec, l'erreur est affichée
+    /// dans la barre d'état et la note affichée reste celle du disque.
+    fn rate(&mut self, action: Action) {
+        let Some(file) = self.files.get(self.selected) else {
+            return;
+        };
+        let multiple = self.settings.xmp.multiple_colors;
+        let result = self.notes.edit(&file.path, |n| match action {
+            Action::Stars(stars) => n.set_stars(stars),
+            Action::Color(color) => n.toggle_color(color, multiple),
+            Action::Flag(flag) => n.flag = flag,
+            _ => {}
+        });
+        self.note_error = match result {
+            Ok(changed) => {
+                trace(|| format!("notes écrites : {changed:?}"));
+                None
+            }
+            Err(e) => Some(format!(
+                "{} : note non enregistrée ({e})",
+                file_name(&file.path)
+            )),
+        };
     }
 
     fn select(&mut self, index: usize) {
@@ -784,6 +837,16 @@ impl TriApp {
             Align2::LEFT_TOP,
             &info,
         );
+        let notes = self.notes.notes(&file.path);
+        let size = self.gui.view.marks;
+        if *notes != tri::xmp::Notes::EMPTY {
+            let width = marks::row_width(notes, size);
+            let left_center = view_rect.left_bottom() + vec2(15.0, -15.0 - size / 2.0);
+            let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
+                .expand(size * 0.35);
+            painter.rect_filled(back, 4.0, Color32::from_black_alpha(170));
+            marks::row(&painter, left_center, notes, size, &self.gui.colors);
+        }
         let hint = match file.kind {
             MediaKind::Raw => "b : JPEG boîtier / RAW   z : 1:1   Échap : grille",
             MediaKind::Flat => "z : 1:1   Échap : grille",
@@ -860,6 +923,18 @@ impl TriApp {
             if let Some(file) = self.files.get(self.selected) {
                 ui.separator();
                 ui.label(file_name(&file.path));
+            }
+            if let Some(error) = &self.note_error {
+                ui.separator();
+                ui.colored_label(self.gui.colors.error, error);
+            }
+            if !self.key_warnings.is_empty() {
+                ui.separator();
+                ui.colored_label(
+                    self.gui.colors.error,
+                    format!("raccourcis : {} problème(s)", self.key_warnings.len()),
+                )
+                .on_hover_text(self.key_warnings.join("\n"));
             }
             if let Some(warning) = &self.warning {
                 // Le message de toml tient sur plusieurs lignes (extrait du fichier) : résumé
@@ -956,7 +1031,12 @@ impl TriApp {
                 let scale = (image_area.width() / size.x).min(image_area.height() / size.y);
                 let dest = Rect::from_center_size(image_area.center(), size * scale);
                 let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-                ui.painter().image(texture.id(), dest, uv, Color32::WHITE);
+                // Photo rejetée : estompée, comme dans Lightroom.
+                let tint = match self.notes.notes(&file.path).flag {
+                    Flag::Rejected => Color32::WHITE.gamma_multiply(g.rejected_opacity),
+                    _ => Color32::WHITE,
+                };
+                ui.painter().image(texture.id(), dest, uv, tint);
             }
             (None, Avail::Failed(error)) => {
                 ui.painter().text(
@@ -994,6 +1074,18 @@ impl TriApp {
             FontId::monospace(11.0),
             colors.badge.into(),
         );
+        // Notes en bas de la vignette, sur un fond sombre pour rester lisibles.
+        let notes = self.notes.notes(&file.path);
+        if *notes != tri::xmp::Notes::EMPTY {
+            let size = g.marks;
+            let left_center = pos2(image_area.min.x + 3.0, image_area.max.y - 3.0 - size / 2.0);
+            let width = marks::row_width(notes, size);
+            let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
+                .expand(2.0);
+            let painter = ui.painter();
+            painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
+            marks::row(painter, left_center, notes, size, &colors);
+        }
     }
 
     /// Script de démarrage (développement) : exécute les actions jusqu'à la prochaine pause.
@@ -1035,20 +1127,26 @@ impl TriApp {
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                egui::Grid::new("help").striped(true).show(ui, |ui| {
-                    for action in Action::ALL {
-                        // Identifiant technique au survol seulement (utile pour le futur
-                        // fichier de raccourcis).
-                        ui.label(action.label()).on_hover_text(action.id());
-                        // Chasse fixe : « l » et « I » restent distincts.
-                        ui.label(
-                            egui::RichText::new(self.keymap.keys_for(action).join(", "))
-                                .monospace()
-                                .strong(),
-                        );
-                        ui.end_row();
-                    }
-                });
+                // Défilante : la liste des actions dépasse la hauteur d'un petit écran.
+                let max_height = ui.ctx().content_rect().height() * 0.8;
+                ScrollArea::vertical()
+                    .max_height(max_height)
+                    .show(ui, |ui| {
+                        egui::Grid::new("help").striped(true).show(ui, |ui| {
+                            for action in Action::ALL {
+                                // Identifiant technique au survol seulement (utile pour le futur
+                                // fichier de raccourcis).
+                                ui.label(action.label()).on_hover_text(action.id());
+                                // Chasse fixe : « l » et « I » restent distincts.
+                                ui.label(
+                                    egui::RichText::new(self.keymap.keys_for(action).join(" / "))
+                                        .monospace()
+                                        .strong(),
+                                );
+                                ui.end_row();
+                            }
+                        });
+                    });
                 ui.add_space(6.0);
                 ui.weak("Échap pour fermer.");
             });
@@ -1290,6 +1388,45 @@ mod tests {
     }
 
     #[test]
+    fn rating_keys_write_the_sidecar_of_the_selected_image() {
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        let image = photos.join("img0.jpg");
+        press(&mut h, Key::Num3, Modifiers::SHIFT);
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        press(&mut h, Key::Num8, Modifiers::NONE);
+        h.event(UiEvent::Text("°".into()));
+        h.run_steps(3);
+        let on_disk = tri::xmp::read(&image).unwrap();
+        assert_eq!(on_disk.stars, 3);
+        assert_eq!(on_disk.flag, Flag::Rejected);
+        assert_eq!(
+            on_disk.colors,
+            [tri::xmp::Color::Purple],
+            "une seule couleur par défaut : le violet remplace le vert"
+        );
+        assert!(photos.join("img0.jpg.xmp").exists(), "convention darktable");
+        assert_eq!(h.state().notes.notes(&image), &on_disk);
+        assert!(h.state().note_error.is_none());
+        // L'image suivante n'est pas touchée.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&photos.join("img1.jpg")).unwrap().stars, 1);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
+    }
+
+    #[test]
+    fn a_malformed_sidecar_is_reported_and_left_alone() {
+        let (mut h, dir) = harness();
+        let sidecar = dir.path().join("photos").join("img0.jpg.xmp");
+        std::fs::write(&sidecar, "<pas du xml").unwrap();
+        h.state_mut().notes.reload();
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        assert!(h.state().note_error.is_some());
+        assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), "<pas du xml");
+    }
+
+    #[test]
     fn help_opens_and_closes_with_its_keys() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -1332,7 +1469,7 @@ mod tests {
         h.run_steps(3);
         press(&mut h, Key::F1, Modifiers::NONE);
         assert!(h.query_by_label("Image suivante").is_some());
-        assert!(h.query_by_label("Flèche droite, l").is_some());
+        assert!(h.query_by_label("Flèche droite / l").is_some());
         assert!(h.query_by_label("core.nav.next").is_none());
     }
 

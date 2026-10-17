@@ -36,6 +36,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   distincte : avant, survol (gris) et sélection (turquoise) donnaient l'impression de deux
   images sélectionnées. Le survol ne fait pas défiler la grille (la sélection bougerait avec
   elle) ; le clic et le clavier, si.
+- **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
+  (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),
+  [notes.md](notes.md)). Notes chargées à l'ouverture du dossier, avec celles déjà posées
+  par darktable, Lightroom ou digiKam. Affichage dessiné en formes (pas de glyphes, voir
+  `marks.rs`) : drapeau (coche verte / croix rouge), étoiles dorées, pastilles de couleur,
+  en bas à gauche de la vignette et du plein écran ; vignette d'une photo rejetée estompée
+  (`[gui.grid] rejected_opacity`). Une écriture impossible (sidecar mal formé, disque en
+  lecture seule) est signalée dans la barre d'état, et la note affichée reste celle du
+  disque. Une seule couleur par photo par défaut (`[xmp] multiple_colors`).
 - **Filtre par type** (touche `f`) : tout → RAW → plates. La sélection est conservée si
   l'image reste visible.
 - **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
@@ -128,13 +137,14 @@ puis on vérifie la netteté des candidates **à 100 %**.
 | `textures.rs` | Cache LRU des textures |
 | `view.rs` | Logique pure du plein écran : choix de la source, ajustement, 100 %, déplacement |
 | `loader.rs` | Thread de chargement des grandes images |
+| `marks.rs` | Dessin des notes : étoiles, pastilles de couleur, drapeau |
 
 ### Actions et raccourcis (`actions.rs`)
 
 Une touche n'appelle jamais une fonction directement : elle est traduite en `Action`, avec
 un identifiant stable (`core.nav.next`, `core.filter.cycle`…), comme décidé dans le
-`CLAUDE.md`. Le futur fichier de raccourcis JSON associera des touches à ces identifiants ;
-la souris déclenche les mêmes actions.
+`CLAUDE.md`. La section `[keys]` du fichier de configuration associe des touches à ces
+identifiants (voir plus bas) ; la souris déclenche les mêmes actions.
 
 Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 
@@ -143,7 +153,7 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.nav.prev` / `core.nav.next` | ← / → | h / l |
 | `core.nav.up` / `core.nav.down` | ↑ / ↓ | k / j |
 | `core.nav.first` / `core.nav.last` | Début / Fin | gg / Maj+G |
-| `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | u / d |
+| `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | Ctrl+U / Ctrl+D |
 | `core.filter.cycle` | f | f |
 | `core.view.open` | Entrée | Entrée |
 | `core.view.zoom` | z | z |
@@ -154,8 +164,54 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.app.help` | F1 | ? |
 | `core.app.quit` | q | q |
 
-Avec Ctrl, Cmd ou Alt, aucune action n'est déclenchée : ces combinaisons restent au système
-(Cmd+Q… ; sur macOS, Ctrl + flèches change de bureau, d'où Maj pour le déplacement).
+Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
+
+| Action | Touches |
+|---|---|
+| `core.rate.star.0` … `core.rate.star.5` | 0 … 5, avec ou sans Maj |
+| `core.rate.color.red` / `yellow` / `green` / `blue` | 6 / 7 / 8 / 9, avec ou sans Maj |
+| `core.rate.color.purple` | ° / , |
+| `core.flag.accept` / `reject` / `none` | Maj+P / Maj+X / Maj+U |
+
+Pourquoi : sur l'AZERTY, les chiffres de la rangée du haut demandent Maj, ceux du pavé
+numérique non ; egui-winit traduit la touche *logique* et, s'il ne la connaît pas (« & »,
+« é »), la touche *physique* : les deux donnent `Num1`… Exception : le 6 non majuscule de
+l'AZERTY est « - », reconnu comme `Minus`, d'où Maj sur la rangée du haut. Le violet est sur
+« ° » (Maj + la touche à droite du 0 en AZERTY), qu'egui ne nomme pas : c'est un
+**caractère**, reçu par l'événement `Text` ; seuls les caractères liés à un raccourci sont
+pris en compte (les autres interrompraient une séquence). La virgule (`Comma`) couvre le
+pavé numérique français (egui ne distingue pas le pavé) et celle de la rangée du bas. `u`
+seul reste libre pour l'annulation (à venir), comme dans vim.
+
+Une couleur déjà posée est retirée par la même touche ; en mode une couleur (défaut), une
+autre couleur remplace la précédente.
+
+Cmd et Alt ne déclenchent aucune action : ces combinaisons restent au système (Cmd+Q…).
+Ctrl est permis (Ctrl+U / Ctrl+D du profil vim) ; Sous Linux et Windows, egui signale aussi
+Ctrl comme `command` : seul `mac_cmd`, ou `command` sans Ctrl, désigne Cmd. Pas de raccourci
+Ctrl + flèches (sur macOS, cela change de bureau), d'où Maj pour le déplacement.
+
+**Section `[keys]`** du fichier de configuration, rangée par action :
+
+```toml
+[keys]
+"core.flag.accept" = ["Maj+P", "a"]
+"core.nav.first" = ["Début", "g g"]
+```
+
+- les raccourcis cités **remplacent** ceux des profils pour cette action (liste vide : plus
+  aucun) ; les profils (`[gui] keys`) restent la base ;
+- une touche s'écrit comme l'aide l'affiche (« Flèche gauche », « Page préc. », « Échap »,
+  « Maj+P », « Ctrl+u ») ou avec le nom d'egui (« ArrowLeft », « PageUp ») ; une majuscule
+  seule vaut Maj + la lettre (« G », comme dans vim) ; une séquence se sépare par des
+  espaces (« g g ») ; un caractère sans nom de touche (« ° ») est reconnu comme caractère ;
+- problèmes signalés au démarrage (stderr et barre d'état, détail au survol), sans
+  invalider le reste du fichier : action ou touche inconnue, raccourci attribué à deux
+  actions (le premier par ordre d'identifiant est gardé ; un raccourci du fichier l'emporte
+  sur celui d'un profil, et le dit), raccourci qui commence une séquence plus longue (il ne
+  se déclencherait jamais) ;
+- un test vérifie que chaque raccourci par défaut, écrit comme l'aide l'affiche, se relit à
+  l'identique.
 
 **Séquences de touches** : un raccourci peut être une suite de touches, comme `gg` (vim). La
 première est mise en attente (`Sequencer`) ; la suivante doit arriver avant
@@ -177,6 +233,8 @@ Les touches sont affichées par des **noms français en toutes lettres** (`key_l
 « l » et « I » restent distincts. Pas de symboles : « ⏴ » (nom fourni par egui) et même
 « ← » manquent dans la police par défaut d'egui. Les tests d'interface échouent sur tout
 caractère sans glyphe, ce qui garantit que l'aide s'affiche partout.
+
+L'aide défile si elle dépasse 80 % de la hauteur de la fenêtre (33 actions au 17/10/2026).
 
 ### Grille (`grid.rs`)
 
@@ -251,8 +309,16 @@ sous le curseur.
 Les tests de l'interface doivent être dans le paquet (`src/`, `#[cfg(test)]`) et non dans
 `tests/` : `tri-gui` est un binaire, ses modules ne sont pas importables depuis `tests/`.
 
+Notation (17/10/2026) : Maj+3, Maj+X, 8 puis « ° » (événement `Text`) écrivent le sidecar
+de l'image sélectionnée (relu du disque : 3 étoiles, rejetée, violet seul), l'image
+suivante est notée à part ; un sidecar mal formé est signalé et laissé intact.
+
 Tests unitaires du paquet (`cargo test -p tri-gui`) : identifiants d'actions uniques et
-préfixés, profils complets et sans doublon, union des profils, modificateurs système
+préfixés, touches de notation avec ou sans Maj, Ctrl+U / Ctrl+D (aussi sous la forme
+Linux, Ctrl + `command`), `u` libre, caractère « ° », lecture des raccourcis du fichier
+(« Maj+P », « G », « g g », « Flèche gauche », « + », « ° »...) et relecture de toutes les
+touches par défaut, remplacement par `[keys]`, conflits et séquences masquées signalés,
+largeur d'une ligne de notes, profils complets et sans doublon, union des profils, modificateurs système
 ignorés, noms de touches et libellés de l'aide, identifiants réversibles ; colonnes, navigation (bords, colonnes, dernière ligne
 incomplète, pages, grille vide), défilement ; LRU (éviction, remplacement, capacité
 minimale) ; troncature des noms, mise à jour des statuts ; réglages (`settings.rs`) :

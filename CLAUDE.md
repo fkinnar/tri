@@ -392,8 +392,10 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
 - [~] Notation XMP (17/10/2026). Fait, moteur : `src/xmp.rs` (lecture / écriture des
       sidecars, vérifiée sur de vrais sidecars darktable et par ExifTool), `src/notes.rs`
       (notes d'un dossier en mémoire, `edit`, filtres `NotesRule` sur le trait `Filter`),
-      section `[xmp]`. Restent : actions et raccourcis de notation, section `[keys]`,
-      affichage des notes (grille, plein écran), filtres dans l'interface. Conversion de
+      section `[xmp]`. Interface : actions et raccourcis de notation (profils), section
+      `[keys]` (raccourcis par action, conflits signalés), notes affichées (grille, plein
+      écran), écriture immédiate, erreurs dans la barre d'état. Restent : filtres sur les
+      notes dans l'interface (raccourcis à décider avec l'utilisateur). Conversion de
       convention faite : `tri <dossier> --convert-xmp darktable|adobe [--dry-run]`.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

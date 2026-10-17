@@ -93,6 +93,10 @@ padding = 6.0
 name_chars = 24
 # Vignettes gardées en mémoire graphique au plus.
 textures = 600
+# Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
+marks = 12.0
+# Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
+rejected_opacity = 0.35
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -104,6 +108,8 @@ textures = 8
 # Déplacement d'une image zoomée par appui (Maj + flèches, Maj + hjkl), en fraction de la
 # vue.
 pan_step = 0.2
+# Taille des notes (étoiles, couleurs, drapeau) en plein écran.
+marks = 18.0
 
 [gui.colors]
 # Couleurs "#rrggbb". Sélection absente : couleur du thème (le survol de la souris
@@ -113,3 +119,23 @@ badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
+# Notes : étoiles, pastilles accepté / rejeté, couleurs de notation.
+stars = "#f0c440"
+accepted = "#46aa5a"
+rejected = "#d74646"
+red = "#e14141"
+yellow = "#e6c832"
+green = "#46b450"
+blue = "#4182e1"
+purple = "#a555d2"
+
+[keys]
+# Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une
+# action). Les raccourcis cités REMPLACENT ceux des profils pour cette action ; liste vide :
+# plus aucun. Une touche : "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap" ;
+# une majuscule seule vaut Maj + la lettre ("G", comme dans vim) ; une séquence : "g g" ;
+# un caractère sans nom de touche : "°". Un raccourci attribué à deux actions est signalé
+# au démarrage (barre d'état). Exemples :
+# "core.flag.accept" = ["Maj+P", "a"]
+# "core.nav.first" = ["Début", "g g"]
+# "core.rate.color.purple" = ["°", ","]

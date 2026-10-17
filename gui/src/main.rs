@@ -16,6 +16,7 @@ mod actions;
 mod app;
 mod grid;
 mod loader;
+mod marks;
 mod settings;
 mod textures;
 mod trace;
