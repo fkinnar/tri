@@ -291,6 +291,16 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
     match action {
         Action::NavPrev => chevron(0.25, 0.7),
         Action::NavNext => chevron(0.75, 0.3),
+        Action::ToggleZoom => {
+            // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "1:1",
+                egui::FontId::proportional(h * 0.8),
+                color,
+            );
+        }
         _ => {
             // Petite étoile à gauche, flèche à droite.
             star(painter, p(0.26, 0.5), w * 0.32, colors.stars.into());

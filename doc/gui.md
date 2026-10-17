@@ -110,8 +110,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : JPEG boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
-- **Bandeau de notation, à droite** (17/10/2026) : image précédente / suivante (chevrons,
-  utiles surtout en 1:1) et avance automatique (étoile suivie d'une flèche : « après une
+- **1:1 depuis la grille** (17/10/2026) : `z` (ou le bouton « 1:1 » du bandeau) ouvre
+  l'image sélectionnée directement à 100 %, pour vérifier vite la netteté ; Échap ramène
+  à la grille. Au clavier et au bouton, le 1:1 est **centré sur le collimateur** quand le
+  boîtier l'a enregistré (`[gui.view] zoom_on_focus_point`), sinon au milieu ; si les
+  métadonnées ne sont pas encore lues, il se recentre dès leur arrivée. Le double-clic
+  zoome toujours sur le point cliqué.
+- **Bandeau de notation, à droite** (17/10/2026) : 1:1 (fond turquoise quand on y est),
+  image précédente / suivante (chevrons, utiles surtout en 1:1) et avance automatique (étoile suivie d'une flèche : « après une
   note, on avance » ; fond turquoise quand elle est active), en boutons à icône
   (`[gui] bar_icon_size`), libellé et raccourci au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;

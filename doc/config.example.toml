@@ -281,6 +281,10 @@ focus_marker_width = 2.0
 # Aide-mémoire des touches (b, z, i, o, Échap) en haut à droite du plein écran ; masqué par
 # défaut : il mord sur l'image, et F1 ouvre l'aide complète.
 key_hints = false
+# 1:1 (z ou bouton « 1:1 ») centré sur le collimateur quand le boîtier l'a enregistré
+# (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
+# zoome sur le point cliqué.
+zoom_on_focus_point = true
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :

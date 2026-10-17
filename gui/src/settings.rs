@@ -350,6 +350,9 @@ pub struct ViewSettings {
     pub focus_marker_width: f32,
     /// Aide-mémoire des touches en haut à droite du plein écran (F1 ouvre l'aide).
     pub key_hints: bool,
+    /// 1:1 au clavier ou au bouton centré sur le collimateur quand il est connu (sinon au
+    /// milieu de l'image).
+    pub zoom_on_focus_point: bool,
 }
 
 impl Default for ViewSettings {
@@ -364,6 +367,7 @@ impl Default for ViewSettings {
             focus_marker_size: 28.0,
             focus_marker_width: 2.0,
             key_hints: false,
+            zoom_on_focus_point: true,
         }
     }
 }

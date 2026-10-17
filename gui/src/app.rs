@@ -176,6 +176,9 @@ pub struct TriApp {
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
     focus_point: bool,
+    /// 1:1 demandé avant que les métadonnées de cette image soient lues : à recentrer sur
+    /// son collimateur dès qu'elles arrivent.
+    zoom_focus_pending: Option<PathBuf>,
     /// Dossier de données (dernier dossier, état d'affichage).
     data_dir: Option<PathBuf>,
     /// État d'affichage tel qu'écrit la dernière fois (`state.rs`).
@@ -361,6 +364,7 @@ impl TriApp {
             peaking: gui.sharpness.visible,
             peaking_color: 0,
             focus_point: gui.view.focus_point,
+            zoom_focus_pending: None,
             data_dir: data.clone(),
             display_saved: Default::default(),
             peaking_texture: None,
@@ -1216,10 +1220,17 @@ impl TriApp {
                 self.peaking = true;
             }
             Action::ToggleZoom => {
+                // Depuis la grille : plein écran directement à 1:1 (vérifier vite la netteté
+                // d'une vignette ; Échap ramène à la grille).
+                if self.mode == Mode::Grid && !self.files.is_empty() {
+                    self.mode = Mode::View;
+                    self.zoom = None;
+                    self.tell_shown();
+                }
                 if matches!(self.mode, Mode::View | Mode::Compare) {
                     self.zoom = match self.zoom {
                         Some(_) => None,
-                        None => Some(vec2(0.5, 0.5)),
+                        None => Some(self.zoom_center(ctx)),
                     };
                     self.request_zoom();
                 }
@@ -1764,6 +1775,58 @@ impl TriApp {
         }
     }
 
+    /// Centre du 1:1 au clavier ou au bouton : le collimateur de l'image courante quand il
+    /// est connu (c'est là qu'on juge la netteté, `[gui.view] zoom_on_focus_point`), sinon
+    /// le milieu de l'image.
+    fn zoom_center(&mut self, ctx: &egui::Context) -> Vec2 {
+        let middle = vec2(0.5, 0.5);
+        if !self.gui.view.zoom_on_focus_point {
+            return middle;
+        }
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return middle;
+        };
+        let read = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
+            .get(&file)
+            .cloned();
+        match read {
+            // Pas encore lues : milieu pour l'instant, recentré à leur arrivée.
+            None => {
+                self.zoom_focus_pending = Some(file.path);
+                middle
+            }
+            Some(read) => read
+                .ok()
+                .and_then(|m| m.focus_point)
+                .map_or(middle, |(x, y)| vec2(x, y)),
+        }
+    }
+
+    /// 1:1 en attente du collimateur ([`TriApp::zoom_center`]) : recentré dès que les
+    /// métadonnées de l'image arrivent, si l'on est toujours sur elle à 1:1.
+    fn apply_pending_focus_zoom(&mut self) {
+        let Some(path) = self.zoom_focus_pending.clone() else {
+            return;
+        };
+        let current = self.files.get(self.selected).cloned();
+        let (Some(file), Some(_), Some(meta)) = (current, self.zoom, self.meta.as_mut()) else {
+            self.zoom_focus_pending = None;
+            return;
+        };
+        if file.path != path {
+            self.zoom_focus_pending = None;
+            return;
+        }
+        if let Some(read) = meta.get(&file) {
+            if let Some((x, y)) = read.as_ref().ok().and_then(|m| m.focus_point) {
+                self.zoom = Some(vec2(x, y));
+            }
+            self.zoom_focus_pending = None;
+        }
+    }
+
     /// Repère du collimateur de mise au point de `file` sur l'image affichée en `rect`
     /// (métadonnées lues en fond ; rien tant qu'elles ne sont pas là, ni pour un boîtier
     /// dont le collimateur n'est pas lu).
@@ -1988,6 +2051,7 @@ impl TriApp {
 
     /// Plein écran : l'image sélectionnée, ajustée ou à 100 %, avec ce qui est affiché.
     fn viewer(&mut self, ui: &mut Ui) {
+        self.apply_pending_focus_zoom();
         let ctx = ui.ctx().clone();
         let index = self.selected;
         let file = self.files[index].clone();
@@ -2706,10 +2770,21 @@ impl TriApp {
             // et précédente, des icônes (retour du 17/10/2026).
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let icon = self.gui.bar_icon_size;
-                for action in [Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev] {
+                let zoomed = self.mode != Mode::Grid && self.zoom.is_some();
+                for action in [
+                    Action::ToggleAutoAdvance,
+                    Action::NavNext,
+                    Action::NavPrev,
+                    Action::ToggleZoom,
+                ] {
                     let (rect, response) =
                         marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
-                    if action == Action::ToggleAutoAdvance && self.auto_advance {
+                    let active = match action {
+                        Action::ToggleAutoAdvance => self.auto_advance,
+                        Action::ToggleZoom => zoomed,
+                        _ => false,
+                    };
+                    if active {
                         ui.painter()
                             .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
                     }
@@ -2729,7 +2804,7 @@ impl TriApp {
         });
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
-            Some(action @ (Action::NavPrev | Action::NavNext)) => {
+            Some(action @ (Action::NavPrev | Action::NavNext | Action::ToggleZoom)) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
             }
@@ -4238,6 +4313,20 @@ mod tests {
     }
 
     #[test]
+    fn z_from_the_grid_opens_at_one_to_one_and_the_bar_has_a_one_to_one_button() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().zoom.is_some(), "directement à 1:1");
+        h.get_by_label("Zoom 100 % / ajusté").click();
+        h.run_steps(3);
+        assert!(h.state().zoom.is_none(), "le bouton revient à l'ajusté");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+    }
+
+    #[test]
     fn rename_with_f2_typing_and_enter() {
         let names = ["img0.jpg", "img0.png", "img1.jpg"];
         let (mut h, dir) = harness_files(&names, 64, 48);
@@ -5043,10 +5132,9 @@ mod tests {
     fn zoom_computes_and_displays_the_full_image() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        // Depuis la grille, z ouvre le plein écran directement à 100 %.
         press(&mut h, Key::Z, Modifiers::NONE);
-        assert!(h.state().zoom.is_none(), "pas de zoom dans la grille");
-        press(&mut h, Key::Enter, Modifiers::NONE);
-        press(&mut h, Key::Z, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().zoom.is_some());
         run_until(&mut h, |app| {
             let path = app.files[0].path.clone();
