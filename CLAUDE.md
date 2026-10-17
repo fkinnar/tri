@@ -576,6 +576,13 @@ explicitement par l'utilisateur comme important.
         barres (une par case) avait remplacé un tracé en « peigne » (cases vides
         intercalées, JPEG 8 bits en échelle IL) ; lisser sans faire réapparaître le
         peigne (lissage sur les cases voisines, ou courbe à travers les cases non vides).
+        Précision de l'utilisateur : garder des classes mais **lisser** pour une belle
+        courbe ; pas d'échelle verticale, seule la forme générale compte.
+      - **Témoin de bouchage incohérent** : sur certaines images, l'indicateur de bouchage
+        (à gauche) s'allume alors que la courbe est bien plus à droite. Pistes : témoin
+        allumé dès quelques pixels (pixels morts, bord noir du capteur), ou seuil de
+        bouchage (-10 IL) hors de la plage dessinée. Demander un exemple à
+        l'utilisateur.
 - [~] **Manuel des testeurs** (demandé le 17/10/2026) : `doc/manuel.md` et
       `doc/manual.md`, courts exprès (« laisser de la liberté de penser » : savoir si
       l'interface est intuitive) ; captures par `scripts/manual-screenshots.sh`. Faites
