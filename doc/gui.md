@@ -163,9 +163,22 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     portraits sur fond blanc (rien, -0,45 IL de marge).
 - **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,
   17/10/2026), voir [notes.md](notes.md).
-- **Aide** (`F1` ou `?`, fermeture par Échap) : chaque action avec un libellé compréhensible
-  et ses touches ; l'identifiant technique n'apparaît qu'au survol. L'aide est **modale** :
-  tant qu'elle est ouverte, seules Échap, l'aide et Quitter agissent.
+- **Aide** (`F1` ou `?`, fermeture par Échap ou `F1`) : chaque action avec un libellé
+  compréhensible et ses touches, **rangée par thème** (Navigation, Affichage, Notation,
+  Filtres, Panneaux, Application : `Action::group`) ; l'identifiant technique n'apparaît
+  qu'au survol. L'aide est **modale** : tant qu'elle est ouverte, seules Échap, l'aide et
+  Quitter agissent.
+- **Recherche dans l'aide, à la fzf** : le champ en tête a le focus dès l'ouverture, on
+  tape directement. Chaque mot de la requête doit se retrouver lettre par lettre, dans
+  l'ordre, éventuellement avec des trous, dans le libellé, les touches ou l'identifiant
+  (« pnd » → *panneau des dossiers*, « etoile 3 », « maj+e », « core.nav »), sans tenir
+  compte des accents ni de la casse ; les mots peuvent être dans le désordre. Résultats
+  triés par pertinence (`actions::fuzzy_score` : lettres consécutives et débuts de mots
+  comptent plus, les trous pénalisent ; à égalité, le libellé le plus court). Pendant la
+  saisie, `?` s'écrit dans le champ : on ferme par Échap ou `F1`.
+- **Saisie dans un champ** (recherche de l'aide, nom de dossier du déchargement) : les
+  touches sont du texte ; seules celles qui ne tapent rien (Échap, F1 à F12 :
+  `Trigger::types_no_text`) restent des raccourcis.
 - Taille des aperçus standard **« Auto »** : plus grand côté de l'écran, en pixels physiques.
 - Thème sombre par défaut.
 
@@ -367,7 +380,7 @@ Les touches sont affichées par des **noms français en toutes lettres** (`key_l
 « ← » manquent dans la police par défaut d'egui. Les tests d'interface échouent sur tout
 caractère sans glyphe, ce qui garantit que l'aide s'affiche partout.
 
-L'aide défile si elle dépasse 80 % de la hauteur de la fenêtre (33 actions au 17/10/2026).
+L'aide défile si elle dépasse 75 % de la hauteur de la fenêtre (33 actions au 17/10/2026).
 
 ### Grille (`grid.rs`)
 
@@ -427,9 +440,10 @@ moitié transparente.
 
 **Tests d'interface** avec [egui_kittest](https://crates.io/crates/egui_kittest) (banc de
 test officiel d'egui) : l'application tourne sans fenêtre, sur un dossier et un cache
-temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre et se ferme avec F1 et
-`?` (avec ou sans Maj), Échap la ferme, elle est modale, et elle affiche les libellés et
-non les identifiants. Plein écran : ouverture par Entrée et retour par Échap, navigation
+temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre avec F1 et
+`?` (avec ou sans Maj) et se ferme avec F1, Échap la ferme, elle est modale, elle affiche
+les libellés et non les identifiants, rangés par thème ; la recherche filtre (« pnd »),
+« q » tapé dans la recherche ne quitte pas, et la recherche est vide à la réouverture. Plein écran : ouverture par Entrée et retour par Échap, navigation
 image par image (haut/bas sans effet), bascule de source, aperçu standard réellement chargé
 et affiché, 1:1 réellement calculé puis affiché, conservé à l'image suivante, zoom conservé
 en basculant de source. Ces tests

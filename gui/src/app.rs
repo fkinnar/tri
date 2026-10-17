@@ -24,7 +24,7 @@ use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
 use tri::xmp::{Color, Flag};
 
-use crate::actions::{Action, FlagFilter, Keymap, Sequencer};
+use crate::actions::{Action, FlagFilter, Group, Keymap, Sequencer};
 use crate::grid::{self, Layout};
 use crate::histogram;
 use crate::loader::Loader;
@@ -199,6 +199,9 @@ pub struct TriApp {
     reveal: Option<Reveal>,
     screenshot: Option<Screenshot>,
     help: bool,
+    /// Recherche dans l'aide (`None` : aide fermée, le champ prendra le focus à
+    /// l'ouverture).
+    help_search: Option<String>,
     /// Actions à exécuter à la première image (`TRI_GUI_ACTIONS`, développement).
     startup_actions: std::collections::VecDeque<Step>,
     /// Pause en cours dans le script de démarrage.
@@ -331,6 +334,7 @@ impl TriApp {
             reveal: None,
             screenshot,
             help: false,
+            help_search: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
             script_wait: None,
@@ -868,10 +872,10 @@ impl TriApp {
     fn handle_keys(&mut self, ctx: &egui::Context) {
         let mut chords = ctx.input(|i| self.keymap.chords(&i.events));
         // Saisie dans un champ de texte (nom de dossier, recherche) : les touches sont du
-        // texte, pas des raccourcis ; seule Échap agit. Sans cela, taper « q » dans le nom
-        // d'un dossier quittait l'application.
+        // texte, pas des raccourcis ; seules les touches qui ne tapent rien (Échap, F1…)
+        // agissent. Sans cela, taper « q » dans le nom d'un dossier quittait l'application.
         if ctx.egui_wants_keyboard_input() {
-            chords.retain(|c| c.trigger == crate::actions::Trigger::Key(egui::Key::Escape));
+            chords.retain(|c| c.trigger.types_no_text());
         }
         if !chords.is_empty() {
             self.mouse_active = false; // on tape : pointeur masqué
@@ -2172,35 +2176,56 @@ impl TriApp {
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
+        let opening = self.help_search.is_none();
+        let mut query = self.help_search.take().unwrap_or_default();
         egui::Window::new("Raccourcis")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
+                // Recherche floue à la fzf : on tape dès l'ouverture.
+                let search = ui.add(
+                    egui::TextEdit::singleline(&mut query)
+                        .id(help_search_id())
+                        .hint_text("Rechercher (ex. « pnd », « etoile 3 »)…")
+                        .desired_width(f32::INFINITY),
+                );
+                if opening {
+                    search.request_focus();
+                }
+                ui.add_space(4.0);
+                let rows = help_rows(&self.keymap, &query);
                 // Défilante : la liste des actions dépasse la hauteur d'un petit écran.
-                let max_height = ui.ctx().content_rect().height() * 0.8;
+                let max_height = ui.ctx().content_rect().height() * 0.75;
                 ScrollArea::vertical()
                     .max_height(max_height)
                     .show(ui, |ui| {
+                        if rows.is_empty() {
+                            ui.weak("Aucune action ne correspond.");
+                        }
                         egui::Grid::new("help").striped(true).show(ui, |ui| {
-                            for action in Action::ALL {
-                                // Identifiant technique au survol seulement (utile pour le futur
-                                // fichier de raccourcis).
+                            let mut group = None;
+                            for (action, keys) in &rows {
+                                // Sans recherche : rangées par thème, avec un titre.
+                                if query.trim().is_empty() && group != Some(action.group()) {
+                                    group = Some(action.group());
+                                    ui.label(egui::RichText::new(action.group().label()).strong());
+                                    ui.end_row();
+                                }
+                                // Identifiant technique au survol seulement (utile pour la
+                                // section `[keys]` de la configuration).
                                 ui.label(action.label()).on_hover_text(action.id());
                                 // Chasse fixe : « l » et « I » restent distincts.
-                                ui.label(
-                                    egui::RichText::new(self.keymap.keys_for(action).join(" / "))
-                                        .monospace()
-                                        .strong(),
-                                );
+                                ui.label(egui::RichText::new(keys).monospace().strong());
                                 ui.end_row();
                             }
                         });
                     });
                 ui.add_space(6.0);
-                ui.weak("Échap pour fermer.");
+                ui.weak("Échap ou F1 pour fermer.");
             });
+        self.help_search = Some(query);
         self.help = open;
     }
 
@@ -2331,6 +2356,8 @@ impl eframe::App for TriApp {
         });
         if self.help {
             self.help_window(&ctx);
+        } else {
+            self.help_search = None;
         }
         self.rating_dialog(&ctx);
         self.eject_dialog(&ctx);
@@ -2499,6 +2526,36 @@ fn truncate(s: &str, max: usize) -> String {
         out.push('…');
         out
     }
+}
+
+/// Identifiant du champ de recherche de l'aide.
+fn help_search_id() -> egui::Id {
+    egui::Id::unique("help_search")
+}
+
+/// Lignes de l'aide : (action, raccourcis). Sans recherche, toutes les actions rangées par
+/// thème ; avec une recherche, celles qui y correspondent (nom, raccourci ou identifiant),
+/// les meilleures d'abord.
+fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
+    let mut rows: Vec<(Action, String, i32)> = Action::ALL
+        .iter()
+        .filter_map(|&action| {
+            let keys = keymap.keys_for(action).join(" / ");
+            let score = [action.label(), keys.as_str(), action.id()]
+                .iter()
+                .filter_map(|text| crate::actions::fuzzy_score(query, text))
+                .max()?;
+            Some((action, keys, score))
+        })
+        .collect();
+    if query.trim().is_empty() {
+        let rank = |a: Action| Group::ALL.iter().position(|g| *g == a.group());
+        rows.sort_by_key(|(a, _, _)| rank(*a)); // stable : ordre d'origine dans un thème
+    } else {
+        // À score égal, le nom le plus court (le plus proche de la requête) d'abord.
+        rows.sort_by_key(|(a, _, score)| (std::cmp::Reverse(*score), a.label().len()));
+    }
+    rows.into_iter().map(|(a, k, _)| (a, k)).collect()
 }
 
 #[cfg(test)]
@@ -2906,6 +2963,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert!(!h.state().help);
+        // « ? » ouvre ; une fois ouverte, la recherche a le focus et « ? » s'y tape :
+        // F1 et Échap ferment.
         for (key, modifiers) in [
             (Key::F1, Modifiers::NONE),
             (Key::Questionmark, Modifiers::NONE),
@@ -2913,12 +2972,41 @@ mod tests {
         ] {
             press(&mut h, key, modifiers);
             assert!(h.state().help, "{key:?} {modifiers:?} doit ouvrir l'aide");
-            press(&mut h, key, modifiers);
-            assert!(
-                !h.state().help,
-                "{key:?} {modifiers:?} doit refermer l'aide"
-            );
+            press(&mut h, Key::F1, Modifiers::NONE);
+            assert!(!h.state().help, "F1 doit refermer l'aide");
         }
+    }
+
+    #[test]
+    fn help_search_filters_and_typing_is_not_a_shortcut() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.query_by_label("Image suivante").is_some());
+        // Rangée par thème sans recherche.
+        assert!(h.query_by_label("Navigation").is_some());
+        assert!(h.query_by_label("Notation").is_some());
+        for c in "wqx".chars() {
+            h.event(UiEvent::Text(c.to_string()));
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+        assert!(!h.state().quit_requested, "« q » tapé dans la recherche");
+        assert!(h.state().help);
+        assert_eq!(h.state().help_search.as_deref(), Some("wqx"));
+        // « wqx » ne correspond à rien.
+        assert!(h.query_by_label("Aucune action ne correspond.").is_some());
+        h.state_mut().help_search = Some("pnd".into());
+        h.run_steps(2);
+        assert!(
+            h.query_by_label("Afficher / masquer le panneau des dossiers")
+                .is_some()
+        );
+        assert!(h.query_by_label("Image suivante").is_none());
+        // Refermer puis rouvrir : recherche vide.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert_eq!(h.state().help_search.as_deref(), Some(""));
     }
 
     #[test]
@@ -3533,5 +3621,22 @@ mod tests {
         assert_eq!(s[0].thumbnail, Avail::Pending);
         assert_eq!(s[1].thumbnail, Avail::Ready);
         assert_eq!(s[1].standard, Avail::Failed("x".into()));
+    }
+
+    #[test]
+    fn help_rows_are_grouped_then_ranked_by_search() {
+        let keymap = Keymap::default();
+        let all = help_rows(&keymap, "");
+        assert_eq!(all.len(), Action::ALL.len());
+        let ranks: Vec<usize> = all
+            .iter()
+            .map(|(a, _)| Group::ALL.iter().position(|g| *g == a.group()).unwrap())
+            .collect();
+        assert!(ranks.is_sorted(), "rangées par thème");
+        // Recherche par raccourci et par identifiant aussi.
+        let by_id = help_rows(&keymap, "core.nav.next");
+        assert_eq!(by_id[0].0, Action::NavNext);
+        let stars = help_rows(&keymap, "etoile 3");
+        assert_eq!(stars[0].0, Action::Stars(3));
     }
 }

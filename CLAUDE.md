@@ -534,8 +534,8 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
-- [ ] **Aide** : regroupée par thème (56 actions à plat aujourd'hui), avec une
-      **recherche floue « à la fzf »** pour retrouver une action ou une touche.
+- [x] **Aide** regroupée par thème, avec une **recherche floue « à la fzf »** (libellé,
+      touches, identifiant), fait le 17/10/2026.
 
 ### Fichiers et dossiers
 - [ ] ★ **Actions sur fichiers et dossiers** : notre propre menu (pas de menu natif de

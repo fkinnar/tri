@@ -12,6 +12,105 @@ use std::time::{Duration, Instant};
 use eframe::egui::{Event, Key, Modifiers};
 use tri::xmp::{Color, Flag};
 
+/// Thème d'une action, pour l'aide.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Group {
+    /// Se déplacer d'une image à l'autre, ouvrir, revenir.
+    Navigation,
+    /// Plein écran : zoom, source, déplacement, histogramme, zones.
+    View,
+    /// Étoiles, couleurs, drapeau.
+    Rating,
+    /// Filtres.
+    Filters,
+    /// Panneaux et barres.
+    Panels,
+    /// Aide, quitter.
+    App,
+}
+
+impl Group {
+    /// Les thèmes, dans l'ordre de l'aide.
+    pub const ALL: [Group; 6] = [
+        Group::Navigation,
+        Group::View,
+        Group::Rating,
+        Group::Filters,
+        Group::Panels,
+        Group::App,
+    ];
+
+    /// Titre dans l'aide.
+    pub fn label(self) -> &'static str {
+        match self {
+            Group::Navigation => "Navigation",
+            Group::View => "Affichage",
+            Group::Rating => "Notation",
+            Group::Filters => "Filtres",
+            Group::Panels => "Panneaux",
+            Group::App => "Application",
+        }
+    }
+}
+
+/// Lettre sans accent, en minuscule (recherche floue).
+fn fold(c: char) -> char {
+    let c = c.to_lowercase().next().unwrap_or(c);
+    match c {
+        'à' | 'â' | 'ä' | 'á' => 'a',
+        'é' | 'è' | 'ê' | 'ë' => 'e',
+        'î' | 'ï' | 'í' => 'i',
+        'ô' | 'ö' | 'ó' => 'o',
+        'ù' | 'û' | 'ü' | 'ú' => 'u',
+        'ç' => 'c',
+        'œ' => 'o',
+        other => other,
+    }
+}
+
+/// Score de `query` dans `text` à la façon de fzf : chaque mot de la requête (séparés par
+/// des espaces) doit s'y retrouver lettre par lettre, dans l'ordre, éventuellement avec
+/// des trous (« pnd » trouve « panneau des dossiers »), sans tenir compte des accents ni
+/// de la casse. `None` : pas de correspondance ; plus le score est grand, meilleure elle
+/// est (lettres consécutives, débuts de mots). Requête vide : `Some(0)`.
+pub fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
+    let text: Vec<char> = text.chars().map(fold).collect();
+    let mut total = 0;
+    for word in query.split_whitespace() {
+        let word: Vec<char> = word.chars().map(fold).collect();
+        total += word_score(&word, &text)?;
+    }
+    Some(total)
+}
+
+fn word_score(word: &[char], text: &[char]) -> Option<i32> {
+    // Meilleure correspondance gloutonne depuis chaque départ possible.
+    let first = *word.first()?;
+    (0..text.len())
+        .filter(|&i| text[i] == first)
+        .filter_map(|start| {
+            let (mut score, mut pos, mut previous) = (0, start, None::<usize>);
+            for &c in word {
+                let found = (pos..text.len()).find(|&i| text[i] == c)?;
+                score += 10;
+                if previous.is_some_and(|p| p + 1 == found) {
+                    score += 15; // lettres consécutives
+                }
+                if found == 0 || !text[found - 1].is_alphanumeric() {
+                    // Début de mot : surtout pour la première lettre (« pnd »).
+                    score += if previous.is_none() { 20 } else { 5 };
+                }
+                if let Some(p) = previous {
+                    score -= (found - p - 1).min(10) as i32; // trou
+                }
+                previous = Some(found);
+                pos = found + 1;
+            }
+            Some(score)
+        })
+        .max()
+}
+
 /// Filtres sur le drapeau proposés à l'utilisateur.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FlagFilter {
@@ -255,6 +354,24 @@ impl Action {
         }
     }
 
+    /// Thème de l'action (aide).
+    pub fn group(self) -> Group {
+        use Action::*;
+        match self {
+            NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
+            | Open | Back => Group::Navigation,
+            ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
+            | HistogramScale | HistogramLarge | ToggleClipping => Group::View,
+            Stars(_) | Color(_) | Flag(_) => Group::Rating,
+            FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear => {
+                Group::Filters
+            }
+            ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
+            | RefreshFolders => Group::Panels,
+            Help | Quit => Group::App,
+        }
+    }
+
     /// Vrai pour les actions encore actives quand une fenêtre (l'aide) est au premier plan.
     pub fn works_over_overlay(self) -> bool {
         matches!(self, Action::Back | Action::Help | Action::Quit)
@@ -333,6 +450,18 @@ pub enum Trigger {
     Key(Key),
     /// Caractère tapé.
     Char(char),
+}
+
+impl Trigger {
+    /// Vrai pour les touches qui ne tapent aucun texte (Échap, F1 à F12) : elles restent
+    /// des raccourcis même pendant la saisie dans un champ.
+    pub fn types_no_text(self) -> bool {
+        use Key::*;
+        matches!(
+            self,
+            Trigger::Key(Escape | F1 | F2 | F3 | F4 | F5 | F6 | F7 | F8 | F9 | F10 | F11 | F12)
+        )
+    }
 }
 
 /// Une combinaison : une touche avec ou sans Maj et Ctrl, ou un caractère. Cmd et Alt sont
@@ -1400,5 +1529,33 @@ mod tests {
             .filter_map(|c| seq.feed(&km, c, now))
             .collect();
         assert_eq!(actions, [Action::FilterColor(Color::Purple)]);
+    }
+
+    #[test]
+    fn every_action_has_a_group_and_groups_cover_the_help() {
+        for g in Group::ALL {
+            assert!(Action::ALL.iter().any(|a| a.group() == g), "{g:?} vide");
+        }
+    }
+
+    #[test]
+    fn fuzzy_search_like_fzf() {
+        let s = |q: &str, t: &str| fuzzy_score(q, t);
+        assert!(s("pnd", "Afficher / masquer le panneau des dossiers").is_some());
+        assert!(
+            s("dossiers panneau", "le panneau des dossiers").is_some(),
+            "mots en désordre"
+        );
+        assert!(s("etoile", "3 étoiles").is_some(), "accents ignorés");
+        assert!(s("ETOILE", "3 étoiles").is_some(), "casse ignorée");
+        assert!(s("xyz", "3 étoiles").is_none());
+        assert!(
+            s("dossiers zzz", "le panneau des dossiers").is_none(),
+            "tous les mots"
+        );
+        assert_eq!(s("", "n'importe quoi"), Some(0));
+        // Lettres consécutives et débuts de mots passent devant les correspondances éparses.
+        assert!(s("zoom", "Zoom 100 % / ajusté") > s("zoom", "z o o m éparpillé"));
+        assert!(s("fil", "Filtre de type") > s("fil", "Afficher le profil"));
     }
 }
