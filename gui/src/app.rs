@@ -17,7 +17,7 @@ use tri::filter::KindFilter;
 use tri::folder::Folder;
 use tri::media::{MediaFile, MediaKind};
 use tri::notes::{ColorRule, NotesRule, StarsRule};
-use tri::places::{Monitor, Place, PlaceSettings, Tree};
+use tri::places::{Monitor, Place, PlaceKind, PlaceSettings, Tree};
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
@@ -113,6 +113,12 @@ pub struct TriApp {
     /// Surveillance des volumes (moteur), démarrée à la première image, et la liste
     /// qu'elle envoie quand un disque est branché ou débranché.
     volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
+    /// Volume dont l'éjection attend confirmation.
+    eject_dialog: Option<PathBuf>,
+    /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
+    ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
+    /// Message pour la barre d'état (texte, vrai si c'est une erreur).
+    notice: Option<(String, bool)>,
     /// Réglages du moteur (fichier de configuration).
     settings: EngineSettings,
     /// Réglages de l'interface (section `[gui]`).
@@ -236,6 +242,9 @@ impl TriApp {
             reveal_folder: true,
             places: settings.places.clone(),
             volumes: None,
+            eject_dialog: None,
+            ejecting: None,
+            notice: None,
             settings: settings.engine(),
             warning,
             key_warnings,
@@ -340,6 +349,7 @@ impl TriApp {
         let f = self.gui.folders;
         let mut toggle = None;
         let mut open = None;
+        let mut eject = None;
         ui.horizontal(|ui| {
             ui.strong("Dossiers");
             if ui
@@ -382,6 +392,13 @@ impl TriApp {
                         ui.colored_label(self.gui.colors.error, "illisible")
                             .on_hover_text(error);
                     }
+                    if row.kind == Some(PlaceKind::Volume) && self.ejecting.is_none() {
+                        let (rect, response) = marks::clickable(ui, size, "Éjecter");
+                        marks::eject(ui.painter(), rect, ui.visuals().text_color());
+                        if response.clicked() {
+                            eject = Some(row.path.clone());
+                        }
+                    }
                 });
             }
         });
@@ -391,6 +408,79 @@ impl TriApp {
         if let Some(path) = open {
             self.open_folder(&path);
         }
+        if eject.is_some() {
+            self.eject_dialog = eject;
+        }
+    }
+
+    /// Confirmation d'éjection (modale), puis éjection dans un fil à part : l'outil du
+    /// système prend une à quelques secondes.
+    fn eject_dialog(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.eject_dialog.clone() else {
+            return;
+        };
+        let name = folder_name(&path);
+        let open_inside = !self.folder.is_none() && self.folder.dir.starts_with(&path);
+        let (mut confirm, mut cancel) = (false, false);
+        let modal = egui::Modal::new(egui::Id::unique("eject_dialog")).show(ctx, |ui| {
+            ui.strong(format!("Éjecter « {name} » ?"));
+            if open_inside {
+                ui.label("Le dossier ouvert est sur ce volume : il sera fermé.");
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                confirm = ui.button("Éjecter").clicked();
+                cancel = ui.button("Annuler").clicked();
+            });
+        });
+        if confirm {
+            self.eject_dialog = None;
+            if open_inside {
+                // Fermer le dossier : sinon le système refuse (fichiers ouverts).
+                self.close_folder();
+            }
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            let volume = path.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(tri::places::eject(&volume));
+                repaint.request_repaint();
+            });
+            self.notice = Some((format!("Éjection de « {name} »…"), false));
+            self.ejecting = Some((path, rx));
+        } else if cancel || modal.should_close() {
+            self.eject_dialog = None;
+        }
+    }
+
+    /// Fin d'une éjection : message, et liste des volumes relue.
+    fn poll_eject(&mut self) {
+        let Some((path, rx)) = &self.ejecting else {
+            return;
+        };
+        let Ok(result) = rx.try_recv() else {
+            return;
+        };
+        let name = folder_name(path);
+        self.notice = Some(match result {
+            Ok(()) => (
+                format!("« {name} » éjecté : vous pouvez le retirer."),
+                false,
+            ),
+            Err(e) => (format!("« {name} » non éjecté : {e}"), true),
+        });
+        self.ejecting = None;
+        self.tree.refresh();
+    }
+
+    /// Ferme le dossier ouvert (avant d'éjecter son volume).
+    fn close_folder(&mut self) {
+        self.folder = Folder::default();
+        self.files.clear();
+        self.selected = 0;
+        self.mode = Mode::Grid;
+        self.rating_dialog = None;
+        self.apply_filter();
     }
 
     /// Recalcule la liste affichée selon les filtres, et la confie au scheduler. La ligne
@@ -540,6 +630,15 @@ impl TriApp {
         for action in actions {
             // L'aide est modale : derrière elle, la grille ne bouge pas.
             if self.help && !action.works_over_overlay() {
+                continue;
+            }
+            // Confirmation d'éjection : seule la fermeture.
+            if self.eject_dialog.is_some() {
+                if action == Action::Back {
+                    self.eject_dialog = None;
+                } else if action.works_over_overlay() {
+                    self.perform(ctx, action);
+                }
                 continue;
             }
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
@@ -1115,6 +1214,14 @@ impl TriApp {
                 ui.separator();
                 ui.label(file_name(&file.path));
             }
+            if let Some((text, error)) = &self.notice {
+                ui.separator();
+                if *error {
+                    ui.colored_label(self.gui.colors.error, text);
+                } else {
+                    ui.label(text);
+                }
+            }
             if let Some(error) = &self.note_error {
                 ui.separator();
                 ui.colored_label(self.gui.colors.error, error);
@@ -1590,6 +1697,7 @@ impl eframe::App for TriApp {
         }
         self.drain_events();
         self.watch_volumes(&ctx);
+        self.poll_eject();
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
@@ -1631,6 +1739,7 @@ impl eframe::App for TriApp {
             self.help_window(&ctx);
         }
         self.rating_dialog(&ctx);
+        self.eject_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
             ctx.set_cursor_icon(egui::CursorIcon::None);
@@ -2022,6 +2131,21 @@ mod tests {
         // La notation suit le nouveau dossier.
         press(&mut h, Key::Num4, Modifiers::NONE);
         assert_eq!(tri::xmp::read(&other.join("x0.jpg")).unwrap().stars, 4);
+        // Volume : icône « éjecter », confirmation, annulation (pas de vraie éjection ici).
+        h.get_by_label("Éjecter").click();
+        h.run_steps(2);
+        assert!(h.state().eject_dialog.is_some());
+        assert!(h.query_by_label("Annuler").is_some());
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(
+            h.state().selected,
+            0,
+            "grille figée derrière la confirmation"
+        );
+        h.get_by_label("Annuler").click();
+        h.run_steps(2);
+        assert!(h.state().eject_dialog.is_none());
+        assert!(h.state().ejecting.is_none(), "rien d'éjecté");
         // F5 relit les dossiers : un dossier créé entre-temps apparaît.
         std::fs::create_dir(dir.path().join("nouveau")).unwrap();
         h.run_steps(2);

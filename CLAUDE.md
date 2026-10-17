@@ -407,10 +407,9 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      dans `~` —, dossier personnel, racine) et arborescence lue à la demande, dans le
      moteur (`src/places.rs`, `Tree`) ; dossier ouvert = `src/folder.rs` (images, notes,
      filtres combinés). Volumes Time Machine masqués et exclusions (`[places]`),
-     disque branché détecté de lui-même (`places::Monitor`), F5. Restent : **éjecter un
-     volume amovible depuis l'interface** (demandé le 17/10/2026 ; pistes : `diskutil
-     eject` sur macOS, `udisksctl unmount` + `power-off` ou `gio mount -e` sous Linux,
-     Windows à étudier ; fonction du moteur, bouton dans le panneau), mémoriser le dernier
+     disque branché détecté de lui-même (`places::Monitor`), F5. Éjection d'un volume
+     (`places::eject` : `diskutil eject`, `gio mount -e` / `udisksctl`, PowerShell non
+     testé ; icône dans le panneau, confirmation). Restent : mémoriser le dernier
      dossier, navigation clavier dans l'arborescence, favoris.
   2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
      données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans

@@ -55,6 +55,21 @@ appelle `on_change` seulement quand elle change. L'interface y répond par
 - Vérifié sur macOS (17/10/2026) avec une image disque montée par `hdiutil attach` :
   apparition en moins de 2 s, disparition au `detach`.
 
+## Éjection (`eject(volume)`)
+
+Avec l'outil du système (demandé le 17/10/2026) : `diskutil eject` (macOS) ; sous Linux,
+`gio mount -e` (l'outil de l'environnement de bureau, comme le gestionnaire de fichiers),
+sinon `udisksctl unmount` puis `power-off` sur le périphérique lu dans `/proc/mounts`
+(`device_of`, espaces écrits `\040`) ; Windows : verbe « Éjecter » de l'explorateur via
+PowerShell (**non testé**). Bloquant (de 0,4 s à quelques secondes) : l'interface l'appelle
+dans un fil à part. En cas de refus (disque interne, fichier ouvert), le message du
+système est renvoyé tel quel. Un disque USB « fixe » (disque dur externe) s'éjecte comme
+une carte, comme dans le Finder. Vérifié sur macOS avec une image disque : éjectée en
+0,36 s ; volume absent : « diskutil : Failed to find disk ».
+
+Les lignes d'emplacement de `Tree::rows` portent leur nature (`Row::kind`) : seuls les
+volumes proposent l'éjection.
+
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 
 Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seulement si

@@ -165,6 +165,26 @@ pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
+/// Icône « éjecter » dans `rect` : triangle pointe en haut sur une barre.
+pub fn eject(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width() * 0.3;
+    painter.add(Shape::convex_polygon(
+        vec![
+            c + vec2(0.0, -r),
+            c + vec2(r, r * 0.2),
+            c + vec2(-r, r * 0.2),
+        ],
+        color,
+        Stroke::NONE,
+    ));
+    painter.rect_filled(
+        Rect::from_min_max(c + vec2(-r, r * 0.45), c + vec2(r, r * 0.75)),
+        0.0,
+        color,
+    );
+}
+
 /// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
 /// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
 /// la même que celle du clavier : recliquer la note active la retire (drapeau, étoiles),

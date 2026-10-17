@@ -292,6 +292,79 @@ impl Drop for Monitor {
     }
 }
 
+/// Éjecte le volume monté en `path` (carte SD, disque externe), avec l'outil du système :
+/// `diskutil eject` (macOS) ; `gio mount -e` (Linux, l'outil de l'environnement de
+/// bureau, comme le gestionnaire de fichiers), sinon `udisksctl unmount` puis
+/// `power-off` ; Windows : verbe « Éjecter » de l'explorateur, via PowerShell (non testé).
+/// Bloquant (une à quelques secondes) : à appeler hors du fil de l'interface. En cas de
+/// refus (disque interne, fichier ouvert sur le volume), le message du système est
+/// renvoyé.
+pub fn eject(path: &Path) -> Result<(), String> {
+    match std::env::consts::OS {
+        "macos" => run("diskutil", &["eject".as_ref(), path.as_os_str()]),
+        "windows" => {
+            let drive = path.to_string_lossy();
+            let drive = drive.trim_end_matches('\\').replace('\'', "''");
+            let script = format!(
+                "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{drive}').InvokeVerb('Eject')"
+            );
+            run(
+                "powershell",
+                &["-NoProfile".as_ref(), "-Command".as_ref(), script.as_ref()],
+            )
+        }
+        _ => {
+            let gio = run("gio", &["mount".as_ref(), "-e".as_ref(), path.as_os_str()]);
+            if gio.is_ok() {
+                return gio;
+            }
+            let mounts = fs::read_to_string("/proc/mounts").unwrap_or_default();
+            let Some(device) = device_of(&mounts, path) else {
+                return gio;
+            };
+            run(
+                "udisksctl",
+                &["unmount".as_ref(), "-b".as_ref(), device.as_ref()],
+            )?;
+            // Couper l'alimentation : le support peut alors être retiré sans risque. Un
+            // échec ici (lecteur de cartes intégré) n'empêche pas le retrait.
+            let _ = run(
+                "udisksctl",
+                &["power-off".as_ref(), "-b".as_ref(), device.as_ref()],
+            );
+            Ok(())
+        }
+    }
+}
+
+/// Lance `program` avec `args` ; en cas d'échec, sa sortie d'erreur (ou standard).
+fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
+    let output = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| format!("{program} : {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_string();
+    let message = Some(text(&output.stderr))
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| text(&output.stdout));
+    Err(format!("{program} : {message}"))
+}
+
+/// Périphérique monté en `path` d'après le contenu de `/proc/mounts` (espaces des chemins
+/// écrits `\040`).
+fn device_of(mounts: &str, path: &Path) -> Option<String> {
+    let wanted = path.to_string_lossy();
+    mounts.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let device = fields.next()?;
+        let point = fields.next()?.replace("\\040", " ");
+        (point == wanted).then(|| device.to_string())
+    })
+}
+
 /// Une ligne de l'arborescence affichée : un emplacement (profondeur 0) ou un dossier.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
@@ -305,6 +378,9 @@ pub struct Row {
     pub expanded: bool,
     /// Dossier illisible (droits...), une fois déplié.
     pub error: Option<String>,
+    /// Nature de l'emplacement, pour une ligne de profondeur 0 (un volume peut être
+    /// éjecté).
+    pub kind: Option<PlaceKind>,
 }
 
 /// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
@@ -422,7 +498,9 @@ impl Tree {
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
         for place in &self.places {
+            let first = rows.len();
             self.push_rows(&mut rows, &place.path, place.name.clone(), 0);
+            rows[first].kind = Some(place.kind);
         }
         rows
     }
@@ -439,6 +517,7 @@ impl Tree {
                 Some(Err(e)) => Some(e.clone()),
                 _ => None,
             },
+            kind: None,
         });
         if let Some(Ok(children)) = children {
             for child in children {
@@ -551,6 +630,17 @@ mod tests {
             |_| panic!("pas de surveillance"),
         );
         assert!(monitor.thread.is_none());
+    }
+
+    #[test]
+    fn device_of_a_mount_point() {
+        let mounts = "/dev/sda2 / ext4 rw 0 0\n\
+                      /dev/sdb1 /media/fab/CARTE\\040SD vfat rw,nosuid 0 0\n";
+        assert_eq!(
+            device_of(mounts, Path::new("/media/fab/CARTE SD")),
+            Some("/dev/sdb1".into())
+        );
+        assert_eq!(device_of(mounts, Path::new("/media/fab/AUTRE")), None);
     }
 
     #[test]

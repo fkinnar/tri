@@ -45,7 +45,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`folder::Folder`, voir [folder.md](folder.md)) : les filtres sont gardés, la sélection
   repart de la première image. Un disque ou une carte branchés apparaissent d'eux-mêmes en quelques secondes
   (surveillance du moteur, `places::Monitor`) ; « Actualiser » ou `F5` relit tout de suite
-  volumes et dossiers. Le
+  volumes et dossiers. Chaque volume a une icône « éjecter » : confirmation (modale), le
+  dossier ouvert est fermé s'il est sur ce volume (sinon le système refuse), puis
+  éjection en fond (`places::eject`) ; le résultat, ou le message du système, s'affiche
+  dans la barre d'état. Le
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` s'ouvre sur le panneau. La barre de filtres passe à la
