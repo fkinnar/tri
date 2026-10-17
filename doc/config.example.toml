@@ -208,13 +208,13 @@ indent = 14.0
 hidden = false
 
 [gui.histogram]
-# Histogramme du plein écran (données du capteur pour un RAW) : affiché au démarrage
-# (touche i), échelle "ev" (IL sous la saturation) ou "linear" (Maj+I bascule), taille
-# en points (indicateurs compris).
+# Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :
+# affiché au démarrage (touche i), échelle "ev" (IL sous la saturation) ou "linear"
+# (Maj+I bascule). Grand histogramme (Maj+E, ou clic sur l'histogramme du panneau) : part
+# de la largeur de la fenêtre.
 visible = true
 scale = "ev"
-width = 320.0
-height = 130.0
+large = 0.7
 # IL montrés en échelle IL : 0 = plage utile de l'image (~13,9 IL pour un RAW 14 bits,
 # ~11,7 pour un JPEG, valeurs sRGB ramenées en lumière linéaire) ; positif : plafond.
 ev_shown = 0.0

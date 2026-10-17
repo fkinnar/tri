@@ -80,6 +80,7 @@ pub fn navigate(
         | Action::RefreshFolders
         | Action::ToggleHistogram
         | Action::HistogramScale
+        | Action::HistogramLarge
         | Action::ToggleClipping
         | Action::ToggleMetadata
         | Action::Open

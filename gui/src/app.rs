@@ -175,8 +175,10 @@ pub struct TriApp {
     metadata_panel: bool,
     /// Lecture des métadonnées en fond (démarrée à la première image).
     meta: Option<MetaLoader>,
-    /// Histogramme affiché en plein écran.
+    /// Histogramme affiché (en haut du panneau des métadonnées).
     histogram: bool,
+    /// Grand histogramme, en boîte modale au milieu de l'écran.
+    histogram_large: bool,
     /// Échelle de l'histogramme.
     histogram_scale: HistogramScale,
     /// Zones saturées / bouchées superposées à l'image.
@@ -311,6 +313,7 @@ impl TriApp {
             metadata_panel: gui.metadata.visible,
             meta: None,
             histogram: gui.histogram.visible,
+            histogram_large: false,
             histogram_scale: gui.histogram.scale,
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
@@ -393,10 +396,21 @@ impl TriApp {
         if settings.histogram && self.histogram {
             match self.exposure_of(self.selected) {
                 Some(e) => {
-                    let (rect, _) = ui.allocate_exact_size(
+                    let (rect, response) = ui.allocate_exact_size(
                         vec2(ui.available_width(), settings.histogram_height),
-                        Sense::hover(),
+                        Sense::click(),
                     );
+                    let tip = format!(
+                        "Agrandir ({})",
+                        self.keymap.keys_for(Action::HistogramLarge).join(" / ")
+                    );
+                    if response
+                        .on_hover_cursor(egui::CursorIcon::ZoomIn)
+                        .on_hover_text(tip)
+                        .clicked()
+                    {
+                        self.histogram_large = true;
+                    }
                     histogram::draw(
                         ui.painter(),
                         rect,
@@ -879,6 +893,16 @@ impl TriApp {
                 }
                 continue;
             }
+            // Grand histogramme : échelle, fermeture (Échap, même touche).
+            if self.histogram_large {
+                match action {
+                    Action::Back | Action::HistogramLarge => self.histogram_large = false,
+                    Action::HistogramScale => self.perform(ctx, action),
+                    _ if action.works_over_overlay() => self.perform(ctx, action),
+                    _ => {}
+                }
+                continue;
+            }
             // Boîte de notation : seules les notes (pour son image) et la fermeture.
             if let Some((path, _)) = &self.rating_dialog {
                 match action {
@@ -993,6 +1017,7 @@ impl TriApp {
             Action::RefreshFolders => self.tree.refresh(),
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
+            Action::HistogramLarge => self.histogram_large = !self.histogram_large,
             Action::ToggleClipping => self.clipping = !self.clipping,
             Action::ToggleMetadata => self.metadata_panel = !self.metadata_panel,
             Action::ToggleFolderPanel => {
@@ -1390,30 +1415,6 @@ impl TriApp {
         }
         // Histogramme en bas à droite (données du capteur pour un RAW, quel que soit
         // l'aperçu affiché).
-        // Dans le panneau des métadonnées s'il est affiché, sinon sur l'image.
-        if self.histogram && !(self.metadata_panel && self.gui.metadata.histogram) {
-            let h = self.gui.histogram;
-            let rect = Rect::from_min_size(
-                view_rect.right_bottom() - vec2(h.width + 10.0, h.height + 10.0),
-                vec2(h.width, h.height),
-            );
-            match self.exposure_of(index) {
-                Some(e) => histogram::draw(
-                    &painter,
-                    rect,
-                    &e,
-                    self.histogram_scale,
-                    &h,
-                    &self.gui.colors,
-                ),
-                None => overlay(
-                    &painter,
-                    rect.right_bottom(),
-                    Align2::RIGHT_BOTTOM,
-                    "histogramme en cours de calcul",
-                ),
-            }
-        }
         let hint = match file.kind {
             MediaKind::Raw => {
                 "b : JPEG boîtier / RAW   z : 1:1   i : histogramme   o : zones   Échap : grille"
@@ -1714,6 +1715,64 @@ impl TriApp {
                 .unwrap_or(response.rect.center());
             self.select(index);
             self.rating_dialog = Some((path, at));
+        }
+    }
+
+    /// Grand histogramme de l'image sélectionnée, en boîte modale centrée (`Maj+E`, clic
+    /// sur l'histogramme du panneau) ; se ferme par Échap, la même touche ou un clic à
+    /// côté.
+    fn histogram_dialog(&mut self, ctx: &egui::Context) {
+        if !self.histogram_large {
+            return;
+        }
+        let exposure = self.exposure_of(self.selected);
+        let name = self
+            .files
+            .get(self.selected)
+            .map(|f| file_name(&f.path))
+            .unwrap_or_default();
+        let screen = ctx.content_rect().size();
+        let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
+        let size = vec2(screen.x * fraction, screen.y * fraction * 0.6);
+        let (mut scale, mut close) = (false, false);
+        let modal = egui::Modal::new(egui::Id::unique("histogram_dialog")).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.strong(name);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = ui.button("Fermer").clicked();
+                    let label = match self.histogram_scale {
+                        HistogramScale::Ev => "Échelle linéaire",
+                        HistogramScale::Linear => "Échelle en IL",
+                    };
+                    scale = ui.button(label).clicked();
+                });
+            });
+            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+            match &exposure {
+                Some(e) => histogram::draw(
+                    ui.painter(),
+                    rect,
+                    e,
+                    self.histogram_scale,
+                    &self.gui.histogram,
+                    &self.gui.colors,
+                ),
+                None => {
+                    ui.painter().text(
+                        rect.center(),
+                        Align2::CENTER_CENTER,
+                        "histogramme en cours de calcul",
+                        FontId::proportional(14.0),
+                        ui.visuals().weak_text_color(),
+                    );
+                }
+            }
+        });
+        if scale {
+            self.histogram_scale = self.histogram_scale.toggled();
+        }
+        if close || modal.should_close() {
+            self.histogram_large = false;
         }
     }
 
@@ -2258,6 +2317,7 @@ impl eframe::App for TriApp {
         }
         self.rating_dialog(&ctx);
         self.eject_dialog(&ctx);
+        self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
@@ -3169,6 +3229,28 @@ mod tests {
         assert_ne!(h.state().folder.dir, before, "séance ouverte à la demande");
         assert_eq!(names(&h), ["IMG0.jpg"]);
         assert!(h.state().offloaded.is_none());
+    }
+
+    #[test]
+    fn the_large_histogram_opens_and_closes() {
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::E, Modifiers::SHIFT);
+        assert!(h.state().histogram_large, "Maj+E l'ouvre");
+        assert!(h.query_by_label("Échelle linéaire").is_some());
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        assert_eq!(
+            h.state().histogram_scale,
+            HistogramScale::Linear,
+            "Maj+I dans la boîte"
+        );
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, 0, "la grille ne bouge pas derrière");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large, "Échap la ferme");
+        assert_eq!(h.state().mode, Mode::Grid);
+        press(&mut h, Key::E, Modifiers::SHIFT);
+        press(&mut h, Key::E, Modifiers::SHIFT);
+        assert!(!h.state().histogram_large, "la même touche la ferme");
     }
 
     #[test]

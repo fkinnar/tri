@@ -332,14 +332,12 @@ impl HistogramScale {
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HistogramSettings {
-    /// Histogramme affiché en plein écran au démarrage (touche `i`).
+    /// Histogramme affiché au démarrage, en haut du panneau des métadonnées (touche `i`).
     pub visible: bool,
     /// Échelle au démarrage (`Maj+I` bascule).
     pub scale: HistogramScale,
-    /// Taille de l'histogramme (points).
-    pub width: f32,
-    /// Hauteur de l'histogramme, indicateurs compris (points).
-    pub height: f32,
+    /// Grand histogramme (`Maj+E`) : part de la largeur de la fenêtre (0,2 à 1).
+    pub large: f32,
     /// IL montrés sous la saturation, en échelle IL : 0 (défaut) = plage utile de
     /// l'image (~13,9 IL pour un RAW 14 bits, ~11,7 pour un JPEG) ; positif : plafond.
     pub ev_shown: f32,
@@ -363,8 +361,7 @@ impl Default for HistogramSettings {
         Self {
             visible: true,
             scale: HistogramScale::Ev,
-            width: 320.0,
-            height: 130.0,
+            large: 0.7,
             ev_shown: 0.0,
             clipping: false,
             clipping_opacity: 0.7,

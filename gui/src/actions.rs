@@ -91,6 +91,8 @@ pub enum Action {
     ToggleHistogram,
     /// Histogramme : basculer entre IL et linéaire.
     HistogramScale,
+    /// Grand histogramme, en boîte au milieu de l'écran.
+    HistogramLarge,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -125,7 +127,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 56] = [
+    pub const ALL: [Action; 57] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -156,6 +158,7 @@ impl Action {
         Action::RefreshFolders,
         Action::ToggleHistogram,
         Action::HistogramScale,
+        Action::HistogramLarge,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -222,6 +225,7 @@ impl Action {
             Action::RefreshFolders => "Actualiser les dossiers (disque branché)",
             Action::ToggleHistogram => "Afficher / masquer l'histogramme",
             Action::HistogramScale => "Histogramme : IL / linéaire",
+            Action::HistogramLarge => "Histogramme en grand",
             Action::ToggleClipping => "Afficher / masquer les zones brûlées et bouchées",
             Action::ToggleMetadata => "Afficher / masquer le panneau des métadonnées",
             Action::Open => "Ouvrir en plein écran",
@@ -289,6 +293,7 @@ impl Action {
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
+            Action::HistogramLarge => "core.view.histogram_large",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -496,6 +501,7 @@ const RATING: &[Binding] = {
         (&[plain(Key::F5)], RefreshFolders),
         (&[plain(Key::I)], ToggleHistogram),
         (&[shifted(Key::I)], HistogramScale),
+        (&[shifted(Key::E)], HistogramLarge),
         (&[plain(Key::O)], ToggleClipping),
         (&[shifted(Key::M)], ToggleMetadata),
     ]
