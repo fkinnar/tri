@@ -569,6 +569,13 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [ ] **Retouches demandées le 17/10/2026 au soir (pour le 18/10)** :
+      - bouton « Actualiser » du panneau des dossiers en **icône** (comme le reste) ;
+      - boîte du **grand histogramme** déplaçable, comme les autres boîtes (cohérence) ;
+      - histogramme en **courbe lissée** plutôt qu'en barres. Attention : le dessin en
+        barres (une par case) avait remplacé un tracé en « peigne » (cases vides
+        intercalées, JPEG 8 bits en échelle IL) ; lisser sans faire réapparaître le
+        peigne (lissage sur les cases voisines, ou courbe à travers les cases non vides).
 - [~] **Manuel des testeurs** (demandé le 17/10/2026) : `doc/manuel.md` et
       `doc/manual.md`, courts exprès (« laisser de la liberté de penser » : savoir si
       l'interface est intuitive) ; captures par `scripts/manual-screenshots.sh`. Faites
