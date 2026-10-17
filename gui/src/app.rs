@@ -1711,9 +1711,10 @@ mod tests {
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::Num9, Modifiers::SHIFT);
         assert_eq!(names(&h), ["img2.jpg"], "f 9 : bleues");
-        // « ° » : le caractère (sa touche physique, livrée dans la même image par winit, est
-        // vérifiée dans `actions::tests` : kittest envoie un événement par image).
+        // « ° » sur un AZERTY : touche physique Maj + Minus, puis le caractère (kittest les
+        // envoie dans deux images, comme cela arrive en vrai).
         press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Minus, Modifiers::SHIFT);
         h.event(UiEvent::Text("°".into()));
         h.run_steps(3);
         assert_eq!(h.state().filter_summary(), "bleu ou violet");

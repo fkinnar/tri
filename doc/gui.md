@@ -235,9 +235,14 @@ Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N.
 
-Caractères : egui-winit livre la touche (Maj + `Minus`, physique) **et** le caractère
-(« ° ») dans la même image ; `Keymap::chords` ignore une touche suivie d'un caractère lié à
-un raccourci, sinon elle interromprait `f °`.
+Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant
+pas « ° ») **puis** comme caractère, parfois dans une image suivante (constaté le
+17/10/2026 sous macOS et Linux : `f °` notait en violet au lieu de filtrer). Deux
+protections : `Keymap::chords` ignore une touche suivie d'un caractère lié dans la même
+image, et le `Sequencer` ignore, au milieu d'une séquence, une touche liée à aucun
+raccourci (même seule) : `f` reste en attente jusqu'au caractère. Une touche qui a un sens
+seule interrompt toujours la séquence (`g` puis `j` : ligne du dessous). `f &` marche sur
+l'AZERTY parce qu'egui, ne connaissant pas « & », se rabat sur la touche physique `1`.
 
 **Section `[keys]`** du fichier de configuration, rangée par action :
 

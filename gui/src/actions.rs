@@ -901,7 +901,7 @@ impl Sequencer {
         }
         let mut keys = std::mem::take(&mut self.pending);
         keys.push(chord);
-        self.since = None;
+        let since = self.since.take();
         match keymap.lookup(&keys) {
             Lookup::Prefix => {
                 self.pending = keys;
@@ -909,7 +909,18 @@ impl Sequencer {
                 None
             }
             Lookup::Action(action) => Some(action),
-            // Séquence interrompue : la dernière touche compte seule.
+            // Touche liée à aucun raccourci, même seule, au milieu d'une séquence : ignorée,
+            // la séquence reste en attente. « ° » arrive sur un AZERTY comme Maj + `Minus`
+            // (touche physique, inconnue ici) *puis*, parfois dans une image suivante, comme
+            // caractère : sans cela, la touche annulait `f` et le caractère notait au lieu
+            // de filtrer (retour du 17/10/2026, macOS et Linux).
+            Lookup::None if keys.len() > 1 && keymap.lookup(&[chord]) == Lookup::None => {
+                keys.pop();
+                self.pending = keys;
+                self.since = since;
+                None
+            }
+            // Séquence interrompue par une touche qui a un sens seule : elle compte seule.
             Lookup::None if keys.len() > 1 => self.feed(keymap, chord, now),
             Lookup::None => None,
         }
@@ -1150,6 +1161,29 @@ mod tests {
             seq.feed(&km, g(), late + Duration::from_millis(100)),
             Some(Action::NavFirst)
         );
+    }
+
+    #[test]
+    fn an_unbound_key_does_not_break_a_sequence() {
+        let km = Keymap::default();
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        let t = Instant::now();
+        // « f ° » sur un AZERTY, touche et caractère dans deux images différentes.
+        assert_eq!(seq.feed(&km, plain(Key::F), t), None);
+        assert_eq!(
+            seq.feed(&km, shifted(Key::Minus), t),
+            None,
+            "touche inconnue ignorée"
+        );
+        assert!(seq.is_pending(t), "f toujours en attente");
+        assert_eq!(
+            seq.feed(&km, Chord::char('°'), t),
+            Some(Action::FilterColor(Color::Purple))
+        );
+        // Le délai court toujours depuis f : la touche ignorée ne le prolonge pas.
+        seq.feed(&km, plain(Key::F), t);
+        seq.feed(&km, shifted(Key::Minus), t + Duration::from_millis(900));
+        assert!(!seq.is_pending(t + Duration::from_millis(1100)));
     }
 
     #[test]
