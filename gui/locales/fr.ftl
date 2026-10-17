@@ -161,7 +161,6 @@ histogram-ev-scale = Échelle en IL
 or-escape = ou Échap
 rating-bar-title = Notes
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
-rating-bar-auto-advance = avance auto
 filter-summary-stars = { $n ->
     [5] 5 étoiles
     [one] { $n } étoile et plus

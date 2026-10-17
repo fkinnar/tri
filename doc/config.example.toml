@@ -211,6 +211,9 @@ load_budget_ms = 8
 # terminées (false : toujours affichées).
 progress_width = 160.0
 progress_hide_done = true
+# Côté des boutons à icône du bandeau de notation (avance automatique, image précédente /
+# suivante), en points.
+bar_icon_size = 24.0
 # Barre de filtres (type, étoiles, drapeau, couleurs) affichée au démarrage ; Maj+F
 # l'affiche ou la masque.
 filter_bar = true

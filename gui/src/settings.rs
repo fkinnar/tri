@@ -103,6 +103,9 @@ pub struct GuiSettings {
     pub progress_width: f32,
     /// Masquer les barres de progression terminées (la barre d'état reste courte).
     pub progress_hide_done: bool,
+    /// Côté des boutons à icône du bandeau de notation (avance automatique, image
+    /// précédente / suivante), en points.
+    pub bar_icon_size: f32,
     /// Barre de filtres affichée au démarrage (Maj+F l'affiche ou la masque).
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
@@ -149,6 +152,7 @@ impl Default for GuiSettings {
             load_budget_ms: 8,
             progress_width: 160.0,
             progress_hide_done: true,
+            bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
             remember_display: true,

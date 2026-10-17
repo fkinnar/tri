@@ -159,7 +159,6 @@ histogram-ev-scale = EV scale
 or-escape = or Esc
 rating-bar-title = Ratings
 rating-bar-applies = ratings apply to the { $n } selected images
-rating-bar-auto-advance = auto-advance
 filter-summary-stars = { $n ->
     [5] 5 stars
     [one] { $n } star and more

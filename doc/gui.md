@@ -107,6 +107,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`[gui] remember_display = false` : toujours elle). Écrit seulement quand l'état change
   (fichier temporaire puis renommage), jamais pendant une capture automatique ni dans les
   tests (dossier de données temporaire).
+- **Bandeau de notation, à droite** (17/10/2026) : image précédente / suivante (chevrons,
+  utiles surtout en 1:1) et avance automatique (étoile suivie d'une flèche : « après une
+  note, on avance » ; fond turquoise quand elle est active), en boutons à icône
+  (`[gui] bar_icon_size`), libellé et raccourci au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
   retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
   grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur

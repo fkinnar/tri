@@ -2700,19 +2700,40 @@ impl TriApp {
                     t!("rating-bar-applies", n = marked),
                 );
             }
+            // À droite (posés de droite à gauche) : avance automatique, puis image suivante
+            // et précédente, des icônes (retour du 17/10/2026).
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let label = t!("rating-bar-auto-advance");
-                if ui
-                    .selectable_label(self.auto_advance, label)
-                    .on_hover_text(self.action_tip(Action::ToggleAutoAdvance))
-                    .clicked()
-                {
-                    clicked = Some(Action::ToggleAutoAdvance);
+                let icon = self.gui.bar_icon_size;
+                for action in [Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev] {
+                    let (rect, response) =
+                        marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
+                    if action == Action::ToggleAutoAdvance && self.auto_advance {
+                        ui.painter()
+                            .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+                    }
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::bar_icon(
+                        ui.painter(),
+                        rect.shrink(icon * 0.2),
+                        action,
+                        color,
+                        &colors,
+                    );
+                    if response.clicked() {
+                        clicked = Some(action);
+                    }
+                    if action == Action::ToggleAutoAdvance {
+                        ui.add_space(6.0);
+                    }
                 }
             });
         });
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
+            Some(action @ (Action::NavPrev | Action::NavNext)) => {
+                let ctx = ui.ctx().clone();
+                self.perform(&ctx, action);
+            }
             Some(action) => self.rate_selected(action),
             None => {}
         }
@@ -4201,6 +4222,23 @@ mod tests {
     }
 
     #[test]
+    fn the_rating_bar_arrows_change_image_and_the_icon_toggles_auto_advance() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.get_by_label("Image suivante").click();
+        h.run_steps(3);
+        assert_eq!(selected_name(&h), "img1.jpg");
+        h.get_by_label("Image précédente").click();
+        h.run_steps(3);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        assert!(!h.state().auto_advance);
+        h.get_by_label("Avance automatique après une note : oui / non")
+            .click();
+        h.run_steps(3);
+        assert!(h.state().auto_advance);
+    }
+
+    #[test]
     fn rename_with_f2_typing_and_enter() {
         let names = ["img0.jpg", "img0.png", "img1.jpg"];
         let (mut h, dir) = harness_files(&names, 64, 48);
@@ -4536,7 +4574,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         press(&mut h, Key::F1, Modifiers::NONE);
-        assert!(h.query_by_label("Image suivante").is_some());
+        assert!(h.query_by_label("Ligne du dessous").is_some());
         // Rangée par thème sans recherche.
         assert!(h.query_by_label("Navigation").is_some());
         assert!(h.query_by_label("Notation").is_some());
@@ -4556,7 +4594,7 @@ mod tests {
             h.query_by_label("Afficher / masquer le panneau des dossiers")
                 .is_some()
         );
-        assert!(h.query_by_label("Image suivante").is_none());
+        assert!(h.query_by_label("Ligne du dessous").is_none());
         // Refermer puis rouvrir : recherche vide.
         press(&mut h, Key::Escape, Modifiers::NONE);
         press(&mut h, Key::F1, Modifiers::NONE);
@@ -4585,7 +4623,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         press(&mut h, Key::F1, Modifiers::NONE);
-        assert!(h.query_by_label("Image suivante").is_some());
+        assert!(h.query_by_label("Ligne du dessous").is_some());
         assert!(h.query_by_label("Flèche droite / l").is_some());
         assert!(h.query_by_label("core.nav.next").is_none());
     }
