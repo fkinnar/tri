@@ -2173,18 +2173,20 @@ impl TriApp {
             painter.rect_filled(back, 4.0, Color32::from_black_alpha(170));
             marks::row(&painter, left_center, notes, size, &self.gui.colors);
         }
-        // Histogramme en bas à droite (données du capteur pour un RAW, quel que soit
-        // l'aperçu affiché).
-        let hint = match file.kind {
-            MediaKind::Raw => t!("view-hint-raw"),
-            MediaKind::Flat => t!("view-hint-flat"),
-        };
-        overlay(
-            &painter,
-            view_rect.right_top() + vec2(-10.0, 10.0),
-            Align2::RIGHT_TOP,
-            &hint,
-        );
+        // Aide-mémoire des touches, en haut à droite : masqué par défaut (retour du
+        // 17/10/2026 : il mordait sur l'image, F1 ouvre l'aide).
+        if self.gui.view.key_hints {
+            let hint = match file.kind {
+                MediaKind::Raw => t!("view-hint-raw"),
+                MediaKind::Flat => t!("view-hint-flat"),
+            };
+            overlay(
+                &painter,
+                view_rect.right_top() + vec2(-10.0, 10.0),
+                Align2::RIGHT_TOP,
+                &hint,
+            );
+        }
     }
 
     /// Analyse d'exposition de l'image `index`, lue dans le cache ; demandée au moteur si

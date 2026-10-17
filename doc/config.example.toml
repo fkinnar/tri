@@ -278,6 +278,9 @@ focus_point = true
 focus_marker = "square"
 focus_marker_size = 28.0
 focus_marker_width = 2.0
+# Aide-mémoire des touches (b, z, i, o, Échap) en haut à droite du plein écran ; masqué par
+# défaut : il mord sur l'image, et F1 ouvre l'aide complète.
+key_hints = false
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :

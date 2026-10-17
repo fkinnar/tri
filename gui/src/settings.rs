@@ -348,6 +348,8 @@ pub struct ViewSettings {
     pub focus_marker_size: f32,
     /// Épaisseur du trait du repère (points).
     pub focus_marker_width: f32,
+    /// Aide-mémoire des touches en haut à droite du plein écran (F1 ouvre l'aide).
+    pub key_hints: bool,
 }
 
 impl Default for ViewSettings {
@@ -361,6 +363,7 @@ impl Default for ViewSettings {
             focus_marker: FocusMarker::default(),
             focus_marker_size: 28.0,
             focus_marker_width: 2.0,
+            key_hints: false,
         }
     }
 }

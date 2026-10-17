@@ -107,6 +107,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`[gui] remember_display = false` : toujours elle). Écrit seulement quand l'état change
   (fichier temporaire puis renommage), jamais pendant une capture automatique ni dans les
   tests (dossier de données temporaire).
+- **Aide-mémoire des touches** en haut à droite du plein écran (« b : JPEG boîtier / RAW,
+  z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
+  l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
 - **Bandeau de notation, à droite** (17/10/2026) : image précédente / suivante (chevrons,
   utiles surtout en 1:1) et avance automatique (étoile suivie d'une flèche : « après une
   note, on avance » ; fond turquoise quand elle est active), en boutons à icône
