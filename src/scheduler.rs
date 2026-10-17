@@ -208,9 +208,19 @@ fn is_zoom_level(level: Level) -> bool {
     matches!(level, Level::Full | Level::EmbeddedFull)
 }
 
-/// Vrai si `index` est l'image affichée ou l'une de ses voisines.
-fn is_near(index: usize, focus: usize) -> bool {
-    index.abs_diff(focus) <= 1
+/// Images affichées : l'image principale d'abord, puis les autres par ordre d'importance.
+/// Par défaut ([`Scheduler::set_focus`]) l'image et ses voisines, suivante puis précédente ;
+/// en comparaison, toutes les images comparées ([`Scheduler::set_shown`]).
+fn default_group(focus: usize, len: usize) -> Vec<usize> {
+    [focus, focus + 1, focus.wrapping_sub(1)]
+        .into_iter()
+        .filter(|&i| i < len)
+        .collect()
+}
+
+/// Rang de `index` parmi les images affichées `group` (0 : l'image principale).
+fn rank_in(group: &[usize], index: usize) -> Option<usize> {
+    group.iter().position(|&i| i == index)
 }
 
 /// Une tâche : un fichier (par sa position) et un niveau.
@@ -242,7 +252,16 @@ const STANDARD_BACKGROUND: u8 = 6;
 ///
 /// (Aperçus boîtier et 1:1 du JPEG passent par les workers légers, rendus RAW par le
 /// worker lourd : chaque file ne voit que ses propres niveaux.)
-fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
+#[cfg(test)]
+fn priority(job: Job, focus: Option<usize>) -> (u8, usize) {
+    let group = focus
+        .map(|f| default_group(f, usize::MAX))
+        .unwrap_or_default();
+    priority_in(job, focus, &group)
+}
+
+/// [`priority`] pour le groupe d'images affichées `group` (voir [`default_group`]).
+fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u8, usize) {
     // Étape pour l'image affichée et ses voisines : ajusté (0), analyse (1), 1:1 (2).
     let (stage, background_class) = match level {
         Level::Thumbnail => return (3, index),
@@ -251,22 +270,14 @@ fn priority((index, level): Job, focus: Option<usize>) -> (u8, usize) {
         Level::Exposure => (1, EXPOSURE_BACKGROUND),
         Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
     };
-    let near = focus.and_then(|f| {
-        if index == f {
-            Some(0)
-        } else if index == f + 1 {
-            Some(1)
-        } else if index + 1 == f {
-            Some(2)
-        } else {
-            None
-        }
-    });
+    let near = rank_in(group, index);
+    // Autres images affichées : voisines (2) en plein écran, plus en comparaison.
+    let others = group.len().saturating_sub(1).max(2);
     match (near, focus) {
-        // Image affichée : ajusté, analyse, 1:1 (0, 1, 2) ; puis les voisines, étape par
-        // étape : ajusté (3, 4), analyse (5, 6), 1:1 (7, 8).
+        // Image affichée : ajusté, analyse, 1:1 (0, 1, 2) ; puis les autres, étape par
+        // étape : ajusté (3, 4…), analyse, 1:1.
         (Some(0), _) => (0, stage),
-        (Some(rank), _) => (0, 3 + stage * 2 + (rank - 1)),
+        (Some(rank), _) => (0, 3 + stage * others + (rank - 1)),
         (None, Some(f)) => (
             background_class,
             index.abs_diff(f) * 2 + usize::from(index < f),
@@ -292,6 +303,8 @@ struct State {
     generation: u64,
     files: Vec<MediaFile>,
     focus: Option<usize>,
+    /// Images affichées, `focus` en tête (voir [`default_group`]).
+    group: Vec<usize>,
     pending: HashSet<Job>,
     running: Vec<Running>,
     progress: [Progress; 4],
@@ -309,7 +322,7 @@ impl State {
         if self.paused {
             return None;
         }
-        let focus = self.focus;
+        let (focus, group) = (self.focus, &self.group);
         // Travail de fond du plus rapide au plus lent : la grille d'abord, puis les aperçus
         // boîtier ; pas de rendu LibRaw de fond (qui occupe tous les cœurs) avant.
         let left = |level: Level| {
@@ -327,8 +340,8 @@ impl State {
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
-            .filter(|job| !blocked(priority(**job, focus).0))
-            .min_by_key(|job| (priority(**job, focus), job.0))?;
+            .filter(|job| !blocked(priority_in(**job, focus, group).0))
+            .min_by_key(|job| (priority_in(**job, focus, group), job.0))?;
         self.pending.remove(&job);
         let cancel = Arc::new(AtomicBool::new(false));
         self.running.push(Running {
@@ -436,6 +449,7 @@ impl Scheduler {
         let (policy, exposure) = (s.raw_previews, s.exposure);
         s.generation += 1;
         s.focus = None;
+        s.group.clear();
         s.pending = (0..files.len())
             .flat_map(|i| {
                 background_levels(files[i].kind, policy, exposure)
@@ -464,15 +478,30 @@ impl Scheduler {
     /// pour des images qui ne sont plus voisines sont abandonnées (un 1:1 en cours est
     /// annulé) et signalées par [`Event::Dropped`].
     pub fn set_focus(&self, index: usize) {
+        let len = self.shared.lock().files.len();
+        self.set_shown(&default_group(index, len));
+    }
+
+    /// Indique les images affichées, la principale d'abord (comparaison côte à côte :
+    /// toutes les images comparées, l'active en tête) : leurs aperçus passent en tête, et
+    /// [`Scheduler::request`] les accepte toutes. Comme [`Scheduler::set_focus`], abandonne
+    /// les demandes pour les images qui ne sont plus affichées.
+    pub fn set_shown(&self, images: &[usize]) {
         let mut s = self.shared.lock();
-        if index >= s.files.len() || s.focus == Some(index) {
+        let len = s.files.len();
+        let group: Vec<usize> = images.iter().copied().filter(|&i| i < len).collect();
+        let Some(&index) = group.first() else {
+            return;
+        };
+        if s.group == group {
             return;
         }
         s.focus = Some(index);
+        s.group = group;
         let dropped: Vec<Job> = s
             .on_demand
             .iter()
-            .filter(|&&(i, _)| !is_near(i, index))
+            .filter(|&&(i, _)| rank_in(&s.group, i).is_none())
             .filter(|j| s.pending.contains(j))
             .copied()
             .collect();
@@ -489,26 +518,29 @@ impl Scheduler {
             });
         }
         // Un 1:1 en cours pour une image éloignée est annulé (signalé à sa fin).
-        s.cancel_running(|r| !is_zoom_level(r.job.1) || is_near(r.job.0, index));
+        let group = s.group.clone();
+        s.cancel_running(|r| !is_zoom_level(r.job.1) || rank_in(&group, r.job.0).is_some());
         drop(s);
         self.shared.work.notify_all();
         deliver(&self.shared);
     }
 
-    /// Demande une image hors du travail de fond, pour l'image affichée ou l'une de ses
-    /// voisines : 1:1 (`Full`, `EmbeddedFull` ; ceux des voisines servent au préchargement
+    /// Demande une image hors du travail de fond, pour une image affichée (l'image
+    /// courante, ses voisines, ou une image comparée, voir [`Scheduler::set_shown`]) : 1:1 (`Full`, `EmbeddedFull` ; ceux des voisines servent au préchargement
     /// quand on navigue zoomé) ou rendu RAW (`Standard`) en politique
     /// [`RawPreviews::OnDemand`]. Ne compte pas dans la progression ; signalée par `Ready`
     /// (immédiatement si déjà en cache), `Failed`, ou `Dropped` si l'image affichée
     /// s'éloigne avant.
     ///
-    /// Ignorée sans image affichée, si `index` n'en est pas voisin, ou si la tâche est déjà
+    /// Ignorée sans image affichée, si `index` n'est pas affichée, ou si la tâche est déjà
     /// prévue.
     pub fn request(&self, index: usize, level: Level) {
         let mut s = self.shared.lock();
-        let Some(focus) = s.focus else { return };
+        if s.focus.is_none() {
+            return;
+        }
         let job = (index, level);
-        if !is_near(index, focus)
+        if rank_in(&s.group, index).is_none()
             || index >= s.files.len()
             || s.pending.contains(&job)
             || s.running.iter().any(|r| r.job == job)

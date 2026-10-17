@@ -78,6 +78,7 @@ pub fn navigate(
         | Action::ToggleRatingBar
         | Action::ToggleAutoAdvance
         | Action::SelectToggle
+        | Action::Compare
         | Action::SelectVisual
         | Action::SelectAll
         | Action::SelectClear

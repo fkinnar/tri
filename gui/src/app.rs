@@ -41,6 +41,8 @@ use crate::view::{self, Source};
 enum Mode {
     Grid,
     View,
+    /// Comparaison côte à côte des images de `TriApp::compare`.
+    Compare,
 }
 
 /// Une grande texture, avec les dimensions d'origine de l'image (la texture a pu être
@@ -153,6 +155,12 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Images comparées côte à côte (`c`), dans l'ordre de la liste.
+    compare: Vec<PathBuf>,
+    /// Colonnes de la dernière disposition de la comparaison (navigation haut / bas).
+    compare_cols: usize,
+    /// Indication passagère dans la barre d'état (effacée à la touche suivante).
+    hint: Option<String>,
     /// Sélection multiple (images marquées, mode visuel).
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
@@ -315,6 +323,9 @@ impl TriApp {
             file_dialog: None,
             file_error: None,
             selection: Default::default(),
+            compare: Vec::new(),
+            compare_cols: 1,
+            hint: None,
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 4],
@@ -354,7 +365,8 @@ impl TriApp {
             source: Source::default(),
             zoom: None,
             zoom_anchor: None,
-            big: Lru::new(gui.view.textures),
+            // En comparaison, chaque image garde son aperçu et son 1:1.
+            big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
@@ -768,6 +780,17 @@ impl TriApp {
         self.reveal = Some(reveal);
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
+        }
+        self.tell_shown();
+    }
+
+    /// Indique au moteur les images affichées (priorité de calcul) : l'image courante et
+    /// ses voisines, ou en comparaison toutes les images comparées.
+    fn tell_shown(&self) {
+        let Some(engine) = &self.engine else { return };
+        if self.mode == Mode::Compare {
+            engine.scheduler.set_shown(&self.displayed());
+        } else {
             engine.scheduler.set_focus(self.selected);
         }
     }
@@ -957,6 +980,10 @@ impl TriApp {
 
     /// Exécute une action (clavier aujourd'hui, souris ou plugin demain).
     fn perform(&mut self, ctx: &egui::Context, action: Action) {
+        self.hint = None;
+        if self.mode == Mode::Compare && self.compare_perform(action) {
+            return;
+        }
         match action {
             Action::Quit => {
                 #[cfg(test)]
@@ -973,6 +1000,8 @@ impl TriApp {
                     self.rating_dialog = None;
                 } else if self.selection.is_visual() {
                     self.selection.end_visual(false);
+                } else if self.mode == Mode::Compare {
+                    self.leave_compare();
                 } else if self.selection.visible(&self.files) > 0 {
                     self.selection.clear();
                 } else if self.mode == Mode::View {
@@ -992,8 +1021,9 @@ impl TriApp {
                 self.source = self.source.toggled();
                 self.request_zoom();
             }
+            Action::Compare => self.start_compare(),
             Action::ToggleZoom => {
-                if self.mode == Mode::View {
+                if matches!(self.mode, Mode::View | Mode::Compare) {
                     self.zoom = match self.zoom {
                         Some(_) => None,
                         None => Some(vec2(0.5, 0.5)),
@@ -1003,7 +1033,7 @@ impl TriApp {
             }
             Action::PanLeft | Action::PanRight | Action::PanUp | Action::PanDown => {
                 // Seulement dans une image zoomée ; sans effet ailleurs.
-                if self.mode == Mode::View && self.zoom.is_some() {
+                if matches!(self.mode, Mode::View | Mode::Compare) && self.zoom.is_some() {
                     let step = self.gui.view.pan_step;
                     self.pan += match action {
                         Action::PanLeft => vec2(-step, 0.0),
@@ -1122,6 +1152,22 @@ impl TriApp {
     /// ([`TriApp::refilter`]) : on ne bouge pas, sinon on sauterait une image. L'autre image
     /// d'une paire RAW+JPEG, notée en même temps, est sautée aussi.
     fn rate_selected(&mut self, action: Action) {
+        // Comparaison : l'image active seule ; avance automatique vers l'image comparée
+        // suivante.
+        if self.mode == Mode::Compare {
+            if let Some(file) = self.files.get(self.selected) {
+                self.rate_path(file.path.clone(), action);
+            }
+            let panes = self.compare_indices();
+            if self.auto_advance
+                && self.note_error.is_none()
+                && let Some(pos) = panes.iter().position(|&i| i == self.selected)
+                && let Some(&next) = panes.get(pos + 1)
+            {
+                self.select(next);
+            }
+            return;
+        }
         let targets = self.selection.targets(&self.files, self.selected);
         if targets.len() > 1 {
             self.rate_many(&targets, action);
@@ -1218,9 +1264,7 @@ impl TriApp {
         self.selected = index;
         self.selection.update_visual(&self.files, index);
         self.focus_since = Instant::now();
-        if let Some(engine) = &self.engine {
-            engine.scheduler.set_focus(index);
-        }
+        self.tell_shown();
         if reveal {
             self.reveal = Some(Reveal::Minimal);
         }
@@ -1241,6 +1285,136 @@ impl TriApp {
         }
     }
 
+    /// Images affichées, la principale d'abord : en plein écran l'image et ses voisines
+    /// (préchargement), en comparaison les images comparées (l'active d'abord).
+    fn displayed(&self) -> Vec<usize> {
+        let n = self.files.len();
+        let current = self.selected;
+        match self.mode {
+            Mode::Grid => Vec::new(),
+            Mode::View => [current, current + 1, current.wrapping_sub(1)]
+                .into_iter()
+                .filter(|&i| i < n)
+                .collect(),
+            Mode::Compare => {
+                let mut images = self.compare_indices();
+                if let Some(pos) = images.iter().position(|&i| i == current) {
+                    images[..=pos].rotate_right(1);
+                }
+                images
+            }
+        }
+    }
+
+    /// Indices (dans la liste affichée) des images comparées encore visibles.
+    fn compare_indices(&self) -> Vec<usize> {
+        self.compare
+            .iter()
+            .filter_map(|p| self.files.iter().position(|f| &f.path == p))
+            .collect()
+    }
+
+    /// Entre en comparaison avec les images sélectionnées (au moins deux).
+    fn start_compare(&mut self) {
+        let mut targets = self.selection.targets(&self.files, self.selected);
+        if targets.len() < 2 {
+            self.hint = Some(
+                "comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic)".into(),
+            );
+            return;
+        }
+        let max = self.gui.compare.max.max(2);
+        if targets.len() > max {
+            self.hint = Some(format!(
+                "comparaison limitée aux {max} premières ([gui.compare] max)"
+            ));
+            targets.truncate(max);
+        }
+        // Image active : l'image courante si elle est comparée, sinon la première.
+        let current = self.files.get(self.selected).map(|f| f.path.clone());
+        let active = match current {
+            Some(p) if targets.contains(&p) => p,
+            _ => targets[0].clone(),
+        };
+        self.compare = targets;
+        self.mode = Mode::Compare;
+        self.zoom = None;
+        self.zoom_anchor = None;
+        if let Some(index) = self.files.iter().position(|f| f.path == active) {
+            self.select(index);
+        }
+        self.tell_shown();
+        self.request_zoom();
+    }
+
+    /// Quitte la comparaison vers la grille, sur l'image active.
+    fn leave_compare(&mut self) {
+        self.mode = Mode::Grid;
+        self.compare.clear();
+        self.zoom = None;
+        self.zoom_anchor = None;
+        self.reveal = Some(Reveal::Minimal);
+        self.tell_shown();
+    }
+
+    /// Actions propres à la comparaison ; `false` : action ordinaire (zoom, source,
+    /// déplacement, panneaux…).
+    fn compare_perform(&mut self, action: Action) -> bool {
+        let panes = self.compare_indices();
+        let Some(active) = panes.iter().position(|&i| i == self.selected) else {
+            // Image active disparue (filtre) : la première.
+            match panes.first() {
+                Some(&first) => self.select(first),
+                None => self.leave_compare(),
+            }
+            return false;
+        };
+        let (n, cols) = (panes.len(), self.compare_cols);
+        let target = match action {
+            Action::NavPrev => Some(crate::compare::neighbour(active, n, cols, -1, 0)),
+            Action::NavNext => Some(crate::compare::neighbour(active, n, cols, 1, 0)),
+            Action::NavUp => Some(crate::compare::neighbour(active, n, cols, 0, -1)),
+            Action::NavDown => Some(crate::compare::neighbour(active, n, cols, 0, 1)),
+            Action::NavFirst | Action::NavPageUp => Some(0),
+            Action::NavLast | Action::NavPageDown => Some(n - 1),
+            _ => None,
+        };
+        if let Some(t) = target {
+            self.select(panes[t]);
+            return true;
+        }
+        let path = self.files[self.selected].path.clone();
+        match action {
+            Action::Open => {
+                self.compare.clear();
+                self.mode = Mode::View;
+                self.tell_shown();
+                self.request_zoom();
+            }
+            // Éliminer : l'image active quitte la comparaison (et la sélection).
+            Action::SelectToggle => {
+                self.compare.retain(|p| *p != path);
+                self.tell_shown();
+                if self.selection.contains(&path) {
+                    self.selection.toggle(&path);
+                }
+                let left = self.compare_indices();
+                match left.get(active.min(left.len().saturating_sub(1))) {
+                    Some(&next) => self.select(next),
+                    None => self.leave_compare(),
+                }
+            }
+            Action::Compare => self.leave_compare(),
+            Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
+            Action::FileRename | Action::FileDelete | Action::FileReveal | Action::FileEdit => {
+                let at = pos2(200.0, 200.0);
+                self.file_action(action, vec![path], at);
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Plein écran : demande au moteur ce que l'affichage va réclamer, **dans l'ordre des
     /// priorités** : image affichée ajustée (rendu RAW en mode RAW), son 1:1 si zoomé, puis
     /// les voisines (préchargement) dans le même ordre. L'ordre d'envoi compte : un worker
@@ -1248,15 +1422,10 @@ impl TriApp {
     /// pas ; envoyer d'abord les 1:1 faisait passer un 100 % (~4,5 s) devant le rendu
     /// ajusté (~0,5 s).
     fn request_zoom(&mut self) {
-        if self.mode != Mode::View || self.files.is_empty() {
+        let images = self.displayed();
+        if images.is_empty() {
             return;
         }
-        let n = self.files.len();
-        let current = self.selected;
-        let images: Vec<usize> = [current, current + 1, current.wrapping_sub(1)]
-            .into_iter()
-            .filter(|&i| i < n)
-            .collect();
         let mut wanted = Vec::new();
         for (rank, &i) in images.iter().enumerate() {
             let kind = self.files[i].kind;
@@ -1344,11 +1513,10 @@ impl TriApp {
                 }
             }
         }
-        if self.mode != Mode::View || self.files.is_empty() {
+        let displayed = self.displayed();
+        if displayed.is_empty() {
             return;
         }
-        let n = self.files.len();
-        let current = self.selected;
         // Demandes au moteur (dédoublonnées : seules les nouvelles partent).
         self.request_zoom();
         // Repasser ici à la fin de l'attente, pour lancer le 100 % RAW.
@@ -1363,15 +1531,10 @@ impl TriApp {
             }
         }
         let Some(engine) = &self.engine else { return };
-        let neighbours = [current + 1, current.wrapping_sub(1)]
-            .into_iter()
-            .filter(|&i| i < n);
         let mut wanted = Vec::new();
-        for (index, zoomed) in
-            // Zoomé, les voisines aussi en 1:1 (préchargement).
-            std::iter::once((current, self.zoom.is_some()))
-                .chain(neighbours.map(|i| (i, self.zoom.is_some())))
-        {
+        // Zoomé, les voisines aussi en 1:1 (préchargement).
+        let zoomed = self.zoom.is_some();
+        for index in displayed {
             let kind = self.files[index].kind;
             let level = view::pick(kind, self.source, zoomed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
@@ -1388,6 +1551,151 @@ impl TriApp {
             self.wanted = keys;
             engine.loader.want(wanted);
         }
+    }
+
+    /// Comparaison : les images comparées côte à côte, ajustées ou à 1:1 au même endroit
+    /// (zoom et déplacement liés), l'image active encadrée.
+    fn compare_view(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let panes = self.compare_indices();
+        if panes.is_empty() {
+            self.leave_compare();
+            return;
+        }
+        let area = ui.available_rect_before_wrap();
+        ui.allocate_rect(area, Sense::hover());
+        let settings = self.gui.compare;
+        // Proportions : celles de la première image dont un aperçu est chargé.
+        let aspect = panes
+            .iter()
+            .find_map(|&i| {
+                [Level::Embedded, Level::Standard].iter().find_map(|&l| {
+                    self.big
+                        .get(&(self.files[i].path.clone(), l))
+                        .map(|b| b.original.x / b.original.y)
+                })
+            })
+            .unwrap_or(1.5);
+        let (cols, rects) = crate::compare::layout(panes.len(), area, aspect, settings.gap);
+        self.compare_cols = cols;
+        let deadline = Instant::now() + self.gui.load_budget();
+        let zoomed = self.zoom.is_some();
+        let pan = std::mem::take(&mut self.pan);
+        let mut waiting = false;
+        let mut new_center = None;
+        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+        for (&index, &rect) in panes.iter().zip(&rects) {
+            let file = self.files[index].clone();
+            let id = ui.scope_id().with(("compare", &file.path));
+            let response = ui.interact(rect, id, Sense::click_and_drag());
+            let painter = ui.painter_at(rect);
+            painter.rect_filled(rect, 0.0, self.gui.colors.view_background);
+            let zoom_level = view::zoom_level(file.kind, self.source);
+            let desired = view::pick(file.kind, self.source, zoomed, |l| self.ready(index, l));
+            let shown = view::pick(file.kind, self.source, zoomed, |l| {
+                self.ready(index, l) && self.loaded(index, l)
+            });
+            waiting |= shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
+            let drawable: Option<(TextureHandle, Vec2)> = match shown {
+                Some(Level::Thumbnail) => self
+                    .thumbnail_texture(&ctx, index, deadline)
+                    .map(|t| (t.clone(), t.size_vec2())),
+                Some(level) => self
+                    .big
+                    .get(&(file.path.clone(), level))
+                    .map(|b| (b.texture.clone(), b.original)),
+                None => None,
+            };
+            if let Some((texture, original)) = drawable {
+                let image_rect = match (self.zoom, shown == Some(zoom_level)) {
+                    // 1:1 au même point relatif de chaque image.
+                    (Some(center), true) => {
+                        let size = original / ctx.pixels_per_point();
+                        let mut c = new_center.unwrap_or(center);
+                        if new_center.is_none() {
+                            if response.dragged() {
+                                let d = response.drag_delta();
+                                c -= vec2(d.x / size.x, d.y / size.y);
+                            }
+                            c += vec2(
+                                pan.x * rect.width() / size.x,
+                                pan.y * rect.height() / size.y,
+                            );
+                            if c != center {
+                                new_center = Some(c);
+                            }
+                        }
+                        let c = view::clamp_center(rect.size(), size, c);
+                        view::zoom_rect(rect, size, c)
+                    }
+                    _ => view::fit_rect(rect, original),
+                };
+                painter.image(texture.id(), image_rect, uv, Color32::WHITE);
+                if self.clipping
+                    && let Some(mask) = self.mask_texture(&ctx, index)
+                {
+                    let opacity = self.gui.histogram.clipping_opacity;
+                    painter.image(
+                        mask.id(),
+                        image_rect,
+                        uv,
+                        Color32::WHITE.gamma_multiply(opacity),
+                    );
+                }
+            }
+            // Nom, ce qui est affiché, notes.
+            let mut label = file_name(&file.path);
+            if let Some(level) = shown {
+                label.push_str(" · ");
+                label.push_str(view::label(file.kind, level));
+            }
+            let font = egui::FontId::proportional(13.0);
+            let galley = painter.layout_no_wrap(label, font, Color32::WHITE);
+            let text_pos = rect.left_bottom() + vec2(8.0, -8.0 - galley.size().y);
+            painter.rect_filled(
+                Rect::from_min_size(text_pos - vec2(4.0, 2.0), galley.size() + vec2(8.0, 4.0)),
+                3.0,
+                Color32::from_black_alpha(160),
+            );
+            painter.galley(text_pos, galley, Color32::WHITE);
+            let notes = self.folder.notes.notes(&file.path).clone();
+            let size = self.gui.view.marks;
+            marks::row(
+                &painter,
+                rect.left_top() + vec2(10.0, 10.0 + size / 2.0),
+                &notes,
+                size,
+                &self.gui.colors,
+            );
+            // Image active : cadre de la couleur de sélection.
+            if index == self.selected {
+                let color = self
+                    .gui
+                    .colors
+                    .selection
+                    .map_or(ui.visuals().selection.bg_fill, Color32::from);
+                painter.rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(settings.frame, color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if response.clicked() || response.drag_started() {
+                self.select(index);
+            }
+            if response.double_clicked() {
+                self.select(index);
+                self.compare.clear();
+                self.mode = Mode::View;
+                self.tell_shown();
+            }
+            self.open_rating_dialog(&response, index);
+        }
+        if let Some(c) = new_center {
+            self.zoom = Some(c);
+        }
+        self.view_waiting = waiting;
     }
 
     /// Plein écran : l'image sélectionnée, ajustée ou à 100 %, avec ce qui est affiché.
@@ -1780,6 +2088,10 @@ impl TriApp {
                 ui.separator();
                 ui.colored_label(self.gui.colors.error, error);
             }
+            if let Some(hint) = &self.hint {
+                ui.separator();
+                ui.label(hint);
+            }
             if !self.key_warnings.is_empty() {
                 ui.separator();
                 ui.colored_label(
@@ -2007,9 +2319,7 @@ impl TriApp {
         self.refilter(Reveal::Minimal);
         if let Some(index) = select.and_then(|p| self.files.iter().position(|f| f.path == p)) {
             self.selected = index;
-            if let Some(engine) = &self.engine {
-                engine.scheduler.set_focus(index);
-            }
+            self.tell_shown();
         }
         if self.files.is_empty() {
             self.mode = Mode::Grid;
@@ -2081,7 +2391,8 @@ impl TriApp {
             ui.label("Notes");
             clicked = marks::controls(ui, &notes, &colors, size);
             ui.weak(name);
-            if marked > 1 {
+            // En comparaison, seule l'image active est notée.
+            if marked > 1 && self.mode != Mode::Compare {
                 ui.colored_label(
                     Color32::from(self.gui.colors.marked),
                     format!("notes appliquées aux {marked} images sélectionnées"),
@@ -2529,7 +2840,7 @@ impl TriApp {
         }
         let ready = self.progress[0].total > 0
             && self.progress[0].done == self.progress[0].total
-            && !(self.mode == Mode::View && self.view_waiting);
+            && !(matches!(self.mode, Mode::View | Mode::Compare) && self.view_waiting);
         let timeout = shot.started.elapsed() > Duration::from_secs(60);
         // Au moins une seconde : laisser finir les animations (fondu d'ouverture des
         // fenêtres), sinon la capture montre un état intermédiaire.
@@ -2638,6 +2949,8 @@ impl eframe::App for TriApp {
                 });
             } else if self.mode == Mode::View {
                 self.viewer(ui);
+            } else if self.mode == Mode::Compare {
+                self.compare_view(ui);
             } else {
                 self.grid(ui);
             }
@@ -3200,6 +3513,56 @@ mod tests {
             h.state().selection.is_empty(),
             "clic simple : sélection effacée"
         );
+    }
+
+    #[test]
+    fn compare_needs_two_images_then_rates_and_eliminates_the_active_one() {
+        let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(
+            h.state().mode,
+            Mode::Grid,
+            "une seule image : pas de comparaison"
+        );
+        assert!(h.query_by_label_contains("au moins 2 images").is_some());
+        // a, b, c sélectionnées (mode visuel), puis c.
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 3);
+        assert_eq!(selected_name(&h), "c.jpg", "l'image courante reste active");
+        // Les flèches changent l'image active, sans sortir de la comparaison.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(
+            selected_name(&h),
+            "c.jpg",
+            "dernière image comparée : on y reste"
+        );
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "b.jpg");
+        // La note va à l'image active seule (pas à toute la sélection).
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        let photos = dir.path().join("photos");
+        let stars = |n: &str| tri::xmp::read(&photos.join(n)).unwrap().stars;
+        assert_eq!((stars("a.jpg"), stars("b.jpg"), stars("c.jpg")), (0, 4, 0));
+        // Espace élimine l'image active : elle quitte la comparaison et la sélection.
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(h.state().compare.len(), 2);
+        assert!(!h.state().selection.contains(&photos.join("b.jpg")));
+        assert_eq!(selected_name(&h), "c.jpg");
+        // Échap : retour à la grille, la sélection restante gardée.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        assert_eq!(h.state().selection.len(), 2);
+        // Entrée depuis la comparaison : plein écran sur l'image active.
+        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
     }
 
     #[test]

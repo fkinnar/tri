@@ -16,6 +16,7 @@
 
 mod actions;
 mod app;
+mod compare;
 mod files;
 mod grid;
 mod histogram;

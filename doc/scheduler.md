@@ -31,12 +31,17 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   l'image regardée arrive au plus tôt. Une priorité ne vaut que pour les tâches *en
   attente* : une tâche lancée ne s'interrompt pas (le dématriçage X-Trans moins encore),
   d'où l'importance de l'ordre d'envoi des demandes (voir [gui.md](gui.md)).
-- **API** : `set_folder(files) -> génération`, `set_focus(index)`,
+- **API** : `set_folder(files) -> génération`, `set_focus(index)`, `set_shown(images)`,
   `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
   `Drop` annule et arrête les threads.
+- **Images affichées** (17/10/2026) : un groupe, l'image principale en tête.
+  `set_focus(n)` = l'image et ses voisines (n, n+1, n-1 : plein écran) ; `set_shown`
+  donne un groupe quelconque (comparaison côte à côte : toutes les images comparées,
+  l'active d'abord). Les priorités « image affichée » et les demandes valent pour tout le
+  groupe, dans son ordre ; ce qui sort du groupe est abandonné (`Dropped`).
 - **Demandes hors travail de fond** (`request`) : 1:1 (`Full`, `EmbeddedFull`) et rendus
-  RAW (`Standard`) de l'image affichée **et de ses voisines** (préchargement quand on
-  navigue zoomé). Elles ne comptent pas dans la progression (`on_demand`). Priorité : les
+  RAW (`Standard`) des images affichées : l'image **et ses voisines** (préchargement quand
+  on navigue zoomé), ou les images comparées. Elles ne comptent pas dans la progression (`on_demand`). Priorité : les
   1:1 d'abord (image affichée, puis suivante, puis précédente). Changer d'image abandonne
   celles qui ne sont plus voisines, annule un 1:1 en cours pour une image éloignée, et le
   **signale par `Event::Dropped`** : l'interface sait ainsi qu'elle doit redemander si l'on

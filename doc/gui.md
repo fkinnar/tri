@@ -88,6 +88,20 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
+  les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
+  garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
+  grand possible (nombre de colonnes choisi d'après les proportions des images et de la
+  fenêtre, dernière ligne centrée). L'**image active** (cadre de la couleur de sélection)
+  est l'image courante : panneau des métadonnées, histogramme et bandeau la suivent ;
+  flèches / hjkl la changent (haut / bas d'une ligne à l'autre), clic aussi. Les notes
+  vont à l'image active seule (avance automatique : vers l'image comparée suivante) ;
+  `Espace` **l'élimine** (elle quitte la comparaison et la sélection : on garde la
+  meilleure d'une rafale par élimination) ; `Entrée` ou double-clic l'ouvre en plein écran ;
+  Échap ou `c` revient à la grille. `z` : **1:1 lié**, au même point relatif de chaque
+  image, déplacé ensemble (glisser n'importe laquelle, Maj + flèches) ; `b` change la
+  source de toutes ; `o` superpose les zones. Le moteur sert toutes les images comparées
+  (`Scheduler::set_shown`), pas seulement l'image courante et ses voisines.
 - **Sélection multiple** (17/10/2026, moteur : `tri::selection`, voir `selection.md`) :
   `Espace` marque, `v` mode visuel (plage qui suit le curseur, `v` valide, Échap annule),
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
@@ -492,6 +506,15 @@ touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boît
 la grille.
 
 Sélection multiple (17/10/2026) : voir [selection.md](selection.md#tests).
+
+Comparaison (17/10/2026) : `c` refusé avec une seule image (indication dans la barre
+d'état) ; trois images en mode visuel puis `c` : l'image courante reste active, les
+flèches restent dans la comparaison, la note ne va qu'à l'image active, `Espace` l'élimine
+(comparaison et sélection), Échap revient à la grille en gardant la sélection, Entrée ouvre
+le plein écran. Disposition (`compare.rs`) : deux paysages côte à côte en fenêtre large,
+l'un sous l'autre en fenêtre haute, portraits, dernière ligne centrée, voisines bornées.
+Moteur : `tests/scheduler.rs` vérifie que toutes les images comparées sont servies,
+l'active d'abord, et que revenir au plein écran abandonne les autres.
 
 Actions sur les fichiers (17/10/2026) : `F2`, le nom tapé remplace le nom sélectionné
 (« q » ne quitte pas), la boîte annonce l'image et sa paire renommées, Entrée renomme sur le

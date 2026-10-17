@@ -192,6 +192,8 @@ pub enum Action {
     ToggleRatingBar,
     /// Avance automatique à l'image suivante après une note : oui / non.
     ToggleAutoAdvance,
+    /// Comparer les images sélectionnées côte à côte.
+    Compare,
     /// Sélectionner / désélectionner l'image courante.
     SelectToggle,
     /// Mode visuel : la plage suit l'image courante.
@@ -252,7 +254,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 66] = [
+    pub const ALL: [Action; 67] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -282,6 +284,7 @@ impl Action {
         Action::ToggleAutoAdvance,
         Action::SelectToggle,
         Action::SelectVisual,
+        Action::Compare,
         Action::SelectAll,
         Action::SelectClear,
         Action::FileRename,
@@ -356,6 +359,7 @@ impl Action {
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
+            Action::Compare => "Comparer les images sélectionnées côte à côte",
             Action::SelectToggle => "Sélectionner / désélectionner l'image",
             Action::SelectVisual => "Mode visuel : sélectionner une plage (v pour valider)",
             Action::SelectAll => "Tout sélectionner",
@@ -419,7 +423,7 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
-            SelectToggle | SelectVisual | SelectAll | SelectClear => Group::Selection,
+            SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Quit => Group::App,
         }
     }
@@ -459,6 +463,7 @@ impl Action {
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
+            Action::Compare => "core.view.compare",
             Action::SelectToggle => "core.select.toggle",
             Action::SelectVisual => "core.select.visual",
             Action::SelectAll => "core.select.all",
@@ -661,6 +666,7 @@ const SELECTION: &[Binding] = {
     &[
         (&[plain(Key::Space)], SelectToggle),
         (&[plain(Key::V)], SelectVisual),
+        (&[plain(Key::C)], Compare),
         (&[ctrl(Key::A)], SelectAll),
         (
             &[Chord {

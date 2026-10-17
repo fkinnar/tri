@@ -216,6 +216,16 @@ pan_step = 0.2
 # Taille des notes (étoiles, couleurs, drapeau) en plein écran.
 marks = 18.0
 
+[gui.compare]
+# Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
+# les premières) : chacune garde un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique
+# pour 26 Mpx).
+max = 6
+# Espace entre les images (points).
+gap = 4.0
+# Épaisseur du cadre de l'image active (celle que l'on note).
+frame = 3.0
+
 [gui.folders]
 # Panneau des dossiers, à gauche de la grille : affiché au démarrage (Maj+D l'affiche ou le
 # masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,

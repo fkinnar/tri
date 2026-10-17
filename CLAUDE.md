@@ -526,8 +526,10 @@ explicitement par l'utilisateur comme important.
       Ctrl+A / Ctrl+Maj+A, Maj+clic, Cmd/Ctrl+clic ; notes, corbeille, éditeur sur la
       sélection. Reste : déplacer / copier plusieurs images (avec « copier / déplacer
       vers… »).
-- [ ] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
-      17/10/2026 : **plus de 2 images** possibles.
+- [x] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
+      17/10/2026 : **plus de 2 images** possibles. Fait le 17/10/2026 : `c` sur la
+      sélection (6 au plus, `[gui.compare] max`), image active notée, `Espace` élimine,
+      1:1 lié (`z`), moteur `Scheduler::set_shown`.
 - [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).
 - [ ] **Annuler** (`u`, réservé) : historique à concevoir (paires, filtres actifs, XMP
       modifiés ailleurs ; session seule ou persistant).

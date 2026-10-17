@@ -662,6 +662,37 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
 }
 
 #[test]
+fn shown_images_of_a_comparison_are_all_served() {
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(10, MediaKind::Raw);
+    fake.mark_all_cached(&all, &[Level::Thumbnail, Level::Embedded, Level::Standard]);
+    let (scheduler, events) = start(&fake, 1);
+    let generation = scheduler.set_folder(all);
+    // Comparaison de 2, 5 et 8 (5 active) : toutes acceptent un 1:1, pas les autres.
+    scheduler.set_shown(&[5, 2, 8]);
+    for i in [2, 5, 8, 6] {
+        scheduler.request(i, Level::EmbeddedFull);
+    }
+    assert!(scheduler.wait_idle(LONG));
+    let mut done: Vec<usize> = ready(&events, generation, Level::EmbeddedFull)
+        .into_iter()
+        .collect();
+    done.sort();
+    assert_eq!(done, [2, 5, 8], "6 n'est pas affichée");
+    // L'image active d'abord.
+    assert_eq!(fake.order(Level::EmbeddedFull)[0], "img5.RAF");
+    // Retour au plein écran sur 5 : 2 et 8 ne sont plus affichées.
+    scheduler.set_paused(true);
+    scheduler.set_shown(&[2, 8]);
+    scheduler.request(8, Level::Full);
+    scheduler.set_focus(5);
+    scheduler.set_paused(false);
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Full).is_empty());
+    assert_eq!(dropped(&events, generation), [(8, Level::Full)]);
+}
+
+#[test]
 fn focus_out_of_range_is_ignored() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let (scheduler, _) = start(&fake, 1);

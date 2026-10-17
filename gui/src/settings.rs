@@ -106,6 +106,8 @@ pub struct GuiSettings {
     pub grid: GridSettings,
     /// `[gui.view]`.
     pub view: ViewSettings,
+    /// `[gui.compare]`.
+    pub compare: CompareSettings,
     /// `[gui.colors]`.
     pub colors: Colors,
     /// `[gui.folders]`.
@@ -133,6 +135,7 @@ impl Default for GuiSettings {
             auto_advance: false,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
+            compare: CompareSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
             histogram: HistogramSettings::default(),
@@ -224,6 +227,29 @@ impl Default for GridSettings {
             rejected_opacity: 0.35,
             hover_frame: 2.0,
             marked_frame: 3.0,
+        }
+    }
+}
+
+/// Section `[gui.compare]` : comparaison côte à côte (`c`).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CompareSettings {
+    /// Images comparées au plus : au-delà, les premières de la sélection. Chacune garde
+    /// un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique pour 26 Mpx).
+    pub max: usize,
+    /// Espace entre les images (points).
+    pub gap: f32,
+    /// Épaisseur du cadre de l'image active (celle que l'on note).
+    pub frame: f32,
+}
+
+impl Default for CompareSettings {
+    fn default() -> Self {
+        Self {
+            max: 6,
+            gap: 4.0,
+            frame: 3.0,
         }
     }
 }
