@@ -406,8 +406,12 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
      17/10/2026 : emplacements (volumes montés — une carte SD est dans `/Volumes`, pas
      dans `~` —, dossier personnel, racine) et arborescence lue à la demande, dans le
      moteur (`src/places.rs`, `Tree`) ; dossier ouvert = `src/folder.rs` (images, notes,
-     filtres combinés). Restent : mémoriser le dernier dossier, navigation clavier dans
-     l'arborescence, favoris.
+     filtres combinés). Volumes Time Machine masqués et exclusions (`[places]`),
+     disque branché détecté de lui-même (`places::Monitor`), F5. Restent : **éjecter un
+     volume amovible depuis l'interface** (demandé le 17/10/2026 ; pistes : `diskutil
+     eject` sur macOS, `udisksctl unmount` + `power-off` ou `gio mount -e` sous Linux,
+     Windows à étudier ; fonction du moteur, bouton dans le panneau), mémoriser le dernier
+     dossier, navigation clavier dans l'arborescence, favoris.
   2. **Histogramme et alertes d'exposition** (sur- et sous-exposition) : sur les vraies
      données, à leur profondeur (RAW 12/14/16 bits selon le capteur, après `unpack`, sans
      dématriçage ; JPEG 8 bits ; autres formats selon leur profondeur d'enregistrement —
