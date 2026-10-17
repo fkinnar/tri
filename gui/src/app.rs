@@ -153,6 +153,8 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Sélection multiple (images marquées, mode visuel).
+    selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
     /// Échec de la dernière action sur un fichier (barre d'état).
@@ -312,6 +314,7 @@ impl TriApp {
             rating_dialog: None,
             file_dialog: None,
             file_error: None,
+            selection: Default::default(),
             files: Vec::new(),
             status: Vec::new(),
             progress: [Progress::default(); 4],
@@ -385,6 +388,7 @@ impl TriApp {
             }
         }
         self.files.clear(); // la sélection ne survit pas au changement de dossier
+        self.selection.clear();
         self.selected = 0;
         self.mode = Mode::Grid;
         self.zoom = None;
@@ -967,6 +971,10 @@ impl TriApp {
                     self.help = false;
                 } else if self.rating_dialog.is_some() {
                     self.rating_dialog = None;
+                } else if self.selection.is_visual() {
+                    self.selection.end_visual(false);
+                } else if self.selection.visible(&self.files) > 0 {
+                    self.selection.clear();
                 } else if self.mode == Mode::View {
                     self.mode = Mode::Grid;
                     self.zoom = None;
@@ -1011,12 +1019,35 @@ impl TriApp {
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FileRename | Action::FileDelete | Action::FileReveal | Action::FileEdit => {
+                // Renommer, afficher : l'image courante ; corbeille, éditeur : la sélection.
+                let paths = match action {
+                    Action::FileDelete | Action::FileEdit => {
+                        self.selection.targets(&self.files, self.selected)
+                    }
+                    _ => self
+                        .files
+                        .get(self.selected)
+                        .map(|f| vec![f.path.clone()])
+                        .unwrap_or_default(),
+                };
+                // Au clavier : boîte vers le centre de la fenêtre.
+                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                self.file_action(action, paths, at);
+            }
+            Action::SelectToggle => {
                 if let Some(file) = self.files.get(self.selected) {
-                    // Au clavier : boîte vers le centre de la fenêtre.
-                    let at = ctx.content_rect().center() - vec2(160.0, 80.0);
-                    self.file_action(action, file.path.clone(), at);
+                    self.selection.toggle(&file.path);
                 }
             }
+            Action::SelectVisual => {
+                if self.selection.is_visual() {
+                    self.selection.end_visual(true);
+                } else {
+                    self.selection.start_visual(&self.files, self.selected);
+                }
+            }
+            Action::SelectAll => self.selection.select_all(&self.files),
+            Action::SelectClear => self.selection.clear(),
             Action::FilterCycle => {
                 self.filter = match self.filter {
                     KindFilter::All => KindFilter::RawOnly,
@@ -1091,6 +1122,11 @@ impl TriApp {
     /// ([`TriApp::refilter`]) : on ne bouge pas, sinon on sauterait une image. L'autre image
     /// d'une paire RAW+JPEG, notée en même temps, est sautée aussi.
     fn rate_selected(&mut self, action: Action) {
+        let targets = self.selection.targets(&self.files, self.selected);
+        if targets.len() > 1 {
+            self.rate_many(&targets, action);
+            return;
+        }
         let Some(path) = self.files.get(self.selected).map(|f| f.path.clone()) else {
             return;
         };
@@ -1106,6 +1142,42 @@ impl TriApp {
             .find(|&i| !siblings.contains(&self.files[i].path));
         if let Some(next) = next {
             self.select(next);
+        }
+    }
+
+    /// Note plusieurs images (sélection multiple), sans avance automatique. Une paire
+    /// RAW+JPEG n'est notée qu'une fois (noter une image note aussi l'autre : une couleur
+    /// basculerait deux fois). Couleur : même effet sur toutes, d'après la première
+    /// (ajoutée si elle ne l'a pas, retirée sinon), au lieu d'une bascule image par image
+    /// qui mélangerait.
+    fn rate_many(&mut self, targets: &[PathBuf], action: Action) {
+        let multiple = self.settings.xmp.multiple_colors;
+        let add = match action {
+            Action::Color(c) => !self.folder.notes.notes(&targets[0]).has_color(c),
+            _ => true,
+        };
+        let mut done: HashSet<PathBuf> = HashSet::new();
+        let mut error = None;
+        for path in targets {
+            if !done.insert(path.clone()) {
+                continue;
+            }
+            done.extend(self.folder.notes.siblings(path));
+            let result = self.folder.notes.edit(path, |n| match action {
+                Action::Stars(stars) => n.set_stars(stars),
+                Action::Color(color) if n.has_color(color) != add => {
+                    n.toggle_color(color, multiple)
+                }
+                Action::Flag(flag) => n.flag = flag,
+                _ => {}
+            });
+            if let Err(e) = result {
+                error.get_or_insert(format!("note non enregistrée : {e}"));
+            }
+        }
+        self.note_error = error;
+        if !self.notes_rule.is_empty() {
+            self.refilter(Reveal::Minimal);
         }
     }
 
@@ -1144,6 +1216,7 @@ impl TriApp {
             return;
         }
         self.selected = index;
+        self.selection.update_visual(&self.files, index);
         self.focus_since = Instant::now();
         if let Some(engine) = &self.engine {
             engine.scheduler.set_focus(index);
@@ -1442,6 +1515,9 @@ impl TriApp {
             self.files.len(),
             file_name(&file.path)
         );
+        if self.selection.contains(&file.path) {
+            info.push_str(" · sélectionnée");
+        }
         match shown {
             Some(level) => {
                 info.push_str(" · ");
@@ -1650,6 +1726,20 @@ impl TriApp {
                 self.files.len(),
                 self.filter_summary()
             ));
+            let marked = self.selection.visible(&self.files);
+            if marked > 0 || self.selection.is_visual() {
+                ui.separator();
+                let text = format!(
+                    "{marked} sélectionnée{}{}",
+                    if marked > 1 { "s" } else { "" },
+                    if self.selection.is_visual() {
+                        " · mode visuel"
+                    } else {
+                        ""
+                    }
+                );
+                ui.colored_label(Color32::from(self.gui.colors.marked), text);
+            }
             ui.separator();
             for (name, p) in [
                 ("vignettes", self.progress[0]),
@@ -1843,21 +1933,25 @@ impl TriApp {
 
     /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
     /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
-    /// Action sur le fichier `path` ; `at` : position d'une boîte éventuelle.
-    fn file_action(&mut self, action: Action, path: PathBuf, at: egui::Pos2) {
+    /// Action sur les fichiers `paths` (renommer, afficher : le premier) ; `at` : position
+    /// d'une boîte éventuelle.
+    fn file_action(&mut self, action: Action, paths: Vec<PathBuf>, at: egui::Pos2) {
         let settings = &self.settings.files;
         self.file_error = None;
+        let Some(first) = paths.first().cloned() else {
+            return;
+        };
         let result = match action {
             Action::FileRename => {
-                self.file_dialog = Some(crate::files::FileDialog::rename(path, at));
+                self.file_dialog = Some(crate::files::FileDialog::rename(first, at));
                 Ok(())
             }
             Action::FileDelete => {
-                self.file_dialog = Some(crate::files::FileDialog::delete(&[path], settings, at));
+                self.file_dialog = Some(crate::files::FileDialog::delete(&paths, settings, at));
                 Ok(())
             }
-            Action::FileReveal => tri::files::reveal(&path),
-            Action::FileEdit => tri::files::open_with(&settings.editor, &[path]),
+            Action::FileReveal => tri::files::reveal(&first),
+            Action::FileEdit => tri::files::open_with(&settings.editor, &paths),
             _ => Ok(()),
         };
         if let Err(e) = result {
@@ -1881,6 +1975,12 @@ impl TriApp {
                 self.reload_folder(None);
             }
             crate::files::Outcome::Done { select } => {
+                // Image renommée sélectionnée : elle le reste sous son nouveau nom.
+                if let (Some(crate::files::FileDialog::Rename { image, .. }), Some(to)) =
+                    (&self.file_dialog, &select)
+                {
+                    self.selection.renamed(image, to);
+                }
                 self.file_dialog = None;
                 self.reload_folder(select);
             }
@@ -1900,6 +2000,7 @@ impl TriApp {
         }
         self.wanted.clear();
         self.missing.clear();
+        self.selection.retain_existing();
         if let Some(meta) = &mut self.meta {
             meta.clear();
         }
@@ -1958,7 +2059,7 @@ impl TriApp {
         }
         if let Some(action) = file_action {
             self.rating_dialog = None;
-            self.file_action(action, path, at);
+            self.file_action(action, vec![path], at);
             return;
         }
         if close || modal.should_close() {
@@ -1974,11 +2075,18 @@ impl TriApp {
         let notes = self.folder.notes.notes(&file.path).clone();
         let name = file_name(&file.path);
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
+        let marked = self.selection.visible(&self.files);
         let mut clicked = None;
         ui.horizontal(|ui| {
             ui.label("Notes");
             clicked = marks::controls(ui, &notes, &colors, size);
             ui.weak(name);
+            if marked > 1 {
+                ui.colored_label(
+                    Color32::from(self.gui.colors.marked),
+                    format!("notes appliquées aux {marked} images sélectionnées"),
+                );
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let label = "avance auto";
                 if ui
@@ -2131,6 +2239,13 @@ impl TriApp {
         let row = self.selected / self.layout.columns;
         let offset = match self.reveal.take() {
             Some(Reveal::Top) => Some(row as f32 * self.layout.row_pitch()),
+            // Grille pas encore mise en page (hauteur visible inconnue, 0) : on attend
+            // l'image suivante, sinon la rangée de l'image passait sous le haut de la vue
+            // (actions dès le démarrage, `TRI_GUI_ACTIONS`).
+            Some(Reveal::Minimal) if self.view_height <= 0.0 => {
+                self.reveal = Some(Reveal::Minimal);
+                None
+            }
             Some(Reveal::Minimal) => {
                 grid::scroll_to_show(&self.layout, row, self.scroll_offset, self.view_height)
             }
@@ -2167,6 +2282,17 @@ impl TriApp {
         // Le clic sélectionne ; le survol ne fait qu'encadrer (retour du 17/10/2026 : quand le
         // survol sélectionnait, aller vers le bandeau de notation changeait d'image).
         if response.clicked() {
+            // Maj+clic : plage depuis l'image courante ; Cmd / Ctrl+clic : ajouter ou retirer
+            // une image ; clic simple : sélection effacée.
+            let modifiers = ctx.input(|i| i.modifiers);
+            let path = self.files[index].path.clone();
+            if modifiers.shift {
+                self.selection.add_range(&self.files, self.selected, index);
+            } else if modifiers.command || modifiers.ctrl {
+                self.selection.toggle(&path);
+            } else if !self.selection.is_visual() {
+                self.selection.clear();
+            }
             self.select(index);
         }
         self.open_rating_dialog(&response, index);
@@ -2185,9 +2311,18 @@ impl TriApp {
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 4.0, background);
+        let marked = self.selection.contains(&self.files[index].path);
+        if marked {
+            painter.rect_stroke(
+                rect,
+                4.0,
+                egui::Stroke::new(g.marked_frame, Color32::from(colors.marked)),
+                egui::StrokeKind::Inside,
+            );
+        }
         // Survol : cadre gris clair, bien distinct de la sélection (fond plein). Pas quand
         // on tape : le pointeur est masqué, le cadre l'est aussi.
-        if response.hovered() && self.mouse_active && !selected {
+        if response.hovered() && self.mouse_active && !selected && !marked {
             self.hovered = Some(index);
             painter.rect_stroke(
                 rect,
@@ -2950,6 +3085,120 @@ mod tests {
         assert!(
             h.query_by_label("3 étoiles").is_none(),
             "Maj+N masque le bandeau"
+        );
+    }
+
+    #[test]
+    fn space_marks_and_ratings_apply_to_the_marked_images() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img1.jpg");
+        assert!(h.query_by_label("2 sélectionnées").is_some());
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        let photos = dir.path().join("photos");
+        let stars = |n: &str| tri::xmp::read(&photos.join(n)).unwrap().stars;
+        assert_eq!(
+            (stars("img0.jpg"), stars("img1.jpg"), stars("img2.jpg")),
+            (3, 0, 3),
+            "les sélectionnées, pas l'image courante"
+        );
+        // Couleur : même effet sur toutes (ajoutée, puis retirée), pas une bascule chacune.
+        press(&mut h, Key::Num8, Modifiers::NONE);
+        let green = |n: &str| tri::xmp::read(&photos.join(n)).unwrap().colors;
+        assert_eq!(green("img0.jpg"), [Color::Green]);
+        assert_eq!(green("img2.jpg"), [Color::Green]);
+        press(&mut h, Key::Num8, Modifiers::NONE);
+        assert!(green("img0.jpg").is_empty() && green("img2.jpg").is_empty());
+        // Échap désélectionne (on reste dans la grille).
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().selection.is_empty());
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(stars("img1.jpg"), 1, "de nouveau l'image courante");
+    }
+
+    #[test]
+    fn visual_mode_selects_a_range_and_delete_takes_it() {
+        let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
+        let (mut h, dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(h.query_by_label("3 sélectionnées · mode visuel").is_some());
+        // Échap annule la plage ; on recommence et on valide par v.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().selection.is_empty());
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert!(!h.state().selection.is_visual());
+        assert_eq!(h.state().selection.len(), 2, "c et d");
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(
+            h.query_by_label("Supprimer définitivement 2 fichiers ?")
+                .is_some()
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let photos = dir.path().join("photos");
+        assert!(photos.join("a.jpg").exists() && photos.join("b.jpg").exists());
+        assert!(!photos.join("c.jpg").exists() && !photos.join("d.jpg").exists());
+        assert!(h.state().selection.is_empty(), "images supprimées oubliées");
+    }
+
+    #[test]
+    fn ctrl_a_selects_everything_and_ctrl_shift_a_nothing() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::A, Modifiers::CTRL);
+        assert_eq!(h.state().selection.len(), 3);
+        press(&mut h, Key::A, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(h.state().selection.is_empty());
+    }
+
+    #[test]
+    fn shift_click_adds_a_range_and_command_click_toggles() {
+        let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
+        let (mut h, _dir) = harness_files(&names, 64, 48);
+        h.run_steps(5);
+        let center = |h: &Harness<'_, TriApp>, i: usize| {
+            h.state()
+                .cell_rects
+                .iter()
+                .find(|(j, _)| *j == i)
+                .unwrap()
+                .1
+                .center()
+        };
+        let click = |h: &mut Harness<'_, TriApp>, i: usize, modifiers: Modifiers| {
+            let pos = center(h, i);
+            h.event(UiEvent::ModifiersChanged(modifiers));
+            h.event(UiEvent::PointerMoved(pos));
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers,
+                });
+            }
+            h.run_steps(3);
+            h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        };
+        click(&mut h, 2, Modifiers::SHIFT);
+        assert_eq!(h.state().selection.len(), 3, "a à c");
+        assert_eq!(selected_name(&h), "c.jpg");
+        click(&mut h, 1, Modifiers::COMMAND);
+        assert_eq!(h.state().selection.len(), 2, "b retirée");
+        click(&mut h, 3, Modifiers::NONE);
+        assert!(
+            h.state().selection.is_empty(),
+            "clic simple : sélection effacée"
         );
     }
 

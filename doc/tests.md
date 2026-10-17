@@ -226,6 +226,10 @@ la plus récente, source mal formée signalée.
 - Avec `TRI_TEST_RAW` : données capteur (12 à 16 bits, blanc > noir, plage = blanc −
   noir), masque dans la taille demandée, aller-retour binaire.
 
+### `selection` (unitaires `src/selection.rs`, interface `gui/src/app.rs`)
+
+Voir [selection.md](selection.md#tests).
+
 ### `files` (unitaires `src/files.rs`, intégration `tests/files.rs`)
 
 Voir [files.md](files.md#tests) : groupes (paires, sidecars partagés), renommage avec

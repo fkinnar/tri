@@ -519,9 +519,13 @@ explicitement par l'utilisateur comme important.
       d'image sous un filtre : n'avancer que si l'image notée est toujours dans la liste.
       Fait le 17/10/2026 : `[gui] auto_advance` (désactivé par défaut), `Maj+A`, bouton
       « avance auto » du bandeau ; l'autre image d'une paire RAW+JPEG est sautée.
-- [ ] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
+- [x] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
       images d'un coup. Décidé le 17/10/2026 : **les deux, et tout faisable au clavier**
-      (« c'est ma grande frustration avec les outils du marché »).
+      (« c'est ma grande frustration avec les outils du marché »). **Fait** le
+      17/10/2026 : `src/selection.rs` (`doc/selection.md`), Espace, `v` (mode visuel),
+      Ctrl+A / Ctrl+Maj+A, Maj+clic, Cmd/Ctrl+clic ; notes, corbeille, éditeur sur la
+      sélection. Reste : déplacer / copier plusieurs images (avec « copier / déplacer
+      vers… »).
 - [ ] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
       17/10/2026 : **plus de 2 images** possibles.
 - [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).

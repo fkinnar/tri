@@ -38,5 +38,6 @@ pub mod places;
 pub mod preview;
 pub mod raw;
 pub mod scheduler;
+pub mod selection;
 pub mod settings;
 pub mod xmp;

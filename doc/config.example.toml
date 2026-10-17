@@ -200,6 +200,8 @@ marks = 12.0
 rejected_opacity = 0.35
 # Épaisseur du cadre de la vignette survolée par la souris.
 hover_frame = 2.0
+# Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
+marked_frame = 3.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -262,6 +264,9 @@ histogram_height = 120.0
 # progress = "#3c3c3c"
 # Cadre de la vignette survolée (le survol ne sélectionne pas).
 hover = "#b4b4b4"
+# Cadre des images sélectionnées (sélection multiple : Espace, v, Ctrl+A, Maj+clic…),
+# distinct de l'image courante (fond plein) et du survol.
+marked = "#ffaa28"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

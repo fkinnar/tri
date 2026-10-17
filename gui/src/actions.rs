@@ -17,6 +17,8 @@ use tri::xmp::{Color, Flag};
 pub enum Group {
     /// Se déplacer d'une image à l'autre, ouvrir, revenir.
     Navigation,
+    /// Sélection multiple.
+    Selection,
     /// Plein écran : zoom, source, déplacement, histogramme, zones.
     View,
     /// Étoiles, couleurs, drapeau.
@@ -33,8 +35,9 @@ pub enum Group {
 
 impl Group {
     /// Les thèmes, dans l'ordre de l'aide.
-    pub const ALL: [Group; 7] = [
+    pub const ALL: [Group; 8] = [
         Group::Navigation,
+        Group::Selection,
         Group::View,
         Group::Rating,
         Group::Filters,
@@ -52,6 +55,7 @@ impl Group {
             Group::Filters => "Filtres",
             Group::Panels => "Panneaux",
             Group::Files => "Fichiers",
+            Group::Selection => "Sélection",
             Group::App => "Application",
         }
     }
@@ -188,6 +192,14 @@ pub enum Action {
     ToggleRatingBar,
     /// Avance automatique à l'image suivante après une note : oui / non.
     ToggleAutoAdvance,
+    /// Sélectionner / désélectionner l'image courante.
+    SelectToggle,
+    /// Mode visuel : la plage suit l'image courante.
+    SelectVisual,
+    /// Tout sélectionner.
+    SelectAll,
+    /// Tout désélectionner.
+    SelectClear,
     /// Renommer l'image (sa paire et ses sidecars suivent).
     FileRename,
     /// Mettre l'image à la corbeille (après confirmation).
@@ -240,7 +252,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 62] = [
+    pub const ALL: [Action; 66] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -268,6 +280,10 @@ impl Action {
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleAutoAdvance,
+        Action::SelectToggle,
+        Action::SelectVisual,
+        Action::SelectAll,
+        Action::SelectClear,
         Action::FileRename,
         Action::FileDelete,
         Action::FileReveal,
@@ -340,6 +356,10 @@ impl Action {
             Action::ToggleFilterBar => "Afficher / masquer la barre de filtres",
             Action::ToggleRatingBar => "Afficher / masquer le bandeau de notation",
             Action::ToggleAutoAdvance => "Avance automatique après une note : oui / non",
+            Action::SelectToggle => "Sélectionner / désélectionner l'image",
+            Action::SelectVisual => "Mode visuel : sélectionner une plage (v pour valider)",
+            Action::SelectAll => "Tout sélectionner",
+            Action::SelectClear => "Tout désélectionner",
             Action::FileRename => "Renommer…",
             Action::FileDelete => "Mettre à la corbeille…",
             Action::FileReveal => {
@@ -399,6 +419,7 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
+            SelectToggle | SelectVisual | SelectAll | SelectClear => Group::Selection,
             Help | Quit => Group::App,
         }
     }
@@ -438,6 +459,10 @@ impl Action {
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
+            Action::SelectToggle => "core.select.toggle",
+            Action::SelectVisual => "core.select.visual",
+            Action::SelectAll => "core.select.all",
+            Action::SelectClear => "core.select.clear",
             Action::FileRename => "core.file.rename",
             Action::FileDelete => "core.file.delete",
             Action::FileReveal => "core.file.reveal",
@@ -629,6 +654,24 @@ const VIM: &[Binding] = {
     ]
 };
 
+/// Sélection multiple, commune aux deux profils : tout au clavier (demande du
+/// 17/10/2026) ; `v` comme le mode visuel de vim. Échap désélectionne aussi.
+const SELECTION: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::Space)], SelectToggle),
+        (&[plain(Key::V)], SelectVisual),
+        (&[ctrl(Key::A)], SelectAll),
+        (
+            &[Chord {
+                shift: true,
+                ..ctrl(Key::A)
+            }],
+            SelectClear,
+        ),
+    ]
+};
+
 /// Actions sur les fichiers, communes aux deux profils. Supprimer : Suppr, ou la touche
 /// « effacer » des claviers Mac (Backspace) ; une confirmation suit toujours.
 const FILES: &[Binding] = {
@@ -737,7 +780,11 @@ impl Profile {
             Profile::Classic => CLASSIC,
             Profile::Vim => VIM,
         };
-        own.iter().chain(RATING).chain(FILTERS).chain(FILES)
+        own.iter()
+            .chain(RATING)
+            .chain(FILTERS)
+            .chain(SELECTION)
+            .chain(FILES)
     }
 }
 

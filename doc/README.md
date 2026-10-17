@@ -21,6 +21,7 @@ existe.
 | [jpeg.md](jpeg.md) | Module `tri::jpeg` : JPEG rapide (libjpeg-turbo, repli pur Rust) |
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [files.md](files.md) | Module `tri::files` : renommer, corbeille, afficher, éditeur externe (paires et sidecars suivent) |
+| [selection.md](selection.md) | Module `tri::selection` : sélection multiple (marques, mode visuel, cibles des actions) |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [offload.md](offload.md) | Module `tri::offload` : déchargement d'une carte (copie vérifiée, historique, suppression) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
@@ -49,6 +50,7 @@ tri/
 │   ├── cache.rs          cache persistant sur disque (clés BLAKE3, JPEG)
 │   ├── preview.rs        calcul des vignettes, aperçus et 1:1 (réglages de calcul)
 │   ├── scheduler.rs      file de travail en fond : priorités, progression, annulation
+│   ├── selection.rs      sélection multiple : marques, mode visuel, cibles
 │   ├── settings.rs       fichier de configuration : sections du moteur, lecture
 │   ├── jpeg.rs           JPEG rapide : libjpeg-turbo (feature) ou crate image
 │   ├── flat/

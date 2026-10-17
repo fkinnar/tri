@@ -207,6 +207,8 @@ pub struct GridSettings {
     pub rejected_opacity: f32,
     /// Épaisseur du cadre de la vignette survolée par la souris.
     pub hover_frame: f32,
+    /// Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
+    pub marked_frame: f32,
 }
 
 impl Default for GridSettings {
@@ -221,6 +223,7 @@ impl Default for GridSettings {
             marks: 12.0,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
+            marked_frame: 3.0,
         }
     }
 }
@@ -390,6 +393,8 @@ pub struct Colors {
     pub progress: Option<Color>,
     /// Cadre de la cellule survolée par la souris (le survol ne sélectionne pas).
     pub hover: Color,
+    /// Cadre des images sélectionnées (sélection multiple : Espace, v, Maj+clic…).
+    pub marked: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -439,6 +444,7 @@ impl Default for Colors {
             selection: None,
             progress: None,
             hover: Color([180, 180, 180]),
+            marked: Color([255, 170, 40]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

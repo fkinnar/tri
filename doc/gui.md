@@ -88,6 +88,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
+- **Sélection multiple** (17/10/2026, moteur : `tri::selection`, voir `selection.md`) :
+  `Espace` marque, `v` mode visuel (plage qui suit le curseur, `v` valide, Échap annule),
+  `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
+  désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
+  aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr` ou `Backspace` — la touche « effacer »
   des Mac —, `d d` dans le profil vim), afficher dans le Finder / le gestionnaire de
@@ -485,6 +490,8 @@ bandeau ; clic droit sur la troisième vignette : elle est sélectionnée, la bo
 la souris passe sur la première vignette sans changer la sélection ; « 4 étoiles » et la
 touche 8 notent la troisième image ; → ne navigue pas ; Échap ferme la boîte sans quitter
 la grille.
+
+Sélection multiple (17/10/2026) : voir [selection.md](selection.md#tests).
 
 Actions sur les fichiers (17/10/2026) : `F2`, le nom tapé remplace le nom sélectionné
 (« q » ne quitte pas), la boîte annonce l'image et sa paire renommées, Entrée renomme sur le
