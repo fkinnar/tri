@@ -189,6 +189,93 @@ pub fn clickable(ui: &mut Ui, size: f32, tip: &str) -> (Rect, Response) {
     (rect, response)
 }
 
+/// Bouton carré de côté `size`, au fond de bouton du thème (survol, appui) : nom `label`
+/// pour l'accessibilité et les tests, bulle `tip`. L'icône est dessinée ensuite par
+/// l'appelant dans le rectangle renvoyé.
+pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Response) {
+    let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
+    let response = response
+        .on_hover_text(tip)
+        .on_hover_cursor(CursorIcon::PointingHand);
+    let visuals = ui.style().interact(&response);
+    ui.painter().rect(
+        rect,
+        visuals.corner_radius,
+        visuals.weak_bg_fill,
+        visuals.bg_stroke,
+        egui::StrokeKind::Inside,
+    );
+    (rect, response)
+}
+
+/// Icône d'une action sur un fichier dans `rect` : crayon (renommer), poubelle (corbeille),
+/// dossier (afficher dans le gestionnaire de fichiers), flèche sortant d'un cadre (ouvrir
+/// dans l'éditeur externe).
+pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.09).max(1.5), color);
+    match action {
+        Action::FileRename => {
+            // Crayon en diagonale : corps, pointe, et la ligne d'écriture.
+            let body = vec![p(0.62, 0.08), p(0.92, 0.38), p(0.42, 0.88), p(0.12, 0.58)];
+            painter.add(Shape::closed_line(body, stroke));
+            painter.line_segment([p(0.12, 0.58), p(0.0, 1.0)], stroke);
+            painter.line_segment([p(0.42, 0.88), p(0.0, 1.0)], stroke);
+            painter.line_segment([p(0.52, 0.18), p(0.82, 0.48)], stroke);
+        }
+        Action::FileDelete => {
+            // Poubelle : couvercle, poignée, corps et rainures.
+            painter.line_segment([p(0.05, 0.2), p(0.95, 0.2)], stroke);
+            painter.add(Shape::line(
+                vec![p(0.35, 0.2), p(0.38, 0.05), p(0.62, 0.05), p(0.65, 0.2)],
+                stroke,
+            ));
+            painter.add(Shape::closed_line(
+                vec![p(0.15, 0.2), p(0.85, 0.2), p(0.77, 1.0), p(0.23, 1.0)],
+                stroke,
+            ));
+            for x in [0.38, 0.62] {
+                painter.line_segment([p(x, 0.38), p(x, 0.84)], stroke);
+            }
+        }
+        Action::FileReveal => {
+            // Dossier : onglet puis corps.
+            painter.add(Shape::closed_line(
+                vec![
+                    p(0.0, 0.12),
+                    p(0.38, 0.12),
+                    p(0.48, 0.26),
+                    p(1.0, 0.26),
+                    p(1.0, 0.92),
+                    p(0.0, 0.92),
+                ],
+                stroke,
+            ));
+            painter.line_segment([p(0.0, 0.4), p(1.0, 0.4)], stroke);
+        }
+        _ => {
+            // Ouvrir ailleurs : cadre ouvert en haut à droite, flèche qui en sort.
+            painter.add(Shape::line(
+                vec![
+                    p(0.45, 0.12),
+                    p(0.05, 0.12),
+                    p(0.05, 0.95),
+                    p(0.88, 0.95),
+                    p(0.88, 0.55),
+                ],
+                stroke,
+            ));
+            painter.line_segment([p(0.42, 0.58), p(0.98, 0.02)], stroke);
+            painter.add(Shape::line(
+                vec![p(0.6, 0.02), p(0.98, 0.02), p(0.98, 0.4)],
+                stroke,
+            ));
+        }
+    }
+}
+
 /// Triangle d'une branche d'arborescence, dans `rect` : vers le bas si `open`, sinon vers
 /// la droite (dessiné : « ▶ » manque dans la police d'egui).
 pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {

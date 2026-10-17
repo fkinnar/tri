@@ -276,6 +276,8 @@ pub struct DialogSettings {
     pub title_size: f32,
     /// Couleur des titres (accent).
     pub title_color: Color,
+    /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
+    pub icon_size: f32,
 }
 
 impl Default for DialogSettings {
@@ -288,6 +290,7 @@ impl Default for DialogSettings {
             max_width: 520.0,
             title_size: 17.0,
             title_color: Color([80, 190, 220]),
+            icon_size: 34.0,
         }
     }
 }

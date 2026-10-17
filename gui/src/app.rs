@@ -2642,18 +2642,20 @@ impl TriApp {
                 ui.add_space(6.0);
                 ui.separator();
                 // Actions sur le fichier.
-                ui.horizontal_wrapped(|ui| {
+                // Icônes carrées, libellé et raccourci au survol (retour du 17/10/2026).
+                let icon = self.gui.dialogs.icon_size;
+                ui.horizontal(|ui| {
                     for action in [
                         Action::FileRename,
                         Action::FileDelete,
                         Action::FileReveal,
                         Action::FileEdit,
                     ] {
-                        if ui
-                            .button(action.label())
-                            .on_hover_text(self.action_tip(action))
-                            .clicked()
-                        {
+                        let (rect, response) =
+                            marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
+                        let color = ui.style().interact(&response).fg_stroke.color;
+                        marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
+                        if response.clicked() {
                             file_action = Some(action);
                         }
                     }
@@ -3119,6 +3121,12 @@ impl TriApp {
                     }
                     return;
                 }
+                Step::RatingDialog => {
+                    if let Some(file) = self.files.get(self.selected) {
+                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        self.rating_dialog = Some((file.path.clone(), at));
+                    }
+                }
             }
         }
     }
@@ -3338,6 +3346,9 @@ enum Step {
     /// Capturer tout de suite (`shot`), sans attendre que tout soit prêt : pour voir un
     /// état intermédiaire (chargement en cours).
     Shot,
+    /// Ouvrir la boîte du clic droit pour l'image sélectionnée (`rating_dialog`), qu'aucune
+    /// action clavier n'ouvre.
+    RatingDialog,
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -3358,6 +3369,7 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .ok()
                     .map(|ms| Step::Wait(Duration::from_millis(ms))),
                 None if id == "shot" => Some(Step::Shot),
+                None if id == "rating_dialog" => Some(Step::RatingDialog),
                 None => Action::from_id(id).map(Step::Do),
             };
             if step.is_none() {
