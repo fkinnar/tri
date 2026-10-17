@@ -19,7 +19,7 @@ use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
 
-use crate::actions::{Action, Keymap};
+use crate::actions::{Action, Chord, Keymap, Sequencer};
 use crate::grid::{self, Layout};
 use crate::loader::Loader;
 use crate::settings::{AppSettings, GuiSettings};
@@ -110,6 +110,11 @@ pub struct TriApp {
     engine: Option<Engine>,
     error: Option<String>,
     keymap: Keymap,
+    /// Séquences de touches en cours (`g g`).
+    sequencer: Sequencer,
+    /// Déplacements clavier d'une image zoomée pas encore appliqués, en fractions de la
+    /// vue (appliqués au dessin, quand la taille de l'image est connue).
+    pan: Vec2,
     textures: Lru<PathBuf, TextureHandle>,
     selected: usize,
     layout: Layout,
@@ -187,6 +192,8 @@ impl TriApp {
             engine: None,
             error,
             keymap: gui.keymap(),
+            sequencer: Sequencer::new(gui.key_sequence_timeout()),
+            pan: Vec2::ZERO,
             textures: Lru::new(gui.grid.textures),
             selected,
             layout: Layout::fit(0.0, gui.grid.cell, gui.grid.gap),
@@ -341,7 +348,7 @@ impl TriApp {
 
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let actions: Vec<Action> = ctx.input(|i| {
+        let chords: Vec<Chord> = ctx.input(|i| {
             i.events
                 .iter()
                 .filter_map(|e| match e {
@@ -350,11 +357,16 @@ impl TriApp {
                         pressed: true,
                         modifiers,
                         ..
-                    } => self.keymap.action(*key, *modifiers),
+                    } => Chord::from_event(*key, *modifiers),
                     _ => None,
                 })
                 .collect()
         });
+        let now = Instant::now();
+        let actions: Vec<Action> = chords
+            .into_iter()
+            .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
+            .collect();
         for action in actions {
             // L'aide est modale : derrière elle, la grille ne bouge pas.
             if self.help && !action.works_over_overlay() {
@@ -396,6 +408,18 @@ impl TriApp {
                         None => Some(vec2(0.5, 0.5)),
                     };
                     self.request_zoom();
+                }
+            }
+            Action::PanLeft | Action::PanRight | Action::PanUp | Action::PanDown => {
+                // Seulement dans une image zoomée ; sans effet ailleurs.
+                if self.mode == Mode::View && self.zoom.is_some() {
+                    let step = self.gui.view.pan_step;
+                    self.pan += match action {
+                        Action::PanLeft => vec2(-step, 0.0),
+                        Action::PanRight => vec2(step, 0.0),
+                        Action::PanUp => vec2(0.0, -step),
+                        _ => vec2(0.0, step),
+                    };
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -665,6 +689,13 @@ impl TriApp {
                         let d = response.drag_delta();
                         center -= vec2(d.x / size.x, d.y / size.y);
                     }
+                    // Déplacements clavier (fractions de la vue) convertis en fractions de
+                    // l'image.
+                    let pan = std::mem::take(&mut self.pan);
+                    center += vec2(
+                        pan.x * view_rect.width() / size.x,
+                        pan.y * view_rect.height() / size.y,
+                    );
                     let center = view::clamp_center(view_rect.size(), size, center);
                     self.zoom = Some(center);
                     view::zoom_rect(view_rect, size, center)
@@ -1195,11 +1226,16 @@ mod tests {
 
     /// Application sur un dossier temporaire de 3 JPEG, avec un cache temporaire.
     fn harness() -> (Harness<'static, TriApp>, tempfile::TempDir) {
+        harness_with(64, 48)
+    }
+
+    /// Application sur 3 JPEG de `w`×`h` pixels, avec un cache temporaire.
+    fn harness_with(w: u32, h: u32) -> (Harness<'static, TriApp>, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("photos");
         std::fs::create_dir(&photos).unwrap();
         for i in 0..3 {
-            image::RgbImage::from_pixel(64, 48, image::Rgb([40 * i, 100, 160]))
+            image::RgbImage::from_pixel(w, h, image::Rgb([40 * i as u8, 100, 160]))
                 .save(photos.join(format!("img{i}.jpg")))
                 .unwrap();
         }
@@ -1370,6 +1406,47 @@ mod tests {
         assert!(zoom.x >= 0.0 && zoom.y >= 0.0);
         press(&mut h, Key::B, Modifiers::NONE);
         assert!(h.state().zoom.is_some());
+    }
+
+    #[test]
+    fn gg_goes_to_the_first_image_and_shift_g_to_the_last() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::G, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, 2);
+        press(&mut h, Key::G, Modifiers::NONE);
+        assert_eq!(h.state().selected, 2, "un seul g : on attend la suite");
+        press(&mut h, Key::G, Modifiers::NONE);
+        assert_eq!(h.state().selected, 0);
+    }
+
+    #[test]
+    fn shift_arrows_and_shift_hjkl_move_inside_a_zoomed_image() {
+        // Image bien plus grande que la vue (1000×700), pour pouvoir se déplacer.
+        let (mut h, _dir) = harness_with(2000, 1400);
+        h.run_steps(3);
+        press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
+        assert!(h.state().zoom.is_none(), "sans zoom : sans effet");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            let path = app.files[0].path.clone();
+            app.big.contains(&(path, Level::Full))
+        });
+        h.run_steps(2);
+        let start = h.state().zoom.unwrap();
+        press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
+        let right = h.state().zoom.unwrap();
+        assert!(right.x > start.x, "vers la droite : {start:?} -> {right:?}");
+        assert_eq!(right.y, start.y);
+        press(&mut h, Key::J, Modifiers::SHIFT);
+        let down = h.state().zoom.unwrap();
+        assert!(down.y > right.y, "vers le bas : {right:?} -> {down:?}");
+        press(&mut h, Key::H, Modifiers::SHIFT);
+        press(&mut h, Key::K, Modifiers::SHIFT);
+        let back = h.state().zoom.unwrap();
+        assert!((back - start).length() < 1e-4, "retour au point de départ");
+        assert_eq!(h.state().selected, 0, "se déplacer ne change pas d'image");
     }
 
     #[test]

@@ -134,18 +134,31 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 |---|---|---|
 | `core.nav.prev` / `core.nav.next` | ← / → | h / l |
 | `core.nav.up` / `core.nav.down` | ↑ / ↓ | k / j |
-| `core.nav.first` / `core.nav.last` | Début / Fin | g / Maj+G |
+| `core.nav.first` / `core.nav.last` | Début / Fin | gg / Maj+G |
 | `core.nav.page_up` / `core.nav.page_down` | Page préc. / suiv. | u / d |
 | `core.filter.cycle` | f | f |
 | `core.view.open` | Entrée | Entrée |
 | `core.view.zoom` | z | z |
 | `core.view.source` | b | b |
+| `core.view.pan_left` / `pan_right` | Maj+Flèche gauche / droite | Maj+h / Maj+l |
+| `core.view.pan_up` / `pan_down` | Maj+Flèche haut / bas | Maj+k / Maj+j |
 | `core.view.back` | Échap | Échap |
 | `core.app.help` | F1 | ? |
 | `core.app.quit` | q | q |
 
 Avec Ctrl, Cmd ou Alt, aucune action n'est déclenchée : ces combinaisons restent au système
-(Cmd+Q…).
+(Cmd+Q… ; sur macOS, Ctrl + flèches change de bureau, d'où Maj pour le déplacement).
+
+**Séquences de touches** : un raccourci peut être une suite de touches, comme `gg` (vim). La
+première est mise en attente (`Sequencer`) ; la suivante doit arriver avant
+`[gui] key_sequence_timeout_ms` (1000 ms par défaut, comme le `timeoutlen` de vim). Si elle
+ne complète aucune séquence, elle agit seule (`g` puis `j` : ligne du dessous). Aucun
+raccourci n'est à la fois une touche seule et le début d'une séquence (vérifié par test) :
+pas besoin d'attendre l'expiration pour décider.
+
+**Déplacement dans une image zoomée** : Maj + flèches ou Maj + hjkl, d'une fraction de la
+vue par appui (`[gui.view] pan_step`, 0,2), touche maintenue possible ; sans effet hors
+zoom.
 
 Chaque action a deux noms : un **identifiant** stable pour les fichiers et le code
 (`core.view.back`), et un **libellé** pour l'utilisateur (« Fermer / revenir »).

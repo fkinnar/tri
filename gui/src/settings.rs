@@ -54,6 +54,9 @@ pub struct GuiSettings {
     /// Profils de raccourcis actifs ; le premier l'emporte en cas de conflit. Liste vide :
     /// profils par défaut.
     pub keys: Vec<Profile>,
+    /// Délai maximal entre deux touches d'une séquence (`g g`), en ms, comme le
+    /// `timeoutlen` de vim.
+    pub key_sequence_timeout_ms: u64,
     /// Taille initiale de la fenêtre (points).
     pub window: [f32; 2],
     /// Rendus RAW : à la demande (image affichée et voisines, en mode RAW) ou tout le
@@ -76,6 +79,7 @@ impl Default for GuiSettings {
             // Fond sombre et neutre : la norme pour juger des photos.
             theme: Theme::Dark,
             keys: vec![Profile::Classic, Profile::Vim],
+            key_sequence_timeout_ms: 1000,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
@@ -100,6 +104,11 @@ impl GuiSettings {
     /// Budget de chargement des vignettes par image affichée.
     pub fn load_budget(&self) -> Duration {
         Duration::from_millis(self.load_budget_ms)
+    }
+
+    /// Délai maximal entre deux touches d'une séquence.
+    pub fn key_sequence_timeout(&self) -> Duration {
+        Duration::from_millis(self.key_sequence_timeout_ms)
     }
 }
 
@@ -169,6 +178,9 @@ pub struct ViewSettings {
     /// Grandes textures (aperçus, 1:1) gardées en mémoire : l'image affichée, ses voisines
     /// et quelques images récentes. Un 1:1 de 26 Mpx occupe ~100 Mo de mémoire graphique.
     pub textures: usize,
+    /// Déplacement d'une image zoomée par appui sur une touche (Maj + flèches, Maj + hjkl),
+    /// en fraction de la largeur (ou hauteur) de la vue.
+    pub pan_step: f32,
 }
 
 impl Default for ViewSettings {
@@ -176,6 +188,7 @@ impl Default for ViewSettings {
         Self {
             full_raw_dwell_ms: 400,
             textures: 8,
+            pan_step: 0.2,
         }
     }
 }

@@ -60,6 +60,9 @@ theme = "dark"
 # Profils de raccourcis actifs, "classic" (flèches) et/ou "vim" (hjkl) ; le premier
 # l'emporte en cas de conflit.
 keys = ["classic", "vim"]
+# Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
+# (première image, profil vim) doit être tapé dans ce délai.
+key_sequence_timeout_ms = 1000
 # Taille initiale de la fenêtre (points).
 window = [1400.0, 900.0]
 # Rendus RAW : "on-demand" (image affichée et voisines, en mode RAW seulement) ou
@@ -89,6 +92,9 @@ full_raw_dwell_ms = 400
 # Grandes textures (aperçus, 1:1) gardées en mémoire graphique ; un 1:1 de 26 Mpx occupe
 # ~100 Mo.
 textures = 8
+# Déplacement d'une image zoomée par appui (Maj + flèches, Maj + hjkl), en fraction de la
+# vue.
+pan_step = 0.2
 
 [gui.colors]
 # Couleurs "#rrggbb". Sélection et survol absents : couleurs du thème. Exemple :

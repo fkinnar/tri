@@ -73,6 +73,10 @@ pub fn navigate(
         | Action::Open
         | Action::ToggleZoom
         | Action::ToggleSource
+        | Action::PanLeft
+        | Action::PanRight
+        | Action::PanUp
+        | Action::PanDown
         | Action::Back
         | Action::Help
         | Action::Quit => selected,

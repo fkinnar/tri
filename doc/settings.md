@@ -32,9 +32,9 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[render]` | Développement LibRaw : balance des blancs, luminosité, luminosité automatique | moteur |
 | `[cache]` | Dossier, qualité JPEG | moteur |
 | `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord | moteur |
-| `[gui]` | Thème, profils de raccourcis, fenêtre, politique des rendus RAW, budget de chargement | interface |
+| `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
 | `[gui.grid]` | Dimensions de la grille, vignettes en mémoire | interface |
-| `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire | interface |
+| `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier | interface |
 | `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, survol, badge, erreurs, fond du plein écran) | interface |
 
 ### Erreurs
