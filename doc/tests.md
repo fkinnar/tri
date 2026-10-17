@@ -141,6 +141,8 @@ prouve rien.
 
 ### `xmp` (unitaires, `src/xmp.rs`)
 
+- `Notes` : étoiles plafonnées sans toucher au drapeau, une couleur (remplace / retire),
+  plusieurs couleurs (triées).
 - Réécriture sans changement identique octet par octet (sidecar darktable réaliste) ; une
   seule valeur changée ne modifie qu'elle ; mise à jour complète en gardant historique,
   mots-clés et champs inconnus ; rejet qui mémorise et restaure les étoiles ; plusieurs
@@ -154,6 +156,16 @@ Dans un dossier temporaire : nouveau sidecar selon la convention, sidecar le plu
 choisi, extension `.XMP` en majuscules, notes inchangées ⇒ fichier non réécrit (date
 intacte), sidecar mal formé jamais écrasé, sidecar Adobe partagé par un RAF et son JPG,
 aucun fichier temporaire laissé.
+
+### `notes` (unitaires `src/notes.rs`, intégration `tests/notes.rs`)
+
+- Règles d'étoiles, de couleurs (dont « sans couleur »), combinaison des critères, règle
+  vide ; image inconnue.
+- Dans un dossier temporaire : chargement (sidecar mal formé signalé sans arrêter le
+  reste), modification écrite puis relue du disque, paire RAW+JPEG en convention Adobe
+  (les deux rafraîchies) et darktable (séparées), sidecar mal formé jamais modifié,
+  `reload` après une modification extérieure, filtres sur un dossier parcouru par
+  `media::scan`.
 
 ### `media` + `filter` (intégration, `tests/media.rs`)
 

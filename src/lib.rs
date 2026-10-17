@@ -10,7 +10,8 @@
 //! - [`preview`] : calcul des vignettes, aperçus et rendus 1:1 ;
 //! - [`scheduler`] : file de travail en tâche de fond, priorités, progression ;
 //! - [`settings`] : fichier de configuration (TOML), emplacement et lecture ;
-//! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP.
+//! - [`xmp`] : notes de tri (étoiles, couleurs, accepté / rejeté) dans les sidecars XMP ;
+//! - [`notes`] : notes d'un dossier en mémoire, modification, filtres sur les notes.
 //!
 //! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/README.md`.
 
@@ -22,6 +23,7 @@ pub mod filter;
 pub mod flat;
 pub mod jpeg;
 pub mod media;
+pub mod notes;
 pub mod preview;
 pub mod raw;
 pub mod scheduler;

@@ -389,5 +389,11 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
       (réglage `hover` supprimé).
 - [x] Clavier (17/10/2026) : déplacement dans une image zoomée (Maj + flèches / Maj + hjkl),
       `gg` pour la première image (séquences de touches, délai réglable).
+- [~] Notation XMP (17/10/2026). Fait, moteur : `src/xmp.rs` (lecture / écriture des
+      sidecars, vérifiée sur de vrais sidecars darktable et par ExifTool), `src/notes.rs`
+      (notes d'un dossier en mémoire, `edit`, filtres `NotesRule` sur le trait `Filter`),
+      section `[xmp]`. Restent : actions et raccourcis de notation, section `[keys]`,
+      affichage des notes (grille, plein écran), filtres dans l'interface, conversion de
+      convention en ligne de commande.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.

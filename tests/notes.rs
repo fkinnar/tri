@@ -1,0 +1,194 @@
+//! Tests d'intégration du module `notes` : notes d'un dossier temporaire, modification,
+//! sidecars partagés, filtres.
+
+use std::fs;
+use std::path::PathBuf;
+
+use tri::filter::{Filter, ungrouped};
+use tri::media::{self, MediaKind};
+use tri::notes::{ColorRule, NoteBook, NotesRule, StarsRule};
+use tri::xmp::{self, Color, Convention, Flag};
+
+/// Dossier temporaire propre à un test, effacé à la fin.
+struct TempDir(PathBuf);
+
+impl TempDir {
+    fn new(name: &str) -> TempDir {
+        let dir = std::env::temp_dir().join(format!("tri-notes-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        TempDir(dir)
+    }
+
+    fn file(&self, name: &str) -> PathBuf {
+        let path = self.0.join(name);
+        fs::write(&path, b"").unwrap();
+        path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn xmp_with(attrs: &str) -> String {
+    format!(
+        r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" {attrs}/></rdf:RDF></x:xmpmeta>"#
+    )
+}
+
+#[test]
+fn loads_existing_notes_and_reports_malformed_sidecars() {
+    let dir = TempDir::new("load");
+    let a = dir.file("A.RAF");
+    let b = dir.file("B.RAF");
+    let c = dir.file("C.RAF");
+    fs::write(
+        dir.0.join("A.RAF.xmp"),
+        xmp_with(r#"xmp:Rating="4" xmp:Label="Red""#),
+    )
+    .unwrap();
+    fs::write(dir.0.join("B.RAF.xmp"), "<pas du xml").unwrap();
+    let book = NoteBook::load(
+        [a.as_path(), b.as_path(), c.as_path()],
+        Convention::Darktable,
+    );
+    assert_eq!(book.len(), 3);
+    assert_eq!(book.notes(&a).stars, 4);
+    assert_eq!(book.notes(&a).colors, [Color::Red]);
+    assert!(book.error(&b).is_some(), "sidecar mal formé signalé");
+    assert_eq!(book.notes(&c), &xmp::Notes::EMPTY);
+    assert_eq!(book.sidecar(&c), Some(dir.0.join("C.RAF.xmp").as_path()));
+}
+
+#[test]
+fn edit_writes_the_sidecar_and_returns_changed_images() {
+    let dir = TempDir::new("edit");
+    let a = dir.file("A.RAF");
+    let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+    let changed = book.edit(&a, |n| n.set_stars(3)).unwrap();
+    assert_eq!(changed, std::slice::from_ref(&a));
+    assert_eq!(xmp::read(&a).unwrap().stars, 3, "relu depuis le disque");
+    assert_eq!(book.notes(&a).stars, 3);
+    assert!(
+        book.edit(&a, |n| n.set_stars(3)).unwrap().is_empty(),
+        "rien à faire"
+    );
+}
+
+#[test]
+fn shared_adobe_sidecar_updates_both_images_of_a_pair() {
+    let dir = TempDir::new("pair");
+    let raf = dir.file("IMG.RAF");
+    let jpg = dir.file("IMG.JPG");
+    let other = dir.file("AUTRE.JPG");
+    let mut book = NoteBook::load(
+        [raf.as_path(), jpg.as_path(), other.as_path()],
+        Convention::Adobe,
+    );
+    let changed = book.edit(&raf, |n| n.flag = Flag::Accepted).unwrap();
+    assert_eq!(changed, [raf.clone(), jpg.clone()]);
+    assert_eq!(book.notes(&jpg).flag, Flag::Accepted);
+    assert_eq!(book.notes(&other).flag, Flag::None);
+}
+
+#[test]
+fn darktable_pair_keeps_separate_notes() {
+    let dir = TempDir::new("dtpair");
+    let raf = dir.file("IMG.RAF");
+    let jpg = dir.file("IMG.JPG");
+    let mut book = NoteBook::load([raf.as_path(), jpg.as_path()], Convention::Darktable);
+    book.edit(&raf, |n| n.set_stars(5)).unwrap();
+    assert_eq!(book.notes(&jpg).stars, 0);
+    assert!(dir.0.join("IMG.RAF.xmp").exists());
+    assert!(!dir.0.join("IMG.JPG.xmp").exists());
+}
+
+#[test]
+fn malformed_sidecar_is_never_edited() {
+    let dir = TempDir::new("malformed");
+    let a = dir.file("A.RAF");
+    fs::write(dir.0.join("A.RAF.xmp"), "<pas du xml").unwrap();
+    let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+    assert!(book.edit(&a, |n| n.set_stars(2)).is_err());
+    assert_eq!(
+        fs::read_to_string(dir.0.join("A.RAF.xmp")).unwrap(),
+        "<pas du xml"
+    );
+    assert_eq!(book.notes(&a).stars, 0);
+}
+
+#[test]
+fn reload_sees_changes_made_by_other_software() {
+    let dir = TempDir::new("reload");
+    let a = dir.file("A.RAF");
+    let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+    fs::write(dir.0.join("A.RAF.xmp"), xmp_with(r#"xmp:Rating="2""#)).unwrap();
+    assert_eq!(book.notes(&a).stars, 0);
+    book.reload();
+    assert_eq!(book.notes(&a).stars, 2);
+}
+
+fn names(groups: &tri::filter::Groups) -> Vec<String> {
+    groups
+        .iter()
+        .flatten()
+        .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn filters_on_a_scanned_folder() {
+    let dir = TempDir::new("filter");
+    for name in ["A.RAF", "B.RAF", "C.RAF", "D.JPG"] {
+        dir.file(name);
+    }
+    let files = media::scan(&dir.0, 1).unwrap();
+    assert_eq!(files.len(), 4);
+    let mut book = NoteBook::load_files(&files, Convention::Darktable);
+    let path = |name: &str| -> PathBuf { dir.0.join(name) };
+    book.edit(&path("A.RAF"), |n| n.set_stars(4)).unwrap();
+    book.edit(&path("B.RAF"), |n| {
+        n.set_stars(5);
+        n.flag = Flag::Rejected;
+    })
+    .unwrap();
+    book.edit(&path("C.RAF"), |n| n.toggle_color(Color::Green, false))
+        .unwrap();
+
+    let groups = || ungrouped(files.clone());
+    let filtered = |rule: &NotesRule| names(&rule.filter(&book).apply(groups()));
+
+    assert_eq!(filtered(&NotesRule::default()).len(), 4);
+    let good = NotesRule {
+        stars: Some(StarsRule::AtLeast(4)),
+        flags: Some(vec![Flag::None, Flag::Accepted]),
+        ..NotesRule::default()
+    };
+    assert_eq!(filtered(&good), ["A.RAF"]);
+    let rejected = NotesRule {
+        flags: Some(vec![Flag::Rejected]),
+        ..NotesRule::default()
+    };
+    assert_eq!(filtered(&rejected), ["B.RAF"]);
+    let green = NotesRule {
+        colors: Some(ColorRule {
+            any_of: vec![Color::Green],
+            none: false,
+        }),
+        ..NotesRule::default()
+    };
+    assert_eq!(filtered(&green), ["C.RAF"]);
+    let unrated = NotesRule {
+        stars: Some(StarsRule::Exactly(0)),
+        ..NotesRule::default()
+    };
+    assert_eq!(filtered(&unrated), ["C.RAF", "D.JPG"]);
+    assert!(
+        files
+            .iter()
+            .all(|f| f.kind == MediaKind::Raw || f.path.ends_with("D.JPG"))
+    );
+}

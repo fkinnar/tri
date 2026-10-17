@@ -126,6 +126,44 @@ pub struct Notes {
     pub colors: Vec<Color>,
 }
 
+impl Notes {
+    /// Notes vides (constante, pour les prêter sans allocation).
+    pub const EMPTY: Notes = Notes {
+        stars: 0,
+        flag: Flag::None,
+        colors: Vec::new(),
+    };
+
+    /// Change les étoiles (0 à 5, au-delà ramené à 5). Le drapeau ne change pas : une photo
+    /// rejetée garde ses étoiles pour le jour où le rejet est annulé.
+    pub fn set_stars(&mut self, stars: u8) {
+        self.stars = stars.min(5);
+    }
+
+    /// Ajoute ou retire `color`. Avec `multiple` faux, une photo n'a qu'une couleur : une
+    /// autre couleur remplace la précédente, la même la retire (comme Lightroom).
+    pub fn toggle_color(&mut self, color: Color, multiple: bool) {
+        if let Some(i) = self.colors.iter().position(|&c| c == color) {
+            self.colors.remove(i);
+        } else if multiple {
+            self.colors.push(color);
+            self.colors.sort();
+        } else {
+            self.colors = vec![color];
+        }
+    }
+
+    /// Retire toutes les couleurs.
+    pub fn clear_colors(&mut self) {
+        self.colors.clear();
+    }
+
+    /// Vrai si la photo porte la couleur `color`.
+    pub fn has_color(&self, color: Color) -> bool {
+        self.colors.contains(&color)
+    }
+}
+
 /// Erreurs du module xmp.
 #[derive(Debug)]
 pub enum XmpError {
@@ -278,8 +316,12 @@ pub fn sidecar_path(image: &Path, default: Convention) -> PathBuf {
 
 /// Notes de `image`, lues dans son sidecar le plus récent ; notes vides sans sidecar.
 pub fn read(image: &Path) -> Result<Notes> {
-    let path = sidecar_path(image, Convention::default());
-    match fs::read_to_string(&path) {
+    read_sidecar(&sidecar_path(image, Convention::default()))
+}
+
+/// Notes lues dans le sidecar `path` ; notes vides s'il n'existe pas.
+pub fn read_sidecar(path: &Path) -> Result<Notes> {
+    match fs::read_to_string(path) {
         Ok(text) => parse(&text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Notes::default()),
         Err(e) => Err(e.into()),
@@ -291,22 +333,30 @@ pub fn read(image: &Path) -> Result<Notes> {
 /// réécrit que si son contenu change (écriture atomique). Renvoie le sidecar utilisé.
 pub fn write(image: &Path, notes: &Notes, default: Convention) -> Result<PathBuf> {
     let path = sidecar_path(image, default);
-    let original = match fs::read_to_string(&path) {
+    write_sidecar(&path, notes)?;
+    Ok(path)
+}
+
+/// Écrit `notes` dans le sidecar `path` (créé s'il n'existe pas), comme [`write()`]. Renvoie
+/// vrai si le fichier a été modifié.
+pub fn write_sidecar(path: &Path, notes: &Notes) -> Result<bool> {
+    let original = match fs::read_to_string(path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
     };
     let base = original.as_deref().unwrap_or(NEW_PACKET);
     let updated = apply(base, notes)?;
-    if original.as_deref() != Some(updated.as_str()) {
-        let tmp = path.with_extension(format!("xmp.{}.tmp", std::process::id()));
-        fs::write(&tmp, &updated)?;
-        if let Err(e) = fs::rename(&tmp, &path) {
-            let _ = fs::remove_file(&tmp);
-            return Err(e.into());
-        }
+    if original.as_deref() == Some(updated.as_str()) {
+        return Ok(false);
     }
-    Ok(path)
+    let tmp = path.with_extension(format!("xmp.{}.tmp", std::process::id()));
+    fs::write(&tmp, &updated)?;
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.into());
+    }
+    Ok(true)
 }
 
 /// Paquet XMP minimal d'un nouveau sidecar.
@@ -1242,5 +1292,38 @@ mod tests {
             Convention::of(image, Path::new("/photos/DSCF0092.xmp")),
             Convention::Adobe
         );
+    }
+
+    #[test]
+    fn stars_are_capped_and_keep_the_flag() {
+        let mut n = Notes {
+            flag: Flag::Rejected,
+            ..Notes::default()
+        };
+        n.set_stars(7);
+        assert_eq!((n.stars, n.flag), (5, Flag::Rejected));
+    }
+
+    #[test]
+    fn single_color_replaces_or_removes() {
+        let mut n = Notes::default();
+        n.toggle_color(Color::Red, false);
+        n.toggle_color(Color::Blue, false);
+        assert_eq!(n.colors, [Color::Blue]);
+        n.toggle_color(Color::Blue, false);
+        assert!(n.colors.is_empty());
+    }
+
+    #[test]
+    fn multiple_colors_toggle_and_stay_sorted() {
+        let mut n = Notes::default();
+        n.toggle_color(Color::Purple, true);
+        n.toggle_color(Color::Red, true);
+        assert_eq!(n.colors, [Color::Red, Color::Purple]);
+        assert!(n.has_color(Color::Purple));
+        n.toggle_color(Color::Purple, true);
+        assert_eq!(n.colors, [Color::Red]);
+        n.clear_colors();
+        assert_eq!(n, Notes::EMPTY);
     }
 }

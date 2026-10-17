@@ -20,7 +20,7 @@ pub trait Filter {
 ```
 
 Un filtre prend des groupes et en renvoie d'autres. Il peut retirer des images (filtre par
-type, et plus tard par étoiles ou couleur), les réordonner ou les regrouper (détection de
+type, filtre sur les notes de [notes.md](notes.md)), les réordonner ou les regrouper (détection de
 séries). Les filtres natifs et ceux des futurs plugins implémentent **ce même trait**, sans
 traitement spécial pour les filtres intégrés.
 
