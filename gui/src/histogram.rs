@@ -65,8 +65,8 @@ pub fn shown_stops(e: &Exposure, setting: f32) -> f32 {
 pub struct Look {
     /// Échelle (IL ou linéaire).
     pub scale: HistogramScale,
-    /// Ligne d'indicateurs (source, marge, saturés, bouchés) et pastilles de canal sous le
-    /// graphe : dans le grand histogramme seulement (retour du 18/10/2026 : pas
+    /// Ligne d'indicateurs (source, marge ; saturés et bouchés sont dans le tableau, par
+    /// canal) et pastilles de canal sous le graphe : dans le grand histogramme seulement (retour du 18/10/2026 : pas
     /// indispensable en petit).
     pub details: bool,
     /// Un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : les trois.
@@ -119,9 +119,7 @@ pub fn draw(
     let text = t!(
         "histogram-indicators",
         source = source,
-        headroom = decimal(e.headroom_ev() as f64, 2),
-        over = decimal(e.over_fraction() * 100.0, 2),
-        under = decimal(e.under_fraction() * 100.0, 2)
+        headroom = decimal(e.headroom_ev() as f64, 2)
     );
     let dots = 4.0 * settings.channel_dot * 1.6 + 6.0;
     let galley = painter.layout(

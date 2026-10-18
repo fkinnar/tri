@@ -131,7 +131,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   déplaçable, boutons en bas, à sa propre largeur (`Dialog::free_width`).
   Couleurs en **mélange additif** (retour du 18/10/2026) : rouge + vert = jaune, les trois
   = blanc, comme la lumière (`fill_strength`). Le **petit** histogramme (panneau) ne montre
-  que la courbe ; les indicateurs (source, marge, saturés, bouchés) et un **tableau de
+  que la courbe ; la ligne d'indicateurs (source, marge ; saturés et bouchés sont dans
+  le tableau, par canal, retour du 18/10/2026) et un **tableau de
   statistiques** par canal ne sont que dans le grand : médiane, moyenne, plage des ombres
   aux hautes lumières (centiles `stats_tail`, 1 % et 99 %), écart-type, saturés, bouchés,
   en IL sous la saturation (`Exposure::channel_stats`, calculé dans le moteur à partir
@@ -144,7 +145,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   zones saturées en jaune et bouchées en bleu (`analysis_over`, `analysis_under`), d'après
   le masque d'exposition du moteur (bits par canal, `tri::exposure::mask`) ; tous canaux :
   saturé dans un canal quelconque, bouché dans l'ensemble des canaux
-  (`histogram::analysis_image`, testé ; hauteur `analysis_height`).
+  (`histogram::analysis_image`, testé ; hauteur `analysis_height`). Mise en page (retour
+  du 18/10/2026) : un bloc horizontal sur toute la largeur restante, fond un peu plus
+  clair que la boîte (`analysis_lighten`), légende à gauche, image centrée. Le pointeur
+  « saisir » de la boîte déplaçable ne remplace plus celui d'un élément (main sur les
+  pastilles).
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
   (F5) et explication au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;

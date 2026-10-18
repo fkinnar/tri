@@ -2668,6 +2668,54 @@ impl TriApp {
         Some(texture)
     }
 
+    /// Bloc de l'image d'analyse, à droite des statistiques : fond un peu plus clair que
+    /// la boîte, légende à gauche, image centrée dans le reste (retour du 18/10/2026).
+    fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle) {
+        let settings = &self.gui.histogram;
+        let size = vec2(ui.available_width().max(80.0), settings.analysis_height);
+        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+        let painter = ui.painter();
+        let fill = ui.visuals().window_fill;
+        let k = settings.analysis_lighten.clamp(0.0, 1.0);
+        let lighten = |v: u8| (v as f32 + (255.0 - v as f32) * k) as u8;
+        painter.rect_filled(
+            rect,
+            4.0,
+            Color32::from_rgb(lighten(fill.r()), lighten(fill.g()), lighten(fill.b())),
+        );
+        let margin = self.gui.dialogs.spacing.max(4.0);
+        let inner = rect.shrink(margin);
+        // Légende : deux lignes, centrées verticalement à gauche.
+        let c = &self.gui.colors;
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let galleys = [
+            (t!("analysis-over"), Color32::from(c.analysis_over)),
+            (t!("analysis-under"), Color32::from(c.analysis_under)),
+        ]
+        .map(|(text, color)| painter.layout_no_wrap(text, font.clone(), color));
+        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
+        let line_h = galleys[0].size().y;
+        let mut y = inner.center().y - line_h - 2.0;
+        for g in galleys {
+            painter.galley(pos2(inner.min.x, y), g, Color32::WHITE);
+            y += line_h + 4.0;
+        }
+        let room = Rect::from_min_max(
+            pos2(inner.min.x + legend_w + margin, inner.min.y),
+            inner.max,
+        );
+        let image = texture.size_vec2();
+        let fit = (room.width() / image.x)
+            .min(room.height() / image.y)
+            .max(0.0);
+        painter.image(
+            texture.id(),
+            Rect::from_center_size(room.center(), image * fit),
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
         if !self.histogram_large {
             return;
@@ -2748,28 +2796,8 @@ impl TriApp {
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| self.histogram_stats(ui, e));
                     if let Some(texture) = &analysis {
-                        let room = vec2(
-                            (ui.available_width() - 12.0).max(40.0),
-                            self.gui.histogram.analysis_height,
-                        );
-                        let image = texture.size_vec2();
-                        let fit = (room.x / image.x).min(room.y / image.y);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            ui.vertical(|ui| {
-                                ui.image((texture.id(), image * fit));
-                                ui.horizontal(|ui| {
-                                    let c = &self.gui.colors;
-                                    ui.colored_label(
-                                        Color32::from(c.analysis_over),
-                                        t!("analysis-over"),
-                                    );
-                                    ui.colored_label(
-                                        Color32::from(c.analysis_under),
-                                        t!("analysis-under"),
-                                    );
-                                });
-                            });
-                        });
+                        ui.add_space(self.gui.dialogs.spacing);
+                        self.analysis_block(ui, texture);
                     }
                 });
                 // Sur des données RAW, pas de luminance : chaque photosite ne mesure
@@ -3840,7 +3868,11 @@ impl Dialog {
             if scope.response.dragged() {
                 moved = scope.response.drag_delta();
             }
-            if scope.response.hovered() {
+            // Sans écraser le pointeur choisi par un élément de la boîte (main sur les
+            // pastilles du grand histogramme : retour du 18/10/2026).
+            if scope.response.hovered()
+                && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
+            {
                 ctx.set_cursor_icon(egui::CursorIcon::Grab);
             }
             scope.inner

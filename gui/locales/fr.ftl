@@ -230,7 +230,7 @@ shown-image = Image
 
 ## Histogramme
 
-histogram-indicators = { $source } · marge { $headroom } IL · saturés { $over } % · bouchés { $under } %
+histogram-indicators = { $source } · marge { $headroom } IL
 histogram-zero-ev = 0 IL
 
 ## Déchargement

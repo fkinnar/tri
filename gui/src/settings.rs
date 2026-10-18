@@ -539,6 +539,9 @@ pub struct HistogramSettings {
     /// Grand histogramme : hauteur de la petite image d'analyse (zones saturées /
     /// bouchées sur l'image en gris), à droite des statistiques (points).
     pub analysis_height: f32,
+    /// Fond du bloc de l'image d'analyse : fond de la boîte éclairci de cette part vers
+    /// le blanc (0 à 1).
+    pub analysis_lighten: f32,
 }
 
 impl Default for HistogramSettings {
@@ -560,6 +563,7 @@ impl Default for HistogramSettings {
             stats_tail: 0.01,
             channel_dot: 11.0,
             analysis_height: 200.0,
+            analysis_lighten: 0.06,
         }
     }
 }

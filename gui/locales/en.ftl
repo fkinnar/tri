@@ -228,7 +228,7 @@ shown-image = Image
 
 ## Histogram
 
-histogram-indicators = { $source } · headroom { $headroom } EV · clipped { $over } % · crushed { $under } %
+histogram-indicators = { $source } · headroom { $headroom } EV
 histogram-zero-ev = 0 EV
 
 ## Offload
