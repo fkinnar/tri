@@ -301,6 +301,30 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   d'un style en ligne de commande) ; darktable expose aussi une API Lua. Serait un plugin
   au sens du `CLAUDE.md` (statique), pas une fonction du cœur.
 
+## Après la V1 : l'« après-développement » (idée de l'utilisateur, 18/10/2026)
+
+**Pas avant une V1 qui marche et documentée.** Aujourd'hui `tri` gère l'*avant*
+développement (tri, sélection) ; l'idée est d'aussi gérer l'*après*. Le flux actuel de
+l'utilisateur : trier → développer (darktable ; peu importe l'outil) → créer des clones /
+copies virtuelles par usage (story Insta, publication Insta, tirage…), classés par
+mots-clés ou collections. Problème : une erreur remarquée après coup oblige à corriger
+puis **recréer toutes les copies**.
+
+Proposition : sortir cette étape du logiciel de développement.
+
+- **Image maîtresse** : un export haute définition, sans recadrage particulier, dans un
+  dossier.
+- **Versions** de cette image dans `tri` : un recadrage (et un usage) par version,
+  stockés comme des *instructions*, jamais comme des copies. Réexporter l'image maîtresse
+  corrigée (même nom) suffit : toutes ses versions se régénèrent.
+- **Profils de sortie** par usage (dimensions, ratio, format, qualité ; ex. story
+  1080 × 1920 JPEG, publication 4:5, tirage TIFF), réglables en TOML comme le reste.
+- **Export** d'une version, et **envoi** : AirDrop sur macOS (feuille de partage du
+  système, via les API Cocoa depuis Rust) ; équivalent Linux à trouver (KDE Connect ?).
+- **Stockage** : un recadrage est une donnée de l'utilisateur → plutôt dans le sidecar
+  XMP de l'image maîtresse (espace de noms `tri:`), comme les notes, pour survivre aux
+  déplacements de fichiers.
+
 ## Préférences de travail à respecter
 
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
