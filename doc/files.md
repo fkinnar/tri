@@ -81,3 +81,32 @@ temporaires : renommage d'une paire et de ses sidecars avec les notes relues, no
 refusé sans rien changer, sidecar partagé copié, changement de casse seul, suppression
 (définitive) de la paire et de ses sidecars sans toucher au reste. Le test de la vraie
 corbeille est `#[ignore]` : il met un fichier dans la corbeille de l'utilisateur.
+
+## Copier / déplacer vers un dossier (18/10/2026)
+
+`plan_transfer(images, dossier, mode, réglages)` prépare, `transfer(plan, progression)`
+exécute. Comme pour le renommage, la **paire** (`[files] pairs`) et les **sidecars XMP**
+suivent, sous le même nom ; un sidecar partagé avec une image qui reste (`IMAGE.xmp`
+d'une paire dont une seule image part) est **copié**, jamais déplacé : les deux images
+gardent leurs notes.
+
+- **Jamais d'écrasement** : un nom déjà présent dans la destination fait échouer le plan,
+  avant toute écriture. Destination absente, ou dossier d'origine : refusées aussi.
+- **Copie vérifiée** : écrite sous un nom temporaire (`.NOM.tri-tmp`), relue et comparée à
+  l'original (BLAKE3, comme le déchargement), **date de modification gardée** (elle
+  départage les deux conventions de sidecars, voir `xmp.md`), puis renommée.
+- **Déplacement** : simple renommage sur le même volume ; vers un autre volume (disque,
+  carte, NAS : `CrossesDevices`), copies vérifiées de **tous** les fichiers, puis
+  suppression des originaux, jamais avant.
+- **En cas d'erreur**, ce qui a été fait est défait (copies supprimées, renommages remis
+  en place).
+- Destinations récentes : `recent_destinations` / `remember_destination` (fichier
+  `destinations` du dossier de données, `[files] recent` au plus, disparues omises).
+  Complétion de la saisie : `complete_dir` (sous-dossiers, casse ignorée, cachés
+  seulement après un « . ») et `common_prefix`.
+- Ligne de commande : `tri --copy|--move <image>... --to <dossier> [--dry-run]`.
+- Interface : `y` (copier, *yank* de vim) et `x` (déplacer, « couper »), sur la sélection,
+  et boutons du clic droit ; boîte avec champ (Tab complète, flèches haut / bas : récentes,
+  dossier absent créé s'il n'en manque qu'un niveau), bascule copier / déplacer,
+  progression pendant la copie (dans un fil : la fenêtre reste vivante).
+

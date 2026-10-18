@@ -549,9 +549,11 @@ Proposition : sortir cette étape du logiciel de développement.
 
 ## Feuille de route décidée le 18/10/2026 (dans cet ordre)
 
-1. **Copier / déplacer vers…** (gain rapide) : fin du lot « actions sur fichiers »,
+1. [x] **Copier / déplacer vers…** (gain rapide) : fin du lot « actions sur fichiers »,
    sur la sélection multiple, sidecars XMP et paires RAW+JPEG suivent, interface et
-   ligne de commande.
+   ligne de commande. **Fait** le 18/10/2026 (`files::plan_transfer` / `transfer`, copies
+   vérifiées, `y` / `x`, champ avec complétion et destinations récentes ; choix sans
+   nouvelle dépendance, glisser-déposer ou sélecteur natif possibles plus tard).
 2. **Fenêtre de réglages** (`Ctrl+,`, gain rapide).
 3. **Annuler** (« très important, il est temps ») : concevoir l'historique d'abord, avec
    l'utilisateur, puis l'appliquer aux notes, au renommage, à la corbeille et au
@@ -559,8 +561,9 @@ Proposition : sortir cette étape du logiciel de développement.
 4. **Panneaux au clavier, façon tmux** (surtout pour l'utilisateur) : un raccourci pour
    passer d'un panneau à l'autre, et **un jeu de raccourcis propre au panneau actif**
    (la même touche fait des choses différentes selon le panneau). `Ctrl+flèches` est
-   réservé au système (macOS : changement de bureau) ; proposition à valider : `Ctrl+W`
-   puis `h` / `j` / `k` / `l` (comme les fenêtres de vim), `Ctrl+W w` pour le suivant.
+   réservé au système (macOS : changement de bureau). Décidé le 18/10/2026 : un
+   **préfixe (leader) réglable**, `Ctrl+B` par défaut **comme tmux** (choix de
+   l'utilisateur), suivi d'une touche de direction pour changer de panneau.
    Long à penser pour ne rien casser.
 5. **Regroupement par similarité, puis netteté par groupe** (le gros morceau, 2 et 4
    ensemble). Modèle souhaité : **Capture One** — une fenêtre pour configurer le
@@ -586,8 +589,7 @@ explicitement par l'utilisateur comme important.
       (« c'est ma grande frustration avec les outils du marché »). **Fait** le
       17/10/2026 : `src/selection.rs` (`doc/selection.md`), Espace, `v` (mode visuel),
       Ctrl+A / Ctrl+Maj+A, Maj+clic, Cmd/Ctrl+clic ; notes, corbeille, éditeur sur la
-      sélection. Reste : déplacer / copier plusieurs images (avec « copier / déplacer
-      vers… »).
+      sélection ; copier / déplacer vers… aussi (18/10/2026).
 - [x] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
       17/10/2026 : **plus de 2 images** possibles. Fait le 17/10/2026 : `c` sur la
       sélection (6 au plus, `[gui.compare] max`), image active notée, `Espace` élimine,
@@ -681,7 +683,8 @@ explicitement par l'utilisateur comme important.
       afficher dans le Finder** (« ce serait déjà super »). **Premier lot fait** le
       17/10/2026 : `src/files.rs` (`doc/files.md`), `[files]` (paires, corbeille, éditeur),
       `F2` / `Suppr` / `Maj+R` / `e`, boutons du clic droit, `tri --rename|--delete|
-      --reveal|--edit`. Restent : copier / déplacer vers…
+      --reveal|--edit`. Copier / déplacer vers… fait le 18/10/2026 (`y` / `x`,
+      `tri --copy|--move`).
 - [x] **Éditeur externe** configurable (`[files] editor`, fait le 17/10/2026).
 - [ ] Panneau des dossiers : navigation au clavier, favoris.
 - [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours

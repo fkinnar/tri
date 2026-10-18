@@ -58,6 +58,9 @@ files-invalid-name = nom invalide : « { $name } »
 files-exists = { $path } existe déjà
 files-trash-failed = mise à la corbeille impossible : { $error }
 files-launch-failed = lancement de « { $program } » impossible : { $error }
+files-not-a-directory = { $path } n'est pas un dossier
+files-same-folder = les images sont déjà dans { $path }
+files-mismatch = copie de { $path } différente de l'original (rien n'a été gardé)
 preview-io = accès fichier impossible : { $error }
 preview-no-embedded = pas d'aperçu embarqué exploitable
 preview-cancelled = calcul annulé
@@ -92,6 +95,7 @@ cli-usage =
       tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
       tri --rename <image> <nom> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
+      tri --copy|--move <image>... --to <dossier> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
     option commune : --config FICHIER (réglages ; défaut : emplacement du système)

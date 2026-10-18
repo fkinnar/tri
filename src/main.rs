@@ -30,6 +30,9 @@
 //!   tri --delete <image>... [--permanent] [--dry-run]
 //!       met les images, leurs paires et leurs sidecars à la corbeille (`--permanent` :
 //!       suppression définitive) ;
+//!   tri --copy|--move <image>... --to <dossier> [--dry-run]
+//!       copie ou déplace les images, leurs paires et leurs sidecars (copies vérifiées ;
+//!       entre deux volumes, originaux supprimés seulement après) ;
 //!   tri --reveal <image>
 //!       montre l'image dans le gestionnaire de fichiers ;
 //!   tri --edit <image>...
@@ -67,6 +70,8 @@ enum FileAction {
     Delete,
     Reveal,
     Edit,
+    Copy,
+    Move,
 }
 
 #[derive(Default)]
@@ -144,6 +149,8 @@ fn parse() -> AnyResult<Args> {
             "--delete" => args.file_action = Some(FileAction::Delete),
             "--reveal" => args.file_action = Some(FileAction::Reveal),
             "--edit" => args.file_action = Some(FileAction::Edit),
+            "--copy" => args.file_action = Some(FileAction::Copy),
+            "--move" => args.file_action = Some(FileAction::Move),
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
@@ -668,6 +675,35 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
             }
             if !args.dry_run {
                 tri::files::delete(&group, trash)?;
+            }
+        }
+        FileAction::Copy | FileAction::Move => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            let dest = args.to.clone().ok_or_else(usage)?;
+            let mode = if action == FileAction::Copy {
+                tri::files::TransferMode::Copy
+            } else {
+                tri::files::TransferMode::Move
+            };
+            let plan = tri::files::plan_transfer(&images, &dest, mode, s)?;
+            for (from, to) in &plan.files {
+                println!("{} → {}", from.display(), to.display());
+            }
+            for (from, to) in &plan.shared {
+                println!(
+                    "{} → {} {}",
+                    from.display(),
+                    to.display(),
+                    t!("cli-rename-shared-copy")
+                );
+            }
+            if !args.dry_run {
+                tri::files::transfer(&plan, |done, total| {
+                    eprint!("\r{done}/{total}");
+                })?;
+                eprintln!();
             }
         }
         FileAction::Reveal => tri::files::reveal(&first)?,

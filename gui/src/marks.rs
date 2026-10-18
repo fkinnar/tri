@@ -255,6 +255,44 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
             ));
             painter.line_segment([p(0.0, 0.4), p(1.0, 0.4)], stroke);
         }
+        Action::FileCopy => {
+            // Deux feuilles décalées : celle de derrière seulement en partie visible.
+            painter.add(Shape::line(
+                vec![
+                    p(0.3, 0.3),
+                    p(0.0, 0.3),
+                    p(0.0, 1.0),
+                    p(0.7, 1.0),
+                    p(0.7, 0.7),
+                ],
+                stroke,
+            ));
+            painter.add(Shape::closed_line(
+                vec![p(0.3, 0.0), p(1.0, 0.0), p(1.0, 0.7), p(0.3, 0.7)],
+                stroke,
+            ));
+        }
+        Action::FileMove => {
+            // Dossier, et une flèche qui y entre par la gauche.
+            painter.add(Shape::line(
+                vec![
+                    p(0.3, 0.42),
+                    p(0.3, 0.12),
+                    p(0.6, 0.12),
+                    p(0.7, 0.26),
+                    p(1.0, 0.26),
+                    p(1.0, 0.92),
+                    p(0.3, 0.92),
+                    p(0.3, 0.72),
+                ],
+                stroke,
+            ));
+            painter.line_segment([p(0.0, 0.57), p(0.72, 0.57)], stroke);
+            painter.add(Shape::line(
+                vec![p(0.52, 0.4), p(0.72, 0.57), p(0.52, 0.74)],
+                stroke,
+            ));
+        }
         _ => {
             // Ouvrir ailleurs : cadre ouvert en haut à droite, flèche qui en sort.
             painter.add(Shape::line(

@@ -47,6 +47,8 @@ action-core-file-reveal = { $os ->
    *[other] Afficher dans le gestionnaire de fichiers
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
+action-core-file-copy = Copier vers…
+action-core-file-move = Déplacer vers…
 action-core-view-folders = Afficher / masquer le panneau des dossiers
 action-core-view-refresh_folders = Actualiser les dossiers (disque branché)
 action-core-view-histogram = Afficher / masquer l'histogramme
@@ -203,6 +205,28 @@ rename-copied = { $from } copié en { $to } (partagé avec la paire)
 rename-button = Renommer
 enter-or-escape = Entrée / Échap
 rename-failed = renommage impossible : { $error }
+transfer-copy-title = { $n ->
+    [one] Copier { $n } image vers…
+   *[other] Copier { $n } images vers…
+}
+transfer-move-title = { $n ->
+    [one] Déplacer { $n } image vers…
+   *[other] Déplacer { $n } images vers…
+}
+transfer-files = { $n ->
+    [one] { $n } fichier (paires et sidecars XMP compris)
+   *[other] { $n } fichiers (paires et sidecars XMP compris)
+}
+transfer-shared = { $name } est partagé avec une image qui reste : copié
+transfer-create = le dossier sera créé
+transfer-copy = Copier
+transfer-move = Déplacer
+transfer-create-copy = Créer et copier
+transfer-create-move = Créer et déplacer
+transfer-hint = Tab : compléter · flèches haut / bas : destinations récentes
+transfer-recent = Récentes
+transfer-progress = { $done } / { $total } fichiers
+transfer-failed = copie / déplacement impossible : { $error }
 delete-to-trash = Mettre à la corbeille
 delete-permanently = Supprimer définitivement
 delete-trash-question = { $n ->

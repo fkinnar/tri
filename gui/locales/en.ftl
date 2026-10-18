@@ -48,6 +48,8 @@ action-core-file-reveal = { $os ->
    *[other] Show in the file manager
 }
 action-core-file-edit = Open in the external editor
+action-core-file-copy = Copy to…
+action-core-file-move = Move to…
 action-core-view-folders = Show / hide the folder panel
 action-core-view-refresh_folders = Refresh folders (drive plugged in)
 action-core-view-histogram = Show / hide the histogram
@@ -201,6 +203,28 @@ rename-copied = { $from } copied as { $to } (shared with the pair)
 rename-button = Rename
 enter-or-escape = Enter / Esc
 rename-failed = cannot rename: { $error }
+transfer-copy-title = { $n ->
+    [one] Copy { $n } image to…
+   *[other] Copy { $n } images to…
+}
+transfer-move-title = { $n ->
+    [one] Move { $n } image to…
+   *[other] Move { $n } images to…
+}
+transfer-files = { $n ->
+    [one] { $n } file (pairs and XMP sidecars included)
+   *[other] { $n } files (pairs and XMP sidecars included)
+}
+transfer-shared = { $name } is shared with an image that stays: copied
+transfer-create = the folder will be created
+transfer-copy = Copy
+transfer-move = Move
+transfer-create-copy = Create and copy
+transfer-create-move = Create and move
+transfer-hint = Tab: complete · up / down arrows: recent destinations
+transfer-recent = Recent
+transfer-progress = { $done } / { $total } files
+transfer-failed = copy / move failed: { $error }
 delete-to-trash = Move to trash
 delete-permanently = Delete permanently
 delete-trash-question = { $n ->

@@ -1,5 +1,5 @@
-//! Actions sur les fichiers : renommer, supprimer (corbeille), afficher dans le gestionnaire
-//! de fichiers, ouvrir dans un éditeur externe.
+//! Actions sur les fichiers : renommer, supprimer (corbeille), copier / déplacer vers un
+//! dossier, afficher dans le gestionnaire de fichiers, ouvrir dans un éditeur externe.
 //!
 //! Une image ne se déplace jamais seule : ses **sidecars XMP** la suivent (sinon ses notes
 //! seraient perdues ou attribuées à une autre image), et, par défaut, l'autre image de sa
@@ -33,6 +33,8 @@ pub struct FileSettings {
     /// système (`open`, `xdg-open`, `start`). Ex. `["darktable"]`, ou sur macOS
     /// `["open", "-a", "darktable"]`.
     pub editor: Vec<String>,
+    /// Copier / déplacer vers… : nombre de destinations récentes proposées.
+    pub recent: usize,
 }
 
 impl Default for FileSettings {
@@ -41,6 +43,7 @@ impl Default for FileSettings {
             pairs: true,
             trash: true,
             editor: Vec::new(),
+            recent: 9,
         }
     }
 }
@@ -58,6 +61,12 @@ pub enum FileError {
     Trash(String),
     /// Lancement d'un programme impossible (gestionnaire de fichiers, éditeur).
     Launch(String, io::Error),
+    /// Destination absente, ou pas un dossier.
+    NotADirectory(PathBuf),
+    /// Destination = dossier d'origine d'un fichier.
+    SameFolder(PathBuf),
+    /// Copie relue différente de l'original.
+    Mismatch(PathBuf),
 }
 
 impl fmt::Display for FileError {
@@ -75,6 +84,21 @@ impl fmt::Display for FileError {
                 f,
                 "{}",
                 crate::t!("files-launch-failed", program = p, error = e.to_string())
+            ),
+            Self::NotADirectory(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-not-a-directory", path = p.display().to_string())
+            ),
+            Self::SameFolder(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-same-folder", path = p.display().to_string())
+            ),
+            Self::Mismatch(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-mismatch", path = p.display().to_string())
             ),
         }
     }
@@ -280,6 +304,286 @@ pub fn delete(group: &Group, trash: bool) -> Result<()> {
     Ok(())
 }
 
+/// Copier ou déplacer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransferMode {
+    /// Les originaux restent.
+    Copy,
+    /// Les originaux partent.
+    Move,
+}
+
+/// Copie ou déplacement prévu vers un dossier.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Transfer {
+    /// Copier ou déplacer.
+    pub mode: TransferMode,
+    /// Dossier de destination.
+    pub dest: PathBuf,
+    /// (source, cible) : images (paires comprises) puis sidecars.
+    pub files: Vec<(PathBuf, PathBuf)>,
+    /// Sidecars partagés avec une image qui reste (`IMAGE.xmp` d'une paire dont une seule
+    /// image part) : toujours **copiés**, les deux images gardent leurs notes.
+    pub shared: Vec<(PathBuf, PathBuf)>,
+}
+
+impl Transfer {
+    /// Nombre de fichiers écrits dans la destination.
+    pub fn len(&self) -> usize {
+        self.files.len() + self.shared.len()
+    }
+
+    /// Vrai si rien n'est à copier.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Les images (pas les sidecars) et leur cible : pour suivre une image déplacée.
+    pub fn images(&self) -> impl Iterator<Item = &(PathBuf, PathBuf)> {
+        self.files
+            .iter()
+            .filter(|(from, _)| media::kind_of(from).is_some())
+    }
+}
+
+/// Prépare la copie ou le déplacement de `images` dans `dest` : paires (`[files] pairs`)
+/// et sidecars suivent, sous le même nom. Erreur si `dest` n'est pas un dossier, est le
+/// dossier d'une image, ou contient déjà un des noms (jamais d'écrasement).
+pub fn plan_transfer(
+    images: &[PathBuf],
+    dest: &Path,
+    mode: TransferMode,
+    settings: &FileSettings,
+) -> Result<Transfer> {
+    if !dest.is_dir() {
+        return Err(FileError::NotADirectory(dest.to_path_buf()));
+    }
+    let group = group(images, settings.pairs);
+    let target = |from: &PathBuf| dest.join(from.file_name().unwrap_or_default());
+    let mut plan = Transfer {
+        mode,
+        dest: dest.to_path_buf(),
+        files: group.files().map(|f| (f.clone(), target(f))).collect(),
+        shared: group
+            .shared
+            .iter()
+            .map(|f| (f.clone(), target(f)))
+            .collect(),
+    };
+    let mut targets = HashSet::new();
+    for (from, to) in plan.files.iter().chain(&plan.shared) {
+        let folder = from.parent().unwrap_or(Path::new("."));
+        if same(folder, dest) {
+            return Err(FileError::SameFolder(dest.to_path_buf()));
+        }
+        if to.exists() || !targets.insert(to.clone()) {
+            return Err(FileError::Exists(to.clone()));
+        }
+    }
+    plan.files.dedup();
+    Ok(plan)
+}
+
+/// Copie `from` en `to` sans écraser, vérifiée : écrite sous un nom temporaire, relue et
+/// comparée à l'original (BLAKE3), date de modification gardée (elle départage les
+/// sidecars, voir `xmp`), puis renommée.
+fn copy_verified(from: &Path, to: &Path) -> Result<()> {
+    fn io_err(p: &Path) -> impl FnOnce(io::Error) -> FileError + '_ {
+        move |e| FileError::Io(p.to_path_buf(), e)
+    }
+    let tmp = to.with_file_name(format!(
+        ".{}.tri-tmp",
+        to.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    let result = (|| {
+        std::fs::copy(from, &tmp).map_err(io_err(from))?;
+        let modified = std::fs::metadata(from)
+            .and_then(|m| m.modified())
+            .map_err(io_err(from))?;
+        std::fs::File::options()
+            .write(true)
+            .open(&tmp)
+            .and_then(|f| f.set_modified(modified))
+            .map_err(io_err(&tmp))?;
+        if hash(from).map_err(io_err(from))? != hash(&tmp).map_err(io_err(&tmp))? {
+            return Err(FileError::Mismatch(from.to_path_buf()));
+        }
+        if to.exists() {
+            return Err(FileError::Exists(to.to_path_buf()));
+        }
+        std::fs::rename(&tmp, to).map_err(io_err(to))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+fn hash(path: &Path) -> io::Result<blake3::Hash> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_reader(std::fs::File::open(path)?)?;
+    Ok(hasher.finalize())
+}
+
+/// Exécute une copie ou un déplacement préparé par [`plan_transfer`] ; `progress` reçoit
+/// (fichiers faits, total) après chaque fichier.
+///
+/// Copie : copies vérifiées. Déplacement : renommage sur le même volume ; sinon (autre
+/// disque, carte, NAS) copies vérifiées de **tous** les fichiers, puis suppression des
+/// originaux, jamais avant. Sur une erreur, ce qui a été fait est défait (copies
+/// supprimées, renommages remis en place).
+pub fn transfer(plan: &Transfer, mut progress: impl FnMut(usize, usize)) -> Result<()> {
+    let total = plan.len();
+    let mut done = 0;
+    let mut created: Vec<&PathBuf> = Vec::new();
+    let mut renamed: Vec<(&PathBuf, &PathBuf)> = Vec::new();
+    let undo = |created: &[&PathBuf], renamed: &[(&PathBuf, &PathBuf)]| {
+        for to in created {
+            let _ = std::fs::remove_file(to);
+        }
+        for (from, to) in renamed.iter().rev() {
+            let _ = std::fs::rename(to, from);
+        }
+    };
+    let mut step = |result: Result<()>,
+                    created: &[&PathBuf],
+                    renamed: &[(&PathBuf, &PathBuf)]|
+     -> Result<()> {
+        if result.is_err() {
+            undo(created, renamed);
+        }
+        result?;
+        done += 1;
+        progress(done, total);
+        Ok(())
+    };
+    // Sidecars partagés : copiés dans tous les cas.
+    for (from, to) in &plan.shared {
+        let result = copy_verified(from, to);
+        if result.is_ok() {
+            created.push(to);
+        }
+        step(result, &created, &renamed)?;
+    }
+    // Déplacement : renommage tant que le volume est le même.
+    let mut copy_rest = plan.mode == TransferMode::Copy;
+    let mut sources_to_remove: Vec<&PathBuf> = Vec::new();
+    for (from, to) in &plan.files {
+        if !copy_rest {
+            if to.exists() {
+                undo(&created, &renamed);
+                return Err(FileError::Exists(to.clone()));
+            }
+            match std::fs::rename(from, to) {
+                Ok(()) => {
+                    renamed.push((from, to));
+                    step(Ok(()), &created, &renamed)?;
+                    continue;
+                }
+                // Autre volume : copier ce fichier et les suivants, supprimer à la fin.
+                Err(e) if e.kind() == io::ErrorKind::CrossesDevices => copy_rest = true,
+                Err(e) => return step(Err(FileError::Io(from.clone(), e)), &created, &renamed),
+            }
+        }
+        let result = copy_verified(from, to);
+        if result.is_ok() {
+            created.push(to);
+            if plan.mode == TransferMode::Move {
+                sources_to_remove.push(from);
+            }
+        }
+        step(result, &created, &renamed)?;
+    }
+    // Tout est copié et vérifié : les originaux peuvent partir.
+    for from in sources_to_remove {
+        std::fs::remove_file(from).map_err(|e| FileError::Io(from.clone(), e))?;
+    }
+    Ok(())
+}
+
+/// Fichier des destinations récentes, dans le dossier de données.
+const RECENT_FILE: &str = "destinations";
+
+/// Destinations récentes de « copier / déplacer vers… », la plus récente d'abord (celles
+/// qui n'existent plus sont omises : carte retirée, dossier supprimé).
+pub fn recent_destinations(data: &Path) -> Vec<PathBuf> {
+    std::fs::read_to_string(data.join(RECENT_FILE))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.is_dir())
+        .collect()
+}
+
+/// Met `dest` en tête des destinations récentes, `max` au plus.
+pub fn remember_destination(data: &Path, dest: &Path, max: usize) -> io::Result<()> {
+    let path = data.join(RECENT_FILE);
+    let mut list: Vec<String> = vec![dest.to_string_lossy().into_owned()];
+    for line in std::fs::read_to_string(&path).unwrap_or_default().lines() {
+        if !line.trim().is_empty() && !list.iter().any(|l| l == line) {
+            list.push(line.to_string());
+        }
+    }
+    list.truncate(max.max(1));
+    std::fs::create_dir_all(data)?;
+    std::fs::write(path, list.join("\n") + "\n")
+}
+
+/// Complétion d'un chemin de dossier en cours de saisie (`~` accepté) : les
+/// sous-dossiers du dossier tapé dont le nom commence par la fin de la saisie (casse
+/// ignorée, dossiers cachés seulement si la saisie commence par « . »), triés, terminés
+/// par un séparateur. Pour la touche Tab de « copier / déplacer vers… ».
+pub fn complete_dir(input: &str) -> Vec<String> {
+    let sep = std::path::MAIN_SEPARATOR;
+    let ends_with_sep = input.ends_with(['/', sep]);
+    let (parent, prefix) = if ends_with_sep || input.is_empty() {
+        (input, "")
+    } else {
+        match input.rfind(['/', sep]) {
+            Some(i) => (&input[..=i], &input[i + 1..]),
+            None => ("", input),
+        }
+    };
+    let dir = if parent.is_empty() {
+        PathBuf::from(".")
+    } else {
+        crate::settings::expand_home(parent)
+    };
+    let wanted = prefix.to_lowercase();
+    let mut found: Vec<String> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.to_lowercase().starts_with(&wanted))
+        .filter(|n| !n.starts_with('.') || prefix.starts_with('.'))
+        .map(|n| format!("{parent}{n}{sep}"))
+        .collect();
+    found.sort_by_key(|n| n.to_lowercase());
+    found
+}
+
+/// Début commun de `candidates` (casse respectée), ce que Tab complète d'abord.
+pub fn common_prefix(candidates: &[String]) -> String {
+    let Some(first) = candidates.first() else {
+        return String::new();
+    };
+    let mut end = first.len();
+    for other in &candidates[1..] {
+        end = first
+            .char_indices()
+            .zip(other.chars())
+            .take_while(|((_, a), b)| a == b)
+            .last()
+            .map(|((i, a), _)| i + a.len_utf8())
+            .unwrap_or(0)
+            .min(end);
+    }
+    first[..end].to_string()
+}
+
 /// Montre `path` dans le gestionnaire de fichiers, sélectionné quand le système le permet
 /// (macOS, Windows, gestionnaires Linux qui exposent `org.freedesktop.FileManager1` :
 /// Nautilus, Nemo, Dolphin…) ; sinon ouvre son dossier.
@@ -429,6 +733,149 @@ mod tests {
         assert_eq!(names(&g.images), ["IMG.RAF"]);
         assert_eq!(names(&g.sidecars), ["IMG.RAF.xmp"]);
         assert_eq!(names(&g.shared), ["IMG.xmp"], "le JPG en a encore besoin");
+    }
+
+    #[test]
+    fn copy_and_move_take_pairs_and_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dest) = (dir.path().join("src"), dir.path().join("dest"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        touch(
+            &src,
+            &["IMG.RAF", "IMG.JPG", "IMG.RAF.xmp", "IMG.xmp", "B.RAF"],
+        );
+        let s = FileSettings::default();
+        let image = [src.join("IMG.RAF")];
+        let plan = plan_transfer(&image, &dest, TransferMode::Copy, &s).unwrap();
+        assert_eq!(plan.len(), 4);
+        assert_eq!(plan.images().count(), 2);
+        let mut steps = Vec::new();
+        transfer(&plan, |done, total| steps.push((done, total))).unwrap();
+        assert_eq!(steps.last(), Some(&(4, 4)));
+        for name in ["IMG.RAF", "IMG.JPG", "IMG.RAF.xmp", "IMG.xmp"] {
+            assert!(
+                src.join(name).exists() && dest.join(name).exists(),
+                "{name}"
+            );
+            assert_eq!(std::fs::read(dest.join(name)).unwrap(), name.as_bytes());
+        }
+        // Jamais d'écrasement : tout est refusé avant la première copie.
+        assert!(matches!(
+            plan_transfer(&image, &dest, TransferMode::Copy, &s),
+            Err(FileError::Exists(_))
+        ));
+        // Déplacement de B vers dest.
+        let b = [src.join("B.RAF")];
+        let plan = plan_transfer(&b, &dest, TransferMode::Move, &s).unwrap();
+        transfer(&plan, |_, _| {}).unwrap();
+        assert!(!src.join("B.RAF").exists() && dest.join("B.RAF").exists());
+    }
+
+    #[test]
+    fn moving_one_image_of_a_pair_copies_the_shared_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dest) = (dir.path().join("src"), dir.path().join("dest"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        touch(&src, &["IMG.RAF", "IMG.JPG", "IMG.xmp"]);
+        let s = FileSettings {
+            pairs: false,
+            ..FileSettings::default()
+        };
+        let plan = plan_transfer(&[src.join("IMG.RAF")], &dest, TransferMode::Move, &s).unwrap();
+        transfer(&plan, |_, _| {}).unwrap();
+        assert!(dest.join("IMG.RAF").exists() && !src.join("IMG.RAF").exists());
+        assert!(src.join("IMG.xmp").exists(), "le JPG garde ses notes");
+        assert!(dest.join("IMG.xmp").exists(), "le RAF aussi");
+    }
+
+    #[test]
+    fn bad_destinations_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        touch(dir.path(), &["IMG.RAF"]);
+        let image = [dir.path().join("IMG.RAF")];
+        let s = FileSettings::default();
+        assert!(matches!(
+            plan_transfer(&image, dir.path(), TransferMode::Move, &s),
+            Err(FileError::SameFolder(_))
+        ));
+        assert!(matches!(
+            plan_transfer(&image, &dir.path().join("absent"), TransferMode::Copy, &s),
+            Err(FileError::NotADirectory(_))
+        ));
+    }
+
+    #[test]
+    fn a_verified_copy_keeps_the_modification_date() {
+        let dir = tempfile::tempdir().unwrap();
+        let from = dir.path().join("a.xmp");
+        std::fs::write(&from, "x").unwrap();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(&from)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let to = dir.path().join("b.xmp");
+        copy_verified(&from, &to).unwrap();
+        assert_eq!(std::fs::metadata(&to).unwrap().modified().unwrap(), old);
+        assert!(matches!(
+            copy_verified(&from, &to),
+            Err(FileError::Exists(_))
+        ));
+    }
+
+    #[test]
+    fn recent_destinations_are_ordered_and_capped() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        let (a, b, c) = (
+            dir.path().join("a"),
+            dir.path().join("b"),
+            dir.path().join("c"),
+        );
+        for d in [&a, &b, &c] {
+            std::fs::create_dir(d).unwrap();
+        }
+        assert!(recent_destinations(&data).is_empty());
+        for d in [&a, &b, &a, &c] {
+            remember_destination(&data, d, 2).unwrap();
+        }
+        assert_eq!(recent_destinations(&data), [c.clone(), a.clone()]);
+        std::fs::remove_dir(&a).unwrap();
+        assert_eq!(recent_destinations(&data), [c], "disparue : omise");
+    }
+
+    #[test]
+    fn directories_are_completed() {
+        let dir = tempfile::tempdir().unwrap();
+        for d in ["Photos", "photos-2026", "Autre", ".cache"] {
+            std::fs::create_dir(dir.path().join(d)).unwrap();
+        }
+        touch(dir.path(), &["Photo.txt"]);
+        let sep = std::path::MAIN_SEPARATOR;
+        let base = format!("{}{sep}", dir.path().display());
+        let found = complete_dir(&format!("{base}pho"));
+        assert_eq!(
+            found,
+            [
+                format!("{base}photos-2026{sep}"),
+                format!("{base}Photos{sep}")
+            ]
+        );
+        assert_eq!(
+            common_prefix(&found),
+            base,
+            "casse différente : rien de commun"
+        );
+        assert_eq!(complete_dir(&base).len(), 3, "sans les dossiers cachés");
+        assert_eq!(complete_dir(&format!("{base}.c")).len(), 1);
+        assert_eq!(
+            common_prefix(&[format!("{base}Autre{sep}")]),
+            format!("{base}Autre{sep}")
+        );
     }
 
     #[test]

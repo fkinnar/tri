@@ -133,8 +133,8 @@ delete_after = false
 delete_left = false
 
 [files]
-# Renommer ou supprimer une image : l'autre image de sa paire RAW+JPEG (même nom, autre
-# extension) suit. Ses sidecars XMP suivent toujours.
+# Renommer, supprimer, copier ou déplacer une image : l'autre image de sa paire RAW+JPEG
+# (même nom, autre extension) suit. Ses sidecars XMP suivent toujours.
 pairs = true
 # Supprimer = mettre à la corbeille (récupérable) ; false : suppression définitive.
 trash = true
@@ -142,6 +142,8 @@ trash = true
 # (ajoutés à la fin sinon). Vide : application par défaut du système. Exemples :
 # ["darktable"], ["open", "-a", "darktable"] (macOS), ["gimp", "{files}"].
 editor = []
+# Copier / déplacer vers… : nombre de destinations récentes proposées (touches 1 à 9).
+recent = 9
 
 [sharpness]
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de

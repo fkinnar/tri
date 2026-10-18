@@ -91,6 +91,8 @@ pub fn navigate(
         | Action::FileDelete
         | Action::FileReveal
         | Action::FileEdit
+        | Action::FileCopy
+        | Action::FileMove
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
         | Action::ToggleHistogram

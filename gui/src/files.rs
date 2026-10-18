@@ -1,11 +1,14 @@
-//! Boîtes des actions sur les fichiers : renommer, mettre à la corbeille. Le travail est
-//! fait par le moteur ([`tri::files`]) ; ici, seulement la saisie, la liste des fichiers
-//! touchés et la confirmation.
+//! Boîtes des actions sur les fichiers : renommer, mettre à la corbeille, copier /
+//! déplacer vers un dossier. Le travail est fait par le moteur ([`tri::files`]) ; ici,
+//! seulement la saisie, la liste des fichiers touchés et la confirmation.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread::JoinHandle;
 
-use eframe::egui::{self, Key, Pos2, ScrollArea};
-use tri::files::{self, FileSettings, Group};
+use eframe::egui::{self, Key, Modifiers, Pos2, ScrollArea};
+use tri::files::{self, FileError, FileSettings, Group, TransferMode};
 
 /// Boîte ouverte.
 pub enum FileDialog {
@@ -19,6 +22,37 @@ pub enum FileDialog {
     },
     /// Confirmer la suppression des fichiers de `group`.
     Delete { group: Group, at: Pos2 },
+    /// Copier / déplacer vers un dossier.
+    Transfer(Box<Transfer>),
+}
+
+/// Boîte « Copier / déplacer vers… ».
+pub struct Transfer {
+    images: Vec<PathBuf>,
+    mode: TransferMode,
+    /// Dossier de destination, en cours de saisie (`~` accepté).
+    input: String,
+    at: Pos2,
+    /// Première image : le champ prend le focus.
+    fresh: bool,
+    /// Curseur à replacer en fin de saisie (après Tab ou une destination récente).
+    cursor_to_end: bool,
+    /// Destinations récentes (la plus récente d'abord), et celle montrée par les flèches.
+    recents: Vec<PathBuf>,
+    recent: Option<usize>,
+    /// Dossiers proposés par le dernier Tab.
+    candidates: Vec<String>,
+    /// Erreur au lancement (création du dossier…), montrée dans la boîte.
+    error: Option<String>,
+    job: Option<Job>,
+}
+
+/// Copie en cours, dans un fil à part (copies vérifiées : longues vers un autre disque).
+struct Job {
+    done: Arc<AtomicUsize>,
+    total: usize,
+    dest: PathBuf,
+    handle: Option<JoinHandle<Result<(), FileError>>>,
 }
 
 /// Résultat d'une image de la boîte.
@@ -67,9 +101,45 @@ impl FileDialog {
         }
     }
 
-    /// Affiche la boîte et applique l'action confirmée.
-    pub fn show(&mut self, ctx: &egui::Context, settings: &FileSettings) -> Outcome {
+    /// Copie en cours : la boîte ne se ferme pas.
+    pub fn busy(&self) -> bool {
+        matches!(self, FileDialog::Transfer(t) if t.job.is_some())
+    }
+
+    /// Boîte « Copier / déplacer vers… » pour `images` ; destinations récentes lues dans
+    /// le dossier de données `data`.
+    pub fn transfer(
+        images: Vec<PathBuf>,
+        mode: TransferMode,
+        data: Option<&Path>,
+        at: Pos2,
+    ) -> FileDialog {
+        let recents = data.map(files::recent_destinations).unwrap_or_default();
+        FileDialog::Transfer(Box::new(Transfer {
+            images,
+            mode,
+            input: String::new(),
+            at,
+            fresh: true,
+            cursor_to_end: false,
+            recents,
+            recent: None,
+            candidates: Vec::new(),
+            error: None,
+            job: None,
+        }))
+    }
+
+    /// Affiche la boîte et applique l'action confirmée ; `data` : dossier de données
+    /// (destinations récentes).
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        settings: &FileSettings,
+        data: Option<&Path>,
+    ) -> Outcome {
         match self {
+            FileDialog::Transfer(t) => t.show(ctx, settings, data),
             FileDialog::Rename {
                 image,
                 name,
@@ -215,5 +285,274 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
         Outcome::Cancelled
     } else {
         Outcome::Open
+    }
+}
+
+/// Identifiant du champ de destination.
+pub fn destination_field_id() -> egui::Id {
+    egui::Id::unique("transfer_field")
+}
+
+impl Transfer {
+    fn show(
+        &mut self,
+        ctx: &egui::Context,
+        settings: &FileSettings,
+        data: Option<&Path>,
+    ) -> Outcome {
+        if self.job.is_some() {
+            return self.progress(ctx, settings, data);
+        }
+        let n = self.images.len();
+        let title = match self.mode {
+            TransferMode::Copy => t!("transfer-copy-title", n = n),
+            TransferMode::Move => t!("transfer-move-title", n = n),
+        };
+        let dest = tri::settings::expand_home(self.input.trim());
+        let plan = files::plan_transfer(&self.images, &dest, self.mode, settings);
+        // Dossier absent dont le parent existe : il sera créé.
+        let create = matches!(plan, Err(FileError::NotADirectory(_)))
+            && !self.input.trim().is_empty()
+            && dest.parent().is_some_and(Path::is_dir);
+        let (mut confirm, mut cancel) = (false, false);
+        let id = destination_field_id();
+        let focused = ctx.memory(|m| m.has_focus(id));
+        // Tab et flèches pour le champ, pas pour la navigation entre éléments.
+        let (tab, up, down) = if focused {
+            ctx.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::NONE, Key::Tab),
+                    i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                    i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                )
+            })
+        } else {
+            (false, false, false)
+        };
+        if tab {
+            self.complete();
+        }
+        if up && !self.recents.is_empty() {
+            let i = self
+                .recent
+                .map_or(0, |i| (i + 1).min(self.recents.len() - 1));
+            self.use_recent(i);
+        }
+        if down {
+            match self.recent {
+                Some(0) | None => {
+                    self.recent = None;
+                    self.input.clear();
+                }
+                Some(i) => self.use_recent(i - 1),
+            }
+        }
+        let mut picked = None;
+        let modal = crate::app::modal_at("transfer_dialog", self.at)
+            .title(title)
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.mode, TransferMode::Move, t!("transfer-move"));
+                    ui.selectable_value(&mut self.mode, TransferMode::Copy, t!("transfer-copy"));
+                });
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut self.input)
+                        .id(id)
+                        .lock_focus(true)
+                        .desired_width(420.0),
+                );
+                if std::mem::take(&mut self.fresh) {
+                    field.request_focus();
+                }
+                if std::mem::take(&mut self.cursor_to_end) {
+                    let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
+                    let end = egui::text::CCursor::new(self.input.chars().count());
+                    state
+                        .cursor
+                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                    state.store(ctx, id);
+                }
+                if field.changed() {
+                    self.candidates.clear();
+                    self.recent = None;
+                }
+                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                ui.weak(t!("transfer-hint"));
+                for candidate in self.candidates.iter().take(12) {
+                    ui.weak(candidate);
+                }
+                ui.add_space(6.0);
+                match &plan {
+                    Ok(plan) => {
+                        ui.label(t!("transfer-files", n = plan.files.len()));
+                        for (from, _) in &plan.shared {
+                            ui.weak(t!("transfer-shared", name = file_name(from)));
+                        }
+                    }
+                    Err(_) if create => {
+                        ui.label(t!("transfer-create"));
+                    }
+                    Err(_) if self.input.trim().is_empty() => {}
+                    Err(e) => {
+                        ui.colored_label(ui.visuals().error_fg_color, e.to_string());
+                    }
+                }
+                if let Some(e) = &self.error {
+                    ui.colored_label(ui.visuals().error_fg_color, e);
+                }
+                if !self.recents.is_empty() {
+                    ui.add_space(6.0);
+                    ui.weak(t!("transfer-recent"));
+                    for (i, recent) in self.recents.iter().enumerate() {
+                        let text = tilde(recent);
+                        if ui.selectable_label(self.recent == Some(i), text).clicked() {
+                            picked = Some(i);
+                        }
+                    }
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    let ok = plan.is_ok() || create;
+                    let label = match (self.mode, create) {
+                        (TransferMode::Copy, false) => t!("transfer-copy"),
+                        (TransferMode::Move, false) => t!("transfer-move"),
+                        (TransferMode::Copy, true) => t!("transfer-create-copy"),
+                        (TransferMode::Move, true) => t!("transfer-create-move"),
+                    };
+                    confirm =
+                        ui.add_enabled(ok, egui::Button::new(label)).clicked() || (enter && ok);
+                    cancel = ui.button(t!("cancel")).clicked();
+                    ui.weak(t!("enter-or-escape"));
+                });
+            });
+        if let Some(i) = picked {
+            self.use_recent(i);
+            ctx.memory_mut(|m| m.request_focus(id));
+        }
+        if confirm {
+            self.start(ctx, settings, &dest, create);
+            return Outcome::Open;
+        }
+        if cancel || modal.should_close() {
+            Outcome::Cancelled
+        } else {
+            Outcome::Open
+        }
+    }
+
+    fn use_recent(&mut self, i: usize) {
+        if let Some(path) = self.recents.get(i) {
+            self.recent = Some(i);
+            self.input = tilde(path);
+            self.candidates.clear();
+            self.cursor_to_end = true;
+        }
+    }
+
+    /// Tab : un seul dossier possible, il est pris ; sinon le début commun, et la liste.
+    fn complete(&mut self) {
+        let found = files::complete_dir(&self.input);
+        match found.as_slice() {
+            [] => {}
+            [one] => {
+                self.input = one.clone();
+                self.candidates.clear();
+            }
+            _ => {
+                let common = files::common_prefix(&found);
+                if common.len() > self.input.len() {
+                    self.input = common;
+                }
+                self.candidates = found;
+            }
+        }
+        self.cursor_to_end = true;
+        self.recent = None;
+    }
+
+    /// Lance la copie dans un fil (dossier créé d'abord si besoin).
+    fn start(&mut self, ctx: &egui::Context, settings: &FileSettings, dest: &Path, create: bool) {
+        self.error = None;
+        if create && let Err(e) = std::fs::create_dir(dest) {
+            self.error = Some(format!("{} : {e}", dest.display()));
+            return;
+        }
+        let plan = match files::plan_transfer(&self.images, dest, self.mode, settings) {
+            Ok(plan) => plan,
+            Err(e) => {
+                self.error = Some(e.to_string());
+                return;
+            }
+        };
+        let done = Arc::new(AtomicUsize::new(0));
+        let total = plan.len();
+        let (counter, ctx) = (done.clone(), ctx.clone());
+        let handle = std::thread::spawn(move || {
+            files::transfer(&plan, |n, _| {
+                counter.store(n, Ordering::Relaxed);
+                ctx.request_repaint();
+            })
+        });
+        self.job = Some(Job {
+            done,
+            total,
+            dest: dest.to_path_buf(),
+            handle: Some(handle),
+        });
+    }
+
+    /// Copie en cours : progression ; à la fin, destination mémorisée et dossier relu.
+    fn progress(
+        &mut self,
+        ctx: &egui::Context,
+        settings: &FileSettings,
+        data: Option<&Path>,
+    ) -> Outcome {
+        let Some(job) = &mut self.job else {
+            return Outcome::Open;
+        };
+        if job.handle.as_ref().is_some_and(|h| h.is_finished()) {
+            let result = job.handle.take().map(|h| h.join());
+            return match result {
+                Some(Ok(Ok(()))) => {
+                    if let Some(data) = data {
+                        let _ = files::remember_destination(data, &job.dest, settings.recent);
+                    }
+                    Outcome::Done { select: None }
+                }
+                Some(Ok(Err(e))) => Outcome::Failed(t!("transfer-failed", error = e.to_string())),
+                _ => Outcome::Failed(t!("transfer-failed", error = "?")),
+            };
+        }
+        let done = job.done.load(Ordering::Relaxed);
+        let title = match self.mode {
+            TransferMode::Copy => t!("transfer-copy-title", n = self.images.len()),
+            TransferMode::Move => t!("transfer-move-title", n = self.images.len()),
+        };
+        crate::app::modal_at("transfer_dialog", self.at)
+            .title(title)
+            .show(ctx, |ui| {
+                ui.label(job.dest.display().to_string());
+                ui.add(
+                    egui::ProgressBar::new(done as f32 / job.total.max(1) as f32).text(t!(
+                        "transfer-progress",
+                        done = done,
+                        total = job.total
+                    )),
+                );
+            });
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        Outcome::Open
+    }
+}
+
+/// `path` avec `~` pour le dossier personnel (plus court, et accepté à la saisie).
+fn tilde(path: &Path) -> String {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    match home.and_then(|h| path.strip_prefix(h).ok().map(Path::to_path_buf)) {
+        Some(rest) if rest.as_os_str().is_empty() => "~".into(),
+        Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
+        None => path.display().to_string(),
     }
 }

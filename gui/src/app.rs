@@ -1160,9 +1160,10 @@ impl TriApp {
                 }
                 continue;
             }
-            // Renommer / corbeille : seule la fermeture (la boîte gère Entrée).
-            if self.file_dialog.is_some() {
-                if action == Action::Back {
+            // Renommer / corbeille / copier : seule la fermeture (la boîte gère Entrée),
+            // pas pendant une copie.
+            if let Some(dialog) = &self.file_dialog {
+                if action == Action::Back && !dialog.busy() {
                     self.file_dialog = None;
                 } else if action.works_over_overlay() {
                     self.perform(ctx, action);
@@ -1269,10 +1270,15 @@ impl TriApp {
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
-            Action::FileRename | Action::FileDelete | Action::FileReveal | Action::FileEdit => {
-                // Renommer, afficher : l'image courante ; corbeille, éditeur : la sélection.
+            Action::FileRename
+            | Action::FileDelete
+            | Action::FileReveal
+            | Action::FileEdit
+            | Action::FileCopy
+            | Action::FileMove => {
+                // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
-                    Action::FileDelete | Action::FileEdit => {
+                    Action::FileDelete | Action::FileEdit | Action::FileCopy | Action::FileMove => {
                         self.selection.targets(&self.files, self.selected)
                     }
                     _ => self
@@ -1643,7 +1649,12 @@ impl TriApp {
             }
             Action::Compare => self.leave_compare(),
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
-            Action::FileRename | Action::FileDelete | Action::FileReveal | Action::FileEdit => {
+            Action::FileRename
+            | Action::FileDelete
+            | Action::FileReveal
+            | Action::FileEdit
+            | Action::FileCopy
+            | Action::FileMove => {
                 let at = pos2(200.0, 200.0);
                 self.file_action(action, vec![path], at);
             }
@@ -2846,6 +2857,20 @@ impl TriApp {
             }
             Action::FileReveal => tri::files::reveal(&first),
             Action::FileEdit => tri::files::open_with(&settings.editor, &paths),
+            Action::FileCopy | Action::FileMove => {
+                let mode = if action == Action::FileCopy {
+                    tri::files::TransferMode::Copy
+                } else {
+                    tri::files::TransferMode::Move
+                };
+                self.file_dialog = Some(crate::files::FileDialog::transfer(
+                    paths,
+                    mode,
+                    self.data_dir.as_deref(),
+                    at,
+                ));
+                Ok(())
+            }
             _ => Ok(()),
         };
         if let Err(e) = result {
@@ -2858,7 +2883,7 @@ impl TriApp {
         let Some(dialog) = &mut self.file_dialog else {
             return;
         };
-        match dialog.show(ctx, &self.settings.files) {
+        match dialog.show(ctx, &self.settings.files, self.data_dir.as_deref()) {
             crate::files::Outcome::Open => {}
             crate::files::Outcome::Cancelled => self.file_dialog = None,
             crate::files::Outcome::Failed(e) => {
@@ -2932,6 +2957,8 @@ impl TriApp {
                 ui.horizontal(|ui| {
                     for action in [
                         Action::FileRename,
+                        Action::FileCopy,
+                        Action::FileMove,
                         Action::FileDelete,
                         Action::FileReveal,
                         Action::FileEdit,
@@ -4605,6 +4632,36 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert_eq!(h.state().mode, Mode::Grid, "Échap ne ferme que la boîte");
+    }
+
+    #[test]
+    fn move_with_x_typing_tab_and_enter_then_copy_from_recents() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let dest = dir.path().join("Sélection");
+        std::fs::create_dir(&dest).unwrap();
+        // x : déplacer l'image courante ; chemin tapé puis complété par Tab.
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_some());
+        assert!(h.ctx.egui_wants_keyboard_input(), "le champ a le focus");
+        let sep = std::path::MAIN_SEPARATOR;
+        h.event(UiEvent::Text(format!("{}{sep}Sél", dir.path().display())));
+        h.run_steps(2);
+        press(&mut h, Key::Tab, Modifiers::NONE);
+        assert!(h.query_by_label_contains("fichier (paires").is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        assert!(dest.join("img0.jpg").exists() && !photos.join("img0.jpg").exists());
+        assert_eq!(h.state().files.len(), 2, "dossier relu");
+        assert!(h.state().file_error.is_none());
+        // y : copier ; la destination récente revient par la flèche du haut.
+        press(&mut h, Key::Y, Modifiers::NONE);
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        assert!(dest.join("img1.jpg").exists() && photos.join("img1.jpg").exists());
+        assert_eq!(h.state().files.len(), 2, "une copie ne retire rien");
     }
 
     #[test]

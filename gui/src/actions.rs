@@ -212,6 +212,10 @@ pub enum Action {
     FileReveal,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
+    /// Copier les images vers un dossier.
+    FileCopy,
+    /// Déplacer les images vers un dossier.
+    FileMove,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -258,7 +262,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 73] = [
+    pub const ALL: [Action; 75] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -300,6 +304,8 @@ impl Action {
         Action::FileDelete,
         Action::FileReveal,
         Action::FileEdit,
+        Action::FileCopy,
+        Action::FileMove,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -360,7 +366,7 @@ impl Action {
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
-            FileRename | FileDelete | FileReveal | FileEdit => Group::Files,
+            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Quit => Group::App,
         }
@@ -413,6 +419,8 @@ impl Action {
             Action::SelectClear => "core.select.clear",
             Action::FileRename => "core.file.rename",
             Action::FileDelete => "core.file.delete",
+            Action::FileCopy => "core.file.copy",
+            Action::FileMove => "core.file.move",
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
             Action::ToggleFolderPanel => "core.view.folders",
@@ -632,6 +640,9 @@ const FILES: &[Binding] = {
         (&[plain(Key::Backspace)], FileDelete),
         (&[shifted(Key::R)], FileReveal),
         (&[plain(Key::E)], FileEdit),
+        // Comme dans vim : `y` copie (« yank »), `x` coupe (déplacer).
+        (&[plain(Key::Y)], FileCopy),
+        (&[plain(Key::X)], FileMove),
     ]
 };
 
