@@ -776,6 +776,7 @@ impl TriApp {
         let mut open = None;
         let mut eject = None;
         let mut offload = None;
+        let mut menu: Option<(PathBuf, Action)> = None;
         ui.horizontal(|ui| {
             ui.strong(t!("folders-title"));
             // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
@@ -822,6 +823,33 @@ impl TriApp {
                     if label.double_clicked() {
                         toggle = Some(row.path.clone());
                     }
+                    // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
+                    // survol.
+                    let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
+                    label.context_menu(|ui| {
+                        let mut entry = |ui: &mut Ui, action: Action, text: String| {
+                            if ui
+                                .button(text)
+                                .on_hover_text(self.action_tip(action))
+                                .clicked()
+                            {
+                                menu = Some((row.path.clone(), action));
+                                ui.close();
+                            }
+                        };
+                        entry(ui, Action::FolderCreate, t!("folder-menu-new"));
+                        if row.depth > 0 {
+                            entry(ui, Action::FolderRename, t!("folder-menu-rename"));
+                            entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
+                        }
+                        ui.separator();
+                        if removable {
+                            entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
+                            entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                        } else {
+                            entry(ui, Action::FolderOffload, t!("folder-menu-offload-here"));
+                        }
+                    });
                     if current && reveal {
                         label.scroll_to_me(Some(egui::Align::Center));
                     }
@@ -875,6 +903,18 @@ impl TriApp {
         }
         if let Some(path) = toggle {
             self.tree.toggle(&path);
+        }
+        // Menu du clic droit : le dossier visé devient la ligne pointée, puis la même
+        // action qu'au clavier.
+        if let Some((path, action)) = menu {
+            self.tree.point_at(&path);
+            let ctx = ui.ctx().clone();
+            match action {
+                Action::FolderOffload | Action::FolderEject => {
+                    self.folder_drive_action(&ctx, action)
+                }
+                _ => self.folder_edit_action(&ctx, action),
+            }
         }
         if let Some(path) = open {
             self.open_folder(&path);
@@ -5924,6 +5964,24 @@ mod tests {
         assert!(h.query_by_label_contains("Dossier vide").is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(!base.exists());
+        // À la souris : clic droit sur un dossier, « Nouveau dossier… ».
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        h.state_mut().tree.reload();
+        h.run_steps(2);
+        h.get_by_label("autre").click_secondary();
+        h.run_steps(2);
+        h.get_by_label("Nouveau dossier…").click();
+        h.run_steps(2);
+        assert!(
+            matches!(
+                &h.state().file_dialog,
+                Some(crate::files::FileDialog::NewFolder { parent, .. }) if *parent == other
+            ),
+            "boîte du nouveau dossier, dans le dossier visé"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
         // Un emplacement ne se supprime pas.
         h.state_mut().tree.set_cursor(0);
         press(&mut h, Key::X, Modifiers::NONE);

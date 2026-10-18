@@ -216,7 +216,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   plusieurs. Dossiers (idée du 18/10/2026, comme nvim-tree) : `a` crée un dossier dans le
   dossier pointé, `r` / F2 le renomme, `x` / Suppr le supprime (confirmé, avec ce qu'il
   contient ; corbeille selon `[files] trash`) ; les emplacements ne se renomment ni ne se
-  suppriment ; tout s'annule (`u`), le dossier ouvert suit son renommage.
+  suppriment ; tout s'annule (`u`), le dossier ouvert suit son renommage. À la souris :
+  **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
+  supprimer ; décharger une carte ici, ou sur un support amovible : décharger,
+  éjecter), raccourci au survol.
   Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
   (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
