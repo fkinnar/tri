@@ -223,8 +223,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
   (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
-  « libellé : valeur » par ligne), Maj+`y` copie tout le panneau ; un clic sur une ligne
-  la pointe et donne le clavier au panneau. Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
+  « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
+  panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. Grand
+  histogramme ouvert : `r`, `g`, `b` un canal, `a` tous (il prend les touches le temps
+  d'être ouvert : `b` n'y change pas la source). Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les
   conflits ne sont signalés qu'entre actions d'un même panneau. Pas de `z` (agrandir le
   panneau, comme tmux) pour l'instant : `Maj+D` / `Maj+M` masquent déjà les panneaux.

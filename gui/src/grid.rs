@@ -124,6 +124,10 @@ pub fn navigate(
         | Action::HistogramScale
         | Action::HistogramLarge
         | Action::HistogramChannel
+        | Action::HistogramRed
+        | Action::HistogramGreen
+        | Action::HistogramBlue
+        | Action::HistogramAll
         | Action::ToggleClipping
         | Action::ToggleMetadata
         | Action::Open

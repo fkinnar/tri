@@ -281,6 +281,14 @@ pub enum Action {
     HistogramLarge,
     /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
     HistogramChannel,
+    /// Grand histogramme ouvert : canal rouge seul.
+    HistogramRed,
+    /// Grand histogramme ouvert : canal vert seul.
+    HistogramGreen,
+    /// Grand histogramme ouvert : canal bleu seul.
+    HistogramBlue,
+    /// Grand histogramme ouvert : tous les canaux.
+    HistogramAll,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -317,7 +325,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 101] = [
+    pub const ALL: [Action; 105] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -392,6 +400,10 @@ impl Action {
         Action::HistogramScale,
         Action::HistogramLarge,
         Action::HistogramChannel,
+        Action::HistogramRed,
+        Action::HistogramGreen,
+        Action::HistogramBlue,
+        Action::HistogramAll,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -440,8 +452,9 @@ impl Action {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back => Group::Navigation,
             ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | HistogramChannel | ToggleClipping
-            | TogglePeaking | PeakingColor | ToggleFocusPoint => Group::View,
+            | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | ToggleClipping | TogglePeaking
+            | PeakingColor | ToggleFocusPoint => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -540,6 +553,10 @@ impl Action {
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
             Action::HistogramChannel => "core.view.histogram_channel",
+            Action::HistogramRed => "core.histogram.red",
+            Action::HistogramGreen => "core.histogram.green",
+            Action::HistogramBlue => "core.histogram.blue",
+            Action::HistogramAll => "core.histogram.all",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -618,6 +635,8 @@ pub enum Scope {
     Folders,
     /// Le panneau des métadonnées.
     Metadata,
+    /// Le grand histogramme (boîte ouverte).
+    Histogram,
 }
 
 impl Action {
@@ -630,18 +649,9 @@ impl Action {
             | FolderDelete => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
+            HistogramRed | HistogramGreen | HistogramBlue | HistogramAll => Some(Scope::Histogram),
             _ => None,
         }
-    }
-}
-
-/// Deux actions peuvent-elles se disputer une touche ? Oui si elles valent dans un même
-/// panneau (une action d'un panneau et une action générale : oui, le panneau l'emporte,
-/// mais seulement quand il a le clavier ; deux panneaux différents : non).
-fn overlap(a: Action, b: Action) -> bool {
-    match (a.scope(), b.scope()) {
-        (Some(x), Some(y)) => x == y,
-        _ => true,
     }
 }
 
@@ -656,9 +666,14 @@ impl Chord {
     /// Windows, egui signale Ctrl aussi comme `command` : seul `mac_cmd`, ou `command` sans
     /// Ctrl, désigne Cmd.
     pub fn from_event(key: Key, modifiers: Modifiers) -> Option<Chord> {
-        // Exception (décidée le 18/10/2026) : Cmd+Z / Cmd+Maj+Z sur macOS, réflexe de tout
-        // utilisateur de Mac, valent Ctrl+Z / Ctrl+Maj+Z (annuler, rétablir).
-        if cfg!(target_os = "macos") && modifiers.mac_cmd && !modifiers.alt && key == Key::Z {
+        // Exceptions (décidées le 18/10/2026) : Cmd+Z / Cmd+Maj+Z / Cmd+C sur macOS,
+        // réflexes de tout utilisateur de Mac, valent Ctrl+Z / Ctrl+Maj+Z / Ctrl+C
+        // (annuler, rétablir, copier).
+        if cfg!(target_os = "macos")
+            && modifiers.mac_cmd
+            && !modifiers.alt
+            && matches!(key, Key::Z | Key::C)
+        {
             return Some(Chord {
                 trigger: Trigger::Key(key),
                 shift: modifiers.shift,
@@ -844,6 +859,8 @@ const METADATA: &[Binding] = {
         (&[plain(Key::ArrowDown)], MetaDown),
         (&[plain(Key::J)], MetaDown),
         (&[plain(Key::Y)], MetaCopy),
+        // Comme partout ailleurs (Cmd+C sur macOS, voir `Chord::from_event`).
+        (&[ctrl(Key::C)], MetaCopy),
         (&[plain(Key::Enter)], MetaOpen),
         // Plusieurs lignes : Maj + flèches / Maj + j k étendent ; Maj+Y copie tout.
         (&[shifted(Key::ArrowUp)], MetaSelectUp),
@@ -851,6 +868,17 @@ const METADATA: &[Binding] = {
         (&[shifted(Key::ArrowDown)], MetaSelectDown),
         (&[shifted(Key::J)], MetaSelectDown),
         (&[shifted(Key::Y)], MetaCopyAll),
+    ]
+};
+
+/// Grand histogramme ouvert : r, g, b, un canal ; a, tous (demandé le 18/10/2026).
+const HISTOGRAM: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::R)], HistogramRed),
+        (&[plain(Key::G)], HistogramGreen),
+        (&[plain(Key::B)], HistogramBlue),
+        (&[plain(Key::A)], HistogramAll),
     ]
 };
 
@@ -988,6 +1016,7 @@ impl Profile {
             .chain(FILES)
             .chain(FOLDERS)
             .chain(METADATA)
+            .chain(HISTOGRAM)
     }
 }
 
@@ -1103,7 +1132,7 @@ impl Keymap {
             if let Some((longer, _)) = self
                 .bindings
                 .iter()
-                .find(|(l, a)| l.len() > keys.len() && l.starts_with(keys) && overlap(*a, *action))
+                .find(|(l, a)| l.len() > keys.len() && l.starts_with(keys) && conflict(*a, *action))
             {
                 warnings.push(t!(
                     "keys-shadowed",
@@ -1634,6 +1663,12 @@ mod tests {
         assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::FileCopy));
         km.set_focus(Scope::Metadata);
         assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::MetaCopy));
+        let ctrl_c = Chord::from_event(Key::C, Modifiers::CTRL).unwrap();
+        assert_eq!(
+            seq.feed(&km, ctrl_c, now),
+            Some(Action::MetaCopy),
+            "Ctrl+C aussi"
+        );
         // Leader puis direction.
         let lead = Chord::from_event(Key::B, Modifiers::CTRL).unwrap();
         assert_eq!(seq.feed(&km, lead, now), None, "en attente");
@@ -1677,13 +1712,15 @@ mod tests {
 
     #[test]
     fn no_binding_is_also_the_start_of_another() {
-        // Sinon il faudrait attendre l'expiration pour savoir lequel déclencher.
+        // Sinon il faudrait attendre l'expiration pour savoir lequel déclencher. Une touche
+        // d'un panneau peut commencer une séquence générale (`g` du grand histogramme,
+        // `gg`) : dans le panneau, la touche l'emporte ; ailleurs, la séquence marche.
         let km = Keymap::default();
         for (k, a) in &km.bindings {
             assert!(
                 !km.bindings
                     .iter()
-                    .any(|(l, _)| l.len() > k.len() && l.starts_with(k)),
+                    .any(|(l, b)| l.len() > k.len() && l.starts_with(k) && conflict(*a, *b)),
                 "{a:?} ({k:?}) est aussi le début d'une séquence"
             );
         }

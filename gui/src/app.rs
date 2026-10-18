@@ -1305,7 +1305,11 @@ impl TriApp {
         }
         let now = Instant::now();
         let focus = self.effective_focus();
-        self.focus = focus;
+        // Le grand histogramme prend les touches le temps d'être ouvert ; le panneau actif
+        // reste mémorisé pour après.
+        if focus != crate::actions::Scope::Histogram {
+            self.focus = focus;
+        }
         self.keymap.set_focus(focus);
         let actions: Vec<Action> = chords
             .into_iter()
@@ -1354,7 +1358,12 @@ impl TriApp {
             if self.histogram_large {
                 match action {
                     Action::Back | Action::HistogramLarge => self.histogram_large = false,
-                    Action::HistogramScale | Action::HistogramChannel => self.perform(ctx, action),
+                    Action::HistogramScale
+                    | Action::HistogramChannel
+                    | Action::HistogramRed
+                    | Action::HistogramGreen
+                    | Action::HistogramBlue
+                    | Action::HistogramAll => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -1655,6 +1664,10 @@ impl TriApp {
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
             // Le grand histogramme s'ouvre au besoin : c'est là que le canal se voit.
+            Action::HistogramRed => self.histogram_channel = Some(0),
+            Action::HistogramGreen => self.histogram_channel = Some(1),
+            Action::HistogramBlue => self.histogram_channel = Some(2),
+            Action::HistogramAll => self.histogram_channel = None,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -2787,7 +2800,7 @@ impl TriApp {
             let focus = match self.focus {
                 crate::actions::Scope::Folders => Some(t!("focus-folders")),
                 crate::actions::Scope::Metadata => Some(t!("focus-metadata")),
-                crate::actions::Scope::Images => None,
+                crate::actions::Scope::Images | crate::actions::Scope::Histogram => None,
             };
             if let Some(focus) = focus {
                 ui.separator();
@@ -3084,10 +3097,17 @@ impl TriApp {
                         t!("stats-all"),
                     ];
                     let dots = histogram::channel_dots(rect, self.gui.histogram.channel_dot);
+                    let direct = [
+                        Action::HistogramRed,
+                        Action::HistogramGreen,
+                        Action::HistogramBlue,
+                        Action::HistogramAll,
+                    ];
                     for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
                         let tip = t!(
                             "histogram-channel-tip",
                             channel = name,
+                            key = self.keymap.keys_for(direct[i]).join(" / "),
                             keys = self.keymap.keys_for(Action::HistogramChannel).join(" / ")
                         );
                         if ui
@@ -3805,6 +3825,10 @@ impl TriApp {
     /// les métadonnées aussi ; sinon les images.
     fn effective_focus(&self) -> crate::actions::Scope {
         use crate::actions::Scope;
+        // Grand histogramme ouvert : r, g, b, a choisissent le canal.
+        if self.histogram_large {
+            return Scope::Histogram;
+        }
         match self.focus {
             Scope::Folders if self.folder_panel && self.mode == Mode::Grid => Scope::Folders,
             Scope::Metadata if self.metadata_panel && !self.folder.is_none() => Scope::Metadata,
@@ -3848,7 +3872,7 @@ impl TriApp {
                 self.metadata_panel = true;
                 self.scroll_to_cursor = true;
             }
-            Scope::Images => {}
+            Scope::Images | Scope::Histogram => {}
         }
     }
 
@@ -6082,6 +6106,18 @@ mod tests {
             press(&mut h, Key::C, Modifiers::SHIFT);
             assert_eq!(h.state().histogram_channel, expected);
         }
+        // r, g, b, a : un canal, ou tous ; b ne change pas la source, g ne commence pas gg.
+        let source = h.state().source;
+        for (key, expected) in [
+            (Key::G, Some(1)),
+            (Key::B, Some(2)),
+            (Key::R, Some(0)),
+            (Key::A, None),
+        ] {
+            press(&mut h, key, Modifiers::NONE);
+            assert_eq!(h.state().histogram_channel, expected, "{key:?}");
+        }
+        assert_eq!(h.state().source, source);
         assert!(h.state().histogram_large, "reste ouvert");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
