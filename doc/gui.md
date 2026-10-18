@@ -184,6 +184,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Curseur masqué** (18/10/2026, pour voir les piles d'ensemble) : en grille, Échap
+  quand il n'y a plus rien à fermer (sélection multiple déjà vidée), ou un clic dans le
+  vide (qui vide aussi la sélection), masque l'image en surbrillance. Une action qui vise
+  l'image courante (se déplacer, noter, supprimer, ouvrir, sélectionner…,
+  `uses_cursor`) le fait seulement réapparaître, à sa place, sans agir sur une image
+  qu'on ne voyait pas ; un clic sur une image aussi. Filtres, panneaux, bandeaux restent
+  utilisables curseur masqué. Recliquer l'image ou Espace écartés : double-clic (ouvrir)
+  et sélection multiple.
 - **Raccourcis dans la fenêtre de réglages** (section « Raccourcis [keys] », 18/10/2026) :
   une ligne par action, par thème comme l'aide (la recherche trouve aussi les actions :
   libellé, identifiant, touches). Ses raccourcis en pastilles (ceux du profil, ou ceux de

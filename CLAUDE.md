@@ -561,7 +561,8 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   `[gui] profile` = `classic` (défaut) / `vim` / `both`, listes communes pour ce qui est
   pareil ; l'aide suit. Dans la foulée : listes déroulantes pour les réglages à choix,
   photo isolée = groupe d'une image (fonds alternés), bouton « tout déplier » allumé
-  quand les piles sont repliées.
+  quand les piles sont repliées. Puis : curseur de la grille masquable (Échap, clic
+  dans le vide) pour une vue d'ensemble des piles.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**

@@ -218,6 +218,12 @@ pub struct TriApp {
     mouse_active: bool,
     /// Vignette survolée par la souris (encadrée, pas sélectionnée).
     hovered: Option<usize>,
+    /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
+    /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
+    cursor_hidden: bool,
+    /// Pointeur au-dessus d'une vignette pendant le dessin de la grille (clic dans le
+    /// vide sinon).
+    over_cell: bool,
     /// Rectangles des cellules dessinées (pour les tests).
     #[cfg(test)]
     cell_rects: Vec<(usize, Rect)>,
@@ -472,6 +478,8 @@ impl TriApp {
             sequencer: gui.sequencer(),
             mouse_active: false,
             hovered: None,
+            cursor_hidden: false,
+            over_cell: false,
             #[cfg(test)]
             cell_rects: Vec::new(),
             #[cfg(test)]
@@ -1687,6 +1695,13 @@ impl TriApp {
                 }
                 continue;
             }
+            // Curseur masqué : une action sur l'image courante (noter, supprimer, ouvrir,
+            // se déplacer…) le fait seulement réapparaître, sans agir sur une image qu'on
+            // ne voit pas.
+            if self.cursor_hidden && self.mode == Mode::Grid && uses_cursor(action) {
+                self.cursor_hidden = false;
+                continue;
+            }
             self.perform(ctx, action);
         }
     }
@@ -1815,6 +1830,9 @@ impl TriApp {
                     self.zoom = None;
                     self.zoom_anchor = None;
                     self.reveal = Some(Reveal::Minimal);
+                } else if self.mode == Mode::Grid {
+                    // Plus rien à fermer : le curseur se masque (vue d'ensemble).
+                    self.cursor_hidden = true;
                 }
             }
             Action::Open => {
@@ -2231,6 +2249,7 @@ impl TriApp {
     /// (pas pour le survol de la souris : la grille bougerait sous le pointeur, et la
     /// sélection avec elle).
     fn select_with(&mut self, index: usize, reveal: bool) {
+        self.cursor_hidden = false;
         if index == self.selected || index >= self.files.len() {
             return;
         }
@@ -4287,6 +4306,7 @@ impl TriApp {
         #[cfg(test)]
         self.cell_rects.clear();
         self.hovered = None;
+        self.over_cell = false;
         let g = self.gui.grid;
         self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
         if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
@@ -4337,11 +4357,26 @@ impl TriApp {
         });
         self.scroll_offset = output.state.clamped_offset().y;
         self.view_height = output.inner_rect.height();
+        // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
+        // vidée, comme dans un gestionnaire de fichiers.
+        let clicked_empty = ui.input(|i| {
+            i.pointer.primary_clicked()
+                && i.pointer
+                    .interact_pos()
+                    .is_some_and(|p| output.inner_rect.contains(p))
+        });
+        if clicked_empty && !self.over_cell && !self.selection.is_visual() {
+            self.cursor_hidden = true;
+            self.selection.clear();
+        }
     }
 
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
         let (g, colors) = (self.gui.grid, self.gui.colors);
         let (rect, response) = ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click());
+        if response.contains_pointer() {
+            self.over_cell = true;
+        }
         #[cfg(test)]
         self.cell_rects.push((index, rect));
         // Le clic sélectionne ; le survol ne fait qu'encadrer (retour du 17/10/2026 : quand le
@@ -4365,7 +4400,7 @@ impl TriApp {
             self.select(index);
             self.mode = Mode::View;
         }
-        let selected = index == self.selected;
+        let selected = index == self.selected && !self.cursor_hidden;
         let visuals = ui.visuals();
         let background = if selected {
             colors
@@ -5314,6 +5349,39 @@ fn parse_actions(list: &str) -> Vec<Step> {
         .collect()
 }
 
+/// Action qui vise l'image courante de la grille (ou en part) : curseur masqué, elle le
+/// fait seulement réapparaître.
+fn uses_cursor(action: Action) -> bool {
+    matches!(
+        action,
+        Action::NavPrev
+            | Action::NavNext
+            | Action::NavUp
+            | Action::NavDown
+            | Action::NavFirst
+            | Action::NavLast
+            | Action::NavPageUp
+            | Action::NavPageDown
+            | Action::Open
+            | Action::Stars(_)
+            | Action::Color(_)
+            | Action::Flag(_)
+            | Action::FileRename
+            | Action::FileDelete
+            | Action::FileReveal
+            | Action::FileEdit
+            | Action::FileCopy
+            | Action::FileMove
+            | Action::FileDeleteStack
+            | Action::FileCopyStack
+            | Action::SelectToggle
+            | Action::SelectVisual
+            | Action::Compare
+            | Action::StackToggle
+            | Action::StackChoose
+    )
+}
+
 /// Position d'un niveau dans `TriApp::progress`, `None` pour le 1:1 (non suivi).
 fn tracked(level: Level) -> Option<usize> {
     match level {
@@ -6019,6 +6087,59 @@ mod tests {
         assert_eq!(h.state().selection.len(), 3);
         press(&mut h, Key::A, Modifiers::CTRL | Modifiers::SHIFT);
         assert!(h.state().selection.is_empty());
+    }
+
+    #[test]
+    fn the_grid_cursor_hides_for_an_overview() {
+        let (mut h, dir) = harness();
+        h.run_steps(5);
+        let image = dir.path().join("photos/img0.jpg");
+        // Échap sans rien à fermer : plus d'image en surbrillance.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().cursor_hidden);
+        // Une note ne vise pas une image qu'on ne voit pas : le curseur revient seulement.
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        assert!(!h.state().cursor_hidden);
+        assert_eq!(h.state().folder.notes.notes(&image).stars, 0, "rien noté");
+        // Une flèche : le curseur revient là où il était, sans bouger.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(!h.state().cursor_hidden);
+        assert_eq!(h.state().selected, 0);
+        // Les filtres, les panneaux… restent utilisables curseur masqué.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        press(&mut h, Key::N, Modifiers::SHIFT);
+        assert!(
+            h.state().cursor_hidden,
+            "Maj+N : bandeau, curseur toujours masqué"
+        );
+        // Clic dans le vide, sous les vignettes : masqué ; clic sur une image : revenu.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        let rects = h.state().cell_rects.clone();
+        let rect = rects[0].1;
+        let click = |h: &mut Harness<'_, TriApp>, pos: egui::Pos2| {
+            h.event(UiEvent::PointerMoved(pos));
+            for pressed in [true, false] {
+                h.event(UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+            }
+            h.run_steps(3);
+        };
+        // Place vide : la colonne de la deuxième image, la ligne de la troisième.
+        let last = rects.iter().map(|(_, r)| *r).fold(rect, |a, r| a.union(r));
+        let empty = egui::pos2(
+            last.max.x - rect.width() / 2.0,
+            last.max.y - rect.height() / 2.0,
+        );
+        assert!(rects.iter().all(|(_, r)| !r.contains(empty)));
+        click(&mut h, empty);
+        assert!(h.state().cursor_hidden, "clic dans le vide");
+        click(&mut h, rect.center());
+        assert!(!h.state().cursor_hidden, "clic sur une image");
     }
 
     #[test]
