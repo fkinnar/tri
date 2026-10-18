@@ -2669,7 +2669,7 @@ impl TriApp {
     }
 
     /// Bloc de l'image d'analyse, à droite des statistiques : fond un peu plus clair que
-    /// la boîte, légende à gauche, image centrée dans le reste (retour du 18/10/2026).
+    /// la boîte, image centrée, légende en bas à droite (retours du 18/10/2026).
     fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle) {
         let settings = &self.gui.histogram;
         let size = vec2(ui.available_width().max(80.0), settings.analysis_height);
@@ -2685,7 +2685,8 @@ impl TriApp {
         );
         let margin = self.gui.dialogs.spacing.max(4.0);
         let inner = rect.shrink(margin);
-        // Légende : deux lignes, centrées verticalement à gauche.
+        // Légende sur une ligne, en bas à droite du bloc, alignée à droite (retour du
+        // 18/10/2026) ; l'image est centrée au-dessus.
         let c = &self.gui.colors;
         let font = egui::TextStyle::Body.resolve(ui.style());
         let galleys = [
@@ -2693,17 +2694,14 @@ impl TriApp {
             (t!("analysis-under"), Color32::from(c.analysis_under)),
         ]
         .map(|(text, color)| painter.layout_no_wrap(text, font.clone(), color));
-        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
         let line_h = galleys[0].size().y;
-        let mut y = inner.center().y - line_h - 2.0;
-        for g in galleys {
-            painter.galley(pos2(inner.min.x, y), g, Color32::WHITE);
-            y += line_h + 4.0;
+        let mut x = inner.max.x;
+        for g in galleys.into_iter().rev() {
+            x -= g.size().x;
+            painter.galley(pos2(x, inner.max.y - line_h), g, Color32::WHITE);
+            x -= margin;
         }
-        let room = Rect::from_min_max(
-            pos2(inner.min.x + legend_w + margin, inner.min.y),
-            inner.max,
-        );
+        let room = Rect::from_min_max(inner.min, pos2(inner.max.x, inner.max.y - line_h - 4.0));
         let image = texture.size_vec2();
         let fit = (room.width() / image.x)
             .min(room.height() / image.y)
