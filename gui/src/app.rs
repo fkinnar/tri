@@ -365,6 +365,7 @@ impl TriApp {
         let (keymap, warnings) = new.keymap();
         self.keymap = keymap;
         self.key_warnings = warnings;
+        self.sequencer = new.gui.sequencer();
         // Textures colorées d'après les réglages : recalculées.
         self.mask_textures.clear();
         self.analysis_texture = None;
@@ -468,7 +469,7 @@ impl TriApp {
             engine: None,
             error,
             keymap,
-            sequencer: Sequencer::new(gui.key_sequence_timeout()),
+            sequencer: gui.sequencer(),
             mouse_active: false,
             hovered: None,
             #[cfg(test)]
@@ -1595,10 +1596,14 @@ impl TriApp {
             self.focus = focus;
         }
         self.keymap.set_focus(focus);
-        let actions: Vec<Action> = chords
-            .into_iter()
-            .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
-            .collect();
+        // Touche ambiguë (`y` avant `y w`) restée sans suite : son action, d'abord.
+        let mut actions: Vec<Action> = self.sequencer.expire(now).into_iter().collect();
+        for chord in chords {
+            actions.extend(self.sequencer.feed(&self.keymap, chord, now));
+        }
+        if let Some(at) = self.sequencer.deadline() {
+            ctx.request_repaint_after(at.saturating_duration_since(now));
+        }
         for action in actions {
             // Regroupement : Échap ou Ctrl+G ferme.
             if self.group_dialog {
@@ -1617,8 +1622,9 @@ impl TriApp {
                 continue;
             }
             // Réglages : seule la fermeture.
-            if self.settings_window.is_some() {
-                if matches!(action, Action::Back | Action::Settings) {
+            // Pendant l'enregistrement d'un raccourci, même pas : Échap peut en être un.
+            if let Some(window) = &self.settings_window {
+                if matches!(action, Action::Back | Action::Settings) && !window.is_recording() {
                     self.settings_window = None;
                 }
                 continue;
@@ -1929,6 +1935,23 @@ impl TriApp {
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
+            Action::FileDeleteStack | Action::FileCopyStack => {
+                // Toute la pile de l'image (images cachées dans une pile repliée comprises).
+                let range = self.stacks.range_of(self.selected).cloned();
+                match range.filter(|_| self.stacking) {
+                    Some(range) => {
+                        let paths = self.files[range].iter().map(|f| f.path.clone()).collect();
+                        let file_action = if action == Action::FileDeleteStack {
+                            Action::FileDelete
+                        } else {
+                            Action::FileCopy
+                        };
+                        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                        self.file_action(file_action, paths, at);
+                    }
+                    None => self.notice = Some((t!("stack-actions-need-stacks"), true)),
+                }
+            }
             Action::FileRename
             | Action::FileDelete
             | Action::FileReveal
@@ -4541,6 +4564,12 @@ impl TriApp {
                         self.rating_dialog = Some((file.path.clone(), at));
                     }
                 }
+                Step::Settings(section) => {
+                    self.open_settings();
+                    if let Some(window) = &mut self.settings_window {
+                        window.show_section(&section);
+                    }
+                }
             }
         }
     }
@@ -5229,7 +5258,7 @@ impl eframe::App for TriApp {
 /// Actions de `TRI_GUI_ACTIONS` (identifiants séparés par des virgules, ex.
 /// `core.nav.next,core.app.help`) ; les identifiants inconnus sont signalés et ignorés.
 /// Étape du script de démarrage (`TRI_GUI_ACTIONS`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Step {
     /// Exécuter une action.
     Do(Action),
@@ -5241,6 +5270,8 @@ enum Step {
     /// Ouvrir la boîte du clic droit pour l'image sélectionnée (`rating_dialog`), qu'aucune
     /// action clavier n'ouvre.
     RatingDialog,
+    /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
+    Settings(String),
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -5262,6 +5293,9 @@ fn parse_actions(list: &str) -> Vec<Step> {
                     .map(|ms| Step::Wait(Duration::from_millis(ms))),
                 None if id == "shot" => Some(Step::Shot),
                 None if id == "rating_dialog" => Some(Step::RatingDialog),
+                None if id.starts_with("settings:") => {
+                    Some(Step::Settings(id["settings:".len()..].to_string()))
+                }
                 None => Action::from_id(id).map(Step::Do),
             };
             if step.is_none() {
@@ -5606,6 +5640,8 @@ mod tests {
         // Séquences (`f °`, `gg`) : délai large, sinon une machine chargée (tests en
         // parallèle) le dépasse entre deux touches et le test échoue au hasard.
         settings.gui.key_sequence_timeout_ms = 60_000;
+        // `y` seul (copier) agit dès l'image suivante, sans attendre un éventuel `y w`.
+        settings.gui.key_ambiguous_timeout_ms = 0;
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
@@ -6980,6 +7016,61 @@ mod tests {
     }
 
     #[test]
+    fn dw_and_yw_act_on_the_whole_stack() {
+        let ramp = |tint: u8| {
+            image::RgbImage::from_fn(64, 48, |x, _| image::Rgb([(x * tint as u32 / 63) as u8; 3]))
+        };
+        let images = vec![
+            ("a1.jpg", ramp(255)),
+            ("a2.jpg", ramp(250)),
+            ("a3.jpg", ramp(245)),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.state_mut().stacking = true;
+        let files = h.state().files.clone();
+        let preview = tri::preview::Settings::default();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        for f in &files {
+            let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().stacks_dirty = true;
+        // Délai de la touche ambiguë large : `y` attend le `w`.
+        h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
+            .with_ambiguous(Duration::from_secs(60));
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.count(), 1);
+        // d w : corbeille pour les 3 images de la pile, cachées comprises.
+        press(&mut h, Key::D, Modifiers::NONE);
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert!(
+            h.query_by_label_contains("3 fichiers").is_some(),
+            "suppression de la pile"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        // y w : copie de la pile.
+        press(&mut h, Key::Y, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none(), "y attend la suite");
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert!(h.query_by_label_contains("Copier 3 images").is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Piles désactivées : expliqué, rien d'autre.
+        h.state_mut().stacking = false;
+        press(&mut h, Key::D, Modifiers::NONE);
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("Piles désactivées")
+        );
+    }
+
+    #[test]
     fn similar_images_stack_and_unstack() {
         // Deux rafales de 3 images : des dégradés horizontaux, puis verticaux, de teintes
         // différentes ; entre elles, rien de commun.
@@ -7819,6 +7910,10 @@ mod tests {
         );
         assert!(parse_actions("").is_empty());
         assert_eq!(parse_actions("shot"), [Step::Shot]);
+        assert_eq!(
+            parse_actions("settings:keys"),
+            [Step::Settings("keys".into())]
+        );
     }
 
     #[test]

@@ -111,6 +111,9 @@ pub struct GuiSettings {
     /// Délai maximal entre deux touches d'une séquence (`g g`), en ms, comme le
     /// `timeoutlen` de vim.
     pub key_sequence_timeout_ms: u64,
+    /// Touche qui est un raccourci et le début d'un autre (`y` et `y w`) : délai d'attente
+    /// de la suite (ms) avant d'agir seule.
+    pub key_ambiguous_timeout_ms: u64,
     /// Taille initiale de la fenêtre (points).
     pub window: [f32; 2],
     /// Rendus RAW : à la demande (image affichée et voisines, en mode RAW) ou tout le
@@ -172,6 +175,7 @@ impl Default for GuiSettings {
             keys: vec![Profile::Classic, Profile::Vim],
             leader: "Ctrl+b".into(),
             key_sequence_timeout_ms: 1000,
+            key_ambiguous_timeout_ms: 300,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
@@ -217,6 +221,12 @@ impl GuiSettings {
     /// Délai maximal entre deux touches d'une séquence.
     pub fn key_sequence_timeout(&self) -> Duration {
         Duration::from_millis(self.key_sequence_timeout_ms)
+    }
+
+    /// Séquenceur des raccourcis, avec ses deux délais.
+    pub fn sequencer(&self) -> crate::actions::Sequencer {
+        crate::actions::Sequencer::new(self.key_sequence_timeout())
+            .with_ambiguous(Duration::from_millis(self.key_ambiguous_timeout_ms))
     }
 }
 

@@ -20,9 +20,10 @@ dans le code :
 Un commentaire au-dessus d'un groupe de clés (« Badges de la grille : … » au-dessus de
 `badge_over` et `badge_under`) décrit le groupe : `Group { doc, entries }`. Seul le
 dernier paragraphe d'un commentaire compte (l'en-tête du fichier, séparé par une ligne
-vide, n'est pas la description de `[preview]`). Les sections sans clé (`[keys]`, dont
-les clés sont des identifiants d'action choisis par l'utilisateur) sont omises, ainsi
-que les clés seulement citées en commentaire (`# selection = "#1e6f7f"`, réglage
+vide, n'est pas la description de `[preview]`). Une section sans clé (`[keys]`, dont
+les clés sont des identifiants d'action choisis par l'utilisateur) est listée sans
+réglage : l'interface lui donne son propre volet (son commentaire, sans clé dessous, se
+perd : toml_edit le range en fin de document). Les clés seulement citées en commentaire (`# selection = "#1e6f7f"`, réglage
 facultatif sans valeur par défaut) : à ajouter à la main dans le fichier.
 
 Limite connue : les commentaires de l'exemple sont en français ; un exemple anglais
@@ -38,8 +39,10 @@ commentaire de sa ligne (`thumbnail = 600 # à moi`). Une sous-section créée
 (`[gui.colors]`) ne crée pas de `[gui]` vide. L'enregistrement passe par un fichier
 temporaire renommé : jamais de fichier à moitié écrit.
 
-Les valeurs : `Value::{Bool, Int, Float, Str, Toml}` ; `Toml` pour les listes et tables,
-éditées comme du texte TOML (`[1280.0, 800.0]`). `parse_color` reconnaît `"#rrggbb"`.
+Les valeurs : `Value::{Bool, Int, Float, Str, Toml, Strings}` ; `Toml` pour les listes
+et tables, éditées comme du texte TOML (`[1280.0, 800.0]`) ; `Strings`, une liste de
+textes écrite par l'interface (raccourcis d'une action : `"core.flag.accept" = ["Maj+P",
+"a"]`, identifiant entre guillemets, échappements faits par toml_edit). `parse_color` reconnaît `"#rrggbb"`.
 
 ## Validation : à l'appelant
 

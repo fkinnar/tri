@@ -33,6 +33,9 @@ pub enum Value {
     Str(String),
     /// Autre (liste, table) : écrit tel quel en TOML (`[1280.0, 800.0]`).
     Toml(String),
+    /// Liste de textes (raccourcis d'une action : `["Maj+P", "a"]`), écrite par
+    /// l'interface ; relue comme [`Value::Toml`].
+    Strings(Vec<String>),
 }
 
 impl Value {
@@ -54,6 +57,9 @@ impl Value {
             Value::Float(f) => (*f).into(),
             Value::Str(s) => s.as_str().into(),
             Value::Toml(text) => text.trim().parse().ok()?,
+            Value::Strings(list) => {
+                toml_edit::Value::Array(list.iter().map(String::as_str).collect())
+            }
         })
     }
 
@@ -71,6 +77,10 @@ impl fmt::Display for Value {
             Value::Float(x) => write!(f, "{x}"),
             Value::Str(s) => write!(f, "\"{s}\""),
             Value::Toml(t) => write!(f, "{t}"),
+            Value::Strings(_) => match self.to_toml() {
+                Some(v) => write!(f, "{}", v.decorated("", "")),
+                None => Ok(()),
+            },
         }
     }
 }
@@ -203,7 +213,9 @@ fn collect(table: &Table, name: &str, out: &mut Vec<Section>) {
             _ => {}
         }
     }
-    if !section.groups.is_empty() {
+    // Une section sans clé (`[keys]`, remplie par l'utilisateur) reste listée : l'interface
+    // lui donne son propre volet.
+    if !section.groups.is_empty() || (!name.is_empty() && subtables.is_empty()) {
         out.push(section);
     }
     // Sous-tables dans l'ordre de leur en-tête dans le fichier.
@@ -349,8 +361,8 @@ hover = \"#b4b4b4\"
         let names: Vec<&str> = s.sections.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(
             names,
-            ["preview", "gui", "gui.colors"],
-            "[keys] vide : omise"
+            ["preview", "gui", "gui.colors", "keys"],
+            "[keys] vide : listée (son propre volet dans l'interface)"
         );
         let preview = &s.sections[0];
         assert_eq!(preview.doc, "", "l'en-tête du fichier n'est pas la section");
@@ -414,6 +426,32 @@ hover = \"#b4b4b4\"
     }
 
     #[test]
+    fn a_section_without_keys_is_listed() {
+        let schema =
+            Schema::parse("[gui]\nx = 1\n\n[keys]\n# Raccourcis.\n# \"a\" = [\"b\"]\n").unwrap();
+        let names: Vec<&str> = schema.sections.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["gui", "keys"]);
+    }
+
+    #[test]
+    fn shortcuts_are_written_with_quoted_action_ids() {
+        let mut file = ConfigFile::open(Path::new("/nonexistent/config.toml")).unwrap();
+        let keys = Value::Strings(vec!["Maj+P".into(), "g \"g\"".into()]);
+        file.set("keys", "core.flag.accept", &keys).unwrap();
+        let text = file.text();
+        assert!(text.contains("[keys]"), "{text}");
+        assert!(
+            text.contains(r#""core.flag.accept" = ["Maj+P", 'g "g"']"#),
+            "{text}"
+        );
+        let doc: toml::Table = text.parse().unwrap();
+        let list = doc["keys"]["core.flag.accept"].as_array().unwrap();
+        assert_eq!(list[1].as_str(), Some("g \"g\""));
+        assert!(file.get("keys", "core.flag.accept").is_some());
+        assert_eq!(keys.to_string(), r#"["Maj+P", 'g "g"']"#);
+    }
+
+    #[test]
     fn a_missing_file_starts_empty() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sous/config.toml");
@@ -432,6 +470,7 @@ hover = \"#b4b4b4\"
         let s = Schema::parse(include_str!("../doc/config.example.toml")).unwrap();
         assert!(s.sections.iter().any(|s| s.name == "gui.histogram"));
         assert!(s.default_of("files", "recent").is_some());
-        assert!(s.sections.iter().all(|s| s.name != "keys"));
+        let keys = s.sections.iter().find(|s| s.name == "keys").unwrap();
+        assert!(keys.groups.is_empty());
     }
 }

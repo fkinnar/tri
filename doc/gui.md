@@ -184,6 +184,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Raccourcis dans la fenêtre de réglages** (section « Raccourcis [keys] », 18/10/2026) :
+  une ligne par action, par thème comme l'aide (la recherche trouve aussi les actions :
+  libellé, identifiant, touches). Ses raccourcis en pastilles (ceux du profil, ou ceux de
+  `[keys]` : libellé en gras), un clic retire ; « enregistrer… » prend les touches
+  tapées ensuite (Échap compris, la fenêtre ne se ferme pas ; une séquence touche après
+  touche, finie après le délai des séquences ; un caractère sans touche nommée, « ° »,
+  pris comme caractère) ; le petit champ accepte un raccourci écrit (« g g ») ;
+  « défaut » revient au profil. Les conflits s'affichent en tête et sous l'action.
+  `Keymap::specs_for` / `keys_spec` écrivent les raccourcis comme `[keys]` les lit (un
+  test vérifie l'aller-retour de tous les raccourcis des profils).
 - **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
   `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
   depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme
@@ -296,7 +306,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   renommer (`F2`), mettre à la corbeille (`Suppr`, `Backspace` — la touche « effacer »
   des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de
   fichiers (`Maj+R`), ouvrir dans l'éditeur externe (`e`, `[files] editor`), copier
-  (`y`) ou déplacer (`Ctrl+X`, couper) vers un dossier (18/10/2026, voir `files.md` : champ avec
+  (`y`) ou déplacer (`Ctrl+X`, couper) vers un dossier, **toute la pile** de l'image :
+  `dw` (corbeille) / `yw` (copier), comme un mot dans vim (idée de l'utilisateur,
+  18/10/2026 : une ligne de la grille, `dd`, n'avait pas de sens ; piles actives
+  requises). `y` étant aussi le début de `yw`, il attend la suite un court instant
+  (`[gui] key_ambiguous_timeout_ms`, 300 ms) : une touche qui est un raccourci et le
+  début d'un autre n'est plus signalée comme masquée, le séquenceur
+  (`Sequencer::expire`, `deadline`) la fait au bout du délai, ou avant la touche
+  suivante qui ne continue pas. Copier / déplacer (18/10/2026, voir `files.md` : champ avec
   complétion par Tab, destinations récentes aux flèches, progression). Aussi par six
   boutons à icône dans la boîte du clic droit (crayon, deux feuilles, flèche dans un
   dossier, poubelle, dossier, flèche sortante ; libellé et raccourci au survol ; `[gui.dialogs] icon_size`). Renommer : le nom (sans extension) est
@@ -662,7 +679,8 @@ moitié transparente.
   identifiant d'action (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, pour
   laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
-  l'image sélectionnée). Une étape inconnue est signalée et ignorée.
+  l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
+  section : `settings:keys`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
 - `TRI_GUI_TRACE=1` : trace minutée de chaque étape du chargement des images (demande au
   moteur, image prête, abandonnée, lecture et décodage, image affichée) sur la sortie

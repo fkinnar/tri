@@ -7,12 +7,19 @@
 //! ([`tri::config_edit::ConfigFile`]). Chaque modification est validée (le fichier entier
 //! doit rester lisible) avant d'être gardée ; les réglages de l'interface s'appliquent
 //! tout de suite, ceux du moteur au prochain lancement.
+//!
+//! La section `[keys]` (raccourcis) n'a pas de clés dans l'exemple : elle a son propre
+//! volet, une ligne par action, ses raccourcis en pastilles (retirer, enregistrer la
+//! prochaine touche tapée, taper une séquence), conflits signalés.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Color32, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
+use eframe::egui::{self, Color32, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
+
+use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys, spec_label};
 use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
 
 use crate::settings::AppSettings;
@@ -111,6 +118,14 @@ pub struct SettingsWindow {
     dirty: bool,
     /// Erreur d'enregistrement du fichier.
     save_error: Option<String>,
+    /// Raccourcis en vigueur d'après le fichier (profils, leader, `[keys]`), et les
+    /// problèmes signalés (conflits…).
+    keymap: Keymap,
+    key_warnings: Vec<String>,
+    /// Raccourci en cours d'enregistrement : l'action, les combinaisons déjà tapées, et
+    /// l'instant de la dernière (fini après le délai des séquences sans nouvelle touche).
+    recording: Option<(Action, Vec<Chord>, Instant)>,
+    sequence_timeout: Duration,
 }
 
 /// Ce que la fenêtre demande à l'application.
@@ -127,8 +142,15 @@ impl SettingsWindow {
     /// Ouvre la fenêtre sur le fichier `path` (créé au premier changement s'il n'existe
     /// pas).
     pub fn open(path: &Path) -> Result<SettingsWindow, String> {
+        let file = ConfigFile::open(path)?;
+        let settings = tri::settings::parse::<AppSettings>(&file.text()).unwrap_or_default();
+        let (keymap, key_warnings) = settings.keymap();
         Ok(SettingsWindow {
-            file: ConfigFile::open(path)?,
+            keymap,
+            key_warnings,
+            recording: None,
+            sequence_timeout: settings.gui.key_sequence_timeout(),
+            file,
             section: 0,
             query: String::new(),
             fresh: true,
@@ -138,6 +160,18 @@ impl SettingsWindow {
             dirty: false,
             save_error: None,
         })
+    }
+
+    /// Affiche la section `name` (`keys`, `gui.zoom`), si elle existe.
+    pub fn show_section(&mut self, name: &str) {
+        if let Some(i) = schema().sections.iter().position(|s| s.name == name) {
+            self.section = i;
+        }
+    }
+
+    /// Vrai pendant l'enregistrement d'un raccourci (les touches lui reviennent).
+    pub fn is_recording(&self) -> bool {
+        self.recording.is_some()
     }
 
     /// Valeur actuelle : celle du fichier, sinon la valeur par défaut.
@@ -164,6 +198,8 @@ impl SettingsWindow {
             Ok(settings) => {
                 self.errors.remove(&id);
                 self.dirty = true;
+                (self.keymap, self.key_warnings) = settings.keymap();
+                self.sequence_timeout = settings.gui.key_sequence_timeout();
                 Some(settings)
             }
             Err(e) => {
@@ -182,6 +218,8 @@ impl SettingsWindow {
     /// Affiche la fenêtre.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome {
         let schema = schema();
+        // Raccourci en cours d'enregistrement : les touches lui reviennent (Échap compris).
+        let mut recorded = self.record(ctx);
         let id = search_id();
         // Recherche vide et focus dessus : flèches haut / bas pour changer de section.
         if ctx.memory(|m| m.has_focus(id)) && self.query.trim().is_empty() {
@@ -276,7 +314,7 @@ impl SettingsWindow {
             }
             return Outcome::Closed;
         }
-        match changed {
+        match changed.or(recorded.take()) {
             Some(settings) => Outcome::Changed(Box::new(settings)),
             None => Outcome::Open,
         }
@@ -320,6 +358,9 @@ impl SettingsWindow {
                 ui.label(t!("settings-section-restart"));
             }
             ui.add_space(6.0);
+            if section.name == "keys" {
+                return self.keys_entries(ui, None);
+            }
         }
         for group in &section.groups {
             let entries: Vec<&Entry> = group
@@ -349,6 +390,17 @@ impl SettingsWindow {
         let mut changed = None;
         let mut any = false;
         for section in &schema.sections {
+            if section.name == "keys" {
+                if self.matching_actions(Some(&query)).next().is_some() {
+                    any = true;
+                    ui.label(section_title(ui, &section.name, true));
+                    if let Some(s) = self.keys_entries(ui, Some(&query)) {
+                        changed = Some(s);
+                    }
+                    ui.add_space(8.0);
+                }
+                continue;
+            }
             let keys: Vec<&str> = section
                 .groups
                 .iter()
@@ -373,6 +425,212 @@ impl SettingsWindow {
             ui.weak(t!("help-no-match"));
         }
         changed
+    }
+
+    /// Enregistrement d'un raccourci : prend les touches tapées (retirées des événements,
+    /// pour que ni la fenêtre ni l'application ne les voient) ; fini après le délai des
+    /// séquences sans nouvelle touche, il est ajouté aux raccourcis de l'action.
+    fn record(&mut self, ctx: &egui::Context) -> Option<AppSettings> {
+        let (action, chords, last) = self.recording.as_mut()?;
+        let events = ctx.input_mut(|i| {
+            let events = i.events.clone();
+            i.events
+                .retain(|e| !matches!(e, Event::Key { .. } | Event::Text(_)));
+            events
+        });
+        // Un caractère sans touche nommée (« ° », « + » selon le clavier) : le caractère,
+        // comme les raccourcis des profils ; sinon la touche.
+        let typed: Vec<char> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Text(t) => {
+                    let mut chars = t.chars();
+                    let c = chars.next()?;
+                    (chars.next().is_none() && !c.is_ascii_alphanumeric() && c != ' ').then_some(c)
+                }
+                _ => None,
+            })
+            .collect();
+        let now = Instant::now();
+        for event in &events {
+            if let Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                modifiers,
+                ..
+            } = event
+                && let Some(chord) = Chord::from_event(*key, *modifiers)
+            {
+                let chord = match typed.first() {
+                    Some(&c) if !chord.ctrl => Chord::char(c),
+                    _ => chord,
+                };
+                chords.push(chord);
+                *last = now;
+            }
+        }
+        ctx.request_repaint_after(Duration::from_millis(100));
+        if chords.is_empty() || now.duration_since(*last) < self.sequence_timeout {
+            return None;
+        }
+        let (action, chords) = (*action, std::mem::take(chords));
+        self.recording = None;
+        self.add_key(action, keys_spec(&chords))
+    }
+
+    /// Ajoute `spec` aux raccourcis de `action` (écrits dans `[keys]`).
+    fn add_key(&mut self, action: Action, spec: String) -> Option<AppSettings> {
+        let mut specs = self.keymap.specs_for(action);
+        if specs.contains(&spec) {
+            return None;
+        }
+        specs.push(spec);
+        self.commit("keys", action.id(), Some(Value::Strings(specs)))
+    }
+
+    /// Actions du volet des raccourcis, dans l'ordre de l'aide ; `query` : celles qui
+    /// correspondent (libellé, identifiant, raccourcis).
+    fn matching_actions<'a>(&'a self, query: Option<&'a str>) -> impl Iterator<Item = Action> + 'a {
+        Group::ALL.into_iter().flat_map(move |group| {
+            Action::ALL.into_iter().filter(move |a| {
+                a.group() == group
+                    && query.is_none_or(|q| {
+                        let keys = self.keymap.keys_for(*a).join(" ");
+                        let text = format!("{} {} {keys}", a.label(), a.id());
+                        crate::actions::fuzzy_score(q, &text).is_some()
+                    })
+            })
+        })
+    }
+
+    /// Volet des raccourcis : problèmes en tête, puis une ligne par action, par thème.
+    fn keys_entries(&mut self, ui: &mut Ui, query: Option<&str>) -> Option<AppSettings> {
+        if query.is_none() {
+            ui.weak(t!("settings-keys-doc"));
+            ui.add_space(4.0);
+            for warning in &self.key_warnings {
+                ui.colored_label(ui.visuals().error_fg_color, warning);
+            }
+        }
+        let actions: Vec<Action> = self.matching_actions(query).collect();
+        let mut changed = None;
+        let mut group = None;
+        for action in actions {
+            if group != Some(action.group()) {
+                group = Some(action.group());
+                ui.add_space(6.0);
+                ui.strong(action.group().label());
+            }
+            if let Some(s) = self.key_row(ui, action) {
+                changed = Some(s);
+            }
+        }
+        changed
+    }
+
+    /// Une action : son libellé, ses raccourcis en pastilles (clic : retiré), enregistrer,
+    /// taper un raccourci, retour aux raccourcis du profil.
+    fn key_row(&mut self, ui: &mut Ui, action: Action) -> Option<AppSettings> {
+        let id = ("keys".to_string(), action.id().to_string());
+        let in_file = self.file.get("keys", action.id()).is_some();
+        let specs = self.keymap.specs_for(action);
+        let mut new: Option<Vec<String>> = None;
+        let mut typed = None;
+        let mut reset = false;
+        ui.horizontal(|ui| {
+            let name = RichText::new(action.label());
+            let name = if in_file { name.strong() } else { name };
+            ui.allocate_ui_with_layout(
+                vec2(240.0, 18.0),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_width(240.0);
+                    ui.add(egui::Label::new(name).truncate())
+                        .on_hover_text(action.id());
+                },
+            );
+            if specs.is_empty() {
+                ui.weak(t!("settings-keys-none"));
+            }
+            for (i, spec) in specs.iter().enumerate() {
+                let chip = egui::Button::new(format!("{}  ×", spec_label(spec))).small();
+                if ui
+                    .add(chip)
+                    .on_hover_text(t!("settings-keys-remove", keys = spec.as_str()))
+                    .clicked()
+                {
+                    let mut list = specs.clone();
+                    list.remove(i);
+                    new = Some(list);
+                }
+            }
+            match &self.recording {
+                Some((a, chords, _)) if *a == action => {
+                    let so_far = keys_spec(chords);
+                    ui.label(
+                        RichText::new(t!("settings-keys-recording", keys = so_far))
+                            .color(ui.visuals().warn_fg_color),
+                    );
+                    if ui.small_button(t!("cancel")).clicked() {
+                        self.recording = None;
+                    }
+                }
+                _ => {
+                    if ui
+                        .small_button(t!("settings-keys-record"))
+                        .on_hover_text(t!("settings-keys-record-tip"))
+                        .clicked()
+                    {
+                        self.recording = Some((action, Vec::new(), Instant::now()));
+                    }
+                    let draft = self.drafts.entry(id.clone()).or_default();
+                    let field = ui.add(
+                        egui::TextEdit::singleline(draft)
+                            .hint_text(t!("settings-keys-type-hint"))
+                            .desired_width(90.0),
+                    );
+                    if field.lost_focus()
+                        && ui.input(|i| i.key_pressed(Key::Enter))
+                        && !draft.trim().is_empty()
+                    {
+                        typed = Some(draft.trim().to_string());
+                    }
+                }
+            }
+            if in_file
+                && ui
+                    .small_button(t!("settings-reset"))
+                    .on_hover_text(t!("settings-keys-default"))
+                    .clicked()
+            {
+                reset = true;
+            }
+        });
+        for warning in self.key_warnings.iter().filter(|w| w.contains(action.id())) {
+            ui.colored_label(ui.visuals().warn_fg_color, warning);
+        }
+        if let Some(e) = self.errors.get(&id) {
+            ui.colored_label(Color32::from_rgb(230, 90, 90), e);
+        }
+        if reset {
+            return self.commit("keys", action.id(), None);
+        }
+        if let Some(spec) = typed {
+            match parse_keys(&spec) {
+                Ok(keys) => {
+                    self.drafts.remove(&id);
+                    self.errors.remove(&id);
+                    return self.add_key(action, keys_spec(&keys));
+                }
+                Err(e) => {
+                    self.errors.insert(id, e);
+                    return None;
+                }
+            }
+        }
+        let list = new?;
+        self.commit("keys", action.id(), Some(Value::Strings(list)))
     }
 
     /// Une ligne : nom, champ selon le type, retour à la valeur par défaut.
@@ -507,6 +765,77 @@ mod tests {
             }
         }
         assert!(is_folder_key("destination") && is_folder_key("dir") && !is_folder_key("history"));
+    }
+
+    #[test]
+    fn shortcuts_are_added_removed_and_reset() {
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        let accept = Action::from_id("core.flag.accept").unwrap();
+        let before = w.keymap.specs_for(accept);
+        assert!(!before.is_empty());
+        // Ajouté : les raccourcis du profil, plus le nouveau, écrits dans [keys].
+        let s = w.add_key(accept, "Maj+X".into()).expect("valide");
+        assert_eq!(s.keys["core.flag.accept"].last().unwrap(), "Maj+X");
+        let spec = keys_spec(&parse_keys("Maj+X").unwrap());
+        assert!(w.keymap.specs_for(accept).contains(&spec));
+        assert!(w.add_key(accept, spec).is_none(), "déjà là");
+        // Maj+X rejetait : signalé.
+        assert!(
+            w.key_warnings
+                .iter()
+                .any(|m| m.contains("core.flag.accept")),
+            "{:?}",
+            w.key_warnings
+        );
+        // Plus aucun raccourci (liste vide), puis retour au profil.
+        let s = w
+            .commit("keys", accept.id(), Some(Value::Strings(Vec::new())))
+            .unwrap();
+        assert!(s.keys["core.flag.accept"].is_empty());
+        assert!(w.keymap.specs_for(accept).is_empty());
+        let s = w.commit("keys", accept.id(), None).unwrap();
+        assert!(s.keys.is_empty());
+        assert_eq!(w.keymap.specs_for(accept), before);
+    }
+
+    #[test]
+    fn a_shortcut_is_recorded_from_the_keys_typed() {
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[gui]\nkey_sequence_timeout_ms = 2000\n").unwrap();
+        let mut w = SettingsWindow::open(&path).unwrap();
+        let accept = Action::from_id("core.flag.accept").unwrap();
+        w.recording = Some((accept, Vec::new(), Instant::now()));
+        let mut h = egui_kittest::Harness::builder()
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        // Une séquence : g puis Échap (qui ne ferme pas la fenêtre).
+        h.key_press(Key::G);
+        h.run_steps(1);
+        h.key_press(Key::Escape);
+        h.run_steps(1);
+        assert!(h.state().is_recording());
+        std::thread::sleep(Duration::from_millis(2100));
+        h.run_steps(2);
+        assert!(!h.state().is_recording());
+        let specs = h.state().keymap.specs_for(accept);
+        let last = specs.last().unwrap();
+        assert_eq!(parse_keys(last).unwrap().len(), 2, "{last}");
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("\"core.flag.accept\"")
+        );
     }
 
     #[test]

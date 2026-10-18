@@ -93,6 +93,8 @@ pub fn navigate(
         | Action::FileEdit
         | Action::FileCopy
         | Action::FileMove
+        | Action::FileDeleteStack
+        | Action::FileCopyStack
         | Action::Undo
         | Action::Redo
         | Action::History

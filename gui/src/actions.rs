@@ -289,6 +289,10 @@ pub enum Action {
     FileCopy,
     /// Déplacer les images vers un dossier.
     FileMove,
+    /// Supprimer toute la pile de l'image (`dw`, comme un mot dans vim).
+    FileDeleteStack,
+    /// Copier toute la pile de l'image vers un dossier (`yw`).
+    FileCopyStack,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -345,7 +349,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 115] = [
+    pub const ALL: [Action; 117] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -389,6 +393,8 @@ impl Action {
         Action::FileEdit,
         Action::FileCopy,
         Action::FileMove,
+        Action::FileDeleteStack,
+        Action::FileCopyStack,
         Action::Undo,
         Action::Redo,
         Action::History,
@@ -490,7 +496,8 @@ impl Action {
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
-            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
+            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
+            | FileDeleteStack | FileCopyStack => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
@@ -587,6 +594,8 @@ impl Action {
             Action::MetaSelectDown => "core.metadata.select_down",
             Action::MetaCopyAll => "core.metadata.copy_all",
             Action::FileMove => "core.file.move",
+            Action::FileDeleteStack => "core.file.delete_stack",
+            Action::FileCopyStack => "core.file.copy_stack",
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
             Action::ToggleFolderPanel => "core.view.folders",
@@ -938,8 +947,12 @@ const FILES: &[Binding] = {
         (&[ctrl(Key::Comma)], Settings),
         // Comme dans vim : `y` copie (« yank »), `x` supprime (efface le caractère : ici
         // l'image ; une confirmation suit). Déplacer : `Ctrl+X`, couper (retour du
-        // 18/10/2026 ; `dd` pour une ligne de la grille, avec un nombre, plus tard).
+        // 18/10/2026). Toute la pile : `dw` / `yw`, comme un mot (idée de l'utilisateur,
+        // 18/10/2026 : une ligne de la grille, `dd`, n'a pas de sens). `y` seul attend
+        // alors un court instant la suite (`[gui] key_ambiguous_timeout_ms`).
         (&[plain(Key::Y)], FileCopy),
+        (&[plain(Key::Y), plain(Key::W)], FileCopyStack),
+        (&[plain(Key::D), plain(Key::W)], FileDeleteStack),
         (&[plain(Key::X)], FileDelete),
         (&[ctrl(Key::X)], FileMove),
         // Annuler : `u` / `Ctrl+R` comme dans vim, `Ctrl+Z` / `Ctrl+Maj+Z` ailleurs (et
@@ -1093,6 +1106,9 @@ pub struct Keymap {
 enum Lookup {
     /// La séquence correspond exactement à un raccourci.
     Action(Action),
+    /// La séquence est un raccourci, et le début d'un plus long (`y` et `y w`) : attendre
+    /// un court instant la suite, sinon agir seule.
+    Ambiguous(Action),
     /// La séquence est le début d'un raccourci plus long : attendre la suite.
     Prefix,
     /// Aucun raccourci ne commence ainsi.
@@ -1124,7 +1140,7 @@ impl Keymap {
     #[cfg(test)]
     pub fn action(&self, key: Key, modifiers: Modifiers) -> Option<Action> {
         match self.lookup(&[Chord::from_event(key, modifiers)?]) {
-            Lookup::Action(a) => Some(a),
+            Lookup::Action(a) | Lookup::Ambiguous(a) => Some(a),
             Lookup::Prefix | Lookup::None => None,
         }
     }
@@ -1188,20 +1204,8 @@ impl Keymap {
             added.push((keys, action));
         }
         self.bindings.extend(added);
-        for (keys, action) in &self.bindings {
-            if let Some((longer, _)) = self
-                .bindings
-                .iter()
-                .find(|(l, a)| l.len() > keys.len() && l.starts_with(keys) && conflict(*a, *action))
-            {
-                warnings.push(t!(
-                    "keys-shadowed",
-                    keys = sequence_label(keys),
-                    action = action.id(),
-                    longer = sequence_label(longer)
-                ));
-            }
-        }
+        // Une touche qui commence aussi une séquence (`y`, `y w`) n'est plus un problème :
+        // elle attend un court instant la suite (voir [`Sequencer`]).
         (self, warnings)
     }
 
@@ -1271,19 +1275,27 @@ impl Keymap {
             .filter(|(k, a)| k == keys && usable(a))
             .max_by_key(|(_, a)| a.scope().is_some())
             .map(|&(_, a)| a);
+        let longer = |same_scope: Option<Action>| {
+            self.bindings.iter().any(|(k, a)| {
+                k.len() > keys.len()
+                    && k.starts_with(keys)
+                    && usable(a)
+                    && same_scope.is_none_or(|s| s.scope() == a.scope())
+            })
+        };
+        // Une touche du panneau ne cède qu'à une séquence du même panneau.
         if let Some(action) = exact.filter(|a| a.scope().is_some()) {
-            return Lookup::Action(action);
+            return if longer(Some(action)) {
+                Lookup::Ambiguous(action)
+            } else {
+                Lookup::Action(action)
+            };
         }
-        if self
-            .bindings
-            .iter()
-            .any(|(k, a)| k.len() > keys.len() && k.starts_with(keys) && usable(a))
-        {
-            return Lookup::Prefix;
-        }
-        match exact {
-            Some(action) => Lookup::Action(action),
-            None => Lookup::None,
+        match (exact, longer(None)) {
+            (Some(action), true) => Lookup::Ambiguous(action),
+            (Some(action), false) => Lookup::Action(action),
+            (None, true) => Lookup::Prefix,
+            (None, false) => Lookup::None,
         }
     }
 
@@ -1301,6 +1313,19 @@ impl Keymap {
             self.bindings.push((vec![lead, plain(key)], action));
         }
         Ok(self)
+    }
+
+    /// Raccourcis d'une action tels qu'on les écrit dans `[keys]` (« Maj+P », « g g »),
+    /// relus par [`parse_keys`] : pour la fenêtre de réglages.
+    pub fn specs_for(&self, action: Action) -> Vec<String> {
+        let mut specs: Vec<String> = Vec::new();
+        for (keys, _) in self.bindings.iter().filter(|(_, a)| *a == action) {
+            let spec = keys_spec(keys);
+            if !specs.contains(&spec) {
+                specs.push(spec);
+            }
+        }
+        specs
     }
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
@@ -1437,6 +1462,26 @@ pub fn parse_keys(text: &str) -> Result<Vec<Chord>, String> {
     Ok(chords)
 }
 
+/// Une séquence telle qu'on l'écrit dans `[keys]` : ses combinaisons séparées par des
+/// espaces (« g g », « Ctrl+b h »).
+pub fn keys_spec(keys: &[Chord]) -> String {
+    // Comme le libellé, mais Maj toujours écrit (« Maj+? » : le libellé l'omet).
+    let spec = |c: &Chord| match c.trigger {
+        Trigger::Key(Key::Questionmark) if c.shift => {
+            let unshifted = Chord { shift: false, ..*c };
+            t!("key-shift-prefix") + &chord_label(&unshifted)
+        }
+        _ => chord_label(c),
+    };
+    keys.iter().map(spec).collect::<Vec<_>>().join(" ")
+}
+
+/// Nom lisible d'un raccourci écrit dans `[keys]` (« gg » pour « g g ») ; illisible : tel
+/// quel.
+pub fn spec_label(spec: &str) -> String {
+    parse_keys(spec).map_or_else(|_| spec.to_string(), |keys| sequence_label(&keys))
+}
+
 /// Nom lisible d'une combinaison (« Maj+Flèche gauche », « Ctrl+u », « g », « ° »).
 fn chord_label(c: &Chord) -> String {
     let name = match c.trigger {
@@ -1526,39 +1571,87 @@ pub struct Sequencer {
     pending: Vec<Chord>,
     since: Option<Instant>,
     timeout: Duration,
+    /// Action d'une touche qui commence aussi une séquence (`y` avant `y w`), faite si la
+    /// suite ne vient pas dans le délai `ambiguous`.
+    waiting: Option<Action>,
+    ambiguous: Duration,
 }
 
 impl Sequencer {
-    /// Séquenceur avec un délai maximal `timeout` entre deux touches d'une séquence.
+    /// Séquenceur avec un délai maximal `timeout` entre deux touches d'une séquence (et
+    /// le même pour une touche ambiguë, voir [`Sequencer::with_ambiguous`]).
     pub fn new(timeout: Duration) -> Sequencer {
         Sequencer {
             pending: Vec::new(),
             since: None,
             timeout,
+            waiting: None,
+            ambiguous: timeout,
+        }
+    }
+
+    /// Délai d'attente de la suite après une touche qui est un raccourci *et* le début
+    /// d'un autre (`y`, `y w`) : plus court que celui des séquences, la touche seule ne
+    /// doit pas sembler lente.
+    pub fn with_ambiguous(mut self, ambiguous: Duration) -> Sequencer {
+        self.ambiguous = ambiguous;
+        self
+    }
+
+    fn window(&self) -> Duration {
+        if self.waiting.is_some() {
+            self.ambiguous
+        } else {
+            self.timeout
         }
     }
 
     /// Vrai si une séquence est commencée (et pas encore expirée à `now`).
     pub fn is_pending(&self, now: Instant) -> bool {
         self.since
-            .is_some_and(|since| now.duration_since(since) <= self.timeout)
+            .is_some_and(|since| now.duration_since(since) <= self.window())
     }
 
-    /// Traite une touche pressée à `now` ; renvoie l'action déclenchée, s'il y en a une.
-    pub fn feed(&mut self, keymap: &Keymap, chord: Chord, now: Instant) -> Option<Action> {
+    /// Instant où l'action d'une touche ambiguë sera faite, faute de suite : l'interface
+    /// se redessine alors pour appeler [`Sequencer::expire`].
+    pub fn deadline(&self) -> Option<Instant> {
+        self.waiting?;
+        Some(self.since? + self.ambiguous)
+    }
+
+    /// L'action d'une touche ambiguë dont le délai est passé à `now` : à faire.
+    pub fn expire(&mut self, now: Instant) -> Option<Action> {
+        if self.waiting.is_none() || self.is_pending(now) {
+            return None;
+        }
+        self.pending.clear();
+        self.since = None;
+        self.waiting.take()
+    }
+
+    /// Traite une touche pressée à `now` ; renvoie les actions déclenchées, dans l'ordre :
+    /// celle d'une touche ambiguë en attente que cette touche ne continue pas, puis la
+    /// sienne.
+    pub fn feed(&mut self, keymap: &Keymap, chord: Chord, now: Instant) -> Vec<Action> {
+        let mut done: Vec<Action> = self.expire(now).into_iter().collect();
         if !self.is_pending(now) {
             self.pending.clear();
         }
         let mut keys = std::mem::take(&mut self.pending);
         keys.push(chord);
         let since = self.since.take();
+        let waiting = self.waiting.take();
         match keymap.lookup(&keys) {
             Lookup::Prefix => {
                 self.pending = keys;
                 self.since = Some(now);
-                None
             }
-            Lookup::Action(action) => Some(action),
+            Lookup::Ambiguous(action) => {
+                self.pending = keys;
+                self.since = Some(now);
+                self.waiting = Some(action);
+            }
+            Lookup::Action(action) => done.push(action),
             // Touche liée à aucun raccourci, même seule, au milieu d'une séquence : ignorée,
             // la séquence reste en attente. « ° » arrive sur un AZERTY comme Maj + `Minus`
             // (touche physique, inconnue ici) *puis*, parfois dans une image suivante, comme
@@ -1568,18 +1661,52 @@ impl Sequencer {
                 keys.pop();
                 self.pending = keys;
                 self.since = since;
-                None
+                self.waiting = waiting;
             }
-            // Séquence interrompue par une touche qui a un sens seule : elle compte seule.
-            Lookup::None if keys.len() > 1 => self.feed(keymap, chord, now),
-            Lookup::None => None,
+            // Séquence interrompue par une touche qui a un sens seule : la touche ambiguë
+            // en attente est faite, puis celle-ci compte seule.
+            Lookup::None if keys.len() > 1 => {
+                done.extend(waiting);
+                done.extend(self.feed(keymap, chord, now));
+            }
+            Lookup::None => {}
         }
+        done
+    }
+
+    /// [`Sequencer::feed`] pour les tests : au plus une action.
+    #[cfg(test)]
+    fn feed_one(&mut self, keymap: &Keymap, chord: Chord, now: Instant) -> Option<Action> {
+        let mut done = self.feed(keymap, chord, now);
+        assert!(done.len() <= 1, "{done:?}");
+        done.pop()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_default_shortcut_reads_back_from_its_spec() {
+        crate::i18n::ensure();
+        for profile in [Profile::Classic, Profile::Vim] {
+            let km = Keymap::from_profiles(&[profile])
+                .with_leader("Ctrl+B")
+                .unwrap();
+            for (keys, action) in &km.bindings {
+                let spec = keys_spec(keys);
+                assert_eq!(
+                    parse_keys(&spec).as_ref(),
+                    Ok(keys),
+                    "{spec} ({})",
+                    action.id()
+                );
+                assert!(km.specs_for(*action).contains(&spec));
+            }
+        }
+        assert_eq!(spec_label("g g"), "gg");
+    }
 
     #[test]
     fn ids_are_unique_namespaced_and_reversible() {
@@ -1717,31 +1844,39 @@ mod tests {
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let now = Instant::now();
         let key = |k| Chord::from_event(k, Modifiers::NONE).unwrap();
-        assert_eq!(seq.feed(&km, key(Key::J), now), Some(Action::NavDown));
+        assert_eq!(seq.feed_one(&km, key(Key::J), now), Some(Action::NavDown));
         km.set_focus(Scope::Folders);
-        assert_eq!(seq.feed(&km, key(Key::J), now), Some(Action::FolderDown));
         assert_eq!(
-            seq.feed(&km, key(Key::Enter), now),
+            seq.feed_one(&km, key(Key::J), now),
+            Some(Action::FolderDown)
+        );
+        assert_eq!(
+            seq.feed_one(&km, key(Key::Enter), now),
             Some(Action::FolderOpen)
         );
         assert_eq!(
-            seq.feed(&km, key(Key::Num3), now),
+            seq.feed_one(&km, key(Key::Num3), now),
             Some(Action::Stars(3)),
             "le reste passe"
         );
-        assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::FileCopy));
+        // `y` commence aussi `y w` : il attend la suite, puis copie.
+        assert_eq!(seq.feed_one(&km, key(Key::Y), now), None);
+        assert_eq!(
+            seq.expire(now + Duration::from_secs(2)),
+            Some(Action::FileCopy)
+        );
         km.set_focus(Scope::Metadata);
-        assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::MetaCopy));
+        assert_eq!(seq.feed_one(&km, key(Key::Y), now), Some(Action::MetaCopy));
         let ctrl_c = Chord::from_event(Key::C, Modifiers::CTRL).unwrap();
         assert_eq!(
-            seq.feed(&km, ctrl_c, now),
+            seq.feed_one(&km, ctrl_c, now),
             Some(Action::MetaCopy),
             "Ctrl+C aussi"
         );
         // Leader puis direction.
         let lead = Chord::from_event(Key::B, Modifiers::CTRL).unwrap();
-        assert_eq!(seq.feed(&km, lead, now), None, "en attente");
-        assert_eq!(seq.feed(&km, key(Key::H), now), Some(Action::FocusLeft));
+        assert_eq!(seq.feed_one(&km, lead, now), None, "en attente");
+        assert_eq!(seq.feed_one(&km, key(Key::H), now), Some(Action::FocusLeft));
         assert!(Keymap::default().with_leader("Ctrl+").is_err());
     }
 
@@ -1752,7 +1887,7 @@ mod tests {
         assert!(!km.uses_char('g'), "g est une touche, pas un caractère");
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         assert_eq!(
-            seq.feed(&km, Chord::char('°'), Instant::now()),
+            seq.feed_one(&km, Chord::char('°'), Instant::now()),
             Some(Action::Color(Color::Purple))
         );
     }
@@ -1780,16 +1915,19 @@ mod tests {
     }
 
     #[test]
-    fn no_binding_is_also_the_start_of_another() {
-        // Sinon il faudrait attendre l'expiration pour savoir lequel déclencher. Une touche
-        // d'un panneau peut commencer une séquence générale (`g` du grand histogramme,
-        // `gg`) : dans le panneau, la touche l'emporte ; ailleurs, la séquence marche.
+    fn only_the_copy_key_is_also_the_start_of_another() {
+        // Une telle touche attend un court instant la suite avant d'agir : voulu pour `y`
+        // (`y w`) seulement, pour ne retarder aucune autre touche. Une touche d'un panneau
+        // peut commencer une séquence générale (`g` du grand histogramme, `gg`) : dans le
+        // panneau, la touche l'emporte ; ailleurs, la séquence marche.
         let km = Keymap::default();
         for (k, a) in &km.bindings {
+            let starts = km
+                .bindings
+                .iter()
+                .any(|(l, b)| l.len() > k.len() && l.starts_with(k) && conflict(*a, *b));
             assert!(
-                !km.bindings
-                    .iter()
-                    .any(|(l, b)| l.len() > k.len() && l.starts_with(k) && conflict(*a, *b)),
+                !starts || *a == Action::FileCopy,
                 "{a:?} ({k:?}) est aussi le début d'une séquence"
             );
         }
@@ -1837,10 +1975,10 @@ mod tests {
         let km = Keymap::default();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
-        assert_eq!(seq.feed(&km, g(), t), None);
+        assert_eq!(seq.feed_one(&km, g(), t), None);
         assert!(seq.is_pending(t));
         assert_eq!(
-            seq.feed(&km, g(), t + Duration::from_millis(300)),
+            seq.feed_one(&km, g(), t + Duration::from_millis(300)),
             Some(Action::NavFirst)
         );
         assert!(!seq.is_pending(t + Duration::from_millis(300)));
@@ -1851,11 +1989,15 @@ mod tests {
         let km = Keymap::default();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
-        seq.feed(&km, g(), t);
+        seq.feed_one(&km, g(), t);
         let late = t + Duration::from_millis(1500);
-        assert_eq!(seq.feed(&km, g(), late), None, "nouveau début de séquence");
         assert_eq!(
-            seq.feed(&km, g(), late + Duration::from_millis(100)),
+            seq.feed_one(&km, g(), late),
+            None,
+            "nouveau début de séquence"
+        );
+        assert_eq!(
+            seq.feed_one(&km, g(), late + Duration::from_millis(100)),
             Some(Action::NavFirst)
         );
     }
@@ -1866,20 +2008,20 @@ mod tests {
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
         // « f ° » sur un AZERTY, touche et caractère dans deux images différentes.
-        assert_eq!(seq.feed(&km, plain(Key::F), t), None);
+        assert_eq!(seq.feed_one(&km, plain(Key::F), t), None);
         assert_eq!(
-            seq.feed(&km, shifted(Key::Minus), t),
+            seq.feed_one(&km, shifted(Key::Minus), t),
             None,
             "touche inconnue ignorée"
         );
         assert!(seq.is_pending(t), "f toujours en attente");
         assert_eq!(
-            seq.feed(&km, Chord::char('°'), t),
+            seq.feed_one(&km, Chord::char('°'), t),
             Some(Action::FilterColor(Color::Purple))
         );
         // Le délai court toujours depuis f : la touche ignorée ne le prolonge pas.
-        seq.feed(&km, plain(Key::F), t);
-        seq.feed(&km, shifted(Key::Minus), t + Duration::from_millis(900));
+        seq.feed_one(&km, plain(Key::F), t);
+        seq.feed_one(&km, shifted(Key::Minus), t + Duration::from_millis(900));
         assert!(!seq.is_pending(t + Duration::from_millis(1100)));
     }
 
@@ -1888,11 +2030,11 @@ mod tests {
         let km = Keymap::default();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
-        seq.feed(&km, g(), t);
-        assert_eq!(seq.feed(&km, plain(Key::J), t), Some(Action::NavDown));
+        seq.feed_one(&km, g(), t);
+        assert_eq!(seq.feed_one(&km, plain(Key::J), t), Some(Action::NavDown));
         assert!(!seq.is_pending(t));
         // Une touche seule passe directement, sans attente.
-        assert_eq!(seq.feed(&km, plain(Key::L), t), Some(Action::NavNext));
+        assert_eq!(seq.feed_one(&km, plain(Key::L), t), Some(Action::NavNext));
     }
 
     fn chord(key: Key, shift: bool, ctrl: bool) -> Chord {
@@ -2019,13 +2161,38 @@ mod tests {
     }
 
     #[test]
-    fn a_key_hidden_by_a_sequence_is_reported() {
+    fn a_key_that_starts_a_sequence_waits_for_the_rest() {
+        // `y` copie, `y w` copie la pile : `y` attend la suite le temps du délai court.
+        let km = Keymap::default();
+        let mut seq =
+            Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
+        let t0 = Instant::now();
+        let key = |k| Chord::from_event(k, Modifiers::NONE).unwrap();
+        let ms = |n| t0 + Duration::from_millis(n);
+        assert!(seq.feed(&km, key(Key::Y), t0).is_empty());
+        assert_eq!(seq.deadline(), Some(ms(300)));
+        assert_eq!(seq.feed(&km, key(Key::W), ms(100)), [Action::FileCopyStack]);
+        // Seul : fait au bout du délai court.
+        assert!(seq.feed(&km, key(Key::Y), ms(1000)).is_empty());
+        assert_eq!(seq.expire(ms(1100)), None, "encore en attente");
+        assert_eq!(seq.expire(ms(1400)), Some(Action::FileCopy));
+        assert_eq!(seq.deadline(), None);
+        // Suivi d'une autre touche : la copie, puis cette touche.
+        seq.feed(&km, key(Key::Y), ms(2000));
+        assert_eq!(
+            seq.feed(&km, key(Key::J), ms(2100)),
+            [Action::FileCopy, Action::NavDown]
+        );
+        // `d w` : une séquence ordinaire (`d` seul ne fait rien).
+        assert!(seq.feed(&km, key(Key::D), ms(3000)).is_empty());
+        assert_eq!(
+            seq.feed(&km, key(Key::W), ms(3500)),
+            [Action::FileDeleteStack]
+        );
+        // Plus de signalement : la touche seule reste joignable.
         let (_, warnings) =
             Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));
-        assert!(
-            warnings.iter().any(|w| w.contains("gg")),
-            "g ne peut plus se déclencher : {warnings:?}"
-        );
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     fn key_event(key: Key, pressed: bool, modifiers: Modifiers) -> Event {
@@ -2056,7 +2223,7 @@ mod tests {
         let now = Instant::now();
         let actions: Vec<Action> = chords
             .into_iter()
-            .filter_map(|c| seq.feed(&km, c, now))
+            .filter_map(|c| seq.feed_one(&km, c, now))
             .collect();
         assert_eq!(actions, [Action::FilterColor(Color::Purple)]);
     }

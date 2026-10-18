@@ -573,8 +573,12 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
 - [x] **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un
   vrai confort ») : **fait** le 18/10/2026 (`src/watch.rs`, `doc/watch.md`, `[watch]
   interval_ms`) ; par scrutation, sans dépendance (même comportement sur NAS et carte).
-- **Raccourcis dans la fenêtre de réglages** (section `[keys]`).
-- **`dd` / `yy`** (toute la ligne de la grille), mineur, avec les nombres (`5dd`, `3yy`).
+- [x] **Raccourcis dans la fenêtre de réglages** (section `[keys]`) : **fait** le
+  18/10/2026 (pastilles par action, enregistrer la touche tapée, conflits signalés).
+- [x] **`dw` / `yw`** : toute la **pile** (comme un mot dans vim) plutôt que `dd` / `yy`
+  (une ligne de la grille « n'a pas de sens », retour du 18/10/2026) ; **fait** le
+  18/10/2026, `y` seul attend 300 ms la suite (`[gui] key_ambiguous_timeout_ms`).
+  Ancienne idée, `dd` / `yy` avec les nombres (`5dd`, `3yy`) :
   Décidé le 18/10/2026 : **en grille seulement**, un chiffre attend le délai des séquences
   (`key_sequence_timeout_ms`) pour voir s'il commence un nombre, sinon il note ; **en
   plein écran, pas de délai** (on n'y fait jamais `dd` ni `yy`), le chiffre note tout de
