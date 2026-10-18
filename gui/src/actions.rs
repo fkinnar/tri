@@ -222,6 +222,8 @@ pub enum Action {
     HistogramScale,
     /// Grand histogramme, en boîte au milieu de l'écran.
     HistogramLarge,
+    /// Grand histogramme : canal suivant (tous, rouge, vert, bleu).
+    HistogramChannel,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -256,7 +258,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 72] = [
+    pub const ALL: [Action; 73] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -303,6 +305,7 @@ impl Action {
         Action::ToggleHistogram,
         Action::HistogramScale,
         Action::HistogramLarge,
+        Action::HistogramChannel,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -350,8 +353,8 @@ impl Action {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back => Group::Navigation,
             ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | ToggleClipping | TogglePeaking | PeakingColor
-            | ToggleFocusPoint => Group::View,
+            | HistogramScale | HistogramLarge | HistogramChannel | ToggleClipping
+            | TogglePeaking | PeakingColor | ToggleFocusPoint => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -417,6 +420,7 @@ impl Action {
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
             Action::HistogramLarge => "core.view.histogram_large",
+            Action::HistogramChannel => "core.view.histogram_channel",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -672,6 +676,7 @@ const RATING: &[Binding] = {
         (&[plain(Key::I)], ToggleHistogram),
         (&[shifted(Key::I)], HistogramScale),
         (&[shifted(Key::E)], HistogramLarge),
+        (&[shifted(Key::C)], HistogramChannel),
         (&[plain(Key::O)], ToggleClipping),
         (&[plain(Key::P)], TogglePeaking),
         (&[ctrl(Key::P)], PeakingColor),

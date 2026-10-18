@@ -354,6 +354,11 @@ fill_strength = 0.55
 # Statistiques du grand histogramme (Maj+E) : plage des ombres aux hautes lumières, sans
 # les pixels isolés (0,01 : centiles 1 % et 99 %).
 stats_tail = 0.01
+# Grand histogramme : diamètre des pastilles de canal (rouge, vert, bleu, blanc = tous ;
+# Maj+C les fait tourner), et hauteur de la petite image d'analyse (en gris, zones
+# saturées / bouchées en analysis_over / analysis_under, du canal choisi).
+channel_dot = 11.0
+analysis_height = 200.0
 
 [gui.sharpness]
 # Carte de netteté (focus peaking) en 1:1 : affichée au démarrage (p l'affiche ou la
@@ -412,6 +417,10 @@ clip_red = "#ff3232"
 clip_green = "#32e632"
 clip_blue = "#3278ff"
 clip_under = "#00d2ff"
+# Image d'analyse du grand histogramme (en gris) : saturé, bouché ; des couleurs qui
+# tranchent sur du gris.
+analysis_over = "#ffdc00"
+analysis_under = "#286eff"
 
 [keys]
 # Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une

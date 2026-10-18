@@ -21,7 +21,7 @@ pub const CHANNELS: usize = 3;
 /// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels ;
 /// 3 : images plates en lumière linéaire, plage utile ; 4 : TIFF / PNG 16 bits à leur
 /// profondeur).
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 
 /// Réglages du calcul (section `[exposure]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -104,7 +104,8 @@ pub enum Source {
     },
 }
 
-/// Bits d'une case du masque : saturé dans le canal 0, 1, 2 ; bouché (tous canaux).
+/// Bits d'une case du masque : saturé dans le canal 0, 1, 2 ; bouché (tous canaux
+/// confondus, et par canal).
 pub mod mask {
     /// Rouge saturé.
     pub const OVER_R: u8 = 1;
@@ -117,6 +118,23 @@ pub mod mask {
     /// Bouché : au moins `mask_under_share` des pixels de la case sous le seuil des
     /// ombres.
     pub const UNDER: u8 = 8;
+    /// Rouge bouché : au moins `mask_under_share` des valeurs rouges de la case sous le
+    /// seuil des ombres (analyse d'un seul canal, grand histogramme).
+    pub const UNDER_R: u8 = 16;
+    /// Vert bouché.
+    pub const UNDER_G: u8 = 32;
+    /// Bleu bouché.
+    pub const UNDER_B: u8 = 64;
+
+    /// Bit « saturé » du canal `channel` (0 rouge, 1 vert, 2 bleu).
+    pub const fn over(channel: usize) -> u8 {
+        OVER_R << channel
+    }
+
+    /// Bit « bouché » du canal `channel`.
+    pub const fn under(channel: usize) -> u8 {
+        UNDER_R << channel
+    }
 }
 
 /// Masque des zones saturées / bouchées, en cases, déjà dans l'orientation de l'image
@@ -279,9 +297,9 @@ struct Accumulator {
     mask_h: usize,
     over_cells: Vec<u8>,
     under_level: u32,
-    /// Par case : pixels bouchés, et pixels en tout.
-    cell_under: Vec<u32>,
-    cell_total: Vec<u32>,
+    /// Par canal et par case : valeurs bouchées, et valeurs en tout.
+    cell_under: [Vec<u32>; CHANNELS],
+    cell_total: [Vec<u32>; CHANNELS],
 }
 
 impl Accumulator {
@@ -326,8 +344,8 @@ impl Accumulator {
             mask_h,
             over_cells: vec![0; mask_w * mask_h],
             under_level,
-            cell_under: vec![0; mask_w * mask_h],
-            cell_total: vec![0; mask_w * mask_h],
+            cell_under: std::array::from_fn(|_| vec![0; mask_w * mask_h]),
+            cell_total: std::array::from_fn(|_| vec![0; mask_w * mask_h]),
         }
     }
 
@@ -343,9 +361,9 @@ impl Accumulator {
         if v >= self.over_level {
             self.over_cells[cell] |= 1 << channel;
         }
-        self.cell_total[cell] += 1;
+        self.cell_total[channel][cell] += 1;
         if v <= self.under_level {
-            self.cell_under[cell] += 1;
+            self.cell_under[channel][cell] += 1;
         }
     }
 
@@ -395,13 +413,27 @@ impl Accumulator {
             }
         }
         let share = settings.mask_under_share.clamp(0.0, 1.0) as f64;
+        let dark = |u: u32, t: u32| t > 0 && u as f64 >= share * t as f64;
         let cells = self
             .over_cells
             .iter()
-            .zip(self.cell_under.iter().zip(&self.cell_total))
-            .map(|(&o, (&u, &t))| {
-                let under = t > 0 && u as f64 >= share * t as f64;
-                o | if under { mask::UNDER } else { 0 }
+            .enumerate()
+            .map(|(i, &o)| {
+                // Tous canaux confondus (zones du plein écran), puis canal par canal.
+                let (mut u, mut t) = (0, 0);
+                let mut bits = o;
+                for c in 0..CHANNELS {
+                    let (cu, ct) = (self.cell_under[c][i], self.cell_total[c][i]);
+                    u += cu;
+                    t += ct;
+                    if dark(cu, ct) {
+                        bits |= mask::under(c);
+                    }
+                }
+                if dark(u, t) {
+                    bits |= mask::UNDER;
+                }
+                bits
             })
             .collect();
         let mask = Mask {
@@ -769,7 +801,10 @@ mod tests {
         assert_eq!(e.under, [1, 1, 1], "-10 IL sous 255 : seul 0 est bouché");
         assert_eq!((e.mask.width, e.mask.height), (4, 2));
         assert_eq!(e.mask.get(0, 0), mask::OVER);
-        assert_eq!(e.mask.get(3, 1), mask::UNDER);
+        assert_eq!(
+            e.mask.get(3, 1),
+            mask::UNDER | mask::UNDER_R | mask::UNDER_G | mask::UNDER_B
+        );
         assert_eq!(e.mask.get(1, 0), 0);
         assert!((e.over_fraction() - 0.125).abs() < 1e-9);
         // Histogrammes : chaque canal compte tous ses pixels.
@@ -791,6 +826,22 @@ mod tests {
         );
         assert_eq!(e.ev[0][bins - 1], 1, "le blanc dans la dernière case");
         assert_eq!(e.ev[0][0], 1, "le noir dans la première");
+    }
+
+    #[test]
+    fn mask_marks_each_channel() {
+        // Un pixel sans bleu (bleu bouché seul) et un pixel au rouge saturé seul.
+        let mut b = sample();
+        b.data[3..6].copy_from_slice(&[128, 128, 0]);
+        b.data[6..9].copy_from_slice(&[255, 128, 128]);
+        let e = Exposure::from_bitmap(&b, &settings());
+        assert_eq!(
+            e.mask.get(1, 0),
+            mask::UNDER_B,
+            "bleu seul : pas « bouché »"
+        );
+        assert_eq!(e.mask.get(2, 0), mask::over(0));
+        assert_eq!(mask::under(2), mask::UNDER_B);
     }
 
     #[test]

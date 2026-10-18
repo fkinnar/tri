@@ -234,6 +234,10 @@ pub struct TriApp {
     histogram_large: bool,
     /// Échelle de l'histogramme.
     histogram_scale: HistogramScale,
+    /// Grand histogramme : un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : tous.
+    histogram_channel: Option<usize>,
+    /// Image d'analyse du grand histogramme, pour (image, canal).
+    analysis_texture: Option<((PathBuf, Option<usize>), TextureHandle)>,
     /// Zones saturées / bouchées superposées à l'image.
     clipping: bool,
     /// Analyses d'exposition lues dans le cache (images affichées récemment).
@@ -392,6 +396,8 @@ impl TriApp {
             histogram: gui.histogram.visible,
             histogram_large: false,
             histogram_scale: gui.histogram.scale,
+            histogram_channel: None,
+            analysis_texture: None,
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
             mask_textures: Lru::new(gui.view.textures),
@@ -554,14 +560,18 @@ impl TriApp {
                     {
                         self.histogram_large = true;
                     }
+                    let look = histogram::Look {
+                        scale: self.histogram_scale,
+                        details: false,
+                        channel: None,
+                    };
                     histogram::draw(
                         ui.painter(),
                         rect,
                         &e,
-                        self.histogram_scale,
+                        look,
                         &self.gui.histogram,
                         &self.gui.colors,
-                        false,
                     );
                 }
                 None => {
@@ -1144,7 +1154,7 @@ impl TriApp {
             if self.histogram_large {
                 match action {
                     Action::Back | Action::HistogramLarge => self.histogram_large = false,
-                    Action::HistogramScale => self.perform(ctx, action),
+                    Action::HistogramScale | Action::HistogramChannel => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -1346,6 +1356,15 @@ impl TriApp {
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
             Action::HistogramLarge => self.histogram_large = !self.histogram_large,
+            // Le grand histogramme s'ouvre au besoin : c'est là que le canal se voit.
+            Action::HistogramChannel => {
+                self.histogram_channel = match self.histogram_channel {
+                    None => Some(0),
+                    Some(c) if c + 1 < tri::exposure::CHANNELS => Some(c + 1),
+                    Some(_) => None,
+                };
+                self.histogram_large = true;
+            }
             Action::ToggleClipping => self.clipping = !self.clipping,
             Action::ToggleMetadata => self.metadata_panel = !self.metadata_panel,
             Action::ToggleFolderPanel => {
@@ -2562,6 +2581,7 @@ impl TriApp {
     /// côté.
     /// Statistiques par canal du grand histogramme (`tri::exposure::ChannelStats`), en IL
     /// sous la saturation.
+    /// Un seul canal choisi : sa ligne seulement.
     fn histogram_stats(&self, ui: &mut Ui, e: &Exposure) {
         let tail = self.gui.histogram.stats_tail;
         let ev = |v: f32| t!("stats-ev", value = tri::i18n::decimal(v as f64, 1));
@@ -2594,6 +2614,9 @@ impl TriApp {
                 }
                 ui.end_row();
                 for (channel, (name, color)) in channels.into_iter().enumerate() {
+                    if self.histogram_channel.is_some_and(|c| c != channel) {
+                        continue;
+                    }
                     let Some(s) = e.channel_stats(channel, tail) else {
                         continue;
                     };
@@ -2607,11 +2630,42 @@ impl TriApp {
                     ui.end_row();
                 }
             });
-        // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
-        // couleur ; le vert, qui en porte l'essentiel, en tient lieu.
-        if matches!(e.source, tri::exposure::Source::Raw { .. }) {
-            ui.weak(t!("stats-raw-luminance"));
+    }
+
+    /// Image d'analyse du grand histogramme pour l'image `index` et le canal choisi
+    /// ([`histogram::analysis_image`]) : vignette en gris, zones du masque d'exposition.
+    fn analysis_texture(&mut self, ctx: &egui::Context, index: usize) -> Option<TextureHandle> {
+        let file = self.files.get(index)?;
+        let key = (file.path.clone(), self.histogram_channel);
+        if let Some((k, t)) = &self.analysis_texture
+            && *k == key
+        {
+            return Some(t.clone());
         }
+        if self.status.get(index)?.thumbnail != Avail::Ready {
+            return None;
+        }
+        let e = self.exposure_of(index)?;
+        let engine = self.engine.as_ref()?;
+        let file = &self.files[index];
+        let thumb = engine
+            .cache
+            .get(&preview::key(file, Level::Thumbnail, &engine.preview).ok()?)?;
+        let c = &self.gui.colors;
+        let image = histogram::analysis_image(
+            &thumb,
+            &e.mask,
+            self.histogram_channel,
+            c.analysis_over.into(),
+            c.analysis_under.into(),
+        );
+        let texture = ctx.load_texture(
+            format!("{}#analysis", file.path.display()),
+            image,
+            TextureOptions::LINEAR,
+        );
+        self.analysis_texture = Some((key, texture.clone()));
+        Some(texture)
     }
 
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
@@ -2619,6 +2673,7 @@ impl TriApp {
             return;
         }
         let exposure = self.exposure_of(self.selected);
+        let analysis = self.analysis_texture(ctx, self.selected);
         let name = self
             .files
             .get(self.selected)
@@ -2627,7 +2682,7 @@ impl TriApp {
         let screen = ctx.content_rect().size();
         let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
         let size = vec2(screen.x * fraction, screen.y * fraction * 0.6);
-        let (mut scale, mut close) = (false, false);
+        let (mut scale, mut close, mut channel) = (false, false, None);
         // Comme les autres boîtes (titre, déplaçable : retour du 17/10/2026), ouverte au
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
@@ -2635,15 +2690,48 @@ impl TriApp {
         let modal = dialog.show(ctx, |ui| {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             match &exposure {
-                Some(e) => histogram::draw(
-                    ui.painter(),
-                    rect,
-                    e,
-                    self.histogram_scale,
-                    &self.gui.histogram,
-                    &self.gui.colors,
-                    true,
-                ),
+                Some(e) => {
+                    let look = histogram::Look {
+                        scale: self.histogram_scale,
+                        details: true,
+                        channel: self.histogram_channel,
+                    };
+                    histogram::draw(
+                        ui.painter(),
+                        rect,
+                        e,
+                        look,
+                        &self.gui.histogram,
+                        &self.gui.colors,
+                    );
+                    // Pastilles : rouge, vert, bleu, blanc (tous les canaux).
+                    let names = [
+                        t!("stats-red"),
+                        t!("stats-green"),
+                        t!("stats-blue"),
+                        t!("stats-all"),
+                    ];
+                    let dots = histogram::channel_dots(rect, self.gui.histogram.channel_dot);
+                    for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
+                        let tip = t!(
+                            "histogram-channel-tip",
+                            channel = name,
+                            keys = self.keymap.keys_for(Action::HistogramChannel).join(" / ")
+                        );
+                        if ui
+                            .interact(
+                                dot.expand(3.0),
+                                egui::Id::unique("histogram_channel").with(i),
+                                Sense::click(),
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(tip)
+                            .clicked()
+                        {
+                            channel = Some((i < 3).then_some(i));
+                        }
+                    }
+                }
                 None => {
                     ui.painter().text(
                         rect.center(),
@@ -2655,7 +2743,42 @@ impl TriApp {
                 }
             }
             if let Some(e) = &exposure {
-                self.histogram_stats(ui, e);
+                // Statistiques, et à leur droite l'image d'analyse (zones du canal choisi
+                // sur l'image en gris).
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| self.histogram_stats(ui, e));
+                    if let Some(texture) = &analysis {
+                        let room = vec2(
+                            (ui.available_width() - 12.0).max(40.0),
+                            self.gui.histogram.analysis_height,
+                        );
+                        let image = texture.size_vec2();
+                        let fit = (room.x / image.x).min(room.y / image.y);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            ui.vertical(|ui| {
+                                ui.image((texture.id(), image * fit));
+                                ui.horizontal(|ui| {
+                                    let c = &self.gui.colors;
+                                    ui.colored_label(
+                                        Color32::from(c.analysis_over),
+                                        t!("analysis-over"),
+                                    );
+                                    ui.colored_label(
+                                        Color32::from(c.analysis_under),
+                                        t!("analysis-under"),
+                                    );
+                                });
+                            });
+                        });
+                    }
+                });
+                // Sur des données RAW, pas de luminance : chaque photosite ne mesure
+                // qu'une couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sous
+                // le tableau et l'image : sur la ligne du tableau, elle l'élargissait et
+                // ne laissait presque plus de place à l'image.
+                if matches!(e.source, tri::exposure::Source::Raw { .. }) {
+                    ui.weak(t!("stats-raw-luminance"));
+                }
             }
             ui.horizontal(|ui| {
                 let label = match self.histogram_scale {
@@ -2669,6 +2792,9 @@ impl TriApp {
         });
         if scale {
             self.histogram_scale = self.histogram_scale.toggled();
+        }
+        if let Some(channel) = channel {
+            self.histogram_channel = channel;
         }
         if close || modal.should_close() {
             self.histogram_large = false;
@@ -4860,6 +4986,27 @@ mod tests {
             h.state().mask_textures.contains(&white_path),
             "masque en texture"
         );
+        // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
+        // vert, bleu, tous ; Échap ferme.
+        press(&mut h, Key::C, Modifiers::SHIFT);
+        assert!(
+            h.state().histogram_large,
+            "Maj+C ouvre le grand histogramme"
+        );
+        assert_eq!(h.state().histogram_channel, Some(0));
+        run_until(&mut h, |app| app.analysis_texture.is_some());
+        assert!(h.query_by_label("saturé").is_some(), "légende de l'image");
+        assert_eq!(
+            h.state().analysis_texture.as_ref().unwrap().0,
+            (white_path.clone(), Some(0))
+        );
+        for expected in [Some(1), Some(2), None] {
+            press(&mut h, Key::C, Modifiers::SHIFT);
+            assert_eq!(h.state().histogram_channel, expected);
+        }
+        assert!(h.state().histogram_large, "reste ouvert");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large);
     }
 
     #[test]

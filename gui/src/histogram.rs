@@ -3,6 +3,7 @@
 //! texture. Aucun calcul sur les pixels ici : seulement du dessin.
 
 use eframe::egui::{Align2, Color32, ColorImage, FontId, Mesh, Painter, Rect, Stroke, pos2, vec2};
+use tri::bitmap::Bitmap;
 use tri::exposure::{CHANNELS, Exposure, Mask, Source, mask};
 use tri::i18n::decimal;
 
@@ -59,19 +60,55 @@ pub fn shown_stops(e: &Exposure, setting: f32) -> f32 {
     }
 }
 
-/// Histogramme dans `rect` : fond, canaux superposés, graduations, indicateurs.
-///
-/// `details` : ligne d'indicateurs (source, marge, saturés, bouchés) sous le graphe ; dans
-/// le grand histogramme seulement (retour du 18/10/2026 : pas indispensable en petit).
+/// Ce que montre un histogramme.
+#[derive(Clone, Copy, Debug)]
+pub struct Look {
+    /// Échelle (IL ou linéaire).
+    pub scale: HistogramScale,
+    /// Ligne d'indicateurs (source, marge, saturés, bouchés) et pastilles de canal sous le
+    /// graphe : dans le grand histogramme seulement (retour du 18/10/2026 : pas
+    /// indispensable en petit).
+    pub details: bool,
+    /// Un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : les trois.
+    pub channel: Option<usize>,
+}
+
+/// Pastilles de choix du canal, en bas à droite de `rect` (sur la ligne d'indicateurs) :
+/// rouge, vert, bleu, puis blanc (tous les canaux). `size` : diamètre.
+pub fn channel_dots(rect: Rect, size: f32) -> [Rect; 4] {
+    let gap = size * 0.6;
+    let y = rect.max.y - 6.0 - size / 2.0;
+    std::array::from_fn(|i| {
+        let x = rect.max.x - 6.0 - size / 2.0 - (3 - i) as f32 * (size + gap);
+        Rect::from_center_size(pos2(x, y), vec2(size, size))
+    })
+}
+
+/// Part des pixels saturés / bouchés : canal le plus touché, ou le canal `channel`.
+fn clipped(e: &Exposure, channel: Option<usize>, counts: &[u64; CHANNELS]) -> f64 {
+    match channel {
+        Some(c) => counts[c] as f64 / e.total[c].max(1) as f64,
+        None => (0..CHANNELS)
+            .map(|c| counts[c] as f64 / e.total[c].max(1) as f64)
+            .fold(0.0, f64::max),
+    }
+}
+
+/// Histogramme dans `rect` : fond, canaux superposés (ou un seul), graduations,
+/// indicateurs.
 pub fn draw(
     painter: &Painter,
     rect: Rect,
     e: &Exposure,
-    scale: HistogramScale,
+    look: Look,
     settings: &HistogramSettings,
     colors: &Colors,
-    details: bool,
 ) {
+    let Look {
+        scale,
+        details,
+        channel,
+    } = look;
     painter.rect_filled(rect, 4.0, Color32::from_black_alpha(190));
     // Indicateurs, mis en page d'abord : sur plusieurs lignes si la place manque, le
     // graphe prend le reste de la hauteur.
@@ -86,11 +123,12 @@ pub fn draw(
         over = decimal(e.over_fraction() * 100.0, 2),
         under = decimal(e.under_fraction() * 100.0, 2)
     );
+    let dots = 4.0 * settings.channel_dot * 1.6 + 6.0;
     let galley = painter.layout(
         text,
         FontId::proportional(11.0),
         Color32::from_gray(225),
-        (rect.width() - 12.0).max(10.0),
+        (rect.width() - 12.0 - dots).max(10.0),
     );
     let text_h = if details {
         let h = galley.size().y + 4.0;
@@ -99,7 +137,7 @@ pub fn draw(
             galley,
             Color32::from_gray(225),
         );
-        h
+        h.max(settings.channel_dot + 4.0)
     } else {
         0.0
     };
@@ -123,14 +161,18 @@ pub fn draw(
         .collect();
     // Échelle verticale : le plus haut pic, sans les classes extrêmes (noir pur, blanc
     // saturé), qui écraseraient le reste ; elles sont signalées à part.
+    let shown = |c: usize| channel.is_none_or(|only| only == c);
     let peak = curves
         .iter()
+        .enumerate()
+        .filter(|(c, _)| shown(*c))
+        .map(|(_, v)| v)
         .flat_map(|v| v.iter().skip(1).take(v.len().saturating_sub(2)).copied())
         .fold(0.0f32, f32::max)
         .max(1e-6);
     let channel_colors = [colors.hist_red, colors.hist_green, colors.hist_blue];
     let class_w = graph.width() / count as f32;
-    for (c, curve) in curves.iter().enumerate() {
+    for (c, curve) in curves.iter().enumerate().filter(|(c, _)| shown(*c)) {
         let base = Color32::from(channel_colors[c]);
         let y = |v: f32| graph.max.y - (v / peak).min(1.0) * graph.height();
         // Points au centre des classes, prolongés jusqu'aux deux bords.
@@ -211,12 +253,79 @@ pub fn draw(
     // gauche s'il y en a de bouchés, au-delà d'une petite part des pixels (retour du
     // 17/10/2026 : allumées dès un pixel, elles s'allumaient pour quelques pixels morts,
     // la courbe loin des bords).
-    if e.over_fraction() >= settings.indicator_min {
+    if clipped(e, channel, &e.over) >= settings.indicator_min {
         painter.circle_filled(graph.right_top() + vec2(-4.0, 4.0), 4.0, colors.clip_over);
     }
-    if e.under_fraction() >= settings.indicator_min {
+    if clipped(e, channel, &e.under) >= settings.indicator_min {
         painter.circle_filled(graph.left_top() + vec2(4.0, 4.0), 4.0, colors.clip_under);
     }
+    // Pastilles de canal : la choisie entourée, les autres atténuées.
+    if details {
+        let fills = [
+            Color32::from(colors.hist_red),
+            Color32::from(colors.hist_green),
+            Color32::from(colors.hist_blue),
+            Color32::from_gray(235),
+        ];
+        let chosen = channel.unwrap_or(3);
+        for (i, (dot, fill)) in channel_dots(rect, settings.channel_dot)
+            .iter()
+            .zip(fills)
+            .enumerate()
+        {
+            let r = dot.width() / 2.0;
+            if i == chosen {
+                painter.circle_filled(dot.center(), r, fill);
+                painter.circle_stroke(
+                    dot.center(),
+                    r + 2.0,
+                    Stroke::new(1.5, Color32::from_gray(235)),
+                );
+            } else {
+                painter.circle_filled(dot.center(), r * 0.8, fill.gamma_multiply(0.6));
+            }
+        }
+    }
+}
+
+/// Petite image d'analyse du grand histogramme : `thumb` (vignette, déjà orientée) en
+/// niveaux de gris, zones saturées en `over` et bouchées en `under` d'après le masque,
+/// tous canaux confondus ou pour le seul canal `channel`. Gris et couleurs franches : les
+/// zones ressortent quelle que soit l'image (idée de l'utilisateur, 18/10/2026).
+pub fn analysis_image(
+    thumb: &Bitmap,
+    m: &Mask,
+    channel: Option<usize>,
+    over: Color32,
+    under: Color32,
+) -> ColorImage {
+    let (w, h) = (thumb.width as usize, thumb.height as usize);
+    let (over_bits, under_bits) = match channel {
+        Some(c) => (mask::over(c), mask::under(c)),
+        None => (mask::OVER, mask::UNDER),
+    };
+    let mut pixels = Vec::with_capacity(w * h);
+    for y in 0..h {
+        let my = (y * m.height as usize / h.max(1)).min(m.height.max(1) as usize - 1);
+        for x in 0..w {
+            let mx = (x * m.width as usize / w.max(1)).min(m.width.max(1) as usize - 1);
+            let cell = if m.cells.is_empty() {
+                0
+            } else {
+                m.get(mx as u32, my as u32)
+            };
+            pixels.push(if cell & over_bits != 0 {
+                over
+            } else if cell & under_bits != 0 {
+                under
+            } else {
+                let p = &thumb.data[(y * w + x) * 3..][..3];
+                let grey = 0.2126 * p[0] as f32 + 0.7152 * p[1] as f32 + 0.0722 * p[2] as f32;
+                Color32::from_gray(grey.round() as u8)
+            });
+        }
+    }
+    ColorImage::new([w, h], pixels)
 }
 
 /// Lissage gaussien de `values` (écart type `sigma`, en classes ; 0 : inchangé). Les bords
@@ -390,6 +499,39 @@ mod tests {
         );
         let single = zones(false);
         assert_eq!(single.of(mask::OVER_R), single.all, "une seule couleur");
+    }
+
+    #[test]
+    fn analysis_image_marks_the_chosen_channel() {
+        let thumb = Bitmap {
+            width: 4,
+            height: 2,
+            data: [[255, 0, 0]; 8].concat(),
+        };
+        // Masque 2 × 1 : rouge saturé à gauche, bleu bouché à droite.
+        let m = Mask {
+            width: 2,
+            height: 1,
+            cells: vec![mask::OVER_R, mask::UNDER_B],
+        };
+        let (over, under) = (Color32::YELLOW, Color32::BLUE);
+        let all = analysis_image(&thumb, &m, None, over, under);
+        assert_eq!(all.size, [4, 2]);
+        assert_eq!(all.pixels[0], over, "un canal saturé suffit");
+        assert_eq!(all.pixels[3], Color32::from_gray(54), "gris (rouge pur)");
+        let blue = analysis_image(&thumb, &m, Some(2), over, under);
+        assert_eq!(blue.pixels[0], Color32::from_gray(54), "pas le bleu");
+        assert_eq!(blue.pixels[7], under);
+        let red = analysis_image(&thumb, &m, Some(0), over, under);
+        assert_eq!(red.pixels[4], over);
+    }
+
+    #[test]
+    fn channel_dots_sit_bottom_right_in_order() {
+        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 200.0));
+        let dots = channel_dots(rect, 10.0);
+        assert!(dots.windows(2).all(|w| w[0].max.x < w[1].min.x));
+        assert!(dots[3].max.x <= rect.max.x && dots[0].center().y > 180.0);
     }
 
     #[test]

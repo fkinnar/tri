@@ -96,6 +96,7 @@ pub fn navigate(
         | Action::ToggleHistogram
         | Action::HistogramScale
         | Action::HistogramLarge
+        | Action::HistogramChannel
         | Action::ToggleClipping
         | Action::ToggleMetadata
         | Action::Open

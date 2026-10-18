@@ -137,6 +137,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en IL sous la saturation (`Exposure::channel_stats`, calculé dans le moteur à partir
   de l'histogramme en IL déjà en cache). Pas de luminance sur des données RAW (un
   photosite ne mesure qu'une couleur) : le vert en tient lieu, c'est indiqué.
+  **Outil d'analyse** (idée de l'utilisateur, 18/10/2026) : quatre pastilles en bas à
+  droite du grand histogramme (rouge, vert, bleu, blanc = tous ; `Maj+C` les fait tourner
+  et ouvre le grand histogramme) n'affichent qu'un canal, sa seule ligne de statistiques
+  et ses zones. À droite du tableau, une **petite image d'analyse** : la vignette en gris,
+  zones saturées en jaune et bouchées en bleu (`analysis_over`, `analysis_under`), d'après
+  le masque d'exposition du moteur (bits par canal, `tri::exposure::mask`) ; tous canaux :
+  saturé dans un canal quelconque, bouché dans l'ensemble des canaux
+  (`histogram::analysis_image`, testé ; hauteur `analysis_height`).
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
   (F5) et explication au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
@@ -432,7 +440,8 @@ Filtres, communs aux deux profils : voir « Filtres » plus haut (`core.filter.*
 `f 0`…`f 5`, `f p` / `f u` / `f x`, `f 6`…`f 9`, `f °`, `f ,`, `f .`, `f Échap`) ;
 `core.view.filter_bar` : Maj+F ; `core.view.rating_bar` : Maj+N ; `core.view.folders` :
 Maj+D ; `core.view.refresh_folders` : F5 ; `core.view.histogram` : i ;
-`core.view.histogram_scale` : Maj+I ; `core.view.clipping` : o ; `core.view.metadata` :
+`core.view.histogram_scale` : Maj+I ; `core.view.histogram_channel` : Maj+C ;
+`core.view.clipping` : o ; `core.view.metadata` :
 Maj+M.
 
 Caractères : « ° » arrive comme une touche (Maj + `Minus`, physique, egui ne connaissant

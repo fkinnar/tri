@@ -534,6 +534,11 @@ pub struct HistogramSettings {
     /// Statistiques du grand histogramme : part de pixels laissée de chaque côté pour la
     /// plage des ombres aux hautes lumières (0,01 : centiles 1 % et 99 %).
     pub stats_tail: f32,
+    /// Grand histogramme : diamètre des pastilles de choix du canal (points).
+    pub channel_dot: f32,
+    /// Grand histogramme : hauteur de la petite image d'analyse (zones saturées /
+    /// bouchées sur l'image en gris), à droite des statistiques (points).
+    pub analysis_height: f32,
 }
 
 impl Default for HistogramSettings {
@@ -553,6 +558,8 @@ impl Default for HistogramSettings {
             smoothing: 1.5,
             fill_strength: 0.55,
             stats_tail: 0.01,
+            channel_dot: 11.0,
+            analysis_height: 200.0,
         }
     }
 }
@@ -615,6 +622,10 @@ pub struct Colors {
     pub clip_blue: Color,
     /// Zones et badges : bouché.
     pub clip_under: Color,
+    /// Image d'analyse du grand histogramme (en gris) : saturé.
+    pub analysis_over: Color,
+    /// Image d'analyse du grand histogramme : bouché.
+    pub analysis_under: Color,
 }
 
 impl Default for Colors {
@@ -646,6 +657,8 @@ impl Default for Colors {
             clip_green: Color([50, 230, 50]),
             clip_blue: Color([50, 120, 255]),
             clip_under: Color([0, 210, 255]),
+            analysis_over: Color([255, 220, 0]),
+            analysis_under: Color([40, 110, 255]),
         }
     }
 }

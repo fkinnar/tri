@@ -102,3 +102,12 @@ histogramme de l'interface. Pas de luminance pour un RAW (chaque photosite ne me
 qu'une couleur) ; pour une image plate, une vraie luminance demanderait un histogramme de
 plus dans l'analyse (non fait).
 
+## Bouché par canal (18/10/2026)
+
+Le masque marque aussi, pour chaque canal, les cases où au moins `mask_under_share` des
+valeurs de ce canal sont bouchées (`mask::UNDER_R`, `UNDER_G`, `UNDER_B`, fonctions
+`mask::over(c)` / `mask::under(c)`), en plus du bouché tous canaux confondus
+(`mask::UNDER`, inchangé : zones du plein écran). Sert à l'image d'analyse du grand
+histogramme quand un seul canal est choisi. Format du cache inchangé (un octet par case),
+mais `VERSION` passe à 5 : les analyses déjà en cache sont recalculées.
+
