@@ -305,6 +305,8 @@ title_size = 17.0
 title_color = "#50bedc"
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
+# Largeur minimale de l'aide (F1), en points.
+help_width = 620.0
 
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,

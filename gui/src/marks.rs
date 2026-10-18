@@ -320,15 +320,17 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
     let (w, h) = (rect.width(), rect.height());
     let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
     let stroke = Stroke::new((w * 0.12).max(1.5), color);
+    // Flèches moins hautes que leur case (retour du 18/10/2026 : elles dépassaient les
+    // icônes voisines), même angle.
     let chevron = |tip: f32, back: f32| {
         painter.add(Shape::line(
-            vec![p(back, 0.1), p(tip, 0.5), p(back, 0.9)],
+            vec![p(back, 0.22), p(tip, 0.5), p(back, 0.78)],
             stroke,
         ));
     };
     match action {
-        Action::NavPrev => chevron(0.25, 0.7),
-        Action::NavNext => chevron(0.75, 0.3),
+        Action::NavPrev => chevron(0.32, 0.64),
+        Action::NavNext => chevron(0.68, 0.36),
         Action::ToggleZoom => {
             // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
             painter.text(

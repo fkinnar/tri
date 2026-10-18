@@ -3717,6 +3717,7 @@ impl TriApp {
         let mut query = self.help_search.take().unwrap_or_default();
         egui::Window::new(t!("help-title"))
             .open(&mut open)
+            .min_width(self.gui.dialogs.help_width)
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
