@@ -3736,29 +3736,39 @@ impl TriApp {
                 let rows = help_rows(&self.keymap, &query);
                 // Défilante : la liste des actions dépasse la hauteur d'un petit écran.
                 let max_height = ui.ctx().content_rect().height() * 0.75;
+                // Toute la largeur de la boîte : l'ascenseur au bord, les bandes du tableau
+                // jusqu'à lui (retour du 18/10/2026 : la boîte élargie gardait une zone de
+                // texte étroite).
                 ScrollArea::vertical()
                     .max_height(max_height)
+                    .auto_shrink([false, true])
                     .show(ui, |ui| {
                         if rows.is_empty() {
                             ui.weak(t!("help-no-match"));
                         }
-                        egui::Grid::new("help").striped(true).show(ui, |ui| {
-                            let mut group = None;
-                            for (action, keys) in &rows {
-                                // Sans recherche : rangées par thème, avec un titre.
-                                if query.trim().is_empty() && group != Some(action.group()) {
-                                    group = Some(action.group());
-                                    ui.label(egui::RichText::new(action.group().label()).strong());
+                        let column = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                        egui::Grid::new("help")
+                            .striped(true)
+                            .min_col_width(column)
+                            .show(ui, |ui| {
+                                let mut group = None;
+                                for (action, keys) in &rows {
+                                    // Sans recherche : rangées par thème, avec un titre.
+                                    if query.trim().is_empty() && group != Some(action.group()) {
+                                        group = Some(action.group());
+                                        ui.label(
+                                            egui::RichText::new(action.group().label()).strong(),
+                                        );
+                                        ui.end_row();
+                                    }
+                                    // Identifiant technique au survol seulement (utile pour la
+                                    // section `[keys]` de la configuration).
+                                    ui.label(action.label()).on_hover_text(action.id());
+                                    // Chasse fixe : « l » et « I » restent distincts.
+                                    ui.label(egui::RichText::new(keys).monospace().strong());
                                     ui.end_row();
                                 }
-                                // Identifiant technique au survol seulement (utile pour la
-                                // section `[keys]` de la configuration).
-                                ui.label(action.label()).on_hover_text(action.id());
-                                // Chasse fixe : « l » et « I » restent distincts.
-                                ui.label(egui::RichText::new(keys).monospace().strong());
-                                ui.end_row();
-                            }
-                        });
+                            });
                     });
                 ui.add_space(6.0);
                 ui.weak(t!("help-close-hint"));
