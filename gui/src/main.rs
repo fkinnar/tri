@@ -37,6 +37,7 @@ mod offload;
 mod path_field;
 mod settings;
 mod settings_window;
+mod stacks;
 mod state;
 mod textures;
 mod trace;

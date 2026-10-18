@@ -257,6 +257,40 @@ pub fn group(
     groups
 }
 
+/// Fichier des seuils par dossier, dans le dossier de données.
+const THRESHOLDS: &str = "group-thresholds.tsv";
+
+/// Seuil retenu pour le dossier `dir` (fenêtre de regroupement), s'il y en a un.
+pub fn folder_threshold(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    let text = std::fs::read_to_string(data.join(THRESHOLDS)).ok()?;
+    let wanted = dir.to_string_lossy();
+    text.lines()
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(_, path)| *path == wanted)
+        .and_then(|(t, _)| t.parse().ok())
+}
+
+/// Retient `threshold` pour le dossier `dir` ; `None` : l'oublie (seuil par défaut).
+pub fn remember_threshold(
+    data: &std::path::Path,
+    dir: &std::path::Path,
+    threshold: Option<f32>,
+) -> std::io::Result<()> {
+    let path = data.join(THRESHOLDS);
+    let wanted = dir.to_string_lossy().into_owned();
+    let mut lines: Vec<String> = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.split_once('\t').is_some_and(|(_, p)| p != wanted))
+        .map(str::to_string)
+        .collect();
+    if let Some(t) = threshold {
+        lines.push(format!("{t}\t{wanted}"));
+    }
+    std::fs::create_dir_all(data)?;
+    std::fs::write(path, lines.join("\n") + "\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,6 +348,25 @@ mod tests {
         );
         assert_eq!(group(&links, 1.0, 0.0), [0..5, 5..6]);
         assert_eq!(group(&[], 0.25, 60.0), vec![0..1], "une seule image");
+    }
+
+    #[test]
+    fn thresholds_are_remembered_per_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path();
+        let (a, b) = (
+            std::path::Path::new("/photos/a"),
+            std::path::Path::new("/photos/b"),
+        );
+        assert_eq!(folder_threshold(data, a), None);
+        remember_threshold(data, a, Some(0.3)).unwrap();
+        remember_threshold(data, b, Some(0.1)).unwrap();
+        remember_threshold(data, a, Some(0.35)).unwrap();
+        assert_eq!(folder_threshold(data, a), Some(0.35));
+        assert_eq!(folder_threshold(data, b), Some(0.1));
+        remember_threshold(data, a, None).unwrap();
+        assert_eq!(folder_threshold(data, a), None, "oublié : seuil par défaut");
+        assert_eq!(folder_threshold(data, b), Some(0.1));
     }
 
     #[test]

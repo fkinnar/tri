@@ -631,6 +631,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    distance d'empreinte (vignette : composition + couleurs) reste sous le seuil, coupé
    aussi au-delà d'un écart de temps de prise de vue ; distances calculées une fois,
    regroupement instantané (curseur en direct).
+   **Fait** le 18/10/2026 : moteur (`src/similarity.rs`, empreintes en cache d'analyse,
+   `tri --groups`), piles dans la grille (`gui/src/stacks.rs`, `s` / `Maj+S`), fenêtre
+   `Ctrl+G` (seuil en direct, retenu par dossier). Reste : la netteté jugée dans le
+   groupe.
 
 ## À faire (liste tenue à jour, 17/10/2026)
 

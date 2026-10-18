@@ -256,6 +256,21 @@ pub struct TriApp {
     help: bool,
     /// Historique des modifications de la session (annuler, rétablir).
     history: tri::history::History,
+    /// Empreintes de regroupement lues dans le cache, par image.
+    signatures: HashMap<PathBuf, tri::similarity::Signature>,
+    /// Piles de la grille : la vue de `files` (couvertures des piles repliées).
+    stacks: crate::stacks::Stacks,
+    /// Piles à recalculer (dossier, filtre, empreinte, note, seuil changés).
+    stacks_dirty: bool,
+    /// Images des piles dépliées.
+    expanded: HashSet<PathBuf>,
+    /// Regroupement en piles actif.
+    stacking: bool,
+    /// Seuil de regroupement du dossier ouvert, et écart de temps maximal (secondes).
+    group_threshold: f32,
+    group_gap: f32,
+    /// Fenêtre de regroupement ouverte (`Ctrl+G`).
+    group_dialog: bool,
     /// Liste de l'historique ouverte (`Ctrl+H`).
     history_open: bool,
     /// Panneau qui a le clavier (leader puis direction, façon tmux).
@@ -464,6 +479,14 @@ impl TriApp {
             settings_window: None,
             config_path: None,
             history: tri::history::History::new(gui.history),
+            signatures: HashMap::new(),
+            stacks: crate::stacks::Stacks::default(),
+            stacks_dirty: true,
+            expanded: HashSet::new(),
+            stacking: settings.similarity.background,
+            group_threshold: settings.similarity.threshold,
+            group_gap: settings.similarity.max_gap_s,
+            group_dialog: false,
             history_open: false,
             focus: crate::actions::Scope::Images,
             meta_cursor: 0,
@@ -565,6 +588,11 @@ impl TriApp {
                 if let Some(data) = self.settings.data_dir() {
                     let _ = tri::folder::remember(&data, &folder.dir);
                 }
+                self.group_threshold = self
+                    .settings
+                    .data_dir()
+                    .and_then(|d| tri::similarity::folder_threshold(&d, &folder.dir))
+                    .unwrap_or(self.settings.similarity.threshold);
                 self.folder = folder;
                 self.error = None;
             }
@@ -574,6 +602,7 @@ impl TriApp {
             }
         }
         self.files.clear(); // la sélection ne survit pas au changement de dossier
+        self.expanded.clear();
         self.selection.clear();
         self.scores.clear();
         self.judgements.clear();
@@ -1111,7 +1140,91 @@ impl TriApp {
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
         }
+        self.stacks_dirty = true;
         self.tell_shown();
+    }
+
+    /// Recalcule les piles (regroupement du moteur sur les empreintes connues), et ce que
+    /// la grille en montre ; l'image sélectionnée, si elle est cachée dans une pile
+    /// repliée, laisse la place à la couverture.
+    fn regroup(&mut self) {
+        let s = &self.settings.similarity;
+        let signatures: Vec<Option<&tri::similarity::Signature>> = self
+            .files
+            .iter()
+            .map(|f| self.signatures.get(&f.path))
+            .collect();
+        let links = tri::similarity::distances(&signatures, s.shape_weight);
+        let ranges = tri::similarity::group(&links, self.group_threshold, self.group_gap);
+        let files = &self.files;
+        let notes = &self.folder.notes;
+        let scores = &self.scores;
+        // Couverture : l'acceptée, sinon la mieux notée, sinon la plus nette, sinon la
+        // première (décidé le 18/10/2026).
+        let cover = |r: &std::ops::Range<usize>| {
+            r.clone()
+                .max_by(|&a, &b| {
+                    let key = |i: usize| {
+                        let n = notes.notes(&files[i].path);
+                        (
+                            n.flag == Flag::Accepted,
+                            n.flag != Flag::Rejected,
+                            n.stars,
+                            scores.get(&files[i].path).copied().unwrap_or(0.0),
+                        )
+                    };
+                    let (ka, kb) = (key(a), key(b));
+                    (ka.0, ka.1, ka.2)
+                        .cmp(&(kb.0, kb.1, kb.2))
+                        .then(ka.3.total_cmp(&kb.3))
+                        // À égalité : la première.
+                        .then(b.cmp(&a))
+                })
+                .unwrap_or(r.start)
+        };
+        let expanded =
+            |r: &std::ops::Range<usize>| r.clone().any(|i| self.expanded.contains(&files[i].path));
+        self.stacks =
+            crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded);
+        if !self.files.is_empty() {
+            let visible = self.stacks.visible(self.selected);
+            if visible != self.selected {
+                self.selected = visible;
+                self.tell_shown();
+            }
+        }
+        self.stacks_dirty = false;
+    }
+
+    /// Déplie ou replie la pile de l'image sélectionnée.
+    fn toggle_stack(&mut self) {
+        let Some(range) = self.stacks.range_of(self.selected).cloned() else {
+            return;
+        };
+        if range.len() < 2 {
+            return;
+        }
+        let paths: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
+        if paths.iter().any(|p| self.expanded.contains(p)) {
+            for p in &paths {
+                self.expanded.remove(p);
+            }
+        } else {
+            self.expanded.extend(paths);
+        }
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
+    }
+
+    /// Déplie toutes les piles, ou les replie toutes si l'une est dépliée.
+    fn toggle_all_stacks(&mut self) {
+        if self.expanded.is_empty() {
+            self.expanded = self.files.iter().map(|f| f.path.clone()).collect();
+        } else {
+            self.expanded.clear();
+        }
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
     }
 
     /// Indique au moteur les images affichées (priorité de calcul) : l'image courante et
@@ -1212,6 +1325,7 @@ impl TriApp {
                 .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
                 .collect();
             self.judgements = tri::sharpness::judge(&ordered, &self.settings.sharpness);
+            self.stacks_dirty = true;
         }
         let p = self.progress[4];
         if self.blur_rule.is_some()
@@ -1251,6 +1365,13 @@ impl TriApp {
                     }
                     if level == Level::Sharpness {
                         scored.push(index);
+                    }
+                    if level == Level::Similarity
+                        && let Some(file) = self.files.get(index)
+                        && let Some(sig) = preview::signature(&engine.cache, file, &engine.preview)
+                    {
+                        self.signatures.insert(file.path.clone(), sig);
+                        self.stacks_dirty = true;
                     }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
@@ -1317,6 +1438,13 @@ impl TriApp {
             .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
             .collect();
         for action in actions {
+            // Regroupement : Échap ou Ctrl+G ferme.
+            if self.group_dialog {
+                if matches!(action, Action::Back | Action::GroupingWindow) {
+                    self.group_dialog = false;
+                }
+                continue;
+            }
             // Historique : annuler / rétablir pas à pas restent possibles, Échap ferme.
             if self.history_open {
                 match action {
@@ -1683,10 +1811,26 @@ impl TriApp {
                 self.folder_panel = !self.folder_panel;
                 self.reveal_folder = self.folder_panel;
             }
+            Action::StackToggle => self.toggle_stack(),
+            Action::StacksAll => self.toggle_all_stacks(),
+            Action::GroupingWindow => self.group_dialog = !self.group_dialog,
+            // Navigation dans la vue : les images cachées dans une pile repliée sont
+            // sautées.
             nav => {
+                if self.stacks_dirty {
+                    self.regroup();
+                }
                 let page = self.layout.rows_in(self.view_height);
-                let new = grid::navigate(self.selected, self.files.len(), &self.layout, page, nav);
-                self.select(new);
+                let shown = &self.stacks.shown;
+                if shown.is_empty() {
+                    let new =
+                        grid::navigate(self.selected, self.files.len(), &self.layout, page, nav);
+                    self.select(new);
+                } else {
+                    let pos = self.stacks.position(self.selected).unwrap_or(0);
+                    let new = grid::navigate(pos, shown.len(), &self.layout, page, nav);
+                    self.select(shown[new]);
+                }
             }
         }
     }
@@ -1737,8 +1881,18 @@ impl TriApp {
             return;
         }
         let siblings = self.folder.notes.siblings(&path);
-        let next = (self.selected + 1..self.files.len())
-            .find(|&i| !siblings.contains(&self.files[i].path));
+        if self.stacks_dirty {
+            self.regroup();
+        }
+        let pos = self.stacks.position(self.selected);
+        let next = match pos {
+            Some(pos) => self.stacks.shown[pos + 1..]
+                .iter()
+                .copied()
+                .find(|&i| !siblings.contains(&self.files[i].path)),
+            None => (self.selected + 1..self.files.len())
+                .find(|&i| !siblings.contains(&self.files[i].path)),
+        };
         if let Some(next) = next {
             self.select(next);
         }
@@ -1806,6 +1960,8 @@ impl TriApp {
         if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
             self.history.push(step);
         }
+        // Couverture des piles : la meilleure, qui a pu changer.
+        self.stacks_dirty = true;
         // Filtre sur les notes : l'image peut ne plus y correspondre.
         if !self.notes_rule.is_empty() {
             self.refilter(Reveal::Minimal);
@@ -3582,10 +3738,19 @@ impl TriApp {
         self.hovered = None;
         let g = self.gui.grid;
         self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
-        let rows = self.layout.rows(self.files.len());
+        if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
+            self.regroup();
+        }
+        // Vue de la grille : couvertures des piles repliées, contenu des piles dépliées.
+        let shown: Vec<usize> = if self.stacks.shown.is_empty() {
+            (0..self.files.len()).collect()
+        } else {
+            self.stacks.shown.clone()
+        };
+        let rows = self.layout.rows(shown.len());
         ui.spacing_mut().item_spacing = vec2(g.gap, g.gap);
         let mut area = ScrollArea::vertical().auto_shrink(false);
-        let row = self.selected / self.layout.columns;
+        let row = shown.iter().position(|&i| i == self.selected).unwrap_or(0) / self.layout.columns;
         let offset = match self.reveal.take() {
             Some(Reveal::Top) => Some(row as f32 * self.layout.row_pitch()),
             // Grille pas encore mise en page (hauteur visible inconnue, 0) : on attend
@@ -3612,8 +3777,8 @@ impl TriApp {
                 ui.horizontal(|ui| {
                     ui.add_space((margin - g.gap).max(0.0));
                     let start = row * self.layout.columns;
-                    let end = (start + self.layout.columns).min(self.files.len());
-                    for index in start..end {
+                    let end = (start + self.layout.columns).min(shown.len());
+                    for &index in &shown[start..end] {
                         self.cell(ui, &ctx, index, deadline);
                     }
                 });
@@ -3681,6 +3846,32 @@ impl TriApp {
             );
         }
 
+        // Pile repliée : des feuilles derrière la vignette, et le nombre d'images ; pile
+        // dépliée : un trait en haut de chaque image, continu d'une image à la suivante.
+        let accent = Color32::from(self.gui.dialogs.title_color);
+        if let Some(count) = self.stacks.collapsed_count(index) {
+            for k in 1..=2 {
+                let o = k as f32 * 3.0;
+                painter.rect_stroke(
+                    rect.translate(vec2(o, -o)).shrink(1.0),
+                    4.0,
+                    egui::Stroke::new(1.0, accent.gamma_multiply(0.6 / k as f32)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let label = painter.layout_no_wrap(
+                count.to_string(),
+                FontId::proportional(12.0),
+                Color32::BLACK,
+            );
+            let at = rect.min + vec2(g.padding + 2.0, g.padding + 2.0);
+            let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
+            painter.rect_filled(back, 6.0, accent);
+            painter.galley(at, label, Color32::BLACK);
+        } else if self.stacks.in_open_stack(index) {
+            let bar = Rect::from_min_size(rect.min, vec2(rect.width() + g.gap, 3.0));
+            painter.rect_filled(bar, 0.0, accent.gamma_multiply(0.8));
+        }
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
             pos2(rect.max.x - g.padding, rect.max.y - g.label - 4.0),
@@ -4130,6 +4321,82 @@ impl TriApp {
         }
     }
 
+    /// Fenêtre de regroupement (`Ctrl+G`, comme Capture One) : regrouper ou non, le seuil
+    /// (la grille derrière suit en direct), l'écart de temps maximal ; le seuil est retenu
+    /// pour le dossier à la fermeture.
+    fn group_window(&mut self, ctx: &egui::Context) {
+        if !self.group_dialog {
+            return;
+        }
+        let default = self.settings.similarity.threshold;
+        let at = ctx.content_rect().center() - vec2(200.0, 160.0);
+        let (mut close, mut reset) = (false, false);
+        let (mut threshold, mut gap, mut stacking) =
+            (self.group_threshold, self.group_gap, self.stacking);
+        let summary = t!(
+            "groups-summary",
+            images = self.files.len(),
+            stacks = self.stacks.count(),
+            groups = self.stacks.groups()
+        );
+        let progress = self.progress[5];
+        let modal = modal_at("group_dialog", at)
+            .title(t!("groups-title"))
+            .show(ctx, |ui| {
+                ui.checkbox(&mut stacking, t!("groups-enabled"));
+                ui.add_space(4.0);
+                ui.label(t!("groups-threshold"));
+                ui.add(egui::Slider::new(&mut threshold, 0.0..=1.0).step_by(0.01));
+                ui.weak(t!("groups-threshold-tip"));
+                ui.add_space(4.0);
+                ui.label(t!("groups-gap"));
+                ui.add(
+                    egui::Slider::new(&mut gap, 0.0..=600.0)
+                        .step_by(5.0)
+                        .suffix(" s"),
+                );
+                ui.weak(t!("groups-gap-tip"));
+                ui.add_space(6.0);
+                ui.label(summary);
+                if progress.total > 0 && progress.done < progress.total {
+                    ui.weak(t!(
+                        "groups-computing",
+                        done = progress.done,
+                        total = progress.total
+                    ));
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    reset = ui
+                        .add_enabled(
+                            threshold != default,
+                            egui::Button::new(t!("groups-default")),
+                        )
+                        .clicked();
+                    close = ui.button(t!("close")).clicked();
+                    ui.weak(t!("or-escape"));
+                });
+            });
+        if reset {
+            threshold = default;
+        }
+        if (threshold, gap, stacking) != (self.group_threshold, self.group_gap, self.stacking) {
+            self.group_threshold = threshold;
+            self.group_gap = gap;
+            self.stacking = stacking;
+            self.stacks_dirty = true;
+        }
+        if close || modal.should_close() {
+            self.group_dialog = false;
+            if let Some(data) = self.settings.data_dir()
+                && !self.folder.is_none()
+            {
+                let keep = (self.group_threshold != default).then_some(self.group_threshold);
+                let _ = tri::similarity::remember_threshold(&data, &self.folder.dir, keep);
+            }
+        }
+    }
+
     /// Ouvre la fenêtre de réglages (ou dit pourquoi c'est impossible).
     fn open_settings(&mut self) {
         let Some(path) = self
@@ -4282,6 +4549,11 @@ impl eframe::App for TriApp {
             self.start_engine(&ctx);
         }
         self.drain_events();
+        // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder
+        // sur la liste (filtre changé, image renommée…).
+        if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
+            self.regroup();
+        }
         self.watch_volumes(&ctx);
         self.poll_eject();
         self.run_script(&ctx);
@@ -4365,6 +4637,7 @@ impl eframe::App for TriApp {
         }
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
+        self.group_window(&ctx);
         self.rating_dialog(&ctx);
         self.file_dialog(&ctx);
         self.eject_dialog(&ctx);
@@ -4770,6 +5043,9 @@ mod tests {
         // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
         // temporaire.
         settings.files.trash = false;
+        // Pas de piles : les images de test, des aplats de couleurs proches, seraient
+        // groupées (le test des piles les active).
+        settings.similarity.background = false;
         let harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
@@ -6020,6 +6296,74 @@ mod tests {
         press(&mut h, Key::X, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert!(h.state().notice.as_ref().unwrap().0.contains("emplacement"));
+    }
+
+    #[test]
+    fn similar_images_stack_and_unstack() {
+        // Deux rafales de 3 images : des dégradés horizontaux, puis verticaux, de teintes
+        // différentes ; entre elles, rien de commun.
+        let ramp = |vertical: bool, tint: [u8; 3]| {
+            image::RgbImage::from_fn(64, 48, |x, y| {
+                let v = if vertical { y * 255 / 47 } else { x * 255 / 63 } as u16;
+                image::Rgb(tint.map(|c| (v * c as u16 / 255) as u8))
+            })
+        };
+        let images = vec![
+            ("a1.jpg", ramp(false, [255, 255, 255])),
+            ("a2.jpg", ramp(false, [250, 250, 250])),
+            ("a3.jpg", ramp(false, [245, 245, 245])),
+            ("b1.jpg", ramp(true, [255, 80, 20])),
+            ("b2.jpg", ramp(true, [250, 80, 20])),
+            ("b3.jpg", ramp(true, [245, 80, 20])),
+        ];
+        let (mut h, _dir) = harness_images(images);
+        h.state_mut().stacking = true;
+        h.state_mut().settings.similarity.background = true;
+        // Empreintes calculées directement (le moteur du banc de test ne les fait pas).
+        let files = h.state().files.clone();
+        let preview = tri::preview::Settings::default();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        for f in &files {
+            let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.shown.len(), 2, "deux piles repliées");
+        assert_eq!(h.state().stacks.count(), 2);
+        // La flèche droite saute les images cachées : de la première pile à la seconde.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(selected_name(&h).starts_with('b'), "{}", selected_name(&h));
+        // s déplie la pile ; Maj+S déplie / replie tout.
+        press(&mut h, Key::S, Modifiers::NONE);
+        assert_eq!(h.state().stacks.shown.len(), 4);
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        assert_eq!(h.state().stacks.shown.len(), 2, "tout replié");
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        assert_eq!(h.state().stacks.shown.len(), 6, "tout déplié");
+        // Couverture : l'acceptée.
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        h.state_mut().expanded.clear();
+        let target = files
+            .iter()
+            .position(|f| f.path.ends_with("a3.jpg"))
+            .unwrap();
+        h.state_mut().select(target);
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        // Ctrl+G : la fenêtre ; seuil à 0 : plus de piles.
+        press(&mut h, Key::G, Modifiers::CTRL);
+        assert!(h.state().group_dialog);
+        h.state_mut().group_threshold = 0.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(
+            h.state().stacks.count(),
+            0,
+            "seuil nul : chaque image seule"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().group_dialog);
     }
 
     #[test]

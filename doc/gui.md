@@ -200,6 +200,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (« Couleurs [gui.colors] », `settings-section-*` dans les catalogues ; un test vérifie
   qu'aucune section n'en manque). Les clés de dossier (`dir`, `*_dir`, `destination`) ont
   la complétion par Tab.
+- **Piles** (18/10/2026, `gui/src/stacks.rs`, moteur `tri::similarity`, voir
+  `similarity.md`) : les images semblables voisines (rafales, séries) forment des piles,
+  repliées par défaut : une vignette, la **couverture** (l'acceptée, sinon la mieux notée,
+  sinon la plus nette, sinon la première), avec le nombre d'images dans une pastille
+  d'accent et des feuilles derrière ; dépliée, un trait d'accent continu au-dessus de ses
+  images. `s` déplie / replie la pile de l'image, `Maj+S` toutes. La grille n'est qu'une
+  **vue** : la liste complète reste celle du moteur (calculs de chaque image, netteté) ;
+  la navigation et l'avance automatique sautent les images cachées. **Fenêtre de
+  regroupement** (`Ctrl+G`, comme Capture One) : regrouper ou non, curseur du seuil (la
+  grille suit en direct), écart de temps maximal, nombre de piles ; le seuil est retenu
+  pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
+  défaut : `[similarity] threshold`).
 - **Panneaux au clavier, façon tmux** (18/10/2026, `actions::Scope`) : le leader
   (`[gui] leader`, `Ctrl+B` par défaut) puis `h` / `l` (ou ← / →) donne le clavier au
   panneau de gauche / de droite, `o` au suivant (dossiers, images, métadonnées ; un

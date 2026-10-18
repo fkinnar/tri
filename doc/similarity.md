@@ -36,3 +36,10 @@ Calcul : ~50 ms par RAF (ouverture LibRaw et JPEG embarqué réduit), workers l�
 
 Restent (décidé : plus tard) : corrections à la main (fusionner, couper), groupes non
 contigus (même sujet à deux moments).
+
+## Seuil par dossier
+
+`folder_threshold` / `remember_threshold` : le seuil choisi dans la fenêtre de
+regroupement, retenu pour chaque dossier (`group-thresholds.tsv` du dossier de données) ;
+remis au défaut, il est oublié.
+

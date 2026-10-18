@@ -221,6 +221,12 @@ pub enum Action {
     Redo,
     /// Liste de l'historique (retour à un pas donné).
     History,
+    /// Déplier / replier la pile de l'image sélectionnée.
+    StackToggle,
+    /// Déplier toutes les piles, ou les replier toutes.
+    StacksAll,
+    /// Fenêtre de regroupement (seuil, écart de temps).
+    GroupingWindow,
     /// Clavier au panneau de gauche (après le leader, `Ctrl+B` par défaut).
     FocusLeft,
     /// Clavier au panneau de droite.
@@ -325,7 +331,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 105] = [
+    pub const ALL: [Action; 108] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -372,6 +378,9 @@ impl Action {
         Action::Undo,
         Action::Redo,
         Action::History,
+        Action::StackToggle,
+        Action::StacksAll,
+        Action::GroupingWindow,
         Action::FocusLeft,
         Action::FocusRight,
         Action::FocusNext,
@@ -462,6 +471,7 @@ impl Action {
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             Undo | Redo | History => Group::Edit,
+            StackToggle | StacksAll | GroupingWindow => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | MetaUp | MetaDown
@@ -522,6 +532,9 @@ impl Action {
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
+            Action::StackToggle => "core.stack.toggle",
+            Action::StacksAll => "core.stack.all",
+            Action::GroupingWindow => "core.stack.settings",
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
             Action::FocusNext => "core.panel.next",
@@ -906,6 +919,11 @@ const FILES: &[Binding] = {
         (&[ctrl(Key::R)], Redo),
         (&[ctrl_shift(Key::Z)], Redo),
         (&[ctrl(Key::H)], History),
+        // Piles : s déplie / replie celle de l'image, Maj+S toutes ; Ctrl+G le
+        // regroupement (seuil).
+        (&[plain(Key::S)], StackToggle),
+        (&[shifted(Key::S)], StacksAll),
+        (&[ctrl(Key::G)], GroupingWindow),
     ]
 };
 

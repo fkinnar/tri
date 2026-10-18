@@ -96,6 +96,9 @@ pub fn navigate(
         | Action::Undo
         | Action::Redo
         | Action::History
+        | Action::StackToggle
+        | Action::StacksAll
+        | Action::GroupingWindow
         | Action::FocusLeft
         | Action::FocusRight
         | Action::FocusNext
