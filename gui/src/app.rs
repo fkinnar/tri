@@ -130,6 +130,9 @@ pub struct TriApp {
     /// Surveillance des volumes (moteur), démarrée à la première image, et la liste
     /// qu'elle envoie quand un disque est branché ou débranché.
     volumes: Option<(Monitor, Receiver<Vec<Place>>)>,
+    /// Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs), avec son
+    /// intervalle (ms) : relancée si le dossier ou l'intervalle change.
+    watch: Option<(tri::watch::FolderWatch, Receiver<tri::watch::Changes>, u64)>,
     /// Boîte de déchargement d'une carte (éventuellement en arrière-plan).
     offload: Option<OffloadDialog>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
@@ -396,6 +399,9 @@ impl TriApp {
             None => (Folder::default(), None),
         };
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
+        if let Some(data) = &data {
+            tree.set_favorites(tri::places::favorites(data));
+        }
         if !folder.is_none() {
             tree.reveal(&folder.dir);
         }
@@ -421,6 +427,7 @@ impl TriApp {
             reveal_folder: true,
             places: settings.places.clone(),
             volumes: None,
+            watch: None,
             offload: None,
             offloaded: None,
             eject_failed: None,
@@ -820,6 +827,60 @@ impl TriApp {
         }
     }
 
+    /// Surveillance du dossier ouvert : démarrée pour chaque dossier ouvert ; images
+    /// ajoutées, retirées ou modifiées : dossier relu (la sélection reste) ; sidecars
+    /// modifiés par un autre logiciel : seules leurs notes sont relues.
+    fn watch_folder(&mut self, ctx: &egui::Context) {
+        let interval = self.settings.watch.interval_ms;
+        if self.folder.is_none() || interval == 0 {
+            self.watch = None;
+            return;
+        }
+        let current = self
+            .watch
+            .as_ref()
+            .is_some_and(|(w, _, ms)| w.dir() == self.folder.dir && *ms == interval);
+        if !current {
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            let watch = tri::watch::FolderWatch::start(
+                &self.folder.dir,
+                Duration::from_millis(interval),
+                move |changes| {
+                    let _ = tx.send(changes);
+                    repaint.request_repaint();
+                },
+            );
+            self.watch = Some((watch, rx, interval));
+        }
+        let Some((_, rx, _)) = &self.watch else {
+            return;
+        };
+        let mut images = Vec::new();
+        let mut sidecars = Vec::new();
+        for changes in rx.try_iter() {
+            images.extend(changes.images);
+            sidecars.extend(changes.sidecars);
+        }
+        if !images.is_empty() {
+            trace(|| format!("dossier modifié ailleurs : {} images", images.len()));
+            let selected = self.files.get(self.selected).map(|f| f.path.clone());
+            self.reload_folder(selected);
+            self.notice = Some((t!("watch-reloaded", count = images.len()), false));
+        } else if !sidecars.is_empty() {
+            let changed = self.folder.notes.reload_sidecars(&sidecars);
+            trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
+            if !changed.is_empty() {
+                // Filtre sur les notes, couverture des piles : à revoir.
+                if !self.notes_rule.is_empty() {
+                    self.refilter(Reveal::Minimal);
+                }
+                self.stacks_dirty = true;
+                self.notice = Some((t!("watch-notes", count = changed.len()), false));
+            }
+        }
+    }
+
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
@@ -846,7 +907,8 @@ impl TriApp {
             }
         });
         ui.separator();
-        let reveal = std::mem::take(&mut self.reveal_folder);
+        // Dossier ouvert montré à sa première ligne (son favori en tête, s'il en est un).
+        let mut reveal = std::mem::take(&mut self.reveal_folder);
         let focused = self.focus == crate::actions::Scope::Folders;
         let cursor = self.tree.cursor().filter(|_| focused);
         let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
@@ -894,6 +956,12 @@ impl TriApp {
                             entry(ui, Action::FolderRename, t!("folder-menu-rename"));
                             entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
                         }
+                        let favorite = if row.favorite {
+                            t!("folder-menu-favorite-remove")
+                        } else {
+                            t!("folder-menu-favorite-add")
+                        };
+                        entry(ui, Action::FolderFavorite, favorite);
                         ui.separator();
                         if removable {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
@@ -903,7 +971,19 @@ impl TriApp {
                         }
                     });
                     if current && reveal {
+                        reveal = false;
                         label.scroll_to_me(Some(egui::Align::Center));
+                    }
+                    if row.favorite {
+                        let (rect, response) =
+                            ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                        let color = ui.visuals().weak_text_color();
+                        marks::star(ui.painter(), rect.center(), size * 0.4, color);
+                        response.on_hover_text(format!(
+                            "{}\n{}",
+                            t!("folders-favorite"),
+                            self.action_tip(Action::FolderFavorite)
+                        ));
                     }
                     if let Some(error) = &row.error {
                         ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
@@ -1675,6 +1755,7 @@ impl TriApp {
             Action::FolderCreate | Action::FolderRename | Action::FolderDelete => {
                 self.folder_edit_action(ctx, action)
             }
+            Action::FolderFavorite => self.toggle_favorite(),
             Action::MetaCopy | Action::MetaCopyAll => {
                 let first = usize::from(self.meta_has_histogram);
                 let (lo, hi) = if action == Action::MetaCopyAll {
@@ -3763,6 +3844,12 @@ impl TriApp {
                 return;
             }
         }
+        // Dossier relu : la surveillance repart de cet état (un changement fait par tri
+        // lui-même n'est pas signalé une seconde fois).
+        if let Some((watch, rx, _)) = &self.watch {
+            watch.sync();
+            rx.try_iter().for_each(drop);
+        }
         self.wanted.clear();
         self.missing.clear();
         self.selection.retain_existing();
@@ -4253,11 +4340,19 @@ impl TriApp {
             colors
                 .selection
                 .map_or(visuals.selection.bg_fill, Color32::from)
-        } else if self.grouping_preview
-            && self.stacks.group_index(index).is_some_and(|g| g % 2 == 1)
+        } else if let Some(group) = self
+            .stacks
+            .group_index(index)
+            .filter(|_| self.grouping_preview || self.stacks.in_open_stack(index))
         {
-            // Réglage du curseur de similarité : une pile sur deux sur un fond plus clair.
-            Color32::from(colors.stack_band)
+            // Piles dépliées (toutes pendant le réglage du curseur de similarité) : deux
+            // gris en alternance, d'une pile à la suivante (retour du 18/10/2026 : cadres
+            // et traits ne se lisaient pas, toutes piles dépliées).
+            Color32::from(if group % 2 == 1 {
+                colors.stack_band
+            } else {
+                colors.stack_band_alt
+            })
         } else {
             visuals.extreme_bg_color
         };
@@ -4284,9 +4379,8 @@ impl TriApp {
             );
         }
 
-        // Pile repliée : des feuilles derrière la vignette, et le nombre d'images ; pile
-        // dépliée : un cadre autour de chaque image, et un trait en bas, continu d'une image
-        // à la suivante. Deux tons de gris (retour du 18/10/2026 : le turquoise gênait).
+        // Pile repliée : des feuilles derrière la vignette, et le nombre d'images (pile
+        // dépliée : son fond, plus haut).
         let accent = Color32::from(colors.stack_mark);
         if let Some(count) = self.stacks.collapsed_count(index) {
             for k in 1..=2 {
@@ -4307,20 +4401,6 @@ impl TriApp {
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, accent);
             painter.galley(at, label, Color32::BLACK);
-        } else if self.stacks.in_open_stack(index) {
-            // Retour du 18/10/2026 : le trait seul se voyait mal ; un cadre gris foncé autour
-            // de chaque image de la pile, et le trait d'accent en bas, continu.
-            painter.rect_stroke(
-                rect,
-                4.0,
-                egui::Stroke::new(g.stack_frame, Color32::from(colors.stack_frame)),
-                egui::StrokeKind::Inside,
-            );
-            let bar = Rect::from_min_size(
-                pos2(rect.min.x, rect.max.y - 3.0),
-                vec2(rect.width() + g.gap, 3.0),
-            );
-            painter.rect_filled(bar, 0.0, accent);
         }
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
@@ -4552,10 +4632,48 @@ impl TriApp {
         });
     }
 
+    /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
+    fn toggle_favorite(&mut self) {
+        let Some(i) = self.tree.cursor() else { return };
+        let Some(data) = self.data_dir.clone() else {
+            return;
+        };
+        let row = self.tree.rows()[i].clone();
+        let on = !row.favorite;
+        match tri::places::set_favorite(&data, &row.path, on) {
+            Ok(list) => {
+                self.tree.set_favorites(list);
+                // Le curseur reste sur la ligne du dossier la plus proche (Tree::cursor).
+                self.scroll_to_cursor = true;
+                let name = row.name;
+                let text = if on {
+                    t!("folders-favorite-added", name = name)
+                } else {
+                    t!("folders-favorite-removed", name = name)
+                };
+                self.notice = Some((text, false));
+            }
+            Err(e) => {
+                let error = e.to_string();
+                self.notice = Some((t!("folders-favorite-error", error = error), true));
+            }
+        }
+    }
+
     /// Après la création, le renommage ou la suppression d'un dossier (ou leur
     /// annulation) : arborescence relue ; le dossier ouvert suit son renommage, ou se
     /// ferme s'il a disparu.
     fn after_folder_change(&mut self, renamed: Option<(PathBuf, PathBuf)>, point: Option<PathBuf>) {
+        // Les favoris suivent un dossier renommé (ou un dossier qui les contient).
+        if let (Some((from, to)), Some(data)) = (&renamed, &self.data_dir) {
+            match tri::places::rename_favorites(data, from, to) {
+                Ok(list) => self.tree.set_favorites(list),
+                Err(e) => {
+                    let error = e.to_string();
+                    self.notice = Some((t!("folders-favorite-error", error = error), true));
+                }
+            }
+        }
         self.tree.reload();
         if !self.folder.is_none() && !self.folder.dir.exists() {
             let moved = renamed.and_then(|(from, to)| {
@@ -5010,6 +5128,7 @@ impl eframe::App for TriApp {
             self.regroup();
         }
         self.watch_volumes(&ctx);
+        self.watch_folder(&ctx);
         self.poll_eject();
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
@@ -5482,6 +5601,11 @@ mod tests {
         settings.cache.dir = Some(dir.path().join("cache"));
         // Pas de surveillance des volumes : les tests fixent leur propre arborescence.
         settings.places.watch_ms = 0;
+        // Ni du dossier ouvert (un test l'active pour lui seul).
+        settings.watch.interval_ms = 0;
+        // Séquences (`f °`, `gg`) : délai large, sinon une machine chargée (tests en
+        // parallèle) le dépasse entre deux touches et le test échoue au hasard.
+        settings.gui.key_sequence_timeout_ms = 60_000;
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
@@ -6682,6 +6806,108 @@ mod tests {
             dialog.root_here(),
             Some(dir.path().join("séance-2").display().to_string().as_str())
         );
+    }
+
+    #[test]
+    fn changes_made_elsewhere_show_up_by_themselves() {
+        let (mut h, dir) = harness();
+        h.state_mut().settings.watch.interval_ms = 20;
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let wait = |h: &mut Harness<'static, TriApp>, done: &dyn Fn(&TriApp) -> bool| {
+            for _ in 0..250 {
+                h.run_steps(1);
+                if done(h.state()) {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            false
+        };
+        // Une image copiée dans le dossier (déchargement, export…) : relu.
+        image::RgbImage::from_pixel(64, 48, image::Rgb([9, 9, 9]))
+            .save(photos.join("img3.jpg"))
+            .unwrap();
+        assert!(
+            wait(&mut h, &|app| app.files.len() == 4),
+            "image ajoutée vue"
+        );
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("dossier relu")
+        );
+        // Notes posées par un autre logiciel (darktable) : relues.
+        let img0 = photos.join("img0.jpg");
+        let three = tri::xmp::Notes {
+            stars: 3,
+            ..Default::default()
+        };
+        tri::xmp::write_sidecar(&photos.join("img0.jpg.xmp"), &three).unwrap();
+        assert!(
+            wait(&mut h, &|app| app.folder.notes.notes(&img0).stars == 3),
+            "notes relues"
+        );
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("modifiées ailleurs")
+        );
+    }
+
+    #[test]
+    fn favorites_are_toggled_from_the_panel_and_follow_renames() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seance = dir.path().join("séance");
+        std::fs::create_dir(&seance).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        h.state_mut().tree.point_at(&seance);
+        // m : favori, en tête de la liste ; le curseur reste dans l'arborescence.
+        press(&mut h, Key::M, Modifiers::NONE);
+        let data = dir.path().join("data");
+        assert_eq!(
+            tri::places::favorites(&data),
+            std::slice::from_ref(&seance),
+            "écrit"
+        );
+        let rows = h.state().tree.rows();
+        assert_eq!(rows[0].path, seance);
+        assert_eq!(rows[0].kind, Some(PlaceKind::Favorite));
+        let cursor = h.state().tree.cursor().unwrap();
+        assert!(cursor > 0 && rows[cursor].path == seance);
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("ajouté aux favoris").is_some());
+        // Renommé depuis le panneau : le favori suit.
+        press(&mut h, Key::R, Modifiers::NONE);
+        h.event(UiEvent::Text("séance du jour".into()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let renamed = dir.path().join("séance du jour");
+        assert_eq!(
+            tri::places::favorites(&data),
+            std::slice::from_ref(&renamed)
+        );
+        assert_eq!(h.state().tree.rows()[0].path, renamed);
+        // m sur la ligne du favori : retiré.
+        h.state_mut().tree.set_cursor(0);
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert!(tri::places::favorites(&data).is_empty());
+        assert_ne!(h.state().tree.rows()[0].kind, Some(PlaceKind::Favorite));
     }
 
     #[test]

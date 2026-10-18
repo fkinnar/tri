@@ -269,6 +269,8 @@ pub enum Action {
     FolderRename,
     /// Panneau des dossiers : supprimer le dossier pointé (confirmé).
     FolderDelete,
+    /// Panneau des dossiers : ajouter le dossier pointé aux favoris, ou l'en retirer.
+    FolderFavorite,
     /// Panneau des métadonnées : ligne du dessus.
     MetaUp,
     /// Panneau des métadonnées : ligne du dessous.
@@ -343,7 +345,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 114] = [
+    pub const ALL: [Action; 115] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -414,6 +416,7 @@ impl Action {
         Action::FolderCreate,
         Action::FolderRename,
         Action::FolderDelete,
+        Action::FolderFavorite,
         Action::MetaUp,
         Action::MetaDown,
         Action::MetaCopy,
@@ -492,8 +495,9 @@ impl Action {
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
-            | FolderEject | FolderCreate | FolderRename | FolderDelete | MetaUp | MetaDown
-            | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll => Group::Panels,
+            | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
+            | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
+            | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | Quit => Group::App,
         }
@@ -574,6 +578,7 @@ impl Action {
             Action::FolderCreate => "core.folders.create",
             Action::FolderRename => "core.folders.rename",
             Action::FolderDelete => "core.folders.delete",
+            Action::FolderFavorite => "core.folders.favorite",
             Action::MetaUp => "core.metadata.up",
             Action::MetaDown => "core.metadata.down",
             Action::MetaCopy => "core.metadata.copy",
@@ -683,7 +688,7 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete => Some(Scope::Folders),
+            | FolderDelete | FolderFavorite => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll => Some(Scope::Histogram),
@@ -882,6 +887,8 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::X)], FolderDelete),
         (&[plain(Key::Delete)], FolderDelete),
         (&[plain(Key::Backspace)], FolderDelete),
+        // Favori : `m` (« mark »), comme les marque-pages de nvim-tree.
+        (&[plain(Key::M)], FolderFavorite),
     ]
 };
 

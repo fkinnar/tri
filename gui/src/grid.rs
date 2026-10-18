@@ -120,6 +120,7 @@ pub fn navigate(
         | Action::FolderCreate
         | Action::FolderRename
         | Action::FolderDelete
+        | Action::FolderFavorite
         | Action::MetaOpen
         | Action::MetaSelectUp
         | Action::MetaSelectDown

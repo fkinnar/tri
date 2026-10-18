@@ -34,6 +34,8 @@ pub struct AppSettings {
     pub xmp: XmpSection,
     /// `[places]` (moteur).
     pub places: tri::places::PlaceSettings,
+    /// `[watch]` (moteur) : surveillance du dossier ouvert.
+    pub watch: tri::watch::WatchSettings,
     /// `[exposure]` (moteur).
     pub exposure: tri::exposure::ExposureSettings,
     /// `[offload]` (moteur).
@@ -65,6 +67,7 @@ impl AppSettings {
             scheduler: self.scheduler,
             xmp: self.xmp,
             places: self.places.clone(),
+            watch: self.watch,
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),
@@ -266,8 +269,6 @@ pub struct GridSettings {
     pub marked_frame: f32,
     /// Mention « floue » sur les vignettes des photos jugées floues (score de netteté).
     pub blur_badge: bool,
-    /// Épaisseur du cadre des images d'une pile dépliée.
-    pub stack_frame: f32,
     /// Largeur du curseur de similarité de la barre des filtres (points).
     pub stack_slider: f32,
 }
@@ -286,7 +287,6 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
-            stack_frame: 2.0,
             stack_slider: 110.0,
         }
     }
@@ -673,12 +673,13 @@ pub struct Colors {
     pub focus: Color,
     /// Goutte des filtres de netteté (barre de filtres).
     pub blur_drop: Color,
-    /// Cadre des images d'une pile dépliée.
-    pub stack_frame: Color,
-    /// Réglage du curseur de similarité : fond d'une pile sur deux, pour les distinguer.
+    /// Fond des images d'une pile dépliée, une pile sur deux (gris clair) ; les autres sur
+    /// `stack_band_alt` (gris foncé). Pendant le réglage du curseur de similarité : toutes
+    /// les piles, celles d'une seule image comprises.
     pub stack_band: Color,
-    /// Piles : feuilles et pastille d'une pile repliée, trait d'une pile dépliée (gris clair,
-    /// avec `stack_frame`, gris foncé).
+    /// Fond de l'autre pile sur deux (voir `stack_band`).
+    pub stack_band_alt: Color,
+    /// Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
     pub stack_mark: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
@@ -736,8 +737,8 @@ impl Default for Colors {
             marked: Color([255, 170, 40]),
             focus: Color([60, 255, 110]),
             blur_drop: Color([110, 170, 230]),
-            stack_frame: Color([72, 72, 72]),
-            stack_band: Color([44, 44, 44]),
+            stack_band: Color([56, 56, 56]),
+            stack_band_alt: Color([24, 24, 24]),
             stack_mark: Color([140, 140, 140]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),

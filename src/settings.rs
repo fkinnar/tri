@@ -99,6 +99,8 @@ pub struct EngineSettings {
     pub xmp: XmpSection,
     /// Emplacements proposés pour choisir un dossier.
     pub places: crate::places::PlaceSettings,
+    /// Surveillance du dossier ouvert.
+    pub watch: crate::watch::WatchSettings,
     /// Calcul de l'exposition (histogrammes, saturés / bouchés).
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.

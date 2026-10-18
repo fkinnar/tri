@@ -82,14 +82,34 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
 
 - rien n'est parcouru d'avance : un dossier est lu quand on le **déplie** (`expand`,
   `toggle`), puis gardé ; instantané même sur un NAS ;
-- `rows()` : lignes visibles à plat (`Row { path, name, depth, expanded, error }`), dans
-  l'ordre d'affichage ; un dossier illisible déplié porte son erreur ;
+- `rows()` : lignes visibles à plat (`Row { path, name, depth, expanded, error, kind,
+  ejectable, favorite }`), dans l'ordre d'affichage (favoris d'abord) ; un dossier illisible déplié porte son erreur ;
 - `reveal(path)` : déplie les dossiers parents de `path` sous l'emplacement le plus précis
   qui le contient (un volume avant la racine), pour montrer le dossier ouvert ;
 - `refresh()` : relit les emplacements (carte insérée) et les dossiers dépliés ;
   `reload()` : seulement les dossiers ;
 - un même dossier présent sous deux emplacements (`/Volumes/SD` sous « Volumes » et sous
   la racine) est déplié aux deux endroits (état rangé par chemin).
+
+## Favoris (18/10/2026)
+
+Dossiers choisis par l'utilisateur, montrés en tête de l'arborescence (avant les
+volumes), rangés dans le dossier de données (`[data] dir`), fichier `favorites`, un
+chemin par ligne, dans l'ordre d'ajout :
+
+- `favorites(data)` : la liste, absents compris : un favori sur une carte ou un disque
+  débranché revient quand le volume est remonté ;
+- `set_favorite(data, dir, on)` : ajoute (à la fin) ou retire, renvoie la liste ;
+- `rename_favorites(data, from, to)` : après un renommage, les favoris qui sont `from` ou
+  dedans suivent ;
+- `Tree::set_favorites(liste)` : lignes de profondeur 0 de nature
+  `PlaceKind::Favorite` ; l'existence des dossiers est vérifiée là, et à chaque
+  `set_places` / `refresh`, pas à chaque dessin (NAS lent) ; `Row::favorite` marque
+  aussi le dossier là où il paraît dans l'arborescence.
+
+Pas encore : réordonner les favoris (ordre d'ajout), suivre un renommage *défait*
+(`u`) ou fait hors de `tri` (le favori disparaît alors de la liste, jusqu'à ce que le
+dossier revienne).
 
 ## Curseur clavier (18/10/2026)
 

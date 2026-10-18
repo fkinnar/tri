@@ -567,9 +567,12 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   Ctrl/Cmd + molette zoome autour du pointeur) ; **loupe tant qu'on maintient une
   touche** (Maj par défaut, réglable ; petit délai pour ne pas clignoter sur Maj+P). **Fait** le
   18/10/2026 (`[gui.zoom]`, `view::next_step`, `TriApp::zoom_input`, `TriApp::loupe`).
-- **Favoris** dans le panneau des dossiers.
-- **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un vrai
-  confort »).
+- [x] **Favoris** dans le panneau des dossiers (**fait** le 18/10/2026 : `m`, clic
+  droit, en tête du panneau, fichier `favorites` du dossier de données,
+  `places::favorites`).
+- [x] **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un
+  vrai confort ») : **fait** le 18/10/2026 (`src/watch.rs`, `doc/watch.md`, `[watch]
+  interval_ms`) ; par scrutation, sans dépendance (même comportement sur NAS et carte).
 - **Raccourcis dans la fenêtre de réglages** (section `[keys]`).
 - **`dd` / `yy`** (toute la ligne de la grille), mineur, avec les nombres (`5dd`, `3yy`).
   Décidé le 18/10/2026 : **en grille seulement**, un chiffre attend le délai des séquences
@@ -649,7 +652,8 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    boucle selon `[gui.view] stack_wrap`, ↑ / ↓ de pile en pile, boutons), préférée de la
    pile choisie (Entrée en mode pile, `Maj+Entrée`), séparée des notes et retenue. Puis :
    un seul interrupteur des piles (grille et plein écran), bouton toujours visible, deux
-   tons de gris.
+   tons de gris. Troisième retour : toutes piles dépliées, illisible (un trait sous chaque
+   image) ; piles dépliées sur **fonds alternés** (deux gris), cadre et trait retirés.
 
 ## À faire (liste tenue à jour, 17/10/2026)
 
@@ -769,11 +773,11 @@ explicitement par l'utilisateur comme important.
       --reveal|--edit`. Copier / déplacer vers… fait le 18/10/2026 (`y` / `x`,
       `tri --copy|--move`).
 - [x] **Éditeur externe** configurable (`[files] editor`, fait le 17/10/2026).
-- [~] Panneau des dossiers : navigation au clavier faite le 18/10/2026 (leader `Ctrl+B`) ;
-      restent les favoris.
+- [x] Panneau des dossiers : navigation au clavier et favoris faits le 18/10/2026.
 - [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours
       (un dossier par jour ?), vidéos (aujourd'hui ignorées).
-- [ ] Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs).
+- [x] Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs), faite le
+      18/10/2026.
 
 ### Internationalisation
 - [x] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais

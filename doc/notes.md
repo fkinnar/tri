@@ -36,6 +36,10 @@ Opérations sur `xmp::Notes` : `set_stars(n)` (le drapeau ne change pas : une ph
 garde ses étoiles), `toggle_color(c, multiple)` (une seule couleur : une autre remplace, la
 même retire ; plusieurs : ajout / retrait, comme darktable), `clear_colors()`.
 
+`reload_sidecars(&sidecars)` relit seulement les images concernées par des sidecars
+modifiés ailleurs (surveillance du dossier, `doc/watch.md`) et renvoie celles dont les
+notes ont changé.
+
 ## Filtres
 
 `NotesRule` regroupe les critères, combinés par « et » ; `None` = critère ignoré :

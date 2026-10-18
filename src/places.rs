@@ -18,6 +18,8 @@ pub enum PlaceKind {
     Home,
     /// Racine du système de fichiers (arborescence complète).
     Root,
+    /// Dossier favori, choisi par l'utilisateur (voir [`favorites`]).
+    Favorite,
 }
 
 /// Un emplacement : point de départ d'une arborescence.
@@ -75,6 +77,14 @@ impl PlaceSettings {
     pub fn ejectable(&self, place: &Place) -> bool {
         place.kind == PlaceKind::Volume && !matches_any(&self.fixed, place)
     }
+}
+
+/// Nom affiché d'un dossier : son dernier composant, sinon le chemin entier (`/`, `C:\\`).
+fn folder_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 /// `place` correspond-il à l'un des `patterns` (par son nom ou son chemin) ?
@@ -200,6 +210,60 @@ fn windows_drives() -> Vec<Place> {
             kind: PlaceKind::Volume,
         })
         .collect()
+}
+
+/// Fichier des favoris, dans le dossier de données : un chemin par ligne, dans l'ordre
+/// d'affichage.
+const FAVORITES_FILE: &str = "favorites";
+
+/// Dossiers favoris, dans l'ordre où ils ont été ajoutés, absents compris (carte retirée,
+/// disque débranché : le favori revient quand le volume est remonté).
+pub fn favorites(data: &Path) -> Vec<PathBuf> {
+    fs::read_to_string(data.join(FAVORITES_FILE))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+fn write_favorites(data: &Path, list: &[PathBuf]) -> io::Result<()> {
+    let text: String = list
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned() + "\n")
+        .collect();
+    fs::create_dir_all(data)?;
+    fs::write(data.join(FAVORITES_FILE), text)
+}
+
+/// Ajoute `dir` aux favoris (à la fin), ou l'en retire si `on` est faux. Renvoie la
+/// nouvelle liste.
+pub fn set_favorite(data: &Path, dir: &Path, on: bool) -> io::Result<Vec<PathBuf>> {
+    let mut list = favorites(data);
+    list.retain(|p| p != dir);
+    if on {
+        list.push(dir.to_path_buf());
+    }
+    write_favorites(data, &list)?;
+    Ok(list)
+}
+
+/// Dossier `from` renommé ou déplacé en `to` : les favoris qui sont `from` ou dedans
+/// suivent. Renvoie la nouvelle liste (inchangée si aucun favori n'est concerné).
+pub fn rename_favorites(data: &Path, from: &Path, to: &Path) -> io::Result<Vec<PathBuf>> {
+    let list = favorites(data);
+    let moved: Vec<PathBuf> = list
+        .iter()
+        .map(|p| {
+            p.strip_prefix(from)
+                .map_or_else(|_| p.clone(), |rest| to.join(rest))
+        })
+        .map(|p| p.components().collect())
+        .collect();
+    if moved != list {
+        write_favorites(data, &moved)?;
+    }
+    Ok(moved)
 }
 
 /// Vrai si le nom de `path` commence par un point (dossier caché sous Unix).
@@ -398,6 +462,8 @@ pub struct Row {
     pub kind: Option<PlaceKind>,
     /// Emplacement qu'on peut éjecter (volume non fixé, voir [`PlaceSettings::fixed`]).
     pub ejectable: bool,
+    /// Dossier favori (en tête de liste, ou ailleurs dans l'arborescence).
+    pub favorite: bool,
 }
 
 /// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
@@ -416,6 +482,9 @@ pub struct Tree {
     /// peut paraître deux fois ; le rang départage, le dossier retrouve la ligne quand
     /// d'autres apparaissent au-dessus).
     cursor: Option<(usize, PathBuf)>,
+    /// Favoris, dans l'ordre ([`favorites`]), et ceux qui existent (montrés en tête).
+    favorites: Vec<PathBuf>,
+    present: Vec<PathBuf>,
 }
 
 impl Tree {
@@ -436,7 +505,37 @@ impl Tree {
             expanded: Default::default(),
             children: Default::default(),
             cursor: None,
+            favorites: Vec::new(),
+            present: Vec::new(),
         }
+    }
+
+    /// Remplace les favoris, montrés en tête, avant les emplacements ; ceux qui n'existent
+    /// pas (volume démonté) sont omis jusqu'au prochain [`Tree::set_places`] ou
+    /// [`Tree::refresh`].
+    pub fn set_favorites(&mut self, favorites: Vec<PathBuf>) {
+        self.favorites = favorites;
+        self.check_favorites();
+    }
+
+    /// Favoris (tous, absents compris).
+    pub fn favorites(&self) -> &[PathBuf] {
+        &self.favorites
+    }
+
+    /// Vrai si `path` est un favori.
+    pub fn is_favorite(&self, path: &Path) -> bool {
+        self.favorites.iter().any(|p| p == path)
+    }
+
+    /// Favoris présents : vérifié une fois, pas à chaque dessin (un NAS peut être lent).
+    fn check_favorites(&mut self) {
+        self.present = self
+            .favorites
+            .iter()
+            .filter(|p| p.is_dir())
+            .cloned()
+            .collect();
     }
 
     /// Emplacements.
@@ -506,11 +605,13 @@ impl Tree {
     /// le reste.
     pub fn set_places(&mut self, places: Vec<Place>) {
         self.places = places;
+        self.check_favorites();
     }
 
     /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
     pub fn refresh(&mut self) {
         self.places = places_filtered(&self.filter);
+        self.check_favorites();
         self.reload();
     }
 
@@ -608,10 +709,15 @@ impl Tree {
         }
     }
 
-    /// Lignes visibles, dans l'ordre d'affichage : chaque emplacement, puis, s'il est
-    /// déplié, ses sous-dossiers, récursivement.
+    /// Lignes visibles, dans l'ordre d'affichage : les favoris présents, puis chaque
+    /// emplacement ; sous chacun, s'il est déplié, ses sous-dossiers, récursivement.
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
+        for path in &self.present {
+            let first = rows.len();
+            self.push_rows(&mut rows, path, folder_name(path), 0);
+            rows[first].kind = Some(PlaceKind::Favorite);
+        }
         for place in &self.places {
             let first = rows.len();
             self.push_rows(&mut rows, &place.path, place.name.clone(), 0);
@@ -635,14 +741,11 @@ impl Tree {
             },
             kind: None,
             ejectable: false,
+            favorite: self.is_favorite(path),
         });
         if let Some(Ok(children)) = children {
             for child in children {
-                let name = child.file_name().map_or_else(
-                    || child.display().to_string(),
-                    |n| n.to_string_lossy().into_owned(),
-                );
-                self.push_rows(rows, child, name, depth + 1);
+                self.push_rows(rows, child, folder_name(child), depth + 1);
             }
         }
     }
@@ -658,6 +761,45 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    #[test]
+    fn favorites_come_first_and_follow_renames() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        let root = dir.path().join("photos");
+        for d in ["2026/Séance", "2026/Autre"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let seance = root.join("2026/Séance");
+        assert!(favorites(&data).is_empty());
+        set_favorite(&data, &seance, true).unwrap();
+        set_favorite(&data, &root.join("absent"), true).unwrap();
+        let list = set_favorite(&data, &root.join("2026"), true).unwrap();
+        assert_eq!(list.len(), 3);
+        let place = Place {
+            name: "Test".into(),
+            path: root.clone(),
+            kind: PlaceKind::Home,
+        };
+        let mut tree = Tree::with_places(vec![place], false);
+        tree.set_favorites(list);
+        let rows = tree.rows();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["Séance", "2026", "Test"], "absent : omis");
+        assert_eq!(rows[0].kind, Some(PlaceKind::Favorite));
+        assert!(rows[0].favorite && !rows[2].favorite);
+        // Le même dossier dans l'arborescence est marqué favori aussi.
+        tree.expand(&root);
+        assert!(tree.rows().iter().any(|r| r.depth == 1 && r.favorite));
+        // Renommer « 2026 » : les deux favoris suivent.
+        std::fs::rename(root.join("2026"), root.join("2027")).unwrap();
+        let list = rename_favorites(&data, &root.join("2026"), &root.join("2027")).unwrap();
+        assert_eq!(list[0], root.join("2027/Séance"));
+        assert_eq!(list[2], root.join("2027"));
+        assert_eq!(favorites(&data), list, "écrit");
+        let list = set_favorite(&data, &root.join("2027"), false).unwrap();
+        assert_eq!(list, [root.join("2027/Séance"), root.join("absent")]);
     }
 
     #[test]

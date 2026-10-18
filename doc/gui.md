@@ -233,10 +233,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   barre des filtres et du bandeau, fond d'accent quand actif, toujours visible ; clic
   droit : `Ctrl+G`) : piles actives, regroupement en grille **et** en plein écran ← / →
   dans la pile, ↑ / ↓ de pile en pile ; inactives, ← / → de photo en photo. Piles en
-  **deux tons de gris** (`stack_frame`, `stack_mark`), plus de turquoise.
-  Retours du 18/10/2026 : pile dépliée signalée par un **cadre gris foncé** autour de
-  chaque image (`[gui.grid] stack_frame`, `[gui.colors] stack_frame`) et le trait
-  d'accent **en bas** ; **curseur de similarité** dans la barre des filtres (icône de
+  **tons de gris**, plus de turquoise. Troisième retour : toutes piles dépliées, cadres
+  et traits ne se lisaient plus (un trait sous chaque image) ; une pile dépliée a
+  maintenant un **fond**, deux gris en alternance d'une pile à la suivante
+  (`[gui.colors] stack_band`, `stack_band_alt`), comme pendant le réglage du curseur.
+  Retours du 18/10/2026 (remplacés depuis) : cadre autour de chaque image et trait en
+  bas ; **curseur de similarité** dans la barre des filtres (icône de
   pile : `Ctrl+G`) : pendant le réglage, les piles sont dépliées, une sur deux sur un fond
   plus clair (`stack_band`), seuil retenu pour le dossier au lâcher. **Mode pile** en
   plein écran (`Ctrl+S`, bouton du bandeau, inspiré du mode tri de Capture One) : ← / →
@@ -262,9 +264,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   plusieurs. Dossiers (idée du 18/10/2026, comme nvim-tree) : `a` crée un dossier dans le
   dossier pointé, `r` / F2 le renomme, `x` / Suppr le supprime (confirmé, avec ce qu'il
   contient ; corbeille selon `[files] trash`) ; les emplacements ne se renomment ni ne se
-  suppriment ; tout s'annule (`u`), le dossier ouvert suit son renommage. À la souris :
+  suppriment ; tout s'annule (`u`), le dossier ouvert suit son renommage. **Favoris**
+  (18/10/2026) : `m` (« mark », comme les marque-pages de nvim-tree) ajoute le dossier
+  pointé aux favoris ou l'en retire ; ils sont en tête du panneau, avant les volumes,
+  marqués d'une étoile (le dossier aussi, là où il paraît dans l'arborescence), et
+  suivent un renommage fait dans `tri`. À la souris :
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
-  supprimer ; décharger une carte ici, ou sur un support amovible : décharger,
+  supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
   éjecter), raccourci au survol.
   Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
   (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`

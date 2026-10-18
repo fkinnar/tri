@@ -98,6 +98,58 @@ impl NoteBook {
         }
     }
 
+    /// Relit les notes des images concernées par les sidecars `sidecars` (créés, modifiés
+    /// ou supprimés par un autre logiciel, voir [`crate::watch`]) : `IMG.RAF.xmp` pour
+    /// `IMG.RAF`, `IMG.xmp` pour `IMG.RAF` et `IMG.JPG`. Renvoie les images dont les notes
+    /// (ou l'erreur de lecture) ont changé : rien quand c'est `tri` qui vient d'écrire.
+    pub fn reload_sidecars(&mut self, sidecars: &[PathBuf]) -> Vec<PathBuf> {
+        let mut by_dir: HashMap<PathBuf, Vec<String>> = HashMap::new();
+        for sidecar in sidecars {
+            if let Some(stem) = sidecar.file_stem() {
+                by_dir
+                    .entry(dir_of(sidecar))
+                    .or_default()
+                    .push(stem.to_string_lossy().to_lowercase());
+            }
+        }
+        let mut changed = Vec::new();
+        for (dir, stems) in by_dir {
+            let Some(images) = self.by_dir.get(&dir).cloned() else {
+                continue;
+            };
+            let index = SidecarIndex::new(&dir);
+            let lower = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().to_lowercase());
+            for image in images {
+                let (name, stem) = (lower(image.file_name()), lower(image.file_stem()));
+                if !stems
+                    .iter()
+                    .any(|s| Some(s) == name.as_ref() || Some(s) == stem.as_ref())
+                {
+                    continue;
+                }
+                let sidecar = index.sidecar_path(&image, self.convention);
+                let (notes, error) = match xmp::read_sidecar(&sidecar) {
+                    Ok(notes) => (notes, None),
+                    Err(e) => (Notes::default(), Some(e.to_string())),
+                };
+                let old = self.entries.get(&image);
+                if old.is_none_or(|e| e.notes != notes || e.error != error) {
+                    changed.push(image.clone());
+                }
+                self.entries.insert(
+                    image,
+                    Entry {
+                        notes,
+                        sidecar,
+                        error,
+                    },
+                );
+            }
+        }
+        changed.sort();
+        changed
+    }
+
     /// Notes de `image` (vides si elle est inconnue ou sans sidecar).
     pub fn notes(&self, image: &Path) -> &Notes {
         self.entries.get(image).map(|e| &e.notes).unwrap_or(&EMPTY)
@@ -397,6 +449,38 @@ mod tests {
             !rule.accepts(&notes(1, Flag::None, &[])),
             "pas assez d'étoiles"
         );
+    }
+
+    #[test]
+    fn sidecars_changed_elsewhere_are_reread() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        for name in ["A.RAF", "A.JPG", "B.RAF"] {
+            std::fs::write(d.join(name), b"x").unwrap();
+        }
+        let images = [d.join("A.RAF"), d.join("A.JPG"), d.join("B.RAF")];
+        let mut book = NoteBook::load(images.iter().map(|p| p.as_path()), Convention::Darktable);
+        // Un autre logiciel (convention Adobe) note la paire A : les deux images relues.
+        let three = notes(3, Flag::None, &[]);
+        xmp::write_sidecar(&d.join("A.xmp"), &three).unwrap();
+        let changed = book.reload_sidecars(&[d.join("A.xmp")]);
+        assert_eq!(changed, [d.join("A.JPG"), d.join("A.RAF")]);
+        assert_eq!(book.notes(&d.join("A.RAF")).stars, 3);
+        assert_eq!(book.notes(&d.join("B.RAF")).stars, 0, "pas concernée");
+        // Relu sans changement (tri vient d'écrire) : rien à signaler.
+        assert!(book.reload_sidecars(&[d.join("A.xmp")]).is_empty());
+        // B.RAF.xmp (darktable) supprimé, puis créé.
+        xmp::write_sidecar(&d.join("B.RAF.xmp"), &notes(5, Flag::None, &[])).unwrap();
+        assert_eq!(
+            book.reload_sidecars(&[d.join("B.RAF.xmp")]),
+            [d.join("B.RAF")]
+        );
+        std::fs::remove_file(d.join("B.RAF.xmp")).unwrap();
+        assert_eq!(
+            book.reload_sidecars(&[d.join("B.RAF.xmp")]),
+            [d.join("B.RAF")]
+        );
+        assert_eq!(book.notes(&d.join("B.RAF")).stars, 0);
     }
 
     #[test]

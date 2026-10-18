@@ -86,6 +86,13 @@ fixed = []
 # dans le panneau des dossiers ; 0 : pas de surveillance (F5 ou « Actualiser »).
 watch_ms = 2000
 
+[watch]
+# Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
+# modifiées par un autre logiciel (darktable…) apparaissent d'elles-mêmes, une fois le
+# dossier stable pendant cet intervalle (une copie en cours ne recharge qu'une fois, à la
+# fin). 0 : pas de surveillance.
+interval_ms = 1000
+
 [exposure]
 # Histogramme et alertes d'exposition, calculés sur les données du capteur pour un RAW.
 # Seuil de saturation en IL sous le blanc du capteur (0 : seulement au blanc). -0.02 (1,4 %)
@@ -294,9 +301,7 @@ marked_frame = 3.0
 # Mention « floue » sur les vignettes des photos jugées floues (score de netteté, voir
 # [sharpness]).
 blur_badge = true
-# Pile dépliée : cadre de ses images (épaisseur ; couleur : [gui.colors] stack_frame) et
-# trait d'accent en bas. Largeur du curseur de similarité de la barre des filtres.
-stack_frame = 2.0
+# Largeur du curseur de similarité de la barre des filtres.
 stack_slider = 110.0
 
 [gui.view]
@@ -458,12 +463,11 @@ marked = "#ffaa28"
 focus = "#3cff6e"
 # Goutte des filtres de netteté (barrée : masquer les floues ; seule : floues seulement).
 blur_drop = "#6eaae6"
-# Piles : cadre des images d'une pile dépliée ; pendant le réglage du curseur de
-# similarité, fond d'une pile sur deux.
-stack_frame = "#484848"
-stack_band = "#2c2c2c"
-# Piles : feuilles et pastille d'une pile repliée, trait en bas d'une pile dépliée (deux
-# tons de gris avec stack_frame).
+# Piles dépliées : fond de leurs images, une pile sur deux en gris clair, l'autre en gris
+# foncé (pendant le réglage du curseur de similarité : toutes les piles).
+stack_band = "#383838"
+stack_band_alt = "#181818"
+# Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
 stack_mark = "#8c8c8c"
 badge = "#78aae6"
 warning = "#e6a03c"

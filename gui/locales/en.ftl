@@ -80,6 +80,7 @@ action-core-folders-eject = Folders: eject the removable drive
 action-core-folders-create = Folders: new folder
 action-core-folders-rename = Folders: rename the folder
 action-core-folders-delete = Folders: delete the folder
+action-core-folders-favorite = Folders: add to or remove from favourites
 action-core-metadata-open = Metadata: open (large histogram)
 action-core-metadata-select_up = Metadata: extend the selection up
 action-core-metadata-select_down = Metadata: extend the selection down
@@ -310,6 +311,7 @@ settings-section-render = RAW rendering
 settings-section-cache = Cache
 settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
+settings-section-watch = Folder watching
 settings-section-places = Places
 settings-section-exposure = Exposure
 settings-section-offload = Card offload
@@ -364,6 +366,20 @@ folder-menu-delete = Delete…
 folder-menu-offload = Offload the card…
 folder-menu-eject = Eject
 folder-menu-offload-here = Offload a card here…
+watch-reloaded = { $count ->
+    [one] One image added, removed or changed elsewhere: folder reloaded
+   *[other] { $count } images added, removed or changed elsewhere: folder reloaded
+}
+watch-notes = { $count ->
+    [one] Notes of one image changed elsewhere: reloaded
+   *[other] Notes of { $count } images changed elsewhere: reloaded
+}
+folder-menu-favorite-add = Add to favourites
+folder-menu-favorite-remove = Remove from favourites
+folders-favorite = Favourite
+folders-favorite-added = “{ $name }” added to favourites
+folders-favorite-removed = “{ $name }” removed from favourites
+folders-favorite-error = Favourites not saved: { $error }
 
 ## What is shown
 

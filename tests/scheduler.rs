@@ -679,10 +679,14 @@ fn shown_images_of_a_comparison_are_all_served() {
     let (scheduler, events) = start(&fake, 1);
     let generation = scheduler.set_folder(all);
     // Comparaison de 2, 5 et 8 (5 active) : toutes acceptent un 1:1, pas les autres.
+    // En pause pendant les demandes : sinon le worker peut partir sur 2 avant que 5 ne
+    // soit demandée (test instable).
+    scheduler.set_paused(true);
     scheduler.set_shown(&[5, 2, 8]);
     for i in [2, 5, 8, 6] {
         scheduler.request(i, Level::EmbeddedFull);
     }
+    scheduler.set_paused(false);
     assert!(scheduler.wait_idle(LONG));
     let mut done: Vec<usize> = ready(&events, generation, Level::EmbeddedFull)
         .into_iter()

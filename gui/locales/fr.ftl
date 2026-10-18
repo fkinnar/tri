@@ -79,6 +79,7 @@ action-core-folders-eject = Dossiers : éjecter le support amovible
 action-core-folders-create = Dossiers : nouveau dossier
 action-core-folders-rename = Dossiers : renommer le dossier
 action-core-folders-delete = Dossiers : supprimer le dossier
+action-core-folders-favorite = Dossiers : ajouter aux favoris ou en retirer
 action-core-metadata-open = Métadonnées : ouvrir (histogramme en grand)
 action-core-metadata-select_up = Métadonnées : étendre la sélection vers le haut
 action-core-metadata-select_down = Métadonnées : étendre la sélection vers le bas
@@ -313,6 +314,7 @@ settings-section-cache = Cache
 settings-section-scheduler = Calculs en arrière-plan
 settings-section-xmp = Notes (XMP)
 settings-section-places = Emplacements
+settings-section-watch = Surveillance du dossier
 settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte
 settings-section-files = Fichiers
@@ -366,6 +368,20 @@ folder-menu-delete = Supprimer…
 folder-menu-offload = Décharger la carte…
 folder-menu-eject = Éjecter
 folder-menu-offload-here = Décharger une carte ici…
+watch-reloaded = { $count ->
+    [one] Une image ajoutée, retirée ou modifiée ailleurs : dossier relu
+   *[other] { $count } images ajoutées, retirées ou modifiées ailleurs : dossier relu
+}
+watch-notes = { $count ->
+    [one] Notes d'une image modifiées ailleurs : relues
+   *[other] Notes de { $count } images modifiées ailleurs : relues
+}
+folder-menu-favorite-add = Ajouter aux favoris
+folder-menu-favorite-remove = Retirer des favoris
+folders-favorite = Favori
+folders-favorite-added = « { $name } » ajouté aux favoris
+folders-favorite-removed = « { $name } » retiré des favoris
+folders-favorite-error = Favoris non enregistrés : { $error }
 
 ## Ce qui est affiché
 
