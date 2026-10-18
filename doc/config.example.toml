@@ -228,9 +228,10 @@ language = "auto"
 [gui]
 # "dark", "light" ou "system".
 theme = "dark"
-# Profils de raccourcis actifs, "classic" (flèches) et/ou "vim" (hjkl) ; le premier
-# l'emporte en cas de conflit.
-keys = ["classic", "vim"]
+# Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, Ctrl+C / Ctrl+X copier /
+# déplacer vers, Ctrl+Z / Ctrl+Y), "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, dw / yw,
+# u / Ctrl+R) ou "both" (les deux). Le reste (notation, filtres, piles, zoom…) est commun.
+profile = "classic"
 # Changer de panneau au clavier, comme tmux : le leader, puis h / l (ou les flèches) pour
 # le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
 # ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
@@ -466,8 +467,8 @@ marked = "#ffaa28"
 focus = "#3cff6e"
 # Goutte des filtres de netteté (barrée : masquer les floues ; seule : floues seulement).
 blur_drop = "#6eaae6"
-# Piles dépliées : fond de leurs images, une pile sur deux en gris clair, l'autre en gris
-# foncé (pendant le réglage du curseur de similarité : toutes les piles).
+# Piles actives : fond des images, un groupe sur deux en gris clair, l'autre en gris foncé
+# (une photo isolée est un groupe d'une image).
 stack_band = "#383838"
 stack_band_alt = "#181818"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.

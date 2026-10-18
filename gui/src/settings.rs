@@ -102,9 +102,8 @@ impl AppSettings {
 pub struct GuiSettings {
     /// Thème de l'interface.
     pub theme: Theme,
-    /// Profils de raccourcis actifs ; le premier l'emporte en cas de conflit. Liste vide :
-    /// profils par défaut.
-    pub keys: Vec<Profile>,
+    /// Jeu de raccourcis : classique (flèches), vim (hjkl), ou les deux.
+    pub profile: Profile,
     /// Leader du changement de panneau, comme le préfixe de tmux : puis `h` / `l` (ou les
     /// flèches) pour le panneau de gauche / de droite, `o` pour le suivant.
     pub leader: String,
@@ -172,7 +171,7 @@ impl Default for GuiSettings {
         Self {
             // Fond sombre et neutre : la norme pour juger des photos.
             theme: Theme::Dark,
-            keys: vec![Profile::Classic, Profile::Vim],
+            profile: Profile::Classic,
             leader: "Ctrl+b".into(),
             key_sequence_timeout_ms: 1000,
             key_ambiguous_timeout_ms: 300,
@@ -206,11 +205,7 @@ impl Default for GuiSettings {
 impl GuiSettings {
     /// Table des raccourcis des profils choisis.
     pub fn keymap(&self) -> Keymap {
-        if self.keys.is_empty() {
-            Keymap::default()
-        } else {
-            Keymap::from_profiles(&self.keys)
-        }
+        Keymap::from_profiles(&[self.profile])
     }
 
     /// Budget de chargement des vignettes par image affichée.
@@ -683,9 +678,8 @@ pub struct Colors {
     pub focus: Color,
     /// Goutte des filtres de netteté (barre de filtres).
     pub blur_drop: Color,
-    /// Fond des images d'une pile dépliée, une pile sur deux (gris clair) ; les autres sur
-    /// `stack_band_alt` (gris foncé). Pendant le réglage du curseur de similarité : toutes
-    /// les piles, celles d'une seule image comprises.
+    /// Piles actives : fond des images d'un groupe sur deux (gris clair), photo isolée
+    /// comprise (un groupe d'une image) ; les autres sur `stack_band_alt` (gris foncé).
     pub stack_band: Color,
     /// Fond de l'autre pile sur deux (voir `stack_band`).
     pub stack_band_alt: Color,
@@ -833,7 +827,7 @@ mod tests {
             standard = 3840
             [gui]
             theme = "light"
-            keys = ["vim"]
+            profile = "vim"
             raw_previews = "background"
             [gui.view]
             full_raw_dwell_ms = 250
@@ -843,7 +837,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(parsed.gui.theme, Theme::Light);
-        assert_eq!(parsed.gui.keys, [Profile::Vim]);
+        assert_eq!(parsed.gui.profile, Profile::Vim);
         assert_eq!(parsed.gui.raw_previews, RawPreviews::Background);
         assert_eq!(parsed.gui.view.full_raw_dwell(), Duration::from_millis(250));
         assert_eq!(parsed.gui.colors.selection, Some(Color([0x1e, 0x6f, 0x7f])));
@@ -871,7 +865,7 @@ mod tests {
     fn bad_values_are_reported() {
         for (text, culprit) in [
             ("[gui]\ntheme = \"sepia\"", "sepia"),
-            ("[gui]\nkeys = [\"emacs\"]", "emacs"),
+            ("[gui]\nprofile = \"emacs\"", "emacs"),
             ("[gui.colors]\nbadge = \"bleu\"", "#rrggbb"),
             ("[gui.colors]\nbadge = \"#12345\"", "#rrggbb"),
             ("[gui.colors]\nbadge = \"#12345g\"", "#rrggbb"),
@@ -904,13 +898,33 @@ mod tests {
     }
 
     #[test]
-    fn empty_key_list_falls_back_to_default_profiles() {
-        let gui = GuiSettings {
-            keys: Vec::new(),
-            ..GuiSettings::default()
+    fn each_profile_has_only_its_own_keys() {
+        let keymap = |profile| {
+            GuiSettings {
+                profile,
+                ..GuiSettings::default()
+            }
+            .keymap()
         };
-        let next = |km: &Keymap| km.action(egui::Key::L, egui::Modifiers::NONE);
-        assert_eq!(next(&gui.keymap()), next(&Keymap::default()));
-        assert!(next(&gui.keymap()).is_some());
+        let next = |km: &Keymap, k| km.action(k, egui::Modifiers::NONE);
+        let (classic, vim, both) = (
+            keymap(Profile::Classic),
+            keymap(Profile::Vim),
+            keymap(Profile::Both),
+        );
+        use crate::actions::Action;
+        use egui::Key::{ArrowRight, L, X, Y};
+        assert_eq!(next(&classic, ArrowRight), Some(Action::NavNext));
+        assert_eq!(next(&classic, L), None, "pas de hjkl en classique");
+        assert_eq!(next(&classic, X), None);
+        assert_eq!(next(&vim, L), Some(Action::NavNext));
+        assert_eq!(next(&vim, ArrowRight), None, "pas de flèches en vim");
+        assert_eq!(next(&vim, Y), Some(Action::FileCopy));
+        assert_eq!(next(&both, L), next(&both, ArrowRight));
+        // Communs : la notation, dans les deux.
+        for km in [&classic, &vim] {
+            assert_eq!(next(km, egui::Key::Num3), Some(Action::Stars(3)));
+        }
+        assert_eq!(GuiSettings::default().profile, Profile::Classic);
     }
 }

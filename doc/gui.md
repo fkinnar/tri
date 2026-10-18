@@ -247,6 +247,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et traits ne se lisaient plus (un trait sous chaque image) ; une pile dépliée a
   maintenant un **fond**, deux gris en alternance d'une pile à la suivante
   (`[gui.colors] stack_band`, `stack_band_alt`), comme pendant le réglage du curseur.
+  Quatrième retour : une photo isolée est un groupe d'une image, avec son fond aussi
+  (deux photos isolées voisines ne se confondent plus) : piles actives, chaque groupe
+  alterne, deux cas au lieu de trois.
   Retours du 18/10/2026 (remplacés depuis) : cadre autour de chaque image et trait en
   bas ; **curseur de similarité** dans la barre des filtres (icône de
   pile : `Ctrl+G`) : pendant le réglage, les piles sont dépliées, une sur deux sur un fond
@@ -522,7 +525,15 @@ un identifiant stable (`core.nav.next`, `core.filter.cycle`…), comme décidé 
 `CLAUDE.md`. La section `[keys]` du fichier de configuration associe des touches à ces
 identifiants (voir plus bas) ; la souris déclenche les mêmes actions.
 
-Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
+Deux jeux de raccourcis sont livrés, **au choix** (`[gui] profile` : `"classic"` par
+défaut, `"vim"`, ou `"both"` pour les deux ensemble, qui ne se recouvrent pas ; liste
+déroulante dans la fenêtre de réglages). Décidé le 18/10/2026 : un utilisateur d'outils
+classiques n'a que faire des touches de vim, et inversement ; ce qui est pareil pour les
+deux n'est écrit qu'une fois, dans les listes communes (`BASICS`, notation, filtres,
+sélection, fichiers, panneaux, histogramme ; `actions.rs`), le propre de chaque jeu dans
+`CLASSIC` / `VIM`. Un test vérifie que chaque jeu couvre toutes les actions, sans conflit.
+L'aide et les textes qui citent une touche la lisent dans la table en vigueur : ils
+suivent le jeu choisi.
 
 | Action | Classique | Vim |
 |---|---|---|
@@ -536,8 +547,13 @@ Deux profils sont livrés et actifs ensemble (ils ne se recouvrent pas) :
 | `core.view.pan_left` / `pan_right` | Maj+Flèche gauche / droite | Maj+h / Maj+l |
 | `core.view.pan_up` / `pan_down` | Maj+Flèche haut / bas | Maj+k / Maj+j |
 | `core.view.back` | Échap | Échap |
-| `core.app.help` | F1 | ? |
+| `core.app.help` | F1, ? | F1, ? |
 | `core.app.quit` | q | q |
+| `core.file.copy` / `core.file.move` | Ctrl+C / Ctrl+X | y / Ctrl+X |
+| `core.file.copy_stack` / `delete_stack` | Ctrl+Maj+C / Maj+Suppr | yw / dw |
+| `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
+| `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |
+| panneaux (dossiers, métadonnées) | flèches, Début / Fin, Maj + flèches | j k h l, gg / G, Maj + j k, y |
 
 Notation, commune aux deux profils (17/10/2026, pensée aussi pour l'AZERTY) :
 
@@ -594,7 +610,7 @@ l'AZERTY parce qu'egui, ne connaissant pas « & », se rabat sur la touche physi
 ```
 
 - les raccourcis cités **remplacent** ceux des profils pour cette action (liste vide : plus
-  aucun) ; les profils (`[gui] keys`) restent la base ;
+  aucun) ; le jeu choisi (`[gui] profile`) reste la base ;
 - une touche s'écrit comme l'aide l'affiche (« Flèche gauche », « Page préc. », « Échap »,
   « Maj+P », « Ctrl+u ») ou avec le nom d'egui (« ArrowLeft », « PageUp ») ; une majuscule
   seule vaut Maj + la lettre (« G », comme dans vim) ; une séquence se sépare par des
@@ -602,8 +618,9 @@ l'AZERTY parce qu'egui, ne connaissant pas « & », se rabat sur la touche physi
 - problèmes signalés au démarrage (stderr et barre d'état, détail au survol), sans
   invalider le reste du fichier : action ou touche inconnue, raccourci attribué à deux
   actions (le premier par ordre d'identifiant est gardé ; un raccourci du fichier l'emporte
-  sur celui d'un profil, et le dit), raccourci qui commence une séquence plus longue (il ne
-  se déclencherait jamais) ;
+  sur celui d'un profil, et le dit). Un raccourci qui commence une séquence plus longue
+  n'est plus un problème : il attend la suite un court instant
+  (`[gui] key_ambiguous_timeout_ms`) ;
 - un test vérifie que chaque raccourci par défaut, écrit comme l'aide l'affiche, se relit à
   l'identique.
 

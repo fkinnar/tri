@@ -89,6 +89,22 @@ fn section_title(ui: &Ui, name: &str, strong: bool) -> egui::text::LayoutJob {
 }
 
 /// Vrai si la clé désigne un dossier : saisie avec complétion par Tab.
+/// Valeurs possibles d'un réglage à choix (liste déroulante plutôt que texte libre). Un
+/// test vérifie que chacune est acceptée.
+fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
+    Some(match (section, key) {
+        ("gui", "profile") => &["classic", "vim", "both"],
+        ("gui", "theme") => &["dark", "light", "system"],
+        ("gui", "raw_previews") => &["on-demand", "background"],
+        ("xmp", "sidecar") => &["darktable", "adobe"],
+        ("i18n", "language") => &["auto", "fr", "en"],
+        ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
+        ("gui.zoom", "loupe_key") => &["shift", "ctrl", "alt", "none"],
+        ("gui.histogram", "scale") => &["ev", "linear"],
+        _ => return None,
+    })
+}
+
 fn is_folder_key(key: &str) -> bool {
     key == "dir" || key.ends_with("_dir") || key == "destination"
 }
@@ -678,6 +694,19 @@ impl SettingsWindow {
                         new = Some(Value::Float(v));
                     }
                 }
+                Value::Str(s) if choices(section, &entry.key).is_some() => {
+                    let mut v = s.clone();
+                    egui::ComboBox::from_id_salt(("settings_choice", &id))
+                        .selected_text(&v)
+                        .show_ui(ui, |ui| {
+                            for choice in choices(section, &entry.key).unwrap_or_default() {
+                                ui.selectable_value(&mut v, choice.to_string(), *choice);
+                            }
+                        });
+                    if v != *s {
+                        new = Some(Value::Str(v));
+                    }
+                }
                 Value::Str(s) if parse_color(s).is_some() => {
                     let mut rgb = parse_color(s).unwrap_or_default();
                     if ui.color_edit_button_srgb(&mut rgb).changed() {
@@ -765,6 +794,42 @@ mod tests {
             }
         }
         assert!(is_folder_key("destination") && is_folder_key("dir") && !is_folder_key("history"));
+    }
+
+    #[test]
+    fn every_choice_is_accepted_and_names_a_real_setting() {
+        let schema = schema();
+        for section in &schema.sections {
+            for entry in section.groups.iter().flat_map(|g| &g.entries) {
+                let Some(list) = choices(&section.name, &entry.key) else {
+                    continue;
+                };
+                assert!(
+                    list.iter()
+                        .any(|c| entry.default == Value::Str(c.to_string())),
+                    "{}.{} : défaut hors de la liste",
+                    section.name,
+                    entry.key
+                );
+                for choice in list {
+                    let text = format!("[{}]\n{} = \"{choice}\"\n", section.name, entry.key);
+                    assert!(tri::settings::parse::<AppSettings>(&text).is_ok(), "{text}");
+                }
+            }
+        }
+        // Chaque réglage de la table existe bien.
+        for (section, key) in [
+            ("gui", "profile"),
+            ("gui", "theme"),
+            ("gui", "raw_previews"),
+            ("xmp", "sidecar"),
+            ("i18n", "language"),
+            ("gui.view", "focus_marker"),
+            ("gui.zoom", "loupe_key"),
+            ("gui.histogram", "scale"),
+        ] {
+            assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
+        }
     }
 
     #[test]

@@ -79,13 +79,6 @@ impl Stacks {
         (self.collapsed[g] && self.covers[g] == index).then(|| self.ranges[g].len())
     }
 
-    /// Vrai si l'image `index` est dans une pile dépliée (de plus d'une image).
-    pub fn in_open_stack(&self, index: usize) -> bool {
-        self.of
-            .get(index)
-            .is_some_and(|&g| !self.collapsed[g] && self.ranges[g].len() > 1)
-    }
-
     /// Rang de l'image `index` dans la vue, `None` si elle est cachée dans une pile.
     pub fn position(&self, index: usize) -> Option<usize> {
         self.shown.iter().position(|&i| i == index)
@@ -155,7 +148,6 @@ mod tests {
         assert_eq!(s.collapsed_count(3), Some(3));
         assert_eq!(s.collapsed_count(1), None, "pas la couverture");
         assert_eq!(s.collapsed_count(0), None, "une seule image : pas une pile");
-        assert!(s.in_open_stack(4) && !s.in_open_stack(3) && !s.in_open_stack(0));
         assert_eq!(s.visible(2), 3, "cachée : sa couverture");
         assert_eq!(s.visible(5), 5);
         assert_eq!(s.position(3), Some(1));

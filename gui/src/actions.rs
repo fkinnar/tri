@@ -786,18 +786,25 @@ const fn ctrl(key: Key) -> Chord {
 /// Un raccourci d'un profil : une touche, ou une séquence de touches (`g g`).
 type Binding = (&'static [Chord], Action);
 
-/// Profil de raccourcis livré par défaut. Dans le fichier de configuration : `"classic"`
-/// ou `"vim"`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+/// Jeu de raccourcis, au choix (`[gui] profile`, décidé le 18/10/2026 : un utilisateur
+/// d'outils classiques n'a que faire des touches de vim, et inversement ; un nouveau
+/// raccourci ne s'écrit qu'une fois s'il est le même pour les deux, dans les listes
+/// communes). Dans le fichier de configuration : `"classic"`, `"vim"` ou `"both"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Profile {
-    /// Flèches, Début / Fin, Page préc. / suiv. ; Maj + flèches dans une image zoomée.
+    /// Flèches, Début / Fin, Page préc. / suiv., Maj + flèches dans une image zoomée,
+    /// Suppr, `Ctrl+C` / `Ctrl+X` copier / déplacer vers, `Ctrl+Z` / `Ctrl+Y`.
+    #[default]
     Classic,
-    /// hjkl, gg / G, Ctrl+U / Ctrl+D ; Maj + hjkl dans une image zoomée. `u` reste libre
-    /// pour l'annulation (à venir), comme dans vim.
+    /// hjkl, gg / G, Ctrl+U / Ctrl+D, Maj + hjkl dans une image zoomée, `x`, `y`, `dw` /
+    /// `yw`, `u` / `Ctrl+R`, `j` / `k` dans les panneaux.
     Vim,
+    /// Les deux ensemble (ils ne se recouvrent pas).
+    Both,
 }
 
+/// Profil classique, en plus des listes communes.
 const CLASSIC: &[Binding] = {
     use Action::*;
     &[
@@ -809,19 +816,34 @@ const CLASSIC: &[Binding] = {
         (&[plain(Key::End)], NavLast),
         (&[plain(Key::PageUp)], NavPageUp),
         (&[plain(Key::PageDown)], NavPageDown),
-        (&[plain(Key::Enter)], Open),
-        (&[plain(Key::Z)], ToggleZoom),
-        (&[plain(Key::B)], ToggleSource),
         (&[shifted(Key::ArrowLeft)], PanLeft),
         (&[shifted(Key::ArrowRight)], PanRight),
         (&[shifted(Key::ArrowUp)], PanUp),
         (&[shifted(Key::ArrowDown)], PanDown),
-        (&[plain(Key::Escape)], Back),
-        (&[plain(Key::F1)], Help),
-        (&[plain(Key::Q)], Quit),
+        // Copier / déplacer vers… : `Ctrl+C` / `Ctrl+X`, comme copier / couper d'un
+        // gestionnaire de fichiers (`Cmd+C` sur macOS, voir `Chord::from_event`).
+        (&[ctrl(Key::C)], FileCopy),
+        // Toute la pile : Maj en plus (corbeille confirmée, comme toujours).
+        (&[ctrl_shift(Key::C)], FileCopyStack),
+        (&[shifted(Key::Delete)], FileDeleteStack),
+        (&[ctrl(Key::Y)], Redo),
+        // Panneau des dossiers.
+        (&[plain(Key::ArrowUp)], FolderUp),
+        (&[plain(Key::ArrowDown)], FolderDown),
+        (&[plain(Key::ArrowRight)], FolderExpand),
+        (&[plain(Key::ArrowLeft)], FolderCollapse),
+        (&[plain(Key::Home)], FolderFirst),
+        (&[plain(Key::End)], FolderLast),
+        // Panneau des métadonnées : Maj + flèches étendent la sélection.
+        (&[plain(Key::ArrowUp)], MetaUp),
+        (&[plain(Key::ArrowDown)], MetaDown),
+        (&[shifted(Key::ArrowUp)], MetaSelectUp),
+        (&[shifted(Key::ArrowDown)], MetaSelectDown),
+        (&[ctrl_shift(Key::C)], MetaCopyAll),
     ]
 };
 
+/// Profil vim, en plus des listes communes. `u` annule, comme dans vim.
 const VIM: &[Binding] = {
     use Action::*;
     &[
@@ -833,14 +855,47 @@ const VIM: &[Binding] = {
         (&[shifted(Key::G)], NavLast),
         (&[ctrl(Key::U)], NavPageUp),
         (&[ctrl(Key::D)], NavPageDown),
-        (&[plain(Key::Enter)], Open),
-        (&[plain(Key::Z)], ToggleZoom),
-        (&[plain(Key::B)], ToggleSource),
         (&[shifted(Key::H)], PanLeft),
         (&[shifted(Key::L)], PanRight),
         (&[shifted(Key::K)], PanUp),
         (&[shifted(Key::J)], PanDown),
+        // `y` copie (« yank »), `x` supprime (efface le caractère : ici l'image ; une
+        // confirmation suit). Toute la pile : `dw` / `yw`, comme un mot (idée de
+        // l'utilisateur, 18/10/2026 : une ligne de la grille, `dd`, n'a pas de sens). `y`
+        // seul attend alors un court instant la suite (`[gui] key_ambiguous_timeout_ms`).
+        (&[plain(Key::Y)], FileCopy),
+        (&[plain(Key::Y), plain(Key::W)], FileCopyStack),
+        (&[plain(Key::D), plain(Key::W)], FileDeleteStack),
+        (&[plain(Key::X)], FileDelete),
+        (&[plain(Key::U)], Undo),
+        (&[ctrl(Key::R)], Redo),
+        // Panneau des dossiers, comme nvim-tree.
+        (&[plain(Key::K)], FolderUp),
+        (&[plain(Key::J)], FolderDown),
+        (&[plain(Key::L)], FolderExpand),
+        (&[plain(Key::H)], FolderCollapse),
+        (&[plain(Key::G), plain(Key::G)], FolderFirst),
+        (&[shifted(Key::G)], FolderLast),
+        (&[plain(Key::X)], FolderDelete),
+        // Panneau des métadonnées : `y` copie, Maj + j / k étendent, Maj+Y copie tout.
+        (&[plain(Key::K)], MetaUp),
+        (&[plain(Key::J)], MetaDown),
+        (&[plain(Key::Y)], MetaCopy),
+        (&[shifted(Key::K)], MetaSelectUp),
+        (&[shifted(Key::J)], MetaSelectDown),
+        (&[shifted(Key::Y)], MetaCopyAll),
+    ]
+};
+
+/// Commun aux deux profils : ouvrir, zoom, source, revenir, aide, quitter.
+const BASICS: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::Enter)], Open),
+        (&[plain(Key::Z)], ToggleZoom),
+        (&[plain(Key::B)], ToggleSource),
         (&[plain(Key::Escape)], Back),
+        (&[plain(Key::F1)], Help),
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (&[plain(Key::Questionmark)], Help),
         (&[shifted(Key::Questionmark)], Help),
@@ -867,33 +922,20 @@ const SELECTION: &[Binding] = {
     ]
 };
 
-/// Panneau des dossiers quand il a le clavier, commun aux deux profils (flèches et hjkl).
+/// Panneau des dossiers quand il a le clavier, commun aux deux profils (déplacement :
+/// flèches ou hjkl selon le profil).
 const FOLDERS: &[Binding] = {
     use Action::*;
     &[
-        (&[plain(Key::ArrowUp)], FolderUp),
-        (&[plain(Key::K)], FolderUp),
-        (&[plain(Key::ArrowDown)], FolderDown),
-        (&[plain(Key::J)], FolderDown),
-        (&[plain(Key::ArrowRight)], FolderExpand),
-        (&[plain(Key::L)], FolderExpand),
-        (&[plain(Key::ArrowLeft)], FolderCollapse),
-        (&[plain(Key::H)], FolderCollapse),
         (&[plain(Key::Enter)], FolderOpen),
-        (&[plain(Key::Home)], FolderFirst),
-        (&[plain(Key::G), plain(Key::G)], FolderFirst),
-        (&[plain(Key::End)], FolderLast),
-        (&[shifted(Key::G)], FolderLast),
         // Support amovible pointé : décharger, éjecter (une boîte confirme).
-        // `o` (« offload ») : `d` masquerait le `dd` (supprimer) du profil vim.
         (&[plain(Key::O)], FolderOffload),
         (&[plain(Key::E)], FolderEject),
-        // Comme nvim-tree : `a` crée, `r` renomme ; supprimer : `x`, Suppr (pas `d`,
-        // début du `dd` de vim). Une boîte confirme toujours.
+        // Comme nvim-tree : `a` crée, `r` renomme ; supprimer : Suppr (et `x` en vim).
+        // Une boîte confirme toujours.
         (&[plain(Key::A)], FolderCreate),
         (&[plain(Key::R)], FolderRename),
         (&[plain(Key::F2)], FolderRename),
-        (&[plain(Key::X)], FolderDelete),
         (&[plain(Key::Delete)], FolderDelete),
         (&[plain(Key::Backspace)], FolderDelete),
         // Favori : `m` (« mark »), comme les marque-pages de nvim-tree.
@@ -901,24 +943,13 @@ const FOLDERS: &[Binding] = {
     ]
 };
 
-/// Panneau des métadonnées quand il a le clavier : défilement, copie (`y`, « yank »).
+/// Panneau des métadonnées quand il a le clavier, commun aux deux profils.
 const METADATA: &[Binding] = {
     use Action::*;
     &[
-        (&[plain(Key::ArrowUp)], MetaUp),
-        (&[plain(Key::K)], MetaUp),
-        (&[plain(Key::ArrowDown)], MetaDown),
-        (&[plain(Key::J)], MetaDown),
-        (&[plain(Key::Y)], MetaCopy),
         // Comme partout ailleurs (Cmd+C sur macOS, voir `Chord::from_event`).
         (&[ctrl(Key::C)], MetaCopy),
         (&[plain(Key::Enter)], MetaOpen),
-        // Plusieurs lignes : Maj + flèches / Maj + j k étendent ; Maj+Y copie tout.
-        (&[shifted(Key::ArrowUp)], MetaSelectUp),
-        (&[shifted(Key::K)], MetaSelectUp),
-        (&[shifted(Key::ArrowDown)], MetaSelectDown),
-        (&[shifted(Key::J)], MetaSelectDown),
-        (&[shifted(Key::Y)], MetaCopyAll),
     ]
 };
 
@@ -945,22 +976,11 @@ const FILES: &[Binding] = {
         (&[plain(Key::E)], FileEdit),
         // Comme la plupart des applications (Cmd+, sur macOS est pris par le système).
         (&[ctrl(Key::Comma)], Settings),
-        // Comme dans vim : `y` copie (« yank »), `x` supprime (efface le caractère : ici
-        // l'image ; une confirmation suit). Déplacer : `Ctrl+X`, couper (retour du
-        // 18/10/2026). Toute la pile : `dw` / `yw`, comme un mot (idée de l'utilisateur,
-        // 18/10/2026 : une ligne de la grille, `dd`, n'a pas de sens). `y` seul attend
-        // alors un court instant la suite (`[gui] key_ambiguous_timeout_ms`).
-        (&[plain(Key::Y)], FileCopy),
-        (&[plain(Key::Y), plain(Key::W)], FileCopyStack),
-        (&[plain(Key::D), plain(Key::W)], FileDeleteStack),
-        (&[plain(Key::X)], FileDelete),
+        // Déplacer : `Ctrl+X`, couper (retour du 18/10/2026).
         (&[ctrl(Key::X)], FileMove),
-        // Annuler : `u` / `Ctrl+R` comme dans vim, `Ctrl+Z` / `Ctrl+Maj+Z` ailleurs (et
-        // `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir `Chord::from_event`), dans les deux
-        // profils.
-        (&[plain(Key::U)], Undo),
+        // Annuler : `Ctrl+Z` / `Ctrl+Maj+Z` (et `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir
+        // `Chord::from_event`) dans les deux profils, réflexe de tous.
         (&[ctrl(Key::Z)], Undo),
-        (&[ctrl(Key::R)], Redo),
         (&[ctrl_shift(Key::Z)], Redo),
         (&[ctrl(Key::H)], History),
         // Piles : s déplie / replie celle de l'image, Maj+S toutes ; Ctrl+G le
@@ -980,6 +1000,11 @@ const FILES: &[Binding] = {
         (&[shifted(Key::Enter)], StackChoose),
     ]
 };
+
+/// Listes communes aux deux profils.
+const COMMON: &[&[Binding]] = &[
+    BASICS, RATING, FILTERS, SELECTION, FILES, FOLDERS, METADATA, HISTOGRAM,
+];
 
 /// Notation, commune aux deux profils, pensée aussi pour l'AZERTY : chiffres avec ou sans Maj
 /// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY),
@@ -1078,18 +1103,12 @@ const FILTERS: &[Binding] = {
 impl Profile {
     /// Raccourcis du profil, notation et filtres compris.
     pub fn bindings(self) -> impl Iterator<Item = &'static Binding> {
-        let own = match self {
-            Profile::Classic => CLASSIC,
-            Profile::Vim => VIM,
+        let own: &[&[Binding]] = match self {
+            Profile::Classic => &[CLASSIC],
+            Profile::Vim => &[VIM],
+            Profile::Both => &[CLASSIC, VIM],
         };
-        own.iter()
-            .chain(RATING)
-            .chain(FILTERS)
-            .chain(SELECTION)
-            .chain(FILES)
-            .chain(FOLDERS)
-            .chain(METADATA)
-            .chain(HISTOGRAM)
+        own.iter().chain(COMMON).flat_map(|list| list.iter())
     }
 }
 
@@ -1556,9 +1575,9 @@ fn key_label_in(language: Language, key: Key) -> String {
 }
 
 impl Default for Keymap {
-    /// Les deux profils actifs ensemble : ils ne se recouvrent pas.
+    /// Les deux profils ensemble ([`Profile::Both`]) : ils ne se recouvrent pas.
     fn default() -> Self {
-        Keymap::from_profiles(&[Profile::Classic, Profile::Vim])
+        Keymap::from_profiles(&[Profile::Both])
     }
 }
 

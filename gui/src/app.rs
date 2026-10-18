@@ -1949,7 +1949,10 @@ impl TriApp {
                         let at = ctx.content_rect().center() - vec2(160.0, 80.0);
                         self.file_action(file_action, paths, at);
                     }
-                    None => self.notice = Some((t!("stack-actions-need-stacks"), true)),
+                    None => {
+                        let keys = self.keymap.keys_for(Action::StackMode).join(" / ");
+                        self.notice = Some((t!("stack-actions-need-stacks", keys = keys), true));
+                    }
                 }
             }
             Action::FileRename
@@ -4209,7 +4212,10 @@ impl TriApp {
                 let mut t = self.group_threshold;
                 let slider = ui
                     .add(egui::Slider::new(&mut t, 0.0..=1.0).show_value(false))
-                    .on_hover_text(t!("stack-slider-tip"));
+                    .on_hover_text(t!(
+                        "stack-slider-tip",
+                        keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
+                    ));
                 if t != self.group_threshold {
                     self.group_threshold = t;
                     self.stacks_dirty = true;
@@ -4234,7 +4240,9 @@ impl TriApp {
                     &Action::StacksAll.label(),
                     &self.action_tip(Action::StacksAll),
                 );
-                if !self.expanded.is_empty() {
+                // Allumé quand les piles sont repliées (retour du 18/10/2026 : « dans
+                // l'autre sens »).
+                if self.expanded.is_empty() {
                     ui.painter()
                         .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
                 }
@@ -4366,11 +4374,11 @@ impl TriApp {
         } else if let Some(group) = self
             .stacks
             .group_index(index)
-            .filter(|_| self.grouping_preview || self.stacks.in_open_stack(index))
+            .filter(|_| self.grouping_preview || self.stacking)
         {
-            // Piles dépliées (toutes pendant le réglage du curseur de similarité) : deux
-            // gris en alternance, d'une pile à la suivante (retour du 18/10/2026 : cadres
-            // et traits ne se lisaient pas, toutes piles dépliées).
+            // Piles actives : deux gris en alternance d'un groupe au suivant, une photo
+            // isolée formant un groupe d'une image (retours du 18/10/2026 : cadres et
+            // traits ne se lisaient pas ; « pourquoi 3 cas quand 2 suffisent »).
             Color32::from(if group % 2 == 1 {
                 colors.stack_band
             } else {
@@ -5642,6 +5650,8 @@ mod tests {
         settings.gui.key_sequence_timeout_ms = 60_000;
         // `y` seul (copier) agit dès l'image suivante, sans attendre un éventuel `y w`.
         settings.gui.key_ambiguous_timeout_ms = 0;
+        // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
+        settings.gui.profile = crate::actions::Profile::Both;
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
