@@ -324,6 +324,21 @@ Proposition : sortir cette étape du logiciel de développement.
 - **Stockage** : un recadrage est une donnée de l'utilisateur → plutôt dans le sidecar
   XMP de l'image maîtresse (espace de noms `tri:`), comme les notes, pour survivre aux
   déplacements de fichiers.
+- **Sans export physique** (précision du 18/10/2026) : avec darktable, `tri` peut
+  produire lui-même l'image maîtresse, `darktable-cli <RAW> <sidecar .xmp> <sortie>`
+  (tout l'historique de développement, taille de sortie au choix), et la garder dans son
+  cache, recalculée quand le `.xmp` de darktable change : corriger dans darktable suffit,
+  les versions suivent sans rien exporter. Même idée possible avec RawTherapee
+  (`rawtherapee-cli`, profils `.pp3`) et ART (outil en ligne de commande aussi) ;
+  Capture One et Lightroom n'en ont pas (export classique).
+- **Plugins** (bon exercice pour l'architecture prévue, idée de l'utilisateur) :
+  - *envoi* : un trait (une version et son fichier → une destination) et une liste de
+    plugins ; le premier, **AirDrop** (macOS, ce qu'utilise l'utilisateur) ; d'autres
+    pour leurs outils (dossier synchronisé, KDE Connect, serveur…) ;
+  - *rendu* par logiciel de développement (darktable d'abord, puis RawTherapee, ART) :
+    même principe, un trait et des plugins.
+  Traits statiques et liste de plugins pour commencer, comme décidé pour les autres
+  plugins (pas de `libloading` tant qu'aucun plugin externe n'existe).
 
 ## Préférences de travail à respecter
 
