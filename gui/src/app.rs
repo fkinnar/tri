@@ -221,6 +221,9 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// Défilement de l'aide (tests).
+    #[cfg(test)]
+    help_offset: f32,
     /// Pointeur au-dessus d'une vignette pendant le dessin de la grille (clic dans le
     /// vide sinon).
     over_cell: bool,
@@ -479,6 +482,8 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            #[cfg(test)]
+            help_offset: 0.0,
             over_cell: false,
             #[cfg(test)]
             cell_rects: Vec::new(),
@@ -5072,6 +5077,26 @@ impl TriApp {
         let mut open = self.help;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
+        // Défilement au clavier (retour du 18/10/2026) : flèches haut / bas, pages, et
+        // Ctrl+U / Ctrl+D ; pris avant le champ de recherche, à qui elles ne servent pas.
+        let max_height = ctx.content_rect().height() * 0.75;
+        let line = self.gui.dialogs.help_scroll_line;
+        let scroll = ctx.input_mut(|i| {
+            let mut delta = 0.0;
+            for (modifiers, key, step) in [
+                (egui::Modifiers::NONE, egui::Key::ArrowDown, line),
+                (egui::Modifiers::NONE, egui::Key::ArrowUp, -line),
+                (egui::Modifiers::NONE, egui::Key::PageDown, max_height * 0.9),
+                (egui::Modifiers::NONE, egui::Key::PageUp, -max_height * 0.9),
+                (egui::Modifiers::CTRL, egui::Key::D, max_height * 0.5),
+                (egui::Modifiers::CTRL, egui::Key::U, -max_height * 0.5),
+            ] {
+                while i.consume_key(modifiers, key) {
+                    delta += step;
+                }
+            }
+            delta
+        });
         egui::Window::new(t!("help-title"))
             .open(&mut open)
             .min_width(self.gui.dialogs.help_width)
@@ -5092,14 +5117,16 @@ impl TriApp {
                 ui.add_space(4.0);
                 let rows = help_rows(&self.keymap, &query);
                 // Défilante : la liste des actions dépasse la hauteur d'un petit écran.
-                let max_height = ui.ctx().content_rect().height() * 0.75;
                 // Toute la largeur de la boîte : l'ascenseur au bord, les bandes du tableau
                 // jusqu'à lui (retour du 18/10/2026 : la boîte élargie gardait une zone de
                 // texte étroite).
-                ScrollArea::vertical()
+                let _output = ScrollArea::vertical()
                     .max_height(max_height)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
+                        if scroll != 0.0 {
+                            ui.scroll_with_delta(vec2(0.0, -scroll));
+                        }
                         if rows.is_empty() {
                             ui.weak(t!("help-no-match"));
                         }
@@ -5127,6 +5154,10 @@ impl TriApp {
                                 }
                             });
                     });
+                #[cfg(test)]
+                {
+                    self.help_offset = _output.state.clamped_offset().y;
+                }
                 ui.add_space(6.0);
                 ui.weak(t!("help-close-hint"));
             });
@@ -6087,6 +6118,26 @@ mod tests {
         assert_eq!(h.state().selection.len(), 3);
         press(&mut h, Key::A, Modifiers::CTRL | Modifiers::SHIFT);
         assert!(h.state().selection.is_empty());
+    }
+
+    #[test]
+    fn the_help_scrolls_with_the_keyboard() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.state().help);
+        for _ in 0..5 {
+            press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        }
+        let after = h.state().help_offset;
+        assert!(after > 0.0, "flèche bas : défile ({after})");
+        press(&mut h, Key::PageDown, Modifiers::NONE);
+        assert!(h.state().help_offset > after, "page suivante");
+        press(&mut h, Key::U, Modifiers::CTRL);
+        press(&mut h, Key::PageUp, Modifiers::NONE);
+        press(&mut h, Key::PageUp, Modifiers::NONE);
+        assert_eq!(h.state().help_offset, 0.0, "revenu en haut");
+        assert!(h.state().help, "toujours ouverte");
     }
 
     #[test]

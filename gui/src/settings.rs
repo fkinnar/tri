@@ -320,6 +320,8 @@ pub struct DialogSettings {
     pub icon_size: f32,
     /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
     pub help_width: f32,
+    /// Défilement de l'aide par flèche haut / bas (points).
+    pub help_scroll_line: f32,
 }
 
 impl Default for DialogSettings {
@@ -334,6 +336,7 @@ impl Default for DialogSettings {
             title_color: Color([80, 190, 220]),
             icon_size: 34.0,
             help_width: 620.0,
+            help_scroll_line: 40.0,
         }
     }
 }

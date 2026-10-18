@@ -334,8 +334,8 @@ key_hints = false
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
 zoom_on_focus_point = true
-# Piles actives (Ctrl+S, bouton pile), en plein écran : ← / → parcourent la pile, ↑ / ↓
-# passent à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
+# Piles actives (Ctrl+S, bouton pile), en plein écran : flèches gauche / droite dans la
+# pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
 
@@ -371,6 +371,9 @@ title_color = "#50bedc"
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.
 help_width = 620.0
+# Défilement de l'aide au clavier : par flèche haut / bas, en points (pages : Page préc. /
+# suiv., Ctrl+U / Ctrl+D).
+help_scroll_line = 40.0
 
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,

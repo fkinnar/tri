@@ -184,6 +184,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Au clavier dans l'aide et les réglages** (retours du 18/10/2026) : l'aide défile aux
+  flèches haut / bas (`[gui.dialogs] help_scroll_line`), Page préc. / suiv. et Ctrl+U /
+  Ctrl+D, la recherche gardant les lettres. Réglages : la liste des sections défile
+  jusqu'à celle choisie aux flèches (et les réglages repartent du haut) ; depuis la
+  recherche, → (recherche vide), Entrée ou Tab donnent le clavier au premier réglage
+  montré, puis Tab / Maj+Tab passent de l'un à l'autre. Un test parcourt toutes les
+  sections : il a trouvé un « ← » des commentaires de l'exemple, absent de la police
+  d'egui (remplacé par des mots).
 - **Curseur masqué** (18/10/2026, pour voir les piles d'ensemble) : en grille, Échap
   quand il n'y a plus rien à fermer (sélection multiple déjà vidée), ou un clic dans le
   vide (qui vide aussi la sélection), masque l'image en surbrillance. Une action qui vise

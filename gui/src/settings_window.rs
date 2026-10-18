@@ -142,6 +142,15 @@ pub struct SettingsWindow {
     /// l'instant de la dernière (fini après le délai des séquences sans nouvelle touche).
     recording: Option<(Action, Vec<Chord>, Instant)>,
     sequence_timeout: Duration,
+    /// Section changée au clavier : la liste défile jusqu'à elle, les réglages repartent
+    /// du haut (retour du 18/10/2026 : la section choisie sortait de la vue).
+    section_moved: bool,
+    /// Entrer dans la partie droite au clavier (→, Entrée ou Tab depuis la recherche) :
+    /// le premier réglage montré prend le focus.
+    focus_first: bool,
+    /// Défilement de la liste des sections (tests).
+    #[cfg(test)]
+    sections_offset: f32,
 }
 
 /// Ce que la fenêtre demande à l'application.
@@ -165,6 +174,10 @@ impl SettingsWindow {
             keymap,
             key_warnings,
             recording: None,
+            section_moved: false,
+            focus_first: false,
+            #[cfg(test)]
+            sections_offset: 0.0,
             sequence_timeout: settings.gui.key_sequence_timeout(),
             file,
             section: 0,
@@ -252,6 +265,19 @@ impl SettingsWindow {
             if down {
                 self.section = (self.section + 1).min(last);
             }
+            self.section_moved |= up || down;
+        }
+        // Depuis la recherche : →, Entrée ou Tab entrent dans les réglages (retour du
+        // 18/10/2026 : la partie droite n'était pas joignable au clavier, Tab passant
+        // d'abord par toutes les sections).
+        if ctx.memory(|m| m.has_focus(id)) {
+            let empty = self.query.trim().is_empty();
+            let enter = ctx.input_mut(|i| {
+                i.consume_key(Modifiers::NONE, Key::Enter)
+                    | i.consume_key(Modifiers::NONE, Key::Tab)
+                    | (empty && i.consume_key(Modifiers::NONE, Key::ArrowRight))
+            });
+            self.focus_first |= enter;
         }
         let screen = ctx.content_rect().size();
         // Place des marges et du titre de la boîte comprise : elle tient dans la fenêtre.
@@ -280,7 +306,11 @@ impl SettingsWindow {
                         ui.horizontal_top(|ui| {
                             self.section_list(ui, schema, size.y);
                             ui.separator();
-                            ScrollArea::vertical()
+                            let mut entries = ScrollArea::vertical();
+                            if self.section_moved {
+                                entries = entries.vertical_scroll_offset(0.0);
+                            }
+                            entries
                                 .id_salt("settings_entries")
                                 .max_height(size.y)
                                 .auto_shrink([false, false])
@@ -291,6 +321,7 @@ impl SettingsWindow {
                                         }
                                     });
                                 });
+                            self.section_moved = false;
                         });
                     } else {
                         ScrollArea::vertical()
@@ -337,24 +368,30 @@ impl SettingsWindow {
     }
 
     fn section_list(&mut self, ui: &mut Ui, schema: &Schema, height: f32) {
-        ScrollArea::vertical()
+        let _output = ScrollArea::vertical()
             .id_salt("settings_sections")
             .max_height(height)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     for (i, section) in schema.sections.iter().enumerate() {
-                        if ui
-                            .selectable_label(
-                                self.section == i,
-                                section_title(ui, &section.name, false),
-                            )
-                            .clicked()
-                        {
+                        let label = ui.selectable_label(
+                            self.section == i,
+                            section_title(ui, &section.name, false),
+                        );
+                        if self.section == i && self.section_moved {
+                            label.scroll_to_me(None);
+                        }
+                        if label.clicked() && self.section != i {
                             self.section = i;
+                            self.section_moved = true;
                         }
                     }
                 });
             });
+        #[cfg(test)]
+        {
+            self.sections_offset = _output.state.clamped_offset().y;
+        }
     }
 
     /// Les réglages d'une section ; `only` : les seules clés à montrer (recherche).
@@ -593,11 +630,14 @@ impl SettingsWindow {
                     }
                 }
                 _ => {
-                    if ui
+                    let record = ui
                         .small_button(t!("settings-keys-record"))
-                        .on_hover_text(t!("settings-keys-record-tip"))
-                        .clicked()
-                    {
+                        .on_hover_text(t!("settings-keys-record-tip"));
+                    if self.focus_first {
+                        record.request_focus();
+                        self.focus_first = false;
+                    }
+                    if record.clicked() {
                         self.recording = Some((action, Vec::new(), Instant::now()));
                     }
                     let draft = self.drafts.entry(id.clone()).or_default();
@@ -656,6 +696,7 @@ impl SettingsWindow {
         let in_file = self.file.get(section, &entry.key).is_some();
         let mut new = None;
         let mut reset = false;
+        let mut widget: Option<egui::Response> = None;
         ui.horizontal(|ui| {
             let name = RichText::new(&entry.key).monospace();
             let name = if in_file { name.strong() } else { name };
@@ -671,15 +712,19 @@ impl SettingsWindow {
             match &current {
                 Value::Bool(b) => {
                     let mut v = *b;
-                    if ui.checkbox(&mut v, "").changed() {
+                    let r = ui.checkbox(&mut v, "");
+                    if r.changed() {
                         new = Some(Value::Bool(v));
                     }
+                    widget = Some(r);
                 }
                 Value::Int(i) => {
                     let mut v = *i;
-                    if ui.add(egui::DragValue::new(&mut v)).changed() {
+                    let r = ui.add(egui::DragValue::new(&mut v));
+                    if r.changed() {
                         new = Some(Value::Int(v));
                     }
+                    widget = Some(r);
                 }
                 Value::Float(x) => {
                     let mut v = *x;
@@ -690,31 +735,36 @@ impl SettingsWindow {
                     let drag = egui::DragValue::new(&mut v)
                         .speed(scale * 0.01)
                         .max_decimals(6);
-                    if ui.add(drag).changed() {
+                    let r = ui.add(drag);
+                    if r.changed() {
                         new = Some(Value::Float(v));
                     }
+                    widget = Some(r);
                 }
                 Value::Str(s) if choices(section, &entry.key).is_some() => {
                     let mut v = s.clone();
-                    egui::ComboBox::from_id_salt(("settings_choice", &id))
+                    let combo = egui::ComboBox::from_id_salt(("settings_choice", &id))
                         .selected_text(&v)
                         .show_ui(ui, |ui| {
                             for choice in choices(section, &entry.key).unwrap_or_default() {
                                 ui.selectable_value(&mut v, choice.to_string(), *choice);
                             }
                         });
+                    widget = Some(combo.response);
                     if v != *s {
                         new = Some(Value::Str(v));
                     }
                 }
                 Value::Str(s) if parse_color(s).is_some() => {
                     let mut rgb = parse_color(s).unwrap_or_default();
-                    if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    let r = ui.color_edit_button_srgb(&mut rgb);
+                    if r.changed() {
                         new = Some(Value::Str(format!(
                             "#{:02x}{:02x}{:02x}",
                             rgb[0], rgb[1], rgb[2]
                         )));
                     }
+                    widget = Some(r);
                     ui.weak(s);
                 }
                 other => {
@@ -742,7 +792,12 @@ impl SettingsWindow {
                     if !field.has_focus() && !done {
                         *draft = shown;
                     }
+                    widget = Some(field);
                 }
+            }
+            if let Some(w) = widget.as_ref().filter(|_| self.focus_first) {
+                w.request_focus();
+                self.focus_first = false;
             }
             if in_file
                 && ui
@@ -830,6 +885,46 @@ mod tests {
         ] {
             assert!(schema.default_of(section, key).is_some(), "{section}.{key}");
         }
+    }
+
+    #[test]
+    fn sections_follow_the_keyboard_and_the_entries_are_reachable() {
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let w = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(900.0, 420.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(3);
+        // Jusqu'à la dernière section : la liste défile pour la montrer.
+        let last = schema().sections.len() - 1;
+        for _ in 0..last {
+            h.key_press(Key::ArrowDown);
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+        assert_eq!(h.state().section, last);
+        assert!(h.state().sections_offset > 0.0, "liste défilée");
+        // Retour à la première, puis → : le premier réglage prend le clavier.
+        for _ in 0..last {
+            h.key_press(Key::ArrowUp);
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+        assert_eq!(h.state().sections_offset, 0.0);
+        h.key_press(Key::ArrowRight);
+        h.run_steps(3);
+        let focused = h.ctx.memory(|m| m.focused());
+        assert!(
+            focused.is_some() && focused != Some(search_id()),
+            "{focused:?}"
+        );
     }
 
     #[test]
