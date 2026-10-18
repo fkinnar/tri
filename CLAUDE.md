@@ -547,6 +547,29 @@ Proposition : sortir cette étape du logiciel de développement.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
 
+## Feuille de route décidée le 18/10/2026 (dans cet ordre)
+
+1. **Copier / déplacer vers…** (gain rapide) : fin du lot « actions sur fichiers »,
+   sur la sélection multiple, sidecars XMP et paires RAW+JPEG suivent, interface et
+   ligne de commande.
+2. **Fenêtre de réglages** (`Ctrl+,`, gain rapide).
+3. **Annuler** (« très important, il est temps ») : concevoir l'historique d'abord, avec
+   l'utilisateur, puis l'appliquer aux notes, au renommage, à la corbeille et au
+   déplacement. Avant les rafales : chaque nouvelle action modifiante l'alourdit.
+4. **Panneaux au clavier, façon tmux** (surtout pour l'utilisateur) : un raccourci pour
+   passer d'un panneau à l'autre, et **un jeu de raccourcis propre au panneau actif**
+   (la même touche fait des choses différentes selon le panneau). `Ctrl+flèches` est
+   réservé au système (macOS : changement de bureau) ; proposition à valider : `Ctrl+W`
+   puis `h` / `j` / `k` / `l` (comme les fenêtres de vim), `Ctrl+W w` pour le suivant.
+   Long à penser pour ne rien casser.
+5. **Regroupement par similarité, puis netteté par groupe** (le gros morceau, 2 et 4
+   ensemble). Modèle souhaité : **Capture One** — une fenêtre pour configurer le
+   regroupement, groupes formés automatiquement selon le contenu, un **curseur de seuil
+   avec effet en temps réel** pour trouver le bon compromis (« simple et efficace à
+   l'usage »). Première base possible : heure de prise de vue (rafales) ; similarité
+   visuelle sur les vignettes, en cache d'analyse. Ensuite : jugement de netteté dans le
+   groupe (corrige les faux positifs des dossiers aux sujets variés).
+
 ## À faire (liste tenue à jour, 17/10/2026)
 
 Vue d'ensemble de ce qui reste, par thème ; le détail et le *pourquoi* sont dans
