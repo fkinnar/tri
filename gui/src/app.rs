@@ -3973,10 +3973,19 @@ impl Dialog {
             }
             // Sans écraser le pointeur choisi par un élément de la boîte (main sur les
             // pastilles du grand histogramme : retour du 18/10/2026).
+            // Sous le pointeur, un élément qui se clique (case, radio, icône dessinée :
+            // `interact_cursor` ne vaut que pour les boutons d'egui) : la main ; ailleurs,
+            // « saisir » pour déplacer la boîte (retours du 18/10/2026).
             if scope.response.hovered()
                 && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
             {
-                ctx.set_cursor_icon(egui::CursorIcon::Grab);
+                let clickable =
+                    ctx.viewport(|v| v.hits.click.is_some_and(|w| w.sense.senses_click()));
+                ctx.set_cursor_icon(if clickable {
+                    egui::CursorIcon::PointingHand
+                } else {
+                    egui::CursorIcon::Grab
+                });
             }
             scope.inner
         });
@@ -5171,6 +5180,36 @@ mod tests {
         assert!(h.state().histogram_large, "reste ouvert");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
+    }
+
+    #[test]
+    fn dialogs_show_a_hand_over_checkboxes_and_grab_elsewhere() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        h.state_mut().config_path = Some(dir.path().join("config.toml"));
+        press(&mut h, Key::Comma, Modifiers::CTRL);
+        // Une case à cocher (réglage booléen) : pas un bouton d'egui.
+        h.event(UiEvent::Text("auto_advance".into()));
+        h.run_steps(2);
+        let rect = h.get_by_role(egui::accesskit::Role::CheckBox).rect();
+        // On a tapé : pointeur masqué jusqu'à ce que la souris bouge.
+        h.hover_at(rect.center() + vec2(1.0, 0.0));
+        h.run_steps(1);
+        h.hover_at(rect.center());
+        h.run_steps(2);
+        assert_eq!(
+            h.output().platform_output.cursor_icon,
+            egui::CursorIcon::PointingHand,
+            "main sur la case"
+        );
+        // Le titre de la boîte : on peut la déplacer.
+        let title = h.get_by_label("Réglages").rect();
+        h.hover_at(title.center());
+        h.run_steps(2);
+        assert_eq!(
+            h.output().platform_output.cursor_icon,
+            egui::CursorIcon::Grab
+        );
     }
 
     #[test]
