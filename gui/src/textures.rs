@@ -54,6 +54,11 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
         }
     }
 
+    /// Vide le cache (réglages des couleurs changés : textures à refaire).
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
     /// Nombre d'entrées.
     #[cfg(test)]
     pub fn len(&self) -> usize {

@@ -71,6 +71,11 @@ barre d'état, le message complet au survol ; la ligne de commande l'écrit sur 
 d'erreur. Un fichier demandé avec `--config` mais introuvable est signalé de même ; un
 fichier absent à l'emplacement par défaut, non.
 
+## Fenêtre de réglages
+
+Dans l'interface, `Ctrl+,` ouvre une fenêtre qui modifie ce fichier sans perdre ses
+commentaires ni ses autres clés (voir `config_edit.md` et `gui.md`).
+
 ## Module `tri::settings` (moteur)
 
 - **`EngineSettings`** : les sections du moteur (`PreviewSection`, `RenderSection`,

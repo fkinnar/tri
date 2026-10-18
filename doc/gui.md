@@ -184,6 +184,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
+  `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
+  depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme
+  l'aide (nom, section, description). Champ selon le type : case à cocher, nombre à
+  glisser ou taper, couleur (sélecteur), texte ou liste TOML (écrits à la validation).
+  Clé présente dans le fichier en gras, bouton « défaut » pour la retirer. Chaque
+  changement est validé (fichier entier relu) puis écrit (quand la souris est lâchée) ;
+  une valeur refusée revient en arrière avec le message d'erreur. Appliqués tout de
+  suite : interface (`[gui.*]`), raccourcis, langue, `[files]`, `[xmp]`, `[offload]` ;
+  le moteur (`[preview]`, `[render]`, `[cache]`, `[scheduler]`, `[exposure]`,
+  `[sharpness]`, `[places]`, `[data]`) et la taille de la fenêtre au prochain lancement,
+  c'est indiqué. Fichier : celui lu au lancement, sinon `--config` ou l'emplacement par
+  défaut.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr` ou `Backspace` — la touche « effacer »
   des Mac —, `d d` dans le profil vim), afficher dans le Finder / le gestionnaire de

@@ -250,6 +250,8 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
+    /// Fenêtre de réglages.
+    Settings,
     /// Noter : 0 à 5 étoiles.
     Stars(u8),
     /// Ajouter ou retirer une couleur.
@@ -262,7 +264,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 75] = [
+    pub const ALL: [Action; 76] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -323,6 +325,7 @@ impl Action {
         Action::PanDown,
         Action::Back,
         Action::Help,
+        Action::Settings,
         Action::Quit,
         Action::Stars(0),
         Action::Stars(1),
@@ -368,7 +371,7 @@ impl Action {
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | Quit => Group::App,
+            Help | Settings | Quit => Group::App,
         }
     }
 
@@ -440,6 +443,7 @@ impl Action {
             Action::PanDown => "core.view.pan_down",
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
+            Action::Settings => "core.app.settings",
             Action::Quit => "core.app.quit",
             Action::Stars(0) => "core.rate.star.0",
             Action::Stars(1) => "core.rate.star.1",
@@ -640,6 +644,8 @@ const FILES: &[Binding] = {
         (&[plain(Key::Backspace)], FileDelete),
         (&[shifted(Key::R)], FileReveal),
         (&[plain(Key::E)], FileEdit),
+        // Comme la plupart des applications (Cmd+, sur macOS est pris par le système).
+        (&[ctrl(Key::Comma)], Settings),
         // Comme dans vim : `y` copie (« yank »), `x` coupe (déplacer).
         (&[plain(Key::Y)], FileCopy),
         (&[plain(Key::X)], FileMove),

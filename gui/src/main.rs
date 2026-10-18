@@ -35,6 +35,7 @@ mod marks;
 mod meta;
 mod offload;
 mod settings;
+mod settings_window;
 mod state;
 mod textures;
 mod trace;
@@ -77,7 +78,12 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             cc.egui_ctx.set_theme(settings.gui.theme);
-            Ok(Box::new(app::TriApp::new(dir, settings, loaded.warning)))
+            // Fichier de la fenêtre de réglages : celui lu, sinon celui demandé ou
+            // l'emplacement par défaut (créé au premier changement).
+            let path = loaded.path.or(config).or_else(tri::settings::default_path);
+            Ok(Box::new(
+                app::TriApp::new(dir, settings, loaded.warning).with_config(path),
+            ))
         }),
     )
 }

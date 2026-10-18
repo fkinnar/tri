@@ -3493,6 +3493,7 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 
@@ -3589,6 +3590,7 @@ dependencies = [
  "sys-locale",
  "tempfile",
  "toml",
+ "toml_edit",
  "trash",
  "turbojpeg",
  "unic-langid",

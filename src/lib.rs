@@ -24,6 +24,7 @@
 
 pub mod bitmap;
 pub mod cache;
+pub mod config_edit;
 pub mod exposure;
 pub mod files;
 pub mod filter;

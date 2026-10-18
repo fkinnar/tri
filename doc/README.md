@@ -12,6 +12,7 @@ existe.
 | [manuel.md](manuel.md) / [manual.md](manual.md) | Premiers pas pour les testeurs (captures, volontairement court) ; captures produites par `scripts/manual-screenshots.sh` |
 | [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
+| [config_edit.md](config_edit.md) | Module `tri::config_edit` : liste des réglages tirée de l'exemple, modification du fichier sans rien perdre (fenêtre de réglages) |
 | [settings.md](settings.md) | Fichier de configuration (TOML) : emplacement, sections, erreurs ; module `tri::settings` |
 | [config.example.toml](config.example.toml) | Toutes les clés avec leur valeur par défaut, commentées |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |

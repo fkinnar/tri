@@ -554,7 +554,11 @@ Proposition : sortir cette étape du logiciel de développement.
    ligne de commande. **Fait** le 18/10/2026 (`files::plan_transfer` / `transfer`, copies
    vérifiées, `y` / `x`, champ avec complétion et destinations récentes ; choix sans
    nouvelle dépendance, glisser-déposer ou sélecteur natif possibles plus tard).
-2. **Fenêtre de réglages** (`Ctrl+,`, gain rapide).
+2. [x] **Fenêtre de réglages** (`Ctrl+,`, gain rapide). **Fait** le 18/10/2026 :
+   `tri::config_edit` (liste des réglages tirée de `config.example.toml`, fichier
+   modifié avec `toml_edit` sans perdre commentaires ni clés), `gui/src/settings_window.rs`
+   (recherche floue, validation, application à chaud de l'interface). Restent : `[keys]`
+   (raccourcis) dans la fenêtre, descriptions en anglais (exemple traduit).
 3. **Annuler** (« très important, il est temps ») : concevoir l'historique d'abord, avec
    l'utilisateur, puis l'appliquer aux notes, au renommage, à la corbeille et au
    déplacement. Avant les rafales : chaque nouvelle action modifiante l'alourdit.
@@ -662,7 +666,7 @@ explicitement par l'utilisateur comme important.
       avec des photos libres (Wikimedia Commons, CC0) ; **à refaire avec de vraies
       photos de l'utilisateur** (RAW, collimateur, histogramme RAW) : relancer le script
       sur son dossier, en `--lang fr` puis `--lang en`.
-- [ ] **Fenêtre de réglages** (`Ctrl+,`, demandée le 17/10/2026) : les réglages sont
+- [x] **Fenêtre de réglages** (`Ctrl+,`, demandée le 17/10/2026, faite le 18/10/2026) : les réglages sont
       devenus nombreux (`doc/config.example.toml`) ; les modifier depuis l'interface,
       écrits dans le fichier de configuration (sans perdre les commentaires ni les clés
       inconnues de l'utilisateur), rangés par section, avec recherche comme l'aide.

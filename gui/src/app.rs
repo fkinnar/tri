@@ -253,6 +253,10 @@ pub struct TriApp {
     reveal: Option<Reveal>,
     screenshot: Option<Screenshot>,
     help: bool,
+    /// Fenêtre de réglages ouverte.
+    settings_window: Option<crate::settings_window::SettingsWindow>,
+    /// Fichier de configuration modifié par la fenêtre de réglages.
+    config_path: Option<PathBuf>,
     /// Recherche dans l'aide (`None` : aide fermée, le champ prendra le focus à
     /// l'ouverture).
     help_search: Option<String>,
@@ -293,6 +297,35 @@ pub struct TriApp {
 }
 
 impl TriApp {
+    /// Fichier de configuration que la fenêtre de réglages modifie.
+    pub fn with_config(mut self, path: Option<PathBuf>) -> TriApp {
+        self.config_path = path;
+        self
+    }
+
+    /// Applique des réglages modifiés dans la fenêtre de réglages : interface, raccourcis,
+    /// langue, fichiers, notes, déchargement. Le moteur (aperçus, cache, calculs) garde les
+    /// siens jusqu'au prochain lancement.
+    fn apply_settings(&mut self, ctx: &egui::Context, new: AppSettings) {
+        if new.i18n.language != self.settings.i18n.language {
+            crate::i18n::init(new.i18n.language);
+        }
+        if new.gui.theme != self.gui.theme {
+            ctx.set_theme(new.gui.theme);
+        }
+        let (keymap, warnings) = new.keymap();
+        self.keymap = keymap;
+        self.key_warnings = warnings;
+        // Textures colorées d'après les réglages : recalculées.
+        self.mask_textures.clear();
+        self.analysis_texture = None;
+        self.gui = new.gui;
+        self.settings.i18n = new.i18n;
+        self.settings.files = new.files;
+        self.settings.xmp = new.xmp;
+        self.settings.offload = new.offload;
+    }
+
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
     /// image), avec les réglages `settings`. `warning` : problème de configuration à
     /// afficher.
@@ -409,6 +442,8 @@ impl TriApp {
             reveal: None,
             screenshot,
             help: false,
+            settings_window: None,
+            config_path: None,
             help_search: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
@@ -1128,6 +1163,13 @@ impl TriApp {
             .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
             .collect();
         for action in actions {
+            // Réglages : seule la fermeture.
+            if self.settings_window.is_some() {
+                if matches!(action, Action::Back | Action::Settings) {
+                    self.settings_window = None;
+                }
+                continue;
+            }
             // L'aide est modale : derrière elle, la grille ne bouge pas.
             if self.help && !action.works_over_overlay() {
                 continue;
@@ -1200,6 +1242,7 @@ impl TriApp {
                 ctx.send_viewport_cmd(ViewportCommand::Close)
             }
             Action::Help => self.help = !self.help,
+            Action::Settings => self.open_settings(),
             Action::Back => {
                 if self.help {
                     self.help = false;
@@ -3472,6 +3515,36 @@ impl TriApp {
         }
     }
 
+    /// Ouvre la fenêtre de réglages (ou dit pourquoi c'est impossible).
+    fn open_settings(&mut self) {
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.file_error = Some(t!("settings-no-path"));
+            return;
+        };
+        match crate::settings_window::SettingsWindow::open(&path) {
+            Ok(w) => {
+                self.help = false;
+                self.settings_window = Some(w);
+            }
+            Err(e) => self.file_error = Some(e),
+        }
+    }
+
+    fn settings_window(&mut self, ctx: &egui::Context) {
+        let Some(window) = &mut self.settings_window else {
+            return;
+        };
+        match window.show(ctx) {
+            crate::settings_window::Outcome::Open => {}
+            crate::settings_window::Outcome::Closed => self.settings_window = None,
+            crate::settings_window::Outcome::Changed(new) => self.apply_settings(ctx, *new),
+        }
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -3661,6 +3734,7 @@ impl eframe::App for TriApp {
         } else {
             self.help_search = None;
         }
+        self.settings_window(&ctx);
         self.rating_dialog(&ctx);
         self.file_dialog(&ctx);
         self.eject_dialog(&ctx);
@@ -5093,6 +5167,48 @@ mod tests {
         assert!(h.state().histogram_large, "reste ouvert");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
+    }
+
+    #[test]
+    fn the_settings_window_searches_and_applies_live() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        h.state_mut().config_path = Some(dir.path().join("config.toml"));
+        press(&mut h, Key::Comma, Modifiers::CTRL);
+        assert!(
+            h.state().settings_window.is_some(),
+            "Ctrl+, ouvre les réglages"
+        );
+        assert!(h.ctx.egui_wants_keyboard_input(), "la recherche a le focus");
+        h.event(UiEvent::Text("clip_under".into()));
+        h.run_steps(2);
+        assert!(
+            h.query_by_label("clip_under").is_some(),
+            "trouvé par la recherche"
+        );
+        assert!(
+            h.query_by_label("thumbnail").is_none(),
+            "le reste est filtré"
+        );
+        // Changement appliqué à chaud : raccourcis et réglages de l'interface.
+        let mut gui = h.state().gui.clone();
+        gui.auto_advance = true;
+        let mut files = h.state().settings.files.clone();
+        files.recent = 3;
+        let settings = AppSettings {
+            gui,
+            files,
+            keys: [("core.app.quit".to_string(), vec!["Ctrl+q".to_string()])].into(),
+            ..AppSettings::default()
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut().apply_settings(&ctx, settings);
+        assert!(h.state().gui.auto_advance);
+        assert_eq!(h.state().settings.files.recent, 3);
+        assert_eq!(h.state().keymap.keys_for(Action::Quit), ["Ctrl+q"]);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().settings_window.is_none(), "Échap ferme");
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]

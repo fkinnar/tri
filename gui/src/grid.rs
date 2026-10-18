@@ -110,6 +110,7 @@ pub fn navigate(
         | Action::PanDown
         | Action::Back
         | Action::Help
+        | Action::Settings
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)

@@ -49,7 +49,10 @@ garde toutes les portes ouvertes.
 Relevé via `cargo metadata` (et complété à chaque ajout : `blake3` est sous CC0-1.0 OR
 Apache-2.0, `turbojpeg` et `turbojpeg-sys` sous Unlicense OR MIT, `cmake` — outil de compilation seulement — sous MIT OR Apache-2.0, `serde` et `toml` — fichier
 de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_parser`,
-`toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `quick-xml` — sidecars XMP —
+`toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `toml_edit` — fenêtre de
+réglages : modifier le fichier sans perdre commentaires ni mise en page, mêmes
+mainteneurs que `toml` (toml-rs), très actif, déjà présent en dépendance indirecte — sous
+MIT OR Apache-2.0, avec `indexmap` et `toml_writer` sous MIT OR Apache-2.0 ; `quick-xml` — sidecars XMP —
 sous MIT, avec `memchr` sous Unlicense OR MIT ; `kamadak-exif` — EXIF des images
 plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` sous
 BSD-2-Clause ; `trash` — corbeille du système, maintenu, version du 13/09/2026 — sous
