@@ -641,7 +641,9 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    similarité dans la barre des filtres (piles dépliées sur fonds alternés pendant le
    réglage), mode pile en plein écran (`Ctrl+S` : ← / → dans la pile, arrêt au bout ou
    boucle selon `[gui.view] stack_wrap`, ↑ / ↓ de pile en pile, boutons), préférée de la
-   pile choisie (Entrée en mode pile, `Maj+Entrée`), séparée des notes et retenue.
+   pile choisie (Entrée en mode pile, `Maj+Entrée`), séparée des notes et retenue. Puis :
+   un seul interrupteur des piles (grille et plein écran), bouton toujours visible, deux
+   tons de gris.
 
 ## À faire (liste tenue à jour, 17/10/2026)
 

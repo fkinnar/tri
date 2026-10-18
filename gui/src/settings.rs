@@ -624,6 +624,9 @@ pub struct Colors {
     pub stack_frame: Color,
     /// Réglage du curseur de similarité : fond d'une pile sur deux, pour les distinguer.
     pub stack_band: Color,
+    /// Piles : feuilles et pastille d'une pile repliée, trait d'une pile dépliée (gris clair,
+    /// avec `stack_frame`, gris foncé).
+    pub stack_mark: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -682,6 +685,7 @@ impl Default for Colors {
             blur_drop: Color([110, 170, 230]),
             stack_frame: Color([72, 72, 72]),
             stack_band: Color([44, 44, 44]),
+            stack_mark: Color([140, 140, 140]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

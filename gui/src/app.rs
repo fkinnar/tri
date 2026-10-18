@@ -271,8 +271,6 @@ pub struct TriApp {
     group_gap: f32,
     /// Fenêtre de regroupement ouverte (`Ctrl+G`).
     group_dialog: bool,
-    /// Mode pile en plein écran (`Ctrl+S`) : ← / → dans la pile, ↑ / ↓ de pile en pile.
-    stack_mode: bool,
     /// Couvertures choisies (la préférée de chaque pile), retenues dans les données.
     chosen: HashSet<PathBuf>,
     /// Curseur de similarité en cours de réglage : piles dépliées, fonds alternés.
@@ -493,7 +491,6 @@ impl TriApp {
             group_threshold: settings.similarity.threshold,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
-            stack_mode: false,
             chosen: settings
                 .engine()
                 .data_dir()
@@ -1231,7 +1228,7 @@ impl TriApp {
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded);
         // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile.
-        let browsing = self.mode == Mode::View && self.stack_mode;
+        let browsing = self.mode == Mode::View && self.stacking;
         if !self.files.is_empty() && !browsing {
             let visible = self.stacks.visible(self.selected);
             if visible != self.selected {
@@ -1724,13 +1721,15 @@ impl TriApp {
             Action::Open => {
                 if self.mode == Mode::Grid && !self.files.is_empty() {
                     self.mode = Mode::View;
-                } else if self.mode == Mode::View && self.stack_mode {
+                } else if self.mode == Mode::View && self.stacking {
                     // Mode pile : Entrée choisit la préférée.
                     self.choose_cover();
                 }
             }
+            // Un seul interrupteur (retour du 18/10/2026) : piles en grille, et en plein
+            // écran ← / → dans la pile, ↑ / ↓ de pile en pile ; sans piles, de photo en photo.
             Action::StackMode => {
-                self.stack_mode = !self.stack_mode;
+                self.stacking = !self.stacking;
                 self.stacks_dirty = true;
             }
             Action::StackChoose => self.choose_cover(),
@@ -1778,14 +1777,14 @@ impl TriApp {
             }
             // En plein écran, seule la navigation image par image a un sens.
             // Mode pile : ← / → dans la pile (arrêt ou boucle au bout), ↑ / ↓ de pile en pile.
-            Action::NavPrev | Action::NavNext if self.mode == Mode::View && self.stack_mode => {
+            Action::NavPrev | Action::NavNext if self.mode == Mode::View && self.stacking => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 let wrap = self.gui.view.stack_wrap;
                 if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
                     self.select(i);
                 }
             }
-            Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stack_mode => {
+            Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stacking => {
                 let forward = action == Action::NavDown;
                 if let Some(i) = self.stacks.neighbour_group(self.selected, forward) {
                     self.select(i);
@@ -3051,7 +3050,7 @@ impl TriApp {
             }
             // Mode pile : où l'on est dans la pile.
             if self.mode == Mode::View
-                && self.stack_mode
+                && self.stacking
                 && let Some(r) = self.stacks.range_of(self.selected)
                 && r.len() > 1
             {
@@ -3636,11 +3635,11 @@ impl TriApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let icon = self.gui.bar_icon_size;
                 let zoomed = self.mode != Mode::Grid && self.zoom.is_some();
-                // Plein écran avec des piles : le mode pile, et en mode pile ↑ / ↓ (pile
-                // d'avant, d'après) à côté de ‹ ›.
+                // Plein écran : l'interrupteur des piles, toujours là ; piles actives, ↑ / ↓
+                // (pile d'avant, d'après) à côté de ‹ ›.
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
-                if self.mode == Mode::View && self.stacking {
-                    if self.stack_mode {
+                if self.mode == Mode::View {
+                    if self.stacking {
                         actions.extend([Action::NavDown, Action::NavUp]);
                     }
                     actions.push(Action::StackMode);
@@ -3652,7 +3651,7 @@ impl TriApp {
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
-                        Action::StackMode => self.stack_mode,
+                        Action::StackMode => self.stacking,
                         _ => false,
                     };
                     if active {
@@ -3833,16 +3832,38 @@ impl TriApp {
             }
             // Piles : curseur de similarité (retour du 18/10/2026, comme Capture One) ;
             // pendant le réglage, les piles se déplient sur des fonds alternés.
+            // L'interrupteur des piles, toujours là (fond d'accent quand elles sont
+            // actives, comme en plein écran) ; clic droit : les réglages fins.
+            ui.separator();
+            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            let tip = format!(
+                "{}\n{}",
+                self.action_tip(Action::StackMode),
+                t!(
+                    "stack-icon-tip",
+                    keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
+                )
+            );
+            let (rect, icon) = marks::icon_button(ui, size, &Action::StackMode.label(), &tip);
             if self.stacking {
-                ui.separator();
-                let size = ui.text_style_height(&egui::TextStyle::Body) + 2.0;
-                let tip = self.action_tip(Action::GroupingWindow);
-                let (rect, icon) = marks::clickable(ui, size, &tip);
-                let color = ui.visuals().text_color();
-                marks::bar_icon(ui.painter(), rect, Action::StackMode, color, &colors);
-                if icon.clicked() {
-                    clicked.push(Action::GroupingWindow);
-                }
+                ui.painter()
+                    .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+            }
+            let color = ui.style().interact(&icon).fg_stroke.color;
+            marks::bar_icon(
+                ui.painter(),
+                rect.shrink(size * 0.2),
+                Action::StackMode,
+                color,
+                &colors,
+            );
+            if icon.clicked() {
+                clicked.push(Action::StackMode);
+            }
+            if icon.secondary_clicked() {
+                clicked.push(Action::GroupingWindow);
+            }
+            if self.stacking {
                 ui.spacing_mut().slider_width = self.gui.grid.stack_slider;
                 let mut t = self.group_threshold;
                 let slider = ui
@@ -4011,15 +4032,16 @@ impl TriApp {
         }
 
         // Pile repliée : des feuilles derrière la vignette, et le nombre d'images ; pile
-        // dépliée : un trait en haut de chaque image, continu d'une image à la suivante.
-        let accent = Color32::from(self.gui.dialogs.title_color);
+        // dépliée : un cadre autour de chaque image, et un trait en bas, continu d'une image
+        // à la suivante. Deux tons de gris (retour du 18/10/2026 : le turquoise gênait).
+        let accent = Color32::from(colors.stack_mark);
         if let Some(count) = self.stacks.collapsed_count(index) {
             for k in 1..=2 {
                 let o = k as f32 * 3.0;
                 painter.rect_stroke(
                     rect.translate(vec2(o, -o)).shrink(1.0),
                     4.0,
-                    egui::Stroke::new(1.0, accent.gamma_multiply(0.6 / k as f32)),
+                    egui::Stroke::new(1.0, accent.gamma_multiply(1.0 / k as f32)),
                     egui::StrokeKind::Inside,
                 );
             }
@@ -4045,7 +4067,7 @@ impl TriApp {
                 pos2(rect.min.x, rect.max.y - 3.0),
                 vec2(rect.width() + g.gap, 3.0),
             );
-            painter.rect_filled(bar, 0.0, accent.gamma_multiply(0.8));
+            painter.rect_filled(bar, 0.0, accent);
         }
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
@@ -6532,8 +6554,7 @@ mod tests {
         h.state_mut().chosen.clear();
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
-        press(&mut h, Key::S, Modifiers::CTRL);
-        assert!(h.state().stack_mode);
+        assert!(h.state().stacking, "piles actives : en plein écran aussi");
         let start = h.state().selected;
         let range = h.state().stacks.range_of(start).cloned().unwrap();
         for _ in 0..5 {
@@ -6551,6 +6572,13 @@ mod tests {
         assert!(selected_name(&h).starts_with('b'), "pile suivante");
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         assert_eq!(h.state().selected, range.end - 1, "retour : sa couverture");
+        // Ctrl+S : plus de piles ; → passe à la photo suivante, toutes visibles.
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert!(!h.state().stacking);
+        h.run_steps(2);
+        let before = h.state().selected;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, before + 1, "de photo en photo");
         press(&mut h, Key::S, Modifiers::CTRL);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);

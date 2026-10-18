@@ -212,6 +212,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   grille suit en direct), écart de temps maximal, nombre de piles ; le seuil est retenu
   pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
   défaut : `[similarity] threshold`).
+  Second retour du 18/10/2026 : **un seul interrupteur** (`Ctrl+S`, bouton pile de la
+  barre des filtres et du bandeau, fond d'accent quand actif, toujours visible ; clic
+  droit : `Ctrl+G`) : piles actives, regroupement en grille **et** en plein écran ← / →
+  dans la pile, ↑ / ↓ de pile en pile ; inactives, ← / → de photo en photo. Piles en
+  **deux tons de gris** (`stack_frame`, `stack_mark`), plus de turquoise.
   Retours du 18/10/2026 : pile dépliée signalée par un **cadre gris foncé** autour de
   chaque image (`[gui.grid] stack_frame`, `[gui.colors] stack_frame`) et le trait
   d'accent **en bas** ; **curseur de similarité** dans la barre des filtres (icône de

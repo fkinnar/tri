@@ -325,9 +325,9 @@ key_hints = false
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
 zoom_on_focus_point = true
-# Mode pile (plein écran, Ctrl+S) : ← / → parcourent la pile, ↑ / ↓ passent à la pile
-# d'avant / d'après ; au bout de la pile, true : on repart de l'autre bout ; false : on
-# s'arrête.
+# Piles actives (Ctrl+S, bouton pile), en plein écran : ← / → parcourent la pile, ↑ / ↓
+# passent à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
+# bout ; false : on s'arrête.
 stack_wrap = false
 
 [gui.dialogs]
@@ -446,6 +446,9 @@ blur_drop = "#6eaae6"
 # similarité, fond d'une pile sur deux.
 stack_frame = "#484848"
 stack_band = "#2c2c2c"
+# Piles : feuilles et pastille d'une pile repliée, trait en bas d'une pile dépliée (deux
+# tons de gris avec stack_frame).
+stack_mark = "#8c8c8c"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
