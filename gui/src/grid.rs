@@ -96,6 +96,19 @@ pub fn navigate(
         | Action::Undo
         | Action::Redo
         | Action::History
+        | Action::FocusLeft
+        | Action::FocusRight
+        | Action::FocusNext
+        | Action::FolderUp
+        | Action::FolderDown
+        | Action::FolderExpand
+        | Action::FolderCollapse
+        | Action::FolderOpen
+        | Action::FolderFirst
+        | Action::FolderLast
+        | Action::MetaUp
+        | Action::MetaDown
+        | Action::MetaCopy
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
         | Action::ToggleHistogram

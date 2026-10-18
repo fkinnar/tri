@@ -412,6 +412,10 @@ pub struct Tree {
     hidden: bool,
     expanded: std::collections::HashSet<PathBuf>,
     children: std::collections::HashMap<PathBuf, Result<Vec<PathBuf>, String>>,
+    /// Ligne pointée au clavier : son rang dans [`Tree::rows`] et son dossier (un dossier
+    /// peut paraître deux fois ; le rang départage, le dossier retrouve la ligne quand
+    /// d'autres apparaissent au-dessus).
+    cursor: Option<(usize, PathBuf)>,
 }
 
 impl Tree {
@@ -431,6 +435,7 @@ impl Tree {
             hidden,
             expanded: Default::default(),
             children: Default::default(),
+            cursor: None,
         }
     }
 
@@ -518,6 +523,91 @@ impl Tree {
         }
     }
 
+    /// Rang de la ligne pointée au clavier dans [`Tree::rows`] (`None` : aucune).
+    pub fn cursor(&self) -> Option<usize> {
+        let (index, path) = self.cursor.as_ref()?;
+        let rows = self.rows();
+        if rows.get(*index).is_some_and(|r| r.path == *path) {
+            return Some(*index);
+        }
+        // Des lignes ont paru ou disparu au-dessus : la plus proche de ce dossier.
+        rows.iter()
+            .enumerate()
+            .filter(|(_, r)| r.path == *path)
+            .min_by_key(|(i, _)| i.abs_diff(*index))
+            .map(|(i, _)| i)
+            .or_else(|| (!rows.is_empty()).then(|| (*index).min(rows.len() - 1)))
+    }
+
+    /// Dossier de la ligne pointée.
+    pub fn cursor_path(&self) -> Option<PathBuf> {
+        self.cursor().map(|i| self.rows()[i].path.clone())
+    }
+
+    /// Pointe la ligne `index` (bornée aux lignes visibles).
+    pub fn set_cursor(&mut self, index: usize) {
+        let rows = self.rows();
+        if let Some(row) = rows.get(index.min(rows.len().saturating_sub(1))) {
+            self.cursor = Some((index.min(rows.len() - 1), row.path.clone()));
+        }
+    }
+
+    /// Pointe la ligne de `path` (la première), si elle est visible.
+    pub fn point_at(&mut self, path: &Path) {
+        if let Some(i) = self.rows().iter().position(|r| r.path == path) {
+            self.set_cursor(i);
+        }
+    }
+
+    /// Descend (`delta` > 0) ou monte de `delta` lignes ; sans ligne pointée, la première.
+    pub fn move_cursor(&mut self, delta: isize) {
+        let next = match self.cursor() {
+            Some(i) => i.saturating_add_signed(delta),
+            None => 0,
+        };
+        self.set_cursor(next);
+    }
+
+    /// Première (`first`) ou dernière ligne.
+    pub fn cursor_to_end(&mut self, first: bool) {
+        let last = self.rows().len().saturating_sub(1);
+        self.set_cursor(if first { 0 } else { last });
+    }
+
+    /// Droite : déplie la ligne pointée ; déjà dépliée, descend sur son premier
+    /// sous-dossier.
+    pub fn cursor_right(&mut self) {
+        let Some(i) = self.cursor() else {
+            return self.set_cursor(0);
+        };
+        let row = self.rows()[i].clone();
+        if row.expanded {
+            let rows = self.rows();
+            if rows.get(i + 1).is_some_and(|next| next.depth > row.depth) {
+                self.set_cursor(i + 1);
+            }
+        } else {
+            self.expand(&row.path);
+            self.set_cursor(i);
+        }
+    }
+
+    /// Gauche : replie la ligne pointée ; déjà repliée, remonte à son dossier parent.
+    pub fn cursor_left(&mut self) {
+        let Some(i) = self.cursor() else {
+            return self.set_cursor(0);
+        };
+        let rows = self.rows();
+        let row = &rows[i];
+        if row.expanded {
+            let path = row.path.clone();
+            self.collapse(&path);
+            self.set_cursor(i);
+        } else if let Some(parent) = (0..i).rev().find(|&j| rows[j].depth < row.depth) {
+            self.set_cursor(parent);
+        }
+    }
+
     /// Lignes visibles, dans l'ordre d'affichage : chaque emplacement, puis, s'il est
     /// déplié, ses sous-dossiers, récursivement.
     pub fn rows(&self) -> Vec<Row> {
@@ -568,6 +658,50 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    #[test]
+    fn the_keyboard_cursor_walks_the_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        for d in ["A/A1", "A/A2", "B"] {
+            std::fs::create_dir_all(dir.path().join(d)).unwrap();
+        }
+        let place = Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: PlaceKind::Home,
+        };
+        let mut tree = Tree::with_places(vec![place], false);
+        assert_eq!(tree.cursor(), None);
+        tree.move_cursor(1);
+        assert_eq!(tree.cursor(), Some(0), "sans curseur : la première ligne");
+        tree.cursor_right();
+        assert!(tree.is_expanded(dir.path()), "droite déplie");
+        tree.cursor_right();
+        assert_eq!(
+            tree.cursor_path(),
+            Some(dir.path().join("A")),
+            "puis descend"
+        );
+        tree.cursor_right();
+        tree.move_cursor(2);
+        assert_eq!(tree.cursor_path(), Some(dir.path().join("A/A2")));
+        tree.cursor_left();
+        assert_eq!(
+            tree.cursor_path(),
+            Some(dir.path().join("A")),
+            "gauche remonte"
+        );
+        tree.cursor_left();
+        assert!(!tree.is_expanded(&dir.path().join("A")), "puis replie");
+        tree.cursor_to_end(false);
+        assert_eq!(tree.cursor_path(), Some(dir.path().join("B")));
+        tree.move_cursor(10);
+        assert_eq!(tree.cursor_path(), Some(dir.path().join("B")), "borné");
+        tree.cursor_to_end(true);
+        assert_eq!(tree.cursor(), Some(0));
+        tree.point_at(&dir.path().join("B"));
+        assert_eq!(tree.cursor_path(), Some(dir.path().join("B")));
     }
 
     #[test]

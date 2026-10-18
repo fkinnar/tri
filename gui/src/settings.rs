@@ -75,7 +75,18 @@ impl AppSettings {
     /// Table des raccourcis : profils de `[gui] keys`, puis section `[keys]` ; avec les
     /// problèmes à signaler (touche inconnue, conflit...).
     pub fn keymap(&self) -> (Keymap, Vec<String>) {
-        self.gui.keymap().with_overrides(&self.keys)
+        let (keymap, mut warnings) = match self.gui.keymap().with_leader(&self.gui.leader) {
+            Ok(keymap) => (keymap, Vec::new()),
+            Err(e) => {
+                let default = GuiSettings::default().leader;
+                let warning = t!("keys-error", id = "gui.leader", error = e);
+                let keymap = self.gui.keymap().with_leader(&default).unwrap_or_default();
+                (keymap, vec![warning])
+            }
+        };
+        let (keymap, more) = keymap.with_overrides(&self.keys);
+        warnings.extend(more);
+        (keymap, warnings)
     }
 }
 
@@ -88,6 +99,9 @@ pub struct GuiSettings {
     /// Profils de raccourcis actifs ; le premier l'emporte en cas de conflit. Liste vide :
     /// profils par défaut.
     pub keys: Vec<Profile>,
+    /// Leader du changement de panneau, comme le préfixe de tmux : puis `h` / `l` (ou les
+    /// flèches) pour le panneau de gauche / de droite, `o` pour le suivant.
+    pub leader: String,
     /// Délai maximal entre deux touches d'une séquence (`g g`), en ms, comme le
     /// `timeoutlen` de vim.
     pub key_sequence_timeout_ms: u64,
@@ -148,6 +162,7 @@ impl Default for GuiSettings {
             // Fond sombre et neutre : la norme pour juger des photos.
             theme: Theme::Dark,
             keys: vec![Profile::Classic, Profile::Vim],
+            leader: "Ctrl+b".into(),
             key_sequence_timeout_ms: 1000,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.

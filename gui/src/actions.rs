@@ -221,6 +221,32 @@ pub enum Action {
     Redo,
     /// Liste de l'historique (retour à un pas donné).
     History,
+    /// Clavier au panneau de gauche (après le leader, `Ctrl+B` par défaut).
+    FocusLeft,
+    /// Clavier au panneau de droite.
+    FocusRight,
+    /// Clavier au panneau suivant.
+    FocusNext,
+    /// Panneau des dossiers : dossier du dessus.
+    FolderUp,
+    /// Panneau des dossiers : dossier du dessous.
+    FolderDown,
+    /// Panneau des dossiers : déplier (déjà déplié : premier sous-dossier).
+    FolderExpand,
+    /// Panneau des dossiers : replier (déjà replié : dossier parent).
+    FolderCollapse,
+    /// Panneau des dossiers : ouvrir le dossier pointé (le clavier revient aux images).
+    FolderOpen,
+    /// Panneau des dossiers : premier dossier.
+    FolderFirst,
+    /// Panneau des dossiers : dernier dossier.
+    FolderLast,
+    /// Panneau des métadonnées : ligne du dessus.
+    MetaUp,
+    /// Panneau des métadonnées : ligne du dessous.
+    MetaDown,
+    /// Panneau des métadonnées : copier la valeur de la ligne pointée.
+    MetaCopy,
     /// Copier les images vers un dossier.
     FileCopy,
     /// Déplacer les images vers un dossier.
@@ -273,7 +299,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 79] = [
+    pub const ALL: [Action; 92] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -320,6 +346,19 @@ impl Action {
         Action::Undo,
         Action::Redo,
         Action::History,
+        Action::FocusLeft,
+        Action::FocusRight,
+        Action::FocusNext,
+        Action::FolderUp,
+        Action::FolderDown,
+        Action::FolderExpand,
+        Action::FolderCollapse,
+        Action::FolderOpen,
+        Action::FolderFirst,
+        Action::FolderLast,
+        Action::MetaUp,
+        Action::MetaDown,
+        Action::MetaCopy,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -383,6 +422,9 @@ impl Action {
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             Undo | Redo | History => Group::Edit,
+            FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
+            | FolderCollapse | FolderOpen | FolderFirst | FolderLast | MetaUp | MetaDown
+            | MetaCopy => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | Quit => Group::App,
         }
@@ -439,6 +481,19 @@ impl Action {
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
+            Action::FocusLeft => "core.panel.left",
+            Action::FocusRight => "core.panel.right",
+            Action::FocusNext => "core.panel.next",
+            Action::FolderUp => "core.folders.up",
+            Action::FolderDown => "core.folders.down",
+            Action::FolderExpand => "core.folders.expand",
+            Action::FolderCollapse => "core.folders.collapse",
+            Action::FolderOpen => "core.folders.open",
+            Action::FolderFirst => "core.folders.first",
+            Action::FolderLast => "core.folders.last",
+            Action::MetaUp => "core.metadata.up",
+            Action::MetaDown => "core.metadata.down",
+            Action::MetaCopy => "core.metadata.copy",
             Action::FileMove => "core.file.move",
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
@@ -513,6 +568,48 @@ pub struct Chord {
     pub shift: bool,
     /// Ctrl enfoncée.
     pub ctrl: bool,
+}
+
+/// Panneau qui a le clavier (façon tmux, demandé le 18/10/2026) : ses raccourcis passent
+/// d'abord ; une touche qu'il n'utilise pas garde son effet habituel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Scope {
+    /// Les images (grille, plein écran, comparaison).
+    #[default]
+    Images,
+    /// Le panneau des dossiers.
+    Folders,
+    /// Le panneau des métadonnées.
+    Metadata,
+}
+
+impl Action {
+    /// Panneau où l'action vaut ; `None` : partout.
+    pub fn scope(self) -> Option<Scope> {
+        use Action::*;
+        match self {
+            FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
+            | FolderLast => Some(Scope::Folders),
+            MetaUp | MetaDown | MetaCopy => Some(Scope::Metadata),
+            _ => None,
+        }
+    }
+}
+
+/// Deux actions peuvent-elles se disputer une touche ? Oui si elles valent dans un même
+/// panneau (une action d'un panneau et une action générale : oui, le panneau l'emporte,
+/// mais seulement quand il a le clavier ; deux panneaux différents : non).
+fn overlap(a: Action, b: Action) -> bool {
+    match (a.scope(), b.scope()) {
+        (Some(x), Some(y)) => x == y,
+        _ => true,
+    }
+}
+
+/// Deux actions se disputent-elles vraiment une touche (pas une action de panneau qui
+/// prend le pas sur une action générale, voulu) ?
+fn conflict(a: Action, b: Action) -> bool {
+    a.scope() == b.scope()
 }
 
 impl Chord {
@@ -667,6 +764,38 @@ const SELECTION: &[Binding] = {
     ]
 };
 
+/// Panneau des dossiers quand il a le clavier, commun aux deux profils (flèches et hjkl).
+const FOLDERS: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::ArrowUp)], FolderUp),
+        (&[plain(Key::K)], FolderUp),
+        (&[plain(Key::ArrowDown)], FolderDown),
+        (&[plain(Key::J)], FolderDown),
+        (&[plain(Key::ArrowRight)], FolderExpand),
+        (&[plain(Key::L)], FolderExpand),
+        (&[plain(Key::ArrowLeft)], FolderCollapse),
+        (&[plain(Key::H)], FolderCollapse),
+        (&[plain(Key::Enter)], FolderOpen),
+        (&[plain(Key::Home)], FolderFirst),
+        (&[plain(Key::G), plain(Key::G)], FolderFirst),
+        (&[plain(Key::End)], FolderLast),
+        (&[shifted(Key::G)], FolderLast),
+    ]
+};
+
+/// Panneau des métadonnées quand il a le clavier : défilement, copie (`y`, « yank »).
+const METADATA: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::ArrowUp)], MetaUp),
+        (&[plain(Key::K)], MetaUp),
+        (&[plain(Key::ArrowDown)], MetaDown),
+        (&[plain(Key::J)], MetaDown),
+        (&[plain(Key::Y)], MetaCopy),
+    ]
+};
+
 /// Actions sur les fichiers, communes aux deux profils. Supprimer : Suppr, ou la touche
 /// « effacer » des claviers Mac (Backspace) ; une confirmation suit toujours.
 const FILES: &[Binding] = {
@@ -799,6 +928,8 @@ impl Profile {
             .chain(FILTERS)
             .chain(SELECTION)
             .chain(FILES)
+            .chain(FOLDERS)
+            .chain(METADATA)
     }
 }
 
@@ -806,6 +937,8 @@ impl Profile {
 #[derive(Clone, Debug)]
 pub struct Keymap {
     bindings: Vec<(Vec<Chord>, Action)>,
+    /// Panneau qui a le clavier ([`Keymap::set_focus`]).
+    focus: Scope,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -825,12 +958,18 @@ impl Keymap {
         let mut bindings: Vec<(Vec<Chord>, Action)> = Vec::new();
         for profile in profiles {
             for &(keys, action) in profile.bindings() {
-                if !bindings.iter().any(|(k, _)| k == keys) {
+                if !bindings
+                    .iter()
+                    .any(|(k, a)| k == keys && conflict(*a, action))
+                {
                     bindings.push((keys.to_vec(), action));
                 }
             }
         }
-        Keymap { bindings }
+        Keymap {
+            bindings,
+            focus: Scope::Images,
+        }
     }
 
     /// Action d'une touche seule (sans séquence en cours), `None` si aucune ou si Ctrl, Cmd
@@ -872,7 +1011,10 @@ impl Keymap {
         self.bindings.retain(|(_, a)| !replaced.contains(a));
         let mut added: Vec<(Vec<Chord>, Action)> = Vec::new();
         for (keys, action, spec) in custom {
-            if let Some((_, other)) = added.iter().find(|(k, _)| *k == keys) {
+            if let Some((_, other)) = added
+                .iter()
+                .find(|(k, a)| *k == keys && conflict(*a, action))
+            {
                 if *other != action {
                     warnings.push(t!(
                         "keys-conflict",
@@ -883,7 +1025,11 @@ impl Keymap {
                 }
                 continue;
             }
-            if let Some(i) = self.bindings.iter().position(|(k, _)| *k == keys) {
+            if let Some(i) = self
+                .bindings
+                .iter()
+                .position(|(k, a)| *k == keys && conflict(*a, action))
+            {
                 warnings.push(t!(
                     "keys-replaces",
                     spec = spec,
@@ -899,7 +1045,7 @@ impl Keymap {
             if let Some((longer, _)) = self
                 .bindings
                 .iter()
-                .find(|(l, _)| l.len() > keys.len() && l.starts_with(keys))
+                .find(|(l, a)| l.len() > keys.len() && l.starts_with(keys) && overlap(*a, *action))
             {
                 warnings.push(t!(
                     "keys-shadowed",
@@ -963,18 +1109,51 @@ impl Keymap {
             .any(|(k, _)| k.contains(&Chord::char(c)))
     }
 
+    /// Donne le clavier au panneau `focus` : ses raccourcis l'emportent, les actions
+    /// d'un autre panneau sont ignorées.
+    pub fn set_focus(&mut self, focus: Scope) {
+        self.focus = focus;
+    }
+
     fn lookup(&self, keys: &[Chord]) -> Lookup {
+        let usable = |a: &Action| a.scope().is_none_or(|s| s == self.focus);
+        // Une touche du panneau actif l'emporte sur une action générale.
+        let exact = self
+            .bindings
+            .iter()
+            .filter(|(k, a)| k == keys && usable(a))
+            .max_by_key(|(_, a)| a.scope().is_some())
+            .map(|&(_, a)| a);
+        if let Some(action) = exact.filter(|a| a.scope().is_some()) {
+            return Lookup::Action(action);
+        }
         if self
             .bindings
             .iter()
-            .any(|(k, _)| k.len() > keys.len() && k.starts_with(keys))
+            .any(|(k, a)| k.len() > keys.len() && k.starts_with(keys) && usable(a))
         {
             return Lookup::Prefix;
         }
-        match self.bindings.iter().find(|(k, _)| k == keys) {
-            Some(&(_, action)) => Lookup::Action(action),
+        match exact {
+            Some(action) => Lookup::Action(action),
             None => Lookup::None,
         }
+    }
+
+    /// Ajoute les raccourcis de changement de panneau, après le leader `leader` (« Ctrl+b »
+    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant.
+    pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
+        let lead = parse_chord(leader)?;
+        for (key, action) in [
+            (Key::H, Action::FocusLeft),
+            (Key::ArrowLeft, Action::FocusLeft),
+            (Key::L, Action::FocusRight),
+            (Key::ArrowRight, Action::FocusRight),
+            (Key::O, Action::FocusNext),
+        ] {
+            self.bindings.push((vec![lead, plain(key)], action));
+        }
+        Ok(self)
     }
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
@@ -1377,6 +1556,34 @@ mod tests {
     }
 
     #[test]
+    fn the_focused_panel_takes_its_keys_first_and_lets_the_rest_through() {
+        let mut km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        let now = Instant::now();
+        let key = |k| Chord::from_event(k, Modifiers::NONE).unwrap();
+        assert_eq!(seq.feed(&km, key(Key::J), now), Some(Action::NavDown));
+        km.set_focus(Scope::Folders);
+        assert_eq!(seq.feed(&km, key(Key::J), now), Some(Action::FolderDown));
+        assert_eq!(
+            seq.feed(&km, key(Key::Enter), now),
+            Some(Action::FolderOpen)
+        );
+        assert_eq!(
+            seq.feed(&km, key(Key::Num3), now),
+            Some(Action::Stars(3)),
+            "le reste passe"
+        );
+        assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::FileCopy));
+        km.set_focus(Scope::Metadata);
+        assert_eq!(seq.feed(&km, key(Key::Y), now), Some(Action::MetaCopy));
+        // Leader puis direction.
+        let lead = Chord::from_event(Key::B, Modifiers::CTRL).unwrap();
+        assert_eq!(seq.feed(&km, lead, now), None, "en attente");
+        assert_eq!(seq.feed(&km, key(Key::H), now), Some(Action::FocusLeft));
+        assert!(Keymap::default().with_leader("Ctrl+").is_err());
+    }
+
+    #[test]
     fn a_bound_character_triggers_its_action() {
         let km = Keymap::default();
         assert!(km.uses_char('°'));
@@ -1392,15 +1599,18 @@ mod tests {
     fn profiles_cover_every_action_and_have_no_internal_conflict() {
         for profile in [Profile::Classic, Profile::Vim] {
             let b: Vec<&Binding> = profile.bindings().collect();
-            for a in Action::ALL {
+            // Changement de panneau : lié après le leader (`Keymap::with_leader`).
+            let by_leader = [Action::FocusLeft, Action::FocusRight, Action::FocusNext];
+            for a in Action::ALL.into_iter().filter(|a| !by_leader.contains(a)) {
                 assert!(
                     b.iter().any(|(_, x)| *x == a),
                     "{profile:?} : {a:?} sans touche"
                 );
             }
-            for (i, (k, _)) in b.iter().enumerate() {
+            // Même touche pour une action d'un panneau et une action générale : voulu.
+            for (i, (k, x)) in b.iter().enumerate() {
                 assert!(
-                    !b[i + 1..].iter().any(|(l, _)| l == k),
+                    !b[i + 1..].iter().any(|(l, y)| l == k && conflict(*x, *y)),
                     "{profile:?} : doublon {k:?}"
                 );
             }

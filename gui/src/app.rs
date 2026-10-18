@@ -257,6 +257,14 @@ pub struct TriApp {
     history: tri::history::History,
     /// Liste de l'historique ouverte (`Ctrl+H`).
     history_open: bool,
+    /// Panneau qui a le clavier (leader puis direction, façon tmux).
+    focus: crate::actions::Scope,
+    /// Panneau des métadonnées : ligne pointée au clavier, et les lignes affichées (pour
+    /// copier la valeur).
+    meta_cursor: usize,
+    meta_rows: Vec<(String, String)>,
+    /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
+    scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
     settings_window: Option<crate::settings_window::SettingsWindow>,
     /// Fichier de configuration modifié par la fenêtre de réglages.
@@ -450,6 +458,10 @@ impl TriApp {
             config_path: None,
             history: tri::history::History::new(gui.history),
             history_open: false,
+            focus: crate::actions::Scope::Images,
+            meta_cursor: 0,
+            meta_rows: Vec::new(),
+            scroll_to_cursor: false,
             help_search: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
@@ -634,14 +646,33 @@ impl TriApp {
                 ui.colored_label(self.gui.colors.error, e);
             }
             Some(Ok(m)) => {
+                let focused = self.focus == crate::actions::Scope::Metadata;
+                let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
+                let accent = Color32::from(self.gui.dialogs.title_color);
+                let rows = m.rows();
+                self.meta_cursor = self.meta_cursor.min(rows.len().saturating_sub(1));
+                let cursor = self.meta_cursor;
                 egui::Grid::new("metadata")
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
                     .show(ui, |ui| {
-                        for (label, value) in m.rows() {
-                            ui.weak(label);
+                        for (i, (label, value)) in rows.iter().enumerate() {
+                            let a = ui.weak(label.as_str());
                             // À la ligne plutôt qu'élargir le panneau (noms d'objectif).
-                            ui.add(egui::Label::new(value).wrap());
+                            let b = ui.add(egui::Label::new(value.as_str()).wrap());
+                            // Ligne pointée au clavier (y copie sa valeur).
+                            if focused && i == cursor {
+                                let rect = a.rect.union(b.rect).expand(2.0);
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    3.0,
+                                    egui::Stroke::new(1.5, accent),
+                                    egui::StrokeKind::Outside,
+                                );
+                                if scroll {
+                                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                                }
+                            }
                             ui.end_row();
                         }
                         if let Some(j) = self.judgements.get(&file.path) {
@@ -662,6 +693,7 @@ impl TriApp {
                             ui.end_row();
                         }
                     });
+                self.meta_rows = rows;
             }
         }
     }
@@ -713,9 +745,13 @@ impl TriApp {
         });
         ui.separator();
         let reveal = std::mem::take(&mut self.reveal_folder);
+        let focused = self.focus == crate::actions::Scope::Folders;
+        let cursor = self.tree.cursor().filter(|_| focused);
+        let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
+        let accent = Color32::from(self.gui.dialogs.title_color);
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-            for row in self.tree.rows() {
-                ui.horizontal(|ui| {
+            for (i, row) in self.tree.rows().into_iter().enumerate() {
+                let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     ui.add_space(row.depth as f32 * f.indent);
                     let tip = if row.expanded {
@@ -771,8 +807,23 @@ impl TriApp {
                         }
                     }
                 });
+                // Curseur clavier : cadre de la couleur d'accent autour de la ligne.
+                if cursor == Some(i) {
+                    ui.painter().rect_stroke(
+                        line.response.rect.expand(1.0),
+                        3.0,
+                        egui::Stroke::new(1.5, accent),
+                        egui::StrokeKind::Outside,
+                    );
+                    if scroll {
+                        line.response.scroll_to_me(Some(egui::Align::Center));
+                    }
+                }
             }
         });
+        if focused {
+            panel_focus_frame(ui, accent);
+        }
         if let Some(path) = toggle {
             self.tree.toggle(&path);
         }
@@ -1164,6 +1215,9 @@ impl TriApp {
             self.mouse_active = false; // on tape : pointeur masqué
         }
         let now = Instant::now();
+        let focus = self.effective_focus();
+        self.focus = focus;
+        self.keymap.set_focus(focus);
         let actions: Vec<Action> = chords
             .into_iter()
             .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
@@ -1267,6 +1321,40 @@ impl TriApp {
                 self.after_history(result.map(|a| vec![a]).map_err(Some));
             }
             Action::History => self.history_open = !self.history_open,
+            Action::FocusLeft | Action::FocusRight | Action::FocusNext => self.move_focus(action),
+            Action::FolderUp => self.tree_cursor(|t| t.move_cursor(-1)),
+            Action::FolderDown => self.tree_cursor(|t| t.move_cursor(1)),
+            Action::FolderExpand => self.tree_cursor(Tree::cursor_right),
+            Action::FolderCollapse => self.tree_cursor(Tree::cursor_left),
+            Action::FolderFirst => self.tree_cursor(|t| t.cursor_to_end(true)),
+            Action::FolderLast => self.tree_cursor(|t| t.cursor_to_end(false)),
+            Action::FolderOpen => {
+                if let Some(path) = self.tree.cursor_path() {
+                    if path != self.folder.dir {
+                        self.open_folder(&path);
+                    }
+                    // Choix du 18/10/2026 : on enchaîne sur le tri.
+                    self.focus = crate::actions::Scope::Images;
+                }
+            }
+            Action::MetaUp => {
+                self.meta_cursor = self.meta_cursor.saturating_sub(1);
+                self.scroll_to_cursor = true;
+            }
+            Action::MetaDown => {
+                let last = self.meta_rows.len().saturating_sub(1);
+                self.meta_cursor = (self.meta_cursor + 1).min(last);
+                self.scroll_to_cursor = true;
+            }
+            Action::MetaCopy => {
+                if let Some((label, value)) = self.meta_rows.get(self.meta_cursor) {
+                    ctx.copy_text(value.clone());
+                    self.notice = Some((t!("metadata-copied", label = label.clone()), false));
+                }
+            }
+            Action::Back if self.focus != crate::actions::Scope::Images => {
+                self.focus = crate::actions::Scope::Images;
+            }
             Action::Back => {
                 if self.help {
                     self.help = false;
@@ -2557,6 +2645,17 @@ impl TriApp {
                 ui.separator();
                 ui.label(file_name(&file.path));
             }
+            // Panneau qui a le clavier (façon tmux) : dit, puisqu'il change l'effet des
+            // touches.
+            let focus = match self.focus {
+                crate::actions::Scope::Folders => Some(t!("focus-folders")),
+                crate::actions::Scope::Metadata => Some(t!("focus-metadata")),
+                crate::actions::Scope::Images => None,
+            };
+            if let Some(focus) = focus {
+                ui.separator();
+                ui.colored_label(Color32::from(self.gui.dialogs.title_color), focus);
+            }
             if let Some((text, error)) = &self.notice {
                 ui.separator();
                 if *error {
@@ -3554,6 +3653,63 @@ impl TriApp {
         }
     }
 
+    /// Panneau qui peut avoir le clavier : les dossiers seulement s'ils sont affichés (grille),
+    /// les métadonnées aussi ; sinon les images.
+    fn effective_focus(&self) -> crate::actions::Scope {
+        use crate::actions::Scope;
+        match self.focus {
+            Scope::Folders if self.folder_panel && self.mode == Mode::Grid => Scope::Folders,
+            Scope::Metadata if self.metadata_panel && !self.folder.is_none() => Scope::Metadata,
+            _ => Scope::Images,
+        }
+    }
+
+    /// Leader puis direction : panneau de gauche, de droite, ou suivant (dossiers, images,
+    /// métadonnées). Un panneau masqué s'affiche ; les dossiers n'existent qu'en grille.
+    fn move_focus(&mut self, action: Action) {
+        use crate::actions::Scope;
+        let mut order = Vec::new();
+        if self.mode == Mode::Grid {
+            order.push(Scope::Folders);
+        }
+        order.push(Scope::Images);
+        if !self.folder.is_none() {
+            order.push(Scope::Metadata);
+        }
+        let i = order.iter().position(|&s| s == self.focus).unwrap_or(0);
+        let next = match action {
+            Action::FocusLeft => i.saturating_sub(1),
+            Action::FocusRight => (i + 1).min(order.len() - 1),
+            _ => (i + 1) % order.len(),
+        };
+        self.focus = order[next];
+        match self.focus {
+            Scope::Folders => {
+                self.folder_panel = true;
+                if self.tree.cursor().is_none() {
+                    if self.folder.is_none() {
+                        self.tree.set_cursor(0);
+                    } else {
+                        let dir = self.folder.dir.clone();
+                        self.tree.point_at(&dir);
+                    }
+                }
+                self.scroll_to_cursor = true;
+            }
+            Scope::Metadata => {
+                self.metadata_panel = true;
+                self.scroll_to_cursor = true;
+            }
+            Scope::Images => {}
+        }
+    }
+
+    /// Déplace le curseur de l'arborescence, et le fait voir.
+    fn tree_cursor(&mut self, f: impl FnOnce(&mut Tree)) {
+        f(&mut self.tree);
+        self.scroll_to_cursor = true;
+    }
+
     /// Après une annulation ou un rétablissement : dossier relu si des fichiers ont bougé
     /// (sinon seulement les notes), image concernée montrée, et message dans la barre
     /// d'état ; refus (fichier modifié ailleurs…) : la raison.
@@ -3872,6 +4028,9 @@ impl eframe::App for TriApp {
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.metadata_panel(ui));
+                    if self.focus == crate::actions::Scope::Metadata {
+                        panel_focus_frame(ui, Color32::from(self.gui.dialogs.title_color));
+                    }
                 });
         }
         if self.folder_panel && self.mode == Mode::Grid {
@@ -4048,6 +4207,16 @@ enum StatusClick {
 /// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
 /// 17/10/2026). Gardée dans la fenêtre, **déplaçable** en glissant son fond, aérée
 /// (`[gui.dialogs]`) ; derrière, le fond est grisé et bloqué comme pour toute modale.
+/// Liseré de la couleur d'accent autour d'un panneau qui a le clavier.
+fn panel_focus_frame(ui: &Ui, color: Color32) {
+    ui.painter().rect_stroke(
+        ui.clip_rect().shrink(1.0),
+        0.0,
+        egui::Stroke::new(2.0, color),
+        egui::StrokeKind::Inside,
+    );
+}
+
 pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
     // Une position par ouverture : la boîte rouverte ailleurs repart de son nouveau clic.
     let id = egui::Id::unique(id).with((at.x as i32, at.y as i32));
@@ -5347,12 +5516,77 @@ mod tests {
     }
 
     #[test]
+    fn panels_take_the_keyboard_like_tmux() {
+        use crate::actions::Scope;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        // Arborescence de test : le dossier temporaire et deux séances.
+        for d in ["séance-1", "séance-2"] {
+            std::fs::create_dir(dir.path().join(d)).unwrap();
+            image::RgbImage::from_pixel(8, 8, image::Rgb([10, 10, 10]))
+                .save(dir.path().join(d).join("a.jpg"))
+                .unwrap();
+        }
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        // Ctrl+B puis h : le clavier aux dossiers (le panneau s'affiche au besoin).
+        h.state_mut().folder_panel = false;
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Folders);
+        assert!(h.state().folder_panel, "affiché");
+        assert!(
+            h.query_by_label("clavier : dossiers (Échap : images)")
+                .is_some()
+        );
+        // j descend (pas l'image suivante), Entrée ouvre et rend le clavier aux images.
+        let selected = h.state().selected;
+        let first = dir.path().join("séance-1");
+        h.state_mut().tree.point_at(&first);
+        press(&mut h, Key::J, Modifiers::NONE);
+        assert_eq!(
+            h.state().tree.cursor_path(),
+            Some(dir.path().join("séance-2"))
+        );
+        press(&mut h, Key::K, Modifiers::NONE);
+        assert_eq!(
+            h.state().selected,
+            selected,
+            "j et k ne bougent pas la grille"
+        );
+        assert_eq!(
+            h.state().tree.cursor_path(),
+            Some(dir.path().join("séance-1"))
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().folder.dir, dir.path().join("séance-1"));
+        assert_eq!(h.state().focus, Scope::Images);
+        // Ctrl+B puis l : les métadonnées ; Échap rend le clavier aux images.
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::L, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Metadata);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Images);
+        assert_eq!(
+            h.state().mode,
+            Mode::Grid,
+            "Échap n'a fait que rendre le clavier"
+        );
+    }
+
+    #[test]
     fn help_shows_labels_not_ids() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         press(&mut h, Key::F1, Modifiers::NONE);
         assert!(h.query_by_label("Ligne du dessous").is_some());
-        assert!(h.query_by_label("Flèche droite / l").is_some());
+        // Image suivante, et déplier dans le panneau des dossiers.
+        assert!(h.query_all_by_label("Flèche droite / l").count() >= 1);
         assert!(h.query_by_label("core.nav.next").is_none());
     }
 

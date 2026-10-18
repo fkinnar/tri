@@ -200,6 +200,20 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (« Couleurs [gui.colors] », `settings-section-*` dans les catalogues ; un test vérifie
   qu'aucune section n'en manque). Les clés de dossier (`dir`, `*_dir`, `destination`) ont
   la complétion par Tab.
+- **Panneaux au clavier, façon tmux** (18/10/2026, `actions::Scope`) : le leader
+  (`[gui] leader`, `Ctrl+B` par défaut) puis `h` / `l` (ou ← / →) donne le clavier au
+  panneau de gauche / de droite, `o` au suivant (dossiers, images, métadonnées ; un
+  panneau masqué s'affiche, les dossiers n'existent qu'en grille). Le panneau actif a un
+  liseré d'accent, la barre d'état le dit. **Ses touches passent d'abord, les autres
+  gardent leur effet** (choix de l'utilisateur : `3` note toujours l'image courante) ;
+  Échap rend le clavier aux images. Dossiers : ↑ ↓ / `j` `k`, → / `l` déplie (déjà
+  déplié : entre), ← / `h` replie (déjà replié : remonte), Début / `gg`, Fin / `G`,
+  Entrée ouvre et rend le clavier aux images (curseur dans le moteur :
+  `places::Tree::cursor`…). Métadonnées : ↑ ↓ / `j` `k`, `y` copie la valeur de la ligne
+  pointée. Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
+  recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les
+  conflits ne sont signalés qu'entre actions d'un même panneau. Pas de `z` (agrandir le
+  panneau, comme tmux) pour l'instant : `Maj+D` / `Maj+M` masquent déjà les panneaux.
 - **Annuler / rétablir** (18/10/2026, moteur `tri::history`, voir `history.md`) : `u` ou
   `Ctrl+Z` (`Cmd+Z` sur macOS), `Ctrl+R` ou `Ctrl+Maj+Z` ; `Ctrl+H` : liste de
   l'historique de la session, cliquer un pas y revient. Notes, renommage, copie /

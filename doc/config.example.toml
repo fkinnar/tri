@@ -198,6 +198,11 @@ theme = "dark"
 # Profils de raccourcis actifs, "classic" (flèches) et/ou "vim" (hjkl) ; le premier
 # l'emporte en cas de conflit.
 keys = ["classic", "vim"]
+# Changer de panneau au clavier, comme tmux : le leader, puis h / l (ou les flèches) pour
+# le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
+# ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
+# y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images.
+leader = "Ctrl+b"
 # Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
 # (première image, profil vim) doit être tapé dans ce délai.
 key_sequence_timeout_ms = 1000

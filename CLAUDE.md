@@ -579,7 +579,9 @@ Proposition : sortir cette étape du logiciel de développement.
    (déjà confirmée), déchargement. Corbeille sur macOS : le crate `trash` ne restaure
    pas (Linux / Windows seulement) → emplacement dans la corbeille demandé au système
    (`NSFileManager`, via `objc2`), remis en place à l'annulation.
-4. **Panneaux au clavier, façon tmux** (surtout pour l'utilisateur) : un raccourci pour
+4. [x] **Panneaux au clavier, façon tmux** (**fait** le 18/10/2026 : leader + h/l/o,
+   touches du panneau d'abord puis le reste, Entrée rend le clavier aux images,
+   métadonnées : défiler et `y` copier ; `z` d'agrandissement écarté pour l'instant) (surtout pour l'utilisateur) : un raccourci pour
    passer d'un panneau à l'autre, et **un jeu de raccourcis propre au panneau actif**
    (la même touche fait des choses différentes selon le panneau). `Ctrl+flèches` est
    réservé au système (macOS : changement de bureau). Décidé le 18/10/2026 : un
@@ -707,7 +709,8 @@ explicitement par l'utilisateur comme important.
       --reveal|--edit`. Copier / déplacer vers… fait le 18/10/2026 (`y` / `x`,
       `tri --copy|--move`).
 - [x] **Éditeur externe** configurable (`[files] editor`, fait le 17/10/2026).
-- [ ] Panneau des dossiers : navigation au clavier, favoris.
+- [~] Panneau des dossiers : navigation au clavier faite le 18/10/2026 (leader `Ctrl+B`) ;
+      restent les favoris.
 - [ ] Déchargement : gabarits de noms (dossier, fichiers), cartes sur plusieurs jours
       (un dossier par jour ?), vidéos (aujourd'hui ignorées).
 - [ ] Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs).

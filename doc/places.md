@@ -90,3 +90,14 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
   `reload()` : seulement les dossiers ;
 - un même dossier présent sous deux emplacements (`/Volumes/SD` sous « Volumes » et sous
   la racine) est déplié aux deux endroits (état rangé par chemin).
+
+## Curseur clavier (18/10/2026)
+
+`Tree` garde une ligne pointée au clavier (panneau des dossiers façon tmux, voir
+`gui.md`) : `cursor` (rang dans `rows`), `cursor_path`, `set_cursor`, `point_at`,
+`move_cursor`, `cursor_to_end`, `cursor_right` (déplie ; déjà déplié : premier
+sous-dossier), `cursor_left` (replie ; déjà replié : dossier parent). Le curseur retient
+son rang et son dossier : un dossier peut paraître sous deux emplacements (le rang
+départage), et des lignes peuvent paraître au-dessus (le dossier retrouve la ligne). Dans
+le moteur, pour un futur TUI.
+
