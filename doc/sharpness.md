@@ -168,3 +168,30 @@ uniforme et les bords de l'image jamais ; le seuil est absolu ; points isolés r
 lignes gardées ; épaississement ; petites images sans panique. Interface : `p` en ajusté
 ne demande rien, en 1:1 la carte arrive à la taille de l'image (pixel pour pixel), quitter
 le 1:1 retire la demande, `Ctrl+P` tourne sur les couleurs et remontre la carte.
+
+## Jugement dans les piles (18/10/2026)
+
+Les faux positifs d'un dossier aux sujets variés (photos libres du manuel : gros plans sur
+fond flou parmi des paysages) venaient surtout de la **règle des voisines** : les
+« voisines » y sont d'autres scènes. Avec les piles d'images semblables (`similarity`),
+`judge_in_groups` ne compare plus une photo à ses voisines, mais aux autres images de sa
+pile (au moins `group_min` = 3, floue sous `group_ratio` = 0,8 × leur médiane) ; la
+**règle du dossier reste** (elle attrape une rafale floue de bout en bout, que la pile ne
+voit pas : toutes ses images se ressemblent). Piles du jugement plus larges que celles de
+l'affichage (`group_threshold` = 0,45, contre 0,25) : la « même scène » d'une comparaison
+de netteté dépasse la rafale.
+
+Mesures, avec les étiquettes de l'utilisateur (dossier MISS, 94 RAF : 15 rouges, 56
+vertes) et les 19 photos libres :
+
+| Règles | MISS : rouges trouvées | vertes marquées | photos libres marquées |
+|---|---|---|---|
+| dossier + voisines (avant) | 14 / 15 | 0 | 3 |
+| pile seule | 9 / 15 | 0 | — |
+| dossier + pile, seuil 0,25 | 12 / 15 | 0 | 1 |
+| **dossier + pile, seuil 0,45** | **14 / 15** | **0** | **1** |
+
+Sans empreintes (`[similarity] background = false`), le jugement d'avant (dossier +
+voisines). La photo restante des photos libres est sous 0,5 × la médiane du dossier :
+seule une analyse du contenu (sujet, flou d'arrière-plan voulu) la distinguerait.
+

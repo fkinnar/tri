@@ -563,16 +563,44 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
         .iter()
         .map(|(name, value, _)| (PathBuf::from(name), Some(*value)))
         .collect();
-    let judgements = tri::sharpness::judge(&ordered, &settings.sharpness);
+    // Piles d'images semblables (comme dans l'interface) : la netteté s'y juge.
+    let by_name: std::collections::HashMap<String, &tri::media::MediaFile> = files
+        .iter()
+        .map(|f| {
+            (
+                f.path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                f,
+            )
+        })
+        .collect();
+    let signatures: Vec<Option<tri::similarity::Signature>> = scores
+        .iter()
+        .map(|(name, _, _)| tri::preview::compute_signature(by_name[name], &preview, &cancel).ok())
+        .collect();
+    let refs: Vec<Option<&tri::similarity::Signature>> =
+        signatures.iter().map(Option::as_ref).collect();
+    let sim = &settings.similarity;
+    let links = tri::similarity::distances(&refs, sim.shape_weight);
+    let groups = if sim.background {
+        tri::similarity::group(&links, settings.sharpness.group_threshold, sim.max_gap_s)
+    } else {
+        Vec::new()
+    };
+    let judgements = tri::sharpness::judge_in_groups(&ordered, &groups, &settings.sharpness);
     let ratio = |r: Option<f32>| r.map_or("-".to_string(), |r| format!("{r:.2}"));
     println!("{}", t!("cli-sharpness-header"));
     for (name, value, elapsed) in &scores {
         let j = judgements[&PathBuf::from(name)];
         println!(
-            "{name}\t{:.1}\t{}\t{}\t{}\t{:.0} ms",
+            "{name}\t{:.1}\t{}\t{}\t{}\t{}\t{:.0} ms",
             value,
             ratio(j.folder_ratio),
             ratio(j.neighbour_ratio),
+            ratio(j.group_ratio),
             if j.blurry {
                 t!("cli-sharpness-blurry")
             } else {

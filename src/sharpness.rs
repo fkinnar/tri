@@ -68,6 +68,17 @@ pub struct SharpnessSettings {
     pub neighbours: u32,
     /// Photo jugée floue sous cette fraction de la médiane de ses voisines.
     pub neighbour_ratio: f32,
+    /// Piles connues (images semblables, `similarity`) : une photo n'est plus comparée à
+    /// ses voisines (une autre pile est une autre scène), mais aux autres images de sa
+    /// pile si elle en compte au moins ce nombre ; le dossier compte toujours.
+    pub group_min: u32,
+    /// Dans une pile : photo jugée floue sous cette fraction de la médiane des autres.
+    pub group_ratio: f32,
+    /// Seuil de regroupement pour le jugement (distance d'empreinte, voir `similarity`) :
+    /// plus large que celui des piles affichées, la « même scène » d'une comparaison de
+    /// netteté dépasse la rafale (mesuré le 18/10/2026 : 0,45 garde 14 photos ratées sur
+    /// 15 sans faux positif, et retire les faux positifs d'un dossier aux sujets variés).
+    pub group_threshold: f32,
     /// Calcul du score de tout le dossier en fond (cache d'analyse).
     pub background: bool,
 }
@@ -86,6 +97,9 @@ impl Default for SharpnessSettings {
             blur_ratio: 0.5,
             neighbours: 3,
             neighbour_ratio: 0.8,
+            group_min: 3,
+            group_ratio: 0.8,
+            group_threshold: 0.45,
             background: true,
         }
     }
@@ -263,6 +277,9 @@ pub struct Judgement {
     pub folder_ratio: Option<f32>,
     /// Score / médiane des voisines (même scène, même rafale le plus souvent).
     pub neighbour_ratio: Option<f32>,
+    /// Score / médiane des autres images de sa pile, si elle est dans une pile d'au moins
+    /// `group_min` images (jugée alors seulement contre elle).
+    pub group_ratio: Option<f32>,
     /// Jugée floue : sous `blur_ratio` × la médiane du dossier, **ou** sous
     /// `neighbour_ratio` × celle de ses voisines.
     pub blurry: bool,
@@ -280,6 +297,28 @@ pub fn judge(
     ordered: &[(PathBuf, Option<f32>)],
     settings: &SharpnessSettings,
 ) -> HashMap<PathBuf, Judgement> {
+    judge_in_groups(ordered, &[], settings)
+}
+
+/// [`judge`], avec les piles de `ordered` (rangs dans `ordered`, voir
+/// `similarity::group`) : une photo d'une pile d'au moins `group_min` images n'est jugée
+/// que contre sa pile (décidé le 18/10/2026 : comparer des gros plans sur fond flou aux
+/// paysages d'un même dossier les faisait passer pour flous) ; seule ou dans une petite
+/// pile, comme [`judge`].
+pub fn judge_in_groups(
+    ordered: &[(PathBuf, Option<f32>)],
+    groups: &[std::ops::Range<usize>],
+    settings: &SharpnessSettings,
+) -> HashMap<PathBuf, Judgement> {
+    let mut group_of: HashMap<&PathBuf, &std::ops::Range<usize>> = HashMap::new();
+    for g in groups.iter().filter(|g| {
+        settings.group_min > 0 && g.len() >= settings.group_min as usize && g.end <= ordered.len()
+    }) {
+        for i in g.clone() {
+            group_of.insert(&ordered[i].0, g);
+        }
+    }
+    let grouped = !groups.is_empty();
     let scored: Vec<(&PathBuf, f32)> = ordered
         .iter()
         .filter_map(|(p, s)| s.filter(|v| v.is_finite()).map(|v| (p, v)))
@@ -298,12 +337,29 @@ pub fn judge(
                 .then(|| median(around))
                 .flatten()
                 .and_then(|m| relative(score, m));
+            let group_ratio = group_of.get(path).and_then(|g| {
+                let others = (*g)
+                    .clone()
+                    .filter(|&j| ordered[j].0 != *path)
+                    .filter_map(|j| ordered[j].1.filter(|v| v.is_finite()));
+                median(others).and_then(|m| relative(score, m))
+            });
+            // Piles connues : les voisines d'une autre pile sont une autre scène, on ne s'y
+            // compare plus ; la pile les remplace. Le dossier reste : il attrape une rafale
+            // floue de bout en bout (mesuré le 18/10/2026, voir `doc/sharpness.md`).
+            let neighbours_count = if grouped {
+                false
+            } else {
+                neighbour_ratio.is_some_and(|r| r < settings.neighbour_ratio)
+            };
             let blurry = folder_ratio.is_some_and(|r| r < settings.blur_ratio)
-                || neighbour_ratio.is_some_and(|r| r < settings.neighbour_ratio);
+                || group_ratio.is_some_and(|r| r < settings.group_ratio)
+                || neighbours_count;
             let judgement = Judgement {
                 score,
                 folder_ratio,
                 neighbour_ratio,
+                group_ratio,
                 blurry,
             };
             (path.clone(), judgement)
@@ -580,6 +636,32 @@ mod tests {
             height: h,
             data: luma.iter().flat_map(|&v| [v, v, v]).collect(),
         }
+    }
+
+    #[test]
+    fn known_stacks_replace_the_neighbours_and_judge_within_the_stack() {
+        let p = |i: usize| PathBuf::from(format!("{i}.jpg"));
+        // Paysages nets (100), puis une pile de gros plans (60) dont un raté (30), puis un
+        // paysage à 60 entre deux scènes sans rapport.
+        let scores = [100.0, 100.0, 60.0, 62.0, 30.0, 61.0, 100.0, 60.0, 100.0];
+        let ordered: Vec<(PathBuf, Option<f32>)> = scores
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| (p(i), Some(v)))
+            .collect();
+        let s = SharpnessSettings::default();
+        let groups = [0..2, 2..6, 6..7, 7..8, 8..9];
+        let j = judge_in_groups(&ordered, &groups, &s);
+        assert!(j[&p(4)].blurry, "le raté de la pile");
+        assert!(j[&p(4)].group_ratio.unwrap() < 0.6);
+        assert!(!j[&p(2)].blurry && !j[&p(3)].blurry, "les gros plans nets");
+        assert!(
+            !j[&p(7)].blurry,
+            "seule : pas comparée à des voisines d'une autre scène"
+        );
+        assert_eq!(j[&p(7)].group_ratio, None);
+        // Sans piles : la règle des voisines la marquait.
+        assert!(judge(&ordered, &s)[&p(7)].blurry);
     }
 
     #[test]

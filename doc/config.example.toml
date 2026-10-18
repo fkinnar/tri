@@ -178,6 +178,14 @@ blur_ratio = 0.5
 # neighbours = 0 : pas de comparaison aux voisines.
 neighbours = 3
 neighbour_ratio = 0.8
+# Piles d'images semblables connues ([similarity]) : une photo n'est plus comparée à ses
+# voisines (une autre pile est une autre scène) mais aux autres images de sa pile, si elle
+# en compte au moins group_min ; jugée floue sous group_ratio × leur médiane. Le dossier
+# compte toujours (une rafale floue de bout en bout). Piles du jugement : seuil
+# group_threshold, plus large que celui des piles affichées.
+group_min = 3
+group_ratio = 0.8
+group_threshold = 0.45
 # Scores de tout le dossier calculés en fond (cache d'analyse).
 background = true
 

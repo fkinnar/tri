@@ -633,8 +633,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    regroupement instantané (curseur en direct).
    **Fait** le 18/10/2026 : moteur (`src/similarity.rs`, empreintes en cache d'analyse,
    `tri --groups`), piles dans la grille (`gui/src/stacks.rs`, `s` / `Maj+S`), fenêtre
-   `Ctrl+G` (seuil en direct, retenu par dossier). Reste : la netteté jugée dans le
-   groupe.
+   `Ctrl+G` (seuil en direct, retenu par dossier), et la netteté jugée dans les piles
+   (`sharpness::judge_in_groups` : la pile remplace les voisines, le dossier reste ;
+   piles du jugement plus larges, `[sharpness] group_threshold` = 0,45) : 14 ratées sur
+   15 sans faux positif sur MISS, faux positifs des photos libres de 3 à 1.
 
 ## À faire (liste tenue à jour, 17/10/2026)
 

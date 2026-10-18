@@ -1144,6 +1144,29 @@ impl TriApp {
         self.tell_shown();
     }
 
+    /// Juge la netteté de tout le dossier, dans l'ordre du dossier quels que soient les
+    /// filtres (les voisines d'une photo sont celles prises juste avant et après) ; dans
+    /// les piles d'images semblables quand les empreintes sont connues
+    /// (`sharpness::judge_in_groups`, seuil `[sharpness] group_threshold`).
+    fn rejudge(&mut self) {
+        let files = &self.folder.files;
+        let ordered: Vec<(PathBuf, Option<f32>)> = files
+            .iter()
+            .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
+            .collect();
+        let s = &self.settings;
+        let groups = if s.similarity.background && !self.signatures.is_empty() {
+            let sigs: Vec<Option<&tri::similarity::Signature>> =
+                files.iter().map(|f| self.signatures.get(&f.path)).collect();
+            let links = tri::similarity::distances(&sigs, s.similarity.shape_weight);
+            tri::similarity::group(&links, s.sharpness.group_threshold, s.similarity.max_gap_s)
+        } else {
+            Vec::new()
+        };
+        self.judgements = tri::sharpness::judge_in_groups(&ordered, &groups, &s.sharpness);
+        self.stacks_dirty = true;
+    }
+
     /// Recalcule les piles (regroupement du moteur sur les empreintes connues), et ce que
     /// la grille en montre ; l'image sélectionnée, si elle est cachée dans une pile
     /// repliée, laisse la place à la couverture.
@@ -1316,16 +1339,7 @@ impl TriApp {
             }
         }
         if changed {
-            // Dans l'ordre du dossier, quels que soient les filtres : les voisines d'une
-            // photo sont celles prises juste avant et juste après.
-            let ordered: Vec<(PathBuf, Option<f32>)> = self
-                .folder
-                .files
-                .iter()
-                .map(|f| (f.path.clone(), self.scores.get(&f.path).copied()))
-                .collect();
-            self.judgements = tri::sharpness::judge(&ordered, &self.settings.sharpness);
-            self.stacks_dirty = true;
+            self.rejudge();
         }
         let p = self.progress[4];
         if self.blur_rule.is_some()
@@ -1347,6 +1361,8 @@ impl TriApp {
     fn drain_engine(&mut self, scored: &mut Vec<usize>) {
         let Some(engine) = &self.engine else { return };
         let generation = engine.generation;
+        // Empreinte arrivée : les piles du jugement de netteté changent.
+        let mut signed = false;
         while let Ok(event) = engine.events.try_recv() {
             match event {
                 Event::Ready {
@@ -1372,6 +1388,7 @@ impl TriApp {
                     {
                         self.signatures.insert(file.path.clone(), sig);
                         self.stacks_dirty = true;
+                        signed = true;
                     }
                     set(&mut self.status, index, level, Avail::Ready)
                 }
@@ -1410,6 +1427,9 @@ impl TriApp {
                 }
                 _ => {} // ancien dossier, ou niveau non suivi
             }
+        }
+        if signed && !self.scores.is_empty() {
+            self.rejudge();
         }
     }
 
