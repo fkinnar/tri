@@ -331,6 +331,31 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
     match action {
         Action::NavPrev => chevron(0.32, 0.64),
         Action::NavNext => chevron(0.68, 0.36),
+        Action::NavUp | Action::NavDown => {
+            // Chevron vertical, même taille que ‹ ›.
+            let (tip, back) = if action == Action::NavUp {
+                (0.32, 0.64)
+            } else {
+                (0.68, 0.36)
+            };
+            painter.add(Shape::line(
+                vec![p(0.22, back), p(0.5, tip), p(0.78, back)],
+                stroke,
+            ));
+        }
+        Action::StackMode => {
+            // Pile : trois feuilles décalées.
+            let thin = Stroke::new(stroke.width * 0.7, color);
+            for (k, o) in [(0, 0.0), (1, 0.12), (2, 0.24)] {
+                let r = Rect::from_min_max(p(0.1 + o, 0.36 - o), p(0.66 + o, 0.9 - o));
+                if k == 0 {
+                    painter.rect_stroke(r, 2.0, stroke, egui::StrokeKind::Middle);
+                } else {
+                    painter.line_segment([r.left_top(), r.right_top()], thin);
+                    painter.line_segment([r.right_top(), r.right_bottom()], thin);
+                }
+            }
+        }
         Action::ToggleZoom => {
             // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
             painter.text(

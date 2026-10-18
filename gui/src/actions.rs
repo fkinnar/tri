@@ -227,6 +227,10 @@ pub enum Action {
     StacksAll,
     /// Fenêtre de regroupement (seuil, écart de temps).
     GroupingWindow,
+    /// Mode pile en plein écran : ← / → dans la pile, ↑ / ↓ de pile en pile.
+    StackMode,
+    /// Faire de l'image la couverture de sa pile (sa préférée).
+    StackChoose,
     /// Clavier au panneau de gauche (après le leader, `Ctrl+B` par défaut).
     FocusLeft,
     /// Clavier au panneau de droite.
@@ -331,7 +335,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 108] = [
+    pub const ALL: [Action; 110] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -381,6 +385,8 @@ impl Action {
         Action::StackToggle,
         Action::StacksAll,
         Action::GroupingWindow,
+        Action::StackMode,
+        Action::StackChoose,
         Action::FocusLeft,
         Action::FocusRight,
         Action::FocusNext,
@@ -471,7 +477,7 @@ impl Action {
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             Undo | Redo | History => Group::Edit,
-            StackToggle | StacksAll | GroupingWindow => Group::Selection,
+            StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | MetaUp | MetaDown
@@ -535,6 +541,8 @@ impl Action {
             Action::StackToggle => "core.stack.toggle",
             Action::StacksAll => "core.stack.all",
             Action::GroupingWindow => "core.stack.settings",
+            Action::StackMode => "core.stack.mode",
+            Action::StackChoose => "core.stack.choose",
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
             Action::FocusNext => "core.panel.next",
@@ -924,6 +932,10 @@ const FILES: &[Binding] = {
         (&[plain(Key::S)], StackToggle),
         (&[shifted(Key::S)], StacksAll),
         (&[ctrl(Key::G)], GroupingWindow),
+        // Mode pile (plein écran) ; la préférée de la pile : Maj+Entrée (Entrée aussi en
+        // mode pile, en plein écran).
+        (&[ctrl(Key::S)], StackMode),
+        (&[shifted(Key::Enter)], StackChoose),
     ]
 };
 

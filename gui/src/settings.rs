@@ -263,6 +263,10 @@ pub struct GridSettings {
     pub marked_frame: f32,
     /// Mention « floue » sur les vignettes des photos jugées floues (score de netteté).
     pub blur_badge: bool,
+    /// Épaisseur du cadre des images d'une pile dépliée.
+    pub stack_frame: f32,
+    /// Largeur du curseur de similarité de la barre des filtres (points).
+    pub stack_slider: f32,
 }
 
 impl Default for GridSettings {
@@ -279,6 +283,8 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
+            stack_frame: 2.0,
+            stack_slider: 110.0,
         }
     }
 }
@@ -378,6 +384,9 @@ pub struct ViewSettings {
     /// 1:1 au clavier ou au bouton centré sur le collimateur quand il est connu (sinon au
     /// milieu de l'image).
     pub zoom_on_focus_point: bool,
+    /// Mode pile (plein écran) : au bout de la pile, ← / → repartent de l'autre bout
+    /// (sinon on s'arrête).
+    pub stack_wrap: bool,
 }
 
 impl Default for ViewSettings {
@@ -393,6 +402,7 @@ impl Default for ViewSettings {
             focus_marker_width: 2.0,
             key_hints: false,
             zoom_on_focus_point: true,
+            stack_wrap: false,
         }
     }
 }
@@ -610,6 +620,10 @@ pub struct Colors {
     pub focus: Color,
     /// Goutte des filtres de netteté (barre de filtres).
     pub blur_drop: Color,
+    /// Cadre des images d'une pile dépliée.
+    pub stack_frame: Color,
+    /// Réglage du curseur de similarité : fond d'une pile sur deux, pour les distinguer.
+    pub stack_band: Color,
     /// Badge « RAW » des cellules.
     pub badge: Color,
     /// Icône d'une vignette impossible à calculer.
@@ -666,6 +680,8 @@ impl Default for Colors {
             marked: Color([255, 170, 40]),
             focus: Color([60, 255, 110]),
             blur_drop: Color([110, 170, 230]),
+            stack_frame: Color([72, 72, 72]),
+            stack_band: Color([44, 44, 44]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),

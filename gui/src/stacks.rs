@@ -100,6 +100,32 @@ impl Stacks {
         }
     }
 
+    /// Rang du groupe de l'image `index` (pour alterner les fonds pendant le réglage).
+    pub fn group_index(&self, index: usize) -> Option<usize> {
+        self.of.get(index).copied()
+    }
+
+    /// Couverture du groupe d'avant (`forward` faux) ou d'après celui de l'image `index`.
+    pub fn neighbour_group(&self, index: usize, forward: bool) -> Option<usize> {
+        let g = *self.of.get(index)?;
+        let other = if forward { g + 1 } else { g.checked_sub(1)? };
+        self.covers.get(other).copied()
+    }
+
+    /// Image d'à côté dans la pile de `index` (`step` : +1 ou -1) ; au bout, rien, ou la
+    /// première / la dernière si `wrap`.
+    pub fn step_in_stack(&self, index: usize, step: isize, wrap: bool) -> Option<usize> {
+        let r = self.range_of(index)?;
+        let next = index as isize + step;
+        if (r.start as isize..r.end as isize).contains(&next) {
+            Some(next as usize)
+        } else if wrap && r.len() > 1 {
+            Some(if step > 0 { r.start } else { r.end - 1 })
+        } else {
+            None
+        }
+    }
+
     /// Nombre de piles (groupes de plus d'une image).
     pub fn count(&self) -> usize {
         self.ranges.iter().filter(|r| r.len() > 1).count()
@@ -135,6 +161,20 @@ mod tests {
         assert_eq!(s.position(3), Some(1));
         assert_eq!((s.count(), s.groups()), (2, 3));
         assert_eq!(s.range_of(2), Some(&(1..4)));
+    }
+
+    #[test]
+    fn stepping_inside_a_stack_and_between_stacks() {
+        let s = Stacks::build(6, vec![0..1, 1..4, 4..6], true, |r| r.start, |_| false);
+        assert_eq!(s.step_in_stack(1, 1, false), Some(2));
+        assert_eq!(s.step_in_stack(3, 1, false), None, "au bout : on s'arrête");
+        assert_eq!(s.step_in_stack(3, 1, true), Some(1), "ou on boucle");
+        assert_eq!(s.step_in_stack(1, -1, true), Some(3));
+        assert_eq!(s.step_in_stack(0, 1, true), None, "une seule image");
+        assert_eq!(s.neighbour_group(2, true), Some(4));
+        assert_eq!(s.neighbour_group(2, false), Some(0));
+        assert_eq!(s.neighbour_group(5, true), None);
+        assert_eq!(s.group_index(5), Some(2));
     }
 
     #[test]

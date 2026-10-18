@@ -291,6 +291,43 @@ pub fn remember_threshold(
     std::fs::write(path, lines.join("\n") + "\n")
 }
 
+/// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.
+const COVERS: &str = "stack-covers.txt";
+
+/// Couvertures choisies par l'utilisateur (la préférée de chaque pile), toutes dossiers
+/// confondus ; séparées des notes, qui restent dans les sidecars.
+pub fn chosen_covers(data: &std::path::Path) -> std::collections::HashSet<std::path::PathBuf> {
+    std::fs::read_to_string(data.join(COVERS))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .collect()
+}
+
+/// Retient (`on`) ou oublie `image` comme couverture choisie ; `others` (les autres
+/// images de sa pile) sont oubliées : une seule préférée par pile.
+pub fn choose_cover(
+    data: &std::path::Path,
+    image: &std::path::Path,
+    others: &[std::path::PathBuf],
+    on: bool,
+) -> std::io::Result<()> {
+    let mut covers = chosen_covers(data);
+    for o in others {
+        covers.remove(o);
+    }
+    if on {
+        covers.insert(image.to_path_buf());
+    } else {
+        covers.remove(image);
+    }
+    let mut lines: Vec<String> = covers.iter().map(|p| p.display().to_string()).collect();
+    lines.sort();
+    std::fs::create_dir_all(data)?;
+    std::fs::write(data.join(COVERS), lines.join("\n") + "\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,6 +385,21 @@ mod tests {
         );
         assert_eq!(group(&links, 1.0, 0.0), [0..5, 5..6]);
         assert_eq!(group(&[], 0.25, 60.0), vec![0..1], "une seule image");
+    }
+
+    #[test]
+    fn one_chosen_cover_per_stack() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path();
+        let p = |n: &str| std::path::PathBuf::from(format!("/photos/{n}"));
+        choose_cover(data, &p("a1"), &[p("a2")], true).unwrap();
+        choose_cover(data, &p("b2"), &[p("b1")], true).unwrap();
+        choose_cover(data, &p("a2"), &[p("a1")], true).unwrap();
+        let covers = chosen_covers(data);
+        assert!(covers.contains(&p("a2")) && !covers.contains(&p("a1")));
+        assert!(covers.contains(&p("b2")));
+        choose_cover(data, &p("b2"), &[], false).unwrap();
+        assert!(!chosen_covers(data).contains(&p("b2")));
     }
 
     #[test]

@@ -43,3 +43,8 @@ contigus (même sujet à deux moments).
 regroupement, retenu pour chaque dossier (`group-thresholds.tsv` du dossier de données) ;
 remis au défaut, il est oublié.
 
+## Couvertures choisies
+
+`chosen_covers` / `choose_cover` : la préférée de chaque pile, choisie par l'utilisateur
+(une par pile), séparée des notes ; retenue dans `stack-covers.txt` du dossier de données.
+

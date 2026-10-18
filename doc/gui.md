@@ -212,6 +212,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   grille suit en direct), écart de temps maximal, nombre de piles ; le seuil est retenu
   pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
   défaut : `[similarity] threshold`).
+  Retours du 18/10/2026 : pile dépliée signalée par un **cadre gris foncé** autour de
+  chaque image (`[gui.grid] stack_frame`, `[gui.colors] stack_frame`) et le trait
+  d'accent **en bas** ; **curseur de similarité** dans la barre des filtres (icône de
+  pile : `Ctrl+G`) : pendant le réglage, les piles sont dépliées, une sur deux sur un fond
+  plus clair (`stack_band`), seuil retenu pour le dossier au lâcher. **Mode pile** en
+  plein écran (`Ctrl+S`, bouton du bandeau, inspiré du mode tri de Capture One) : ← / →
+  parcourent la pile, images cachées comprises (au bout : arrêt, ou retour à l'autre bout
+  avec `[gui.view] stack_wrap`), ↑ / ↓ passent à la couverture de la pile d'avant /
+  d'après (boutons ↑ ↓ à côté de ‹ ›), « pile : 3 / 12 » dans la barre d'état. **La
+  préférée** : Entrée en mode pile, ou `Maj+Entrée`, fait de l'image la couverture de sa
+  pile, séparée des notes (une par pile, retenue : `stack-covers.txt` du dossier de
+  données ; la rechoisir l'oublie).
 - **Panneaux au clavier, façon tmux** (18/10/2026, `actions::Scope`) : le leader
   (`[gui] leader`, `Ctrl+B` par défaut) puis `h` / `l` (ou ← / →) donne le clavier au
   panneau de gauche / de droite, `o` au suivant (dossiers, images, métadonnées ; un

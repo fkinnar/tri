@@ -271,6 +271,12 @@ pub struct TriApp {
     group_gap: f32,
     /// Fenêtre de regroupement ouverte (`Ctrl+G`).
     group_dialog: bool,
+    /// Mode pile en plein écran (`Ctrl+S`) : ← / → dans la pile, ↑ / ↓ de pile en pile.
+    stack_mode: bool,
+    /// Couvertures choisies (la préférée de chaque pile), retenues dans les données.
+    chosen: HashSet<PathBuf>,
+    /// Curseur de similarité en cours de réglage : piles dépliées, fonds alternés.
+    grouping_preview: bool,
     /// Liste de l'historique ouverte (`Ctrl+H`).
     history_open: bool,
     /// Panneau qui a le clavier (leader puis direction, façon tmux).
@@ -487,6 +493,13 @@ impl TriApp {
             group_threshold: settings.similarity.threshold,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
+            stack_mode: false,
+            chosen: settings
+                .engine()
+                .data_dir()
+                .map(|d| tri::similarity::chosen_covers(&d))
+                .unwrap_or_default(),
+            grouping_preview: false,
             history_open: false,
             focus: crate::actions::Scope::Images,
             meta_cursor: 0,
@@ -1184,7 +1197,12 @@ impl TriApp {
         let scores = &self.scores;
         // Couverture : l'acceptée, sinon la mieux notée, sinon la plus nette, sinon la
         // première (décidé le 18/10/2026).
+        let chosen = &self.chosen;
         let cover = |r: &std::ops::Range<usize>| {
+            // La préférée choisie par l'utilisateur, sinon la meilleure.
+            if let Some(i) = r.clone().find(|&i| chosen.contains(&files[i].path)) {
+                return i;
+            }
             r.clone()
                 .max_by(|&a, &b| {
                     let key = |i: usize| {
@@ -1205,11 +1223,16 @@ impl TriApp {
                 })
                 .unwrap_or(r.start)
         };
-        let expanded =
-            |r: &std::ops::Range<usize>| r.clone().any(|i| self.expanded.contains(&files[i].path));
+        // Réglage du curseur de similarité : tout déplié, pour voir les piles se former.
+        let preview = self.grouping_preview;
+        let expanded = |r: &std::ops::Range<usize>| {
+            preview || r.clone().any(|i| self.expanded.contains(&files[i].path))
+        };
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded);
-        if !self.files.is_empty() {
+        // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile.
+        let browsing = self.mode == Mode::View && self.stack_mode;
+        if !self.files.is_empty() && !browsing {
             let visible = self.stacks.visible(self.selected);
             if visible != self.selected {
                 self.selected = visible;
@@ -1217,6 +1240,36 @@ impl TriApp {
             }
         }
         self.stacks_dirty = false;
+    }
+
+    /// Fait de l'image sélectionnée la couverture de sa pile (la préférée), ou l'oublie
+    /// si elle l'était ; une seule par pile, retenue dans les données de tri.
+    fn choose_cover(&mut self) {
+        let Some(range) = self.stacks.range_of(self.selected).cloned() else {
+            return;
+        };
+        if range.len() < 2 {
+            return;
+        }
+        let path = self.files[self.selected].path.clone();
+        let others: Vec<PathBuf> = range
+            .map(|i| self.files[i].path.clone())
+            .filter(|p| *p != path)
+            .collect();
+        let on = !self.chosen.contains(&path);
+        for o in &others {
+            self.chosen.remove(o);
+        }
+        if on {
+            self.chosen.insert(path.clone());
+            self.notice = Some((t!("stack-chosen", name = file_name(&path)), false));
+        } else {
+            self.chosen.remove(&path);
+        }
+        if let Some(data) = self.settings.data_dir() {
+            let _ = tri::similarity::choose_cover(&data, &path, &others, on);
+        }
+        self.stacks_dirty = true;
     }
 
     /// Déplie ou replie la pile de l'image sélectionnée.
@@ -1671,8 +1724,16 @@ impl TriApp {
             Action::Open => {
                 if self.mode == Mode::Grid && !self.files.is_empty() {
                     self.mode = Mode::View;
+                } else if self.mode == Mode::View && self.stack_mode {
+                    // Mode pile : Entrée choisit la préférée.
+                    self.choose_cover();
                 }
             }
+            Action::StackMode => {
+                self.stack_mode = !self.stack_mode;
+                self.stacks_dirty = true;
+            }
+            Action::StackChoose => self.choose_cover(),
             Action::ToggleSource => {
                 // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
                 self.source = self.source.toggled();
@@ -1716,6 +1777,20 @@ impl TriApp {
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
+            // Mode pile : ← / → dans la pile (arrêt ou boucle au bout), ↑ / ↓ de pile en pile.
+            Action::NavPrev | Action::NavNext if self.mode == Mode::View && self.stack_mode => {
+                let step = if action == Action::NavNext { 1 } else { -1 };
+                let wrap = self.gui.view.stack_wrap;
+                if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
+                    self.select(i);
+                }
+            }
+            Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stack_mode => {
+                let forward = action == Action::NavDown;
+                if let Some(i) = self.stacks.neighbour_group(self.selected, forward) {
+                    self.select(i);
+                }
+            }
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
@@ -2974,6 +3049,22 @@ impl TriApp {
                 ui.separator();
                 ui.label(file_name(&file.path));
             }
+            // Mode pile : où l'on est dans la pile.
+            if self.mode == Mode::View
+                && self.stack_mode
+                && let Some(r) = self.stacks.range_of(self.selected)
+                && r.len() > 1
+            {
+                ui.separator();
+                ui.colored_label(
+                    Color32::from(self.gui.dialogs.title_color),
+                    t!(
+                        "stack-position",
+                        n = self.selected - r.start + 1,
+                        total = r.len()
+                    ),
+                );
+            }
             // Panneau qui a le clavier (façon tmux) : dit, puisqu'il change l'effet des
             // touches.
             let focus = match self.focus {
@@ -3545,17 +3636,23 @@ impl TriApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let icon = self.gui.bar_icon_size;
                 let zoomed = self.mode != Mode::Grid && self.zoom.is_some();
-                for action in [
-                    Action::ToggleAutoAdvance,
-                    Action::NavNext,
-                    Action::NavPrev,
-                    Action::ToggleZoom,
-                ] {
+                // Plein écran avec des piles : le mode pile, et en mode pile ↑ / ↓ (pile
+                // d'avant, d'après) à côté de ‹ ›.
+                let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
+                if self.mode == Mode::View && self.stacking {
+                    if self.stack_mode {
+                        actions.extend([Action::NavDown, Action::NavUp]);
+                    }
+                    actions.push(Action::StackMode);
+                }
+                actions.push(Action::ToggleZoom);
+                for action in actions {
                     let (rect, response) =
                         marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
+                        Action::StackMode => self.stack_mode,
                         _ => false,
                     };
                     if active {
@@ -3578,7 +3675,14 @@ impl TriApp {
         });
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
-            Some(action @ (Action::NavPrev | Action::NavNext | Action::ToggleZoom)) => {
+            Some(
+                action @ (Action::NavPrev
+                | Action::NavNext
+                | Action::NavUp
+                | Action::NavDown
+                | Action::StackMode
+                | Action::ToggleZoom),
+            ) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
             }
@@ -3727,6 +3831,41 @@ impl TriApp {
                     clicked.push(Action::FilterColor(color));
                 }
             }
+            // Piles : curseur de similarité (retour du 18/10/2026, comme Capture One) ;
+            // pendant le réglage, les piles se déplient sur des fonds alternés.
+            if self.stacking {
+                ui.separator();
+                let size = ui.text_style_height(&egui::TextStyle::Body) + 2.0;
+                let tip = self.action_tip(Action::GroupingWindow);
+                let (rect, icon) = marks::clickable(ui, size, &tip);
+                let color = ui.visuals().text_color();
+                marks::bar_icon(ui.painter(), rect, Action::StackMode, color, &colors);
+                if icon.clicked() {
+                    clicked.push(Action::GroupingWindow);
+                }
+                ui.spacing_mut().slider_width = self.gui.grid.stack_slider;
+                let mut t = self.group_threshold;
+                let slider = ui
+                    .add(egui::Slider::new(&mut t, 0.0..=1.0).show_value(false))
+                    .on_hover_text(t!("stack-slider-tip"));
+                if t != self.group_threshold {
+                    self.group_threshold = t;
+                    self.stacks_dirty = true;
+                }
+                let adjusting = slider.dragged() || slider.has_focus();
+                if adjusting != self.grouping_preview {
+                    self.grouping_preview = adjusting;
+                    self.stacks_dirty = true;
+                }
+                if slider.drag_stopped()
+                    && let Some(data) = self.settings.data_dir()
+                    && !self.folder.is_none()
+                {
+                    let default = self.settings.similarity.threshold;
+                    let keep = (self.group_threshold != default).then_some(self.group_threshold);
+                    let _ = tri::similarity::remember_threshold(&data, &self.folder.dir, keep);
+                }
+            }
             ui.separator();
             let any = self.filter != KindFilter::All
                 || !self.notes_rule.is_empty()
@@ -3840,6 +3979,11 @@ impl TriApp {
             colors
                 .selection
                 .map_or(visuals.selection.bg_fill, Color32::from)
+        } else if self.grouping_preview
+            && self.stacks.group_index(index).is_some_and(|g| g % 2 == 1)
+        {
+            // Réglage du curseur de similarité : une pile sur deux sur un fond plus clair.
+            Color32::from(colors.stack_band)
         } else {
             visuals.extreme_bg_color
         };
@@ -3889,7 +4033,18 @@ impl TriApp {
             painter.rect_filled(back, 6.0, accent);
             painter.galley(at, label, Color32::BLACK);
         } else if self.stacks.in_open_stack(index) {
-            let bar = Rect::from_min_size(rect.min, vec2(rect.width() + g.gap, 3.0));
+            // Retour du 18/10/2026 : le trait seul se voyait mal ; un cadre gris foncé autour
+            // de chaque image de la pile, et le trait d'accent en bas, continu.
+            painter.rect_stroke(
+                rect,
+                4.0,
+                egui::Stroke::new(g.stack_frame, Color32::from(colors.stack_frame)),
+                egui::StrokeKind::Inside,
+            );
+            let bar = Rect::from_min_size(
+                pos2(rect.min.x, rect.max.y - 3.0),
+                vec2(rect.width() + g.gap, 3.0),
+            );
             painter.rect_filled(bar, 0.0, accent.gamma_multiply(0.8));
         }
         let image_area = Rect::from_min_max(
@@ -4571,7 +4726,12 @@ impl eframe::App for TriApp {
         self.drain_events();
         // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder
         // sur la liste (filtre changé, image renommée…).
-        if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
+        // Retour à la grille depuis une image cachée d'une pile (mode pile) : sa couverture.
+        let hidden = self.mode == Mode::Grid
+            && !self.files.is_empty()
+            && !self.stacks.shown.is_empty()
+            && self.stacks.position(self.selected).is_none();
+        if hidden || self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
             self.regroup();
         }
         self.watch_volumes(&ctx);
@@ -6361,16 +6521,39 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 2, "tout replié");
         press(&mut h, Key::S, Modifiers::SHIFT);
         assert_eq!(h.state().stacks.shown.len(), 6, "tout déplié");
-        // Couverture : l'acceptée.
         press(&mut h, Key::S, Modifiers::SHIFT);
         h.state_mut().expanded.clear();
-        let target = files
-            .iter()
-            .position(|f| f.path.ends_with("a3.jpg"))
-            .unwrap();
-        h.state_mut().select(target);
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
+        // Plein écran, mode pile (Ctrl+S) : → dans la pile, arrêt au bout ; ↓ la pile
+        // suivante ; Entrée choisit la préférée, qui devient la couverture.
+        let pos = |name: &str| files.iter().position(|f| f.path.ends_with(name)).unwrap();
+        h.state_mut().select(pos("a1.jpg"));
+        h.state_mut().chosen.clear();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert!(h.state().stack_mode);
+        let start = h.state().selected;
+        let range = h.state().stacks.range_of(start).cloned().unwrap();
+        for _ in 0..5 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        }
+        assert_eq!(h.state().selected, range.end - 1, "arrêt en fin de pile");
+        assert!(h.query_by_label_contains("pile : 3 / 3").is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(
+            h.state().stacks.cover_of(start),
+            Some(range.end - 1),
+            "préférée"
+        );
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert!(selected_name(&h).starts_with('b'), "pile suivante");
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        assert_eq!(h.state().selected, range.end - 1, "retour : sa couverture");
+        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
         // Ctrl+G : la fenêtre ; seuil à 0 : plus de piles.
         press(&mut h, Key::G, Modifiers::CTRL);
         assert!(h.state().group_dialog);

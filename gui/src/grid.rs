@@ -99,6 +99,8 @@ pub fn navigate(
         | Action::StackToggle
         | Action::StacksAll
         | Action::GroupingWindow
+        | Action::StackMode
+        | Action::StackChoose
         | Action::FocusLeft
         | Action::FocusRight
         | Action::FocusNext

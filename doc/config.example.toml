@@ -294,6 +294,10 @@ marked_frame = 3.0
 # Mention « floue » sur les vignettes des photos jugées floues (score de netteté, voir
 # [sharpness]).
 blur_badge = true
+# Pile dépliée : cadre de ses images (épaisseur ; couleur : [gui.colors] stack_frame) et
+# trait d'accent en bas. Largeur du curseur de similarité de la barre des filtres.
+stack_frame = 2.0
+stack_slider = 110.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -321,6 +325,10 @@ key_hints = false
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
 zoom_on_focus_point = true
+# Mode pile (plein écran, Ctrl+S) : ← / → parcourent la pile, ↑ / ↓ passent à la pile
+# d'avant / d'après ; au bout de la pile, true : on repart de l'autre bout ; false : on
+# s'arrête.
+stack_wrap = false
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :
@@ -434,6 +442,10 @@ marked = "#ffaa28"
 focus = "#3cff6e"
 # Goutte des filtres de netteté (barrée : masquer les floues ; seule : floues seulement).
 blur_drop = "#6eaae6"
+# Piles : cadre des images d'une pile dépliée ; pendant le réglage du curseur de
+# similarité, fond d'une pile sur deux.
+stack_frame = "#484848"
+stack_band = "#2c2c2c"
 badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"

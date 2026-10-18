@@ -637,6 +637,11 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    (`sharpness::judge_in_groups` : la pile remplace les voisines, le dossier reste ;
    piles du jugement plus larges, `[sharpness] group_threshold` = 0,45) : 14 ratées sur
    15 sans faux positif sur MISS, faux positifs des photos libres de 3 à 1.
+   Retours du 18/10/2026, faits le jour même : cadre gris des piles dépliées, curseur de
+   similarité dans la barre des filtres (piles dépliées sur fonds alternés pendant le
+   réglage), mode pile en plein écran (`Ctrl+S` : ← / → dans la pile, arrêt au bout ou
+   boucle selon `[gui.view] stack_wrap`, ↑ / ↓ de pile en pile, boutons), préférée de la
+   pile choisie (Entrée en mode pile, `Maj+Entrée`), séparée des notes et retenue.
 
 ## À faire (liste tenue à jour, 17/10/2026)
 
