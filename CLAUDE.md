@@ -561,6 +561,12 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**
   (« important »), et la **loupe à 100 %** sous le pointeur (« très bonne idée »).
+  Décisions du 18/10/2026 : **400 %** au plus (réglable) ; au clavier, des **paliers**
+  (`+` / `-`, pavé numérique compris : palier supérieur / inférieur ; `*` ajusté, `/`
+  100 %) ; souris et pavé tactile en **continu** (pincer zoome, défiler déplace,
+  Ctrl/Cmd + molette zoome autour du pointeur) ; **loupe tant qu'on maintient une
+  touche** (Maj par défaut, réglable ; petit délai pour ne pas clignoter sur Maj+P). **Fait** le
+  18/10/2026 (`[gui.zoom]`, `view::next_step`, `TriApp::zoom_input`, `TriApp::loupe`).
 - **Favoris** dans le panneau des dossiers.
 - **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un vrai
   confort »).
@@ -709,8 +715,10 @@ explicitement par l'utilisateur comme important.
       (statistiques du grand histogramme, 18/10/2026).
 
 ### Affichage
-- [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
-- [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
+- [x] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 % (fait
+      le 18/10/2026).
+- [x] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée (Maj maintenue,
+      fait le 18/10/2026).
 - [x] **Retouches demandées le 17/10/2026 au soir (pour le 18/10)**, faites le 18/10 :
       icône Actualiser, grand histogramme déplaçable, courbe lissée (classes + noyau
       gaussien), pastilles au-delà de 0,1 % des pixels :

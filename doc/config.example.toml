@@ -330,6 +330,20 @@ zoom_on_focus_point = true
 # bout ; false : on s'arrête.
 stack_wrap = false
 
+[gui.zoom]
+# Zoom en plein écran : paliers de + et - (1.0 = 100 % : un pixel de l'image par pixel de
+# l'écran ; * revient à l'ajusté, / à 100 %, z bascule ajusté / 100 %). À la souris et au
+# pavé tactile, en continu : pincer, ou Ctrl / Cmd + molette (défiler déplace l'image).
+steps = [0.25, 0.5, 1.0, 2.0, 4.0]
+max = 4.0
+# Loupe, en vue ajustée : tant que cette touche est maintenue ("shift", "ctrl", "alt" ou
+# "none" : pas de loupe), l'image à 100 % (loupe_scale) sous le pointeur, dans un carré de
+# loupe_size points, après loupe_delay_ms (pour ne pas clignoter pendant Maj+P).
+loupe_key = "shift"
+loupe_delay_ms = 150
+loupe_size = 320.0
+loupe_scale = 1.0
+
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :
 # elles se déplacent en glissant leur fond. Marge intérieure, espace entre les éléments,

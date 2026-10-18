@@ -100,6 +100,10 @@ pub fn navigate(
         | Action::StacksAll
         | Action::GroupingWindow
         | Action::StackMode
+        | Action::ZoomIn
+        | Action::ZoomOut
+        | Action::ZoomFit
+        | Action::Zoom100
         | Action::StackChoose
         | Action::FocusLeft
         | Action::FocusRight

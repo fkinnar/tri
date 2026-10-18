@@ -229,6 +229,14 @@ pub enum Action {
     GroupingWindow,
     /// Mode pile en plein écran : ← / → dans la pile, ↑ / ↓ de pile en pile.
     StackMode,
+    /// Zoom : palier supérieur.
+    ZoomIn,
+    /// Zoom : palier inférieur (jusqu'à l'ajusté).
+    ZoomOut,
+    /// Zoom : ajusté.
+    ZoomFit,
+    /// Zoom : 100 %.
+    Zoom100,
     /// Faire de l'image la couverture de sa pile (sa préférée).
     StackChoose,
     /// Clavier au panneau de gauche (après le leader, `Ctrl+B` par défaut).
@@ -335,7 +343,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 110] = [
+    pub const ALL: [Action; 114] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -386,6 +394,10 @@ impl Action {
         Action::StacksAll,
         Action::GroupingWindow,
         Action::StackMode,
+        Action::ZoomIn,
+        Action::ZoomOut,
+        Action::ZoomFit,
+        Action::Zoom100,
         Action::StackChoose,
         Action::FocusLeft,
         Action::FocusRight,
@@ -466,10 +478,10 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back => Group::Navigation,
-            ToggleZoom | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
-            | HistogramGreen | HistogramBlue | HistogramAll | ToggleClipping | TogglePeaking
-            | PeakingColor | ToggleFocusPoint => Group::View,
+            ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
+            | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
+            | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
+            | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -542,6 +554,10 @@ impl Action {
             Action::StacksAll => "core.stack.all",
             Action::GroupingWindow => "core.stack.settings",
             Action::StackMode => "core.stack.mode",
+            Action::ZoomIn => "core.view.zoom_in",
+            Action::ZoomOut => "core.view.zoom_out",
+            Action::ZoomFit => "core.view.zoom_fit",
+            Action::Zoom100 => "core.view.zoom_100",
             Action::StackChoose => "core.stack.choose",
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
@@ -932,6 +948,12 @@ const FILES: &[Binding] = {
         (&[plain(Key::S)], StackToggle),
         (&[shifted(Key::S)], StacksAll),
         (&[ctrl(Key::G)], GroupingWindow),
+        // Zoom par paliers, comme Lightroom : des caractères, pour la rangée du haut comme
+        // pour le pavé numérique, quelle que soit la disposition du clavier.
+        (&[Chord::char('+')], ZoomIn),
+        (&[Chord::char('-')], ZoomOut),
+        (&[Chord::char('*')], ZoomFit),
+        (&[Chord::char('/')], Zoom100),
         // Mode pile (plein écran) ; la préférée de la pile : Maj+Entrée (Entrée aussi en
         // mode pile, en plein écran).
         (&[ctrl(Key::S)], StackMode),
@@ -1361,6 +1383,15 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     };
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
+    }
+    // « + - * / » : des caractères, pas des touches (le zoom) ; la touche dépend de la
+    // disposition (« + » demande Maj sur un AZERTY), le caractère est le même partout,
+    // pavé numérique compris.
+    if let Some(c) = single.filter(|c| "+-*/".contains(*c))
+        && !shift
+        && !ctrl
+    {
+        return Ok(Chord::char(c));
     }
     match key_named(rest) {
         Some(key) => Ok(Chord {
@@ -1887,7 +1918,11 @@ mod tests {
         assert_eq!(ok("Page préc."), [plain(Key::PageUp)]);
         assert_eq!(ok("3"), [plain(Key::Num3)]);
         assert_eq!(ok(","), [plain(Key::Comma)]);
-        assert_eq!(ok("+"), [plain(Key::Plus)]);
+        assert_eq!(
+            ok("+"),
+            [Chord::char('+')],
+            "un caractère, quelle que soit la disposition"
+        );
         assert_eq!(ok("°"), [Chord::char('°')]);
         assert!(parse_keys("").is_err());
         assert!(parse_keys("Maj+°").is_err(), "Maj fait partie du caractère");

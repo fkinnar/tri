@@ -310,6 +310,14 @@ pub struct TriApp {
     /// Zoom 100 % demandé : point de l'image (coordonnées relatives) au centre de la vue.
     /// Conservé d'une image à l'autre pour comparer la netteté au même endroit.
     zoom: Option<Vec2>,
+    /// Échelle du zoom (1,0 = 100 % : un pixel de l'image par pixel de l'écran), entre
+    /// l'ajusté et `[gui.zoom] max`.
+    zoom_scale: f32,
+    /// Échelle de l'ajusté pour l'image affichée (relative au 100 %), pour les paliers.
+    fit_scale: f32,
+    /// Loupe : touche maintenue depuis…, et loupe affichée.
+    loupe_since: Option<Instant>,
+    loupe_on: bool,
     /// Zoom par double-clic : point cliqué (relatif) et position du curseur, appliqués dès
     /// que le 100 % est affiché (sa taille n'est connue qu'à ce moment) pour garder ce point
     /// sous le curseur.
@@ -511,6 +519,10 @@ impl TriApp {
             mode: Mode::Grid,
             source: Source::default(),
             zoom: None,
+            zoom_scale: 1.0,
+            fit_scale: 1.0,
+            loupe_since: None,
+            loupe_on: false,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
             big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
@@ -1756,12 +1768,45 @@ impl TriApp {
                     self.tell_shown();
                 }
                 if matches!(self.mode, Mode::View | Mode::Compare) {
+                    self.zoom_scale = 1.0;
                     self.zoom = match self.zoom {
                         Some(_) => None,
                         None => Some(self.zoom_center(ctx)),
                     };
                     self.request_zoom();
                 }
+            }
+            // Paliers (+, -), ajusté (*), 100 % (/) : comme Lightroom.
+            Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::Zoom100
+                if matches!(self.mode, Mode::View | Mode::Compare) =>
+            {
+                let z = &self.gui.zoom;
+                let current = if self.zoom.is_some() {
+                    self.zoom_scale
+                } else {
+                    self.fit_scale
+                };
+                let target = match action {
+                    Action::ZoomFit => None,
+                    Action::Zoom100 => Some(1.0),
+                    _ => view::next_step(
+                        current,
+                        self.fit_scale,
+                        &z.steps,
+                        action == Action::ZoomIn,
+                        z.max,
+                    ),
+                };
+                match target {
+                    Some(scale) => {
+                        self.zoom_scale = scale;
+                        if self.zoom.is_none() {
+                            self.zoom = Some(self.zoom_center(ctx));
+                        }
+                    }
+                    None => self.zoom = None,
+                }
+                self.request_zoom();
             }
             Action::PanLeft | Action::PanRight | Action::PanUp | Action::PanDown => {
                 // Seulement dans une image zoomée ; sans effet ailleurs.
@@ -2246,7 +2291,7 @@ impl TriApp {
             if self.source == Source::Raw && kind == MediaKind::Raw {
                 wanted.push((rank == 0, i, Level::Standard));
             }
-            if self.zoom.is_some() {
+            if self.zoom.is_some() || (self.loupe_on && rank == 0) {
                 let level = view::zoom_level(kind, self.source);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
@@ -2357,8 +2402,22 @@ impl TriApp {
         }
         let Some(engine) = &self.engine else { return };
         let mut wanted = Vec::new();
-        // Zoomé, les voisines aussi en 1:1 (préchargement).
+        // Zoomé, les voisines aussi en 1:1 (préchargement) ; loupe : le 1:1 de l'image.
         let zoomed = self.zoom.is_some();
+        let mut loupe_extra = None;
+        if self.loupe_on
+            && !zoomed
+            && let Some(file) = self.files.get(self.selected)
+        {
+            let level = view::zoom_level(file.kind, self.source);
+            let key = (file.path.clone(), level);
+            if self.ready(self.selected, level)
+                && !self.loaded(self.selected, level)
+                && !self.missing.contains(&key)
+            {
+                loupe_extra = Some((file.clone(), level));
+            }
+        }
         for index in displayed {
             let kind = self.files[index].kind;
             let level = view::pick(kind, self.source, zoomed, |l| self.ready(index, l));
@@ -2368,6 +2427,9 @@ impl TriApp {
                     wanted.push((self.files[index].clone(), level));
                 }
             }
+        }
+        if let Some(extra) = loupe_extra {
+            wanted.insert(0, extra);
         }
         let keys: Vec<(PathBuf, Level)> =
             wanted.iter().map(|(f, l)| (f.path.clone(), *l)).collect();
@@ -2563,7 +2625,7 @@ impl TriApp {
                 let image_rect = match (self.zoom, shown == Some(zoom_level)) {
                     // 1:1 au même point relatif de chaque image.
                     (Some(center), true) => {
-                        let size = original / ctx.pixels_per_point();
+                        let size = original * self.zoom_scale / ctx.pixels_per_point();
                         let mut c = new_center.unwrap_or(center);
                         if new_center.is_none() {
                             if response.dragged() {
@@ -2652,6 +2714,144 @@ impl TriApp {
         self.view_waiting = waiting;
     }
 
+    /// Zoom à la souris et au pavé tactile, en continu (décidé le 18/10/2026) : pincer, ou
+    /// Ctrl / Cmd + molette, zoome autour du pointeur (entre l'ajusté et `[gui.zoom]
+    /// max`) ; défiler déplace l'image zoomée. `rect` : l'image telle qu'affichée, `px` :
+    /// la taille de son 100 % (pixels).
+    fn zoom_input(
+        &mut self,
+        ctx: &egui::Context,
+        response: &egui::Response,
+        view_rect: Rect,
+        rect: Rect,
+        px: Vec2,
+    ) {
+        if !response.contains_pointer() {
+            return;
+        }
+        let ppp = ctx.pixels_per_point();
+        let (factor, scroll, pointer) =
+            ctx.input(|i| (i.zoom_delta(), i.smooth_scroll_delta, i.pointer.hover_pos()));
+        if (factor - 1.0).abs() > 1e-4
+            && let Some(pos) = pointer
+        {
+            let fit = self.fit_scale;
+            let current = if self.zoom.is_some() {
+                self.zoom_scale
+            } else {
+                fit
+            };
+            let new = (current * factor).clamp(fit, self.gui.zoom.max.max(fit));
+            if new <= fit * 1.001 {
+                self.zoom = None;
+            } else {
+                let point = view::relative(rect, pos);
+                self.zoom_scale = new;
+                let size = px * new / ppp;
+                self.zoom = Some(view::center_keeping(view_rect, size, point, pos));
+            }
+            self.request_zoom();
+            ctx.request_repaint();
+        } else if scroll != Vec2::ZERO
+            && let Some(center) = self.zoom
+        {
+            // Défiler déplace l'image zoomée (deux doigts sur le pavé tactile).
+            let size = px * self.zoom_scale / ppp;
+            let c = center - vec2(scroll.x / size.x, scroll.y / size.y);
+            self.zoom = Some(view::clamp_center(view_rect.size(), size, c));
+            ctx.request_repaint();
+        }
+    }
+
+    /// Loupe (décidé le 18/10/2026) : en vue ajustée, tant que la touche de
+    /// `[gui.zoom] loupe_key` est maintenue (après `loupe_delay_ms`), l'image à
+    /// `loupe_scale` (100 %) sous le pointeur, dans un carré ; le 1:1 est chargé pour
+    /// l'occasion, l'aperçu agrandi en attendant.
+    fn loupe(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        index: usize,
+        image_rect: Option<Rect>,
+    ) {
+        let z = self.gui.zoom.clone();
+        let held = ctx.input(|i| match z.loupe_key {
+            crate::settings::LoupeKey::Shift => i.modifiers.shift,
+            crate::settings::LoupeKey::Ctrl => i.modifiers.ctrl,
+            crate::settings::LoupeKey::Alt => i.modifiers.alt,
+            crate::settings::LoupeKey::None => false,
+        });
+        let pointer = ctx.input(|i| i.pointer.hover_pos());
+        let over = match (image_rect, pointer) {
+            (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
+            _ => None,
+        };
+        if !held || self.zoom.is_some() || over.is_none() {
+            self.loupe_since = None;
+            self.loupe_on = false;
+            return;
+        }
+        let since = *self.loupe_since.get_or_insert_with(Instant::now);
+        let delay = Duration::from_millis(z.loupe_delay_ms);
+        if since.elapsed() < delay {
+            ctx.request_repaint_after(delay - since.elapsed());
+            return;
+        }
+        if !self.loupe_on {
+            self.loupe_on = true;
+            self.request_zoom();
+        }
+        let Some((rect, pos)) = over else { return };
+        let file = &self.files[index];
+        let level = view::zoom_level(file.kind, self.source);
+        let ppp = ctx.pixels_per_point();
+        // Le 1:1 s'il est chargé, sinon l'image affichée (agrandie, floue un instant).
+        let full = self.big.get(&(file.path.clone(), level)).cloned();
+        let (texture, px, loading) = match full {
+            Some(b) => (b.texture.id(), b.original, false),
+            None => match self
+                .big
+                .get(&(file.path.clone(), Level::Standard))
+                .cloned()
+                .or_else(|| self.big.get(&(file.path.clone(), Level::Embedded)).cloned())
+            {
+                Some(b) => {
+                    let px = self
+                        .last_zoom_size
+                        .get(&level)
+                        .map(|&last| view::estimate_zoom_size(last, b.original.x / b.original.y))
+                        .unwrap_or(b.original);
+                    (b.texture.id(), px, true)
+                }
+                None => return,
+            },
+        };
+        let side = z.loupe_size;
+        let square = Rect::from_center_size(pos, vec2(side, side));
+        let size = px * z.loupe_scale / ppp;
+        let point = view::relative(rect, pos);
+        let whole = Rect::from_min_size(pos - vec2(point.x * size.x, point.y * size.y), size);
+        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+        let clipped = painter.with_clip_rect(square);
+        clipped.rect_filled(square, 0.0, self.gui.colors.view_background);
+        clipped.image(texture, whole, uv, Color32::WHITE);
+        painter.rect_stroke(
+            square,
+            4.0,
+            egui::Stroke::new(2.0, Color32::from_gray(220)),
+            egui::StrokeKind::Outside,
+        );
+        if loading {
+            overlay(
+                painter,
+                square.left_top() + vec2(6.0, 6.0),
+                Align2::LEFT_TOP,
+                &t!("view-loupe-loading"),
+            );
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
     /// Plein écran : l'image sélectionnée, ajustée ou à 100 %, avec ce qui est affiché.
     fn viewer(&mut self, ui: &mut Ui) {
         self.apply_pending_focus_zoom();
@@ -2714,8 +2914,8 @@ impl TriApp {
             };
             let rect = match (zoom_px, self.zoom) {
                 (Some(px), Some(center)) => {
-                    // 1:1 : un pixel de l'image = un pixel de l'écran.
-                    let size = px / ctx.pixels_per_point();
+                    // Échelle 1,0 : un pixel de l'image = un pixel de l'écran.
+                    let size = px * self.zoom_scale / ctx.pixels_per_point();
                     let mut center = match self.zoom_anchor.take() {
                         Some((point, pointer)) => {
                             view::center_keeping(view_rect, size, point, pointer)
@@ -2739,8 +2939,21 @@ impl TriApp {
                 }
                 _ => view::fit_rect(view_rect, original),
             };
+            // Échelle de l'ajusté, rapportée au 100 % (connu ou estimé), pour les paliers.
+            let px = zoom_px
+                .or_else(|| {
+                    self.last_zoom_size
+                        .get(&zoom_level)
+                        .map(|&last| view::estimate_zoom_size(last, original.x / original.y))
+                })
+                .unwrap_or(original);
+            let ppp = ctx.pixels_per_point();
+            self.fit_scale = (view_rect.width() * ppp / px.x)
+                .min(view_rect.height() * ppp / px.y)
+                .min(1.0);
             painter.image(texture.id(), rect, uv, Color32::WHITE);
             image_rect = Some(rect);
+            self.zoom_input(&ctx, &response, view_rect, rect, px);
             // Zones saturées / bouchées, étirées sur l'image (aussi zoomée).
             if self.clipping
                 && let Some(texture) = self.mask_texture(&ctx, index)
@@ -2755,6 +2968,7 @@ impl TriApp {
             }
         }
         self.draw_focus_point(&ctx, &painter, &file, image_rect);
+        self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
         let peaking = self.peaking_overlay(
             &painter,
@@ -2767,6 +2981,7 @@ impl TriApp {
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
         if response.double_clicked() {
             self.zoom_anchor = None;
+            self.zoom_scale = 1.0;
             self.zoom = match (self.zoom, image_rect, response.interact_pointer_pos()) {
                 (Some(_), _, _) => None,
                 (None, Some(rect), Some(pos)) => {
@@ -2788,6 +3003,10 @@ impl TriApp {
         );
         if self.selection.contains(&file.path) {
             info.push_str(&t!("view-info-selected"));
+        }
+        if self.zoom.is_some() {
+            let percent = (self.zoom_scale * 100.0).round() as i64;
+            info.push_str(&t!("view-info-zoom", percent = percent));
         }
         if self.peaking {
             info.push_str(&match peaking {
@@ -3885,6 +4104,28 @@ impl TriApp {
                     let default = self.settings.similarity.threshold;
                     let keep = (self.group_threshold != default).then_some(self.group_threshold);
                     let _ = tri::similarity::remember_threshold(&data, &self.folder.dir, keep);
+                }
+                // Tout déplier / tout replier (Maj+S), à côté du curseur.
+                let (rect, all) = marks::icon_button(
+                    ui,
+                    size,
+                    &Action::StacksAll.label(),
+                    &self.action_tip(Action::StacksAll),
+                );
+                if !self.expanded.is_empty() {
+                    ui.painter()
+                        .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+                }
+                let color = ui.style().interact(&all).fg_stroke.color;
+                marks::bar_icon(
+                    ui.painter(),
+                    rect.shrink(size * 0.2),
+                    Action::StacksAll,
+                    color,
+                    &colors,
+                );
+                if all.clicked() {
+                    clicked.push(Action::StacksAll);
                 }
             }
             ui.separator();
@@ -6595,6 +6836,60 @@ mod tests {
         );
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().group_dialog);
+    }
+
+    #[test]
+    fn zoom_steps_pinch_and_loupe() {
+        let (mut h, _dir) = harness_with(4000, 3000);
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.last_shown.1.is_some());
+        // + : palier au-dessus de l'ajusté ; / : 100 % ; - : palier en dessous ; * : ajusté.
+        h.event(UiEvent::Text("+".into()));
+        h.run_steps(3);
+        assert!(h.state().zoom.is_some(), "zoomé");
+        let first = h.state().zoom_scale;
+        assert!(
+            h.state().gui.zoom.steps.contains(&first),
+            "un palier : {first}"
+        );
+        h.event(UiEvent::Text("/".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().zoom_scale, 1.0);
+        assert!(h.query_by_label_contains("100 %").is_some(), "affiché");
+        h.event(UiEvent::Text("-".into()));
+        h.run_steps(3);
+        assert!(h.state().zoom_scale < 1.0 || h.state().zoom.is_none());
+        h.event(UiEvent::Text("*".into()));
+        h.run_steps(3);
+        assert!(h.state().zoom.is_none(), "ajusté");
+        // Pincer au-dessus de l'image : zoom continu.
+        let center = h.ctx.content_rect().center();
+        h.hover_at(center);
+        h.event(UiEvent::Zoom(3.0));
+        h.run_steps(3);
+        assert!(h.state().zoom.is_some(), "pincé : zoomé");
+        let pinched = h.state().zoom_scale;
+        assert!(
+            pinched > h.state().fit_scale,
+            "au-delà de l'ajusté : {pinched}"
+        );
+        h.event(UiEvent::Zoom(1000.0));
+        h.run_steps(3);
+        assert_eq!(h.state().zoom_scale, h.state().gui.zoom.max, "plafonné");
+        // Loupe : Maj maintenue, en vue ajustée.
+        press(&mut h, Key::Z, Modifiers::NONE);
+        if h.state().zoom.is_some() {
+            press(&mut h, Key::Z, Modifiers::NONE);
+        }
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        h.event(UiEvent::ModifiersChanged(Modifiers::SHIFT));
+        h.hover_at(center + vec2(1.0, 0.0));
+        h.run_steps(3);
+        assert!(h.state().loupe_on, "loupe");
+        h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        h.run_steps(3);
+        assert!(!h.state().loupe_on, "lâchée");
     }
 
     #[test]

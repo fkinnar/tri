@@ -343,6 +343,13 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
                 stroke,
             ));
         }
+        Action::StacksAll => {
+            // Piles dépliées : trois feuilles côte à côte.
+            for x in [0.0, 0.36, 0.72] {
+                let r = Rect::from_min_max(p(x, 0.3), p(x + 0.28, 0.7));
+                painter.rect_stroke(r, 1.5, stroke, egui::StrokeKind::Middle);
+            }
+        }
         Action::StackMode => {
             // Pile : trois feuilles décalées.
             let thin = Stroke::new(stroke.width * 0.7, color);

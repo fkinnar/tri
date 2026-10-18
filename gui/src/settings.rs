@@ -143,6 +143,8 @@ pub struct GuiSettings {
     pub grid: GridSettings,
     /// `[gui.view]`.
     pub view: ViewSettings,
+    /// `[gui.zoom]`.
+    pub zoom: ZoomSettings,
     /// `[gui.compare]`.
     pub compare: CompareSettings,
     /// `[gui.dialogs]`.
@@ -182,6 +184,7 @@ impl Default for GuiSettings {
             history: 200,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
+            zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             dialogs: DialogSettings::default(),
             colors: Colors::default(),
@@ -349,6 +352,53 @@ impl Default for CompareSettings {
             max: 6,
             gap: 4.0,
             frame: 3.0,
+        }
+    }
+}
+
+/// Touche à maintenir pour la loupe.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoupeKey {
+    /// Maj.
+    #[default]
+    Shift,
+    /// Ctrl.
+    Ctrl,
+    /// Alt (Option sur macOS).
+    Alt,
+    /// Pas de loupe.
+    None,
+}
+
+/// Section `[gui.zoom]` : zoom continu et loupe (décidé le 18/10/2026).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ZoomSettings {
+    /// Paliers de `+` / `-` (1,0 = 100 % : un pixel de l'image par pixel de l'écran).
+    pub steps: Vec<f32>,
+    /// Zoom maximal (4,0 = 400 %).
+    pub max: f32,
+    /// Loupe : touche à maintenir (en vue ajustée, sous le pointeur).
+    pub loupe_key: LoupeKey,
+    /// Loupe : délai avant d'apparaître (ms), pour ne pas clignoter quand la touche sert à
+    /// un raccourci (Maj+P).
+    pub loupe_delay_ms: u64,
+    /// Loupe : côté (points).
+    pub loupe_size: f32,
+    /// Loupe : grossissement (1,0 = 100 %).
+    pub loupe_scale: f32,
+}
+
+impl Default for ZoomSettings {
+    fn default() -> Self {
+        Self {
+            steps: vec![0.25, 0.5, 1.0, 2.0, 4.0],
+            max: 4.0,
+            loupe_key: LoupeKey::Shift,
+            loupe_delay_ms: 150,
+            loupe_size: 320.0,
+            loupe_scale: 1.0,
         }
     }
 }

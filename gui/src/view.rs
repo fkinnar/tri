@@ -117,6 +117,29 @@ pub fn center_keeping(view: Rect, size: Vec2, point: Vec2, pointer: Pos2) -> Vec
     vec2(point.x - offset.x / size.x, point.y - offset.y / size.y)
 }
 
+/// Palier suivant (`up`) ou précédent de l'échelle `current` (1,0 = 100 %), parmi
+/// `steps`, l'ajusté valant `fit` ; `None` : revenir à l'ajusté. Au-delà du dernier palier,
+/// `max`.
+pub fn next_step(current: f32, fit: f32, steps: &[f32], up: bool, max: f32) -> Option<f32> {
+    let eps = 1e-3;
+    if up {
+        let next = steps
+            .iter()
+            .copied()
+            .filter(|&s| s > current * (1.0 + eps) && s > fit * (1.0 + eps))
+            .fold(f32::INFINITY, f32::min);
+        Some(if next.is_finite() { next.min(max) } else { max }).filter(|&s| s > fit)
+    } else {
+        steps
+            .iter()
+            .copied()
+            .filter(|&s| s < current * (1.0 - eps) && s > fit * (1.0 + eps))
+            .fold(None, |best: Option<f32>, s| {
+                Some(best.map_or(s, |b| b.max(s)))
+            })
+    }
+}
+
 /// Taille (pixels) supposée du 1:1 d'une image dont on n'a encore qu'un aperçu de
 /// proportions `aspect` (largeur / hauteur), d'après le dernier 1:1 affiché (`last`) :
 /// même côté long, orientation de l'aperçu. Une série vient en général du même boîtier.
@@ -255,6 +278,28 @@ mod tests {
         let r = fit_rect(view, vec2(400.0, 600.0)); // portrait
         assert!((r.size() - vec2(500.0 * 400.0 / 600.0, 500.0)).length() < 1e-3);
         assert_eq!(r.center(), view.center());
+    }
+
+    #[test]
+    fn zoom_steps_go_up_and_down_from_the_fit() {
+        let steps = [0.25, 0.5, 1.0, 2.0, 4.0];
+        // Ajusté à 0,3 : 0,25 est plus petit que l'ajusté, on passe à 0,5.
+        assert_eq!(next_step(0.3, 0.3, &steps, true, 4.0), Some(0.5));
+        assert_eq!(next_step(0.5, 0.3, &steps, true, 4.0), Some(1.0));
+        assert_eq!(next_step(4.0, 0.3, &steps, true, 4.0), Some(4.0), "plafond");
+        assert_eq!(next_step(1.5, 0.3, &steps, false, 4.0), Some(1.0));
+        assert_eq!(
+            next_step(0.5, 0.3, &steps, false, 4.0),
+            None,
+            "retour à l'ajusté"
+        );
+        // Entre deux paliers (pincement) : le palier d'au-dessus.
+        assert_eq!(next_step(1.3, 0.3, &steps, true, 4.0), Some(2.0));
+        assert_eq!(
+            next_step(3.0, 0.3, &steps, true, 3.0),
+            Some(3.0),
+            "max réglé"
+        );
     }
 
     #[test]

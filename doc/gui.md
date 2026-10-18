@@ -200,6 +200,20 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (« Couleurs [gui.colors] », `settings-section-*` dans les catalogues ; un test vérifie
   qu'aucune section n'en manque). Les clés de dossier (`dir`, `*_dir`, `destination`) ont
   la complétion par Tab.
+- **Zoom continu et loupe** (18/10/2026, `[gui.zoom]`) : l'échelle (1,0 = 100 %, un
+  pixel de l'image par pixel de l'écran) va de l'ajusté à `max` (400 %). Clavier, par
+  **paliers** comme Lightroom : `+` / `-` (rangée du haut ou pavé numérique : liés comme
+  caractères, la touche dépendant de la disposition) palier supérieur / inférieur
+  (`steps`), `*` ajusté, `/` 100 %, `z` et le double-clic basculent ajusté / 100 %.
+  Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour
+  du pointeur ; défiler déplace l'image zoomée. Au-delà de l'ajusté, c'est le 1:1 qui est
+  affiché, réduit ou agrandi ; l'échelle s'affiche (« 200 % ») ; elle est gardée d'une
+  image à l'autre, comme la position, et vaut aussi en comparaison. **Loupe** : en vue
+  ajustée, tant que `loupe_key` (Maj) est maintenue, après `loupe_delay_ms` (pour ne pas
+  clignoter pendant Maj+P), un carré de `loupe_size` points sous le pointeur montre
+  l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
+  en attendant (« 100 % en cours »).
+- **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
 - **Piles** (18/10/2026, `gui/src/stacks.rs`, moteur `tri::similarity`, voir
   `similarity.md`) : les images semblables voisines (rafales, séries) forment des piles,
   repliées par défaut : une vignette, la **couverture** (l'acceptée, sinon la mieux notée,
