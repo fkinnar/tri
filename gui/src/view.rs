@@ -118,25 +118,26 @@ pub fn center_keeping(view: Rect, size: Vec2, point: Vec2, pointer: Pos2) -> Vec
 }
 
 /// Palier suivant (`up`) ou précédent de l'échelle `current` (1,0 = 100 %), parmi
-/// `steps`, l'ajusté valant `fit` ; `None` : revenir à l'ajusté. Au-delà du dernier palier,
-/// `max`.
-pub fn next_step(current: f32, fit: f32, steps: &[f32], up: bool, max: f32) -> Option<f32> {
+/// `steps`, entre `min` et `max` ; `None` : rien au-delà (déjà au bout). On peut dézoomer
+/// sous l'ajusté (retour du 18/10/2026 : l'image plus petite que l'écran, centrée).
+pub fn next_step(current: f32, steps: &[f32], up: bool, (min, max): (f32, f32)) -> Option<f32> {
     let eps = 1e-3;
-    if up {
-        let next = steps
-            .iter()
-            .copied()
-            .filter(|&s| s > current * (1.0 + eps) && s > fit * (1.0 + eps))
-            .fold(f32::INFINITY, f32::min);
-        Some(if next.is_finite() { next.min(max) } else { max }).filter(|&s| s > fit)
-    } else {
+    let inside = |s: f32| s >= min * (1.0 - eps) && s <= max * (1.0 + eps);
+    let pick = |better: fn(f32, f32) -> f32, keep: &dyn Fn(f32) -> bool| {
         steps
             .iter()
             .copied()
-            .filter(|&s| s < current * (1.0 - eps) && s > fit * (1.0 + eps))
+            .filter(|&s| keep(s) && inside(s))
             .fold(None, |best: Option<f32>, s| {
-                Some(best.map_or(s, |b| b.max(s)))
+                Some(best.map_or(s, |b| better(b, s)))
             })
+    };
+    if up {
+        pick(f32::min, &|s| s > current * (1.0 + eps))
+            .or_else(|| (current < max * (1.0 - eps)).then_some(max))
+    } else {
+        pick(f32::max, &|s| s < current * (1.0 - eps))
+            .or_else(|| (current > min * (1.0 + eps)).then_some(min))
     }
 }
 
@@ -282,21 +283,24 @@ mod tests {
 
     #[test]
     fn zoom_steps_go_up_and_down_from_the_fit() {
-        let steps = [0.25, 0.5, 1.0, 2.0, 4.0];
-        // Ajusté à 0,3 : 0,25 est plus petit que l'ajusté, on passe à 0,5.
-        assert_eq!(next_step(0.3, 0.3, &steps, true, 4.0), Some(0.5));
-        assert_eq!(next_step(0.5, 0.3, &steps, true, 4.0), Some(1.0));
-        assert_eq!(next_step(4.0, 0.3, &steps, true, 4.0), Some(4.0), "plafond");
-        assert_eq!(next_step(1.5, 0.3, &steps, false, 4.0), Some(1.0));
+        let steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0];
+        let limits = (0.1, 4.0);
+        // Depuis l'ajusté (0,3) : 0,5 au-dessus, 0,25 au-dessous (sous l'ajusté).
+        assert_eq!(next_step(0.3, &steps, true, limits), Some(0.5));
+        assert_eq!(next_step(0.3, &steps, false, limits), Some(0.25));
+        assert_eq!(next_step(0.5, &steps, true, limits), Some(1.0));
+        assert_eq!(next_step(4.0, &steps, true, limits), None, "plafond");
+        assert_eq!(next_step(1.5, &steps, false, limits), Some(1.0));
         assert_eq!(
-            next_step(0.5, 0.3, &steps, false, 4.0),
-            None,
-            "retour à l'ajusté"
+            next_step(0.125, &steps, false, limits),
+            Some(0.1),
+            "jusqu'au minimum"
         );
+        assert_eq!(next_step(0.1, &steps, false, limits), None);
         // Entre deux paliers (pincement) : le palier d'au-dessus.
-        assert_eq!(next_step(1.3, 0.3, &steps, true, 4.0), Some(2.0));
+        assert_eq!(next_step(1.3, &steps, true, limits), Some(2.0));
         assert_eq!(
-            next_step(3.0, 0.3, &steps, true, 3.0),
+            next_step(2.5, &steps, true, (0.1, 3.0)),
             Some(3.0),
             "max réglé"
         );

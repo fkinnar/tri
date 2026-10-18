@@ -204,7 +204,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pixel de l'image par pixel de l'écran) va de l'ajusté à `max` (400 %). Clavier, par
   **paliers** comme Lightroom : `+` / `-` (rangée du haut ou pavé numérique : liés comme
   caractères, la touche dépendant de la disposition) palier supérieur / inférieur
-  (`steps`), `*` ajusté, `/` 100 %, `z` et le double-clic basculent ajusté / 100 %.
+  (`steps`), `*` 100 %, `/` ajusté (inversés le 18/10/2026, comme Lightroom), `z` et le
+  double-clic basculent ajusté / 100 % ; on peut **dézoomer sous l'ajusté** jusqu'à
+  `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
+  qu'à 100 %.
   Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour
   du pointeur ; défiler déplace l'image zoomée. Au-delà de l'ajusté, c'est le 1:1 qui est
   affiché, réduit ou agrandi ; l'échelle s'affiche (« 200 % ») ; elle est gardée d'une

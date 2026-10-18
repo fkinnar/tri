@@ -562,8 +562,8 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**
   (« important »), et la **loupe à 100 %** sous le pointeur (« très bonne idée »).
   Décisions du 18/10/2026 : **400 %** au plus (réglable) ; au clavier, des **paliers**
-  (`+` / `-`, pavé numérique compris : palier supérieur / inférieur ; `*` ajusté, `/`
-  100 %) ; souris et pavé tactile en **continu** (pincer zoome, défiler déplace,
+  (`+` / `-`, pavé numérique compris : palier supérieur / inférieur ; `*` 100 %, `/`
+  ajusté, comme Lightroom ; dézoom sous l'ajusté jusqu'à 10 %) ; souris et pavé tactile en **continu** (pincer zoome, défiler déplace,
   Ctrl/Cmd + molette zoome autour du pointeur) ; **loupe tant qu'on maintient une
   touche** (Maj par défaut, réglable ; petit délai pour ne pas clignoter sur Maj+P). **Fait** le
   18/10/2026 (`[gui.zoom]`, `view::next_step`, `TriApp::zoom_input`, `TriApp::loupe`).

@@ -1776,7 +1776,7 @@ impl TriApp {
                     self.request_zoom();
                 }
             }
-            // Paliers (+, -), ajusté (*), 100 % (/) : comme Lightroom.
+            // Paliers (+, -), 100 % (*), ajusté (/) : comme Lightroom.
             Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::Zoom100
                 if matches!(self.mode, Mode::View | Mode::Compare) =>
             {
@@ -1789,15 +1789,24 @@ impl TriApp {
                 let target = match action {
                     Action::ZoomFit => None,
                     Action::Zoom100 => Some(1.0),
-                    _ => view::next_step(
+                    // Déjà au bout (min, max) : rien ne change.
+                    _ => match view::next_step(
                         current,
-                        self.fit_scale,
                         &z.steps,
                         action == Action::ZoomIn,
-                        z.max,
-                    ),
+                        (z.min, z.max),
+                    ) {
+                        Some(scale) => Some(scale),
+                        None => return,
+                    },
                 };
                 match target {
+                    // Un palier qui tombe sur l'ajusté : pas de zoom (100 % reste 100 %).
+                    Some(scale)
+                        if action != Action::Zoom100 && (scale - self.fit_scale).abs() < 1e-3 =>
+                    {
+                        self.zoom = None
+                    }
                     Some(scale) => {
                         self.zoom_scale = scale;
                         if self.zoom.is_none() {
@@ -2741,8 +2750,10 @@ impl TriApp {
             } else {
                 fit
             };
-            let new = (current * factor).clamp(fit, self.gui.zoom.max.max(fit));
-            if new <= fit * 1.001 {
+            let z = &self.gui.zoom;
+            // Sous l'ajusté aussi, jusqu'à `min` ; l'ajusté lui-même : pas de zoom.
+            let new = (current * factor).clamp(z.min.min(fit), z.max.max(fit));
+            if (new - fit).abs() <= fit * 1e-3 {
                 self.zoom = None;
             } else {
                 let point = view::relative(rect, pos);
@@ -2948,9 +2959,7 @@ impl TriApp {
                 })
                 .unwrap_or(original);
             let ppp = ctx.pixels_per_point();
-            self.fit_scale = (view_rect.width() * ppp / px.x)
-                .min(view_rect.height() * ppp / px.y)
-                .min(1.0);
+            self.fit_scale = (view_rect.width() * ppp / px.x).min(view_rect.height() * ppp / px.y);
             painter.image(texture.id(), rect, uv, Color32::WHITE);
             image_rect = Some(rect);
             self.zoom_input(&ctx, &response, view_rect, rect, px);
@@ -3853,7 +3862,10 @@ impl TriApp {
             // et précédente, des icônes (retour du 17/10/2026).
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let icon = self.gui.bar_icon_size;
-                let zoomed = self.mode != Mode::Grid && self.zoom.is_some();
+                // Le bouton 1:1 allumé à 100 % seulement (pas à 13 % ni à 200 %).
+                let zoomed = self.mode != Mode::Grid
+                    && self.zoom.is_some()
+                    && (self.zoom_scale - 1.0).abs() < 1e-3;
                 // Plein écran : l'interrupteur des piles, toujours là ; piles actives, ↑ / ↓
                 // (pile d'avant, d'après) à côté de ‹ ›.
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
@@ -6844,7 +6856,7 @@ mod tests {
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| app.last_shown.1.is_some());
-        // + : palier au-dessus de l'ajusté ; / : 100 % ; - : palier en dessous ; * : ajusté.
+        // + : palier au-dessus de l'ajusté ; * : 100 % ; - : palier en dessous ; / : ajusté.
         h.event(UiEvent::Text("+".into()));
         h.run_steps(3);
         assert!(h.state().zoom.is_some(), "zoomé");
@@ -6853,16 +6865,23 @@ mod tests {
             h.state().gui.zoom.steps.contains(&first),
             "un palier : {first}"
         );
-        h.event(UiEvent::Text("/".into()));
+        h.event(UiEvent::Text("*".into()));
         h.run_steps(3);
         assert_eq!(h.state().zoom_scale, 1.0);
         assert!(h.query_by_label_contains("100 %").is_some(), "affiché");
         h.event(UiEvent::Text("-".into()));
         h.run_steps(3);
         assert!(h.state().zoom_scale < 1.0 || h.state().zoom.is_none());
-        h.event(UiEvent::Text("*".into()));
+        h.event(UiEvent::Text("/".into()));
         h.run_steps(3);
         assert!(h.state().zoom.is_none(), "ajusté");
+        // - depuis l'ajusté : sous l'ajusté, l'image plus petite que l'écran.
+        h.event(UiEvent::Text("-".into()));
+        h.run_steps(3);
+        assert!(h.state().zoom.is_some(), "dézoomé");
+        assert!(h.state().zoom_scale < h.state().fit_scale, "sous l'ajusté");
+        h.event(UiEvent::Text("/".into()));
+        h.run_steps(3);
         // Pincer au-dessus de l'image : zoom continu.
         let center = h.ctx.content_rect().center();
         h.hover_at(center);

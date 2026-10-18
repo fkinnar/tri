@@ -379,6 +379,8 @@ pub struct ZoomSettings {
     pub steps: Vec<f32>,
     /// Zoom maximal (4,0 = 400 %).
     pub max: f32,
+    /// Zoom minimal (0,1 = 10 %) : sous l'ajusté, l'image plus petite que l'écran.
+    pub min: f32,
     /// Loupe : touche à maintenir (en vue ajustée, sous le pointeur).
     pub loupe_key: LoupeKey,
     /// Loupe : délai avant d'apparaître (ms), pour ne pas clignoter quand la touche sert à
@@ -393,8 +395,9 @@ pub struct ZoomSettings {
 impl Default for ZoomSettings {
     fn default() -> Self {
         Self {
-            steps: vec![0.25, 0.5, 1.0, 2.0, 4.0],
+            steps: vec![0.125, 0.25, 0.5, 1.0, 2.0, 4.0],
             max: 4.0,
+            min: 0.1,
             loupe_key: LoupeKey::Shift,
             loupe_delay_ms: 150,
             loupe_size: 320.0,

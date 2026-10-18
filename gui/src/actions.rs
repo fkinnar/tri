@@ -952,8 +952,8 @@ const FILES: &[Binding] = {
         // pour le pavé numérique, quelle que soit la disposition du clavier.
         (&[Chord::char('+')], ZoomIn),
         (&[Chord::char('-')], ZoomOut),
-        (&[Chord::char('*')], ZoomFit),
-        (&[Chord::char('/')], Zoom100),
+        (&[Chord::char('*')], Zoom100),
+        (&[Chord::char('/')], ZoomFit),
         // Mode pile (plein écran) ; la préférée de la pile : Maj+Entrée (Entrée aussi en
         // mode pile, en plein écran).
         (&[ctrl(Key::S)], StackMode),
