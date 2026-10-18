@@ -196,7 +196,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   le moteur (`[preview]`, `[render]`, `[cache]`, `[scheduler]`, `[exposure]`,
   `[sharpness]`, `[places]`, `[data]`) et la taille de la fenêtre au prochain lancement,
   c'est indiqué. Fichier : celui lu au lancement, sinon `--config` ou l'emplacement par
-  défaut.
+  défaut. Sections nommées par un libellé traduit suivi du nom du fichier en gris
+  (« Couleurs [gui.colors] », `settings-section-*` dans les catalogues ; un test vérifie
+  qu'aucune section n'en manque). Les clés de dossier (`dir`, `*_dir`, `destination`) ont
+  la complétion par Tab.
+- **Champs de chemin** (18/10/2026, `gui/src/path_field.rs`) : partout où l'on tape un
+  dossier existant (copier / déplacer, racine du déchargement, réglages), Tab complète
+  comme un terminal : un seul dossier possible, il est pris ; sinon le début commun, et
+  la liste des dossiers sous le champ.
+- **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
+  le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
   renommer (`F2`), mettre à la corbeille (`Suppr` ou `Backspace` — la touche « effacer »
   des Mac —, `d d` dans le profil vim), afficher dans le Finder / le gestionnaire de

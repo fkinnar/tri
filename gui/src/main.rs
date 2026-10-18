@@ -34,6 +34,7 @@ mod loader;
 mod marks;
 mod meta;
 mod offload;
+mod path_field;
 mod settings;
 mod settings_window;
 mod state;

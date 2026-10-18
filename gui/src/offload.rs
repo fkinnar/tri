@@ -47,6 +47,8 @@ enum Stage {
         plan: Plan,
         history: Option<History>,
         root: String,
+        /// Champ de la racine (complétion par Tab).
+        root_field: crate::path_field::PathField,
         folder: String,
         error: Option<String>,
         /// Déjà présentes dans la destination : (destination, RAW seulement, (nombre,
@@ -234,6 +236,7 @@ impl OffloadDialog {
                                 plan,
                                 history: Some(history),
                                 root: offload::root(&self.settings, self.data.as_deref()),
+                                root_field: Default::default(),
                                 folder,
                                 error: None,
                                 present: None,
@@ -339,6 +342,7 @@ impl OffloadDialog {
                     Stage::Ready {
                         plan,
                         root,
+                        root_field,
                         folder,
                         error,
                         present,
@@ -387,7 +391,9 @@ impl OffloadDialog {
                             .num_columns(2)
                             .show(ui, |ui| {
                                 ui.label(t!("offload-root"));
-                                ui.add(egui::TextEdit::singleline(root).desired_width(300.0));
+                                ui.vertical(|ui| {
+                                    root_field.show(ui, root_field_id(), root, 300.0);
+                                });
                                 ui.end_row();
                                 ui.label(t!("offload-session"));
                                 ui.add(
@@ -544,4 +550,9 @@ fn file_name(path: &Path) -> String {
 /// Mégaoctets, une décimale, à la façon de la langue (« 109,4 » en français).
 fn megabytes(bytes: u64) -> String {
     tri::i18n::decimal(bytes as f64 / 1e6, 1)
+}
+
+/// Identifiant du champ de la racine du déchargement.
+fn root_field_id() -> egui::Id {
+    egui::Id::unique("offload_root_field")
 }

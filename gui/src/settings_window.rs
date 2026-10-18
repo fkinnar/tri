@@ -35,6 +35,49 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
     ) || (section, key) == ("gui", "window")
 }
 
+/// Libellé lisible d'une section (« Couleurs » pour `gui.colors`), traduit ; à défaut,
+/// son nom.
+pub fn section_label(name: &str) -> String {
+    let id = format!("settings-section-{}", name.replace('.', "-"));
+    if tri::i18n::has(tri::i18n::language(), &id) {
+        tri::i18n::translate(&id, None)
+    } else {
+        name.to_string()
+    }
+}
+
+/// « Libellé [section] » : le libellé, et le nom technique entre crochets dans un gris
+/// plus discret (celui du fichier de configuration).
+fn section_title(ui: &Ui, name: &str, strong: bool) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    let style = ui.style();
+    let mut label = RichText::new(section_label(name)).color(ui.visuals().text_color());
+    if strong {
+        label = label.strong();
+    }
+    label.append_to(
+        &mut job,
+        style,
+        egui::FontSelection::Default,
+        egui::Align::Center,
+    );
+    RichText::new(format!("  [{name}]"))
+        .color(ui.visuals().weak_text_color())
+        .monospace()
+        .append_to(
+            &mut job,
+            style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+    job
+}
+
+/// Vrai si la clé désigne un dossier : saisie avec complétion par Tab.
+fn is_folder_key(key: &str) -> bool {
+    key == "dir" || key.ends_with("_dir") || key == "destination"
+}
+
 /// Identifiant du champ de recherche.
 pub fn search_id() -> egui::Id {
     egui::Id::unique("settings_search")
@@ -51,6 +94,8 @@ pub struct SettingsWindow {
     /// Textes en cours de saisie (texte, liste TOML), écrits à la validation (Entrée ou
     /// focus perdu), par (section, clé).
     drafts: HashMap<(String, String), String>,
+    /// Champs de chemin (complétion par Tab), par (section, clé).
+    paths: HashMap<(String, String), crate::path_field::PathField>,
     /// Dernière erreur de validation, par (section, clé).
     errors: HashMap<(String, String), String>,
     /// Modifié depuis le dernier enregistrement (écrit quand on lâche la souris : pas à
@@ -80,6 +125,7 @@ impl SettingsWindow {
             query: String::new(),
             fresh: true,
             drafts: HashMap::new(),
+            paths: HashMap::new(),
             errors: HashMap::new(),
             dirty: false,
             save_error: None,
@@ -236,7 +282,10 @@ impl SettingsWindow {
                 ui.vertical(|ui| {
                     for (i, section) in schema.sections.iter().enumerate() {
                         if ui
-                            .selectable_label(self.section == i, &section.name)
+                            .selectable_label(
+                                self.section == i,
+                                section_title(ui, &section.name, false),
+                            )
                             .clicked()
                         {
                             self.section = i;
@@ -255,11 +304,7 @@ impl SettingsWindow {
     ) -> Option<AppSettings> {
         let mut changed = None;
         if only.is_none() {
-            ui.label(
-                RichText::new(format!("[{}]", section.name))
-                    .strong()
-                    .monospace(),
-            );
+            ui.label(section_title(ui, &section.name, true));
             if !section.doc.is_empty() {
                 ui.weak(&section.doc);
             }
@@ -310,11 +355,7 @@ impl SettingsWindow {
                 continue;
             }
             any = true;
-            ui.label(
-                RichText::new(format!("[{}]", section.name))
-                    .strong()
-                    .monospace(),
-            );
+            ui.label(section_title(ui, &section.name, true));
             if let Some(s) = self.section_entries(ui, section, Some(&keys)) {
                 changed = Some(s);
             }
@@ -388,7 +429,14 @@ impl SettingsWindow {
                         v => v.to_string(),
                     };
                     let draft = self.drafts.entry(id.clone()).or_insert(shown.clone());
-                    let field = ui.add(egui::TextEdit::singleline(draft).desired_width(260.0));
+                    let field = if is_folder_key(&entry.key) {
+                        let path = self.paths.entry(id.clone()).or_default();
+                        let field_id = egui::Id::unique("settings_path").with(&id);
+                        ui.vertical(|ui| path.show(ui, field_id, draft, 260.0))
+                            .inner
+                    } else {
+                        ui.add(egui::TextEdit::singleline(draft).desired_width(260.0))
+                    };
                     let done = field.lost_focus() && *draft != shown;
                     if done {
                         new = Some(match other {
@@ -439,6 +487,18 @@ mod tests {
         }
         assert!(needs_restart("cache", "dir") && !needs_restart("gui.colors", "hover"));
         assert!(needs_restart("gui", "window") && !needs_restart("gui", "theme"));
+    }
+
+    #[test]
+    fn every_section_has_a_label_in_both_languages() {
+        crate::i18n::ensure();
+        for section in &schema().sections {
+            let id = format!("settings-section-{}", section.name.replace('.', "-"));
+            for lang in [tri::i18n::Language::Fr, tri::i18n::Language::En] {
+                assert!(tri::i18n::has(lang, &id), "{id} ({lang:?})");
+            }
+        }
+        assert!(is_folder_key("destination") && is_folder_key("dir") && !is_folder_key("history"));
     }
 
     #[test]

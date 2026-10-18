@@ -358,6 +358,12 @@ Proposition : sortir cette étape du logiciel de développement.
   clé dans la section TOML adéquate (`src/settings.rs` pour le moteur,
   `gui/src/settings.rs` pour l'interface) **et** dans `doc/config.example.toml` (un test
   vérifie que l'exemple reste égal aux valeurs par défaut).
+- **Conventions de l'interface** (18/10/2026) : tout champ où l'on tape un **chemin
+  existant** a la complétion par Tab (`gui/src/path_field.rs`, moteur
+  `files::complete_dir`) ; dans les boîtes, la **main** apparaît sur tout ce qui se
+  clique (`interact_cursor` dans le cadre commun `Dialog`) ; les noms techniques
+  (sections, identifiants) sont accompagnés d'un **libellé lisible et traduit**
+  (« Couleurs [gui.colors] »).
 - Scripts/outils paramétrables plutôt que multipliés (un script avec options plutôt que N
   scripts dédiés) — vaut aussi pour l'organisation du code quand c'est pertinent.
 - Décisions pragmatiques : tester avant de s'engager, ne pas optimiser avant d'avoir confirmé

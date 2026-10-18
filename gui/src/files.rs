@@ -35,13 +35,11 @@ pub struct Transfer {
     at: Pos2,
     /// Première image : le champ prend le focus.
     fresh: bool,
-    /// Curseur à replacer en fin de saisie (après Tab ou une destination récente).
-    cursor_to_end: bool,
+    /// Champ du chemin (complétion par Tab).
+    field: crate::path_field::PathField,
     /// Destinations récentes (la plus récente d'abord), et celle montrée par les flèches.
     recents: Vec<PathBuf>,
     recent: Option<usize>,
-    /// Dossiers proposés par le dernier Tab.
-    candidates: Vec<String>,
     /// Erreur au lancement (création du dossier…), montrée dans la boîte.
     error: Option<String>,
     job: Option<Job>,
@@ -121,10 +119,9 @@ impl FileDialog {
             input: String::new(),
             at,
             fresh: true,
-            cursor_to_end: false,
+            field: Default::default(),
             recents,
             recent: None,
-            candidates: Vec::new(),
             error: None,
             job: None,
         }))
@@ -317,21 +314,17 @@ impl Transfer {
         let (mut confirm, mut cancel) = (false, false);
         let id = destination_field_id();
         let focused = ctx.memory(|m| m.has_focus(id));
-        // Tab et flèches pour le champ, pas pour la navigation entre éléments.
-        let (tab, up, down) = if focused {
+        // Flèches pour les destinations récentes (Tab : le champ de chemin).
+        let (up, down) = if focused {
             ctx.input_mut(|i| {
                 (
-                    i.consume_key(Modifiers::NONE, Key::Tab),
                     i.consume_key(Modifiers::NONE, Key::ArrowUp),
                     i.consume_key(Modifiers::NONE, Key::ArrowDown),
                 )
             })
         } else {
-            (false, false, false)
+            (false, false)
         };
-        if tab {
-            self.complete();
-        }
         if up && !self.recents.is_empty() {
             let i = self
                 .recent
@@ -356,32 +349,15 @@ impl Transfer {
                     ui.selectable_value(&mut self.mode, TransferMode::Move, t!("transfer-move"));
                     ui.selectable_value(&mut self.mode, TransferMode::Copy, t!("transfer-copy"));
                 });
-                let field = ui.add(
-                    egui::TextEdit::singleline(&mut self.input)
-                        .id(id)
-                        .lock_focus(true)
-                        .desired_width(420.0),
-                );
+                let field = self.field.show(ui, id, &mut self.input, 420.0);
                 if std::mem::take(&mut self.fresh) {
                     field.request_focus();
                 }
-                if std::mem::take(&mut self.cursor_to_end) {
-                    let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
-                    let end = egui::text::CCursor::new(self.input.chars().count());
-                    state
-                        .cursor
-                        .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                    state.store(ctx, id);
-                }
                 if field.changed() {
-                    self.candidates.clear();
                     self.recent = None;
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 ui.weak(t!("transfer-hint"));
-                for candidate in self.candidates.iter().take(12) {
-                    ui.weak(candidate);
-                }
                 ui.add_space(6.0);
                 match &plan {
                     Ok(plan) => {
@@ -445,30 +421,8 @@ impl Transfer {
         if let Some(path) = self.recents.get(i) {
             self.recent = Some(i);
             self.input = tilde(path);
-            self.candidates.clear();
-            self.cursor_to_end = true;
+            self.field.replaced();
         }
-    }
-
-    /// Tab : un seul dossier possible, il est pris ; sinon le début commun, et la liste.
-    fn complete(&mut self) {
-        let found = files::complete_dir(&self.input);
-        match found.as_slice() {
-            [] => {}
-            [one] => {
-                self.input = one.clone();
-                self.candidates.clear();
-            }
-            _ => {
-                let common = files::common_prefix(&found);
-                if common.len() > self.input.len() {
-                    self.input = common;
-                }
-                self.candidates = found;
-            }
-        }
-        self.cursor_to_end = true;
-        self.recent = None;
     }
 
     /// Lance la copie dans un fil (dossier créé d'abord si besoin).

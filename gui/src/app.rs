@@ -3945,6 +3945,10 @@ impl Dialog {
                         let style = ui.style_mut();
                         // Textes non sélectionnables : glisser le titre déplace la boîte.
                         style.interaction.selectable_labels = false;
+                        // Main sur ce qui se clique (boutons, sections, cases) : sans
+                        // elle, le pointeur « saisir » de la boîte déplaçable restait
+                        // partout (retour du 18/10/2026).
+                        style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
                         style
                             .text_styles
                             .insert(egui::TextStyle::Heading, FontId::proportional(d.title_size));
