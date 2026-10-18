@@ -209,8 +209,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Échap rend le clavier aux images. Dossiers : ↑ ↓ / `j` `k`, → / `l` déplie (déjà
   déplié : entre), ← / `h` replie (déjà replié : remonte), Début / `gg`, Fin / `G`,
   Entrée ouvre et rend le clavier aux images (curseur dans le moteur :
-  `places::Tree::cursor`…). Métadonnées : ↑ ↓ / `j` `k`, `y` copie la valeur de la ligne
-  pointée. Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
+  `places::Tree::cursor`…) ; sur un support amovible, `o` le décharge et `e` l'éjecte
+  (mêmes boîtes que les icônes ; `o` plutôt que `d`, qui masquerait le `dd` de vim) ; sur
+  un dossier ordinaire, `o` **décharge ici** : boîte de déchargement avec ce dossier pour
+  racine (pas retenue pour les suivants), et une liste pour choisir la carte s'il y en a
+  plusieurs. Dossiers (idée du 18/10/2026, comme nvim-tree) : `a` crée un dossier dans le
+  dossier pointé, `r` / F2 le renomme, `x` / Suppr le supprime (confirmé, avec ce qu'il
+  contient ; corbeille selon `[files] trash`) ; les emplacements ne se renomment ni ne se
+  suppriment ; tout s'annule (`u`), le dossier ouvert suit son renommage.
+  Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
+  (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`
+  (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
+  « libellé : valeur » par ligne), Maj+`y` copie tout le panneau ; un clic sur une ligne
+  la pointe et donne le clavier au panneau. Un seul keymap : chaque action dit son panneau (`Action::scope`) ; à la
   recherche d'une touche, celle du panneau actif l'emporte sur l'action générale, et les
   conflits ne sont signalés qu'entre actions d'un même panneau. Pas de `z` (agrandir le
   panneau, comme tmux) pour l'instant : `Maj+D` / `Maj+M` masquent déjà les panneaux.

@@ -117,3 +117,11 @@ de quoi les retrouver), `untrash` les remet en place (voir `history.md`). Sur ma
 mise à la corbeille passe par `NSFileManager` (emplacement exact renvoyé) plutôt que par
 le crate `trash`, qui ne le donne pas.
 
+## Dossiers (18/10/2026)
+
+`create_dir(parent, nom)`, `rename_dir(dossier, nom)` (même parent ; la casse seule peut
+changer), `dir_contents` (fichiers et sous-dossiers, pour la confirmation),
+`delete_dir(dossier, corbeille)` (tout le contenu ; à la corbeille, de quoi l'en
+ressortir). Noms vérifiés comme pour les images (`check_name`). Annulables (voir
+`history.md`).
+

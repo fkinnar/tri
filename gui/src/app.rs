@@ -263,6 +263,12 @@ pub struct TriApp {
     /// copier la valeur).
     meta_cursor: usize,
     meta_rows: Vec<(String, String)>,
+    /// L'histogramme est en tête du panneau : premier élément pointable (Entrée l'ouvre
+    /// en grand).
+    meta_has_histogram: bool,
+    /// Début d'une sélection de plusieurs lignes (Maj + flèches, Maj+clic) ; `None` : la
+    /// ligne pointée seule.
+    meta_anchor: Option<usize>,
     /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
     scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
@@ -461,6 +467,8 @@ impl TriApp {
             focus: crate::actions::Scope::Images,
             meta_cursor: 0,
             meta_rows: Vec::new(),
+            meta_has_histogram: false,
+            meta_anchor: None,
             scroll_to_cursor: false,
             help_search: None,
             visible_waiting: 0,
@@ -595,9 +603,13 @@ impl TriApp {
         // Histogramme en haut du panneau, en grille comme en plein écran (retour du
         // 17/10/2026) ; panneau masqué : en plein écran, il est sur l'image.
         let settings = self.gui.metadata;
+        let focused = self.focus == crate::actions::Scope::Metadata;
+        let accent = Color32::from(self.gui.dialogs.title_color);
+        self.meta_has_histogram = false;
         if settings.histogram && self.histogram {
             match self.exposure_of(self.selected) {
                 Some(e) => {
+                    self.meta_has_histogram = true;
                     let (rect, response) = ui.allocate_exact_size(
                         vec2(ui.available_width(), settings.histogram_height),
                         Sense::click(),
@@ -626,6 +638,18 @@ impl TriApp {
                         &self.gui.histogram,
                         &self.gui.colors,
                     );
+                    // Pointé au clavier : Entrée l'ouvre en grand.
+                    if focused && self.meta_cursor == 0 {
+                        ui.painter().rect_stroke(
+                            rect.expand(2.0),
+                            4.0,
+                            egui::Stroke::new(1.5, accent),
+                            egui::StrokeKind::Outside,
+                        );
+                        if std::mem::take(&mut self.scroll_to_cursor) {
+                            ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                        }
+                    }
                 }
                 None => {
                     ui.weak(t!("histogram-computing"));
@@ -646,23 +670,52 @@ impl TriApp {
                 ui.colored_label(self.gui.colors.error, e);
             }
             Some(Ok(m)) => {
-                let focused = self.focus == crate::actions::Scope::Metadata;
                 let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
-                let accent = Color32::from(self.gui.dialogs.title_color);
-                let rows = m.rows();
-                self.meta_cursor = self.meta_cursor.min(rows.len().saturating_sub(1));
-                let cursor = self.meta_cursor;
+                let mut rows = m.rows();
+                // Netteté : une ligne comme les autres (pointable, copiable).
+                if let Some(j) = self.judgements.get(&file.path) {
+                    let ratio = |r: Option<f32>| {
+                        r.map_or("-".to_string(), |r| tri::i18n::decimal(r as f64, 2))
+                    };
+                    let mut text = t!(
+                        "panel-sharpness-value",
+                        score = tri::i18n::decimal(j.score as f64, 1),
+                        folder = ratio(j.folder_ratio),
+                        neighbours = ratio(j.neighbour_ratio)
+                    );
+                    if j.blurry {
+                        text.push_str(&t!("panel-sharpness-blurry"));
+                    }
+                    rows.push((t!("panel-sharpness"), text));
+                }
+                let first = usize::from(self.meta_has_histogram);
+                self.meta_cursor = self.meta_cursor.min((rows.len() + first).saturating_sub(1));
+                // Lignes sélectionnées (rangs parmi les lignes : l'histogramme passe avant).
+                let (lo, hi) = self.meta_range();
+                let picked = |i: usize| (lo..=hi).contains(&(i + first));
+                let selection_fill = ui.visuals().selection.bg_fill.gamma_multiply(0.5);
+                let mut clicked = None;
                 egui::Grid::new("metadata")
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
                     .show(ui, |ui| {
                         for (i, (label, value)) in rows.iter().enumerate() {
-                            let a = ui.weak(label.as_str());
+                            let a = ui.add(
+                                egui::Label::new(egui::RichText::new(label.as_str()).weak())
+                                    .sense(Sense::click()),
+                            );
                             // À la ligne plutôt qu'élargir le panneau (noms d'objectif).
-                            let b = ui.add(egui::Label::new(value.as_str()).wrap());
-                            // Ligne pointée au clavier (y copie sa valeur).
-                            if focused && i == cursor {
-                                let rect = a.rect.union(b.rect).expand(2.0);
+                            let b = ui.add(
+                                egui::Label::new(value.as_str())
+                                    .wrap()
+                                    .sense(Sense::click()),
+                            );
+                            let rect = a.rect.union(b.rect).expand(2.0);
+                            // Sélection (y la copie) ; la ligne pointée au clavier encadrée.
+                            if focused && picked(i) && hi > lo {
+                                ui.painter().rect_filled(rect, 3.0, selection_fill);
+                            }
+                            if focused && i + first == self.meta_cursor {
                                 ui.painter().rect_stroke(
                                     rect,
                                     3.0,
@@ -673,27 +726,23 @@ impl TriApp {
                                     ui.scroll_to_rect(rect, Some(egui::Align::Center));
                                 }
                             }
-                            ui.end_row();
-                        }
-                        if let Some(j) = self.judgements.get(&file.path) {
-                            ui.weak(t!("panel-sharpness"));
-                            let ratio = |r: Option<f32>| {
-                                r.map_or("-".to_string(), |r| tri::i18n::decimal(r as f64, 2))
-                            };
-                            let mut text = t!(
-                                "panel-sharpness-value",
-                                score = tri::i18n::decimal(j.score as f64, 1),
-                                folder = ratio(j.folder_ratio),
-                                neighbours = ratio(j.neighbour_ratio)
-                            );
-                            if j.blurry {
-                                text.push_str(&t!("panel-sharpness-blurry"));
+                            if a.clicked() || b.clicked() {
+                                clicked = Some((i + first, ui.input(|inp| inp.modifiers.shift)));
                             }
-                            ui.add(egui::Label::new(text).wrap());
                             ui.end_row();
                         }
                     });
                 self.meta_rows = rows;
+                // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend.
+                if let Some((i, shift)) = clicked {
+                    self.focus = crate::actions::Scope::Metadata;
+                    if shift {
+                        self.meta_anchor.get_or_insert(self.meta_cursor);
+                    } else {
+                        self.meta_anchor = None;
+                    }
+                    self.meta_cursor = i;
+                }
             }
         }
     }
@@ -1337,19 +1386,67 @@ impl TriApp {
                     self.focus = crate::actions::Scope::Images;
                 }
             }
-            Action::MetaUp => {
+            Action::MetaUp | Action::MetaSelectUp => {
+                if action == Action::MetaSelectUp {
+                    self.meta_anchor.get_or_insert(self.meta_cursor);
+                } else {
+                    self.meta_anchor = None;
+                }
                 self.meta_cursor = self.meta_cursor.saturating_sub(1);
                 self.scroll_to_cursor = true;
             }
-            Action::MetaDown => {
-                let last = self.meta_rows.len().saturating_sub(1);
+            Action::MetaDown | Action::MetaSelectDown => {
+                if action == Action::MetaSelectDown {
+                    self.meta_anchor.get_or_insert(self.meta_cursor);
+                } else {
+                    self.meta_anchor = None;
+                }
+                let first = usize::from(self.meta_has_histogram);
+                let last = (self.meta_rows.len() + first).saturating_sub(1);
                 self.meta_cursor = (self.meta_cursor + 1).min(last);
                 self.scroll_to_cursor = true;
             }
-            Action::MetaCopy => {
-                if let Some((label, value)) = self.meta_rows.get(self.meta_cursor) {
-                    ctx.copy_text(value.clone());
-                    self.notice = Some((t!("metadata-copied", label = label.clone()), false));
+            Action::MetaOpen => {
+                if self.meta_has_histogram && self.meta_cursor == 0 {
+                    self.histogram_large = true;
+                }
+            }
+            Action::FolderOffload | Action::FolderEject => self.folder_drive_action(ctx, action),
+            Action::FolderCreate | Action::FolderRename | Action::FolderDelete => {
+                self.folder_edit_action(ctx, action)
+            }
+            Action::MetaCopy | Action::MetaCopyAll => {
+                let first = usize::from(self.meta_has_histogram);
+                let (lo, hi) = if action == Action::MetaCopyAll {
+                    (0, usize::MAX)
+                } else {
+                    self.meta_range()
+                };
+                let rows: Vec<&(String, String)> = self
+                    .meta_rows
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| (lo..=hi).contains(&(i + first)))
+                    .map(|(_, r)| r)
+                    .collect();
+                match rows.as_slice() {
+                    [] => {}
+                    // Une ligne : la valeur seule (à coller dans un champ).
+                    [(label, value)] => {
+                        ctx.copy_text(value.clone());
+                        self.notice = Some((t!("metadata-copied", label = label.clone()), false));
+                    }
+                    // Plusieurs : « libellé : valeur », une par ligne.
+                    many => {
+                        let text: Vec<String> = many
+                            .iter()
+                            .map(|(l, v)| {
+                                t!("metadata-copy-line", label = l.clone(), value = v.clone())
+                            })
+                            .collect();
+                        ctx.copy_text(text.join("\n"));
+                        self.notice = Some((t!("metadata-copied-lines", n = many.len()), false));
+                    }
                 }
             }
             Action::Back if self.focus != crate::actions::Scope::Images => {
@@ -3064,6 +3161,17 @@ impl TriApp {
         match dialog.show(ctx, &self.settings.files, self.data_dir.as_deref()) {
             crate::files::Outcome::Open => {}
             crate::files::Outcome::Cancelled => self.file_dialog = None,
+            crate::files::Outcome::Folder {
+                step,
+                point,
+                renamed,
+            } => {
+                self.file_dialog = None;
+                if let Some(step) = step {
+                    self.history.push(step);
+                }
+                self.after_folder_change(renamed, point);
+            }
             crate::files::Outcome::Failed(e) => {
                 self.file_dialog = None;
                 self.file_error = Some(e);
@@ -3704,6 +3812,120 @@ impl TriApp {
         }
     }
 
+    /// Créer, renommer, supprimer un dossier depuis le panneau des dossiers : la boîte
+    /// (nom à saisir, ou confirmation avec ce que contient le dossier). Les emplacements
+    /// (volume, dossier personnel, racine) ne se renomment ni ne se suppriment.
+    fn folder_edit_action(&mut self, ctx: &egui::Context, action: Action) {
+        let Some(i) = self.tree.cursor() else { return };
+        let row = self.tree.rows()[i].clone();
+        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        if action != Action::FolderCreate && row.depth == 0 {
+            self.notice = Some((t!("folders-place-root", name = row.name), true));
+            return;
+        }
+        self.file_dialog = Some(match action {
+            Action::FolderCreate => crate::files::FileDialog::NewFolder {
+                parent: row.path,
+                name: String::new(),
+                at,
+                fresh: true,
+            },
+            Action::FolderRename => crate::files::FileDialog::RenameFolder {
+                name: row.name,
+                path: row.path,
+                at,
+                fresh: true,
+            },
+            _ => crate::files::FileDialog::DeleteFolder {
+                contents: tri::files::dir_contents(&row.path),
+                path: row.path,
+                at,
+            },
+        });
+    }
+
+    /// Après la création, le renommage ou la suppression d'un dossier (ou leur
+    /// annulation) : arborescence relue ; le dossier ouvert suit son renommage, ou se
+    /// ferme s'il a disparu.
+    fn after_folder_change(&mut self, renamed: Option<(PathBuf, PathBuf)>, point: Option<PathBuf>) {
+        self.tree.reload();
+        if !self.folder.is_none() && !self.folder.dir.exists() {
+            let moved = renamed.and_then(|(from, to)| {
+                let rest = self.folder.dir.strip_prefix(&from).ok()?;
+                Some(to.join(rest))
+            });
+            match moved.filter(|p| p.is_dir()) {
+                Some(dir) => self.open_folder(&dir),
+                None => self.close_folder(),
+            }
+        }
+        if let Some(path) = point {
+            if let Some(parent) = path.parent() {
+                self.tree.expand(parent);
+            }
+            self.tree.point_at(&path);
+            self.scroll_to_cursor = true;
+        }
+    }
+
+    /// Éléments sélectionnés dans le panneau des métadonnées (rangs, histogramme compris
+    /// en tête) : de l'ancre à la ligne pointée, ou la ligne pointée seule.
+    fn meta_range(&self) -> (usize, usize) {
+        let anchor = self.meta_anchor.unwrap_or(self.meta_cursor);
+        (anchor.min(self.meta_cursor), anchor.max(self.meta_cursor))
+    }
+
+    /// Décharger ou éjecter le support amovible pointé dans le panneau des dossiers : les
+    /// mêmes boîtes que les icônes de la ligne (confirmation), près du centre.
+    fn folder_drive_action(&mut self, ctx: &egui::Context, action: Action) {
+        let Some(i) = self.tree.cursor() else { return };
+        let row = self.tree.rows()[i].clone();
+        let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
+        // `o` sur un dossier ordinaire : « décharger ici », depuis un des supports
+        // amovibles (idée de l'utilisateur, 18/10/2026).
+        if action == Action::FolderOffload && !removable {
+            if self.offload.is_some() || self.ejecting.is_some() {
+                return;
+            }
+            let sources: Vec<(PathBuf, String)> = self
+                .tree
+                .rows()
+                .into_iter()
+                .filter(|r| r.kind == Some(PlaceKind::Volume) && r.ejectable)
+                .map(|r| (r.path, r.name))
+                .collect();
+            let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+            match OffloadDialog::here(
+                &row.path,
+                sources,
+                at,
+                self.settings.offload.clone(),
+                self.settings.data_dir(),
+                ctx,
+            ) {
+                Some(dialog) => self.offload = Some(dialog),
+                None => self.notice = Some((t!("folders-no-removable"), true)),
+            }
+            return;
+        }
+        if !removable {
+            self.notice = Some((t!("folders-not-removable", name = row.name), true));
+            return;
+        }
+        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+        if action == Action::FolderEject {
+            self.eject_dialog = Some((row.path, at));
+        } else if self.offload.is_none() && self.ejecting.is_none() {
+            self.offload = Some(OffloadDialog::new(
+                row.path,
+                at,
+                self.settings.offload.clone(),
+                self.settings.data_dir(),
+                ctx,
+            ));
+        }
+    }
+
     /// Déplace le curseur de l'arborescence, et le fait voir.
     fn tree_cursor(&mut self, f: impl FnOnce(&mut Tree)) {
         f(&mut self.tree);
@@ -3729,13 +3951,18 @@ impl TriApp {
         applied: Vec<tri::history::Applied>,
         error: Option<tri::history::HistoryError>,
     ) {
+        if applied.iter().any(|a| a.files_changed) {
+            self.after_folder_change(None, None);
+        }
         if let Some(last) = applied.last() {
             let show = last
                 .images
                 .iter()
                 .find(|p| p.parent() == Some(&self.folder.dir))
                 .cloned();
-            if applied.iter().any(|a| a.files_changed) {
+            if self.folder.is_none() {
+                // Le dossier ouvert a disparu (dossier renommé ou créé, défait) : fermé.
+            } else if applied.iter().any(|a| a.files_changed) {
                 self.reload_folder(show.clone());
             } else {
                 self.folder.notes.reload();
@@ -5566,10 +5793,42 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().folder.dir, dir.path().join("séance-1"));
         assert_eq!(h.state().focus, Scope::Images);
-        // Ctrl+B puis l : les métadonnées ; Échap rend le clavier aux images.
+        // Ctrl+B puis l : les métadonnées.
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::L, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Metadata);
+        // Jusqu'à la dernière ligne (netteté comprise), puis l'histogramme en tête : Entrée
+        // l'ouvre en grand.
+        run_until(&mut h, |app| {
+            app.meta_has_histogram && !app.meta_rows.is_empty()
+        });
+        for _ in 0..40 {
+            press(&mut h, Key::J, Modifiers::NONE);
+        }
+        let last = h.state().meta_rows.len();
+        assert_eq!(
+            h.state().meta_cursor,
+            last,
+            "dernière ligne (après l'histogramme)"
+        );
+        // Maj+k deux fois : trois lignes sélectionnées.
+        press(&mut h, Key::K, Modifiers::SHIFT);
+        press(&mut h, Key::K, Modifiers::SHIFT);
+        assert_eq!(h.state().meta_range(), (last - 2, last));
+        press(&mut h, Key::K, Modifiers::NONE);
+        assert_eq!(
+            h.state().meta_anchor,
+            None,
+            "sans Maj : la sélection s'efface"
+        );
+        for _ in 0..40 {
+            press(&mut h, Key::K, Modifiers::NONE);
+        }
+        assert_eq!(h.state().meta_cursor, 0);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().histogram_large, "Entrée sur l'histogramme");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         assert_eq!(
@@ -5577,6 +5836,99 @@ mod tests {
             Mode::Grid,
             "Échap n'a fait que rendre le clavier"
         );
+        // o sur un dossier ordinaire : « décharger ici », mais aucune carte branchée.
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::O, Modifiers::NONE);
+        assert!(h.state().offload.is_none());
+        // Pas de carte dans l'arborescence de test : expliqué.
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .unwrap()
+                .0
+                .contains("aucun support amovible")
+        );
+        // Une « carte » (dossier temporaire déclaré volume) : décharger ici l'ouvre.
+        let card = dir.path().join("carte");
+        std::fs::create_dir(&card).unwrap();
+        image::RgbImage::from_pixel(8, 8, image::Rgb([90, 90, 90]))
+            .save(card.join("DSC1.jpg"))
+            .unwrap();
+        let places = vec![
+            tri::places::Place {
+                name: "Test".into(),
+                path: dir.path().to_path_buf(),
+                kind: tri::places::PlaceKind::Home,
+            },
+            tri::places::Place {
+                name: "CARTE".into(),
+                path: card.clone(),
+                kind: tri::places::PlaceKind::Volume,
+            },
+        ];
+        h.state_mut().tree = Tree::with_places(places, false);
+        h.state_mut().tree.expand(dir.path());
+        h.state_mut().tree.point_at(&dir.path().join("séance-2"));
+        press(&mut h, Key::O, Modifiers::NONE);
+        let dialog = h.state().offload.as_ref().expect("décharger ici");
+        assert_eq!(dialog.source(), card.as_path());
+        assert_eq!(
+            dialog.root_here(),
+            Some(dir.path().join("séance-2").display().to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn folders_are_created_renamed_deleted_and_undone_from_the_panel() {
+        use crate::actions::Scope;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let base = dir.path().join("base");
+        std::fs::create_dir(&base).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Folders);
+        h.state_mut().tree.point_at(&base);
+        // a : nouveau dossier dans « base ».
+        press(&mut h, Key::A, Modifiers::NONE);
+        h.event(UiEvent::Text("Séance".into()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let made = base.join("Séance");
+        assert!(made.is_dir());
+        assert_eq!(h.state().tree.cursor_path(), Some(made.clone()), "pointé");
+        // r : renommer ; le nom actuel est sélectionné, on tape le nouveau.
+        press(&mut h, Key::R, Modifiers::NONE);
+        h.event(UiEvent::Text("Séance du jour".into()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let renamed = base.join("Séance du jour");
+        assert!(renamed.is_dir() && !made.exists());
+        // Annuler deux fois : renommage puis création défaits.
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert!(made.is_dir() && !renamed.exists());
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert!(!made.exists());
+        // x : supprimer (confirmé ; corbeille désactivée dans les tests).
+        h.state_mut().tree.point_at(&base);
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert!(h.query_by_label_contains("Dossier vide").is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!base.exists());
+        // Un emplacement ne se supprime pas.
+        h.state_mut().tree.set_cursor(0);
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert!(h.state().notice.as_ref().unwrap().0.contains("emplacement"));
     }
 
     #[test]

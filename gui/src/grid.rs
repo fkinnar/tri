@@ -106,6 +106,15 @@ pub fn navigate(
         | Action::FolderOpen
         | Action::FolderFirst
         | Action::FolderLast
+        | Action::FolderOffload
+        | Action::FolderEject
+        | Action::FolderCreate
+        | Action::FolderRename
+        | Action::FolderDelete
+        | Action::MetaOpen
+        | Action::MetaSelectUp
+        | Action::MetaSelectDown
+        | Action::MetaCopyAll
         | Action::MetaUp
         | Action::MetaDown
         | Action::MetaCopy

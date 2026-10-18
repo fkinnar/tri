@@ -581,7 +581,10 @@ Proposition : sortir cette étape du logiciel de développement.
    (`NSFileManager`, via `objc2`), remis en place à l'annulation.
 4. [x] **Panneaux au clavier, façon tmux** (**fait** le 18/10/2026 : leader + h/l/o,
    touches du panneau d'abord puis le reste, Entrée rend le clavier aux images,
-   métadonnées : défiler et `y` copier ; `z` d'agrandissement écarté pour l'instant) (surtout pour l'utilisateur) : un raccourci pour
+   métadonnées : histogramme et lignes pointables, sélection de plusieurs lignes, `y` /
+   Maj+`y` copier ; dossiers : `o` décharger (ou « décharger ici » sur un dossier
+   ordinaire, carte au choix), `e` éjecter, `a` / `r` / `x` créer, renommer, supprimer
+   un dossier, annulables ; `z` d'agrandissement écarté pour l'instant) (surtout pour l'utilisateur) : un raccourci pour
    passer d'un panneau à l'autre, et **un jeu de raccourcis propre au panneau actif**
    (la même touche fait des choses différentes selon le panneau). `Ctrl+flèches` est
    réservé au système (macOS : changement de bureau). Décidé le 18/10/2026 : un

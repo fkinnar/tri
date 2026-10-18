@@ -66,6 +66,8 @@ history-notes-changed = { $name } : notes modifiées ailleurs depuis (rien n'a �
 history-missing = { $name } est introuvable (déplacé ou supprimé ailleurs)
 history-modified = { $name } a été modifié ailleurs depuis (rien n'a été changé)
 history-nothing = rien à annuler
+history-trash-one = { $name } mis à la corbeille
+history-create-dir = dossier { $name } créé
 history-stars = { $n ->
     [0] 0 étoile
     [one] 1 étoile

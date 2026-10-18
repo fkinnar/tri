@@ -85,6 +85,11 @@ pub struct OffloadDialog {
     stage: Stage,
     /// En arrière-plan : la copie continue, la boîte n'est pas affichée.
     hidden: bool,
+    /// « Décharger ici » : racine choisie dans le panneau des dossiers (proposée à la place
+    /// de la racine retenue, et pas retenue pour les déchargements suivants).
+    root_here: Option<String>,
+    /// « Décharger ici » : supports amovibles possibles (dossier, nom), au choix.
+    sources: Vec<(PathBuf, String)>,
 }
 
 impl OffloadDialog {
@@ -96,20 +101,7 @@ impl OffloadDialog {
         data: Option<PathBuf>,
         ctx: &egui::Context,
     ) -> Self {
-        let (tx, rx) = mpsc::channel();
-        let (dir, s, repaint) = (source.clone(), settings.clone(), ctx.clone());
-        let data_dir = data.clone();
-        std::thread::spawn(move || {
-            let result = History::open_configured(&s, data_dir.as_deref())
-                .map_err(|e| t!("offload-history-unreadable", error = e.to_string()))
-                .and_then(|history| {
-                    offload::plan(&dir, &history)
-                        .map(|plan| (plan, history))
-                        .map_err(|e| e.to_string())
-                });
-            let _ = tx.send(result);
-            repaint.request_repaint();
-        });
+        let rx = plan_in_background(&source, &settings, data.as_deref(), ctx);
         OffloadDialog {
             source,
             at,
@@ -117,7 +109,49 @@ impl OffloadDialog {
             data,
             stage: Stage::Planning(rx),
             hidden: false,
+            root_here: None,
+            sources: Vec::new(),
         }
+    }
+
+    /// « Décharger ici » (panneau des dossiers) : la boîte, racine `root` proposée, depuis
+    /// le premier des supports `sources` (une liste permet d'en choisir un autre).
+    pub fn here(
+        root: &Path,
+        sources: Vec<(PathBuf, String)>,
+        at: Pos2,
+        settings: OffloadSettings,
+        data: Option<PathBuf>,
+        ctx: &egui::Context,
+    ) -> Option<Self> {
+        let source = sources.first()?.0.clone();
+        let mut dialog = OffloadDialog::new(source, at, settings, data, ctx);
+        dialog.root_here = Some(root.display().to_string());
+        dialog.sources = sources;
+        Some(dialog)
+    }
+
+    /// Change de support (liste de « décharger ici ») : nouvel inventaire, la racine
+    /// saisie gardée.
+    fn change_source(&mut self, source: PathBuf, ctx: &egui::Context) {
+        if let Stage::Ready { root, .. } = &self.stage {
+            self.root_here = Some(root.clone());
+        }
+        let rx = plan_in_background(&source, &self.settings, self.data.as_deref(), ctx);
+        self.source = source;
+        self.stage = Stage::Planning(rx);
+    }
+
+    /// Carte déchargée (tests).
+    #[cfg(test)]
+    pub fn source(&self) -> &Path {
+        &self.source
+    }
+
+    /// Racine proposée par « décharger ici » (tests).
+    #[cfg(test)]
+    pub fn root_here(&self) -> Option<&str> {
+        self.root_here.as_deref()
     }
 
     /// Vrai si la boîte est passée en arrière-plan.
@@ -235,7 +269,9 @@ impl OffloadDialog {
                             Stage::Ready {
                                 plan,
                                 history: Some(history),
-                                root: offload::root(&self.settings, self.data.as_deref()),
+                                root: self.root_here.clone().unwrap_or_else(|| {
+                                    offload::root(&self.settings, self.data.as_deref())
+                                }),
                                 root_field: Default::default(),
                                 folder,
                                 error: None,
@@ -287,8 +323,9 @@ impl OffloadDialog {
                     return;
                 }
             };
-        // Racine retenue pour les prochains déchargements.
-        if let Some(data) = &self.data {
+        // Racine retenue pour les prochains déchargements (pas celle d'un « décharger
+        // ici », choisie pour cette fois).
+        if let Some(data) = self.data.as_ref().filter(|_| self.root_here.is_none()) {
             let _ = offload::remember_root(data, root);
         }
         let (tx, rx) = mpsc::channel();
@@ -319,6 +356,7 @@ impl OffloadDialog {
         let mut request = self.finish(true);
         let mut start = false;
         let mut background = false;
+        let mut new_source = None;
         let source = self.source.clone();
         let name = source.file_name().map_or_else(
             || source.display().to_string(),
@@ -329,6 +367,26 @@ impl OffloadDialog {
             .title(title)
             .show(ctx, |ui| {
                 ui.add_space(6.0);
+                // « Décharger ici » avec plusieurs supports : lequel décharger.
+                let choosing = matches!(
+                    self.stage,
+                    Stage::Planning(_) | Stage::Ready { .. } | Stage::Failed(_)
+                );
+                if self.sources.len() > 1 && choosing {
+                    ui.horizontal(|ui| {
+                        ui.label(t!("offload-source"));
+                        egui::ComboBox::from_id_salt("offload_source")
+                            .selected_text(name.clone())
+                            .show_ui(ui, |ui| {
+                                for (path, label) in &self.sources {
+                                    let current = *path == source;
+                                    if ui.selectable_label(current, label).clicked() && !current {
+                                        new_source = Some(path.clone());
+                                    }
+                                }
+                            });
+                    });
+                }
                 match &mut self.stage {
                     Stage::Planning(_) => {
                         ui.horizontal(|ui| {
@@ -522,6 +580,9 @@ impl OffloadDialog {
                     }
                 }
             });
+        if let Some(source) = new_source {
+            self.change_source(source, ctx);
+        }
         if start {
             self.start(ctx);
         }
@@ -555,4 +616,28 @@ fn megabytes(bytes: u64) -> String {
 /// Identifiant du champ de la racine du déchargement.
 fn root_field_id() -> egui::Id {
     egui::Id::unique("offload_root_field")
+}
+
+/// Inventaire de la carte `source` dans un fil à part ; le résultat arrive sur le canal.
+fn plan_in_background(
+    source: &Path,
+    settings: &OffloadSettings,
+    data: Option<&Path>,
+    ctx: &egui::Context,
+) -> Receiver<Result<(Plan, History), String>> {
+    let (tx, rx) = mpsc::channel();
+    let (dir, s, repaint) = (source.to_path_buf(), settings.clone(), ctx.clone());
+    let data_dir = data.map(Path::to_path_buf);
+    std::thread::spawn(move || {
+        let result = History::open_configured(&s, data_dir.as_deref())
+            .map_err(|e| t!("offload-history-unreadable", error = e.to_string()))
+            .and_then(|history| {
+                offload::plan(&dir, &history)
+                    .map(|plan| (plan, history))
+                    .map_err(|e| e.to_string())
+            });
+        let _ = tx.send(result);
+        repaint.request_repaint();
+    });
+    rx
 }

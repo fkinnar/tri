@@ -24,6 +24,26 @@ pub enum FileDialog {
     Delete { group: Group, at: Pos2 },
     /// Copier / déplacer vers un dossier.
     Transfer(Box<Transfer>),
+    /// Créer un dossier dans `parent`.
+    NewFolder {
+        parent: PathBuf,
+        name: String,
+        at: Pos2,
+        fresh: bool,
+    },
+    /// Renommer le dossier `path`.
+    RenameFolder {
+        path: PathBuf,
+        name: String,
+        at: Pos2,
+        fresh: bool,
+    },
+    /// Confirmer la suppression du dossier `path` ; (fichiers, sous-dossiers) dedans.
+    DeleteFolder {
+        path: PathBuf,
+        contents: (usize, usize),
+        at: Pos2,
+    },
 }
 
 /// Boîte « Copier / déplacer vers… ».
@@ -65,6 +85,13 @@ pub enum Outcome {
     Done {
         select: Option<PathBuf>,
         step: Option<tri::history::Step>,
+    },
+    /// Dossier créé, renommé ou supprimé : `step` pour l'historique ; `point` : dossier à
+    /// pointer dans l'arborescence (créé, ou nouveau nom) ; `renamed` : (ancien, nouveau).
+    Folder {
+        step: Option<tri::history::Step>,
+        point: Option<PathBuf>,
+        renamed: Option<(PathBuf, PathBuf)>,
     },
     /// Échec (message pour la barre d'état) ; la boîte est fermée.
     Failed(String),
@@ -142,6 +169,77 @@ impl FileDialog {
     ) -> Outcome {
         match self {
             FileDialog::Transfer(t) => t.show(ctx, settings, data),
+            FileDialog::NewFolder {
+                parent,
+                name,
+                at,
+                fresh,
+            } => {
+                let title = t!("folder-new-title", name = file_name(parent));
+                let check = |n: &str| {
+                    let p = parent.join(n.trim());
+                    (n.trim().is_empty() || p.exists()).then(|| FileError::Exists(p).to_string())
+                };
+                match name_dialog(
+                    ctx,
+                    "new_folder",
+                    title,
+                    name,
+                    *at,
+                    fresh,
+                    &t!("folder-new-button"),
+                    check,
+                ) {
+                    Some(true) => match files::create_dir(parent, name) {
+                        Ok(path) => Outcome::Folder {
+                            step: Some(tri::history::Step::CreateDir(path.clone())),
+                            point: Some(path),
+                            renamed: None,
+                        },
+                        Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
+                    },
+                    Some(false) => Outcome::Cancelled,
+                    None => Outcome::Open,
+                }
+            }
+            FileDialog::RenameFolder {
+                path,
+                name,
+                at,
+                fresh,
+            } => {
+                let title = t!("folder-rename-title", name = file_name(path));
+                let original = file_name(path);
+                let check = |n: &str| {
+                    let to = path.with_file_name(n.trim());
+                    let taken = to.exists() && !n.trim().eq_ignore_ascii_case(&original);
+                    (n.trim().is_empty() || taken).then(|| FileError::Exists(to).to_string())
+                };
+                match name_dialog(
+                    ctx,
+                    "rename_folder",
+                    title,
+                    name,
+                    *at,
+                    fresh,
+                    &t!("rename-button"),
+                    check,
+                ) {
+                    Some(true) => match files::rename_dir(path, name) {
+                        Ok(to) => Outcome::Folder {
+                            step: Some(tri::history::Step::RenameDir(path.clone(), to.clone())),
+                            point: Some(to.clone()),
+                            renamed: Some((path.clone(), to)),
+                        },
+                        Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
+                    },
+                    Some(false) => Outcome::Cancelled,
+                    None => Outcome::Open,
+                }
+            }
+            FileDialog::DeleteFolder { path, contents, at } => {
+                delete_folder_dialog(ctx, settings, path, *contents, *at)
+            }
             FileDialog::Rename {
                 image,
                 name,
@@ -287,6 +385,115 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
                 step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
             },
             Err(e) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
+        };
+    }
+    if cancel || modal.should_close() {
+        Outcome::Cancelled
+    } else {
+        Outcome::Open
+    }
+}
+
+/// Boîte de saisie d'un nom (nouveau dossier, renommer un dossier) : `Some(true)`
+/// confirmée, `Some(false)` annulée, `None` encore ouverte ; `check` donne l'erreur à
+/// montrer pour un nom refusé.
+#[allow(clippy::too_many_arguments)]
+fn name_dialog(
+    ctx: &egui::Context,
+    id: &str,
+    title: String,
+    name: &mut String,
+    at: Pos2,
+    fresh: &mut bool,
+    button: &str,
+    check: impl Fn(&str) -> Option<String>,
+) -> Option<bool> {
+    let field_id = egui::Id::unique(id).with("field");
+    let error = check(name);
+    let (mut confirm, mut cancel) = (false, false);
+    let modal = crate::app::modal_at(id, at).title(title).show(ctx, |ui| {
+        ui.add_space(6.0);
+        let field = ui.add(
+            egui::TextEdit::singleline(name)
+                .id(field_id)
+                .desired_width(320.0),
+        );
+        if std::mem::take(fresh) {
+            field.request_focus();
+            let mut state = egui::TextEdit::load_state(ctx, field_id).unwrap_or_default();
+            let all = egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(name.chars().count()),
+            );
+            state.cursor.set_char_range(Some(all));
+            state.store(ctx, field_id);
+        }
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        if let Some(e) = &error
+            && !name.trim().is_empty()
+        {
+            ui.colored_label(ui.visuals().error_fg_color, e);
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            let ok = error.is_none();
+            confirm = ui.add_enabled(ok, egui::Button::new(button)).clicked() || (enter && ok);
+            cancel = ui.button(t!("cancel")).clicked();
+            ui.weak(t!("enter-or-escape"));
+        });
+    });
+    if confirm {
+        Some(true)
+    } else if cancel || modal.should_close() {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn delete_folder_dialog(
+    ctx: &egui::Context,
+    settings: &FileSettings,
+    path: &Path,
+    (files_in, dirs_in): (usize, usize),
+    at: Pos2,
+) -> Outcome {
+    let (mut confirm, mut cancel) = (false, false);
+    let name = file_name(path);
+    let title = if settings.trash {
+        t!("folder-delete-trash", name = &name)
+    } else {
+        t!("folder-delete-permanently", name = &name)
+    };
+    let modal = crate::app::modal_at("delete_folder", at)
+        .title(title)
+        .show(ctx, |ui| {
+            ui.add_space(6.0);
+            ui.label(t!("folder-contents", files = files_in, dirs = dirs_in));
+            if !settings.trash {
+                ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                let verb = if settings.trash {
+                    t!("delete-to-trash")
+                } else {
+                    t!("delete-permanently")
+                };
+                confirm = ui.button(verb).clicked();
+                cancel = ui.button(t!("cancel")).clicked();
+                ui.weak(t!("enter-or-escape"));
+            });
+        });
+    confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
+    if confirm {
+        return match files::delete_dir(path, settings.trash) {
+            Ok(trashed) => Outcome::Folder {
+                step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
+                point: path.parent().map(Path::to_path_buf),
+                renamed: None,
+            },
+            Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
         };
     }
     if cancel || modal.should_close() {

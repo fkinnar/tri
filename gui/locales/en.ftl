@@ -66,6 +66,15 @@ action-core-folders-last = Folders: last folder
 action-core-metadata-up = Metadata: line above
 action-core-metadata-down = Metadata: line below
 action-core-metadata-copy = Metadata: copy the value
+action-core-folders-offload = Folders: offload the removable drive
+action-core-folders-eject = Folders: eject the removable drive
+action-core-folders-create = Folders: new folder
+action-core-folders-rename = Folders: rename the folder
+action-core-folders-delete = Folders: delete the folder
+action-core-metadata-open = Metadata: open (large histogram)
+action-core-metadata-select_up = Metadata: extend the selection up
+action-core-metadata-select_down = Metadata: extend the selection down
+action-core-metadata-copy_all = Metadata: copy everything
 action-core-view-folders = Show / hide the folder panel
 action-core-view-refresh_folders = Refresh folders (drive plugged in)
 action-core-view-histogram = Show / hide the histogram
@@ -254,6 +263,11 @@ history-refused = refused: { $error }
 focus-folders = keyboard: folders (Esc: images)
 focus-metadata = keyboard: metadata (Esc: images)
 metadata-copied = { $label } copied to the clipboard
+metadata-copied-lines = { $n } lines copied to the clipboard
+metadata-copy-line = { $label }: { $value }
+folders-not-removable = “{ $name }” is not a removable drive
+offload-source = Card:
+folders-no-removable = no removable drive to offload
 settings-title = Settings
 settings-search-hint = Search a setting (name, section, description)…
 settings-file = file: { $path }
@@ -298,6 +312,22 @@ delete-permanently-question = { $n ->
 delete-kept-shared = { $name } kept (shared with the pair)
 delete-irreversible = Cannot be undone.
 delete-failed = cannot delete: { $error }
+folder-new-title = New folder in “{ $name }”
+folder-new-button = Create
+folder-rename-title = Rename the folder “{ $name }”
+folder-delete-trash = Move the folder “{ $name }” to the trash?
+folder-delete-permanently = Permanently delete the folder “{ $name }”?
+folder-contents = { $files ->
+    [0] Empty folder
+    [one] 1 file
+   *[other] { $files } files
+}{ $dirs ->
+    [0] {""}
+    [one] , 1 subfolder
+   *[other] , { $dirs } subfolders
+}, everything included.
+folder-failed = { $error }
+folders-place-root = “{ $name }” is a place: it cannot be renamed or deleted
 
 ## What is shown
 

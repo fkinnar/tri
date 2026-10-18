@@ -66,6 +66,8 @@ history-notes-changed = { $name }: ratings changed elsewhere since (nothing was 
 history-missing = { $name } cannot be found (moved or deleted elsewhere)
 history-modified = { $name } was modified elsewhere since (nothing was changed)
 history-nothing = nothing to undo
+history-trash-one = { $name } moved to the trash
+history-create-dir = folder { $name } created
 history-stars = { $n ->
     [one] 1 star
    *[other] { $n } stars

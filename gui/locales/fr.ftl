@@ -65,6 +65,15 @@ action-core-folders-last = Dossiers : dernier dossier
 action-core-metadata-up = Métadonnées : ligne du dessus
 action-core-metadata-down = Métadonnées : ligne du dessous
 action-core-metadata-copy = Métadonnées : copier la valeur
+action-core-folders-offload = Dossiers : décharger le support amovible
+action-core-folders-eject = Dossiers : éjecter le support amovible
+action-core-folders-create = Dossiers : nouveau dossier
+action-core-folders-rename = Dossiers : renommer le dossier
+action-core-folders-delete = Dossiers : supprimer le dossier
+action-core-metadata-open = Métadonnées : ouvrir (histogramme en grand)
+action-core-metadata-select_up = Métadonnées : étendre la sélection vers le haut
+action-core-metadata-select_down = Métadonnées : étendre la sélection vers le bas
+action-core-metadata-copy_all = Métadonnées : tout copier
 action-core-view-folders = Afficher / masquer le panneau des dossiers
 action-core-view-refresh_folders = Actualiser les dossiers (disque branché)
 action-core-view-histogram = Afficher / masquer l'histogramme
@@ -256,6 +265,11 @@ history-refused = refusé : { $error }
 focus-folders = clavier : dossiers (Échap : images)
 focus-metadata = clavier : métadonnées (Échap : images)
 metadata-copied = { $label } copié dans le presse-papiers
+metadata-copied-lines = { $n } lignes copiées dans le presse-papiers
+metadata-copy-line = { $label } : { $value }
+folders-not-removable = « { $name } » n'est pas un support amovible
+offload-source = Carte :
+folders-no-removable = aucun support amovible à décharger
 settings-title = Réglages
 settings-search-hint = Rechercher un réglage (nom, section, description)…
 settings-file = fichier : { $path }
@@ -300,6 +314,22 @@ delete-permanently-question = { $n ->
 delete-kept-shared = { $name } gardé (partagé avec la paire)
 delete-irreversible = Irréversible.
 delete-failed = suppression impossible : { $error }
+folder-new-title = Nouveau dossier dans « { $name } »
+folder-new-button = Créer
+folder-rename-title = Renommer le dossier « { $name } »
+folder-delete-trash = Mettre le dossier « { $name } » à la corbeille ?
+folder-delete-permanently = Supprimer définitivement le dossier « { $name } » ?
+folder-contents = { $files ->
+    [0] Dossier vide
+    [one] 1 fichier
+   *[other] { $files } fichiers
+}{ $dirs ->
+    [0] {""}
+    [one] , 1 sous-dossier
+   *[other] , { $dirs } sous-dossiers
+}, tout compris.
+folder-failed = { $error }
+folders-place-root = « { $name } » est un emplacement : il ne se renomme ni ne se supprime
 
 ## Ce qui est affiché
 

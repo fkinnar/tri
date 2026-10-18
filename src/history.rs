@@ -65,8 +65,12 @@ pub enum Step {
         /// Fichiers écrits dans la destination.
         written: Vec<(PathBuf, Print)>,
     },
-    /// Mise à la corbeille.
+    /// Mise à la corbeille (fichiers, ou un dossier entier).
     Trash(Vec<Trashed>),
+    /// Dossier créé.
+    CreateDir(PathBuf),
+    /// Dossier renommé : (ancien, nouveau).
+    RenameDir(PathBuf, PathBuf),
 }
 
 /// Pourquoi un pas ne peut pas être défait (ou refait).
@@ -230,7 +234,14 @@ impl Step {
                     TransferMode::Move => crate::t!("history-move", n = n, dest = dest),
                 }
             }
-            Step::Trash(items) => crate::t!("history-trash", n = items.len()),
+            Step::Trash(items) => match items.as_slice() {
+                [one] => crate::t!("history-trash-one", name = name(&one.original)),
+                _ => crate::t!("history-trash", n = items.len()),
+            },
+            Step::CreateDir(path) => crate::t!("history-create-dir", name = name(path)),
+            Step::RenameDir(from, to) => {
+                crate::t!("history-rename", from = name(from), to = name(to))
+            }
         }
     }
 
@@ -260,6 +271,8 @@ impl Step {
                     Vec::new()
                 }
             }
+            Step::CreateDir(_) => Vec::new(),
+            Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
         }
     }
 
@@ -339,6 +352,21 @@ impl Step {
                 Ok(())
             }
             Step::Trash(items) => Ok(files::untrash(items)?),
+            Step::CreateDir(path) => {
+                // Seulement vide : ce qu'on y a mis depuis ne disparaît pas.
+                if !path.is_dir() {
+                    return Err(HistoryError::Missing(path.clone()));
+                }
+                std::fs::remove_dir(&*path).map_err(|_| HistoryError::Modified(path.clone()))
+            }
+            Step::RenameDir(from, to) => {
+                if !to.is_dir() {
+                    return Err(HistoryError::Missing(to.clone()));
+                }
+                let name = from.file_name().unwrap_or_default().to_string_lossy();
+                files::rename_dir(to, &name)?;
+                Ok(())
+            }
         }
     }
 
@@ -378,7 +406,24 @@ impl Step {
                         return Err(HistoryError::Missing(p.clone()));
                     }
                 }
-                *items = files::delete(&group, true)?;
+                *items = match group.images.as_slice() {
+                    [one] if one.is_dir() => files::delete_dir(one, true)?,
+                    _ => files::delete(&group, true)?,
+                };
+                Ok(())
+            }
+            Step::CreateDir(path) => {
+                let parent = path.parent().unwrap_or(Path::new("."));
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                files::create_dir(parent, &name)?;
+                Ok(())
+            }
+            Step::RenameDir(from, to) => {
+                if !from.is_dir() {
+                    return Err(HistoryError::Missing(from.clone()));
+                }
+                let name = to.file_name().unwrap_or_default().to_string_lossy();
+                files::rename_dir(from, &name)?;
                 Ok(())
             }
         }
@@ -652,6 +697,29 @@ mod tests {
         }]));
         assert!(!history.can_redo());
         assert_eq!(history.entries().len(), 2);
+    }
+
+    #[test]
+    fn folder_steps_are_undone_but_a_filled_folder_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut history = History::new(10);
+        let made = files::create_dir(dir.path(), "Nouveau").unwrap();
+        history.push(Step::CreateDir(made.clone()));
+        let renamed = files::rename_dir(&made, "Séance").unwrap();
+        history.push(Step::RenameDir(made.clone(), renamed.clone()));
+        history.undo(Convention::Darktable).unwrap();
+        assert!(made.is_dir() && !renamed.exists());
+        history.undo(Convention::Darktable).unwrap();
+        assert!(!made.exists());
+        history.redo(Convention::Darktable).unwrap();
+        assert!(made.is_dir());
+        // Rempli depuis : la création n'est plus défaite.
+        std::fs::write(made.join("photo.jpg"), "x").unwrap();
+        assert!(matches!(
+            history.undo(Convention::Darktable),
+            Err(HistoryError::Modified(_))
+        ));
+        assert!(made.join("photo.jpg").exists());
     }
 
     #[test]

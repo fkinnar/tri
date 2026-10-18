@@ -241,12 +241,30 @@ pub enum Action {
     FolderFirst,
     /// Panneau des dossiers : dernier dossier.
     FolderLast,
+    /// Panneau des dossiers : décharger le support amovible pointé.
+    FolderOffload,
+    /// Panneau des dossiers : éjecter le support amovible pointé.
+    FolderEject,
+    /// Panneau des dossiers : créer un dossier dans le dossier pointé.
+    FolderCreate,
+    /// Panneau des dossiers : renommer le dossier pointé.
+    FolderRename,
+    /// Panneau des dossiers : supprimer le dossier pointé (confirmé).
+    FolderDelete,
     /// Panneau des métadonnées : ligne du dessus.
     MetaUp,
     /// Panneau des métadonnées : ligne du dessous.
     MetaDown,
     /// Panneau des métadonnées : copier la valeur de la ligne pointée.
     MetaCopy,
+    /// Panneau des métadonnées : ouvrir ce qui est pointé (l'histogramme en grand).
+    MetaOpen,
+    /// Panneau des métadonnées : étendre la sélection vers le haut.
+    MetaSelectUp,
+    /// Panneau des métadonnées : étendre la sélection vers le bas.
+    MetaSelectDown,
+    /// Panneau des métadonnées : copier tout le panneau.
+    MetaCopyAll,
     /// Copier les images vers un dossier.
     FileCopy,
     /// Déplacer les images vers un dossier.
@@ -299,7 +317,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 92] = [
+    pub const ALL: [Action; 101] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -356,9 +374,18 @@ impl Action {
         Action::FolderOpen,
         Action::FolderFirst,
         Action::FolderLast,
+        Action::FolderOffload,
+        Action::FolderEject,
+        Action::FolderCreate,
+        Action::FolderRename,
+        Action::FolderDelete,
         Action::MetaUp,
         Action::MetaDown,
         Action::MetaCopy,
+        Action::MetaOpen,
+        Action::MetaSelectUp,
+        Action::MetaSelectDown,
+        Action::MetaCopyAll,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -423,8 +450,9 @@ impl Action {
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
             Undo | Redo | History => Group::Edit,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
-            | FolderCollapse | FolderOpen | FolderFirst | FolderLast | MetaUp | MetaDown
-            | MetaCopy => Group::Panels,
+            | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
+            | FolderEject | FolderCreate | FolderRename | FolderDelete | MetaUp | MetaDown
+            | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | Quit => Group::App,
         }
@@ -491,9 +519,18 @@ impl Action {
             Action::FolderOpen => "core.folders.open",
             Action::FolderFirst => "core.folders.first",
             Action::FolderLast => "core.folders.last",
+            Action::FolderOffload => "core.folders.offload",
+            Action::FolderEject => "core.folders.eject",
+            Action::FolderCreate => "core.folders.create",
+            Action::FolderRename => "core.folders.rename",
+            Action::FolderDelete => "core.folders.delete",
             Action::MetaUp => "core.metadata.up",
             Action::MetaDown => "core.metadata.down",
             Action::MetaCopy => "core.metadata.copy",
+            Action::MetaOpen => "core.metadata.open",
+            Action::MetaSelectUp => "core.metadata.select_up",
+            Action::MetaSelectDown => "core.metadata.select_down",
+            Action::MetaCopyAll => "core.metadata.copy_all",
             Action::FileMove => "core.file.move",
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
@@ -589,8 +626,10 @@ impl Action {
         use Action::*;
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
-            | FolderLast => Some(Scope::Folders),
-            MetaUp | MetaDown | MetaCopy => Some(Scope::Metadata),
+            | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
+            | FolderDelete => Some(Scope::Folders),
+            MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
+            | MetaCopyAll => Some(Scope::Metadata),
             _ => None,
         }
     }
@@ -781,6 +820,18 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::G), plain(Key::G)], FolderFirst),
         (&[plain(Key::End)], FolderLast),
         (&[shifted(Key::G)], FolderLast),
+        // Support amovible pointé : décharger, éjecter (une boîte confirme).
+        // `o` (« offload ») : `d` masquerait le `dd` (supprimer) du profil vim.
+        (&[plain(Key::O)], FolderOffload),
+        (&[plain(Key::E)], FolderEject),
+        // Comme nvim-tree : `a` crée, `r` renomme ; supprimer : `x`, Suppr (pas `d`,
+        // début du `dd` de vim). Une boîte confirme toujours.
+        (&[plain(Key::A)], FolderCreate),
+        (&[plain(Key::R)], FolderRename),
+        (&[plain(Key::F2)], FolderRename),
+        (&[plain(Key::X)], FolderDelete),
+        (&[plain(Key::Delete)], FolderDelete),
+        (&[plain(Key::Backspace)], FolderDelete),
     ]
 };
 
@@ -793,6 +844,13 @@ const METADATA: &[Binding] = {
         (&[plain(Key::ArrowDown)], MetaDown),
         (&[plain(Key::J)], MetaDown),
         (&[plain(Key::Y)], MetaCopy),
+        (&[plain(Key::Enter)], MetaOpen),
+        // Plusieurs lignes : Maj + flèches / Maj + j k étendent ; Maj+Y copie tout.
+        (&[shifted(Key::ArrowUp)], MetaSelectUp),
+        (&[shifted(Key::K)], MetaSelectUp),
+        (&[shifted(Key::ArrowDown)], MetaSelectDown),
+        (&[shifted(Key::J)], MetaSelectDown),
+        (&[shifted(Key::Y)], MetaCopyAll),
     ]
 };
 

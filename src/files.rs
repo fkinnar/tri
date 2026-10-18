@@ -204,14 +204,7 @@ pub struct Rename {
 /// `IMG.xmp` deviennent `NOUVEAU.RAF`, `NOUVEAU.JPG`… Erreur si le nom est invalide ou
 /// déjà pris (changer seulement la casse est permis).
 pub fn plan_rename(image: &Path, new_stem: &str, settings: &FileSettings) -> Result<Rename> {
-    let invalid = new_stem.trim().is_empty()
-        || new_stem == "."
-        || new_stem == ".."
-        || new_stem.contains(['/', '\\'])
-        || new_stem.contains(std::path::MAIN_SEPARATOR);
-    if invalid {
-        return Err(FileError::InvalidName(new_stem.into()));
-    }
+    check_name(new_stem)?;
     let group = group(&[image.to_path_buf()], settings.pairs);
     let old_len = image
         .file_stem()
@@ -240,6 +233,70 @@ pub fn plan_rename(image: &Path, new_stem: &str, settings: &FileSettings) -> Res
     }
     plan.moves.retain(|(from, to)| from != to);
     Ok(plan)
+}
+
+/// Erreur si `name` ne peut pas être un nom de fichier ou de dossier : vide, « . », « .. »,
+/// ou avec un séparateur.
+fn check_name(name: &str) -> Result<()> {
+    let invalid = name.trim().is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains(['/', '\\'])
+        || name.contains(std::path::MAIN_SEPARATOR);
+    if invalid {
+        Err(FileError::InvalidName(name.into()))
+    } else {
+        Ok(())
+    }
+}
+
+/// Crée le dossier `name` dans `parent` ; erreur si le nom est invalide ou pris.
+pub fn create_dir(parent: &Path, name: &str) -> Result<PathBuf> {
+    check_name(name)?;
+    let path = parent.join(name.trim());
+    if path.exists() {
+        return Err(FileError::Exists(path));
+    }
+    std::fs::create_dir(&path).map_err(|e| FileError::Io(path.clone(), e))?;
+    Ok(path)
+}
+
+/// Renomme le dossier `path` en `name` (même dossier parent) ; changer seulement la casse
+/// est permis. Renvoie le nouveau chemin.
+pub fn rename_dir(path: &Path, name: &str) -> Result<PathBuf> {
+    check_name(name)?;
+    let to = path.with_file_name(name.trim());
+    if to.exists() && !same(path, &to) {
+        return Err(FileError::Exists(to));
+    }
+    std::fs::rename(path, &to).map_err(|e| FileError::Io(path.to_path_buf(), e))?;
+    Ok(to)
+}
+
+/// Contenu d'un dossier, sous-dossiers compris : (fichiers, dossiers), pour la
+/// confirmation d'une suppression.
+pub fn dir_contents(path: &Path) -> (usize, usize) {
+    walkdir::WalkDir::new(path)
+        .min_depth(1)
+        .into_iter()
+        .flatten()
+        .fold((0, 0), |(files, dirs), e| {
+            if e.file_type().is_dir() {
+                (files, dirs + 1)
+            } else {
+                (files + 1, dirs)
+            }
+        })
+}
+
+/// Supprime le dossier `path` et tout son contenu : à la corbeille si `trash` (renvoie de
+/// quoi l'en ressortir, voir [`untrash`]), sinon définitivement.
+pub fn delete_dir(path: &Path, trash: bool) -> Result<Vec<Trashed>> {
+    if trash {
+        return to_trash(&[&path.to_path_buf()]);
+    }
+    std::fs::remove_dir_all(path).map_err(|e| FileError::Io(path.to_path_buf(), e))?;
+    Ok(Vec::new())
 }
 
 /// Vrai si `a` et `b` désignent le même fichier (casse différente sur un système de
@@ -1047,6 +1104,34 @@ mod tests {
             common_prefix(&[format!("{base}Autre{sep}")]),
             format!("{base}Autre{sep}")
         );
+    }
+
+    #[test]
+    fn folders_are_created_renamed_and_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let made = create_dir(dir.path(), "Séance").unwrap();
+        assert!(made.is_dir());
+        assert!(matches!(
+            create_dir(dir.path(), "Séance"),
+            Err(FileError::Exists(_))
+        ));
+        assert!(matches!(
+            create_dir(dir.path(), "a/b"),
+            Err(FileError::InvalidName(_))
+        ));
+        touch(&made, &["A.RAF", "A.RAF.xmp"]);
+        std::fs::create_dir(made.join("sous")).unwrap();
+        assert_eq!(dir_contents(&made), (2, 1));
+        let renamed = rename_dir(&made, "Séance du jour").unwrap();
+        assert!(renamed.join("A.RAF").exists() && !made.exists());
+        create_dir(dir.path(), "Autre").unwrap();
+        assert!(matches!(
+            rename_dir(&renamed, "Autre"),
+            Err(FileError::Exists(_))
+        ));
+        // Définitivement (les tests ne touchent jamais à la corbeille).
+        delete_dir(&renamed, false).unwrap();
+        assert!(!renamed.exists());
     }
 
     #[test]
