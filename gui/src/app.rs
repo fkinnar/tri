@@ -645,11 +645,17 @@ impl TriApp {
         let mut offload = None;
         ui.horizontal(|ui| {
             ui.strong(t!("folders-title"));
-            if ui
-                .small_button(t!("folders-refresh"))
-                .on_hover_text(t!("folders-refresh-tip"))
-                .clicked()
-            {
+            // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
+            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            let tip = format!(
+                "{}\n{}",
+                self.action_tip(Action::RefreshFolders),
+                t!("folders-refresh-tip")
+            );
+            let (rect, response) = marks::icon_button(ui, size, &t!("folders-refresh"), &tip);
+            let color = ui.style().interact(&response).fg_stroke.color;
+            marks::refresh(ui.painter(), rect.shrink(size * 0.2), color);
+            if response.clicked() {
                 self.tree.refresh();
             }
         });
@@ -2567,18 +2573,11 @@ impl TriApp {
         let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
         let size = vec2(screen.x * fraction, screen.y * fraction * 0.6);
         let (mut scale, mut close) = (false, false);
-        let modal = egui::Modal::new(egui::Id::unique("histogram_dialog")).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.strong(name);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = ui.button(t!("close")).clicked();
-                    let label = match self.histogram_scale {
-                        HistogramScale::Ev => t!("histogram-linear-scale"),
-                        HistogramScale::Linear => t!("histogram-ev-scale"),
-                    };
-                    scale = ui.button(label).clicked();
-                });
-            });
+        // Comme les autres boîtes (titre, déplaçable : retour du 17/10/2026), ouverte au
+        // centre et à sa propre largeur.
+        let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
+        let dialog = modal_at("histogram_dialog", at).title(name).free_width();
+        let modal = dialog.show(ctx, |ui| {
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             match &exposure {
                 Some(e) => histogram::draw(
@@ -2599,6 +2598,15 @@ impl TriApp {
                     );
                 }
             }
+            ui.horizontal(|ui| {
+                let label = match self.histogram_scale {
+                    HistogramScale::Ev => t!("histogram-linear-scale"),
+                    HistogramScale::Linear => t!("histogram-ev-scale"),
+                };
+                scale = ui.button(label).clicked();
+                close = ui.button(t!("close")).clicked();
+                ui.weak(t!("or-escape"));
+            });
         });
         if scale {
             self.histogram_scale = self.histogram_scale.toggled();
@@ -2608,8 +2616,6 @@ impl TriApp {
         }
     }
 
-    /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
-    /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
     /// Action sur les fichiers `paths` (renommer, afficher : le premier) ; `at` : position
     /// d'une boîte éventuelle.
     fn file_action(&mut self, action: Action, paths: Vec<PathBuf>, at: egui::Pos2) {
@@ -2691,6 +2697,8 @@ impl TriApp {
         }
     }
 
+    /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
+    /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
     fn rating_dialog(&mut self, ctx: &egui::Context) {
         let Some((path, at)) = self.rating_dialog.clone() else {
             return;
@@ -3558,6 +3566,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         id,
         start: at + vec2(4.0, 4.0),
         title: None,
+        free_width: false,
     }
 }
 
@@ -3568,12 +3577,21 @@ pub(crate) struct Dialog {
     start: egui::Pos2,
     /// Titre, dessiné en couleur d'accent au-dessus d'une ligne de séparation.
     title: Option<String>,
+    /// Sans largeurs minimale et maximale (`[gui.dialogs]`) : la boîte prend la taille de
+    /// son contenu (grand histogramme).
+    free_width: bool,
 }
 
 impl Dialog {
     /// Titre de la boîte.
     pub(crate) fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    /// Largeur libre (voir [`Dialog::free_width`]).
+    pub(crate) fn free_width(mut self) -> Self {
+        self.free_width = true;
         self
     }
 
@@ -3621,8 +3639,10 @@ impl Dialog {
                         let spacing = ui.spacing_mut();
                         spacing.item_spacing = vec2(d.spacing, d.spacing);
                         spacing.button_padding = vec2(d.button_padding, d.button_padding / 2.0);
-                        ui.set_min_width(d.min_width);
-                        ui.set_max_width(d.max_width.max(d.min_width));
+                        if !self.free_width {
+                            ui.set_min_width(d.min_width);
+                            ui.set_max_width(d.max_width.max(d.min_width));
+                        }
                         if let Some(title) = &self.title {
                             let color = Color32::from(d.title_color);
                             ui.label(egui::RichText::new(title).size(d.title_size).color(color));

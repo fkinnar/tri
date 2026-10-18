@@ -313,6 +313,35 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
     }
 }
 
+/// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
+/// pointe de flèche au bout.
+pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {
+    let c = rect.center();
+    let r = rect.width().min(rect.height()) * 0.45;
+    let stroke = Stroke::new((r * 0.24).max(1.5), color);
+    // De -60° à 240° (sens horaire à l'écran : y vers le bas).
+    let (start, end) = (-PI / 3.0, 4.0 * PI / 3.0);
+    let steps = 28;
+    let points: Vec<Pos2> = (0..=steps)
+        .map(|i| {
+            let t = start + (end - start) * i as f32 / steps as f32;
+            c + vec2(t.cos(), t.sin()) * r
+        })
+        .collect();
+    let tip = points[0];
+    painter.add(Shape::line(points, stroke));
+    // Pointe : tangente au début de l'arc, vers le haut.
+    let dir = vec2(start.sin(), -start.cos());
+    let side = vec2(-dir.y, dir.x);
+    let h = r * 0.8;
+    let head = vec![
+        tip + dir * h * 0.35,
+        tip - dir * h * 0.65 + side * h * 0.7,
+        tip - dir * h * 0.65 - side * h * 0.7,
+    ];
+    painter.add(Shape::convex_polygon(head, color, Stroke::NONE));
+}
+
 /// Triangle d'une branche d'arborescence, dans `rect` : vers le bas si `open`, sinon vers
 /// la droite (dessiné : « ▶ » manque dans la police d'egui).
 pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {

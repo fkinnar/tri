@@ -608,7 +608,9 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
 - [ ] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée.
-- [ ] **Retouches demandées le 17/10/2026 au soir (pour le 18/10)** :
+- [x] **Retouches demandées le 17/10/2026 au soir (pour le 18/10)**, faites le 18/10 :
+      icône Actualiser, grand histogramme déplaçable, courbe lissée (classes + noyau
+      gaussien), pastilles au-delà de 0,1 % des pixels :
       - bouton « Actualiser » du panneau des dossiers en **icône** (comme le reste) ;
       - boîte du **grand histogramme** déplaçable, comme les autres boîtes (cohérence) ;
       - histogramme en **courbe lissée** plutôt qu'en barres. Attention : le dessin en

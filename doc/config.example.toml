@@ -341,6 +341,13 @@ clipping_channels = true
 # au-delà de laquelle une vignette est signalée.
 badge_over = 0.005
 badge_under = 0.05
+# Pastilles saturés / bouchés dans les coins de l'histogramme : allumées au-delà de cette
+# part des pixels (0,001 = 0,1 %), pas pour quelques pixels morts.
+indicator_min = 0.001
+# Courbe de l'histogramme : nombre de classes sur sa largeur, et lissage (écart type, en
+# classes ; 0 : sans lissage). Pas d'échelle verticale : seule la forme compte.
+classes = 80
+smoothing = 1.5
 
 [gui.sharpness]
 # Carte de netteté (focus peaking) en 1:1 : affichée au démarrage (p l'affiche ou la

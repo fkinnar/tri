@@ -100,44 +100,54 @@ pub fn draw(
         rect.min + vec2(6.0, 6.0),
         pos2(rect.max.x - 6.0, rect.max.y - text_h - labels_h - 6.0),
     );
-    // Une barre par case de l'histogramme (pas par pixel : trop de colonnes vides entre
-    // deux cases donnaient un « peigne »).
-    let count = match scale {
-        HistogramScale::Ev => {
-            let per_stop = e.ev[0].len() as f32 / e.ev_range;
-            (shown_stops(e, settings.ev_shown) * per_stop).round() as usize
-        }
-        HistogramScale::Linear => e.linear[0].len(),
-    }
-    .clamp(1, graph.width().max(1.0) as usize);
+    // Courbe lissée (retour du 17/10/2026 : les barres faisaient escalier) : des classes
+    // plus larges que les cases du moteur, puis un lissage gaussien sur les classes
+    // voisines. Les classes larges comblent déjà les cases vides d'un JPEG en échelle IL,
+    // qui donnaient un « peigne ». Pas d'échelle verticale : seule la forme compte.
+    let count = settings.classes.clamp(8, graph.width().max(8.0) as usize);
     let cols = columns(e, scale, settings.ev_shown, count);
-    // Échelle verticale : le plus haut pic, sans les colonnes extrêmes (noir pur, blanc
+    let curves: Vec<Vec<f32>> = (0..CHANNELS)
+        .map(|c| {
+            let raw: Vec<f32> = cols.iter().map(|v| v[c] as f32).collect();
+            smooth(&raw, settings.smoothing)
+        })
+        .collect();
+    // Échelle verticale : le plus haut pic, sans les classes extrêmes (noir pur, blanc
     // saturé), qui écraseraient le reste ; elles sont signalées à part.
-    let peak = cols
+    let peak = curves
         .iter()
-        .skip(1)
-        .take(cols.len().saturating_sub(2))
-        .flat_map(|c| c.iter().copied())
-        .max()
-        .unwrap_or(0)
-        .max(1) as f32;
+        .flat_map(|v| v.iter().skip(1).take(v.len().saturating_sub(2)).copied())
+        .fold(0.0f32, f32::max)
+        .max(1e-6);
     let channel_colors = [colors.hist_red, colors.hist_green, colors.hist_blue];
-    let column_w = graph.width() / cols.len() as f32;
-    for c in 0..CHANNELS {
-        let color = Color32::from(channel_colors[c]).gamma_multiply(0.6);
+    let class_w = graph.width() / count as f32;
+    for (c, curve) in curves.iter().enumerate() {
+        let base = Color32::from(channel_colors[c]);
+        let y = |v: f32| graph.max.y - (v / peak).min(1.0) * graph.height();
+        // Points au centre des classes, prolongés jusqu'aux deux bords.
+        let mut points = Vec::with_capacity(curve.len() + 2);
+        points.push(pos2(graph.min.x, y(curve[0])));
+        for (i, &v) in curve.iter().enumerate() {
+            points.push(pos2(graph.min.x + (i as f32 + 0.5) * class_w, y(v)));
+        }
+        points.push(pos2(graph.max.x, y(curve[curve.len() - 1])));
+        // Surface : un trapèze par segment, jusqu'à la ligne de base.
+        let fill = base.gamma_multiply(0.45);
         let mut mesh = Mesh::default();
-        for (i, values) in cols.iter().enumerate() {
-            let h = (values[c] as f32 / peak).min(1.0) * graph.height();
-            if h <= 0.0 {
-                continue;
+        for w in points.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let i = mesh.vertices.len() as u32;
+            for p in [a, b, pos2(b.x, graph.max.y), pos2(a.x, graph.max.y)] {
+                mesh.colored_vertex(p, fill);
             }
-            let x = graph.min.x + i as f32 * column_w;
-            mesh.add_colored_rect(
-                Rect::from_min_max(pos2(x, graph.max.y - h), pos2(x + column_w, graph.max.y)),
-                color,
-            );
+            mesh.add_triangle(i, i + 1, i + 2);
+            mesh.add_triangle(i, i + 2, i + 3);
         }
         painter.add(mesh);
+        painter.add(eframe::egui::Shape::line(
+            points,
+            Stroke::new(1.2, base.gamma_multiply(0.9)),
+        ));
     }
     // Graduations.
     let grid = Stroke::new(1.0, Color32::from_white_alpha(40));
@@ -177,14 +187,40 @@ pub fn draw(
             label(graph.max.x - 12.0, "blanc".into());
         }
     }
-    // Repères d'alerte : pastille rouge en haut à droite si des pixels sont saturés, bleue
-    // en haut à gauche s'il y en a de bouchés.
-    if e.over.iter().any(|&n| n > 0) {
+    // Repères d'alerte : pastille en haut à droite si des pixels sont saturés, en haut à
+    // gauche s'il y en a de bouchés, au-delà d'une petite part des pixels (retour du
+    // 17/10/2026 : allumées dès un pixel, elles s'allumaient pour quelques pixels morts,
+    // la courbe loin des bords).
+    if e.over_fraction() >= settings.indicator_min {
         painter.circle_filled(graph.right_top() + vec2(-4.0, 4.0), 4.0, colors.clip_over);
     }
-    if e.under.iter().any(|&n| n > 0) {
+    if e.under_fraction() >= settings.indicator_min {
         painter.circle_filled(graph.left_top() + vec2(4.0, 4.0), 4.0, colors.clip_under);
     }
+}
+
+/// Lissage gaussien de `values` (écart type `sigma`, en classes ; 0 : inchangé). Les bords
+/// sont traités en ne comptant que les voisins existants (pas de chute artificielle).
+pub fn smooth(values: &[f32], sigma: f32) -> Vec<f32> {
+    if sigma <= 0.0 || values.is_empty() {
+        return values.to_vec();
+    }
+    let radius = (sigma * 3.0).ceil() as isize;
+    let weights: Vec<f32> = (-radius..=radius)
+        .map(|k| (-(k * k) as f32 / (2.0 * sigma * sigma)).exp())
+        .collect();
+    (0..values.len() as isize)
+        .map(|i| {
+            let (mut sum, mut total) = (0.0, 0.0);
+            for (k, w) in (-radius..=radius).zip(&weights) {
+                if let Some(&v) = values.get((i + k) as usize).filter(|_| i + k >= 0) {
+                    sum += v * w;
+                    total += w;
+                }
+            }
+            sum / total
+        })
+        .collect()
 }
 
 /// Couleurs des zones.
@@ -341,5 +377,30 @@ mod tests {
         crate::i18n::register();
         tri::i18n::set_language(tri::i18n::Language::Fr);
         assert_eq!(decimal(-0.456, 2), "-0,46");
+    }
+
+    #[test]
+    fn smoothing_fills_a_comb_and_keeps_the_shape() {
+        // Peigne : une classe sur deux vide.
+        let comb: Vec<f32> = (0..20)
+            .map(|i| if i % 2 == 0 { 10.0 } else { 0.0 })
+            .collect();
+        let s = smooth(&comb, 1.5);
+        let (min, max) = s[3..17]
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), &v| (a.min(v), b.max(v)));
+        assert!(max - min < 1.0, "peigne comblé : {min} à {max}");
+        // Un pic reste un pic, au même endroit.
+        let mut peak = vec![0.0f32; 21];
+        peak[10] = 100.0;
+        let s = smooth(&peak, 1.5);
+        let top = s
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .unwrap()
+            .0;
+        assert_eq!(top, 10);
+        assert_eq!(smooth(&peak, 0.0), peak, "sans lissage : inchangé");
     }
 }

@@ -120,6 +120,17 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   image précédente / suivante (chevrons, utiles surtout en 1:1) et avance automatique (étoile suivie d'une flèche : « après une
   note, on avance » ; fond turquoise quand elle est active), en boutons à icône
   (`[gui] bar_icon_size`), libellé et raccourci au survol.
+- **Histogramme en courbe lissée** (18/10/2026, retour : les barres faisaient escalier) :
+  les cases du moteur sont regroupées en classes (`[gui.histogram] classes`), lissées par
+  un noyau gaussien (`smoothing`, écart type en classes), puis dessinées en surface pleine
+  par canal avec un liseré. Les classes larges comblent les cases vides d'un JPEG en
+  échelle IL (l'ancien « peigne »). **Pastilles** saturés / bouchés des coins : allumées
+  au-delà de `indicator_min` (0,1 % des pixels) et non plus dès un pixel (sur DSCF0305 :
+  0,007 % de bouchés, quelques pixels morts, allumait la pastille, la courbe loin du
+  bord). Le **grand histogramme** (`Maj+E`) est une boîte comme les autres : titre,
+  déplaçable, boutons en bas, à sa propre largeur (`Dialog::free_width`).
+- **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
+  (F5) et explication au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
   retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
   grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur

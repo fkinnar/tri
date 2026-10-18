@@ -521,6 +521,13 @@ pub struct HistogramSettings {
     pub badge_over: f64,
     /// Badge « bouchée » au-delà de cette part de pixels bouchés.
     pub badge_under: f64,
+    /// Pastilles saturés / bouchés de l'histogramme : allumées au-delà de cette part des
+    /// pixels (canal le plus touché, 0 à 1), pas pour quelques pixels morts.
+    pub indicator_min: f64,
+    /// Nombre de classes de la courbe (sur la largeur de l'histogramme).
+    pub classes: usize,
+    /// Lissage de la courbe : écart type, en classes (0 : sans lissage).
+    pub smoothing: f32,
 }
 
 impl Default for HistogramSettings {
@@ -535,6 +542,9 @@ impl Default for HistogramSettings {
             clipping_channels: true,
             badge_over: 0.005,
             badge_under: 0.05,
+            indicator_min: 0.001,
+            classes: 80,
+            smoothing: 1.5,
         }
     }
 }
