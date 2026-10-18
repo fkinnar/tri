@@ -147,7 +147,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   saturé dans un canal quelconque, bouché dans l'ensemble des canaux
   (`histogram::analysis_image`, testé ; hauteur `analysis_height`). Mise en page (retour
   du 18/10/2026) : un bloc horizontal sur toute la largeur restante, fond un peu plus
-  clair que la boîte (`analysis_lighten`), image centrée, légende en bas à droite. Le pointeur
+  clair que la boîte (`analysis_lighten`), image centrée sur toute la hauteur, légende empilée en bas à droite (alignée à droite). Le pointeur
   « saisir » de la boîte déplaçable ne remplace plus celui d'un élément (main sur les
   pastilles).
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci

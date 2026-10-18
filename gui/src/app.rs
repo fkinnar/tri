@@ -2723,7 +2723,7 @@ impl TriApp {
     }
 
     /// Bloc de l'image d'analyse, à droite des statistiques : fond un peu plus clair que
-    /// la boîte, image centrée, légende en bas à droite (retours du 18/10/2026).
+    /// la boîte, image centrée, légende empilée en bas à droite (retours du 18/10/2026).
     fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle) {
         let settings = &self.gui.histogram;
         let size = vec2(ui.available_width().max(80.0), settings.analysis_height);
@@ -2739,8 +2739,9 @@ impl TriApp {
         );
         let margin = self.gui.dialogs.spacing.max(4.0);
         let inner = rect.shrink(margin);
-        // Légende sur une ligne, en bas à droite du bloc, alignée à droite (retour du
-        // 18/10/2026) ; l'image est centrée au-dessus.
+        // Légende : les deux mots l'un au-dessus de l'autre, en bas à droite du bloc,
+        // alignés à droite ; l'image prend toute la hauteur à leur gauche (retour du
+        // 18/10/2026 : la photo est petite, chaque ligne gagnée compte).
         let c = &self.gui.colors;
         let font = egui::TextStyle::Body.resolve(ui.style());
         let galleys = [
@@ -2748,14 +2749,16 @@ impl TriApp {
             (t!("analysis-under"), Color32::from(c.analysis_under)),
         ]
         .map(|(text, color)| painter.layout_no_wrap(text, font.clone(), color));
-        let line_h = galleys[0].size().y;
-        let mut x = inner.max.x;
+        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
+        let mut y = inner.max.y;
         for g in galleys.into_iter().rev() {
-            x -= g.size().x;
-            painter.galley(pos2(x, inner.max.y - line_h), g, Color32::WHITE);
-            x -= margin;
+            y -= g.size().y;
+            painter.galley(pos2(inner.max.x - g.size().x, y), g, Color32::WHITE);
         }
-        let room = Rect::from_min_max(inner.min, pos2(inner.max.x, inner.max.y - line_h - 4.0));
+        let room = Rect::from_min_max(
+            inner.min,
+            pos2(inner.max.x - legend_w - margin, inner.max.y),
+        );
         let image = texture.size_vec2();
         let fit = (room.width() / image.x)
             .min(room.height() / image.y)
