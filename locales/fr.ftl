@@ -61,6 +61,41 @@ files-launch-failed = lancement de « { $program } » impossible : { $error }
 files-not-a-directory = { $path } n'est pas un dossier
 files-same-folder = les images sont déjà dans { $path }
 files-mismatch = copie de { $path } différente de l'original (rien n'a été gardé)
+files-not-in-trash = { $path } n'est plus dans la corbeille
+history-notes-changed = { $name } : notes modifiées ailleurs depuis (rien n'a été changé)
+history-missing = { $name } est introuvable (déplacé ou supprimé ailleurs)
+history-modified = { $name } a été modifié ailleurs depuis (rien n'a été changé)
+history-nothing = rien à annuler
+history-stars = { $n ->
+    [0] 0 étoile
+    [one] 1 étoile
+   *[other] { $n } étoiles
+}
+history-accepted = acceptée
+history-rejected = rejetée
+history-no-flag = sans drapeau
+history-color-added = { $color }
+history-color-removed = sans { $color }
+history-red = rouge
+history-yellow = jaune
+history-green = vert
+history-blue = bleu
+history-purple = violet
+history-notes-one = { $what } : { $name }
+history-notes-many = { $what } : { $n } images
+history-rename = { $from } renommé en { $to }
+history-copy = { $n ->
+    [one] 1 image copiée vers { $dest }
+   *[other] { $n } images copiées vers { $dest }
+}
+history-move = { $n ->
+    [one] 1 image déplacée vers { $dest }
+   *[other] { $n } images déplacées vers { $dest }
+}
+history-trash = { $n ->
+    [one] 1 fichier mis à la corbeille
+   *[other] { $n } fichiers mis à la corbeille
+}
 config-invalid-toml = valeur TOML invalide : { $value }
 config-not-a-section = « { $section } » n'est pas une section
 preview-io = accès fichier impossible : { $error }

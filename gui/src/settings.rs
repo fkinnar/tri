@@ -119,6 +119,9 @@ pub struct GuiSettings {
     /// Après une note au clavier ou au bandeau, passer à l'image suivante (Maj+A l'active
     /// ou le désactive).
     pub auto_advance: bool,
+    /// Annuler : nombre de pas gardés dans l'historique de la session (les plus anciens
+    /// sont oubliés).
+    pub history: usize,
     /// `[gui.grid]`.
     pub grid: GridSettings,
     /// `[gui.view]`.
@@ -158,6 +161,7 @@ impl Default for GuiSettings {
             remember_display: true,
             rating_bar: true,
             auto_advance: false,
+            history: 200,
             grid: GridSettings::default(),
             view: ViewSettings::default(),
             compare: CompareSettings::default(),

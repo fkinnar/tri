@@ -137,6 +137,34 @@ impl NoteBook {
             .collect()
     }
 
+    /// Écrit `notes` pour `image` seule, sans toucher à sa paire (annulation : chaque
+    /// image de la paire retrouve ses propres notes d'avant). Relit ensuite le dossier.
+    pub fn write_only(&mut self, image: &Path, notes: &Notes) -> Result<(), XmpError> {
+        let dir = dir_of(image);
+        if !self.entries.contains_key(image) {
+            self.by_dir
+                .entry(dir.clone())
+                .or_default()
+                .push(image.to_path_buf());
+            self.reload_dir(&dir);
+        }
+        let entry = &self.entries[image];
+        if let Some(error) = &entry.error {
+            return Err(XmpError::Image {
+                image: image.to_path_buf(),
+                message: error.clone(),
+            });
+        }
+        if entry.notes != *notes {
+            xmp::write_sidecar(&entry.sidecar, notes).map_err(|e| XmpError::Image {
+                image: image.to_path_buf(),
+                message: e.to_string(),
+            })?;
+        }
+        self.reload_dir(&dir);
+        Ok(())
+    }
+
     /// Modifie les notes de `image` avec `edit`, puis les écrit dans son sidecar. Les
     /// images de même nom (paire RAW+JPEG, voir [`NoteBook::siblings`]) reçoivent les mêmes
     /// notes : noter le RAF note aussi le JPG, quelle que soit la convention (choix du

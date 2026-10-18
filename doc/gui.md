@@ -200,6 +200,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (« Couleurs [gui.colors] », `settings-section-*` dans les catalogues ; un test vérifie
   qu'aucune section n'en manque). Les clés de dossier (`dir`, `*_dir`, `destination`) ont
   la complétion par Tab.
+- **Annuler / rétablir** (18/10/2026, moteur `tri::history`, voir `history.md`) : `u` ou
+  `Ctrl+Z` (`Cmd+Z` sur macOS), `Ctrl+R` ou `Ctrl+Maj+Z` ; `Ctrl+H` : liste de
+  l'historique de la session, cliquer un pas y revient. Notes, renommage, copie /
+  déplacement, corbeille ; refus expliqué si un fichier a changé ailleurs.
 - **Champs de chemin** (18/10/2026, `gui/src/path_field.rs`) : partout où l'on tape un
   dossier existant (copier / déplacer, racine du déchargement, réglages), Tab complète
   comme un terminal : un seul dossier possible, il est pris ; sinon le début commun, et

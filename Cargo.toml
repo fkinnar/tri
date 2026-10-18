@@ -23,6 +23,11 @@ unic-langid = "0.9"
 sys-locale = "0.3"
 fluent-syntax = "0.12"
 
+# macOS : emplacement d'un fichier mis à la corbeille (annulation), déjà présents par
+# le crate `trash`.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSError", "NSFileManager", "NSString", "NSURL"] }
+
 [features]
 default = ["heif", "turbojpeg"]
 # HEIC/HEIF via libheif. HEVC est breveté : désactivable pour un binaire distribué

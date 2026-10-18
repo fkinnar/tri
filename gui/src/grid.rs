@@ -93,6 +93,9 @@ pub fn navigate(
         | Action::FileEdit
         | Action::FileCopy
         | Action::FileMove
+        | Action::Undo
+        | Action::Redo
+        | Action::History
         | Action::ToggleFolderPanel
         | Action::RefreshFolders
         | Action::ToggleHistogram

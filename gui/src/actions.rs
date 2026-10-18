@@ -30,13 +30,15 @@ pub enum Group {
     Panels,
     /// Renommer, supprimer, afficher, éditeur externe.
     Files,
+    /// Annuler, rétablir, historique.
+    Edit,
     /// Aide, quitter.
     App,
 }
 
 impl Group {
     /// Les thèmes, dans l'ordre de l'aide.
-    pub const ALL: [Group; 8] = [
+    pub const ALL: [Group; 9] = [
         Group::Navigation,
         Group::Selection,
         Group::View,
@@ -44,6 +46,7 @@ impl Group {
         Group::Filters,
         Group::Panels,
         Group::Files,
+        Group::Edit,
         Group::App,
     ];
 
@@ -212,6 +215,12 @@ pub enum Action {
     FileReveal,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
+    /// Annuler la dernière modification.
+    Undo,
+    /// Rétablir la dernière modification annulée.
+    Redo,
+    /// Liste de l'historique (retour à un pas donné).
+    History,
     /// Copier les images vers un dossier.
     FileCopy,
     /// Déplacer les images vers un dossier.
@@ -264,7 +273,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 76] = [
+    pub const ALL: [Action; 79] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -308,6 +317,9 @@ impl Action {
         Action::FileEdit,
         Action::FileCopy,
         Action::FileMove,
+        Action::Undo,
+        Action::Redo,
+        Action::History,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -370,6 +382,7 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove => Group::Files,
+            Undo | Redo | History => Group::Edit,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | Quit => Group::App,
         }
@@ -423,6 +436,9 @@ impl Action {
             Action::FileRename => "core.file.rename",
             Action::FileDelete => "core.file.delete",
             Action::FileCopy => "core.file.copy",
+            Action::Undo => "core.edit.undo",
+            Action::Redo => "core.edit.redo",
+            Action::History => "core.edit.history",
             Action::FileMove => "core.file.move",
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
@@ -504,6 +520,15 @@ impl Chord {
     /// Windows, egui signale Ctrl aussi comme `command` : seul `mac_cmd`, ou `command` sans
     /// Ctrl, désigne Cmd.
     pub fn from_event(key: Key, modifiers: Modifiers) -> Option<Chord> {
+        // Exception (décidée le 18/10/2026) : Cmd+Z / Cmd+Maj+Z sur macOS, réflexe de tout
+        // utilisateur de Mac, valent Ctrl+Z / Ctrl+Maj+Z (annuler, rétablir).
+        if cfg!(target_os = "macos") && modifiers.mac_cmd && !modifiers.alt && key == Key::Z {
+            return Some(Chord {
+                trigger: Trigger::Key(key),
+                shift: modifiers.shift,
+                ctrl: true,
+            });
+        }
         if modifiers.alt || modifiers.mac_cmd || (modifiers.command && !modifiers.ctrl) {
             return None;
         }
@@ -537,6 +562,14 @@ const fn shifted(key: Key) -> Chord {
         trigger: Trigger::Key(key),
         shift: true,
         ctrl: false,
+    }
+}
+
+const fn ctrl_shift(key: Key) -> Chord {
+    Chord {
+        trigger: Trigger::Key(key),
+        shift: true,
+        ctrl: true,
     }
 }
 
@@ -649,6 +682,14 @@ const FILES: &[Binding] = {
         // Comme dans vim : `y` copie (« yank »), `x` coupe (déplacer).
         (&[plain(Key::Y)], FileCopy),
         (&[plain(Key::X)], FileMove),
+        // Annuler : `u` / `Ctrl+R` comme dans vim, `Ctrl+Z` / `Ctrl+Maj+Z` ailleurs (et
+        // `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir `Chord::from_event`), dans les deux
+        // profils.
+        (&[plain(Key::U)], Undo),
+        (&[ctrl(Key::Z)], Undo),
+        (&[ctrl(Key::R)], Redo),
+        (&[ctrl_shift(Key::Z)], Redo),
+        (&[ctrl(Key::H)], History),
     ]
 };
 
@@ -1259,10 +1300,17 @@ mod tests {
         assert_eq!(km.action(Key::L, Modifiers::CTRL), None, "Ctrl+L : libre");
         assert_eq!(km.action(Key::L, Modifiers::ALT), None);
         assert_eq!(Chord::from_event(Key::ArrowLeft, Modifiers::ALT), None);
+        // Cmd+Z : annuler sur macOS (exception), rien ailleurs.
+        let cmd_z = Chord::from_event(Key::Z, Modifiers::MAC_CMD | Modifiers::COMMAND);
+        if cfg!(target_os = "macos") {
+            assert_eq!(cmd_z, Chord::from_event(Key::Z, Modifiers::CTRL));
+        } else {
+            assert_eq!(cmd_z, None);
+        }
     }
 
     #[test]
-    fn vim_pages_with_ctrl_u_and_ctrl_d_and_keeps_u_free() {
+    fn vim_pages_with_ctrl_u_and_ctrl_d_and_u_undoes() {
         let km = Keymap::default();
         // Sous Linux et Windows, egui signale Ctrl aussi comme `command`.
         let linux_ctrl = Modifiers {
@@ -1274,9 +1322,10 @@ mod tests {
         assert_eq!(km.action(Key::D, linux_ctrl), Some(Action::NavPageDown));
         assert_eq!(
             km.action(Key::U, Modifiers::NONE),
-            None,
-            "réservé à l'annulation"
+            Some(Action::Undo),
+            "comme dans vim"
         );
+        assert_eq!(km.action(Key::R, linux_ctrl), Some(Action::Redo));
         assert_eq!(km.action(Key::D, Modifiers::NONE), None);
         assert_eq!(km.keys_for(Action::NavPageUp), ["Page préc.", "Ctrl+u"]);
     }

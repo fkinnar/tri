@@ -110,3 +110,10 @@ gardent leurs notes.
   dossier absent créé s'il n'en manque qu'un niveau), bascule copier / déplacer,
   progression pendant la copie (dans un fil : la fenêtre reste vivante).
 
+## Corbeille et annulation (18/10/2026)
+
+`delete` renvoie les fichiers mis à la corbeille (`Trashed` : emplacement d'origine, et
+de quoi les retrouver), `untrash` les remet en place (voir `history.md`). Sur macOS, la
+mise à la corbeille passe par `NSFileManager` (emplacement exact renvoyé) plutôt que par
+le crate `trash`, qui ne le donne pas.
+

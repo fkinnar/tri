@@ -50,7 +50,8 @@ struct Job {
     done: Arc<AtomicUsize>,
     total: usize,
     dest: PathBuf,
-    handle: Option<JoinHandle<Result<(), FileError>>>,
+    /// Le fil rend le plan exécuté (pour l'historique).
+    handle: Option<JoinHandle<Result<files::Transfer, FileError>>>,
 }
 
 /// Résultat d'une image de la boîte.
@@ -59,8 +60,12 @@ pub enum Outcome {
     Open,
     /// Annulée.
     Cancelled,
-    /// Fichiers modifiés ; `select` : image à sélectionner ensuite (nouveau nom).
-    Done { select: Option<PathBuf> },
+    /// Fichiers modifiés ; `select` : image à sélectionner ensuite (nouveau nom) ; `step` :
+    /// le pas à mettre dans l'historique (aucun pour une suppression définitive).
+    Done {
+        select: Option<PathBuf>,
+        step: Option<tri::history::Step>,
+    },
     /// Échec (message pour la barre d'état) ; la boîte est fermée.
     Failed(String),
 }
@@ -224,7 +229,10 @@ fn rename_dialog(
             .find(|(from, _)| from == image)
             .map(|(_, to)| to.clone());
         return match files::rename(&plan) {
-            Ok(()) => Outcome::Done { select },
+            Ok(()) => Outcome::Done {
+                select,
+                step: Some(tri::history::Step::Rename(plan)),
+            },
             Err(e) => Outcome::Failed(t!("rename-failed", error = e.to_string())),
         };
     }
@@ -274,7 +282,10 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
     confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
     if confirm {
         return match files::delete(group, settings.trash) {
-            Ok(()) => Outcome::Done { select: None },
+            Ok(trashed) => Outcome::Done {
+                select: None,
+                step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
+            },
             Err(e) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
         };
     }
@@ -447,6 +458,7 @@ impl Transfer {
                 counter.store(n, Ordering::Relaxed);
                 ctx.request_repaint();
             })
+            .map(|()| plan)
         });
         self.job = Some(Job {
             done,
@@ -469,11 +481,14 @@ impl Transfer {
         if job.handle.as_ref().is_some_and(|h| h.is_finished()) {
             let result = job.handle.take().map(|h| h.join());
             return match result {
-                Some(Ok(Ok(()))) => {
+                Some(Ok(Ok(plan))) => {
                     if let Some(data) = data {
                         let _ = files::remember_destination(data, &job.dest, settings.recent);
                     }
-                    Outcome::Done { select: None }
+                    Outcome::Done {
+                        select: None,
+                        step: Some(tri::history::transfer_step(plan)),
+                    }
                 }
                 Some(Ok(Err(e))) => Outcome::Failed(t!("transfer-failed", error = e.to_string())),
                 _ => Outcome::Failed(t!("transfer-failed", error = "?")),

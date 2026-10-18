@@ -61,6 +61,40 @@ files-launch-failed = cannot launch "{ $program }": { $error }
 files-not-a-directory = { $path } is not a folder
 files-same-folder = the images are already in { $path }
 files-mismatch = copy of { $path } differs from the original (nothing was kept)
+files-not-in-trash = { $path } is no longer in the trash
+history-notes-changed = { $name }: ratings changed elsewhere since (nothing was changed)
+history-missing = { $name } cannot be found (moved or deleted elsewhere)
+history-modified = { $name } was modified elsewhere since (nothing was changed)
+history-nothing = nothing to undo
+history-stars = { $n ->
+    [one] 1 star
+   *[other] { $n } stars
+}
+history-accepted = accepted
+history-rejected = rejected
+history-no-flag = no flag
+history-color-added = { $color }
+history-color-removed = no { $color }
+history-red = red
+history-yellow = yellow
+history-green = green
+history-blue = blue
+history-purple = purple
+history-notes-one = { $what }: { $name }
+history-notes-many = { $what }: { $n } images
+history-rename = { $from } renamed to { $to }
+history-copy = { $n ->
+    [one] 1 image copied to { $dest }
+   *[other] { $n } images copied to { $dest }
+}
+history-move = { $n ->
+    [one] 1 image moved to { $dest }
+   *[other] { $n } images moved to { $dest }
+}
+history-trash = { $n ->
+    [one] 1 file moved to the trash
+   *[other] { $n } files moved to the trash
+}
 config-invalid-toml = invalid TOML value: { $value }
 config-not-a-section = “{ $section }” is not a section
 preview-io = cannot access the file: { $error }

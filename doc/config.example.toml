@@ -236,6 +236,9 @@ rating_bar = true
 # on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est
 # sautée.
 auto_advance = false
+# Annuler (u, Ctrl+Z) : nombre de pas gardés dans l'historique de la session (Ctrl+H le
+# montre). Rien n'est gardé d'un lancement à l'autre.
+history = 200
 
 [gui.grid]
 # Dimensions en points.

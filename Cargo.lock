@@ -3584,6 +3584,7 @@ dependencies = [
  "image",
  "kamadak-exif",
  "libheif-rs",
+ "objc2-foundation 0.3.2",
  "pkg-config",
  "quick-xml 0.42.0",
  "serde",

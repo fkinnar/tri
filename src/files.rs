@@ -292,16 +292,187 @@ pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> Group {
     group(images, settings.pairs)
 }
 
+/// Un fichier mis à la corbeille, et de quoi l'en ressortir ([`untrash`]).
+#[derive(Clone, Debug)]
+pub struct Trashed {
+    /// Emplacement d'origine.
+    pub original: PathBuf,
+    /// macOS : emplacement dans la corbeille, donné par le système.
+    #[cfg(target_os = "macos")]
+    pub location: Option<PathBuf>,
+    /// Linux, Windows : l'élément de la corbeille (le crate `trash` sait l'y retrouver).
+    #[cfg(any(
+        target_os = "windows",
+        all(
+            unix,
+            not(target_os = "macos"),
+            not(target_os = "ios"),
+            not(target_os = "android")
+        )
+    ))]
+    pub item: Option<trash::TrashItem>,
+}
+
 /// Supprime les fichiers de `group` : à la corbeille si `trash`, sinon définitivement.
-pub fn delete(group: &Group, trash: bool) -> Result<()> {
+/// Renvoie les fichiers mis à la corbeille, pour pouvoir les remettre en place
+/// ([`untrash`] ; vide pour une suppression définitive).
+pub fn delete(group: &Group, trash: bool) -> Result<Vec<Trashed>> {
     let files: Vec<&PathBuf> = group.files().collect();
     if trash {
-        return trash::delete_all(&files).map_err(|e| FileError::Trash(e.to_string()));
+        return to_trash(&files);
     }
     for file in files {
         std::fs::remove_file(file).map_err(|e| FileError::Io(file.clone(), e))?;
     }
+    Ok(Vec::new())
+}
+
+/// macOS : le crate `trash` ne dit pas où il met les fichiers ; on demande au système
+/// (`NSFileManager`), qui renvoie l'emplacement exact dans la corbeille.
+#[cfg(target_os = "macos")]
+fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let manager = NSFileManager::defaultManager();
+    let mut trashed = Vec::new();
+    for file in files {
+        let absolute = std::path::absolute(file).map_err(|e| FileError::Io((*file).clone(), e))?;
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&absolute.to_string_lossy()));
+        let mut resulting = None;
+        manager
+            .trashItemAtURL_resultingItemURL_error(&url, Some(&mut resulting))
+            .map_err(|e| FileError::Trash(format!("{} : {e}", file.display())))?;
+        let location = resulting
+            .and_then(|u| u.path())
+            .map(|p| PathBuf::from(p.to_string()));
+        trashed.push(Trashed {
+            original: absolute,
+            location,
+        });
+    }
+    Ok(trashed)
+}
+
+#[cfg(any(
+    target_os = "windows",
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+))]
+fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+    let absolute: Vec<PathBuf> = files
+        .iter()
+        .map(|f| std::path::absolute(f).map_err(|e| FileError::Io((*f).clone(), e)))
+        .collect::<Result<_>>()?;
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64 - 2)
+        .unwrap_or(0);
+    trash::delete_all(&absolute).map_err(|e| FileError::Trash(e.to_string()))?;
+    // Retrouvés dans la corbeille par leur emplacement d'origine (les plus récents).
+    let items = trash::os_limited::list().unwrap_or_default();
+    Ok(absolute
+        .into_iter()
+        .map(|original| {
+            let item = items
+                .iter()
+                .filter(|i| i.original_path() == original && i.time_deleted >= since)
+                .max_by_key(|i| i.time_deleted)
+                .cloned();
+            Trashed { original, item }
+        })
+        .collect())
+}
+
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(unix, not(target_os = "ios"), not(target_os = "android"))
+)))]
+fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+    trash::delete_all(files).map_err(|e| FileError::Trash(e.to_string()))?;
+    Ok(Vec::new())
+}
+
+/// Remet en place des fichiers mis à la corbeille par [`delete`]. Erreur (rien n'est
+/// fait pour ce fichier) si l'emplacement d'origine est repris, ou si le fichier n'est
+/// plus dans la corbeille (vidée).
+pub fn untrash(items: &[Trashed]) -> Result<()> {
+    for t in items {
+        if t.original.exists() {
+            return Err(FileError::Exists(t.original.clone()));
+        }
+    }
+    for t in items {
+        restore_one(t)?;
+    }
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn restore_one(t: &Trashed) -> Result<()> {
+    let gone = || {
+        FileError::Trash(crate::t!(
+            "files-not-in-trash",
+            path = t.original.display().to_string()
+        ))
+    };
+    let location = t
+        .location
+        .as_ref()
+        .filter(|l| l.exists())
+        .ok_or_else(gone)?;
+    match std::fs::rename(location, &t.original) {
+        Ok(()) => Ok(()),
+        // Corbeille d'un autre volume que l'origine : copie vérifiée, puis suppression.
+        Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
+            copy_verified(location, &t.original)?;
+            std::fs::remove_file(location).map_err(|e| FileError::Io(location.clone(), e))
+        }
+        Err(e) => Err(FileError::Io(location.clone(), e)),
+    }
+}
+
+#[cfg(any(
+    target_os = "windows",
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+))]
+fn restore_one(t: &Trashed) -> Result<()> {
+    let gone = || {
+        FileError::Trash(crate::t!(
+            "files-not-in-trash",
+            path = t.original.display().to_string()
+        ))
+    };
+    let item = t.item.clone().ok_or_else(gone)?;
+    // Encore dans la corbeille ?
+    let present = trash::os_limited::list()
+        .unwrap_or_default()
+        .into_iter()
+        .any(|i| i.id == item.id);
+    if !present {
+        return Err(gone());
+    }
+    trash::os_limited::restore_all([item]).map_err(|e| FileError::Trash(e.to_string()))
+}
+
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(unix, not(target_os = "ios"), not(target_os = "android"))
+)))]
+fn restore_one(t: &Trashed) -> Result<()> {
+    Err(FileError::Trash(crate::t!(
+        "files-not-in-trash",
+        path = t.original.display().to_string()
+    )))
 }
 
 /// Copier ou déplacer.

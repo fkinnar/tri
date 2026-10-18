@@ -253,6 +253,10 @@ pub struct TriApp {
     reveal: Option<Reveal>,
     screenshot: Option<Screenshot>,
     help: bool,
+    /// Historique des modifications de la session (annuler, rétablir).
+    history: tri::history::History,
+    /// Liste de l'historique ouverte (`Ctrl+H`).
+    history_open: bool,
     /// Fenêtre de réglages ouverte.
     settings_window: Option<crate::settings_window::SettingsWindow>,
     /// Fichier de configuration modifié par la fenêtre de réglages.
@@ -444,6 +448,8 @@ impl TriApp {
             help: false,
             settings_window: None,
             config_path: None,
+            history: tri::history::History::new(gui.history),
+            history_open: false,
             help_search: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
@@ -1163,6 +1169,15 @@ impl TriApp {
             .filter_map(|c| self.sequencer.feed(&self.keymap, c, now))
             .collect();
         for action in actions {
+            // Historique : annuler / rétablir pas à pas restent possibles, Échap ferme.
+            if self.history_open {
+                match action {
+                    Action::Back | Action::History => self.history_open = false,
+                    Action::Undo | Action::Redo => self.perform(ctx, action),
+                    _ => {}
+                }
+                continue;
+            }
             // Réglages : seule la fermeture.
             if self.settings_window.is_some() {
                 if matches!(action, Action::Back | Action::Settings) {
@@ -1243,6 +1258,15 @@ impl TriApp {
             }
             Action::Help => self.help = !self.help,
             Action::Settings => self.open_settings(),
+            Action::Undo => {
+                let result = self.history.undo(self.settings.xmp.sidecar);
+                self.after_history(result.map(|a| vec![a]).map_err(Some));
+            }
+            Action::Redo => {
+                let result = self.history.redo(self.settings.xmp.sidecar);
+                self.after_history(result.map(|a| vec![a]).map_err(Some));
+            }
+            Action::History => self.history_open = !self.history_open,
             Action::Back => {
                 if self.help {
                     self.help = false;
@@ -1487,6 +1511,7 @@ impl TriApp {
     /// (ajoutée si elle ne l'a pas, retirée sinon), au lieu d'une bascule image par image
     /// qui mélangerait.
     fn rate_many(&mut self, targets: &[PathBuf], action: Action) {
+        let before = tri::history::snapshot(&self.folder.notes, targets);
         let multiple = self.settings.xmp.multiple_colors;
         let add = match action {
             Action::Color(c) => !self.folder.notes.notes(&targets[0]).has_color(c),
@@ -1512,6 +1537,10 @@ impl TriApp {
             }
         }
         self.note_error = error;
+        // Un seul pas pour toute la sélection.
+        if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
+            self.history.push(step);
+        }
         if !self.notes_rule.is_empty() {
             self.refilter(Reveal::Minimal);
         }
@@ -1520,6 +1549,7 @@ impl TriApp {
     /// Note l'image `path` et écrit son sidecar. En cas d'échec, l'erreur est affichée
     /// dans la barre d'état et la note affichée reste celle du disque.
     fn rate_path(&mut self, path: PathBuf, action: Action) {
+        let before = tri::history::snapshot(&self.folder.notes, std::slice::from_ref(&path));
         let multiple = self.settings.xmp.multiple_colors;
         let result = self.folder.notes.edit(&path, |n| match action {
             Action::Stars(stars) => n.set_stars(stars),
@@ -1534,6 +1564,9 @@ impl TriApp {
             }
             Err(e) => Some(t!("rating-not-saved", error = e.to_string())),
         };
+        if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
+            self.history.push(step);
+        }
         // Filtre sur les notes : l'image peut ne plus y correspondre.
         if !self.notes_rule.is_empty() {
             self.refilter(Reveal::Minimal);
@@ -2939,7 +2972,10 @@ impl TriApp {
                 // partielle non : relire le dossier.
                 self.reload_folder(None);
             }
-            crate::files::Outcome::Done { select } => {
+            crate::files::Outcome::Done { select, step } => {
+                if let Some(step) = step {
+                    self.history.push(step);
+                }
                 // Image renommée sélectionnée : elle le reste sous son nouveau nom.
                 if let (Some(crate::files::FileDialog::Rename { image, .. }), Some(to)) =
                     (&self.file_dialog, &select)
@@ -3518,6 +3554,132 @@ impl TriApp {
         }
     }
 
+    /// Après une annulation ou un rétablissement : dossier relu si des fichiers ont bougé
+    /// (sinon seulement les notes), image concernée montrée, et message dans la barre
+    /// d'état ; refus (fichier modifié ailleurs…) : la raison.
+    fn after_history(
+        &mut self,
+        result: Result<Vec<tri::history::Applied>, Option<tri::history::HistoryError>>,
+    ) {
+        let (applied, error) = match result {
+            Ok(applied) => (applied, None),
+            Err(e) => (Vec::new(), e),
+        };
+        self.after_applied(applied, error);
+    }
+
+    fn after_applied(
+        &mut self,
+        applied: Vec<tri::history::Applied>,
+        error: Option<tri::history::HistoryError>,
+    ) {
+        if let Some(last) = applied.last() {
+            let show = last
+                .images
+                .iter()
+                .find(|p| p.parent() == Some(&self.folder.dir))
+                .cloned();
+            if applied.iter().any(|a| a.files_changed) {
+                self.reload_folder(show.clone());
+            } else {
+                self.folder.notes.reload();
+                self.refilter(Reveal::Minimal);
+            }
+            if let Some(path) = show
+                && let Some(i) = self.files.iter().position(|f| f.path == path)
+            {
+                self.select(i);
+            }
+            let text = if last.undone {
+                t!("history-undone", label = last.label.clone())
+            } else {
+                t!("history-redone", label = last.label.clone())
+            };
+            self.notice = Some((text, false));
+        }
+        self.file_error = error.map(|e| t!("history-refused", error = e.to_string()));
+    }
+
+    /// Liste de l'historique (`Ctrl+H`) : les pas de la session, les plus récents en haut ;
+    /// cliquer un pas y revient (en défaisant ou refaisant ce qui le suit ou le précède).
+    fn history_dialog(&mut self, ctx: &egui::Context) {
+        if !self.history_open {
+            return;
+        }
+        let mut target = None;
+        let (mut undo, mut redo, mut close) = (false, false, false);
+        let at = ctx.content_rect().center() - vec2(220.0, 200.0);
+        let position = self.history.position();
+        let modal = modal_at("history_dialog", at)
+            .title(t!("history-title"))
+            .show(ctx, |ui| {
+                ui.add_space(4.0);
+                ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                    // Les plus récents en haut ; l'état de départ en bas.
+                    for (i, entry) in self.history.entries().iter().enumerate().rev() {
+                        let done = i < position;
+                        let current = i + 1 == position;
+                        let mut text = egui::RichText::new(&entry.label);
+                        if !done {
+                            text = text.weak().strikethrough();
+                        }
+                        if current {
+                            text = text.strong();
+                        }
+                        if ui.selectable_label(current, text).clicked() {
+                            target = Some(i + 1);
+                        }
+                    }
+                    let start = egui::RichText::new(t!("history-start"));
+                    if ui
+                        .selectable_label(position == 0, start.italics())
+                        .clicked()
+                    {
+                        target = Some(0);
+                    }
+                });
+                if self.history.entries().is_empty() {
+                    ui.weak(t!("history-empty"));
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    let tip = |a: Action| self.keymap.keys_for(a).join(" / ");
+                    undo = ui
+                        .add_enabled(
+                            self.history.can_undo(),
+                            egui::Button::new(t!("history-undo")),
+                        )
+                        .on_hover_text(tip(Action::Undo))
+                        .clicked();
+                    redo = ui
+                        .add_enabled(
+                            self.history.can_redo(),
+                            egui::Button::new(t!("history-redo")),
+                        )
+                        .on_hover_text(tip(Action::Redo))
+                        .clicked();
+                    close = ui.button(t!("close")).clicked();
+                    ui.weak(t!("or-escape"));
+                });
+            });
+        let convention = self.settings.xmp.sidecar;
+        if let Some(target) = target {
+            let (applied, error) = self.history.go_to(target, convention);
+            self.after_applied(applied, error);
+        }
+        if undo {
+            let result = self.history.undo(convention);
+            self.after_history(result.map(|a| vec![a]).map_err(Some));
+        }
+        if redo {
+            let result = self.history.redo(convention);
+            self.after_history(result.map(|a| vec![a]).map_err(Some));
+        }
+        if close || modal.should_close() {
+            self.history_open = false;
+        }
+    }
+
     /// Ouvre la fenêtre de réglages (ou dit pourquoi c'est impossible).
     fn open_settings(&mut self) {
         let Some(path) = self
@@ -3738,6 +3900,7 @@ impl eframe::App for TriApp {
             self.help_search = None;
         }
         self.settings_window(&ctx);
+        self.history_dialog(&ctx);
         self.rating_dialog(&ctx);
         self.file_dialog(&ctx);
         self.eject_dialog(&ctx);
@@ -4140,6 +4303,90 @@ mod tests {
     fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
         h.key_press_modifiers(modifiers, key);
         h.run_steps(3);
+    }
+
+    #[test]
+    fn undo_and_redo_ratings_and_refuse_after_an_outside_change() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos/img0.jpg");
+        press(&mut h, Key::Num3, Modifiers::SHIFT);
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        assert_eq!(h.state().history.entries().len(), 2, "un pas par note");
+        // u : la dernière note (rejet) défaite, puis Ctrl+Z : les étoiles.
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&image).unwrap().flag, Flag::None);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
+        assert!(h.state().notice.as_ref().unwrap().0.starts_with("Annulé"));
+        press(&mut h, Key::Z, Modifiers::CTRL);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 0);
+        assert_eq!(
+            h.state().folder.notes.notes(&image).stars,
+            0,
+            "affichage relu"
+        );
+        // Rétablir : Ctrl+R puis Ctrl+Maj+Z.
+        press(&mut h, Key::R, Modifiers::CTRL);
+        press(&mut h, Key::Z, Modifiers::CTRL | Modifiers::SHIFT);
+        let notes = tri::xmp::read(&image).unwrap();
+        assert_eq!((notes.stars, notes.flag), (3, Flag::Rejected));
+        // Modifié ailleurs : refus, rien ne bouge.
+        let mut changed = notes.clone();
+        changed.stars = 5;
+        tri::xmp::write_sidecar(&dir.path().join("photos/img0.jpg.xmp"), &changed).unwrap();
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 5);
+        assert!(
+            h.state()
+                .file_error
+                .as_ref()
+                .unwrap()
+                .contains("modifiées ailleurs"),
+            "{:?}",
+            h.state().file_error
+        );
+        assert_eq!(h.state().history.position(), 2);
+    }
+
+    #[test]
+    fn undo_a_rename_and_a_move_and_walk_the_history_list() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        // Renommer img0 en quai.
+        press(&mut h, Key::F2, Modifiers::NONE);
+        h.event(UiEvent::Text("quai".into()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(photos.join("quai.jpg").exists());
+        // Déplacer l'image courante vers un dossier.
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        press(&mut h, Key::X, Modifiers::NONE);
+        h.event(UiEvent::Text(dest.display().to_string()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        assert_eq!(h.state().history.entries().len(), 2);
+        let moved = std::fs::read_dir(&dest).unwrap().count();
+        assert_eq!(moved, 1);
+        // Ctrl+H : la liste ; « État au lancement » défait tout.
+        press(&mut h, Key::H, Modifiers::CTRL);
+        assert!(h.state().history_open);
+        h.get_by_label("État au lancement").click();
+        h.run_steps(3);
+        assert_eq!(h.state().history.position(), 0);
+        assert!(photos.join("img0.jpg").exists() && !photos.join("quai.jpg").exists());
+        assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 0, "revenue");
+        assert_eq!(h.state().files.len(), 3, "dossier relu");
+        // Le pas le plus récent : tout refait.
+        let label = h.state().history.entries()[1].label.clone();
+        h.get_by_label(&label).click();
+        h.run_steps(3);
+        assert_eq!(h.state().history.position(), 2);
+        assert!(photos.join("quai.jpg").exists() || dest.join("quai.jpg").exists());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().history_open);
     }
 
     #[test]

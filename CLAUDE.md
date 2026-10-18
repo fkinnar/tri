@@ -565,9 +565,20 @@ Proposition : sortir cette étape du logiciel de développement.
    modifié avec `toml_edit` sans perdre commentaires ni clés), `gui/src/settings_window.rs`
    (recherche floue, validation, application à chaud de l'interface). Restent : `[keys]`
    (raccourcis) dans la fenêtre, descriptions en anglais (exemple traduit).
-3. **Annuler** (« très important, il est temps ») : concevoir l'historique d'abord, avec
+3. [x] **Annuler** (« très important, il est temps », **fait** le 18/10/2026 :
+   `src/history.rs`, `doc/history.md`, `u` / `Ctrl+Z` / `Cmd+Z`, liste `Ctrl+H`) : concevoir l'historique d'abord, avec
    l'utilisateur, puis l'appliquer aux notes, au renommage, à la corbeille et au
    déplacement. Avant les rafales : chaque nouvelle action modifiante l'alourdit.
+   Décisions du 18/10/2026 : historique **de session** (en mémoire, perdu à la
+   fermeture) ; une action = un pas (même sur 30 images), rétablir aussi ; raccourcis
+   des profils (`u` / `Ctrl+R`, `Ctrl+Z` / `Ctrl+Maj+Z`) **et `Cmd+Z` / `Cmd+Maj+Z` sur
+   macOS** (exception à « Cmd réservé au système ») ; fichier modifié ailleurs depuis
+   (notes changées dans darktable…) : **refuser et expliquer**, ne jamais écraser un
+   travail fait ailleurs ; **liste visible de l'historique dès maintenant** (retour à un
+   pas donné). Hors historique : navigation, filtres, sélection, suppression définitive
+   (déjà confirmée), déchargement. Corbeille sur macOS : le crate `trash` ne restaure
+   pas (Linux / Windows seulement) → emplacement dans la corbeille demandé au système
+   (`NSFileManager`, via `objc2`), remis en place à l'annulation.
 4. **Panneaux au clavier, façon tmux** (surtout pour l'utilisateur) : un raccourci pour
    passer d'un panneau à l'autre, et **un jeu de raccourcis propre au panneau actif**
    (la même touche fait des choses différentes selon le panneau). `Ctrl+flèches` est
@@ -605,8 +616,8 @@ explicitement par l'utilisateur comme important.
       sélection (6 au plus, `[gui.compare] max`), image active notée, `Espace` élimine,
       1:1 lié (`z`), moteur `Scheduler::set_shown`.
 - [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).
-- [ ] **Annuler** (`u`, réservé) : historique à concevoir (paires, filtres actifs, XMP
-      modifiés ailleurs ; session seule ou persistant).
+- [x] **Annuler** : fait le 18/10/2026 (historique de session, voir `doc/history.md`).
+      Corbeille réelle à vérifier à la main (les tests n'y touchent pas).
 - [ ] Filtres complexes (fenêtre modale ou panneau latéral, à discuter).
 
 ### Analyse d'image
