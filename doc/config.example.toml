@@ -181,6 +181,24 @@ neighbour_ratio = 0.8
 # Scores de tout le dossier calculés en fond (cache d'analyse).
 background = true
 
+[similarity]
+# Regroupement des images semblables (rafales, séries d'une même scène) en piles.
+# Empreintes de tout le dossier calculées en fond (cache d'analyse, juste après les
+# vignettes) ; false : pas de regroupement.
+background = true
+# Côté long de la petite image d'où l'empreinte est tirée (pixels) : petite, elle ne
+# regarde que la composition et les couleurs, pas les détails.
+side = 64
+# Poids de la composition dans la distance entre deux images (0 à 1) ; le reste : les
+# couleurs.
+shape_weight = 0.5
+# Seuil par défaut (distance de 0 à 1) : deux images voisines plus proches vont dans le
+# même groupe. Ajustable pour chaque dossier dans la fenêtre de regroupement.
+threshold = 0.25
+# Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
+# groupées (secondes ; 0 : sans limite).
+max_gap_s = 60.0
+
 [i18n]
 # Langue des textes (interface, ligne de commande, messages) : "auto" (langue du système ;
 # l'anglais si elle n'est pas disponible), "fr" ou "en".

@@ -91,6 +91,7 @@ struct Status {
     full: Avail,
     exposure: Avail,
     sharpness: Avail,
+    similarity: Avail,
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
@@ -203,7 +204,7 @@ pub struct TriApp {
     file_error: Option<String>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
-    progress: [Progress; 5],
+    progress: [Progress; 6],
     engine: Option<Engine>,
     error: Option<String>,
     keymap: Keymap,
@@ -429,7 +430,7 @@ impl TriApp {
             hint: None,
             files: Vec::new(),
             status: Vec::new(),
-            progress: [Progress::default(); 5],
+            progress: [Progress::default(); 6],
             engine: None,
             error,
             keymap,
@@ -1098,7 +1099,7 @@ impl TriApp {
         self.files = groups.into_iter().flatten().collect();
         self.status = vec![Status::default(); self.files.len()];
         self.requested.clear();
-        self.progress = [Progress::default(); 5];
+        self.progress = [Progress::default(); 6];
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path
             && let Some(index) = self.files.iter().position(|f| f.path == path)
@@ -2022,6 +2023,7 @@ impl TriApp {
             Level::Full => &s.full,
             Level::Exposure => &s.exposure,
             Level::Sharpness => &s.sharpness,
+            Level::Similarity => &s.similarity,
         };
         *avail == Avail::Ready
     }
@@ -2772,6 +2774,7 @@ impl TriApp {
                 (t!("progress-previews"), self.progress[2]),
                 (t!("progress-histograms"), self.progress[3]),
                 (t!("progress-sharpness"), self.progress[4]),
+                (t!("progress-groups"), self.progress[5]),
             ] {
                 // Rien à calculer en fond pour ce niveau, ou déjà fini.
                 if p.total == 0 || (self.gui.progress_hide_done && p.done >= p.total) {
@@ -4430,6 +4433,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Standard => Some(2),
         Level::Exposure => Some(3),
         Level::Sharpness => Some(4),
+        Level::Similarity => Some(5),
         Level::EmbeddedFull | Level::Full => None,
     }
 }
@@ -4444,6 +4448,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Full => s.full = avail,
             Level::Exposure => s.exposure = avail,
             Level::Sharpness => s.sharpness = avail,
+            Level::Similarity => s.similarity = avail,
         }
     }
 }
@@ -4830,10 +4835,10 @@ mod tests {
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(photos.join("quai.jpg").exists());
-        // Déplacer l'image courante vers un dossier.
+        // Déplacer l'image courante vers un dossier (Ctrl+X, couper).
         let dest = dir.path().join("dest");
         std::fs::create_dir(&dest).unwrap();
-        press(&mut h, Key::X, Modifiers::NONE);
+        press(&mut h, Key::X, Modifiers::CTRL);
         h.event(UiEvent::Text(dest.display().to_string()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -5443,14 +5448,14 @@ mod tests {
     }
 
     #[test]
-    fn move_with_x_typing_tab_and_enter_then_copy_from_recents() {
+    fn move_with_ctrl_x_typing_tab_and_enter_then_copy_from_recents() {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let photos = dir.path().join("photos");
         let dest = dir.path().join("Sélection");
         std::fs::create_dir(&dest).unwrap();
-        // x : déplacer l'image courante ; chemin tapé puis complété par Tab.
-        press(&mut h, Key::X, Modifiers::NONE);
+        // Ctrl+X : déplacer l'image courante ; chemin tapé puis complété par Tab.
+        press(&mut h, Key::X, Modifiers::CTRL);
         assert!(h.state().file_dialog.is_some());
         assert!(h.ctx.egui_wants_keyboard_input(), "le champ a le focus");
         let sep = std::path::MAIN_SEPARATOR;
@@ -5483,6 +5488,10 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert!(photos.join("img0.jpg").exists());
+        // x (comme dans vim) : la boîte de suppression.
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_some(), "x supprime");
+        press(&mut h, Key::Escape, Modifiers::NONE);
         // Backspace (touche « effacer » des Mac), puis Entrée.
         press(&mut h, Key::Backspace, Modifiers::NONE);
         assert!(h.state().file_dialog.is_some());

@@ -97,6 +97,8 @@ struct Args {
     exposure: bool,
     metadata: bool,
     sharpness: bool,
+    groups: bool,
+    threshold: Option<f32>,
     offload: Option<PathBuf>,
     to: Option<PathBuf>,
     folder: Option<String>,
@@ -113,6 +115,8 @@ fn parse_level(name: &str) -> Option<Level> {
         "standard" => Some(Level::Standard),
         "full" => Some(Level::Full),
         "exposure" => Some(Level::Exposure),
+        "sharpness" => Some(Level::Sharpness),
+        "similarity" => Some(Level::Similarity),
         _ => None,
     }
 }
@@ -155,6 +159,8 @@ fn parse() -> AnyResult<Args> {
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
             "--sharpness" => args.sharpness = true,
+            "--groups" => args.groups = true,
+            "--threshold" => args.threshold = Some(value()?.parse()?),
             "--offload" => args.offload = Some(value()?.into()),
             "--to" => args.to = Some(value()?.into()),
             "--folder" => args.folder = Some(value()?),
@@ -592,6 +598,67 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
     Ok(())
 }
 
+/// Regroupement des images semblables : distance et écart de temps entre voisines, puis
+/// les groupes au seuil `threshold` (sinon celui de la configuration), pour le calibrer
+/// (voir `tri::similarity`).
+fn similarity_groups(
+    settings: &EngineSettings,
+    files: &[tri::media::MediaFile],
+    threshold: Option<f32>,
+) -> AnyResult<()> {
+    let preview = settings.preview(None);
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let s = &settings.similarity;
+    let start = Instant::now();
+    let signatures: Vec<Option<tri::similarity::Signature>> = files
+        .iter()
+        .map(|f| tri::preview::compute_signature(f, &preview, &cancel).ok())
+        .collect();
+    let elapsed = start.elapsed();
+    let refs: Vec<Option<&tri::similarity::Signature>> =
+        signatures.iter().map(Option::as_ref).collect();
+    let links = tri::similarity::distances(&refs, s.shape_weight);
+    let name = |i: usize| {
+        files[i]
+            .path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    };
+    println!("{}", t!("cli-groups-header"));
+    for (i, link) in links.iter().enumerate() {
+        let (d, gap) = match link {
+            Some(l) => (
+                format!("{:.3}", l.distance),
+                l.gap_s.map_or("-".into(), |g| format!("{g:.0}")),
+            ),
+            None => ("-".into(), "-".into()),
+        };
+        println!("{}	{}	{d}	{gap}", name(i), name(i + 1));
+    }
+    let threshold = threshold.unwrap_or(s.threshold);
+    let groups = tri::similarity::group(&links, threshold, s.max_gap_s);
+    for g in &groups {
+        let names: Vec<String> = g.clone().map(name).collect();
+        println!("[{}] {}", g.len(), names.join(" "));
+    }
+    println!(
+        "{}",
+        t!(
+            "cli-groups-summary",
+            n = files.len(),
+            groups = groups.len(),
+            threshold = format!("{threshold}"),
+            ms = format!(
+                "{:.0}",
+                elapsed.as_secs_f64() * 1000.0 / files.len().max(1) as f64
+            )
+        )
+    );
+    Ok(())
+}
+
 /// Conversion des sidecars vers la convention `target`, avec bilan.
 fn convert_xmp(
     files: &[tri::media::MediaFile],
@@ -780,6 +847,10 @@ fn run() -> AnyResult<()> {
     if args.sharpness {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return sharpness(&settings, &files);
+    }
+    if args.groups {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return similarity_groups(&settings, &files, args.threshold);
     }
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();

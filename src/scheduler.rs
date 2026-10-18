@@ -153,6 +153,9 @@ pub struct Config {
     /// Score de netteté ([`Level::Sharpness`]) de tout le dossier en fond (workers
     /// légers : JPEG boîtier), après vignettes et aperçus boîtier ; sinon à la demande.
     pub sharpness: bool,
+    /// Empreintes de regroupement ([`Level::Similarity`]) de tout le dossier en fond
+    /// (workers légers), juste après les vignettes.
+    pub similarity: bool,
 }
 
 /// Politique de calcul des rendus RAW (aperçus standard des RAW). Les aperçus des images
@@ -179,17 +182,19 @@ impl Default for Config {
             raw_previews: RawPreviews::default(),
             exposure: true,
             sharpness: true,
+            similarity: true,
         }
     }
 }
 
 /// Niveaux dont l'avancement est suivi (calculés en fond) ; `Full` ne l'est qu'à la demande.
-const TRACKED: [Level; 5] = [
+const TRACKED: [Level; 6] = [
     Level::Thumbnail,
     Level::Embedded,
     Level::Standard,
     Level::Exposure,
     Level::Sharpness,
+    Level::Similarity,
 ];
 
 /// Niveaux calculés en fond pour un fichier : l'aperçu boîtier n'existe que pour les RAW,
@@ -281,6 +286,8 @@ fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u
         Level::Embedded => (0, EMBEDDED_BACKGROUND),
         Level::Standard => (0, STANDARD_BACKGROUND),
         Level::Exposure | Level::Sharpness => (1, EXPOSURE_BACKGROUND),
+        // Empreintes : vite faites, et le regroupement de la grille en dépend.
+        Level::Similarity => (1, EMBEDDED_BACKGROUND),
         Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
     };
     let near = rank_in(group, index);
@@ -311,6 +318,7 @@ struct State {
     raw_previews: RawPreviews,
     exposure: bool,
     sharpness: bool,
+    similarity: bool,
     /// Tâches demandées hors du travail de fond ([`Scheduler::request`]) : elles ne
     /// comptent pas dans la progression.
     on_demand: HashSet<Job>,
@@ -321,7 +329,7 @@ struct State {
     group: Vec<usize>,
     pending: HashSet<Job>,
     running: Vec<Running>,
-    progress: [Progress; 5],
+    progress: [Progress; 6],
     paused: bool,
     shutdown: bool,
     /// Événements en attente de livraison, dans l'ordre où ils se sont produits.
@@ -422,6 +430,7 @@ impl Scheduler {
                 raw_previews: config.raw_previews,
                 exposure: config.exposure,
                 sharpness: config.sharpness,
+                similarity: config.similarity,
                 ..State::default()
             }),
             work: Condvar::new(),
@@ -462,6 +471,14 @@ impl Scheduler {
         s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
         s.on_demand.clear();
         let (policy, analyses) = (s.raw_previews, (s.exposure, s.sharpness));
+        let similarity = s.similarity;
+        let background_levels = |kind, policy, analyses| {
+            let mut levels = background_levels(kind, policy, analyses);
+            if similarity {
+                levels.push(Level::Similarity);
+            }
+            levels
+        };
         s.generation += 1;
         s.focus = None;
         s.group.clear();

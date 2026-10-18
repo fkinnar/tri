@@ -553,6 +553,30 @@ Proposition : sortir cette étape du logiciel de développement.
 - [ ] Une fois ce chemin bout-en-bout validé : revenir à ce document pour décider quelle
       partie de l'architecture cible (dynamique, filtrage, JSON FFI) attaquer ensuite.
 
+## Vers la V1 (fait le point le 18/10/2026 avec l'utilisateur)
+
+Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
+
+- **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
+  utilisateurs sinon ».
+- **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**
+  (« important »), et la **loupe à 100 %** sous le pointeur (« très bonne idée »).
+- **Favoris** dans le panneau des dossiers.
+- **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un vrai
+  confort »).
+- **Raccourcis dans la fenêtre de réglages** (section `[keys]`).
+- **`dd` / `yy`** (toute la ligne de la grille), mineur, avec les nombres (`5dd`, `3yy`).
+  Décidé le 18/10/2026 : **en grille seulement**, un chiffre attend le délai des séquences
+  (`key_sequence_timeout_ms`) pour voir s'il commence un nombre, sinon il note ; **en
+  plein écran, pas de délai** (on n'y fait jamais `dd` ni `yy`), le chiffre note tout de
+  suite. En grille on note rarement aux étoiles : le léger retard n'y gêne pas. Délai
+  propre aux nombres, plus court que celui des séquences (1 s) : ~300 ms ou moins, réglable,
+  à tester.
+- Puis, une fois corrections et ajouts finis : **licence** (`LICENSE`, `doc/licensing.md`)
+  et **builds fournis** pour macOS, Linux et Windows (que personne ne doive compiler).
+- **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
+  la V1 »).
+
 ## Feuille de route décidée le 18/10/2026 (dans cet ordre)
 
 1. [x] **Copier / déplacer vers…** (gain rapide) : fin du lot « actions sur fichiers »,
@@ -598,6 +622,15 @@ Proposition : sortir cette étape du logiciel de développement.
    l'usage »). Première base possible : heure de prise de vue (rafales) ; similarité
    visuelle sur les vignettes, en cache d'analyse. Ensuite : jugement de netteté dans le
    groupe (corrige les faux positifs des dossiers aux sujets variés).
+   Décisions du 18/10/2026 : **piles repliables** dans la grille (comme Capture One : un
+   groupe replié = une vignette « couverture » et son nombre d'images, dépliable sur
+   place) ; couverture = **la meilleure** (acceptée, sinon la mieux notée, sinon la plus
+   nette) ; corrections à la main (fusionner, couper) **plus tard** ; seuil **global
+   (configuration) puis par dossier** (le curseur l'ajuste pour le dossier ouvert, retenu
+   dans les données de tri). Regroupement : images voisines (ordre de la grille) dont la
+   distance d'empreinte (vignette : composition + couleurs) reste sous le seuil, coupé
+   aussi au-delà d'un écart de temps de prise de vue ; distances calculées une fois,
+   regroupement instantané (curseur en direct).
 
 ## À faire (liste tenue à jour, 17/10/2026)
 
@@ -624,6 +657,9 @@ explicitement par l'utilisateur comme important.
 - [x] **Annuler** : fait le 18/10/2026 (historique de session, voir `doc/history.md`).
       Corbeille réelle à vérifier à la main (les tests n'y touchent pas).
 - [ ] Filtres complexes (fenêtre modale ou panneau latéral, à discuter).
+- [ ] **`dd` et les nombres, comme vim** (idée du 18/10/2026, pas urgent) : `x` supprime
+      l'image (fait), `dd` supprimerait toute la ligne de la grille, `5dd` cinq lignes ;
+      plus généralement un nombre devant une action (`5j`, `3x`).
 
 ### Analyse d'image
 - [ ] ★ **Netteté** : carte superposée (focus peaking) et score par image, filtrable ;

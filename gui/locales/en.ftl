@@ -291,6 +291,7 @@ settings-section-exposure = Exposure
 settings-section-offload = Card offload
 settings-section-files = Files
 settings-section-sharpness = Sharpness
+settings-section-similarity = Grouping
 settings-section-i18n = Language
 settings-section-data = Data
 settings-section-gui = Interface
@@ -433,6 +434,7 @@ settings-bad-color = colour "{ $value }": expected "#rrggbb"
 ## Sharpness score
 
 progress-sharpness = sharpness
+progress-groups = grouping
 filter-bar-no-blurry = without blurry
 filter-bar-only-blurry = blurry only
 filter-bar-count-tip = images shown / images in the folder

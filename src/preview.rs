@@ -59,6 +59,8 @@ pub struct Settings {
     pub exposure: ExposureSettings,
     /// Score de netteté (niveau [`Level::Sharpness`]).
     pub sharpness: crate::sharpness::SharpnessSettings,
+    /// Empreinte de regroupement (niveau [`Level::Similarity`]).
+    pub similarity: crate::similarity::SimilaritySettings,
 }
 
 impl Default for Settings {
@@ -71,6 +73,7 @@ impl Default for Settings {
             min_embedded_full: 1024,
             exposure: ExposureSettings::default(),
             sharpness: crate::sharpness::SharpnessSettings::default(),
+            similarity: crate::similarity::SimilaritySettings::default(),
         }
     }
 }
@@ -185,6 +188,11 @@ pub fn params(level: Level, settings: &Settings) -> String {
                 e.mask_under_share
             )
         }
+        Level::Similarity => format!(
+            "r{RULES_VERSION};v{};side={}",
+            crate::similarity::VERSION,
+            settings.similarity.side
+        ),
         Level::Sharpness => {
             let s = &settings.sharpness;
             format!(
@@ -256,7 +264,9 @@ pub fn compute(
         }
         // Pas de JPEG « embarqué » distinct pour une image plate : c'est l'image elle-même.
         (MediaKind::Flat, Level::EmbeddedFull | Level::Full) => Ok(flat::decode(&file.path)?),
-        (_, Level::Exposure | Level::Sharpness) => Err(PreviewError::NotAnImage),
+        (_, Level::Exposure | Level::Sharpness | Level::Similarity) => {
+            Err(PreviewError::NotAnImage)
+        }
     }
 }
 
@@ -335,6 +345,11 @@ pub fn ensure(
         cache.put_bytes(&key, &score.to_bytes())?;
         return Ok(Outcome::Computed);
     }
+    if level == Level::Similarity {
+        let signature = compute_signature(file, settings, cancel)?;
+        cache.put_bytes(&key, &signature.to_bytes())?;
+        return Ok(Outcome::Computed);
+    }
     let bitmap = compute(file, level, settings, cancel)?;
     cache.put(&key, &bitmap)?;
     Ok(Outcome::Computed)
@@ -375,6 +390,56 @@ pub fn compute_sharpness(
         MediaKind::Flat => flat::decode_fit(&file.path, side)?,
     };
     Ok(crate::sharpness::score(&image, s))
+}
+
+/// Empreinte de regroupement de `file`, sans cache : sur une petite version (JPEG boîtier
+/// d'un RAW, image plate réduite), avec l'heure de prise de vue.
+pub fn compute_signature(
+    file: &MediaFile,
+    settings: &Settings,
+    cancel: &AtomicBool,
+) -> Result<crate::similarity::Signature> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(PreviewError::Cancelled);
+    }
+    let side = settings.similarity.side.max(16);
+    let (image, date) = match file.kind {
+        MediaKind::Raw => {
+            let mut raw = RawFile::open(&file.path)?;
+            let date = raw.shooting_info().date;
+            let rotation = raw.orientation();
+            let image = match embedded_bitmap(&mut raw, side) {
+                Some(b) => b.fit(side).rotate(rotation),
+                // Sans JPEG embarqué : un rendu réduit.
+                None => raw_thumbnail(file, settings, cancel)?.fit(side),
+            };
+            (image, date)
+        }
+        MediaKind::Flat => (
+            flat::decode_fit(&file.path, side)?,
+            crate::metadata::read(file).ok().and_then(|m| m.date),
+        ),
+    };
+    let time = date.as_deref().and_then(crate::similarity::parse_time);
+    Ok(crate::similarity::Signature::of(&image, time))
+}
+
+/// Empreinte de regroupement de `file` lue dans le cache, `None` si elle n'y est pas
+/// (encore) ou si l'entrée est illisible (supprimée, pour être recalculée).
+pub fn signature(
+    cache: &Cache,
+    file: &MediaFile,
+    settings: &Settings,
+) -> Option<crate::similarity::Signature> {
+    let key = key(file, Level::Similarity, settings).ok()?;
+    let bytes = cache.get_bytes(&key)?;
+    match crate::similarity::Signature::from_bytes(&bytes) {
+        Some(s) => Some(s),
+        None => {
+            let _ = cache.remove(&key);
+            None
+        }
+    }
 }
 
 /// Score de netteté de `file` lu dans le cache, `None` s'il n'y est pas (encore) ou si

@@ -44,6 +44,8 @@ pub struct AppSettings {
     pub files: tri::files::FileSettings,
     /// `[sharpness]` (moteur).
     pub sharpness: tri::sharpness::SharpnessSettings,
+    /// `[similarity]` (moteur) : regroupement des images semblables.
+    pub similarity: tri::similarity::SimilaritySettings,
     /// `[i18n]` (moteur) : langue des textes.
     pub i18n: tri::i18n::I18nSettings,
     /// `[gui]`.
@@ -68,6 +70,7 @@ impl AppSettings {
             data: self.data.clone(),
             files: self.files.clone(),
             sharpness: self.sharpness,
+            similarity: self.similarity,
             i18n: self.i18n,
         }
     }

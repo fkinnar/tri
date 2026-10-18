@@ -794,8 +794,6 @@ const VIM: &[Binding] = {
         (&[plain(Key::Questionmark)], Help),
         (&[shifted(Key::Questionmark)], Help),
         (&[plain(Key::Q)], Quit),
-        // Comme `dd` dans nvim (une confirmation suit).
-        (&[plain(Key::D), plain(Key::D)], FileDelete),
     ]
 };
 
@@ -894,9 +892,12 @@ const FILES: &[Binding] = {
         (&[plain(Key::E)], FileEdit),
         // Comme la plupart des applications (Cmd+, sur macOS est pris par le système).
         (&[ctrl(Key::Comma)], Settings),
-        // Comme dans vim : `y` copie (« yank »), `x` coupe (déplacer).
+        // Comme dans vim : `y` copie (« yank »), `x` supprime (efface le caractère : ici
+        // l'image ; une confirmation suit). Déplacer : `Ctrl+X`, couper (retour du
+        // 18/10/2026 ; `dd` pour une ligne de la grille, avec un nombre, plus tard).
         (&[plain(Key::Y)], FileCopy),
-        (&[plain(Key::X)], FileMove),
+        (&[plain(Key::X)], FileDelete),
+        (&[ctrl(Key::X)], FileMove),
         // Annuler : `u` / `Ctrl+R` comme dans vim, `Ctrl+Z` / `Ctrl+Maj+Z` ailleurs (et
         // `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir `Chord::from_event`), dans les deux
         // profils.

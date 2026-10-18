@@ -39,11 +39,13 @@ pub enum Level {
     Exposure,
     /// Score de netteté ([`crate::sharpness::Score`]). Entrée binaire.
     Sharpness,
+    /// Empreinte de regroupement ([`crate::similarity::Signature`]). Entrée binaire.
+    Similarity,
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 7] = [
+    pub const ALL: [Level; 8] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
@@ -51,12 +53,13 @@ impl Level {
         Level::Full,
         Level::Exposure,
         Level::Sharpness,
+        Level::Similarity,
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
     /// (binaire).
     pub fn is_image(self) -> bool {
-        !matches!(self, Level::Exposure | Level::Sharpness)
+        !matches!(self, Level::Exposure | Level::Sharpness | Level::Similarity)
     }
 
     fn dir_name(self) -> &'static str {
@@ -68,6 +71,7 @@ impl Level {
             Self::Full => "full",
             Self::Exposure => "exposure",
             Self::Sharpness => "sharpness",
+            Self::Similarity => "similarity",
         }
     }
 }

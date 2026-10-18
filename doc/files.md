@@ -105,7 +105,8 @@ gardent leurs notes.
   Complétion de la saisie : `complete_dir` (sous-dossiers, casse ignorée, cachés
   seulement après un « . ») et `common_prefix`.
 - Ligne de commande : `tri --copy|--move <image>... --to <dossier> [--dry-run]`.
-- Interface : `y` (copier, *yank* de vim) et `x` (déplacer, « couper »), sur la sélection,
+- Interface : `y` (copier, *yank* de vim) et `Ctrl+X` (déplacer, « couper » ; `x` supprime,
+  comme dans vim), sur la sélection,
   et boutons du clic droit ; boîte avec champ (Tab complète, flèches haut / bas : récentes,
   dossier absent créé s'il n'en manque qu'un niveau), bascule copier / déplacer,
   progression pendant la copie (dans un fil : la fenêtre reste vivante).

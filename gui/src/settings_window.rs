@@ -31,7 +31,15 @@ fn schema() -> &'static Schema {
 pub fn needs_restart(section: &str, key: &str) -> bool {
     matches!(
         section,
-        "preview" | "render" | "cache" | "scheduler" | "exposure" | "sharpness" | "places" | "data"
+        "preview"
+            | "render"
+            | "cache"
+            | "scheduler"
+            | "exposure"
+            | "sharpness"
+            | "similarity"
+            | "places"
+            | "data"
     ) || (section, key) == ("gui", "window")
 }
 

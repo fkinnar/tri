@@ -129,6 +129,7 @@ cli-usage =
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
+      tri <folder> --groups [--threshold X]
       tri <folder> --sharpness [--raw|--flat] [--depth N]
       tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
       tri --rename <image> <name> [--dry-run]
@@ -186,6 +187,8 @@ cli-delete-trash = trash:
 cli-delete-permanent = deleted:
 cli-delete-kept = kept (shared):
 cli-dry-run = (--dry-run: nothing was changed)
+cli-groups-header = image	next	distance	gap (s)
+cli-groups-summary = { $n } images, { $groups } groups at threshold { $threshold } ({ $ms } ms per signature)
 cli-cache-cleared = cache cleared ({ $level })
 cli-cache-all = all
 cli-group = GROUP { $index } ({ $n } images)

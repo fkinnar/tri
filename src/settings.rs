@@ -107,6 +107,8 @@ pub struct EngineSettings {
     pub files: crate::files::FileSettings,
     /// Carte de netteté (focus peaking).
     pub sharpness: crate::sharpness::SharpnessSettings,
+    /// Regroupement des images semblables.
+    pub similarity: crate::similarity::SimilaritySettings,
     /// Langue des textes.
     pub i18n: crate::i18n::I18nSettings,
     /// Dossier des données.
@@ -266,6 +268,7 @@ impl EngineSettings {
             min_embedded_full: p.min_embedded_full,
             exposure: self.exposure,
             sharpness: self.sharpness,
+            similarity: self.similarity,
         }
     }
 
@@ -284,6 +287,7 @@ impl EngineSettings {
             raw_previews,
             exposure: self.scheduler.exposure,
             sharpness: self.sharpness.background,
+            similarity: self.similarity.background,
         }
     }
 

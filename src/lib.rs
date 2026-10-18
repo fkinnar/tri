@@ -44,4 +44,5 @@ pub mod scheduler;
 pub mod selection;
 pub mod settings;
 pub mod sharpness;
+pub mod similarity;
 pub mod xmp;

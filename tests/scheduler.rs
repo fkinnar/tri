@@ -154,6 +154,7 @@ fn start(fake: &Fake, light_workers: usize) -> (Scheduler, Events) {
             thumbnails_first: false,
             exposure: false,
             sharpness: false,
+            similarity: false,
             ..Config::default()
         },
     )
@@ -344,6 +345,7 @@ fn thumbnails_first_holds_background_previews_until_the_grid_is_done() {
             thumbnails_first: true,
             exposure: false,
             sharpness: false,
+            similarity: false,
             ..Config::default()
         },
     );
@@ -405,6 +407,7 @@ fn raw_renders_wait_for_embedded_previews_in_thumbnails_first_mode() {
             thumbnails_first: true,
             exposure: false,
             sharpness: false,
+            similarity: false,
             ..Config::default()
         },
     );
@@ -591,6 +594,7 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
             raw_previews: RawPreviews::OnDemand,
             exposure: false,
             sharpness: false,
+            similarity: false,
         },
     );
     let generation = scheduler.set_folder(all);
@@ -639,6 +643,7 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
             raw_previews: RawPreviews::OnDemand,
             exposure: false,
             sharpness: false,
+            similarity: false,
         },
     );
     scheduler.set_paused(true);
@@ -760,6 +765,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
             Config {
                 exposure: false,
                 sharpness: false,
+                similarity: false,
                 ..Config::default()
             },
             |_| {},
@@ -828,6 +834,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
             Config {
                 exposure: false,
                 sharpness: false,
+                similarity: false,
                 ..Config::default()
             },
             |_| {},
@@ -869,6 +876,7 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
             raw_previews: RawPreviews::Background,
             exposure: true,
             sharpness: false,
+            similarity: false,
         },
     );
     let generation = scheduler.set_folder(all);

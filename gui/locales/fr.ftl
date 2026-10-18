@@ -293,6 +293,7 @@ settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte
 settings-section-files = Fichiers
 settings-section-sharpness = Netteté
+settings-section-similarity = Regroupement
 settings-section-i18n = Langue
 settings-section-data = Données
 settings-section-gui = Interface
@@ -438,6 +439,7 @@ settings-bad-color = couleur « { $value } » : attendu "#rrggbb"
 ## Score de netteté
 
 progress-sharpness = netteté
+progress-groups = regroupement
 filter-bar-no-blurry = sans les floues
 filter-bar-only-blurry = floues seulement
 filter-bar-count-tip = images affichées / images du dossier

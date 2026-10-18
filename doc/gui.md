@@ -241,10 +241,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
-  renommer (`F2`), mettre à la corbeille (`Suppr` ou `Backspace` — la touche « effacer »
-  des Mac —, `d d` dans le profil vim), afficher dans le Finder / le gestionnaire de
+  renommer (`F2`), mettre à la corbeille (`Suppr`, `Backspace` — la touche « effacer »
+  des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de
   fichiers (`Maj+R`), ouvrir dans l'éditeur externe (`e`, `[files] editor`), copier
-  (`y`) ou déplacer (`x`) vers un dossier (18/10/2026, voir `files.md` : champ avec
+  (`y`) ou déplacer (`Ctrl+X`, couper) vers un dossier (18/10/2026, voir `files.md` : champ avec
   complétion par Tab, destinations récentes aux flèches, progression). Aussi par six
   boutons à icône dans la boîte du clic droit (crayon, deux feuilles, flèche dans un
   dossier, poubelle, dossier, flèche sortante ; libellé et raccourci au survol ; `[gui.dialogs] icon_size`). Renommer : le nom (sans extension) est
