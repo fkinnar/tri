@@ -604,6 +604,9 @@ explicitement par l'utilisateur comme important.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).
+- [ ] Histogramme de **luminance** pour les images plates (un histogramme de plus dans
+      l'analyse, version du cache à incrémenter) ; pour un RAW, le vert en tient lieu
+      (statistiques du grand histogramme, 18/10/2026).
 
 ### Affichage
 - [ ] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 %.
@@ -673,6 +676,16 @@ explicitement par l'utilisateur comme important.
 ### Plateformes et outillage
 - [ ] **Windows** : jamais compilé ni testé (build LibRaw, lettres de lecteur, éjection
       PowerShell, chemins).
+- [ ] **Tests sur les RAW des autres marques** (finalisation, pas urgent ; idée de
+      l'utilisateur, 18/10/2026) : échantillons de [raw.pixls.us](https://raw.pixls.us)
+      (équipe darktable / rawspeed, surtout CC0, boîtiers récents), complétés au besoin
+      par [rawsamples.ch](https://rawsamples.ch) (boîtiers plus anciens). Pour chaque
+      marque courante (Canon CR2 / CR3, Nikon NEF, Sony ARW, OM / Olympus ORF, Panasonic
+      RW2, un DNG) : décodage, métadonnées, noir / blanc de l'histogramme, et **repère
+      du collimateur** (aujourd'hui Fujifilm seul ; Canon `AFInfo2`, Nikon `AFInfo2`,
+      Sony `FocusLocation`, Olympus `AFPointSelected`, Panasonic `AFPointPosition`),
+      valeurs vérifiées avec ExifTool. Fichiers hors du dépôt, lus par des tests
+      `#[ignore]` (variable d'environnement, comme `TRI_TEST_RAW`).
 - [ ] Notes XMP à faire vérifier dans digiKam, RawTherapee, ART, RapidRaw (l'utilisateur
       s'en charge) ; Lightroom et Capture One : testeurs à trouver.
 - [ ] Architecture cible (LibRaw en bibliothèque dynamique, JSON à la frontière, TUI) :

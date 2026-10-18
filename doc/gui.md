@@ -129,6 +129,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   0,007 % de bouchés, quelques pixels morts, allumait la pastille, la courbe loin du
   bord). Le **grand histogramme** (`Maj+E`) est une boîte comme les autres : titre,
   déplaçable, boutons en bas, à sa propre largeur (`Dialog::free_width`).
+  Couleurs en **mélange additif** (retour du 18/10/2026) : rouge + vert = jaune, les trois
+  = blanc, comme la lumière (`fill_strength`). Le **petit** histogramme (panneau) ne montre
+  que la courbe ; les indicateurs (source, marge, saturés, bouchés) et un **tableau de
+  statistiques** par canal ne sont que dans le grand : médiane, moyenne, plage des ombres
+  aux hautes lumières (centiles `stats_tail`, 1 % et 99 %), écart-type, saturés, bouchés,
+  en IL sous la saturation (`Exposure::channel_stats`, calculé dans le moteur à partir
+  de l'histogramme en IL déjà en cache). Pas de luminance sur des données RAW (un
+  photosite ne mesure qu'une couleur) : le vert en tient lieu, c'est indiqué.
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
   (F5) et explication au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;

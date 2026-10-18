@@ -561,6 +561,7 @@ impl TriApp {
                         self.histogram_scale,
                         &self.gui.histogram,
                         &self.gui.colors,
+                        false,
                     );
                 }
                 None => {
@@ -2559,6 +2560,60 @@ impl TriApp {
     /// Grand histogramme de l'image sélectionnée, en boîte modale centrée (`Maj+E`, clic
     /// sur l'histogramme du panneau) ; se ferme par Échap, la même touche ou un clic à
     /// côté.
+    /// Statistiques par canal du grand histogramme (`tri::exposure::ChannelStats`), en IL
+    /// sous la saturation.
+    fn histogram_stats(&self, ui: &mut Ui, e: &Exposure) {
+        let tail = self.gui.histogram.stats_tail;
+        let ev = |v: f32| t!("stats-ev", value = tri::i18n::decimal(v as f64, 1));
+        let percent = |v: f64| t!("stats-percent", value = tri::i18n::decimal(v * 100.0, 2));
+        let c = &self.gui.colors;
+        let channels = [
+            (t!("stats-red"), c.hist_red),
+            (t!("stats-green"), c.hist_green),
+            (t!("stats-blue"), c.hist_blue),
+        ];
+        let range_title = t!(
+            "stats-range",
+            low = tri::i18n::decimal(tail as f64 * 100.0, 0),
+            high = tri::i18n::decimal(100.0 - tail as f64 * 100.0, 0)
+        );
+        egui::Grid::new("histogram_stats")
+            .num_columns(7)
+            .spacing(vec2(18.0, 4.0))
+            .show(ui, |ui| {
+                for title in [
+                    String::new(),
+                    t!("stats-median"),
+                    t!("stats-mean"),
+                    range_title.clone(),
+                    t!("stats-spread"),
+                    t!("stats-over"),
+                    t!("stats-under"),
+                ] {
+                    ui.weak(title);
+                }
+                ui.end_row();
+                for (channel, (name, color)) in channels.into_iter().enumerate() {
+                    let Some(s) = e.channel_stats(channel, tail) else {
+                        continue;
+                    };
+                    ui.colored_label(Color32::from(color), name);
+                    ui.label(ev(s.median));
+                    ui.label(ev(s.mean));
+                    ui.label(t!("stats-range-value", low = ev(s.low), high = ev(s.high)));
+                    ui.label(ev(s.std_dev));
+                    ui.label(percent(s.over));
+                    ui.label(percent(s.under));
+                    ui.end_row();
+                }
+            });
+        // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
+        // couleur ; le vert, qui en porte l'essentiel, en tient lieu.
+        if matches!(e.source, tri::exposure::Source::Raw { .. }) {
+            ui.weak(t!("stats-raw-luminance"));
+        }
+    }
+
     fn histogram_dialog(&mut self, ctx: &egui::Context) {
         if !self.histogram_large {
             return;
@@ -2587,6 +2642,7 @@ impl TriApp {
                     self.histogram_scale,
                     &self.gui.histogram,
                     &self.gui.colors,
+                    true,
                 ),
                 None => {
                     ui.painter().text(
@@ -2597,6 +2653,9 @@ impl TriApp {
                         ui.visuals().weak_text_color(),
                     );
                 }
+            }
+            if let Some(e) = &exposure {
+                self.histogram_stats(ui, e);
             }
             ui.horizontal(|ui| {
                 let label = match self.histogram_scale {

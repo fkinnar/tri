@@ -320,3 +320,19 @@ badge-blurry = floue
 panel-sharpness = Netteté
 panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
 panel-sharpness-blurry = { " " }· floue
+
+## Statistiques de l'histogramme
+
+stats-ev = { $value } IL
+stats-percent = { $value } %
+stats-red = Rouge
+stats-green = Vert
+stats-blue = Bleu
+stats-median = Médiane
+stats-mean = Moyenne
+stats-range = Plage ({ $low } % à { $high } %)
+stats-range-value = { $low } à { $high }
+stats-spread = Écart-type
+stats-over = Saturés
+stats-under = Bouchés
+stats-raw-luminance = Données RAW : chaque photosite ne mesure qu'une couleur, pas de luminance ; le vert en est la meilleure approximation. Valeurs en IL sous la saturation.

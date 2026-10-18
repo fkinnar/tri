@@ -315,3 +315,19 @@ badge-blurry = blurry
 panel-sharpness = Sharpness
 panel-sharpness-value = { $score } (× { $folder } the folder, × { $neighbours } the neighbours)
 panel-sharpness-blurry = { " " }· blurry
+
+## Histogram statistics
+
+stats-ev = { $value } EV
+stats-percent = { $value } %
+stats-red = Red
+stats-green = Green
+stats-blue = Blue
+stats-median = Median
+stats-mean = Mean
+stats-range = Range ({ $low } % to { $high } %)
+stats-range-value = { $low } to { $high }
+stats-spread = Std. dev.
+stats-over = Clipped
+stats-under = Crushed
+stats-raw-luminance = RAW data: each photosite records a single colour, so there is no luminance; green is the best approximation. Values in EV below clipping.

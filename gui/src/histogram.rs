@@ -60,6 +60,9 @@ pub fn shown_stops(e: &Exposure, setting: f32) -> f32 {
 }
 
 /// Histogramme dans `rect` : fond, canaux superposés, graduations, indicateurs.
+///
+/// `details` : ligne d'indicateurs (source, marge, saturés, bouchés) sous le graphe ; dans
+/// le grand histogramme seulement (retour du 18/10/2026 : pas indispensable en petit).
 pub fn draw(
     painter: &Painter,
     rect: Rect,
@@ -67,10 +70,11 @@ pub fn draw(
     scale: HistogramScale,
     settings: &HistogramSettings,
     colors: &Colors,
+    details: bool,
 ) {
     painter.rect_filled(rect, 4.0, Color32::from_black_alpha(190));
-    // Indicateurs, mis en page d'abord : sur plusieurs lignes si la place manque
-    // (panneau des métadonnées), le graphe prend le reste de la hauteur.
+    // Indicateurs, mis en page d'abord : sur plusieurs lignes si la place manque, le
+    // graphe prend le reste de la hauteur.
     let source = match e.source {
         Source::Raw { bits, .. } => format!("RAW {bits} bits"),
         Source::Flat { bits } => format!("{bits} bits"),
@@ -88,12 +92,17 @@ pub fn draw(
         Color32::from_gray(225),
         (rect.width() - 12.0).max(10.0),
     );
-    let text_h = galley.size().y + 4.0;
-    painter.galley(
-        pos2(rect.min.x + 6.0, rect.max.y - 4.0 - galley.size().y),
-        galley,
-        Color32::from_gray(225),
-    );
+    let text_h = if details {
+        let h = galley.size().y + 4.0;
+        painter.galley(
+            pos2(rect.min.x + 6.0, rect.max.y - 4.0 - galley.size().y),
+            galley,
+            Color32::from_gray(225),
+        );
+        h
+    } else {
+        0.0
+    };
     // Bande réservée aux graduations, sous le graphe.
     let labels_h = 12.0;
     let graph = Rect::from_min_max(
@@ -131,8 +140,19 @@ pub fn draw(
             points.push(pos2(graph.min.x + (i as f32 + 0.5) * class_w, y(v)));
         }
         points.push(pos2(graph.max.x, y(curve[curve.len() - 1])));
-        // Surface : un trapèze par segment, jusqu'à la ligne de base.
-        let fill = base.gamma_multiply(0.45);
+        // Surface : un trapèze par segment, jusqu'à la ligne de base. Mélange **additif**
+        // (alpha nul en couleurs prémultipliées) : rouge + vert = jaune, les trois = blanc,
+        // comme la lumière ; une superposition par transparence donnait des teintes
+        // troubles (retour du 18/10/2026).
+        let additive = |color: Color32, k: f32| {
+            Color32::from_rgba_premultiplied(
+                (color.r() as f32 * k) as u8,
+                (color.g() as f32 * k) as u8,
+                (color.b() as f32 * k) as u8,
+                0,
+            )
+        };
+        let fill = additive(base, settings.fill_strength);
         let mut mesh = Mesh::default();
         for w in points.windows(2) {
             let (a, b) = (w[0], w[1]);
@@ -146,7 +166,7 @@ pub fn draw(
         painter.add(mesh);
         painter.add(eframe::egui::Shape::line(
             points,
-            Stroke::new(1.2, base.gamma_multiply(0.9)),
+            Stroke::new(1.2, additive(base, 0.9)),
         ));
     }
     // Graduations.

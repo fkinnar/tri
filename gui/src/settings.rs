@@ -528,6 +528,12 @@ pub struct HistogramSettings {
     pub classes: usize,
     /// Lissage de la courbe : écart type, en classes (0 : sans lissage).
     pub smoothing: f32,
+    /// Intensité des surfaces de la courbe (0 à 1), mélangées en additif : rouge + vert =
+    /// jaune, les trois = blanc.
+    pub fill_strength: f32,
+    /// Statistiques du grand histogramme : part de pixels laissée de chaque côté pour la
+    /// plage des ombres aux hautes lumières (0,01 : centiles 1 % et 99 %).
+    pub stats_tail: f32,
 }
 
 impl Default for HistogramSettings {
@@ -545,6 +551,8 @@ impl Default for HistogramSettings {
             indicator_min: 0.001,
             classes: 80,
             smoothing: 1.5,
+            fill_strength: 0.55,
+            stats_tail: 0.01,
         }
     }
 }

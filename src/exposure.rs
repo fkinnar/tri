@@ -64,6 +64,27 @@ impl Default for ExposureSettings {
     }
 }
 
+/// Statistiques d'un canal, en IL sous la saturation (0 : blanc), tirées de l'histogramme
+/// en IL ([`Exposure::channel_stats`]) : précision d'une case (1/8 d'IL par défaut),
+/// interpolée dans la case pour les centiles.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChannelStats {
+    /// Médiane.
+    pub median: f32,
+    /// Centile bas (ombres, sans les pixels isolés).
+    pub low: f32,
+    /// Centile haut (hautes lumières, sans les pixels isolés).
+    pub high: f32,
+    /// Moyenne (en IL : moyenne des tons, pas de la lumière).
+    pub mean: f32,
+    /// Écart-type (étalement des tons, en IL).
+    pub std_dev: f32,
+    /// Part de pixels saturés (0 à 1).
+    pub over: f64,
+    /// Part de pixels bouchés (0 à 1).
+    pub under: f64,
+}
+
 /// D'où viennent les valeurs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -485,6 +506,58 @@ impl Exposure {
         acc.finish(Source::Flat { bits }, Rotation::None, settings)
     }
 
+    /// Statistiques du canal `channel` (0 rouge, 1 vert, 2 bleu), tirées de l'histogramme
+    /// en IL ; `tail` : part de pixels laissée de chaque côté pour la plage (0,01 : centiles
+    /// 1 % et 99 %). `None` pour un canal vide.
+    pub fn channel_stats(&self, channel: usize, tail: f32) -> Option<ChannelStats> {
+        let bins = self.ev.get(channel)?;
+        let total: u64 = bins.iter().map(|&n| n as u64).sum();
+        if total == 0 {
+            return None;
+        }
+        let width = self.ev_range / bins.len() as f32;
+        let start = |i: usize| -self.ev_range + i as f32 * width;
+        // Centile p : interpolé dans la case où le cumul franchit p × total.
+        let centile = |p: f32| -> f32 {
+            let target = p.clamp(0.0, 1.0) as f64 * total as f64;
+            let mut seen = 0.0;
+            for (i, &n) in bins.iter().enumerate() {
+                let next = seen + n as f64;
+                if next >= target && n > 0 {
+                    let inside = ((target - seen) / n as f64) as f32;
+                    return start(i) + inside * width;
+                }
+                seen = next;
+            }
+            0.0
+        };
+        let mean = bins
+            .iter()
+            .enumerate()
+            .map(|(i, &n)| (start(i) + width / 2.0) as f64 * n as f64)
+            .sum::<f64>()
+            / total as f64;
+        let variance = bins
+            .iter()
+            .enumerate()
+            .map(|(i, &n)| {
+                let d = (start(i) + width / 2.0) as f64 - mean;
+                d * d * n as f64
+            })
+            .sum::<f64>()
+            / total as f64;
+        let share = |n: u64| n as f64 / self.total[channel].max(1) as f64;
+        Some(ChannelStats {
+            median: centile(0.5),
+            low: centile(tail),
+            high: centile(1.0 - tail),
+            mean: mean as f32,
+            std_dev: variance.sqrt() as f32,
+            over: share(self.over[channel]),
+            under: share(self.under[channel]),
+        })
+    }
+
     /// Part des pixels saturés dans le canal le plus touché (0 à 1).
     pub fn over_fraction(&self) -> f64 {
         fraction(&self.over, &self.total)
@@ -784,5 +857,32 @@ mod tests {
         let e = Exposure::from_bitmap(&grey, &settings());
         // 64 sur 255 en sRGB : 5,1 % de la lumière du blanc, soit -4,28 IL.
         assert!((e.headroom_ev() + 4.28).abs() < 0.02, "{}", e.headroom_ev());
+    }
+
+    #[test]
+    fn channel_stats_from_the_ev_histogram() {
+        // Histogramme synthétique : 100 pixels à -4 IL, 100 à -2 IL (cases de 1/8 d'IL).
+        let mut e = Exposure::from_bitmap(&sample(), &settings());
+        let bins = (e.ev_range * 8.0) as usize;
+        let mut ev = vec![0u32; bins];
+        let case = |ev_value: f32| ((ev_value + e.ev_range) * 8.0) as usize;
+        ev[case(-4.0)] = 100;
+        ev[case(-2.0)] = 100;
+        e.ev = [ev.clone(), ev.clone(), ev];
+        e.total = [200, 200, 200];
+        e.over = [10, 0, 0];
+        e.under = [0, 0, 0];
+        let s = e.channel_stats(0, 0.01).unwrap();
+        // Deux groupes égaux : toute valeur entre eux est une médiane.
+        assert!((-4.0..=-2.0).contains(&s.median), "médiane : {}", s.median);
+        assert!((s.low - -4.0).abs() < 0.2, "centile bas : {}", s.low);
+        assert!((s.high - -1.9).abs() < 0.2, "centile haut : {}", s.high);
+        assert!((s.mean - -2.94).abs() < 0.1, "moyenne : {}", s.mean);
+        assert!((s.std_dev - 1.0).abs() < 0.1, "écart-type : {}", s.std_dev);
+        assert!((s.over - 0.05).abs() < 1e-9);
+        // Canal vide : pas de statistiques.
+        e.ev[1] = vec![0; bins];
+        assert_eq!(e.channel_stats(1, 0.01), None);
+        assert_eq!(e.channel_stats(7, 0.01), None);
     }
 }

@@ -91,3 +91,14 @@ tri <dossier> --exposure [--raw|--flat] [--depth N]
 
 Une ligne par image : source (profondeur, noir, blanc), marge avant saturation, saturés,
 bouchés, durée.
+
+## Statistiques par canal (`Exposure::channel_stats`, 18/10/2026)
+
+Tirées de l'histogramme en IL (1/8 d'IL par case par défaut), sans relire l'image :
+médiane et centiles (interpolés dans la case où le cumul franchit le seuil), moyenne et
+écart-type (centres des cases), parts saturée et bouchée du canal. En IL sous la
+saturation : la moyenne est celle des tons, pas de la lumière. Montrées dans le grand
+histogramme de l'interface. Pas de luminance pour un RAW (chaque photosite ne mesure
+qu'une couleur) ; pour une image plate, une vraie luminance demanderait un histogramme de
+plus dans l'analyse (non fait).
+
