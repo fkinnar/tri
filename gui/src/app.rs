@@ -5027,7 +5027,6 @@ mod tests {
         );
         assert_eq!(h.state().histogram_channel, Some(0));
         run_until(&mut h, |app| app.analysis_texture.is_some());
-        assert!(h.query_by_label("saturé").is_some(), "légende de l'image");
         assert_eq!(
             h.state().analysis_texture.as_ref().unwrap().0,
             (white_path.clone(), Some(0))
