@@ -158,6 +158,16 @@ impl Profile {
         ]
     }
 
+    /// Profil « tel quel » : un JPEG copié sans rien toucher (sans recompression, espace
+    /// d'origine, pleine taille). N'a de sens que pour exporter un JPEG : un RAW n'a pas
+    /// d'espace couleur, son rendu doit en recevoir un (retour du 19/10/2026).
+    pub fn is_as_is(&self) -> bool {
+        self.format == Format::Jpeg
+            && self.passthrough
+            && self.color.trim().is_empty()
+            && self.max_side == 0
+    }
+
     /// Le profil est-il cohérent ? Sinon, la raison.
     pub fn check(&self) -> Result<(), String> {
         let bits_ok = match self.format {

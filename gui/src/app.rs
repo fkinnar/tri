@@ -4518,9 +4518,10 @@ impl TriApp {
                 // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
                 // du 19/10/2026) ; le choix de la séance est retenu à part de celui des rendus.
                 let jpeg = crate::export::exports_jpeg(render, &paths);
+                // Indices dans la liste de la boîte (sans « tel quel » pour un rendu).
                 let profiles = &self.settings.export.profiles;
                 let choice = self.export_choice[usize::from(jpeg)].unwrap_or_else(|| {
-                    jpeg.then(|| profiles.0.iter().position(|p| p.id == "asis"))
+                    jpeg.then(|| profiles.0.iter().position(|p| p.is_as_is()))
                         .flatten()
                         .unwrap_or(0)
                 });
@@ -9230,6 +9231,9 @@ mod tests {
                 panic!("boîte d'export attendue");
             };
             assert_eq!(dialog.render(), expected);
+            // Images du test : des JPEG, « tel quel » toujours proposé (un rendu de RAW ne
+            // le propose pas : `what_is_exported_is_what_is_looked_at`).
+            assert!(dialog.lists_as_is());
             press(&mut h, Key::Escape, Modifiers::NONE);
         }
     }

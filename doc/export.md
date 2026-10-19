@@ -86,8 +86,12 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
 | Web (`web`) | JPEG 90 | sRGB | 2048 px | oui |
 
 « JPEG tel quel » (demandé le 19/10/2026) : un JPEG est copié sans rien toucher (taille,
-espace : un JPEG Adobe RGB le reste) ; un RAW sort en JPEG pleine taille, dans l'espace du
-développement (darktable), ou en sRGB (LibRaw).
+espace : un JPEG Adobe RGB le reste ; pas de qualité affichée, c'est celle du fichier
+d'origine). **Pour exporter des JPEG seulement** (JPEG boîtier, JPEG d'origine) : un RAW
+n'a pas d'espace couleur, son rendu doit en recevoir un. La boîte ne le propose donc pas
+pour un rendu darktable ou LibRaw (`Profile::is_as_is`, `exports_jpeg`), et la ligne de
+commande le refuse sur un RAW (sauf `--embedded`). Quand on exporte un JPEG, il est
+proposé d'abord.
 
 ## Réglages (`[export]`)
 

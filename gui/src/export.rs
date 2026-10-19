@@ -109,7 +109,7 @@ pub fn profile_name(p: &Profile) -> String {
 pub fn profile_summary(p: &Profile) -> String {
     // Copie telle quelle (sans recompression, espace d'origine, pleine taille) : la
     // qualité est celle du fichier d'origine, pas celle du profil (retour du 19/10/2026).
-    let as_is = p.passthrough && p.color.trim().is_empty() && p.max_side == 0;
+    let as_is = p.is_as_is();
     let format = match p.format {
         Format::Jpeg if as_is => "JPEG".to_string(),
         Format::Jpeg => t!("export-format-jpeg", quality = p.quality),
@@ -147,7 +147,15 @@ impl ExportDialog {
         at: Pos2,
     ) -> ExportDialog {
         let images = tri::export::sources(images);
-        let profiles = settings.profiles.0.clone();
+        // Un rendu (RAW) : pas de profil « tel quel », sans objet (un RAW n'a pas d'espace).
+        let jpeg = exports_jpeg(render, &images);
+        let profiles: Vec<Profile> = settings
+            .profiles
+            .0
+            .iter()
+            .filter(|p| jpeg || !p.is_as_is())
+            .cloned()
+            .collect();
         let choice = choice.min(profiles.len().saturating_sub(1));
         ExportDialog {
             choice,
@@ -329,6 +337,12 @@ impl ExportDialog {
         self.render
     }
 
+    /// « JPEG tel quel » proposé.
+    #[cfg(test)]
+    pub fn lists_as_is(&self) -> bool {
+        self.profiles.iter().any(Profile::is_as_is)
+    }
+
     /// Case « sans recompression ».
     #[cfg(test)]
     pub fn passthrough(&self) -> bool {
@@ -429,5 +443,18 @@ mod tests {
         assert_eq!(Render::of(Some(Source::Raw), true), Render::LibRaw);
         assert_eq!(Render::of(Some(Source::Developed), true), Render::Darktable);
         assert_eq!(Render::of(Some(Source::Developed), false), Render::LibRaw);
+        // « JPEG tel quel » : seulement pour exporter des JPEG.
+        let raw = [PathBuf::from("a/DSCF1.RAF")];
+        let jpeg = [PathBuf::from("a/DSCF1.JPG")];
+        assert!(!exports_jpeg(Render::LibRaw, &raw));
+        assert!(!exports_jpeg(Render::Darktable, &raw));
+        assert!(exports_jpeg(Render::Embedded, &raw));
+        assert!(exports_jpeg(Render::LibRaw, &jpeg));
+        let settings = tri::export::ExportSettings::default();
+        let dialog = |render, images: &[PathBuf]| {
+            ExportDialog::new(images, &settings, 0, true, render, Pos2::ZERO)
+        };
+        assert!(!dialog(Render::Darktable, &raw).lists_as_is());
+        assert!(dialog(Render::Embedded, &raw).lists_as_is());
     }
 }
