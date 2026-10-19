@@ -436,6 +436,7 @@ view-info-developed-pending = { " · " }développement darktable en cours…
 action-plugin-darktable-develop = Développer dans darktable (l'image affichée)
 view-info-developed-none = { " · " }pas encore développé ({ $keys })
 develop-not-found = darktable introuvable (réglage [develop] darktable)
+develop-stale = Développement modifié dans darktable : { $keys } pour le refaire.
 shown-image = Image
 
 ## Histogramme

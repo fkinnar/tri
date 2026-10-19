@@ -36,7 +36,10 @@ quelle que soit la configuration ; un test le vérifie sur un vrai rendu (sur un
 
 Niveau `Level::Developed` : le JPEG de darktable, à la taille de l'aperçu standard,
 rangé **tel quel** dans le cache. Sa clé comprend l'empreinte du sidecar (taille, date) :
-modifier le développement dans darktable refait le rendu. Calcul **sur demande
+modifier le développement dans darktable refait le rendu. Dans l'interface, un développé
+déjà affiché dont le sidecar a changé (surveillance du dossier, ou au moment de `b` /
+`Maj+B`) est oublié : `b` revient au rendu de base et `Maj+B` le refait (retour du
+19/10/2026 : un recadrage modifié n'était pas vu). Calcul **sur demande
 explicite seulement** (`Maj+B`, image affichée ; une image déjà en cache reste dans la
 rotation de `b`, même d'une séance à l'autre), par le worker lourd (darktable occupe toute la
 machine), jamais tout le dossier en fond. Mesuré le 19/10/2026 (RAF X-T4, Mac Apple

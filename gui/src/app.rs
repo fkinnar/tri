@@ -945,6 +945,14 @@ impl TriApp {
             self.reload_folder(selected);
             self.notice = Some((t!("watch-reloaded", count = images.len()), false));
         } else if !sidecars.is_empty() {
+            // Développés chargés dont le sidecar a changé (recadrage dans darktable…) :
+            // oubliés, l'image revient au rendu de base.
+            let developed: Vec<usize> = (0..self.status.len())
+                .filter(|&i| self.status[i].developed == Avail::Ready)
+                .collect();
+            for i in developed {
+                self.developed_ready(i);
+            }
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
             if !changed.is_empty() {
@@ -3009,18 +3017,29 @@ impl TriApp {
             });
     }
 
-    /// Le développé de l'image `index` existe : calculé dans la séance, ou retrouvé dans le
-    /// cache (séance précédente ; sa clé suit le sidecar, un développement modifié n'y est
-    /// plus).
-    fn developed_ready(&self, index: usize) -> bool {
-        if self.ready(index, Level::Developed) {
-            return true;
-        }
+    /// Le développé de l'image `index` existe, **pour son sidecar actuel** : la clé de
+    /// cache suit le sidecar (taille, date), un développement modifié dans darktable n'y
+    /// est plus. Un développé déjà chargé mais périmé est oublié (état, texture) : `b` ne
+    /// le montre plus, Maj+B le refait (retour du 19/10/2026 : recadrage changé, l'ancien
+    /// restait affiché).
+    fn developed_ready(&mut self, index: usize) -> bool {
         let (Some(engine), Some(file)) = (&self.engine, self.files.get(index)) else {
             return false;
         };
-        tri::preview::key(file, Level::Developed, &engine.preview)
-            .is_ok_and(|key| engine.cache.contains(&key))
+        let current = tri::preview::key(file, Level::Developed, &engine.preview)
+            .is_ok_and(|key| engine.cache.contains(&key));
+        if !current && self.status[index].developed == Avail::Ready {
+            let path = file.path.clone();
+            trace(|| format!("développé périmé : {}", path.display()));
+            self.status[index].developed = Avail::Pending;
+            self.requested.remove(&(path.clone(), Level::Developed));
+            self.big.remove(&(path, Level::Developed));
+            if index == self.selected {
+                let keys = self.keymap.keys_for(Action::Develop).join(" / ");
+                self.notice = Some((t!("develop-stale", keys = keys), false));
+            }
+        }
+        current
     }
 
     /// Maj+B ou le bouton : développer l'image affichée dans darktable, puis l'afficher (à
@@ -3037,6 +3056,8 @@ impl TriApp {
             self.mode = Mode::View;
         }
         self.source = Source::Developed;
+        // Périmé (sidecar modifié depuis) : oublié ici, donc recalculé.
+        self.developed_ready(self.selected);
         self.request(self.selected, Level::Developed);
         self.request_zoom();
     }
@@ -8962,11 +8983,32 @@ mod tests {
                 .all(|(_, l)| *l != Level::Developed)
         );
         // Développé (fait plus tôt, ou retrouvé en cache) : il entre dans la rotation.
+        let key = {
+            let app = h.state();
+            let engine = app.engine.as_ref().unwrap();
+            let key = tri::preview::key(&app.files[0], Level::Developed, &engine.preview).unwrap();
+            engine.cache.put_bytes(&key, b"jpeg").unwrap();
+            key
+        };
         set(&mut h.state_mut().status, 0, Level::Developed, Avail::Ready);
         for expected in [Source::Raw, Source::Developed, Source::Embedded] {
             press(&mut h, Key::B, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
         }
+        // Développement modifié dans darktable (autre clé : le cache ne l'a plus) : oublié,
+        // b ne le montre plus (retour du 19/10/2026 : l'ancien recadrage restait).
+        h.state()
+            .engine
+            .as_ref()
+            .unwrap()
+            .cache
+            .remove(&key)
+            .unwrap();
+        for expected in [Source::Raw, Source::Embedded] {
+            press(&mut h, Key::B, Modifiers::NONE);
+            assert_eq!(h.state().source, expected);
+        }
+        assert_eq!(h.state().status[0].developed, Avail::Pending);
     }
 
     #[test]

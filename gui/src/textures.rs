@@ -54,6 +54,11 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
         }
     }
 
+    /// Retire `key` (image périmée : développement modifié ailleurs).
+    pub fn remove(&mut self, key: &K) {
+        self.entries.remove(key);
+    }
+
     /// Vide le cache (réglages des couleurs changés : textures à refaire).
     pub fn clear(&mut self) {
         self.entries.clear();
