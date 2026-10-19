@@ -613,6 +613,16 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   sur demande seulement** (retour du 19/10/2026 : 10 s d'attente souvent pour rien) :
   `Maj+B` ou bouton du bandeau ; `b` n'inclut le développé que s'il existe déjà. Ensuite :
   RawTherapee / ART sur le même trait, envoi de JPEG développés.
+- [x] **Export par profils** (19/10/2026, étape 1 de l'après-développement) :
+  `src/export.rs`, `doc/export.md`, `Ctrl+E`, `tri --export` ; darktable fait formats et
+  profils couleur (un lancement pour tout l'export), profils `[export.profiles.<id>]`
+  (« Retouche » TIFF 16 bits ProPhoto, « Web » JPEG sRGB), espaces de la liste de
+  darktable. **Pas de ProPhoto / espace linéaire en 8 bits** (idée de l'utilisateur :
+  refusé par le moteur, masqué dans les listes). La ProPhoto de darktable est linéaire
+  (gamma 1,8 : fichier `.icc`). Dossier **propre à chaque profil** (`folder` : `/…`,
+  `~/…`, sinon relatif à chaque image, `""` / `"."` à côté de la source ;
+  `$(FILE_FOLDER)` de darktable). Étapes suivantes : versions recadrées dans `tri`
+  (instructions dans le XMP), repli LibRaw sans darktable.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**

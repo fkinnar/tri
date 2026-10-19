@@ -138,6 +138,7 @@ cli-usage =
       tri --copy|--move <image>... --to <dossier> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
+      tri --export <profil> <image>... [--to <dossier>] [--dry-run]
     option commune : --config FICHIER (réglages ; défaut : emplacement du système)
 cli-unknown-convention = convention inconnue : { $value } (darktable ou adobe)
 cli-unknown-option = option inconnue : { $option }
@@ -188,6 +189,13 @@ cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :
 cli-delete-kept = gardé (partagé) :
 cli-dry-run = (--dry-run : rien n'a été modifié)
+cli-export-unknown-profile = profil d'export inconnu : { $profile } (profils : { $known })
+cli-export-plan = export « { $profile } » ({ $summary }) vers { $dest } :
+cli-export-done = { $n ->
+    [one] 1 fichier écrit
+   *[other] { $n } fichiers écrits
+}
+cli-export-failed = { $failed } images sans fichier écrit (illisibles par darktable ?)
 cli-groups-header = image	suivante	distance	écart (s)
 cli-groups-summary = { $n } images, { $groups } groupes au seuil { $threshold } ({ $ms } ms par empreinte)
 cli-cache-cleared = cache vidé ({ $level })
@@ -219,3 +227,8 @@ send-refused = { $name } refuse ces fichiers
 develop-none = pas de développement darktable pour cette image
 develop-unavailable = darktable introuvable (réglage [develop] darktable)
 develop-failed = darktable : { $error }
+export-bad-bits = profil d'export « { $profile } » : { $bits } bits impossible en { $format }
+export-bad-quality = profil d'export « { $profile } » : qualité { $quality } hors de 1 à 100
+export-bad-color = profil d'export « { $profile } » : espace couleur inconnu « { $value } »
+export-bad-intent = profil d'export « { $profile } » : intention de rendu inconnue « { $value } »
+export-needs-16-bits = profil d'export « { $profile } » : « { $color } » demande 16 bits ou plus (en 8 bits, les dégradés se cassent), donc TIFF ou PNG en 16 bits

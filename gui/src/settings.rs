@@ -38,6 +38,8 @@ pub struct AppSettings {
     pub watch: tri::watch::WatchSettings,
     /// `[develop]` (moteur) : rendu par darktable.
     pub develop: tri::develop::DevelopSettings,
+    /// `[export]` (moteur) : profils d'export, destination.
+    pub export: tri::export::ExportSettings,
     /// `[exposure]` (moteur).
     pub exposure: tri::exposure::ExposureSettings,
     /// `[offload]` (moteur).
@@ -71,6 +73,7 @@ impl AppSettings {
             places: self.places.clone(),
             watch: self.watch,
             develop: self.develop.clone(),
+            export: self.export.clone(),
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),

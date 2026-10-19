@@ -36,7 +36,11 @@
 //!   tri --reveal <image>
 //!       montre l'image dans le gestionnaire de fichiers ;
 //!   tri --edit <image>...
-//!       ouvre les images dans l'éditeur externe (`[files] editor`), voir `tri::files`.
+//!       ouvre les images dans l'éditeur externe (`[files] editor`), voir `tri::files` ;
+//!   tri --export <profil> <image>... [--to <dossier>] [--dry-run]
+//!       exporte les images développées par darktable avec un profil d'export
+//!       (`[export.profiles.<profil>]`) ; dossier : `--to`, sinon celui du profil, voir
+//!       `tri::export`.
 //!
 //! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
@@ -72,6 +76,7 @@ enum FileAction {
     Edit,
     Copy,
     Move,
+    Export,
 }
 
 #[derive(Default)]
@@ -80,6 +85,8 @@ struct Args {
     /// Arguments sans option après le premier (images d'une action sur fichiers).
     rest: Vec<String>,
     file_action: Option<FileAction>,
+    /// Profil de `--export`.
+    export_profile: Option<String>,
     permanent: bool,
     kind: KindFilter,
     depth: Option<usize>,
@@ -155,6 +162,10 @@ fn parse() -> AnyResult<Args> {
             "--edit" => args.file_action = Some(FileAction::Edit),
             "--copy" => args.file_action = Some(FileAction::Copy),
             "--move" => args.file_action = Some(FileAction::Move),
+            "--export" => {
+                args.file_action = Some(FileAction::Export);
+                args.export_profile = Some(value()?);
+            }
             "--permanent" => args.permanent = true,
             "--exposure" => args.exposure = true,
             "--metadata" => args.metadata = true,
@@ -803,6 +814,12 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                 eprintln!();
             }
         }
+        FileAction::Export => {
+            let images: Vec<PathBuf> = std::iter::once(first)
+                .chain(args.rest.iter().map(PathBuf::from))
+                .collect();
+            export(settings, args, &images)?;
+        }
         FileAction::Reveal => tri::files::reveal(&first)?,
         FileAction::Edit => {
             let images: Vec<PathBuf> = std::iter::once(first)
@@ -813,6 +830,81 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
     }
     if args.dry_run {
         println!("{}", t!("cli-dry-run"));
+    }
+    Ok(())
+}
+
+/// `--export` : voir `tri::export`.
+fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResult<()> {
+    let id = args.export_profile.as_deref().unwrap_or_default();
+    let profiles = &settings.export.profiles;
+    let Some(profile) = profiles.get(id) else {
+        let known: Vec<&str> = profiles.0.iter().map(|p| p.id.as_str()).collect();
+        return Err(t!(
+            "cli-export-unknown-profile",
+            profile = id,
+            known = known.join(", ")
+        )
+        .into());
+    };
+    profile.check()?;
+    let sources = tri::export::sources(images);
+    // `--to`, sinon le dossier du profil (relatif : à côté de chaque image).
+    let folder = match &args.to {
+        Some(to) => to.display().to_string(),
+        None => profile.folder.clone(),
+    };
+    let dest = sources
+        .first()
+        .map(|first| tri::export::folder_for(&folder, first))
+        .unwrap_or_default();
+    let summary = format!(
+        "{} {} bits, {}, {}",
+        profile.format.extension(),
+        profile.bits,
+        if profile.color.is_empty() {
+            "-"
+        } else {
+            profile.color.as_str()
+        },
+        profile.max_side
+    );
+    println!(
+        "{}",
+        t!(
+            "cli-export-plan",
+            profile = id,
+            summary = summary,
+            dest = dest.display().to_string()
+        )
+    );
+    for image in &sources {
+        println!("  {}", image.display());
+    }
+    if args.dry_run {
+        return Ok(());
+    }
+    let cli = tri::develop::find_darktable(&settings.develop.darktable)
+        .ok_or_else(|| tri::develop::DevelopError::Unavailable.to_string())?;
+    let dt = tri::develop::Darktable {
+        cli,
+        config_dir: settings.open_cache()?.root().join("darktable-export"),
+        high_quality: true,
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let report = tri::export::export(
+        &dt,
+        &sources,
+        profile,
+        &folder,
+        &cancel,
+        |done, total, path| {
+            eprintln!("{done}/{total} {}", path.display());
+        },
+    )?;
+    println!("{}", t!("cli-export-done", n = report.written.len()));
+    if report.failed > 0 {
+        return Err(t!("cli-export-failed", failed = report.failed).into());
     }
     Ok(())
 }

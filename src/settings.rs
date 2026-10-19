@@ -103,6 +103,8 @@ pub struct EngineSettings {
     pub watch: crate::watch::WatchSettings,
     /// Rendu par un logiciel de développement (darktable).
     pub develop: crate::develop::DevelopSettings,
+    /// Export (profils, destination).
+    pub export: crate::export::ExportSettings,
     /// Calcul de l'exposition (histogrammes, saturés / bouchés).
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.

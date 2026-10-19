@@ -205,6 +205,10 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
+    /// Profil d'export choisi la dernière fois (session).
+    export_choice: usize,
+    /// Export en cours (darktable, en fond), suivi dans la barre d'état.
+    export_job: Option<crate::export::Job>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
     files: Vec<MediaFile>,
@@ -500,6 +504,8 @@ impl TriApp {
             auto_advance: gui.auto_advance,
             rating_dialog: None,
             file_dialog: None,
+            export_choice: 0,
+            export_job: None,
             file_error: None,
             selection: Default::default(),
             scores: HashMap::new(),
@@ -2113,6 +2119,7 @@ impl TriApp {
             | Action::FileEdit
             | Action::FileCopy
             | Action::FileMove
+            | Action::FileExport
             | Action::Send(_) => {
                 // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
@@ -2120,6 +2127,7 @@ impl TriApp {
                     | Action::FileEdit
                     | Action::FileCopy
                     | Action::FileMove
+                    | Action::FileExport
                     | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
@@ -3994,6 +4002,34 @@ impl TriApp {
                         .text(format!("{name} {}/{}", p.done, p.total)),
                 );
             }
+            if let Some(job) = &self.export_job {
+                let done = job.done.load(std::sync::atomic::Ordering::Relaxed);
+                let fill = self
+                    .gui
+                    .colors
+                    .progress
+                    .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
+                let text = t!(
+                    "export-progress",
+                    profile = job.profile.as_str(),
+                    done = done,
+                    total = job.total
+                );
+                ui.add(
+                    egui::ProgressBar::new(done as f32 / job.total.max(1) as f32)
+                        .desired_width(self.gui.progress_width)
+                        .fill(fill)
+                        .text(text),
+                )
+                .on_hover_text(crate::files::tilde(&job.dest));
+                if ui
+                    .small_button("×")
+                    .on_hover_text(t!("export-cancel"))
+                    .clicked()
+                {
+                    job.cancel();
+                }
+            }
             if let Some(file) = self.files.get(self.selected) {
                 ui.separator();
                 ui.label(file_name(&file.path));
@@ -4470,6 +4506,16 @@ impl TriApp {
                     }
                 }
             }
+            Action::FileExport => {
+                let dialog = crate::export::ExportDialog::new(
+                    &paths,
+                    &self.settings.export,
+                    self.export_choice,
+                    at,
+                );
+                self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
+                Ok(())
+            }
             Action::FileCopy | Action::FileMove => {
                 let mode = if action == Action::FileCopy {
                     tri::files::TransferMode::Copy
@@ -4517,6 +4563,16 @@ impl TriApp {
                 // partielle non : relire le dossier.
                 self.reload_folder(None);
             }
+            crate::files::Outcome::Export {
+                images,
+                profile,
+                folder,
+                choice,
+            } => {
+                self.file_dialog = None;
+                self.export_choice = choice;
+                self.start_export(ctx, images, profile, folder);
+            }
             crate::files::Outcome::Done { select, step } => {
                 if let Some(step) = step {
                     self.history.push(step);
@@ -4531,6 +4587,63 @@ impl TriApp {
                 self.reload_folder(select);
             }
         }
+    }
+
+    /// Lance l'export en fond (darktable) ; un seul à la fois.
+    fn start_export(
+        &mut self,
+        ctx: &egui::Context,
+        images: Vec<PathBuf>,
+        profile: tri::export::Profile,
+        folder: String,
+    ) {
+        if self.export_job.is_some() {
+            self.notice = Some((t!("export-busy"), true));
+            return;
+        }
+        let Some(cli) = tri::develop::find_darktable(&self.settings.develop.darktable) else {
+            self.notice = Some((t!("develop-not-found"), true));
+            return;
+        };
+        let Some(engine) = &self.engine else { return };
+        // Configuration à part de celle des rendus développés : deux darktable peuvent
+        // tourner en même temps (un rendu demandé par Maj+B pendant un export).
+        let dt = tri::develop::Darktable {
+            cli,
+            config_dir: engine.cache.root().join("darktable-export"),
+            high_quality: true,
+        };
+        trace(|| format!("export : {} images vers {folder}", images.len()));
+        self.export_job = Some(crate::export::Job::start(dt, images, profile, folder, ctx));
+    }
+
+    /// Export fini : bilan dans la barre d'état.
+    fn poll_export(&mut self) {
+        let Some(job) = &mut self.export_job else {
+            return;
+        };
+        let Some(result) = job.finished() else {
+            return;
+        };
+        let dest = crate::files::tilde(&job.dest);
+        self.notice = Some(match result {
+            Ok(report) if report.failed == 0 => (
+                t!("export-done", n = report.written.len(), dest = dest),
+                false,
+            ),
+            Ok(report) => (
+                t!(
+                    "export-partial",
+                    n = report.written.len(),
+                    failed = report.failed,
+                    dest = dest
+                ),
+                true,
+            ),
+            Err(tri::develop::DevelopError::Cancelled) => (t!("export-cancelled"), false),
+            Err(e) => (e.to_string(), true),
+        });
+        self.export_job = None;
     }
 
     /// Relit le dossier ouvert après une action sur ses fichiers, en gardant la vue (grille
@@ -6020,6 +6133,7 @@ impl eframe::App for TriApp {
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
         self.file_dialog(&ctx);
+        self.poll_export();
         self.eject_dialog(&ctx);
         self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
@@ -6106,6 +6220,7 @@ fn uses_cursor(action: Action) -> bool {
             | Action::FileEdit
             | Action::FileCopy
             | Action::FileMove
+            | Action::FileExport
             | Action::FileDeleteStack
             | Action::FileCopyStack
             | Action::Send(_)
@@ -8718,6 +8833,9 @@ mod tests {
     #[test]
     fn status_bar_icons_toggle_the_panels() {
         let (mut h, _dir) = harness();
+        // Calculs de fond finis : leurs barres de progression, en apparaissant ou en
+        // disparaissant, déplaceraient les icônes entre deux clics.
+        run_until(&mut h, |app| app.progress.iter().all(|p| p.done >= p.total));
         h.run_steps(2);
         let click = |h: &mut Harness<'_, TriApp>, what: &str| {
             h.get_by_label_contains(what).click();
@@ -9024,6 +9142,37 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_e_offers_the_export_profiles_and_remembers_the_choice() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::E, Modifiers::CTRL);
+        assert!(matches!(
+            h.state().file_dialog,
+            Some(crate::files::FileDialog::Export(_))
+        ));
+        // Profils fournis et dossier proposé (sous-dossier `export` des images).
+        h.get_by_label_contains("Retouche   TIFF 16 bits · ProPhoto (linéaire)");
+        h.get_by_label_contains("Web   JPEG 90 % · sRGB · 2048 px au plus");
+        // ↓ : profil Web ; Entrée : export demandé. Sans darktable (tests), la raison
+        // est donnée et rien n'est lancé.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+        assert!(h.state().export_job.is_none());
+        let notice = h.state().notice.clone().unwrap();
+        assert!(notice.0.contains("darktable"), "{notice:?}");
+        assert!(!dir.path().join("photos/export").exists(), "rien d'écrit");
+        // Rouverte : le profil choisi la dernière fois.
+        press(&mut h, Key::E, Modifiers::CTRL);
+        let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
+            panic!("boîte d'export attendue");
+        };
+        assert_eq!(dialog.choice(), 1);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
+    }
+
+    #[test]
     fn an_image_without_development_says_so_and_falls_back() {
         // darktable « présent » (simulé) mais un sidecar sans historique : le rendu
         // échoue proprement, l'image reste visible (rendu RAW ou boîtier) avec la raison.
@@ -9037,8 +9186,8 @@ mod tests {
         run_until(&mut h, |app| {
             matches!(app.status[0].developed, Avail::Failed(_))
         });
-        h.run_steps(3);
-        assert!(h.state().last_shown.1.is_some(), "une image reste affichée");
+        // Une image reste affichée (le temps de la charger : suite de tests chargée).
+        run_until(&mut h, |app| app.last_shown.1.is_some());
         // La raison est donnée (affichée en surimpression à côté de la source).
         let Avail::Failed(reason) = &h.state().status[0].developed else {
             unreachable!()

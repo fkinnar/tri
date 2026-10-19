@@ -65,6 +65,7 @@ action-core-file-reveal = { $os ->
 }
 action-core-file-edit = Open in the external editor
 action-core-file-copy = Copy to…
+action-core-file-export = Export…
 action-core-file-delete_stack = Delete the whole stack
 action-core-file-copy_stack = Copy the whole stack to…
 stack-actions-need-stacks = Stacks are off ({ $keys }): this action is for a whole stack
@@ -276,6 +277,36 @@ rename-becomes = { $from } becomes { $to }
 rename-copied = { $from } copied as { $to } (shared with the pair)
 rename-button = Rename
 enter-or-escape = Enter / Esc
+export-title = { $n ->
+    [one] Export 1 image
+   *[other] Export { $n } images
+}
+export-profile = Export profile
+export-profile-hint = up / down arrows: profile · profiles in the settings (Ctrl+,), Export section
+export-destination = Folder (Tab completes)
+export-create = will be created
+export-folder-hint = /… absolute · ~/… home folder · otherwise relative to each image (empty or “.”: next to it)
+export-goes-to = Destination: { $dest }
+export-how = Developed by darktable from their .xmp (without a development: darktable's defaults). Nothing is overwritten.
+export-button = Export
+export-profile-edit = Editing
+export-profile-web = Web
+export-format-jpeg = JPEG { $quality }%
+export-format-tiff = TIFF { $bits }-bit
+export-format-png = PNG { $bits }-bit
+export-color-image = development's color space
+export-color-linear = { $name } (linear)
+export-size-full = full resolution
+export-size-max = { $side } px max
+export-busy = An export is already running.
+export-done = { $n ->
+    [one] 1 image exported to { $dest }
+   *[other] { $n } images exported to { $dest }
+}
+export-partial = { $n } exported, { $failed } failed (unreadable by darktable?), to { $dest }
+export-cancelled = Export stopped (files already written are kept).
+export-progress = Export “{ $profile }” { $done }/{ $total }
+export-cancel = Stop the export
 rename-failed = cannot rename: { $error }
 transfer-copy-title = { $n ->
     [one] Copy { $n } image to…
@@ -350,6 +381,9 @@ settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
 settings-section-keys = Shortcuts
 settings-section-develop = darktable rendering
+settings-section-export = Export
+settings-section-export-profiles-edit = Export profile “Editing”
+settings-section-export-profiles-web = Export profile “Web”
 settings-section-watch = Folder watching
 settings-section-places = Places
 settings-section-exposure = Exposure

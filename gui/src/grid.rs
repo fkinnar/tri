@@ -97,6 +97,7 @@ pub fn navigate(
         | Action::FileMove
         | Action::FileDeleteStack
         | Action::FileCopyStack
+        | Action::FileExport
         | Action::Send(_)
         | Action::Undo
         | Action::Redo

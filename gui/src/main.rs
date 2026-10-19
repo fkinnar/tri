@@ -27,6 +27,7 @@ mod actions;
 mod app;
 mod compare;
 mod crash;
+mod export;
 mod files;
 mod grid;
 mod histogram;

@@ -21,6 +21,8 @@ installer pour macOS (`.dmg`) et Linux (`.tar.gz`), sans HEIC ; Windows à venir
   (macOS).
 - **Développé dans darktable** : `Maj+B` (ou le bouton sous l'image) fait
   le rendu darktable-cli, en cache, rien d'écrit chez vous ; `b` le montre ensuite.
+- **Export** : `Ctrl+E`, JPEG / TIFF / PNG par profils d'export (« Retouche » TIFF 16 bits
+  ProPhoto, « Web » JPEG sRGB), développés par darktable ; pas de ProPhoto en 8 bits.
 - **Interface** : tout au clavier (jeux « classique » et « vim », raccourcis réglables),
   fenêtre de réglages, aide avec recherche, français et anglais, thèmes sombre, clair et
   gris neutre ; icône, barre du haut, mode concentration (F11).

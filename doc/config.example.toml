@@ -87,14 +87,55 @@ fixed = []
 watch_ms = 2000
 
 [develop]
-# Voir ses développements dans tri (b en plein écran : JPEG boîtier, rendu RAW, puis
-# développé) : darktable-cli refait l'image avec l'historique du sidecar .xmp, à la
+# Voir ses développements dans tri (Maj+B en plein écran, puis b : JPEG boîtier, rendu
+# RAW, développé) : darktable-cli refait l'image avec l'historique du sidecar .xmp, à la
 # demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
 # "auto" : cherché dans le PATH et aux emplacements habituels ; un chemin ; "" : jamais.
 # Rien n'est écrit chez vous (configuration propre, bibliothèque en mémoire).
 darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false
+
+# Export d'images développées par darktable (Ctrl+E), avec un profil par usage. Rien
+# n'est écrasé (darktable ajoute _01…).
+# Profils d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
+# vient du profil fourni de même identifiant (edit, web), sinon d'un JPEG sRGB.
+# name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
+# format : "jpeg", "tiff" ou "png" ; bits : 8 (JPEG), 8 ou 16 (PNG), 8, 16 ou 32 (TIFF) ;
+# quality : qualité JPEG (1 à 100) ;
+# color : "srgb", "adobergb", "rec709", "rec2020", "prophoto" (ceux de darktable ; les
+#   trois derniers linéaires), "display-p3", le chemin d'un profil .icc, ou "" (celui
+#   du développement) ;
+# intent : "perceptual", "relative", "saturation", "absolute", ou "" (celle du
+#   développement) ;
+# max_side : côté long maximal en pixels, 0 : pleine définition ;
+# suffix : ajouté au nom du fichier ("-web" : DSCF0001-web.jpg) ;
+# folder : dossier des fichiers : "/…" absolu, "~/…" depuis le dossier personnel, sinon
+#   relatif au dossier de chaque image ("export" : un sous-dossier à côté des images,
+#   "" ou "." : à côté d'elles) ; variables de darktable permises ($(YEAR)…).
+[export.profiles.edit]
+# Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
+name = ""
+format = "tiff"
+bits = 16
+quality = 90
+color = "prophoto"
+intent = ""
+max_side = 0
+suffix = ""
+folder = "export"
+
+[export.profiles.web]
+# Publication : JPEG sRGB, 2048 pixels au plus.
+name = ""
+format = "jpeg"
+bits = 8
+quality = 90
+color = "srgb"
+intent = ""
+max_side = 2048
+suffix = ""
+folder = "export"
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP

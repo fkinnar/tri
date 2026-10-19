@@ -92,6 +92,21 @@ fn section_title(ui: &Ui, name: &str, strong: bool) -> egui::text::LayoutJob {
 /// Valeurs possibles d'un réglage à choix (liste déroulante plutôt que texte libre). Un
 /// test vérifie que chacune est acceptée.
 fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
+    // Profils d'export (`[export.profiles.<id>]`) : espaces couleur selon la profondeur du
+    // profil fourni (ProPhoto et les linéaires seulement en 16 bits), affinés à
+    // l'affichage selon les valeurs du fichier (`fits`).
+    if let Some(id) = section.strip_prefix("export.profiles.") {
+        let deep = tri::export::Profiles::default()
+            .get(id)
+            .is_some_and(|p| p.bits >= 16);
+        return match key {
+            "format" => Some(&["jpeg", "tiff", "png"]),
+            "color" if deep => Some(&tri::export::COLORS),
+            "color" => Some(&tri::export::COLORS_8BIT),
+            "intent" => Some(&tri::export::INTENTS),
+            _ => None,
+        };
+    }
     Some(match (section, key) {
         ("gui", "profile") => &["classic", "vim", "both"],
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
@@ -203,6 +218,37 @@ impl SettingsWindow {
     }
 
     /// Valeur actuelle : celle du fichier, sinon la valeur par défaut.
+    /// Choix cohérent avec les autres valeurs de la section ? Profils d'export : pas
+    /// d'espace « 16 bits » (ProPhoto…) en JPEG ou en 8 bits, pas de JPEG avec un tel
+    /// espace (idée de l'utilisateur, 19/10/2026). Le moteur refuse de toute façon.
+    fn fits(&self, section: &str, key: &str, choice: &str) -> bool {
+        let Some(id) = section.strip_prefix("export.profiles.") else {
+            return true;
+        };
+        let base = tri::export::Profiles::default().get(id).cloned();
+        let text = |k: &str, default: String| match self.file.get(section, k) {
+            Some(Value::Str(v)) => v,
+            _ => default,
+        };
+        let format = text(
+            "format",
+            base.as_ref()
+                .map_or("jpeg", |p| p.format.extension())
+                .into(),
+        );
+        let bits = match self.file.get(section, "bits") {
+            Some(Value::Int(b)) => b as u8,
+            _ if format == "jpeg" || format == "jpg" => 8,
+            _ => base.as_ref().map_or(8, |p| p.bits),
+        };
+        let color = text("color", base.map_or_else(String::new, |p| p.color));
+        match key {
+            "color" => tri::export::color_fits(choice, bits),
+            "format" => choice != "jpeg" || tri::export::color_fits(&color, 8),
+            _ => true,
+        }
+    }
+
     fn current(&self, section: &str, entry: &Entry) -> Value {
         self.file
             .get(section, &entry.key)
@@ -747,7 +793,9 @@ impl SettingsWindow {
                         .selected_text(&v)
                         .show_ui(ui, |ui| {
                             for choice in choices(section, &entry.key).unwrap_or_default() {
-                                ui.selectable_value(&mut v, choice.to_string(), *choice);
+                                if self.fits(section, &entry.key, choice) {
+                                    ui.selectable_value(&mut v, choice.to_string(), *choice);
+                                }
                             }
                         });
                     widget = Some(combo.response);
@@ -867,7 +915,12 @@ mod tests {
                     entry.key
                 );
                 for choice in list {
-                    let text = format!("[{}]\n{} = \"{choice}\"\n", section.name, entry.key);
+                    let mut text = format!("[{}]\n{} = \"{choice}\"\n", section.name, entry.key);
+                    // JPEG d'un profil d'export en ProPhoto : masqué tant que l'espace n'a pas
+                    // changé (`fits`) ; accepté avec un espace 8 bits.
+                    if section.name.starts_with("export.profiles.") && *choice == "jpeg" {
+                        text.push_str("color = \"srgb\"\n");
+                    }
                     assert!(tri::settings::parse::<AppSettings>(&text).is_ok(), "{text}");
                 }
             }
@@ -995,6 +1048,32 @@ mod tests {
                 .unwrap()
                 .contains("\"core.flag.accept\"")
         );
+    }
+
+    #[test]
+    fn export_profiles_only_offer_coherent_choices() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        let (edit, web) = ("export.profiles.edit", "export.profiles.web");
+        // Retouche (TIFF 16 bits, ProPhoto) : tous les espaces, mais pas de JPEG.
+        assert!(w.fits(edit, "color", "prophoto"));
+        assert!(!w.fits(edit, "format", "jpeg"));
+        // Web (JPEG) : ni ProPhoto ni espaces linéaires.
+        assert!(!w.fits(web, "color", "prophoto") && !w.fits(web, "color", "rec2020"));
+        assert!(w.fits(web, "color", "adobergb"));
+        // Retouche passée en sRGB : le JPEG devient possible, et le moteur l'accepte.
+        w.commit(edit, "color", Some(Value::Str("srgb".into())))
+            .expect("valide");
+        assert!(w.fits(edit, "format", "jpeg"));
+        w.commit(edit, "format", Some(Value::Str("jpeg".into())))
+            .expect("valide");
+        // Puis ProPhoto en JPEG : refusé, avec la raison.
+        assert!(
+            w.commit(edit, "color", Some(Value::Str("prophoto".into())))
+                .is_none()
+        );
+        let reason = &w.errors[&(edit.to_string(), "color".to_string())];
+        assert!(reason.contains("16"), "{reason}");
     }
 
     #[test]

@@ -38,6 +38,8 @@ pub enum FileDialog {
         at: Pos2,
         fresh: bool,
     },
+    /// Exporter (profil, dossier) : voir [`crate::export`].
+    Export(Box<crate::export::ExportDialog>),
     /// Confirmer la suppression du dossier `path` ; (fichiers, sous-dossiers) dedans.
     DeleteFolder {
         path: PathBuf,
@@ -95,6 +97,14 @@ pub enum Outcome {
     },
     /// Échec (message pour la barre d'état) ; la boîte est fermée.
     Failed(String),
+    /// Export demandé (lancé en fond par l'application) ; `choice` : profil choisi, retenu
+    /// pour la prochaine fois.
+    Export {
+        images: Vec<PathBuf>,
+        profile: tri::export::Profile,
+        folder: String,
+        choice: usize,
+    },
 }
 
 /// Identifiant du champ du nouveau nom.
@@ -169,6 +179,20 @@ impl FileDialog {
     ) -> Outcome {
         match self {
             FileDialog::Transfer(t) => t.show(ctx, settings, data),
+            FileDialog::Export(e) => match e.show(ctx) {
+                crate::export::Outcome::Open => Outcome::Open,
+                crate::export::Outcome::Cancelled => Outcome::Cancelled,
+                crate::export::Outcome::Start {
+                    images,
+                    profile,
+                    folder,
+                } => Outcome::Export {
+                    images,
+                    profile,
+                    folder,
+                    choice: e.choice(),
+                },
+            },
             FileDialog::NewFolder {
                 parent,
                 name,
@@ -724,7 +748,7 @@ impl Transfer {
 }
 
 /// `path` avec `~` pour le dossier personnel (plus court, et accepté à la saisie).
-fn tilde(path: &Path) -> String {
+pub fn tilde(path: &Path) -> String {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
     match home.and_then(|h| path.strip_prefix(h).ok().map(Path::to_path_buf)) {
         Some(rest) if rest.as_os_str().is_empty() => "~".into(),

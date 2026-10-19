@@ -246,6 +246,8 @@ pub enum Action {
     Send(&'static str),
     /// Copier toute la pile de l'image vers un dossier (`yw`).
     FileCopyStack,
+    /// Exporter la sélection (profil d'export, darktable), voir [`tri::export`].
+    FileExport,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
     /// un dossier (aussi `/`, sauf en plein écran où il vaut « ajusté »).
     Search,
@@ -311,7 +313,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 124] = [
+    pub const ALL: [Action; 125] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -359,6 +361,7 @@ impl Action {
         Action::FileMove,
         Action::FileDeleteStack,
         Action::FileCopyStack,
+        Action::FileExport,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
         Action::Redo,
@@ -484,7 +487,7 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
-            | FileDeleteStack | FileCopyStack | Send(_) => Group::Files,
+            | FileDeleteStack | FileCopyStack | FileExport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
@@ -547,6 +550,7 @@ impl Action {
             Action::FileRename => "core.file.rename",
             Action::FileDelete => "core.file.delete",
             Action::FileCopy => "core.file.copy",
+            Action::FileExport => "core.file.export",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
@@ -985,6 +989,9 @@ const FILES: &[Binding] = {
         (&[ctrl(Key::Comma)], Settings),
         // Déplacer : `Ctrl+X`, couper (retour du 18/10/2026).
         (&[ctrl(Key::X)], FileMove),
+        // Exporter (profil d'export, darktable) : `Ctrl+E`, comme Lightroom (`Cmd+E` sur
+        // macOS, voir `Chord::from_event`).
+        (&[ctrl(Key::E)], FileExport),
         // Annuler : `Ctrl+Z` / `Ctrl+Maj+Z` (et `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir
         // `Chord::from_event`) dans les deux profils, réflexe de tous.
         (&[ctrl(Key::Z)], Undo),

@@ -64,6 +64,7 @@ action-core-file-reveal = { $os ->
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
 action-core-file-copy = Copier vers…
+action-core-file-export = Exporter…
 action-core-file-delete_stack = Supprimer toute la pile
 action-core-file-copy_stack = Copier toute la pile vers…
 stack-actions-need-stacks = Piles désactivées ({ $keys }) : cette action vaut pour toute une pile
@@ -278,6 +279,36 @@ rename-becomes = { $from } devient { $to }
 rename-copied = { $from } copié en { $to } (partagé avec la paire)
 rename-button = Renommer
 enter-or-escape = Entrée / Échap
+export-title = { $n ->
+    [one] Exporter 1 image
+   *[other] Exporter { $n } images
+}
+export-profile = Profil d'export
+export-profile-hint = flèches haut / bas : profil · profils dans les réglages (Ctrl+,), section Export
+export-destination = Dossier (Tab complète)
+export-create = sera créé
+export-folder-hint = /… absolu · ~/… dossier personnel · sinon relatif à chaque image (vide ou « . » : à côté d'elle)
+export-goes-to = Destination : { $dest }
+export-how = Développées par darktable d'après leur .xmp (sans développement : réglages par défaut de darktable). Rien n'est écrasé.
+export-button = Exporter
+export-profile-edit = Retouche
+export-profile-web = Web
+export-format-jpeg = JPEG { $quality } %
+export-format-tiff = TIFF { $bits } bits
+export-format-png = PNG { $bits } bits
+export-color-image = espace du développement
+export-color-linear = { $name } (linéaire)
+export-size-full = pleine définition
+export-size-max = { $side } px au plus
+export-busy = Un export est déjà en cours.
+export-done = { $n ->
+    [one] 1 image exportée dans { $dest }
+   *[other] { $n } images exportées dans { $dest }
+}
+export-partial = { $n } exportées, { $failed } en échec (illisibles par darktable ?), dans { $dest }
+export-cancelled = Export arrêté (les fichiers déjà écrits restent).
+export-progress = Export « { $profile } » { $done }/{ $total }
+export-cancel = Arrêter l'export
 rename-failed = renommage impossible : { $error }
 transfer-copy-title = { $n ->
     [one] Copier { $n } image vers…
@@ -353,6 +384,9 @@ settings-section-xmp = Notes (XMP)
 settings-section-places = Emplacements
 settings-section-keys = Raccourcis
 settings-section-develop = Rendu darktable
+settings-section-export = Export
+settings-section-export-profiles-edit = Profil d'export « Retouche »
+settings-section-export-profiles-web = Profil d'export « Web »
 settings-section-watch = Surveillance du dossier
 settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte
