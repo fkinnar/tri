@@ -275,6 +275,13 @@ remember_display = true
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
 rating_bar = true
+# Barre du haut : icône et nom de l'application à gauche, comme darktable (masquée, comme
+# tout le reste, en mode concentration : F11 ou Ctrl+Maj+F).
+title_bar = true
+# Taille du nom dans la barre du haut (points ; l'icône un peu plus grande), et durée de
+# l'indication « F11 pour en sortir » en entrant en mode concentration (ms).
+title_bar_size = 26.0
+focus_mode_hint_ms = 3000
 # Après une note (clavier ou bandeau), passer à l'image suivante ; Maj+A l'active ou le
 # désactive. Si la note fait sortir l'image d'un filtre, la suivante est déjà sélectionnée :
 # on ne saute pas une image. L'autre image d'une paire RAW+JPEG, notée en même temps, est

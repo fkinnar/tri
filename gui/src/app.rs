@@ -221,6 +221,14 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
+    /// fermés : ils reviennent tels quels en sortant).
+    focus_mode: bool,
+    /// Entrée en mode concentration : l'indication pour en sortir s'affiche un moment
+    /// (la barre d'état, où vont les messages, est masquée).
+    focus_mode_since: Option<Instant>,
+    /// Icône de l'application, pour la barre du haut (chargée à la première image).
+    logo: Option<egui::TextureHandle>,
     /// Boîte de regroupement tout juste ouverte : la case « regrouper » prend le clavier.
     group_dialog_fresh: bool,
     /// Recherche par nom de fichier (filtre de la grille, `/`, Ctrl+F).
@@ -514,6 +522,9 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            focus_mode: false,
+            focus_mode_since: None,
+            logo: None,
             group_dialog_fresh: false,
             name_query: String::new(),
             focus_request: None,
@@ -1963,6 +1974,11 @@ impl TriApp {
             }
             // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
             Action::Search => self.start_search(),
+            Action::FocusMode => {
+                self.focus_mode = !self.focus_mode;
+                ctx.send_viewport_cmd(ViewportCommand::Fullscreen(self.focus_mode));
+                self.focus_mode_since = self.focus_mode.then(Instant::now);
+            }
             Action::ZoomFit
                 if self.mode == Mode::Grid || self.focus == crate::actions::Scope::Folders =>
             {
@@ -2905,6 +2921,47 @@ impl TriApp {
             self.open_found_folder(path);
         }
         true
+    }
+
+    /// Barre du haut : l'icône et « tri » en grand, à gauche.
+    fn title_bar(&mut self, ui: &mut Ui) {
+        let logo = self
+            .logo
+            .get_or_insert_with(|| {
+                let icon = window_icon();
+                let size = [icon.width as usize, icon.height as usize];
+                let image = egui::ColorImage::from_rgba_unmultiplied(size, &icon.rgba);
+                ui.ctx()
+                    .load_texture("logo", image, egui::TextureOptions::LINEAR)
+            })
+            .clone();
+        let size = self.gui.title_bar_size;
+        ui.horizontal(|ui| {
+            ui.add(egui::Image::new(&logo).fit_to_exact_size(vec2(size, size) * 1.2));
+            ui.label(egui::RichText::new("tri").size(size).strong());
+        });
+    }
+
+    /// Mode concentration : l'indication pour en sortir, en haut au centre, un moment.
+    fn focus_mode_hint(&mut self, ctx: &egui::Context) {
+        let Some(since) = self.focus_mode_since.filter(|_| self.focus_mode) else {
+            return;
+        };
+        let duration = Duration::from_millis(self.gui.focus_mode_hint_ms);
+        if since.elapsed() >= duration {
+            self.focus_mode_since = None;
+            return;
+        }
+        ctx.request_repaint_after(duration - since.elapsed());
+        let keys = self.keymap.keys_for(Action::FocusMode).join(" / ");
+        egui::Area::new(egui::Id::unique("focus_mode_hint"))
+            .anchor(Align2::CENTER_TOP, vec2(0.0, 16.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.label(t!("focus-mode-on", keys = keys));
+                });
+            });
     }
 
     /// Relit les superpositions : grilles intégrées (couleur et opacité des réglages),
@@ -5750,9 +5807,18 @@ impl eframe::App for TriApp {
         self.search_focused = None;
         self.update_loads(&ctx);
 
-        let status_click = egui::Panel::bottom("status")
-            .show(ui, |ui| self.status_bar(ui))
-            .inner;
+        self.focus_mode_hint(&ctx);
+        // Barre du haut : icône et nom, à gauche (comme darktable).
+        if self.gui.title_bar && !self.focus_mode {
+            egui::Panel::top("title").show(ui, |ui| self.title_bar(ui));
+        }
+        let status_click = if self.focus_mode {
+            None
+        } else {
+            egui::Panel::bottom("status")
+                .show(ui, |ui| self.status_bar(ui))
+                .inner
+        };
         match status_click {
             Some(StatusClick::Action(action)) => self.perform(&ctx, action),
             Some(StatusClick::RevealOffload) => {
@@ -5773,7 +5839,8 @@ impl eframe::App for TriApp {
             }
             None => {}
         }
-        if self.metadata_panel && self.error.is_none() && !self.folder.is_none() {
+        if self.metadata_panel && !self.focus_mode && self.error.is_none() && !self.folder.is_none()
+        {
             egui::Panel::right("metadata")
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
@@ -5786,16 +5853,16 @@ impl eframe::App for TriApp {
                     }
                 });
         }
-        if self.folder_panel && self.mode == Mode::Grid {
+        if self.folder_panel && !self.focus_mode && self.mode == Mode::Grid {
             egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
                 .show(ui, |ui| self.folder_panel(ui));
         }
-        if self.rating_bar && !self.files.is_empty() && self.error.is_none() {
+        if self.rating_bar && !self.focus_mode && !self.files.is_empty() && self.error.is_none() {
             egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
         }
-        if self.filter_bar && self.mode == Mode::Grid && self.error.is_none() {
+        if self.filter_bar && !self.focus_mode && self.mode == Mode::Grid && self.error.is_none() {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
         // Fond central : gris neutre avec ce thème (grille et plein écran).
@@ -5927,6 +5994,19 @@ fn uses_cursor(action: Action) -> bool {
             | Action::StackToggle
             | Action::StackChoose
     )
+}
+
+/// Icône de l'application (`gui/assets`, voir `scripts/make-icon.py`) : fenêtre, Dock,
+/// barre des tâches, barre du haut.
+pub fn window_icon() -> egui::IconData {
+    let image = image::load_from_memory(include_bytes!("../assets/icon-256.png"))
+        .expect("icône embarquée lisible")
+        .to_rgba8();
+    egui::IconData {
+        width: image.width(),
+        height: image.height(),
+        rgba: image.into_raw(),
+    }
 }
 
 /// Champ de recherche par nom de la grille.
@@ -7931,6 +8011,45 @@ mod tests {
             h.state().selection.is_empty(),
             "Espace n'a pas sélectionné l'image"
         );
+    }
+
+    #[test]
+    fn focus_mode_hides_everything_and_gives_it_back() {
+        let icon = window_icon();
+        assert_eq!(
+            (icon.width, icon.height),
+            (256, 256),
+            "icône embarquée lisible"
+        );
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(h.query_by_label("tri").is_some(), "barre du haut");
+        let before = (
+            h.state().folder_panel,
+            h.state().metadata_panel,
+            h.state().filter_bar,
+        );
+        press(&mut h, Key::F11, Modifiers::NONE);
+        assert!(h.state().focus_mode && h.state().focus_mode_since.is_some());
+        assert!(h.query_by_label("tri").is_none(), "barre du haut masquée");
+        assert!(
+            h.query_by_label_contains("Dossiers").is_none(),
+            "panneaux masqués"
+        );
+        assert!(
+            h.query_by_label_contains("Mode concentration").is_some(),
+            "indication"
+        );
+        // Ctrl+Maj+F aussi ; les panneaux reviennent tels quels.
+        press(&mut h, Key::F, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(!h.state().focus_mode);
+        let after = (
+            h.state().folder_panel,
+            h.state().metadata_panel,
+            h.state().filter_bar,
+        );
+        assert_eq!(after, before);
+        assert!(h.query_by_label("tri").is_some());
     }
 
     #[test]

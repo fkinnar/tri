@@ -20,4 +20,4 @@ Première version de test (dépôt privé ; la bêta sera publique).
   (macOS).
 - **Interface** : tout au clavier (jeux « classique » et « vim », raccourcis réglables),
   fenêtre de réglages, aide avec recherche, français et anglais, thèmes sombre, clair et
-  gris neutre.
+  gris neutre ; icône, barre du haut, mode concentration (F11).

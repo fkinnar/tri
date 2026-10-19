@@ -145,6 +145,12 @@ pub struct GuiSettings {
     pub remember_display: bool,
     /// Bandeau de notation à la souris affiché au démarrage (Maj+N l'affiche ou le masque).
     pub rating_bar: bool,
+    /// Barre du haut : icône et nom de l'application à gauche (comme darktable).
+    pub title_bar: bool,
+    /// Barre du haut : taille du nom (points ; l'icône un peu plus grande).
+    pub title_bar_size: f32,
+    /// Mode concentration : durée de l'indication « F11 pour en sortir » (ms).
+    pub focus_mode_hint_ms: u64,
     /// Après une note au clavier ou au bandeau, passer à l'image suivante (Maj+A l'active
     /// ou le désactive).
     pub auto_advance: bool,
@@ -193,6 +199,9 @@ impl Default for GuiSettings {
             reopen_last: true,
             remember_display: true,
             rating_bar: true,
+            title_bar: true,
+            title_bar_size: 26.0,
+            focus_mode_hint_ms: 3000,
             auto_advance: false,
             history: 200,
             grid: GridSettings::default(),

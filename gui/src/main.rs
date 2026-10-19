@@ -79,6 +79,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("tri")
+            .with_icon(app::window_icon())
             .with_inner_size(settings.gui.window),
         ..Default::default()
     };

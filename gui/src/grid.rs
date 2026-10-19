@@ -135,6 +135,7 @@ pub fn navigate(
         | Action::MetaCopy
         | Action::ToggleFolderPanel
         | Action::Search
+        | Action::FocusMode
         | Action::RefreshFolders
         | Action::ToggleHistogram
         | Action::HistogramScale

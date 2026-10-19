@@ -643,7 +643,8 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   (`.github/workflows/ci.yml`, à la main ou sur tag, pour ménager les minutes) ; code
   Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/build.md`). Restent :
   paquets prêts à installer (`.app`, archive Linux, zip Windows), notices des
-  dépendances.
+  dépendances. Icône choisie (« t » et étoile, `scripts/make-icon.py`), barre du haut
+  (icône et nom à gauche), mode concentration (F11).
 - **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
   la V1 »).
 
