@@ -184,6 +184,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Grand histogramme revu** (19/10/2026) : image d'analyse dans un bloc presque carré
+  (le carré de l'image, `[gui.histogram] analysis_height` = 300, plus la légende), calé
+  à droite ; l'échelle se bascule par une **icône** à gauche des pastilles de canal
+  (droite : linéaire, courbe logarithmique : IL ; elle montre l'échelle en cours), plus
+  par un bouton texte à côté de « Fermer ».
 - **Superpositions** (`o`, `Maj+O` orientation, comme Lightroom, 19/10/2026, voir
   `overlay.md` ; les zones saturées / bouchées passent de `o` à `w`) : grilles intégrées
   et superpositions de l'utilisateur (texte, logo, format 4:5…), en plein écran et en
@@ -273,6 +278,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et traits ne se lisaient plus (un trait sous chaque image) ; une pile dépliée a
   maintenant un **fond**, deux gris en alternance d'une pile à la suivante
   (`[gui.colors] stack_band`, `stack_band_alt`), comme pendant le réglage du curseur.
+  Grille **non groupée au démarrage** (retour du 19/10/2026) : `[gui.grid] stacks`
+  (faux par défaut) ; les empreintes se calculent en fond quand même
+  (`[similarity] background`), `Ctrl+S` regroupe aussitôt.
   Quatrième retour : une photo isolée est un groupe d'une image, avec son fond aussi
   (deux photos isolées voisines ne se confondent plus) : piles actives, chaque groupe
   alterne, deux cas au lieu de trois.

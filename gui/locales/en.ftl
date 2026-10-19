@@ -218,8 +218,9 @@ status-open-session = Open the session "{ $name }"
 ## Dialogs, rating bar, filters, help
 
 close = Close
-histogram-linear-scale = Linear scale
-histogram-ev-scale = EV scale
+histogram-scale-ev = in EV
+histogram-scale-linear = linear
+histogram-scale-tip = Scale { $current }; click or { $keys }: { $other }
 or-escape = or Esc
 rating-bar-title = Ratings
 rating-bar-applies = ratings apply to the { $n } selected images

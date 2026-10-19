@@ -307,6 +307,10 @@ marked_frame = 3.0
 blur_badge = true
 # Largeur du curseur de similarité de la barre des filtres.
 stack_slider = 110.0
+# Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
+# seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
+# calculent en fond, voir [similarity] background).
+stacks = false
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -435,11 +439,12 @@ fill_strength = 0.55
 # les pixels isolés (0,01 : centiles 1 % et 99 %).
 stats_tail = 0.01
 # Grand histogramme : diamètre des pastilles de canal (rouge, vert, bleu, blanc = tous ;
-# Maj+C les fait tourner), et hauteur de la petite image d'analyse (en gris, zones
-# saturées / bouchées en analysis_over / analysis_under, du canal choisi), et
-# éclaircissement de son fond par rapport à celui de la boîte (0 à 1).
+# Maj+C les fait tourner), côté du carré de l'image d'analyse, calée à droite de la
+# boîte, légende à côté (en gris, zones saturées / bouchées en analysis_over /
+# analysis_under, du canal choisi), et éclaircissement de son fond par rapport à celui
+# de la boîte (0 à 1).
 channel_dot = 11.0
-analysis_height = 200.0
+analysis_height = 300.0
 analysis_lighten = 0.06
 
 [gui.sharpness]

@@ -283,6 +283,10 @@ pub struct GridSettings {
     pub blur_badge: bool,
     /// Largeur du curseur de similarité de la barre des filtres (points).
     pub stack_slider: f32,
+    /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
+    /// empreintes se calculent en fond quand même (`[similarity] background`) : la
+    /// bascule est instantanée.
+    pub stacks: bool,
 }
 
 impl Default for GridSettings {
@@ -300,6 +304,7 @@ impl Default for GridSettings {
             marked_frame: 3.0,
             blur_badge: true,
             stack_slider: 110.0,
+            stacks: false,
         }
     }
 }
@@ -681,8 +686,8 @@ pub struct HistogramSettings {
     pub stats_tail: f32,
     /// Grand histogramme : diamètre des pastilles de choix du canal (points).
     pub channel_dot: f32,
-    /// Grand histogramme : hauteur de la petite image d'analyse (zones saturées /
-    /// bouchées sur l'image en gris), à droite des statistiques (points).
+    /// Grand histogramme : côté du carré de l'image d'analyse (zones saturées /
+    /// bouchées sur l'image en gris), à droite de la boîte (points).
     pub analysis_height: f32,
     /// Fond du bloc de l'image d'analyse : fond de la boîte éclairci de cette part vers
     /// le blanc (0 à 1).
@@ -707,7 +712,7 @@ impl Default for HistogramSettings {
             fill_strength: 0.55,
             stats_tail: 0.01,
             channel_dot: 11.0,
-            analysis_height: 200.0,
+            analysis_height: 300.0,
             analysis_lighten: 0.06,
         }
     }

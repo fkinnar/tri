@@ -535,7 +535,8 @@ impl TriApp {
             stacks: crate::stacks::Stacks::default(),
             stacks_dirty: true,
             expanded: HashSet::new(),
-            stacking: settings.similarity.background,
+            // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
+            stacking: settings.similarity.background && gui.grid.stacks,
             group_threshold: settings.similarity.threshold,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -3799,7 +3800,19 @@ impl TriApp {
     /// la boîte, image centrée, légende empilée en bas à droite (retours du 18/10/2026).
     fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle) {
         let settings = &self.gui.histogram;
-        let size = vec2(ui.available_width().max(80.0), settings.analysis_height);
+        let margin = self.gui.dialogs.spacing.max(4.0);
+        let c = &self.gui.colors;
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let galleys = [
+            (t!("analysis-over"), Color32::from(c.analysis_over)),
+            (t!("analysis-under"), Color32::from(c.analysis_under)),
+        ]
+        .map(|(text, color)| ui.painter().layout_no_wrap(text, font.clone(), color));
+        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
+        // Presque carré (retour du 19/10/2026) : un carré pour l'image, plus la place de
+        // la légende ; le bloc pleine largeur laissait surtout du gris.
+        let side = settings.analysis_height;
+        let size = vec2(side + legend_w + 3.0 * margin, side + 2.0 * margin);
         let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
         let painter = ui.painter();
         let fill = ui.visuals().window_fill;
@@ -3810,19 +3823,10 @@ impl TriApp {
             4.0,
             Color32::from_rgb(lighten(fill.r()), lighten(fill.g()), lighten(fill.b())),
         );
-        let margin = self.gui.dialogs.spacing.max(4.0);
         let inner = rect.shrink(margin);
         // Légende : les deux mots l'un au-dessus de l'autre, en bas à droite du bloc,
-        // alignés à droite ; l'image prend toute la hauteur à leur gauche (retour du
-        // 18/10/2026 : la photo est petite, chaque ligne gagnée compte).
-        let c = &self.gui.colors;
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let galleys = [
-            (t!("analysis-over"), Color32::from(c.analysis_over)),
-            (t!("analysis-under"), Color32::from(c.analysis_under)),
-        ]
-        .map(|(text, color)| painter.layout_no_wrap(text, font.clone(), color));
-        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
+        // alignés à droite ; l'image dans le carré à leur gauche (retour du 18/10/2026 :
+        // la photo est petite, chaque ligne gagnée compte).
         let mut y = inner.max.y;
         for g in galleys.into_iter().rev() {
             y -= g.size().y;
@@ -3894,6 +3898,35 @@ impl TriApp {
                         Action::HistogramBlue,
                         Action::HistogramAll,
                     ];
+                    // Échelle : icône à gauche des pastilles, qui montre celle en cours.
+                    let button = histogram::scale_button(rect, self.gui.histogram.channel_dot);
+                    let (current, other) = match self.histogram_scale {
+                        HistogramScale::Ev => {
+                            (t!("histogram-scale-ev"), t!("histogram-scale-linear"))
+                        }
+                        HistogramScale::Linear => {
+                            (t!("histogram-scale-linear"), t!("histogram-scale-ev"))
+                        }
+                    };
+                    let tip = t!(
+                        "histogram-scale-tip",
+                        current = current,
+                        other = other,
+                        keys = self.keymap.keys_for(Action::HistogramScale).join(" / ")
+                    );
+                    let response = ui
+                        .interact(button, egui::Id::unique("histogram_scale"), Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(tip);
+                    let color = if response.hovered() {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        ui.visuals().text_color()
+                    };
+                    histogram::scale_icon(ui.painter(), button, self.histogram_scale, color);
+                    if response.clicked() {
+                        scale = true;
+                    }
                     for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
                         let tip = t!(
                             "histogram-channel-tip",
@@ -3931,8 +3964,10 @@ impl TriApp {
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| self.histogram_stats(ui, e));
                     if let Some(texture) = &analysis {
-                        ui.add_space(self.gui.dialogs.spacing);
-                        self.analysis_block(ui, texture);
+                        // Calée à droite de la boîte.
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            self.analysis_block(ui, texture);
+                        });
                     }
                 });
                 // Sur des données RAW, pas de luminance : chaque photosite ne mesure
@@ -3944,11 +3979,6 @@ impl TriApp {
                 }
             }
             ui.horizontal(|ui| {
-                let label = match self.histogram_scale {
-                    HistogramScale::Ev => t!("histogram-linear-scale"),
-                    HistogramScale::Linear => t!("histogram-ev-scale"),
-                };
-                scale = ui.button(label).clicked();
                 close = ui.button(t!("close")).clicked();
                 ui.weak(t!("or-escape"));
             });
@@ -7497,6 +7527,22 @@ mod tests {
     }
 
     #[test]
+    fn the_grid_starts_without_stacks_unless_asked() {
+        assert!(!crate::settings::GridSettings::default().stacks);
+        let (h, _dir) = harness();
+        assert!(!h.state().stacking, "grille non groupée par défaut");
+        // Jamais les données de l'utilisateur : dossier temporaire, rien de rouvert.
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = AppSettings::default();
+        settings.data.dir = Some(dir.path().join("data"));
+        settings.cache.dir = Some(dir.path().join("cache"));
+        settings.gui.reopen_last = false;
+        settings.gui.grid.stacks = true;
+        let app = TriApp::new(None, settings, None);
+        assert!(app.stacking, "[gui.grid] stacks = true");
+    }
+
+    #[test]
     fn dw_and_yw_act_on_the_whole_stack() {
         let ramp = |tint: u8| {
             image::RgbImage::from_fn(64, 48, |x, _| image::Rgb([(x * tint as u32 / 63) as u8; 3]))
@@ -8140,7 +8186,9 @@ mod tests {
         let (mut h, _dir) = harness();
         press(&mut h, Key::E, Modifiers::SHIFT);
         assert!(h.state().histogram_large, "Maj+E l'ouvre");
-        assert!(h.query_by_label("Échelle linéaire").is_some());
+        // L'échelle est une icône dans l'histogramme (19/10/2026), plus un bouton texte
+        // à côté de « Fermer ».
+        assert!(h.query_by_label("Échelle linéaire").is_none());
         press(&mut h, Key::I, Modifiers::SHIFT);
         assert_eq!(
             h.state().histogram_scale,

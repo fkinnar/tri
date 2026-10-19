@@ -2,7 +2,9 @@
 //! histogramme (en IL ou linéaire), indicateurs, masque des zones saturées / bouchées en
 //! texture. Aucun calcul sur les pixels ici : seulement du dessin.
 
-use eframe::egui::{Align2, Color32, ColorImage, FontId, Mesh, Painter, Rect, Stroke, pos2, vec2};
+use eframe::egui::{
+    self, Align2, Color32, ColorImage, FontId, Mesh, Painter, Rect, Stroke, pos2, vec2,
+};
 use tri::bitmap::Bitmap;
 use tri::exposure::{CHANNELS, Exposure, Mask, Source, mask};
 use tri::i18n::decimal;
@@ -82,6 +84,45 @@ pub fn channel_dots(rect: Rect, size: f32) -> [Rect; 4] {
         let x = rect.max.x - 6.0 - size / 2.0 - (3 - i) as f32 * (size + gap);
         Rect::from_center_size(pos2(x, y), vec2(size, size))
     })
+}
+
+/// Bouton d'échelle du grand histogramme : à gauche des pastilles de canal, un peu plus
+/// grand qu'elles (retour du 19/10/2026 : le bouton « Échelle linéaire » était à côté de
+/// « Fermer », sans rapport).
+pub fn scale_button(rect: Rect, dot: f32) -> Rect {
+    let first = channel_dots(rect, dot)[0];
+    let side = dot * 1.8;
+    Rect::from_center_size(
+        pos2(first.min.x - dot - side / 2.0, first.center().y),
+        vec2(side, side),
+    )
+}
+
+/// Icône de l'échelle `scale` dans `rect` : une droite pour le linéaire, une courbe
+/// logarithmique pour l'échelle en IL.
+pub fn scale_icon(painter: &Painter, rect: Rect, scale: HistogramScale, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.15);
+    let stroke = Stroke::new((rect.width() * 0.09).max(1.2), color);
+    // Axes en L, discrets.
+    let axes = Stroke::new(stroke.width * 0.6, color.gamma_multiply(0.6));
+    painter.line_segment([r.left_top(), r.left_bottom()], axes);
+    painter.line_segment([r.left_bottom(), r.right_bottom()], axes);
+    let at = |x: f32, y: f32| pos2(r.left() + x * r.width(), r.bottom() - y * r.height());
+    match scale {
+        HistogramScale::Linear => {
+            painter.line_segment([at(0.08, 0.08), at(1.0, 1.0)], stroke);
+        }
+        HistogramScale::Ev => {
+            // y = log(1 + 9x) / log(10) : monte vite puis s'aplatit.
+            let points = (0..=16)
+                .map(|k| {
+                    let x = k as f32 / 16.0;
+                    at(0.08 + 0.92 * x, 0.08 + 0.92 * (1.0 + 9.0 * x).log10())
+                })
+                .collect();
+            painter.add(egui::Shape::line(points, stroke));
+        }
+    }
 }
 
 /// Part des pixels saturés / bouchés : canal le plus touché, ou le canal `channel`.

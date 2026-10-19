@@ -220,8 +220,9 @@ status-open-session = Ouvrir la séance « { $name } »
 ## Boîtes, bandeau, filtres, aide
 
 close = Fermer
-histogram-linear-scale = Échelle linéaire
-histogram-ev-scale = Échelle en IL
+histogram-scale-ev = en IL
+histogram-scale-linear = linéaire
+histogram-scale-tip = Échelle { $current } ; clic ou { $keys } : { $other }
 or-escape = ou Échap
 rating-bar-title = Notes
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
