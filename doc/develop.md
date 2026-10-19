@@ -23,7 +23,7 @@ tomber `tri`, et sa licence reste la sienne. RawTherapee (`rawtherapee-cli`, pro
   la plus récente), lancée avec `darktable-cli` en premier argument : l'AppImage exécute
   alors ce binaire au lieu de l'interface (documenté par darktable, « invocation per
   OS »). C'est l'installation de l'utilisateur sous Mint (`~/AppImages/darktable.appimage`,
-  19/10/2026). Un chemin d'AppImage est aussi accepté dans le réglage. Sinon, le
+  19/10/2026) : **vérifié par lui** le jour même, rendu et export fonctionnent. Un chemin d'AppImage est aussi accepté dans le réglage. Sinon, le
   **Flatpak** `org.darktable.Darktable` (installation système ou
   utilisateur, `flatpak info`), lancé par `flatpak run --command=darktable-cli
   org.darktable.Darktable` (`Cli` : programme et arguments placés devant ceux de `tri`) ;
