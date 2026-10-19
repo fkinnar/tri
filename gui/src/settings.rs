@@ -286,6 +286,27 @@ impl Theme {
         }
     }
 
+    /// Couleur de sélection (fond de la cellule, cadre de l'image active en comparaison) :
+    /// `selection` si elle est donnée, sinon `neutral_selection` pour ce thème, sinon
+    /// celle du thème.
+    pub fn selection(self, colors: &Colors, visuals: &egui::Visuals) -> Color32 {
+        match (colors.selection, self) {
+            (Some(c), _) => c.into(),
+            (None, Theme::Neutral) => colors.neutral_selection.into(),
+            (None, _) => visuals.selection.bg_fill,
+        }
+    }
+
+    /// Nom d'une image sur une cellule sélectionnée : sombre sur le gris clair de ce
+    /// thème (sans `selection` donnée), sinon `text`.
+    pub fn selected_text(self, colors: &Colors, text: Color32) -> Color32 {
+        if self == Theme::Neutral && colors.selection.is_none() {
+            colors.neutral_cell_text.into()
+        } else {
+            text
+        }
+    }
+
     /// Nom d'une image sur une cellule non sélectionnée : `neutral_cell_text` pour ce
     /// thème, sinon `text` (la couleur de texte du thème).
     pub fn cell_text(self, colors: &Colors, text: Color32) -> Color32 {
@@ -831,6 +852,9 @@ pub struct Colors {
     pub neutral_cell: Color,
     /// Thème gris neutre : champs de saisie (recherche, réglages).
     pub neutral_field: Color,
+    /// Thème gris neutre : cellule sélectionnée (gris clair, comme darktable), sauf si
+    /// `selection` est donnée.
+    pub neutral_selection: Color,
     /// Thème gris neutre : nom des images sur les cellules (sombre : lisible sur un gris
     /// moyen, contrairement au gris du thème sombre).
     pub neutral_cell_text: Color,
@@ -905,6 +929,7 @@ impl Default for Colors {
             neutral_cell: Color([118, 118, 118]),
             neutral_field: Color([62, 62, 62]),
             neutral_cell_text: Color([30, 30, 30]),
+            neutral_selection: Color([179, 179, 179]),
             neutral_stack_band: Color([132, 132, 132]),
             neutral_stack_band_alt: Color([106, 106, 106]),
             stack_mark: Color([140, 140, 140]),
@@ -1087,6 +1112,22 @@ mod tests {
             Color32::from(c.neutral_cell_text)
         );
         assert_eq!(Theme::Dark.cell_text(&c, Color32::WHITE), Color32::WHITE);
+        // Sélection gris clair (texte sombre), sauf couleur donnée.
+        assert_eq!(
+            Theme::Neutral.selection(&c, &v),
+            Color32::from(c.neutral_selection)
+        );
+        assert_eq!(Theme::Dark.selection(&c, &v), v.selection.bg_fill);
+        let mut chosen = c;
+        chosen.selection = Some(Color([1, 2, 3]));
+        assert_eq!(
+            Theme::Neutral.selection(&chosen, &v),
+            Color32::from_rgb(1, 2, 3)
+        );
+        assert_eq!(
+            Theme::Neutral.selected_text(&chosen, Color32::WHITE),
+            Color32::WHITE
+        );
         let parsed: AppSettings = tri::settings::parse("[gui]\ntheme = \"neutral\"\n").unwrap();
         assert_eq!(parsed.gui.theme, Theme::Neutral);
         assert_eq!(

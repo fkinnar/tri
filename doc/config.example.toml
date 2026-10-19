@@ -504,6 +504,8 @@ neutral_cell = "#767676"
 neutral_field = "#3e3e3e"
 # Nom des images sur les cellules (sombre : lisible sur le gris des cellules).
 neutral_cell_text = "#1e1e1e"
+# Cellule sélectionnée, gris clair comme darktable (si selection n'est pas donnée).
+neutral_selection = "#b3b3b3"
 neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.

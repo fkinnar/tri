@@ -3233,11 +3233,7 @@ impl TriApp {
             );
             // Image active : cadre de la couleur de sélection.
             if index == self.selected {
-                let color = self
-                    .gui
-                    .colors
-                    .selection
-                    .map_or(ui.visuals().selection.bg_fill, Color32::from);
+                let color = self.gui.theme.selection(&self.gui.colors, ui.visuals());
                 painter.rect_stroke(
                     rect,
                     0.0,
@@ -4904,9 +4900,7 @@ impl TriApp {
         let selected = index == self.selected && !self.cursor_hidden;
         let visuals = ui.visuals();
         let background = if selected {
-            colors
-                .selection
-                .map_or(visuals.selection.bg_fill, Color32::from)
+            self.gui.theme.selection(&colors, visuals)
         } else if let Some(group) = self
             .stacks
             .group_index(index)
@@ -5001,7 +4995,9 @@ impl TriApp {
         }
 
         let text_color = if selected {
-            visuals_text(ui, true)
+            self.gui
+                .theme
+                .selected_text(&colors, visuals_text(ui, true))
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
