@@ -213,3 +213,8 @@ send-nothing = nothing to send
 send-main-thread = cannot send outside the interface's main thread
 send-unavailable = { $name } is not available on this machine
 send-refused = { $name } refuses these files
+
+## Rendering by a development program
+develop-none = no darktable development for this image
+develop-unavailable = darktable not found ([develop] darktable setting)
+develop-failed = darktable: { $error }

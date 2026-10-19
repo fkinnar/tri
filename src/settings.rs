@@ -511,6 +511,8 @@ mod tests {
         assert_eq!(default_path_for("windows", env(&home)), None);
     }
 
+    // Chemins Unix simulés : sous Windows, « /home/u » n'est pas absolu.
+    #[cfg(not(windows))]
     #[test]
     fn data_dir_per_os() {
         let home = [("HOME", "/home/u")];

@@ -962,6 +962,8 @@ mod tests {
             "plus long chemin existant"
         );
         assert_eq!(q(&typed).pattern, "deh");
+        // Sous Windows, « /zzz » n'est pas un chemin absolu (pas de lecteur).
+        #[cfg(not(windows))]
         assert_eq!(q("/zzz").base, Path::new("/"), "racine");
     }
 
@@ -978,12 +980,11 @@ mod tests {
             seen.push(p.strip_prefix(root).unwrap().to_path_buf());
             true
         });
-        let names: Vec<String> = seen.iter().map(|p| p.display().to_string()).collect();
-        assert_eq!(
-            names,
-            ["a", "e", "a/b", "a/b/c"],
-            "en largeur, 3 niveaux, sans les cachés"
-        );
+        let expected: Vec<PathBuf> = ["a", "e", "a/b", "a/b/c"]
+            .iter()
+            .map(|p| p.split('/').collect())
+            .collect();
+        assert_eq!(seen, expected, "en largeur, 3 niveaux, sans les cachés");
         let mut count = 0;
         walk_dirs(root, 3, true, &cancel, |_| {
             count += 1;
@@ -1094,6 +1095,8 @@ mod tests {
         assert!(volume_dirs("windows", env(&user)).is_empty());
     }
 
+    // Chemins Unix simulés : sous Windows, « /home/fab » n'est pas absolu.
+    #[cfg(not(windows))]
     #[test]
     fn home_per_os() {
         let vars = [("HOME", "/home/fab"), ("USERPROFILE", "C:\\Users\\fab")];

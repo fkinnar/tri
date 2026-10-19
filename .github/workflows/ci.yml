@@ -65,8 +65,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets ${{ env.FEATURES }} -- -D warnings
 
+      # Tous les programmes de tests, même après un échec : tout voir en un passage.
       - name: Tests
-        run: cargo test --workspace ${{ env.FEATURES }}
+        run: cargo test --workspace --no-fail-fast ${{ env.FEATURES }}
 
       - name: Binaires
         run: cargo build --release --workspace ${{ env.FEATURES }}

@@ -214,3 +214,8 @@ send-nothing = rien à envoyer
 send-main-thread = envoi impossible hors du fil principal de l'interface
 send-unavailable = { $name } n'est pas disponible sur cette machine
 send-refused = { $name } refuse ces fichiers
+
+## Rendu par un logiciel de développement
+develop-none = pas de développement darktable pour cette image
+develop-unavailable = darktable introuvable (réglage [develop] darktable)
+develop-failed = darktable : { $error }
