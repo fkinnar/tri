@@ -293,6 +293,25 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
                 stroke,
             ));
         }
+        Action::Send(_) => {
+            // Partager (comme macOS) : boîte ouverte en haut, flèche qui en monte.
+            painter.add(Shape::line(
+                vec![
+                    p(0.3, 0.38),
+                    p(0.1, 0.38),
+                    p(0.1, 0.98),
+                    p(0.9, 0.98),
+                    p(0.9, 0.38),
+                    p(0.7, 0.38),
+                ],
+                stroke,
+            ));
+            painter.line_segment([p(0.5, 0.02), p(0.5, 0.68)], stroke);
+            painter.add(Shape::line(
+                vec![p(0.3, 0.22), p(0.5, 0.02), p(0.7, 0.22)],
+                stroke,
+            ));
+        }
         _ => {
             // Ouvrir ailleurs : cadre ouvert en haut à droite, flèche qui en sort.
             painter.add(Shape::line(

@@ -84,6 +84,8 @@ pub fn navigate(
         | Action::TogglePeaking
         | Action::PeakingColor
         | Action::ToggleFocusPoint
+        | Action::OverlayNext
+        | Action::OverlayPrev
         | Action::SelectVisual
         | Action::SelectAll
         | Action::SelectClear
@@ -95,6 +97,7 @@ pub fn navigate(
         | Action::FileMove
         | Action::FileDeleteStack
         | Action::FileCopyStack
+        | Action::Send(_)
         | Action::Undo
         | Action::Redo
         | Action::History

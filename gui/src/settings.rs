@@ -448,6 +448,10 @@ pub struct ViewSettings {
     /// Mode pile (plein écran) : au bout de la pile, ← / → repartent de l'autre bout
     /// (sinon on s'arrête).
     pub stack_wrap: bool,
+    /// Superpositions (t) : épaisseur des traits (points).
+    pub overlay_line_width: f32,
+    /// Grilles intégrées (tiers, nombre d'or, diagonales) : opacité des lignes.
+    pub overlay_opacity: f32,
 }
 
 impl Default for ViewSettings {
@@ -464,6 +468,8 @@ impl Default for ViewSettings {
             key_hints: false,
             zoom_on_focus_point: true,
             stack_wrap: false,
+            overlay_line_width: 1.0,
+            overlay_opacity: 0.6,
         }
     }
 }
@@ -679,6 +685,8 @@ pub struct Colors {
     pub marked: Color,
     /// Repère du collimateur de mise au point.
     pub focus: Color,
+    /// Grilles intégrées des superpositions (tiers, nombre d'or, diagonales).
+    pub overlay: Color,
     /// Goutte des filtres de netteté (barre de filtres).
     pub blur_drop: Color,
     /// Piles actives : fond des images d'un groupe sur deux (gris clair), photo isolée
@@ -743,6 +751,7 @@ impl Default for Colors {
             hover: Color([180, 180, 180]),
             marked: Color([255, 170, 40]),
             focus: Color([60, 255, 110]),
+            overlay: Color([255, 255, 255]),
             blur_drop: Color([110, 170, 230]),
             stack_band: Color([56, 56, 56]),
             stack_band_alt: Color([24, 24, 24]),

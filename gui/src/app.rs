@@ -221,6 +221,12 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// Superpositions (t) : grilles intégrées et celles de l'utilisateur, relues à chaque
+    /// changement (un fichier modifié se voit à la pression suivante) ; celle affichée
+    /// (0 : aucune) ; logos chargés (`None` : illisible).
+    overlays: Vec<Box<dyn tri::overlay::Overlay>>,
+    overlay: usize,
+    overlay_textures: HashMap<PathBuf, Option<egui::TextureHandle>>,
     /// Défilement de l'aide (tests).
     #[cfg(test)]
     help_offset: f32,
@@ -482,6 +488,9 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            overlays: Vec::new(),
+            overlay: 0,
+            overlay_textures: HashMap::new(),
             #[cfg(test)]
             help_offset: 0.0,
             over_cell: false,
@@ -1863,6 +1872,8 @@ impl TriApp {
             Action::Compare => self.start_compare(),
             Action::TogglePeaking => self.peaking = !self.peaking,
             Action::ToggleFocusPoint => self.focus_point = !self.focus_point,
+            Action::OverlayNext => self.cycle_overlay(true),
+            Action::OverlayPrev => self.cycle_overlay(false),
             Action::PeakingColor => {
                 // Changer de couleur montre la carte si elle était masquée.
                 let n = self.gui.sharpness.colors.len().max(1);
@@ -1983,12 +1994,15 @@ impl TriApp {
             | Action::FileReveal
             | Action::FileEdit
             | Action::FileCopy
-            | Action::FileMove => {
+            | Action::FileMove
+            | Action::Send(_) => {
                 // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
-                    Action::FileDelete | Action::FileEdit | Action::FileCopy | Action::FileMove => {
-                        self.selection.targets(&self.files, self.selected)
-                    }
+                    Action::FileDelete
+                    | Action::FileEdit
+                    | Action::FileCopy
+                    | Action::FileMove
+                    | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
                         .get(self.selected)
@@ -2632,6 +2646,147 @@ impl TriApp {
         }
     }
 
+    /// Relit les superpositions : grilles intégrées (couleur et opacité des réglages),
+    /// puis les fichiers du dossier `overlays` des données. Renvoie la première erreur.
+    fn reload_overlays(&mut self) -> Option<String> {
+        let [r, g, b] = self.gui.colors.overlay.0;
+        let alpha = (self.gui.view.overlay_opacity.clamp(0.0, 1.0) * 255.0) as u8;
+        let mut list = tri::overlay::builtin(tri::overlay::Rgba([r, g, b, alpha]));
+        let mut error = None;
+        if let Some(data) = &self.data_dir {
+            let (user, errors) = tri::overlay::load_dir(&tri::overlay::user_dir(data));
+            list.extend(
+                user.into_iter()
+                    .map(|o| Box::new(o) as Box<dyn tri::overlay::Overlay>),
+            );
+            error = errors
+                .into_iter()
+                .next()
+                .map(|(file, e)| t!("overlay-error", file = folder_name(&file), error = e));
+        }
+        self.overlays = list;
+        // Un logo a pu changer : rechargé à son prochain dessin.
+        self.overlay_textures.clear();
+        self.overlay = self.overlay.min(self.overlays.len());
+        error
+    }
+
+    /// Superposition suivante (ou précédente) ; aucune entre la dernière et la première.
+    fn cycle_overlay(&mut self, forward: bool) {
+        let error = self.reload_overlays();
+        let n = self.overlays.len() + 1;
+        self.overlay = if forward {
+            (self.overlay + 1) % n
+        } else {
+            (self.overlay + n - 1) % n
+        };
+        self.notice = Some(match error {
+            Some(e) => (e, true),
+            None => match self
+                .overlay
+                .checked_sub(1)
+                .and_then(|i| self.overlays.get(i))
+            {
+                Some(o) => (t!("overlay-shown", name = o.name()), false),
+                None => (t!("overlay-none"), false),
+            },
+        });
+    }
+
+    /// Superposition affichée, sur l'image dessinée en `rect` (formes du moteur en
+    /// coordonnées relatives, mises à l'échelle de l'image, zoom compris).
+    fn draw_overlay(&mut self, ctx: &egui::Context, painter: &egui::Painter, rect: Option<Rect>) {
+        let Some(rect) = rect.filter(|r| r.height() > 0.0) else {
+            return;
+        };
+        let Some(overlay) = self
+            .overlay
+            .checked_sub(1)
+            .and_then(|i| self.overlays.get(i))
+        else {
+            return;
+        };
+        let shapes = overlay.shapes(rect.width() / rect.height());
+        let at = |p: [f32; 2]| rect.min + vec2(p[0] * rect.width(), p[1] * rect.height());
+        let color =
+            |c: tri::overlay::Rgba| Color32::from_rgba_unmultiplied(c.0[0], c.0[1], c.0[2], c.0[3]);
+        let width = self.gui.view.overlay_line_width;
+        for shape in shapes {
+            match shape {
+                tri::overlay::Shape::Line { from, to, color: c } => {
+                    // Liseré sombre dessous : lisible sur un ciel comme sur une ombre.
+                    let shadow = Color32::from_black_alpha(c.0[3] / 3);
+                    painter
+                        .line_segment([at(from), at(to)], egui::Stroke::new(width + 2.0, shadow));
+                    painter.line_segment([at(from), at(to)], egui::Stroke::new(width, color(c)));
+                }
+                tri::overlay::Shape::Rect {
+                    min,
+                    max,
+                    stroke,
+                    fill,
+                } => {
+                    let r = Rect::from_min_max(at(min), at(max));
+                    if let Some(f) = fill {
+                        painter.rect_filled(r, 0.0, color(f));
+                    }
+                    if let Some(s) = stroke {
+                        painter.rect_stroke(
+                            r,
+                            0.0,
+                            egui::Stroke::new(width, color(s)),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                }
+                tri::overlay::Shape::Text {
+                    at: p,
+                    anchor,
+                    text,
+                    size,
+                    color: c,
+                } => {
+                    let [fx, fy] = anchor.factors();
+                    let align = |f: f32| match f {
+                        f if f < 0.25 => egui::Align::Min,
+                        f if f > 0.75 => egui::Align::Max,
+                        _ => egui::Align::Center,
+                    };
+                    let font = FontId::proportional((size * rect.height()).max(4.0));
+                    painter.text(at(p), Align2([align(fx), align(fy)]), text, font, color(c));
+                }
+                tri::overlay::Shape::Image {
+                    path,
+                    min,
+                    max,
+                    opacity,
+                } => {
+                    let texture = self
+                        .overlay_textures
+                        .entry(path.clone())
+                        .or_insert_with(|| {
+                            let image = image::open(&path).ok()?.to_rgba8();
+                            let size = [image.width() as usize, image.height() as usize];
+                            let pixels = egui::ColorImage::from_rgba_unmultiplied(size, &image);
+                            Some(ctx.load_texture(
+                                format!("overlay:{}", path.display()),
+                                pixels,
+                                egui::TextureOptions::LINEAR,
+                            ))
+                        });
+                    if let Some(texture) = texture {
+                        painter.image(
+                            texture.id(),
+                            Rect::from_min_max(at(min), at(max)),
+                            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            Color32::WHITE.gamma_multiply(opacity.clamp(0.0, 1.0)),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Repère du collimateur de mise au point de `file` sur l'image affichée en `rect`
     /// (métadonnées lues en fond ; rien tant qu'elles ne sont pas là, ni pour un boîtier
     /// dont le collimateur n'est pas lu).
@@ -2786,6 +2941,7 @@ impl TriApp {
                     _ => view::fit_rect(rect, original),
                 };
                 painter.image(texture.id(), image_rect, uv, Color32::WHITE);
+                self.draw_overlay(&ctx, &painter, Some(image_rect));
                 self.draw_focus_point(&ctx, &painter, &file, Some(image_rect));
                 if self.clipping
                     && let Some(mask) = self.mask_texture(&ctx, index)
@@ -3107,6 +3263,7 @@ impl TriApp {
                 );
             }
         }
+        self.draw_overlay(&ctx, &painter, image_rect);
         self.draw_focus_point(&ctx, &painter, &file, image_rect);
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
@@ -3820,6 +3977,23 @@ impl TriApp {
             }
             Action::FileReveal => tri::files::reveal(&first),
             Action::FileEdit => tri::files::open_with(&settings.editor, &paths),
+            Action::Send(_) => {
+                let Some(sender) = action.sender() else {
+                    return;
+                };
+                let n = paths.len();
+                match sender.send(&paths) {
+                    Ok(()) => {
+                        let name = sender.name();
+                        self.notice = Some((t!("send-started", name = name, n = n), false));
+                        Ok(())
+                    }
+                    Err(e) => {
+                        self.file_error = Some(format!("{} : {e}", sender.name()));
+                        return;
+                    }
+                }
+            }
             Action::FileCopy | Action::FileMove => {
                 let mode = if action == Action::FileCopy {
                     tri::files::TransferMode::Copy
@@ -3945,7 +4119,11 @@ impl TriApp {
                         Action::FileDelete,
                         Action::FileReveal,
                         Action::FileEdit,
-                    ] {
+                        Action::Send("plugin.airdrop.send"),
+                    ]
+                    .into_iter()
+                    .filter(|a| a.available())
+                    {
                         let (rect, response) =
                             marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
                         let color = ui.style().interact(&response).fg_stroke.color;
@@ -5405,6 +5583,7 @@ fn uses_cursor(action: Action) -> bool {
             | Action::FileMove
             | Action::FileDeleteStack
             | Action::FileCopyStack
+            | Action::Send(_)
             | Action::SelectToggle
             | Action::SelectVisual
             | Action::Compare
@@ -5673,6 +5852,7 @@ fn help_search_id() -> egui::Id {
 fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
     let mut rows: Vec<(Action, String, i32)> = Action::ALL
         .iter()
+        .filter(|a| a.available())
         .filter_map(|&action| {
             let keys = keymap.keys_for(action).join(" / ");
             let label = action.label();
@@ -6118,6 +6298,65 @@ mod tests {
         assert_eq!(h.state().selection.len(), 3);
         press(&mut h, Key::A, Modifiers::CTRL | Modifiers::SHIFT);
         assert!(h.state().selection.is_empty());
+    }
+
+    #[test]
+    fn airdrop_is_a_plugin_action_with_a_configurable_key() {
+        let airdrop = Action::from_id("plugin.airdrop.send").expect("action du plugin");
+        assert_eq!(airdrop.available(), cfg!(target_os = "macos"));
+        // Dans l'aide sur macOS seulement ; sans touche par défaut, réglable dans [keys].
+        let rows = help_rows(&Keymap::default(), "airdrop");
+        assert_eq!(
+            rows.iter().any(|(a, _)| *a == airdrop),
+            cfg!(target_os = "macos")
+        );
+        let mut keys = std::collections::BTreeMap::new();
+        keys.insert("plugin.airdrop.send".to_string(), vec!["F6".to_string()]);
+        let (km, warnings) = Keymap::default().with_overrides(&keys);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(km.keys_for(airdrop).len(), 1);
+        // Lancée depuis un fil de test (pas le fil principal) : refus expliqué, rien
+        // d'ouvert.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().keymap = km;
+        press(&mut h, Key::F6, Modifiers::NONE);
+        let error = h.state().file_error.clone().unwrap_or_default();
+        assert!(error.starts_with("AirDrop"), "{error}");
+    }
+
+    #[test]
+    fn overlays_cycle_through_grids_and_user_files() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let overlays = dir.path().join("data/overlays");
+        std::fs::create_dir_all(&overlays).unwrap();
+        std::fs::write(
+            overlays.join("insta.toml"),
+            "name = \"Insta\"\n[[shape]]\nkind = \"frame\"\nratio = \"4:5\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            overlays.join("cassé.toml"),
+            "[[shape]]\nkind = \"cercle\"\n",
+        )
+        .unwrap();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::T, Modifiers::NONE);
+        assert_eq!(h.state().overlay, 1);
+        // Un fichier mal écrit est signalé (les autres restent utilisables).
+        let notice = h.state().notice.clone().unwrap();
+        assert!(notice.1 && notice.0.contains("cassé"), "{notice:?}");
+        // Trois grilles intégrées, puis le fichier de l'utilisateur, puis aucune.
+        assert_eq!(h.state().overlays.len(), 4);
+        for _ in 0..3 {
+            press(&mut h, Key::T, Modifiers::NONE);
+        }
+        assert_eq!(h.state().overlays[h.state().overlay - 1].name(), "Insta");
+        press(&mut h, Key::T, Modifiers::NONE);
+        assert_eq!(h.state().overlay, 0, "après la dernière : aucune");
+        press(&mut h, Key::T, Modifiers::SHIFT);
+        assert_eq!(h.state().overlay, 4, "Maj+T : en arrière");
     }
 
     #[test]

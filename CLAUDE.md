@@ -587,6 +587,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   photo isolée = groupe d'une image (fonds alternés), bouton « tout déplier » allumé
   quand les piles sont repliées. Puis : curseur de la grille masquable (Échap, clic
   dans le vide) pour une vue d'ensemble des piles.
+- [x] **Deux premiers plugins** (19/10/2026, pour éprouver l'architecture) :
+  superpositions (`src/overlay.rs` : grilles en Rust, et fichiers TOML de l'utilisateur
+  — texte, logo, format 4:5 —, `t`) et envoi par **AirDrop** (`src/send.rs`,
+  `NSSharingService`, action `plugin.airdrop.send`). Choix discuté : traits Rust
+  statiques pour le cœur ; plus tard, pour les plugins des utilisateurs (IA en Python…),
+  un **processus externe parlant JSON** (n'importe quel langage, isolé, « JSON à la
+  frontière ») plutôt que Lua ou Python embarqués.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**

@@ -199,3 +199,17 @@ cli-group = GROUPE { $index } ({ $n } images)
 cli-sharpness-header = fichier	score	× dossier	× voisines	× pile	jugement	durée
 cli-sharpness-blurry = FLOUE
 cli-sharpness-summary = { $n } images, médiane { $median } : { $blurry } floues (sous { $ratio } × la médiane du dossier, ou { $neighbour_ratio } × celle des { $neighbours } voisines de chaque côté)
+
+## Superpositions
+overlay-thirds = Tiers
+overlay-golden = Nombre d'or
+overlay-diagonals = Diagonales
+overlay-bad-color = couleur « { $color } » : attendu "#rrggbb"
+overlay-bad-ratio = format « { $ratio } » : attendu largeur:hauteur, par exemple "4:5"
+overlay-bad-image = logo { $path } illisible : { $error }
+
+## Envoi (plugins)
+send-nothing = rien à envoyer
+send-main-thread = envoi impossible hors du fil principal de l'interface
+send-unavailable = { $name } n'est pas disponible sur cette machine
+send-refused = { $name } refuse ces fichiers

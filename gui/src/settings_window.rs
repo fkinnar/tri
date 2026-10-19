@@ -548,6 +548,7 @@ impl SettingsWindow {
         Group::ALL.into_iter().flat_map(move |group| {
             Action::ALL.into_iter().filter(move |a| {
                 a.group() == group
+                    && a.available()
                     && query.is_none_or(|q| {
                         let keys = self.keymap.keys_for(*a).join(" ");
                         let text = format!("{} {} {keys}", a.label(), a.id());

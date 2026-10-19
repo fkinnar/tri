@@ -338,6 +338,10 @@ zoom_on_focus_point = true
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
+# Superpositions (t / Maj+T, voir overlay.md) : épaisseur des traits (points) ; opacité
+# des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
+overlay_line_width = 1.0
+overlay_opacity = 0.6
 
 [gui.zoom]
 # Zoom en plein écran : paliers de + et - (1.0 = 100 % : un pixel de l'image par pixel de
@@ -468,6 +472,8 @@ hover = "#b4b4b4"
 marked = "#ffaa28"
 # Repère du collimateur de mise au point.
 focus = "#3cff6e"
+# Grilles intégrées des superpositions (tiers, nombre d'or, diagonales).
+overlay = "#ffffff"
 # Goutte des filtres de netteté (barrée : masquer les floues ; seule : floues seulement).
 blur_drop = "#6eaae6"
 # Piles actives : fond des images, un groupe sur deux en gris clair, l'autre en gris foncé

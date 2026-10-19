@@ -37,6 +37,11 @@ action-core-select-visual = Visual mode: select a range (v to confirm)
 action-core-view-compare = Compare the selected images side by side
 action-core-view-peaking = Show / hide sharpness (sharp edges, at 1:1)
 action-core-view-peaking_color = Sharpness: next colour
+action-core-view-overlay = Next overlay (grids, then yours: text, logo, format)
+action-core-view-overlay_prev = Previous overlay
+overlay-shown = Overlay: { $name }
+overlay-none = Overlay: none
+overlay-error = Overlay { $file }: { $error }
 action-core-view-focus_point = Show / hide the focus point
 action-core-select-all = Select all
 action-core-select-clear = Deselect all
@@ -52,6 +57,11 @@ action-core-file-copy = Copy to…
 action-core-file-delete_stack = Delete the whole stack
 action-core-file-copy_stack = Copy the whole stack to…
 stack-actions-need-stacks = Stacks are off ({ $keys }): this action is for a whole stack
+action-plugin-airdrop-send = Send with AirDrop
+send-started = { $name }: { $n ->
+    [one] { $n } image to send
+   *[other] { $n } images to send
+}
 action-core-file-move = Move to…
 action-core-edit-undo = Undo the last change
 action-core-edit-redo = Redo

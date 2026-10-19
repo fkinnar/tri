@@ -199,6 +199,10 @@ pub enum Action {
     PeakingColor,
     /// Afficher / masquer le collimateur de mise au point.
     ToggleFocusPoint,
+    /// Superposition suivante (aucune, grilles, celles de l'utilisateur).
+    OverlayNext,
+    /// Superposition précédente.
+    OverlayPrev,
     /// Sélectionner / désélectionner l'image courante.
     SelectToggle,
     /// Mode visuel : la plage suit l'image courante.
@@ -291,6 +295,9 @@ pub enum Action {
     FileMove,
     /// Supprimer toute la pile de l'image (`dw`, comme un mot dans vim).
     FileDeleteStack,
+    /// Envoyer la sélection par un plugin d'envoi ([`tri::send`]) ; l'identifiant complet
+    /// de l'action, dans l'espace de noms des plugins (`plugin.airdrop.send`).
+    Send(&'static str),
     /// Copier toute la pile de l'image vers un dossier (`yw`).
     FileCopyStack,
     /// Afficher / masquer le panneau des dossiers.
@@ -349,7 +356,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 117] = [
+    pub const ALL: [Action; 120] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -385,6 +392,8 @@ impl Action {
         Action::TogglePeaking,
         Action::PeakingColor,
         Action::ToggleFocusPoint,
+        Action::OverlayNext,
+        Action::OverlayPrev,
         Action::SelectAll,
         Action::SelectClear,
         Action::FileRename,
@@ -395,6 +404,7 @@ impl Action {
         Action::FileMove,
         Action::FileDeleteStack,
         Action::FileCopyStack,
+        Action::Send("plugin.airdrop.send"),
         Action::Undo,
         Action::Redo,
         Action::History,
@@ -474,6 +484,23 @@ impl Action {
         Action::ALL.into_iter().find(|a| a.id() == id)
     }
 
+    /// Plugin d'envoi d'une action [`Action::Send`] (`airdrop` pour
+    /// `plugin.airdrop.send`).
+    pub fn sender(self) -> Option<Box<dyn tri::send::Sender>> {
+        let Action::Send(id) = self else { return None };
+        let name = id.strip_prefix("plugin.")?.strip_suffix(".send")?;
+        tri::send::sender(name)
+    }
+
+    /// Faux pour l'action d'un plugin indisponible sur cette machine (AirDrop hors
+    /// macOS) : ni dans l'aide, ni dans les réglages, ni en bouton.
+    pub fn available(self) -> bool {
+        match self {
+            Action::Send(_) => self.sender().is_some_and(|s| s.available()),
+            _ => true,
+        }
+    }
+
     /// Libellé compréhensible (aide, bulles, boutons), dans la langue de l'interface :
     /// identifiant `action-<identifiant de l'action>` des catalogues (`gui/locales`).
     pub fn label(self) -> String {
@@ -490,14 +517,15 @@ impl Action {
             ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint => Group::View,
+            | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint | OverlayNext
+            | OverlayPrev => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
-            | FileDeleteStack | FileCopyStack => Group::Files,
+            | FileDeleteStack | FileCopyStack | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
@@ -551,6 +579,8 @@ impl Action {
             Action::TogglePeaking => "core.view.peaking",
             Action::PeakingColor => "core.view.peaking_color",
             Action::ToggleFocusPoint => "core.view.focus_point",
+            Action::OverlayNext => "core.view.overlay",
+            Action::OverlayPrev => "core.view.overlay_prev",
             Action::SelectToggle => "core.select.toggle",
             Action::SelectVisual => "core.select.visual",
             Action::SelectAll => "core.select.all",
@@ -596,6 +626,7 @@ impl Action {
             Action::FileMove => "core.file.move",
             Action::FileDeleteStack => "core.file.delete_stack",
             Action::FileCopyStack => "core.file.copy_stack",
+            Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
             Action::ToggleFolderPanel => "core.view.folders",
@@ -1052,6 +1083,9 @@ const RATING: &[Binding] = {
         (&[plain(Key::P)], TogglePeaking),
         (&[ctrl(Key::P)], PeakingColor),
         (&[plain(Key::M)], ToggleFocusPoint),
+        // Superpositions (« tracé ») : grilles, puis celles de l'utilisateur.
+        (&[plain(Key::T)], OverlayNext),
+        (&[shifted(Key::T)], OverlayPrev),
         (&[shifted(Key::M)], ToggleMetadata),
     ]
 };
@@ -1730,7 +1764,12 @@ mod tests {
     #[test]
     fn ids_are_unique_namespaced_and_reversible() {
         let mut ids: Vec<&str> = Action::ALL.iter().map(|a| a.id()).collect();
-        assert!(ids.iter().all(|id| id.starts_with("core.")));
+        // `core.*`, ou `plugin.<nom>.<action>` pour les plugins (voir le `CLAUDE.md`).
+        let plugin = |id: &str| id.starts_with("plugin.") && id.split('.').count() == 3;
+        assert!(
+            ids.iter().all(|id| id.starts_with("core.") || plugin(id)),
+            "{ids:?}"
+        );
         for a in Action::ALL {
             assert_eq!(Action::from_id(a.id()), Some(a));
         }
@@ -1917,7 +1956,13 @@ mod tests {
             let b: Vec<&Binding> = profile.bindings().collect();
             // Changement de panneau : lié après le leader (`Keymap::with_leader`).
             let by_leader = [Action::FocusLeft, Action::FocusRight, Action::FocusNext];
-            for a in Action::ALL.into_iter().filter(|a| !by_leader.contains(a)) {
+            // Les actions des plugins n'ont pas de touche par défaut (à régler dans
+            // `[keys]` ou la fenêtre de réglages).
+            let plugin = |a: &Action| a.id().starts_with("plugin.");
+            for a in Action::ALL
+                .into_iter()
+                .filter(|a| !by_leader.contains(a) && !plugin(a))
+            {
                 assert!(
                     b.iter().any(|(_, x)| *x == a),
                     "{profile:?} : {a:?} sans touche"

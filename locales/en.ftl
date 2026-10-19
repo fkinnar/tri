@@ -198,3 +198,17 @@ cli-group = GROUP { $index } ({ $n } images)
 cli-sharpness-header = file	score	× folder	× neighbours	× stack	verdict	time
 cli-sharpness-blurry = BLURRY
 cli-sharpness-summary = { $n } images, median { $median }: { $blurry } blurry (below { $ratio } × the folder median, or { $neighbour_ratio } × that of the { $neighbours } neighbours on each side)
+
+## Overlays
+overlay-thirds = Thirds
+overlay-golden = Golden ratio
+overlay-diagonals = Diagonals
+overlay-bad-color = colour “{ $color }”: expected "#rrggbb"
+overlay-bad-ratio = format “{ $ratio }”: expected width:height, for example "4:5"
+overlay-bad-image = logo { $path } unreadable: { $error }
+
+## Sending (plugins)
+send-nothing = nothing to send
+send-main-thread = cannot send outside the interface's main thread
+send-unavailable = { $name } is not available on this machine
+send-refused = { $name } refuses these files

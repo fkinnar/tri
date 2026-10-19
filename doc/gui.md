@@ -184,6 +184,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Superpositions** (`t` / `Maj+T`, 19/10/2026, voir `overlay.md`) : grilles intégrées
+  et superpositions de l'utilisateur (texte, logo, format 4:5…), en plein écran et en
+  comparaison ; nom dans la barre d'état.
+- **AirDrop** (19/10/2026, voir `send.md`) : action `plugin.airdrop.send`, bouton de
+  partage dans la boîte du clic droit, sans touche par défaut ; macOS seulement (masquée
+  ailleurs : `Action::available`).
 - **Au clavier dans l'aide et les réglages** (retours du 18/10/2026) : l'aide défile aux
   flèches haut / bas (`[gui.dialogs] help_scroll_line`), Page préc. / suiv. et Ctrl+U /
   Ctrl+D, la recherche gardant les lettres. Réglages : la liste des sections défile

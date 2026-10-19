@@ -1,0 +1,46 @@
+# Exemple de superposition (voir overlay.md) : à copier dans le dossier « overlays » du
+# dossier de données de tri, un fichier par superposition. La touche t les fait défiler
+# en plein écran, après les grilles intégrées (tiers, nombre d'or, diagonales).
+
+# Nom affiché (défaut : le nom du fichier).
+name = "Publication Insta"
+
+# Cadre d'un format, largeur:hauteur, le plus grand possible et centré ; le hors-cadre
+# est assombri (shade : opacité du voile, 0 : aucun). Les formes qui suivent un cadre se
+# placent DANS ce cadre (le logo et le texte d'une publication 4:5 tombent dans la
+# publication, pas dans ce qui sera coupé ; la grille est celle du recadrage).
+[[shape]]
+kind = "frame"
+ratio = "4:5"
+color = "#ffffff"
+opacity = 0.9
+shade = 0.5
+
+# Logo : fichier (relatif à ce fichier, ou ~/…), ancrage (top-left, top, top-right, left,
+# center, right, bottom-left, bottom, bottom-right), largeur en fraction de la largeur de
+# l'image, marge en fraction du petit côté, opacité.
+[[shape]]
+kind = "image"
+path = "logo.png"
+anchor = "bottom-right"
+width = 0.15
+margin = 0.03
+opacity = 0.8
+
+# Texte : contenu, ancrage, hauteur des lettres et marge en fraction du petit côté,
+# couleur "#rrggbb", opacité.
+[[shape]]
+kind = "text"
+text = "© Mon nom"
+anchor = "bottom-left"
+size = 0.03
+margin = 0.03
+color = "#ffffff"
+opacity = 0.9
+
+# Grille de composition : thirds (tiers), golden (nombre d'or) ou diagonals.
+[[shape]]
+kind = "grid"
+grid = "thirds"
+color = "#ffffff"
+opacity = 0.4

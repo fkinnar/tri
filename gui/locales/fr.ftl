@@ -37,6 +37,11 @@ action-core-select-visual = Mode visuel : sélectionner une plage (v pour valide
 action-core-view-compare = Comparer les images sélectionnées côte à côte
 action-core-view-peaking = Afficher / masquer la netteté (contours nets, en 1:1)
 action-core-view-peaking_color = Netteté : couleur suivante
+action-core-view-overlay = Superposition suivante (grilles, puis les vôtres : texte, logo, format)
+action-core-view-overlay_prev = Superposition précédente
+overlay-shown = Superposition : { $name }
+overlay-none = Superposition : aucune
+overlay-error = Superposition { $file } : { $error }
 action-core-view-focus_point = Afficher / masquer le collimateur de mise au point
 action-core-select-all = Tout sélectionner
 action-core-select-clear = Tout désélectionner
@@ -51,6 +56,11 @@ action-core-file-copy = Copier vers…
 action-core-file-delete_stack = Supprimer toute la pile
 action-core-file-copy_stack = Copier toute la pile vers…
 stack-actions-need-stacks = Piles désactivées ({ $keys }) : cette action vaut pour toute une pile
+action-plugin-airdrop-send = Envoyer par AirDrop
+send-started = { $name } : { $n ->
+    [one] { $n } image à envoyer
+   *[other] { $n } images à envoyer
+}
 action-core-file-move = Déplacer vers…
 action-core-edit-undo = Annuler la dernière modification
 action-core-edit-redo = Rétablir
