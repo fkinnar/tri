@@ -400,6 +400,8 @@ fn default_dir_for(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<P
 mod tests {
     use super::*;
 
+    // Les tests qui s'en servent comparent des chemins Unix : pas sous Windows.
+    #[cfg(not(windows))]
     fn env<'a>(vars: &'a [(&str, &str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
         move |name| {
             vars.iter()

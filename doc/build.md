@@ -144,3 +144,26 @@ TURBOJPEG_SOURCE=explicit TURBOJPEG_LIB_DIR=… TURBOJPEG_INCLUDE_DIR=… cargo 
 | `LIBRAW_LIB` | Nom de la bibliothèque à lier avec `LIBRAW_DIR` (défaut : `raw`) |
 | `TRI_TEST_RAW` | Fichier RAW utilisé par les tests d'intégration (voir [tests.md](tests.md)) |
 | `TRI_TEST_HEIC` | Vrai HEIC (iPhone) utilisé par un test d'intégration optionnel |
+
+## Vérifier le code pour Windows depuis macOS ou Linux (19/10/2026)
+
+Sans machine Windows, on vérifie au moins que tout le code Rust (moteur, interface,
+tests) se compile et passe clippy pour Windows :
+
+```sh
+rustup target add x86_64-pc-windows-msvc        # une fois
+TRI_CHECK_ONLY=1 CARGO_FEATURE_PURE=1 cargo clippy --workspace --all-targets \
+  --no-default-features --target x86_64-pc-windows-msvc --target-dir /tmp/tri-win
+```
+
+- `cargo check` / `clippy` ne lient rien : LibRaw n'est pas nécessaire ;
+- `TRI_CHECK_ONLY` : `build.rs` saute le shim C de LibRaw (il faudrait le compilateur
+  de la cible) ;
+- `CARGO_FEATURE_PURE` : blake3 sans son assembleur (même raison), pour la
+  vérification seulement ;
+- `--no-default-features` : sans libjpeg-turbo ni libheif, compilées en C.
+
+Premier passage le 19/10/2026 : tout se compile, clippy propre (une fonction de test
+réservée à Unix marquée comme telle). Restent à vérifier sur une vraie machine : la
+compilation des bibliothèques C (LibRaw via `LIBRAW_DIR`, libjpeg-turbo, libheif) et
+l'exécution (chemins, lettres de lecteur, éjection, corbeille).

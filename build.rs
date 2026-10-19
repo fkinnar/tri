@@ -39,6 +39,14 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBRAW_DIR");
     println!("cargo:rerun-if-env-changed=LIBRAW_LIB");
     println!("cargo:rerun-if-changed=csrc/libraw_shim.c");
+    println!("cargo:rerun-if-env-changed=TRI_CHECK_ONLY");
+
+    // Vérification du code Rust pour une autre plateforme (`cargo check --target
+    // x86_64-pc-windows-msvc` depuis macOS ou Linux, voir doc/build.md) : ni shim C (il
+    // faudrait le compilateur de la cible) ni LibRaw ; `cargo check` ne lie rien.
+    if env::var_os("TRI_CHECK_ONLY").is_some() {
+        return;
+    }
 
     let libraw = match env::var_os("LIBRAW_DIR") {
         Some(dir) => probe_dir(dir.into()),
