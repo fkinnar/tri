@@ -661,7 +661,11 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   notes) ; vocabulaire (mots-clés du dossier, liste globale de `tri`, import de la liste
   de Lightroom, fichier texte indenté) ; saisie au clavier avec complétion floue, sur la
   sélection ; filtre par mot-clé (même trait `Filter`) ; panneau ou boîte ; mots-clés
-  hiérarchiques, synonymes ; annulation (historique) ; place par rapport à la V1.
+  hiérarchiques, synonymes ; annulation (historique).
+  **Décidé le 19/10/2026 : après la V1.** **Hiérarchiques** et **compatibles avec les
+  autres outils** (Lightroom, Capture One, darktable, digiKam… : là que « ça se corse »).
+  **Interface vraiment agréable** : exigence première (« si c'est pour avoir un truc
+  aussi moisi que DT, ça ne sert à rien ») ; à maquetter et discuter avant de coder.
 - **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
   la V1 »).
 
