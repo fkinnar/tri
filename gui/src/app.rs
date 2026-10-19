@@ -416,6 +416,12 @@ impl TriApp {
             },
             None => (Folder::default(), None),
         };
+        trace(|| {
+            format!(
+                "dossier lu : {} images, notes comprises",
+                folder.notes.len()
+            )
+        });
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
@@ -423,6 +429,7 @@ impl TriApp {
         if !folder.is_none() {
             tree.reveal(&folder.dir);
         }
+        trace(|| format!("arborescence : {} emplacements", tree.places().len()));
         let screenshot = std::env::var_os("TRI_GUI_SCREENSHOT").map(|p| Screenshot {
             path: p.into(),
             forced: false,
@@ -5394,7 +5401,9 @@ impl eframe::App for TriApp {
         let ctx = ui.ctx().clone();
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
         if self.engine.is_none() && self.error.is_none() {
+            trace(|| "première image".into());
             self.start_engine(&ctx);
+            trace(|| "moteur démarré".into());
         }
         self.drain_events();
         // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder

@@ -46,6 +46,7 @@ mod view;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result {
+    trace::trace(|| "démarrage".into());
     let mut args = std::env::args_os().skip(1);
     let (mut dir, mut cache, mut config) = (None, None, None);
     while let Some(arg) = args.next() {
@@ -62,6 +63,7 @@ fn main() -> eframe::Result {
     i18n::init(tri::i18n::LanguageSetting::Auto);
     let loaded = tri::settings::load::<settings::AppSettings>(config.as_deref());
     i18n::init(loaded.settings.i18n.language);
+    trace::trace(|| "configuration lue".into());
     if let Some(warning) = &loaded.warning {
         eprintln!("{}", tri::t!("warning-prefix", message = warning));
     }
@@ -75,10 +77,12 @@ fn main() -> eframe::Result {
             .with_inner_size(settings.gui.window),
         ..Default::default()
     };
+    trace::trace(|| "ouverture de la fenêtre".into());
     eframe::run_native(
         "tri",
         options,
         Box::new(move |cc| {
+            trace::trace(|| "fenêtre ouverte".into());
             cc.egui_ctx.set_theme(settings.gui.theme);
             // Fichier de la fenêtre de réglages : celui lu, sinon celui demandé ou
             // l'emplacement par défaut (créé au premier changement).
