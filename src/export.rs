@@ -413,11 +413,51 @@ impl Profiles {
 }
 
 /// Réglages (section `[export]`).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ExportSettings {
+    /// Profil proposé pour un rendu de RAW (identifiant).
+    pub default_raw: String,
+    /// Profil proposé pour une image déjà développée (JPEG boîtier, JPEG…).
+    pub default_flat: String,
     /// Profils (`[export.profiles.<id>]`).
     pub profiles: Profiles,
+}
+
+impl Default for ExportSettings {
+    fn default() -> Self {
+        Self {
+            default_raw: "edit".into(),
+            default_flat: "asis".into(),
+            profiles: Profiles::default(),
+        }
+    }
+}
+
+impl ExportSettings {
+    /// Les profils qui s'appliquent à un export d'images déjà développées (`flat`) ou de
+    /// rendus de RAW, dans l'ordre (voir [`Profile::applies_to`]).
+    pub fn applicable(&self, flat: bool) -> Vec<&Profile> {
+        self.profiles
+            .0
+            .iter()
+            .filter(|p| p.applies_to.allows(flat))
+            .collect()
+    }
+
+    /// Position, dans [`ExportSettings::applicable`], du profil proposé par défaut
+    /// (`default_flat` ou `default_raw`) ; le premier s'il est inconnu ou ne s'applique pas.
+    pub fn default_index(&self, flat: bool) -> usize {
+        let id = if flat {
+            &self.default_flat
+        } else {
+            &self.default_raw
+        };
+        self.applicable(flat)
+            .iter()
+            .position(|p| p.id == *id)
+            .unwrap_or(0)
+    }
 }
 
 /// `"."` (ou `"./"`) : à côté de l'image, comme `""`.
@@ -1200,6 +1240,22 @@ mod tests {
             AppliesTo::Raw
         );
         assert!(toml::from_str::<S>("[export.profiles.web]\napplies_to = \"tout\"\n").is_err());
+    }
+
+    #[test]
+    fn the_proposed_profile_comes_from_the_settings() {
+        let mut s = ExportSettings::default();
+        // Par défaut : Retouche pour un rendu, JPEG tel quel pour une image développée.
+        assert_eq!(s.applicable(false)[s.default_index(false)].id, "edit");
+        assert_eq!(s.applicable(true)[s.default_index(true)].id, "asis");
+        // Changé dans les réglages.
+        s.default_raw = "web".into();
+        assert_eq!(s.applicable(false)[s.default_index(false)].id, "web");
+        // Inconnu, ou qui ne s'applique pas (JPEG tel quel pour un rendu) : le premier.
+        s.default_raw = "asis".into();
+        assert_eq!(s.default_index(false), 0);
+        s.default_flat = "nulle-part".into();
+        assert_eq!(s.default_index(true), 0);
     }
 
     #[test]

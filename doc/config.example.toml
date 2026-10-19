@@ -99,8 +99,15 @@ darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false
 
+[export]
 # Export d'images développées par darktable (Ctrl+E), avec un profil par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
+# Profil proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
+# développée (JPEG boîtier, JPEG…) ; dans la séance, le dernier choisi l'emporte. Inconnu
+# ou qui ne s'applique pas : le premier de la liste.
+default_raw = "edit"
+default_flat = "asis"
+
 # Profils d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
 # vient du profil fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;

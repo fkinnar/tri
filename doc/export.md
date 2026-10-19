@@ -97,6 +97,12 @@ développée : JPEG boîtier, JPEG, TIFF…). « JPEG tel quel » vaut `"flat"`.
 propose que les profils qui s'appliquent à ce qu'on exporte (`AppliesTo::allows`,
 `exports_flat`), et la ligne de commande refuse les autres, avec la raison.
 
+**Profil proposé** (19/10/2026) : `[export] default_raw` (rendu de RAW, défaut `edit`) et
+`default_flat` (image déjà développée, défaut `asis`), plutôt qu'un paramètre par profil
+(un seul choix par cas, jamais deux profils « par défaut »). Dans la séance, le dernier
+profil choisi pour ce type d'export l'emporte. Un identifiant inconnu, ou un profil qui ne
+s'applique pas, retombe sur le premier de la liste (`ExportSettings::default_index`).
+
 ## Réglages (`[export]`)
 
 ```toml

@@ -147,13 +147,7 @@ impl ExportDialog {
         let images = tri::export::sources(images);
         // Seulement les profils qui s'appliquent à ce qu'on exporte (`applies_to`).
         let flat = exports_flat(render, &images);
-        let profiles: Vec<Profile> = settings
-            .profiles
-            .0
-            .iter()
-            .filter(|p| p.applies_to.allows(flat))
-            .cloned()
-            .collect();
+        let profiles: Vec<Profile> = settings.applicable(flat).into_iter().cloned().collect();
         let choice = choice.min(profiles.len().saturating_sub(1));
         ExportDialog {
             choice,
