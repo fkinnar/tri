@@ -128,7 +128,9 @@ impl Profile {
             max_side: 0,
             suffix: String::new(),
             folder: "export".into(),
-            passthrough: false,
+            // Retour de l'utilisateur (19/10/2026) : par défaut, ne jamais recompresser un
+            // JPEG quand on peut l'éviter.
+            passthrough: true,
         }
     }
 
@@ -140,6 +142,14 @@ impl Profile {
                 bits: 16,
                 color: "prophoto".into(),
                 ..Profile::base("edit")
+            },
+            // « JPEG tel quel » (demandé le 19/10/2026) : un JPEG d'origine est copié sans
+            // rien toucher (ni taille, ni espace couleur : un JPEG Adobe RGB le reste) ; un
+            // RAW sort en JPEG pleine taille, dans l'espace du développement.
+            Profile {
+                quality: 95,
+                color: String::new(),
+                ..Profile::base("asis")
             },
             Profile {
                 max_side: 2048,
@@ -544,17 +554,10 @@ pub enum Local {
     Embedded,
 }
 
-/// Le profil peut-il être exporté **sans darktable** depuis `local` ? Sinon, la raison :
-/// pas de fichier `.icc` ni de Display P3 (LibRaw ne les produit pas), pas de TIFF 32 bits ;
-/// le JPEG boîtier, en sRGB seulement (c'est son espace).
-pub fn libraw_check(profile: &Profile, local: Local) -> Result<(), String> {
+/// Le profil peut-il être exporté **sans darktable** ? Sinon, la raison : pas de fichier
+/// `.icc` ni de Display P3 (LibRaw ne les produit pas), pas de TIFF 32 bits.
+pub fn libraw_check(profile: &Profile, _local: Local) -> Result<(), String> {
     profile.check()?;
-    if local == Local::Embedded && !is_srgb(&profile.color) {
-        return Err(crate::t!(
-            "export-embedded-color",
-            profile = profile.id.as_str()
-        ));
-    }
     if libraw_space(&profile.color).is_none() {
         return Err(crate::t!(
             "export-libraw-color",
@@ -569,10 +572,6 @@ pub fn libraw_check(profile: &Profile, local: Local) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-fn is_srgb(color: &str) -> bool {
-    matches!(color.trim().to_lowercase().as_str(), "" | "srgb")
 }
 
 /// Espace de sortie LibRaw et profil ICC (généré par `moxcms`) d'un espace de profil.
@@ -630,10 +629,162 @@ fn libraw_space(color: &str) -> Option<(crate::raw::OutputSpace, moxcms::ColorPr
     })
 }
 
+/// Espace couleur d'origine d'une image déjà développée (JPEG boîtier, image plate) :
+/// remarque de l'utilisateur (19/10/2026), un JPEG boîtier peut être en Adobe RGB (réglage
+/// du boîtier), il ne faut pas le supposer sRGB.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Origin {
+    Srgb,
+    AdobeRgb,
+    /// Profil ICC intégré (autre que sRGB ou Adobe RGB reconnus).
+    Icc(Vec<u8>),
+}
+
+impl Origin {
+    /// D'un JPEG : son profil ICC intégré, sinon l'EXIF (Adobe RGB selon la norme DCF :
+    /// `InteroperabilityIndex` « R03 », ou `ColorSpace` 2 de certains boîtiers), sinon sRGB
+    /// (l'espace par défaut de l'EXIF).
+    fn of_jpeg(bytes: &[u8]) -> Origin {
+        if let Some(icc) = crate::jpeg::icc_profile(bytes) {
+            return Origin::of_icc(icc);
+        }
+        let exif = exif::Reader::new().read_from_container(&mut std::io::Cursor::new(bytes));
+        let adobe = exif.is_ok_and(|e| {
+            let interop = e
+                .get_field(exif::Tag::InteroperabilityIndex, exif::In::PRIMARY)
+                .is_some_and(|f| f.display_value().to_string().contains("R03"));
+            let space = e
+                .get_field(exif::Tag::ColorSpace, exif::In::PRIMARY)
+                .and_then(|f| f.value.get_uint(0));
+            interop || space == Some(2)
+        });
+        if adobe {
+            Origin::AdobeRgb
+        } else {
+            Origin::Srgb
+        }
+    }
+
+    /// D'un profil ICC : sRGB et Adobe RGB reconnus à leur description (ASCII ou UTF-16).
+    fn of_icc(icc: Vec<u8>) -> Origin {
+        let has = |text: &str| {
+            let ascii = text.as_bytes();
+            let wide: Vec<u8> = text.bytes().flat_map(|b| [0, b]).collect();
+            icc.windows(ascii.len()).any(|w| w == ascii)
+                || icc.windows(wide.len()).any(|w| w == wide.as_slice())
+        };
+        if has("sRGB") {
+            Origin::Srgb
+        } else if has("Adobe RGB") {
+            Origin::AdobeRgb
+        } else {
+            Origin::Icc(icc)
+        }
+    }
+
+    /// D'un fichier image (plate) : JPEG comme ci-dessus ; autre format : son profil ICC
+    /// intégré, sinon sRGB.
+    fn of_file(bytes: &[u8]) -> Origin {
+        if crate::jpeg::dimensions(bytes).is_some() {
+            return Origin::of_jpeg(bytes);
+        }
+        use image::ImageDecoder;
+        image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_decoder().ok())
+            .and_then(|mut d| d.icc_profile().ok().flatten())
+            .map_or(Origin::Srgb, Origin::of_icc)
+    }
+
+    /// Le profil d'export `color` est-il déjà cet espace (rien à convertir) ? `""` : oui
+    /// (l'espace d'origine est gardé).
+    fn is(&self, color: &str) -> bool {
+        match color.trim().to_lowercase().as_str() {
+            "" => true,
+            "srgb" => *self == Origin::Srgb,
+            "adobergb" => *self == Origin::AdobeRgb,
+            _ => false,
+        }
+    }
+
+    fn profile(&self) -> Option<moxcms::ColorProfile> {
+        match self {
+            Origin::Srgb => Some(moxcms::ColorProfile::new_srgb()),
+            Origin::AdobeRgb => Some(moxcms::ColorProfile::new_adobe_rgb()),
+            Origin::Icc(icc) => moxcms::ColorProfile::new_from_slice(icc).ok(),
+        }
+    }
+
+    /// Profil ICC à intégrer quand on garde cet espace.
+    fn icc(&self) -> Option<Vec<u8>> {
+        match self {
+            Origin::Icc(icc) => Some(icc.clone()),
+            other => other.profile()?.encode().ok(),
+        }
+    }
+}
+
+/// Image déjà développée à exporter (JPEG boîtier d'un RAW, ou image plate) : ses pixels
+/// (orientation appliquée), son espace d'origine, et les octets JPEG à copier tels quels
+/// si c'en est un (orientation du RAW posée dans l'EXIF pour un JPEG boîtier).
+struct Developed {
+    pixels: crate::raw::Rgb16,
+    origin: Origin,
+    jpeg: Option<Vec<u8>>,
+}
+
+fn developed(image: &Path) -> Result<Developed, DevelopError> {
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
+    let to16 = |bmp: crate::bitmap::Bitmap| {
+        let data = bmp.data.iter().map(|&v| u16::from(v) * 257).collect();
+        crate::raw::Rgb16::from_raw(bmp.width, bmp.height, data)
+            .ok_or_else(|| DevelopError::Other("image".into()))
+    };
+    if kind_of(image) == Some(MediaKind::Raw) {
+        let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
+        let rotation = raw.orientation();
+        let crate::raw::Thumbnail::Jpeg(bytes) = raw.thumbnail().map_err(|e| failed(&e))? else {
+            // Aperçu non compressé (rare) : pas d'espace connu, sRGB.
+            let bmp = crate::preview::embedded_full(image).map_err(|e| failed(&e))?;
+            return Ok(Developed {
+                pixels: to16(bmp)?,
+                origin: Origin::Srgb,
+                jpeg: None,
+            });
+        };
+        let exif_orientation = match rotation {
+            crate::bitmap::Rotation::None => 1,
+            crate::bitmap::Rotation::Cw90 => 6,
+            crate::bitmap::Rotation::Cw180 => 3,
+            crate::bitmap::Rotation::Cw270 => 8,
+        };
+        let bmp = crate::jpeg::decode(&bytes, 0).map_err(|e| failed(&e))?;
+        return Ok(Developed {
+            pixels: to16(bmp.rotate(rotation))?,
+            origin: Origin::of_jpeg(&bytes),
+            jpeg: crate::jpeg::set_orientation(&bytes, exif_orientation),
+        });
+    }
+    let bytes = std::fs::read(image).map_err(|e| failed(&e))?;
+    let origin = Origin::of_file(&bytes);
+    let pixels = match crate::flat::decode_deep(image).map_err(|e| failed(&e))? {
+        crate::flat::Deep::Bits16(img) => img,
+        crate::flat::Deep::Bits8(bmp) => to16(bmp)?,
+    };
+    let jpeg = crate::jpeg::dimensions(&bytes).is_some().then_some(bytes);
+    Ok(Developed {
+        pixels,
+        origin,
+        jpeg,
+    })
+}
+
 /// Exporte `images` **sans darktable** : RAW développés par LibRaw (le rendu « plat » de
 /// `tri` : balance des blancs du boîtier, sans luminosité automatique) ou leur JPEG
-/// boîtier (`local`), images plates réencodées (en sRGB seulement : leur espace d'origine
-/// est inconnu). Même dossier, mêmes
+/// boîtier (`local`), images plates réencodées. Une image déjà développée (JPEG boîtier,
+/// image plate) garde son espace d'origine (`""`), ou y est **convertie** (`moxcms`) ;
+/// un JPEG est copié tel quel si possible ([`Profile::passthrough`]). Même dossier, mêmes
 /// noms et même progression que [`export`] ; une image en échec n'arrête pas les autres
 /// (raison dans [`Report::errors`]).
 pub fn export_libraw(
@@ -645,10 +796,6 @@ pub fn export_libraw(
     mut progress: impl FnMut(usize, usize, &Path),
 ) -> Result<Report, DevelopError> {
     libraw_check(profile, local).map_err(DevelopError::Other)?;
-    let (space, icc) = libraw_space(&profile.color).expect("vérifié");
-    let icc = icc
-        .encode()
-        .map_err(|e| DevelopError::Other(format!("{e:?}")))?;
     let images = sources(images);
     let total = images.len();
     let mut report = Report::default();
@@ -656,29 +803,9 @@ pub fn export_libraw(
         if cancel.load(Ordering::Relaxed) {
             return Err(DevelopError::Cancelled);
         }
-        // Sans recompression, si possible.
-        if profile.passthrough && profile.format == Format::Jpeg {
-            match passthrough(image, local, profile.max_side) {
-                Ok(Some(bytes)) => {
-                    let out = write_passthrough(image, profile, folder, &bytes)?;
-                    report.passthrough += 1;
-                    report.written.push(out);
-                    progress(
-                        report.written.len(),
-                        total,
-                        report.written.last().expect("ajouté"),
-                    );
-                    continue;
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    report.errors.push((image.clone(), e.to_string()));
-                    continue;
-                }
-            }
-        }
-        match export_one(image, profile, local, space, &icc, folder, cancel) {
-            Ok(out) => {
+        match export_one(image, profile, local, folder, cancel) {
+            Ok((out, copied)) => {
+                report.passthrough += usize::from(copied);
                 report.written.push(out);
                 progress(
                     report.written.len(),
@@ -694,42 +821,67 @@ pub fn export_libraw(
     Ok(report)
 }
 
+/// Exporte une image ; `true` : copiée sans recompression.
 fn export_one(
     image: &Path,
     profile: &Profile,
     local: Local,
-    space: crate::raw::OutputSpace,
-    icc: &[u8],
     folder: &str,
     cancel: &AtomicBool,
-) -> Result<PathBuf, DevelopError> {
+) -> Result<(PathBuf, bool), DevelopError> {
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
-    let to16 = |bmp: crate::bitmap::Bitmap| {
-        let data = bmp.data.iter().map(|&v| u16::from(v) * 257).collect();
-        crate::raw::Rgb16::from_raw(bmp.width, bmp.height, data)
-            .ok_or_else(|| DevelopError::Other("image".into()))
-    };
-    let mut pixels = match kind_of(image) {
-        Some(MediaKind::Raw) if local == Local::Embedded => {
-            to16(crate::preview::embedded_full(image).map_err(|e| failed(&e))?)?
+    let encode = |p: moxcms::ColorProfile| p.encode().map_err(|e| failed(&format!("{e:?}")));
+    let (mut pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
+        let (space, target) = libraw_space(&profile.color).expect("vérifié");
+        let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
+        let pixels = raw
+            .render_deep(&crate::raw::RenderOptions::default(), space, cancel)
+            .map_err(|e| match e {
+                crate::raw::RawError::Cancelled => DevelopError::Cancelled,
+                e => failed(&e),
+            })?;
+        (pixels, Some(encode(target)?))
+    } else {
+        let Developed {
+            mut pixels,
+            origin,
+            jpeg,
+        } = developed(image)?;
+        let (w, h) = pixels.dimensions();
+        let fits = profile.max_side == 0 || w.max(h) <= profile.max_side;
+        // Sans recompression : JPEG vers JPEG, sans réduction, sans changer d'espace.
+        if profile.passthrough
+            && profile.format == Format::Jpeg
+            && fits
+            && origin.is(&profile.color)
+            && let Some(bytes) = jpeg
+        {
+            return write_bytes(image, profile, folder, &bytes).map(|out| (out, true));
         }
-        Some(MediaKind::Raw) => {
-            let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
-            raw.render_deep(&crate::raw::RenderOptions::default(), space, cancel)
-                .map_err(|e| match e {
-                    crate::raw::RawError::Cancelled => DevelopError::Cancelled,
-                    e => failed(&e),
-                })?
-        }
-        _ => {
-            if !is_srgb(&profile.color) {
-                return Err(DevelopError::Other(crate::t!("export-libraw-flat")));
-            }
-            match crate::flat::decode_deep(image).map_err(|e| failed(&e))? {
-                crate::flat::Deep::Bits16(img) => img,
-                crate::flat::Deep::Bits8(bmp) => to16(bmp)?,
-            }
-        }
+        let icc = if origin.is(&profile.color) {
+            origin.icc()
+        } else {
+            // Conversion de l'espace d'origine vers celui du profil.
+            let (_, target) = libraw_space(&profile.color).expect("vérifié");
+            let source = origin
+                .profile()
+                .ok_or_else(|| DevelopError::Other(crate::t!("export-bad-icc")))?;
+            let transform = source
+                .create_transform_16bit(
+                    moxcms::Layout::Rgb,
+                    &target,
+                    moxcms::Layout::Rgb,
+                    moxcms::TransformOptions::default(),
+                )
+                .map_err(|e| failed(&format!("{e:?}")))?;
+            let mut out = vec![0u16; pixels.as_raw().len()];
+            transform
+                .transform(pixels.as_raw(), &mut out)
+                .map_err(|e| failed(&format!("{e:?}")))?;
+            pixels = crate::raw::Rgb16::from_raw(w, h, out).expect("même taille");
+            Some(encode(target)?)
+        };
+        (pixels, icc)
     };
     let (w, h) = pixels.dimensions();
     let side = profile.max_side;
@@ -741,72 +893,39 @@ fn export_one(
         );
         pixels = image::imageops::resize(&pixels, nw, nh, image::imageops::FilterType::Lanczos3);
     }
+    let out = output_path(image, profile, folder, profile.format.extension())?;
+    write_image(&out, &pixels, profile, icc.as_deref()).map_err(|e| {
+        let _ = std::fs::remove_file(&out);
+        failed(&e)
+    })?;
+    Ok((out, false))
+}
+
+/// Fichier de sortie de `image` (dossier créé, jamais d'écrasement).
+fn output_path(
+    image: &Path,
+    profile: &Profile,
+    folder: &str,
+    ext: &str,
+) -> Result<PathBuf, DevelopError> {
     let dir = folder_for(folder, image);
-    std::fs::create_dir_all(&dir).map_err(|e| failed(&e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| DevelopError::Other(e.to_string()))?;
     let stem = image
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let out = unique_path(
-        &dir,
-        &format!("{stem}{}", profile.suffix),
-        profile.format.extension(),
-    );
-    write_image(&out, &pixels, profile, icc).map_err(|e| {
-        let _ = std::fs::remove_file(&out);
-        failed(&e)
-    })?;
-    Ok(out)
-}
-
-/// Octets JPEG à écrire tels quels pour `image`, si possible : JPEG d'origine (image
-/// plate), ou JPEG boîtier d'un RAW avec l'orientation du RAW posée dans son EXIF, et pas
-/// plus grand que `max_side` (0 : toute taille). `None` : à réencoder.
-fn passthrough(image: &Path, local: Local, max_side: u32) -> Result<Option<Vec<u8>>, DevelopError> {
-    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
-    let fits = |bytes: &[u8]| {
-        crate::jpeg::dimensions(bytes).is_some_and(|(w, h)| max_side == 0 || w.max(h) <= max_side)
-    };
-    match kind_of(image) {
-        Some(MediaKind::Raw) if local == Local::Embedded => {
-            let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
-            let orientation = match raw.orientation() {
-                crate::bitmap::Rotation::None => 1,
-                crate::bitmap::Rotation::Cw90 => 6,
-                crate::bitmap::Rotation::Cw180 => 3,
-                crate::bitmap::Rotation::Cw270 => 8,
-            };
-            match raw.thumbnail() {
-                Ok(crate::raw::Thumbnail::Jpeg(bytes)) if fits(&bytes) => {
-                    Ok(crate::jpeg::set_orientation(&bytes, orientation))
-                }
-                _ => Ok(None),
-            }
-        }
-        Some(MediaKind::Flat) => {
-            let bytes = std::fs::read(image).map_err(|e| failed(&e))?;
-            Ok((crate::jpeg::dimensions(&bytes).is_some() && fits(&bytes)).then_some(bytes))
-        }
-        _ => Ok(None),
-    }
+    Ok(unique_path(&dir, &format!("{stem}{}", profile.suffix), ext))
 }
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
-fn write_passthrough(
+fn write_bytes(
     image: &Path,
     profile: &Profile,
     folder: &str,
     bytes: &[u8],
 ) -> Result<PathBuf, DevelopError> {
-    let failed = |e: std::io::Error| DevelopError::Other(e.to_string());
-    let dir = folder_for(folder, image);
-    std::fs::create_dir_all(&dir).map_err(failed)?;
-    let stem = image
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let out = unique_path(&dir, &format!("{stem}{}", profile.suffix), "jpg");
-    std::fs::write(&out, bytes).map_err(failed)?;
+    let out = output_path(image, profile, folder, "jpg")?;
+    std::fs::write(&out, bytes).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(out)
 }
 
@@ -827,7 +946,7 @@ fn write_image(
     out: &Path,
     pixels: &crate::raw::Rgb16,
     profile: &Profile,
-    icc: &[u8],
+    icc: Option<&[u8]>,
 ) -> Result<(), image::ImageError> {
     use image::{ExtendedColorType, ImageEncoder};
     let (w, h) = pixels.dimensions();
@@ -856,17 +975,23 @@ fn write_image(
     match profile.format {
         Format::Jpeg => {
             let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(file, profile.quality);
-            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            if let Some(icc) = icc {
+                enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            }
             enc.write_image(&eight(), w, h, ExtendedColorType::Rgb8)
         }
         Format::Tiff => {
             let mut enc = image::codecs::tiff::TiffEncoder::new(file);
-            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            if let Some(icc) = icc {
+                enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            }
             enc.write_image(&bytes, w, h, color)
         }
         Format::Png => {
             let mut enc = image::codecs::png::PngEncoder::new(file);
-            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            if let Some(icc) = icc {
+                enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            }
             enc.write_image(&bytes, w, h, color)
         }
     }
@@ -929,7 +1054,11 @@ mod tests {
         .unwrap();
         let p = &s.export.profiles;
         let ids: Vec<&str> = p.0.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(ids, ["edit", "web", "print"], "fournis d'abord, gardés");
+        assert_eq!(
+            ids,
+            ["edit", "asis", "web", "print"],
+            "fournis d'abord, gardés"
+        );
         let web = p.get("web").unwrap();
         assert_eq!(
             (web.quality, web.max_side),
@@ -1098,9 +1227,9 @@ mod tests {
             ..Profile::base("f32")
         };
         assert!(libraw_check(&float, Local::LibRaw).is_err());
-        // JPEG boîtier : sRGB seulement (Web oui, Retouche ProPhoto non).
+        // JPEG boîtier : converti au besoin (Web comme Retouche).
         assert!(libraw_check(p.get("web").unwrap(), Local::Embedded).is_ok());
-        assert!(libraw_check(p.get("edit").unwrap(), Local::Embedded).is_err());
+        assert!(libraw_check(p.get("edit").unwrap(), Local::Embedded).is_ok());
         for color in ["", "srgb", "adobergb", "prophoto", "rec709", "rec2020"] {
             let (_, icc) = libraw_space(color).unwrap();
             assert!(icc.encode().is_ok(), "{color}");
@@ -1162,7 +1291,7 @@ mod tests {
             let depth = decoder.color_type().bits_per_pixel() / 3;
             assert_eq!(depth, u16::from(bits), "{ext}");
         }
-        // Une image plate vers ProPhoto : refusée (espace d'origine inconnu), raison donnée.
+        // Une image plate (sans profil : sRGB) vers ProPhoto : convertie, profil intégré.
         let prophoto = Profile {
             format: Format::Tiff,
             bits: 16,
@@ -1178,8 +1307,18 @@ mod tests {
             |_, _, _| {},
         )
         .unwrap();
-        assert_eq!(report.failed, 1);
-        assert!(report.written.is_empty());
+        assert_eq!(report.failed, 0, "{:?}", report.errors);
+        let mut decoder = image::ImageReader::open(&report.written[0])
+            .unwrap()
+            .with_guessed_format()
+            .unwrap()
+            .into_decoder()
+            .unwrap();
+        let icc = decoder.icc_profile().unwrap().unwrap();
+        let wide: Vec<u8> = b"ProPhoto".iter().flat_map(|&b| [0, b]).collect();
+        let named = icc.windows(8).any(|w| w == b"ProPhoto")
+            || icc.windows(16).any(|w| w == wide.as_slice());
+        assert!(named, "profil ProPhoto");
     }
 
     #[test]
@@ -1211,6 +1350,12 @@ mod tests {
         let report = run(&profile(2048));
         assert_eq!(report.passthrough, 1);
         assert_eq!(std::fs::read(&report.written[0]).unwrap(), original);
+        // « JPEG tel quel » (profil fourni) : copie pure et simple, rien de touché.
+        let asis = Profiles::default().get("asis").unwrap().clone();
+        let report = run(&asis);
+        assert_eq!(report.passthrough, 1);
+        assert_eq!(std::fs::read(&report.written[0]).unwrap(), original);
+        std::fs::remove_file(&report.written[0]).unwrap();
         // À réduire : réencodée (pas de copie possible), sans écraser la première.
         let report = run(&profile(150));
         assert_eq!(report.passthrough, 0);
@@ -1219,6 +1364,55 @@ mod tests {
             image::image_dimensions(&report.written[0]).unwrap(),
             (150, 100)
         );
+    }
+
+    #[test]
+    fn an_adobe_rgb_jpeg_is_kept_as_is_or_converted_for_the_web() {
+        use image::{ImageDecoder, ImageEncoder};
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("boitier.jpg");
+        // JPEG Adobe RGB (profil intégré), vert saturé.
+        let adobe = moxcms::ColorProfile::new_adobe_rgb().encode().unwrap();
+        let pixels = image::RgbImage::from_pixel(64, 48, image::Rgb([20, 220, 40]));
+        let mut bytes = Vec::new();
+        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 95);
+        enc.set_icc_profile(adobe).unwrap();
+        enc.write_image(pixels.as_raw(), 64, 48, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        std::fs::write(&src, &bytes).unwrap();
+        assert_eq!(Origin::of_jpeg(&bytes), Origin::AdobeRgb, "reconnu");
+        let profiles = Profiles::default();
+        let run = |p: &Profile| {
+            export_libraw(
+                std::slice::from_ref(&src),
+                p,
+                "out",
+                Local::Embedded,
+                &AtomicBool::new(false),
+                |_, _, _| {},
+            )
+            .unwrap()
+        };
+        // « JPEG tel quel » : copie pure et simple, toujours Adobe RGB.
+        let asis = run(profiles.get("asis").unwrap());
+        assert_eq!(asis.passthrough, 1);
+        assert_eq!(std::fs::read(&asis.written[0]).unwrap(), bytes);
+        // « Web » (sRGB) : converti, pas copié, profil sRGB.
+        let web = run(profiles.get("web").unwrap());
+        assert_eq!(web.passthrough, 0, "un autre espace : pas de copie");
+        let out = std::fs::read(&web.written[0]).unwrap();
+        assert_eq!(Origin::of_jpeg(&out), Origin::Srgb);
+        let mut decoder =
+            image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(&out)).unwrap();
+        assert!(decoder.icc_profile().unwrap().is_some());
+        // Le vert Adobe RGB, hors du gamut sRGB : sa composante verte reste au maximum,
+        // le rouge et le bleu changent (conversion faite).
+        let px = image::load_from_memory(&out)
+            .unwrap()
+            .to_rgb8()
+            .get_pixel(32, 24)
+            .0;
+        assert_ne!(px, [20, 220, 40], "converti : {px:?}");
     }
 
     /// Export LibRaw réel : `TRI_TEST_RAW` (RAW hors du dépôt), copié.

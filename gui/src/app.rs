@@ -9174,7 +9174,9 @@ mod tests {
         h.get_by_label_contains("Web   JPEG 90 % · sRGB · 2048 px au plus");
         // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
         h.get_by_label_contains("darktable absent");
-        // ↓ : profil Web ; Entrée : export en fond, puis bilan.
+        // ↓ ↓ : profil Web ; Entrée : export en fond, puis bilan.
+        h.get_by_label_contains("JPEG tel quel   JPEG 95 % · espace d'origine · pleine définition");
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
@@ -9189,11 +9191,12 @@ mod tests {
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
         };
-        assert_eq!(dialog.choice(), 1);
+        assert_eq!(dialog.choice(), 2);
         // En grille, sans darktable : rendu LibRaw.
         assert_eq!(dialog.render(), crate::export::Render::LibRaw);
-        // JPEG, rendu local : la case « sans recompression » est proposée.
+        // JPEG, rendu local : la case « sans recompression » est proposée, cochée.
         h.get_by_label("Sans recompression");
+        assert!(dialog.passthrough());
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         // On exporte ce qu'on regarde : plein écran sur le JPEG boîtier, puis le rendu RAW.

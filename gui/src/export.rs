@@ -90,6 +90,7 @@ pub fn profile_name(p: &Profile) -> String {
     }
     match p.id.as_str() {
         "edit" => t!("export-profile-edit"),
+        "asis" => t!("export-profile-asis"),
         "web" => t!("export-profile-web"),
         id => id.to_string(),
     }
@@ -215,24 +216,9 @@ impl ExportDialog {
                     ui.weak(text);
                 }
                 ui.add_space(6.0);
-                // Image exportée : darktable (s'il est là), rendu LibRaw, JPEG boîtier.
-                ui.horizontal(|ui| {
-                    ui.label(t!("export-renderer"));
-                    if self.darktable {
-                        ui.selectable_value(&mut self.render, Render::Darktable, "darktable");
-                    }
-                    ui.selectable_value(
-                        &mut self.render,
-                        Render::LibRaw,
-                        t!("export-renderer-libraw"),
-                    );
-                    ui.selectable_value(
-                        &mut self.render,
-                        Render::Embedded,
-                        t!("export-renderer-embedded"),
-                    );
-                });
-                if !self.darktable {
+                // L'image exportée est celle qu'on regarde (retour du 19/10/2026 : pas de
+                // choix dans la boîte, Ctrl+E sur l'image voulue) ; dite ci-dessous.
+                if !self.darktable && self.render == Render::LibRaw {
                     ui.weak(t!("export-no-darktable"));
                 }
                 // Sans darktable : ce que LibRaw et le JPEG boîtier ne savent pas faire.
@@ -303,6 +289,12 @@ impl ExportDialog {
     #[cfg(test)]
     pub fn render(&self) -> Render {
         self.render
+    }
+
+    /// Case « sans recompression ».
+    #[cfg(test)]
+    pub fn passthrough(&self) -> bool {
+        self.passthrough.0
     }
 }
 

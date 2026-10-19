@@ -247,6 +247,26 @@ pub fn set_orientation(bytes: &[u8], value: u16) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Profil ICC intégré d'un JPEG (segments APP2 `ICC_PROFILE`, remis bout à bout dans
+/// l'ordre), s'il y en a un.
+pub fn icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut parts: Vec<(u8, &[u8])> = segments(bytes)?
+        .into_iter()
+        .filter(|&(m, s, _)| m == 0xE2 && bytes.get(s + 4..s + 16) == Some(b"ICC_PROFILE\0"))
+        .filter_map(|(_, s, e)| Some((*bytes.get(s + 16)?, bytes.get(s + 18..e)?)))
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    parts.sort_by_key(|&(n, _)| n);
+    Some(
+        parts
+            .into_iter()
+            .flat_map(|(_, d)| d.iter().copied())
+            .collect(),
+    )
+}
+
 /// Position, dans les données TIFF d'un EXIF, de la valeur de la balise d'orientation de
 /// l'IFD0 (type SHORT), s'il y en a une.
 fn orientation_offset(tiff: &[u8]) -> Option<usize> {

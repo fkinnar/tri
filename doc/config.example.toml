@@ -102,7 +102,7 @@ high_quality = false
 # Export d'images développées par darktable (Ctrl+E), avec un profil par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
 # Profils d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
-# vient du profil fourni de même identifiant (edit, web), sinon d'un JPEG sRGB.
+# vient du profil fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
 # format : "jpeg", "tiff" ou "png" ; bits : 8 (JPEG), 8 ou 16 (PNG), 8, 16 ou 32 (TIFF) ;
 # quality : qualité JPEG (1 à 100) ;
@@ -117,8 +117,8 @@ high_quality = false
 #   relatif au dossier de chaque image ("export" : un sous-dossier à côté des images,
 #   "" ou "." : à côté d'elles) ; variables de darktable permises ($(YEAR)…).
 # passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
-#   boîtier écrit tel quel) ; une image à réduire est réencodée ; sans effet sur un rendu
-#   darktable ou LibRaw.
+#   boîtier écrit tel quel ; défaut) ; une image à réduire est réencodée ; sans effet sur
+#   un rendu darktable ou LibRaw, ni hors JPEG.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -130,7 +130,22 @@ intent = ""
 max_side = 0
 suffix = ""
 folder = "export"
-passthrough = false
+passthrough = true
+
+[export.profiles.asis]
+# JPEG tel quel : un JPEG d'origine est copié sans rien toucher (taille, espace couleur :
+# un JPEG Adobe RGB le reste) ; un RAW sort en JPEG pleine taille, dans l'espace du
+# développement.
+name = ""
+format = "jpeg"
+bits = 8
+quality = 95
+color = ""
+intent = ""
+max_side = 0
+suffix = ""
+folder = "export"
+passthrough = true
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -143,7 +158,7 @@ intent = ""
 max_side = 2048
 suffix = ""
 folder = "export"
-passthrough = false
+passthrough = true
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP

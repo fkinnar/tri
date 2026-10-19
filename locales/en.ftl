@@ -235,5 +235,4 @@ export-bad-intent = export profile “{ $profile }”: unknown rendering intent 
 export-needs-16-bits = export profile “{ $profile }”: “{ $color }” needs 16 bits or more (gradients break up in 8 bits), so 16-bit TIFF or PNG
 export-libraw-color = export profile “{ $profile }”: the “{ $color }” color space needs darktable (without darktable: sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
 export-libraw-bits = export profile “{ $profile }”: 32-bit TIFF needs darktable
-export-libraw-flat = not a RAW image: without darktable, exported in sRGB only
-export-embedded-color = export profile “{ $profile }”: the camera JPEG exports in sRGB only (its own color space)
+export-bad-icc = unreadable image color profile: no conversion possible (“JPEG as is” keeps it as it is)

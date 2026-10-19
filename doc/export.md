@@ -77,6 +77,18 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
   puissent tourner en même temps), bibliothèque en mémoire, `write_sidecar_files=never`.
   Vérifié : sidecars identiques octet par octet après export.
 
+## Profils fournis
+
+| Profil | Format | Espace | Taille | Sans recompression |
+|---|---|---|---|---|
+| Retouche (`edit`) | TIFF 16 bits | ProPhoto linéaire | pleine | — |
+| JPEG tel quel (`asis`) | JPEG 95 | d'origine (`""`) | pleine | oui |
+| Web (`web`) | JPEG 90 | sRGB | 2048 px | oui |
+
+« JPEG tel quel » (demandé le 19/10/2026) : un JPEG est copié sans rien toucher (taille,
+espace : un JPEG Adobe RGB le reste) ; un RAW sort en JPEG pleine taille, dans l'espace du
+développement (darktable), ou en sRGB (LibRaw).
+
 ## Réglages (`[export]`)
 
 ```toml
@@ -126,21 +138,44 @@ Règle de l'utilisateur (19/10/2026) : l'image exportée est celle qu'on regarde
 | Plein écran, rendu RAW (`b`) | rendu LibRaw |
 | Plein écran, JPEG boîtier | le JPEG boîtier (aperçu embarqué, à sa taille) |
 
-La boîte d'export la présélectionne (`Render::of`) et permet d'en changer pour cette
-fois : darktable (s'il est là), LibRaw, JPEG boîtier. En ligne de commande : darktable
+La boîte d'export ne propose **pas de choix** : on fait `Ctrl+E` sur l'image voulue
+(retour de l'utilisateur, 19/10/2026 : pas de complexité de plus dans la boîte).
+`Render::of` décide, une ligne d'explication le dit. En ligne de commande : darktable
 s'il est là, `--libraw` ou `--embedded` pour les autres.
 
-Le **JPEG boîtier** (`Local::Embedded`, `preview::embedded_full`) est l'aperçu embarqué du
-RAW à sa taille (71 % du capteur sur un X-T4), redressé, réencodé selon le profil. Il est
-**en sRGB seulement**, puisque c'est son espace : un profil ProPhoto est refusé, avec la
-raison. Une image plate est exportée telle quelle, réencodée.
+Le **JPEG boîtier** (`Local::Embedded`) est l'aperçu embarqué du RAW, à sa taille (71 % du
+capteur sur un X-T4), redressé.
+
+## Espace d'origine des images déjà développées
+
+Remarque de l'utilisateur (19/10/2026) : un JPEG boîtier peut être en **Adobe RGB**
+(réglage de presque tous les boîtiers), et un JPEG du disque aussi. On ne suppose donc
+rien : `Origin` lit l'espace réel de chaque JPEG boîtier ou image plate.
+
+1. Le **profil ICC intégré** (`jpeg::icc_profile` : segments APP2 remis bout à bout ;
+   autres formats : celui que lit le crate `image`). sRGB et Adobe RGB y sont reconnus à
+   leur description, en ASCII ou en UTF-16.
+2. Sinon l'**EXIF**, selon la norme DCF : `InteroperabilityIndex` « R03 » (Adobe RGB) ou
+   « R98 » (sRGB), et `ColorSpace` 2, qu'écrivent certains boîtiers pour Adobe RGB.
+3. Sinon sRGB, l'espace par défaut de l'EXIF.
+
+Vérifié sur le X-T4 de l'utilisateur : JPEG boîtier en « R98 », donc sRGB.
+
+L'espace du profil d'export décide ensuite :
+
+- `""` (**« JPEG tel quel »**) : l'espace d'origine est **gardé**, avec son profil ICC.
+- Même espace que l'origine : rien à convertir.
+- Autre espace : **conversion** par `moxcms` (16 bits), puis le profil ICC du nouvel
+  espace. Un JPEG Adobe RGB exporté en « Web » sort donc en sRGB, comme il se doit pour
+  le web.
 
 ## Sans recompression (`passthrough`)
 
 Idée de l'utilisateur (19/10/2026) : ne pas recompresser une seconde fois un fichier déjà
-compressé. Réglage de chaque profil (`passthrough`, désactivé par défaut), case « Sans
-recompression » de la boîte, `--passthrough` en ligne de commande. Il ne s'applique
-qu'aux profils JPEG, depuis un JPEG :
+compressé. Réglage de chaque profil (`passthrough`), **activé par défaut** (retour de
+l'utilisateur), case « Sans recompression » de la boîte, `--passthrough` en ligne de
+commande. Il ne s'applique qu'aux profils JPEG, depuis un JPEG, **dans le même espace**
+(voir plus haut : une conversion recompresse forcément) :
 
 - **JPEG d'origine** (image plate) : copié tel quel, octet par octet (EXIF, profil
   compris).
@@ -176,8 +211,8 @@ darktable.
 
   Display P3, un fichier `.icc` et le TIFF 32 bits demandent darktable : `libraw_check`
   le dit, la boîte d'export aussi, et le bouton reste grisé.
-- **Images plates** (JPEG, TIFF…) : réencodées, et **en sRGB seulement**. Leur espace
-  d'origine est inconnu ; les convertir vers ProPhoto n'aurait pas de sens.
+- **Images plates** (JPEG, TIFF…) et **JPEG boîtier** : leur espace d'origine est gardé
+  ou converti (voir « Espace d'origine »).
 - Réduction Lanczos3 en 16 bits (`image::imageops::resize`), puis écriture par le crate
   `image` : JPEG (8 bits, qualité du profil), TIFF ou PNG en 8 ou 16 bits.
 - **Profils ICC** : générés par `moxcms`, la gestion couleur en pur Rust déjà compilée

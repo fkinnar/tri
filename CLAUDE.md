@@ -627,7 +627,12 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   l'utilisateur) : grille = darktable sinon LibRaw ; plein écran = la source affichée
   (développé, rendu RAW, ou JPEG boîtier en sRGB, `--embedded`). **Sans recompression**
   (`passthrough`, idée de l'utilisateur) : JPEG d'origine copié, JPEG boîtier écrit tel
-  quel avec l'orientation posée dans l'EXIF ; une image à réduire est réencodée. darktable trouvé aussi en **AppImage**
+  quel avec l'orientation posée dans l'EXIF ; une image à réduire est réencodée. Retours du
+  19/10/2026 : sans recompression **par défaut** ; profil fourni **« JPEG tel quel »**
+  (`asis` : copie pure, espace d'origine gardé) ; **pas de choix du rendu** dans la boîte
+  (Ctrl+E sur l'image voulue) ; **espace d'origine lu** (ICC, sinon EXIF DCF R03 / R98 :
+  un JPEG boîtier peut être en Adobe RGB), converti par `moxcms` si le profil en demande
+  un autre. darktable trouvé aussi en **AppImage**
   (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
   dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des

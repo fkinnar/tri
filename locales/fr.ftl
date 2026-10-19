@@ -236,5 +236,4 @@ export-bad-intent = profil d'export « { $profile } » : intention de rendu inco
 export-needs-16-bits = profil d'export « { $profile } » : « { $color } » demande 16 bits ou plus (en 8 bits, les dégradés se cassent), donc TIFF ou PNG en 16 bits
 export-libraw-color = profil d'export « { $profile } » : l'espace « { $color } » demande darktable (sans darktable : sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
 export-libraw-bits = profil d'export « { $profile } » : le TIFF 32 bits demande darktable
-export-libraw-flat = image non RAW : sans darktable, exportée en sRGB seulement
-export-embedded-color = profil d'export « { $profile } » : le JPEG boîtier s'exporte en sRGB seulement (c'est son espace)
+export-bad-icc = profil couleur de l'image illisible : conversion impossible (« JPEG tel quel » la garde telle quelle)
