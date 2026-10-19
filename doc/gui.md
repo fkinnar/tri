@@ -187,8 +187,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Icône, barre du haut, mode concentration** (19/10/2026) : icône choisie parmi trois
   pistes (un « t » et l'étoile de la note, `scripts/make-icon.py`, images dans
   `gui/assets`) pour la fenêtre, le Dock et la barre des tâches ; **barre du haut** avec
-  l'icône et « tri » en grand **à gauche**, comme darktable (`[gui] title_bar`,
-  `title_bar_size`). **Mode concentration** (`F11`, `Ctrl+Maj+F` : sur macOS, F11 montre
+  le **mot-symbole « t★ri »** à gauche, comme darktable (idée de l'utilisateur : plus net
+  que l'icône suivie du nom ; lettres teintées de la couleur du texte du thème, étoile
+  jaune, version au survol ; `[gui] title_bar`, `title_bar_size`). **Mode concentration** (`F11`, `Ctrl+Maj+F` : sur macOS, F11 montre
   le bureau) : plein écran du système, toutes les barres et tous les panneaux masqués
   (pas fermés : ils reviennent tels quels), indication pour en sortir quelques secondes
   en haut (`focus_mode_hint_ms`). Échap n'en sort pas : il sert à revenir à la grille.

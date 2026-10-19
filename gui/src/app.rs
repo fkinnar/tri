@@ -227,8 +227,9 @@ pub struct TriApp {
     /// Entrée en mode concentration : l'indication pour en sortir s'affiche un moment
     /// (la barre d'état, où vont les messages, est masquée).
     focus_mode_since: Option<Instant>,
-    /// Icône de l'application, pour la barre du haut (chargée à la première image).
-    logo: Option<egui::TextureHandle>,
+    /// Mot-symbole « t★ri » de la barre du haut : lettres (teintées selon le thème) et
+    /// étoile (chargés à la première image).
+    logo: Option<(egui::TextureHandle, egui::TextureHandle)>,
     /// Boîte de regroupement tout juste ouverte : la case « regrouper » prend le clavier.
     group_dialog_fresh: bool,
     /// Recherche par nom de fichier (filtre de la grille, `/`, Ctrl+F).
@@ -2923,23 +2924,39 @@ impl TriApp {
         true
     }
 
-    /// Barre du haut : l'icône et « tri » en grand, à gauche.
+    /// Barre du haut : le mot-symbole « t★ri » à gauche (idée de l'utilisateur, 19/10/2026 :
+    /// plus net qu'une icône suivie du nom). Lettres de la couleur du texte du thème,
+    /// étoile jaune.
     fn title_bar(&mut self, ui: &mut Ui) {
-        let logo = self
+        let (letters, star) = self
             .logo
             .get_or_insert_with(|| {
-                let icon = window_icon();
-                let size = [icon.width as usize, icon.height as usize];
-                let image = egui::ColorImage::from_rgba_unmultiplied(size, &icon.rgba);
-                ui.ctx()
-                    .load_texture("logo", image, egui::TextureOptions::LINEAR)
+                let load = |name: &str, bytes: &[u8]| {
+                    let image = image::load_from_memory(bytes)
+                        .expect("mot-symbole embarqué lisible")
+                        .to_rgba8();
+                    let size = [image.width() as usize, image.height() as usize];
+                    let pixels = egui::ColorImage::from_rgba_unmultiplied(size, &image);
+                    ui.ctx()
+                        .load_texture(name, pixels, egui::TextureOptions::LINEAR)
+                };
+                (
+                    load("wordmark", include_bytes!("../assets/wordmark-letters.png")),
+                    load(
+                        "wordmark-star",
+                        include_bytes!("../assets/wordmark-star.png"),
+                    ),
+                )
             })
             .clone();
-        let size = self.gui.title_bar_size;
-        ui.horizontal(|ui| {
-            ui.add(egui::Image::new(&logo).fit_to_exact_size(vec2(size, size) * 1.2));
-            ui.label(egui::RichText::new("tri").size(size).strong());
-        });
+        let height = self.gui.title_bar_size;
+        let size = letters.size_vec2() * (height / letters.size_vec2().y);
+        let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+        let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+        let painter = ui.painter();
+        painter.image(letters.id(), rect, uv, ui.visuals().strong_text_color());
+        painter.image(star.id(), rect, uv, Color32::WHITE);
+        response.on_hover_text(format!("tri {}", env!("CARGO_PKG_VERSION")));
     }
 
     /// Mode concentration : l'indication pour en sortir, en haut au centre, un moment.
@@ -8023,7 +8040,7 @@ mod tests {
         );
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        assert!(h.query_by_label("tri").is_some(), "barre du haut");
+        assert!(h.state().gui.title_bar, "barre du haut");
         let before = (
             h.state().folder_panel,
             h.state().metadata_panel,
@@ -8031,7 +8048,6 @@ mod tests {
         );
         press(&mut h, Key::F11, Modifiers::NONE);
         assert!(h.state().focus_mode && h.state().focus_mode_since.is_some());
-        assert!(h.query_by_label("tri").is_none(), "barre du haut masquée");
         assert!(
             h.query_by_label_contains("Dossiers").is_none(),
             "panneaux masqués"
@@ -8049,7 +8065,6 @@ mod tests {
             h.state().filter_bar,
         );
         assert_eq!(after, before);
-        assert!(h.query_by_label("tri").is_some());
     }
 
     #[test]
