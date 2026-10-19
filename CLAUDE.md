@@ -653,9 +653,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   JPEG de l'appareil suffixé (`[export] camera_suffix`, `-camera`), sauf en JPEG boîtier ;
   mélange = profils communs (`Kind`, `Batch`, `run`) ; ce qui part écrit sous le titre de
   la boîte ; clavier à la liste des profils ; clic dans la boîte qui ne traverse plus.
-- **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, juste après les
-  versions) : fenêtre de réglages, section Export — nouveau profil, dupliquer, supprimer
-  (profils de l'utilisateur seulement), mêmes contrôles et refus des incohérences. darktable trouvé aussi en **AppImage**
+- [x] **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, fait dans la
+  nuit) : fenêtre de réglages, page d'un profil — « Créer à partir de celui-ci » (toutes
+  les valeurs écrites), « Supprimer celui-ci » (profils de l'utilisateur seulement) ;
+  profils ajoutés montrés à la suite des fournis. De même pour les préréglages. darktable trouvé aussi en **AppImage**
   (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
   dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des

@@ -285,6 +285,24 @@ darktable.
   même image : cadrage, orientation et couleurs cohérents, darktable plus clair (ses
   réglages par défaut).
 
+## Créer un profil depuis l'interface
+
+Demandé le 19/10/2026 : plus besoin d'éditer le fichier. Dans la fenêtre de réglages
+(`Ctrl+,`), chaque page de profil d'export propose :
+
+- **« Nouveau : [nom] · Créer à partir de celui-ci »** : copie du profil affiché sous un
+  nouveau nom. **Toutes** ses valeurs sont écrites, pour que le nouveau profil ne dépende
+  pas des valeurs par défaut d'un autre. Identifiant tiré du nom (`versions::new_id`).
+  Ensuite, il se règle comme les autres (listes déroulantes, refus des incohérences).
+- **« Supprimer celui-ci »** pour les profils de l'utilisateur seulement. Les profils
+  fournis se modifient mais ne se suppriment pas.
+- La fenêtre montre les profils de l'utilisateur à la suite des profils fournis, sur leur
+  modèle (`SettingsWindow::schema` : sections de l'exemple, plus celles trouvées dans le
+  fichier ; `ConfigFile::subtables`, `remove_table`), titrés « Profil d'export « tirage » ».
+- Appliqué à chaud : le profil est aussitôt proposé dans la boîte d'export.
+
+Les préréglages de recadrage se créent de la même façon (voir `versions.md`).
+
 ## Interface et ligne de commande
 
 - `Ctrl+E` (`Cmd+E` sur macOS), action `core.file.export` : boîte sur la sélection (ou

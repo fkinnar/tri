@@ -384,6 +384,16 @@ impl Preset {
         }
     }
 
+    /// Les clés du préréglage telles qu'écrites dans `[versions.presets.<id>]`.
+    pub fn entries(&self) -> Vec<(&'static str, crate::config_edit::Value)> {
+        use crate::config_edit::Value;
+        vec![
+            ("name", Value::Str(self.name.clone())),
+            ("ratio", Value::Str(self.ratio.label())),
+            ("profile", Value::Str(self.profile.clone())),
+        ]
+    }
+
     /// Les préréglages fournis : story (9:16) et publication (4:5), pour le web.
     pub fn defaults() -> Vec<Preset> {
         vec![

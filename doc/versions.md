@@ -155,7 +155,9 @@ cadre, Entrée.
   sont écrits dans le fichier de configuration, sans perdre les commentaires
   (`config_edit`). L'identifiant est tiré du nom (`versions::new_id` : minuscules,
   accents retirés, numéro s'il est pris). Appliqué à chaud.
-- Fenêtre de réglages : liste déroulante des rapports pour `ratio`.
+- Fenêtre de réglages : liste déroulante des rapports pour `ratio` ; créer un préréglage
+  à partir d'un autre, supprimer ceux de l'utilisateur (comme les profils d'export, voir
+  `export.md`).
 
 Au passage (19/10/2026) : les profils d'export, les préréglages et darktable modifiés
 dans la fenêtre de réglages s'appliquent désormais **à chaud** (auparavant, il fallait

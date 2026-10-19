@@ -67,6 +67,15 @@ pub enum Format {
 }
 
 impl Format {
+    /// Valeur dans le fichier de configuration (`"jpeg"`, `"tiff"`, `"png"`).
+    pub fn key(self) -> &'static str {
+        match self {
+            Format::Jpeg => "jpeg",
+            Format::Tiff => "tiff",
+            Format::Png => "png",
+        }
+    }
+
     /// Extension des fichiers écrits.
     pub fn extension(self) -> &'static str {
         match self {
@@ -90,6 +99,17 @@ pub enum Sharpen {
     Screen,
     /// Pour le tirage : rayon plus large.
     Print,
+}
+
+impl Sharpen {
+    /// Valeur dans le fichier de configuration.
+    pub fn key(self) -> &'static str {
+        match self {
+            Sharpen::None => "none",
+            Sharpen::Screen => "screen",
+            Sharpen::Print => "print",
+        }
+    }
 }
 
 /// Paramètres d'un masque flou (accentuation).
@@ -188,6 +208,15 @@ pub enum AppliesTo {
 }
 
 impl AppliesTo {
+    /// Valeur dans le fichier de configuration.
+    pub fn key(self) -> &'static str {
+        match self {
+            AppliesTo::All => "all",
+            AppliesTo::Raw => "raw",
+            AppliesTo::Flat => "flat",
+        }
+    }
+
     /// Le profil vaut-il pour un export de RAW rendus (`flat` faux) ou d'images déjà
     /// développées (`flat` vrai) ?
     pub fn allows(self, flat: bool) -> bool {
@@ -297,6 +326,26 @@ impl Profile {
             && self.color.trim().is_empty()
             && self.max_side == 0
             && self.sharpen == Sharpen::None
+    }
+
+    /// Les clés du profil telles qu'écrites dans `[export.profiles.<id>]` (pour en créer
+    /// un depuis l'interface, toutes ses valeurs explicites).
+    pub fn entries(&self) -> Vec<(&'static str, crate::config_edit::Value)> {
+        use crate::config_edit::Value;
+        vec![
+            ("name", Value::Str(self.name.clone())),
+            ("format", Value::Str(self.format.key().into())),
+            ("bits", Value::Int(i64::from(self.bits))),
+            ("quality", Value::Int(i64::from(self.quality))),
+            ("color", Value::Str(self.color.clone())),
+            ("intent", Value::Str(self.intent.clone())),
+            ("max_side", Value::Int(i64::from(self.max_side))),
+            ("suffix", Value::Str(self.suffix.clone())),
+            ("folder", Value::Str(self.folder.clone())),
+            ("passthrough", Value::Bool(self.passthrough)),
+            ("applies_to", Value::Str(self.applies_to.key().into())),
+            ("sharpen", Value::Str(self.sharpen.key().into())),
+        ]
     }
 
     /// Le profil est-il cohérent ? Sinon, la raison.

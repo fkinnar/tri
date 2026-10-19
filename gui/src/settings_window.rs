@@ -50,12 +50,52 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
     ) || (section, key) == ("gui", "window")
 }
 
+/// Sections que l'utilisateur peut multiplier depuis la fenêtre (demandé le 19/10/2026) :
+/// (section parente, section d'exemple qui sert de modèle, libellé d'une section ajoutée).
+const FAMILIES: [(&str, &str, &str); 2] = [
+    (
+        "export.profiles",
+        "export.profiles.web",
+        "settings-section-export-profile-user",
+    ),
+    (
+        "versions.presets",
+        "versions.presets.story",
+        "settings-section-versions-preset-user",
+    ),
+];
+
+/// Famille de `section` (`export.profiles.tirage`) : (parente, modèle, libellé) et
+/// l'identifiant (`tirage`).
+fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), &str)> {
+    FAMILIES.iter().find_map(|f| {
+        section
+            .strip_prefix(f.0)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .filter(|id| !id.is_empty() && !id.contains('.'))
+            .map(|id| (*f, id))
+    })
+}
+
+/// Profils et préréglages fournis par `tri` : modifiables, pas supprimables.
+fn builtin(section: &str) -> bool {
+    match family(section) {
+        Some((("export.profiles", _, _), id)) => {
+            tri::export::Profile::defaults().iter().any(|p| p.id == id)
+        }
+        Some((_, id)) => tri::versions::Preset::defaults().iter().any(|p| p.id == id),
+        None => false,
+    }
+}
+
 /// Libellé lisible d'une section (« Couleurs » pour `gui.colors`), traduit ; à défaut,
-/// son nom.
+/// son nom (profil ou préréglage ajouté : « Profil d'export « tirage » »).
 pub fn section_label(name: &str) -> String {
     let id = format!("settings-section-{}", name.replace('.', "-"));
     if tri::i18n::has(tri::i18n::language(), &id) {
         tri::i18n::translate(&id, None)
+    } else if let Some(((_, _, label), id)) = family(name) {
+        t!(label, id = id)
     } else {
         name.to_string()
     }
@@ -173,6 +213,8 @@ pub struct SettingsWindow {
     /// Défilement de la liste des sections (tests).
     #[cfg(test)]
     sections_offset: f32,
+    /// Nom d'un nouveau profil ou préréglage, en cours de saisie.
+    new_name: String,
 }
 
 /// Ce que la fenêtre demande à l'application.
@@ -200,6 +242,7 @@ impl SettingsWindow {
             focus_first: false,
             #[cfg(test)]
             sections_offset: 0.0,
+            new_name: String::new(),
             sequence_timeout: settings.gui.key_sequence_timeout(),
             file,
             section: 0,
@@ -215,9 +258,91 @@ impl SettingsWindow {
 
     /// Affiche la section `name` (`keys`, `gui.zoom`), si elle existe.
     pub fn show_section(&mut self, name: &str) {
-        if let Some(i) = schema().sections.iter().position(|s| s.name == name) {
+        if let Some(i) = self.schema().sections.iter().position(|s| s.name == name) {
             self.section = i;
+            self.section_moved = true;
         }
+    }
+
+    /// Les sections montrées : celles de l'exemple, et les profils d'export et
+    /// préréglages ajoutés par l'utilisateur (sur le modèle d'un profil fourni), à la suite
+    /// de ceux de leur famille.
+    fn schema(&self) -> Schema {
+        let mut schema = schema().clone();
+        for (parent, model, _) in FAMILIES {
+            let Some(template) = schema.sections.iter().find(|s| s.name == model).cloned() else {
+                continue;
+            };
+            let prefix = format!("{parent}.");
+            let mut at = schema
+                .sections
+                .iter()
+                .rposition(|s| s.name.starts_with(&prefix))
+                .map_or(schema.sections.len(), |i| i + 1);
+            for id in self.file.subtables(parent) {
+                let name = format!("{parent}.{id}");
+                if schema.sections.iter().any(|s| s.name == name) {
+                    continue;
+                }
+                let mut section = template.clone();
+                section.name = name;
+                section.doc = String::new();
+                schema.sections.insert(at, section);
+                at += 1;
+            }
+        }
+        schema
+    }
+
+    /// Nouveau profil ou préréglage nommé `name`, copie de `section` (toutes ses valeurs
+    /// écrites : il ne dépend plus des valeurs par défaut d'un autre), puis montré.
+    fn create_from(&mut self, section: &str, name: &str) -> Option<AppSettings> {
+        let ((parent, _, _), id) = family(section)?;
+        let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
+        let (ids, entries): (Vec<String>, Vec<_>) = if parent == "export.profiles" {
+            let all = &settings.export.profiles.0;
+            (
+                all.iter().map(|p| p.id.clone()).collect(),
+                all.iter().find(|p| p.id == id)?.entries(),
+            )
+        } else {
+            let all = &settings.versions.presets.0;
+            (
+                all.iter().map(|p| p.id.clone()).collect(),
+                all.iter().find(|p| p.id == id)?.entries(),
+            )
+        };
+        let new = tri::versions::new_id(name, |id| ids.iter().any(|i| i == id));
+        let target = format!("{parent}.{new}");
+        for (key, value) in entries {
+            let value = if key == "name" {
+                Value::Str(name.trim().to_string())
+            } else {
+                value
+            };
+            if let Err(e) = self.file.set(&target, key, &value) {
+                self.errors.insert((target.clone(), key.to_string()), e);
+                return None;
+            }
+        }
+        let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
+        self.dirty = true;
+        self.new_name.clear();
+        self.show_section(&target);
+        Some(settings)
+    }
+
+    /// Supprime un profil ou préréglage ajouté par l'utilisateur.
+    fn delete_section(&mut self, section: &str) -> Option<AppSettings> {
+        if builtin(section) || family(section).is_none() {
+            return None;
+        }
+        self.file.remove_table(section);
+        let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
+        self.dirty = true;
+        self.section = self.section.saturating_sub(1);
+        self.section_moved = true;
+        Some(settings)
     }
 
     /// Vrai pendant l'enregistrement d'un raccourci (les touches lui reviennent).
@@ -299,7 +424,8 @@ impl SettingsWindow {
 
     /// Affiche la fenêtre.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome {
-        let schema = schema();
+        let schema = self.schema();
+        let schema = &schema;
         // Raccourci en cours d'enregistrement : les touches lui reviennent (Échap compris).
         let mut recorded = self.record(ctx);
         let id = search_id();
@@ -466,6 +592,34 @@ impl SettingsWindow {
             ui.add_space(6.0);
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
+            }
+            // Profil d'export ou préréglage : en créer un à partir de celui-ci, supprimer
+            // ceux de l'utilisateur.
+            if family(&section.name).is_some() {
+                let mut create = false;
+                let mut delete = false;
+                ui.horizontal(|ui| {
+                    ui.label(t!("settings-new-name"));
+                    let field =
+                        ui.add(egui::TextEdit::singleline(&mut self.new_name).desired_width(160.0));
+                    let ok = !self.new_name.trim().is_empty();
+                    create = ui
+                        .add_enabled(ok, egui::Button::new(t!("settings-new-from-this")))
+                        .clicked()
+                        || (ok && field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
+                    if !builtin(&section.name) {
+                        ui.separator();
+                        delete = ui.button(t!("settings-delete-this")).clicked();
+                    }
+                });
+                ui.add_space(6.0);
+                let name = self.new_name.clone();
+                if create && let Some(s) = self.create_from(&section.name, &name) {
+                    return Some(s);
+                }
+                if delete && let Some(s) = self.delete_section(&section.name) {
+                    return Some(s);
+                }
             }
         }
         for group in &section.groups {
@@ -1082,6 +1236,68 @@ mod tests {
         );
         let reason = &w.errors[&(edit.to_string(), "color".to_string())];
         assert!(reason.contains("16"), "{reason}");
+    }
+
+    #[test]
+    fn profiles_and_presets_are_created_from_another_and_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        // Nouveau profil « Tirage A4 » à partir de Web : toutes ses valeurs écrites.
+        let s = w.create_from("export.profiles.web", "Tirage A4").unwrap();
+        let tirage = s.export.profiles.get("tirage-a4").expect("créé");
+        assert_eq!(tirage.name, "Tirage A4");
+        assert_eq!(tirage.max_side, 2048, "valeurs de Web");
+        assert_eq!(
+            w.file.get("export.profiles.tirage-a4", "format"),
+            Some(Value::Str("jpeg".into()))
+        );
+        let schema = w.schema();
+        let names: Vec<&str> = schema.sections.iter().map(|s| s.name.as_str()).collect();
+        let at = names
+            .iter()
+            .position(|n| *n == "export.profiles.tirage-a4")
+            .unwrap();
+        assert_eq!(
+            names[at - 1],
+            "export.profiles.web",
+            "à la suite des profils"
+        );
+        assert_eq!(w.section, at, "montré");
+        assert_eq!(
+            section_label("export.profiles.tirage-a4"),
+            "Profil d'export « tirage-a4 »"
+        );
+        // Modifiable comme les autres.
+        let s = w
+            .commit(
+                "export.profiles.tirage-a4",
+                "max_side",
+                Some(Value::Int(4000)),
+            )
+            .unwrap();
+        assert_eq!(s.export.profiles.get("tirage-a4").unwrap().max_side, 4000);
+        // Supprimable ; un profil fourni, non.
+        assert!(w.delete_section("export.profiles.web").is_none());
+        let s = w.delete_section("export.profiles.tirage-a4").unwrap();
+        assert!(s.export.profiles.get("tirage-a4").is_none());
+        assert!(
+            !w.schema()
+                .sections
+                .iter()
+                .any(|s| s.name == "export.profiles.tirage-a4")
+        );
+        // Préréglage de recadrage : de même.
+        let s = w.create_from("versions.presets.story", "Reel").unwrap();
+        let reel = s
+            .versions
+            .presets
+            .0
+            .iter()
+            .find(|p| p.id == "reel")
+            .unwrap();
+        assert_eq!(reel.ratio, tri::versions::Ratio::Fixed(9, 16));
+        assert!(w.delete_section("versions.presets.story").is_none());
     }
 
     #[test]

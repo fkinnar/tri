@@ -314,6 +314,29 @@ impl ConfigFile {
         }
     }
 
+    /// Sous-sections écrites dans `section` (`tirage` pour `[export.profiles.tirage]`).
+    pub fn subtables(&self, section: &str) -> Vec<String> {
+        self.table(section)
+            .map(|t| {
+                t.iter()
+                    .filter(|(_, item)| item.is_table())
+                    .map(|(name, _)| name.to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Retire la section `section` (avec ses clés) du fichier.
+    pub fn remove_table(&mut self, section: &str) {
+        let Some((parent, name)) = section.rsplit_once('.') else {
+            self.doc.as_table_mut().remove(section);
+            return;
+        };
+        if let Some(table) = self.table_mut(parent) {
+            table.remove(name);
+        }
+    }
+
     /// Texte du fichier modifié.
     pub fn text(&self) -> String {
         self.doc.to_string()
