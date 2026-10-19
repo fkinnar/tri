@@ -50,5 +50,6 @@ pub mod send;
 pub mod settings;
 pub mod sharpness;
 pub mod similarity;
+pub mod versions;
 pub mod watch;
 pub mod xmp;

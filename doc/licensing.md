@@ -67,6 +67,8 @@ sous Unicode-3.0 et `self_cell` sous Apache-2.0 OR GPL-2.0-only, dont on retient
 l'Apache-2.0 ; `sys-locale` — langue du système — sous MIT OR Apache-2.0 ; `moxcms` —
 profils ICC des exports sans darktable, gestion couleur en pur Rust, déjà compilé par
 `image` (même version), activement maintenu (0.9.1 du 15/09/2026) — sous BSD-3-Clause OR
+Apache-2.0 ; `serde_json` — versions (recadrages) dans le XMP,
+un objet JSON par élément, dtolnay, très maintenu (1.0.154 du 11/10/2026) — sous MIT OR
 Apache-2.0) : les 89 crates
 de l'arbre de
 dépendances du moteur sur macOS (`cargo tree -p tri -e normal,build`, recompté le

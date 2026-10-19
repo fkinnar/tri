@@ -71,6 +71,29 @@ pub enum Step {
     CreateDir(PathBuf),
     /// Dossier renommé : (ancien, nouveau).
     RenameDir(PathBuf, PathBuf),
+    /// Versions d'une image (recadrages, `tri::versions`) : liste `tri:Versions` avant et
+    /// après, et ce qui a changé.
+    Versions {
+        /// L'image.
+        image: PathBuf,
+        /// Éléments avant.
+        before: Vec<String>,
+        /// Éléments après.
+        after: Vec<String>,
+        /// Ce qui a changé (pour la liste de l'historique).
+        change: VersionChange,
+    },
+}
+
+/// Changement d'une version, pour l'historique.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VersionChange {
+    /// Version créée (son nom).
+    Created(String),
+    /// Version modifiée.
+    Changed(String),
+    /// Version supprimée.
+    Deleted(String),
 }
 
 /// Pourquoi un pas ne peut pas être défait (ou refait).
@@ -242,6 +265,14 @@ impl Step {
             Step::RenameDir(from, to) => {
                 crate::t!("history-rename", from = name(from), to = name(to))
             }
+            Step::Versions { image, change, .. } => {
+                let (id, version) = match change {
+                    VersionChange::Created(v) => ("history-version-created", v),
+                    VersionChange::Changed(v) => ("history-version-changed", v),
+                    VersionChange::Deleted(v) => ("history-version-deleted", v),
+                };
+                crate::t!(id, version = version.as_str(), name = name(image))
+            }
         }
     }
 
@@ -273,6 +304,7 @@ impl Step {
             }
             Step::CreateDir(_) => Vec::new(),
             Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
+            Step::Versions { image, .. } => vec![image.clone()],
         }
     }
 
@@ -280,6 +312,12 @@ impl Step {
     fn undo(&mut self, convention: Convention) -> Result<()> {
         match self {
             Step::Notes(changes) => set_notes(changes, convention, true),
+            Step::Versions {
+                image,
+                before,
+                after,
+                ..
+            } => set_versions(image, after, before, convention),
             Step::Rename(plan) => {
                 for (from, to) in &plan.moves {
                     if !to.exists() {
@@ -374,6 +412,12 @@ impl Step {
     fn redo(&mut self, convention: Convention) -> Result<()> {
         match self {
             Step::Notes(changes) => set_notes(changes, convention, false),
+            Step::Versions {
+                image,
+                before,
+                after,
+                ..
+            } => set_versions(image, before, after, convention),
             Step::Rename(plan) => {
                 for (from, _) in &plan.moves {
                     if !from.exists() {
@@ -449,6 +493,24 @@ fn set_notes(changes: &[NoteChange], convention: Convention, undo: bool) -> Resu
         book.write_only(&c.image, wanted)
             .map_err(|e| HistoryError::Notes(e.to_string()))?;
     }
+    Ok(())
+}
+
+/// Remet la liste des versions de `image` à `wanted`, si elle vaut bien `expected` (sinon
+/// modifiée ailleurs depuis : refusé, rien n'est écrasé).
+fn set_versions(
+    image: &Path,
+    expected: &[String],
+    wanted: &[String],
+    convention: Convention,
+) -> Result<()> {
+    let current = crate::xmp::read_list_of(image, crate::xmp::VERSIONS)
+        .map_err(|e| HistoryError::Notes(e.to_string()))?;
+    if current != expected {
+        return Err(HistoryError::NotesChanged(image.to_path_buf()));
+    }
+    crate::xmp::write_list(image, crate::xmp::VERSIONS, wanted, convention)
+        .map_err(|e| HistoryError::Notes(e.to_string()))?;
     Ok(())
 }
 
@@ -579,7 +641,7 @@ fn applied(entry: &Entry, undone: bool) -> Applied {
         label: entry.label.clone(),
         undone,
         images: entry.step.images(undone),
-        files_changed: !matches!(entry.step, Step::Notes(_)),
+        files_changed: !matches!(entry.step, Step::Notes(_) | Step::Versions { .. }),
     }
 }
 
@@ -730,5 +792,36 @@ mod tests {
         }
         assert_eq!(history.entries().len(), 2);
         assert_eq!(history.position(), 2);
+    }
+
+    #[test]
+    fn a_version_change_is_undone_and_redone_unless_changed_elsewhere() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        std::fs::write(&image, b"raw").unwrap();
+        let conv = Convention::Darktable;
+        let after = vec![r#"{"name":"Story"}"#.to_string()];
+        crate::xmp::write_list(&image, crate::xmp::VERSIONS, &after, conv).unwrap();
+        let mut history = History::new(10);
+        history.push(Step::Versions {
+            image: image.clone(),
+            before: Vec::new(),
+            after: after.clone(),
+            change: VersionChange::Created("Story".into()),
+        });
+        let read = || crate::xmp::read_list_of(&image, crate::xmp::VERSIONS).unwrap();
+        let undone = history.undo(conv).unwrap();
+        assert!(!undone.files_changed);
+        assert!(read().is_empty(), "défaite");
+        history.redo(conv).unwrap();
+        assert_eq!(read(), after, "refaite");
+        // Modifiée ailleurs depuis : refus, rien d'écrasé.
+        let elsewhere = vec![r#"{"name":"Autre"}"#.to_string()];
+        crate::xmp::write_list(&image, crate::xmp::VERSIONS, &elsewhere, conv).unwrap();
+        assert!(matches!(
+            history.undo(conv),
+            Err(HistoryError::NotesChanged(_))
+        ));
+        assert_eq!(read(), elsewhere);
     }
 }

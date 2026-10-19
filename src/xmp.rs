@@ -1141,20 +1141,39 @@ fn write_colors(
     colors: &[u8],
     indent: &str,
 ) -> Result<()> {
+    let items: Vec<String> = colors.iter().map(u8::to_string).collect();
+    write_seq(
+        writer,
+        scopes,
+        (ns::DARKTABLE, "colorlabels", "darktable"),
+        &items,
+        indent,
+    )
+}
+
+/// Écrit `<préfixe:local><rdf:Seq><rdf:li>…</rdf:li>…` (textes échappés), avec
+/// l'indentation `indent` ; l'espace de noms est déclaré sur l'élément s'il ne l'est pas.
+fn write_seq(
+    writer: &mut Writer<Vec<u8>>,
+    scopes: &Scopes,
+    (uri, local, preferred): (&str, &str, &str),
+    items: &[String],
+    indent: &str,
+) -> Result<()> {
     let rdf = scopes.prefix(ns::RDF).unwrap_or("rdf").to_string();
-    let (dt_prefix, declare) = match scopes.prefix(ns::DARKTABLE) {
+    let (prefix, declare) = match scopes.prefix(uri) {
         Some(p) => (p.to_string(), false),
-        None => (free_prefix(scopes, &[], "darktable"), true),
+        None => (free_prefix(scopes, &[], preferred), true),
     };
     let w = |writer: &mut Writer<Vec<u8>>, e: Event<'_>| {
         writer
             .write_event(e)
             .map_err(|e| XmpError::Malformed(e.to_string()))
     };
-    let tag = format!("{dt_prefix}:colorlabels");
+    let tag = format!("{prefix}:{local}");
     let mut start = BytesStart::new(tag.clone());
     if declare {
-        start.push_attribute((format!("xmlns:{dt_prefix}").as_str(), ns::DARKTABLE));
+        start.push_attribute((format!("xmlns:{prefix}").as_str(), uri));
     }
     let seq = format!("{rdf}:Seq");
     let li = format!("{rdf}:li");
@@ -1168,13 +1187,15 @@ fn write_colors(
         Event::Text(BytesText::from_escaped(format!("{indent} "))),
     )?;
     w(writer, Event::Start(BytesStart::new(seq.clone())))?;
-    for c in colors {
+    for item in items {
         w(
             writer,
             Event::Text(BytesText::from_escaped(format!("{indent}  "))),
         )?;
         w(writer, Event::Start(BytesStart::new(li.clone())))?;
-        w(writer, Event::Text(BytesText::new(&c.to_string())))?;
+        // Seuls &, < et > échappés : un JSON reste lisible (pas de &quot;).
+        let text = quick_xml::escape::partial_escape(item.as_str());
+        w(writer, Event::Text(BytesText::from_escaped(text)))?;
         w(writer, Event::End(BytesEnd::new(li.clone())))?;
     }
     w(
@@ -1188,6 +1209,269 @@ fn write_colors(
     )?;
     w(writer, Event::End(BytesEnd::new(tag)))?;
     Ok(())
+}
+
+// --- Listes propres à une application (versions de tri) --------------------------------
+
+/// Champ « liste de textes » (`rdf:Seq`) d'une application, à part des notes : le
+/// réécrivain des notes ne le connaît pas, donc le recopie tel quel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ListField {
+    /// Espace de noms.
+    pub uri: &'static str,
+    /// Nom local.
+    pub local: &'static str,
+    /// Préfixe usuel.
+    pub prefix: &'static str,
+}
+
+/// Versions d'une photo (recadrages de `tri`, voir `tri::versions`) : `tri:Versions`.
+pub const VERSIONS: ListField = ListField {
+    uri: ns::TRI,
+    local: "Versions",
+    prefix: "tri",
+};
+
+/// Éléments de la liste `field` dans un paquet XMP (vide si absente).
+pub fn read_list(xml: &str, field: ListField) -> Result<Vec<String>> {
+    let mut reader = new_reader(xml);
+    let mut scopes = Scopes::default();
+    let mut depth = 0usize;
+    let mut description: Option<usize> = None;
+    let mut inside: Option<usize> = None;
+    let mut text = String::new();
+    let mut in_li = false;
+    let mut items = Vec::new();
+    loop {
+        let event = reader.read_event()?;
+        match &event {
+            Event::Start(e) | Event::Empty(e) => {
+                scopes.push(e)?;
+                depth += 1;
+                let qname = name_of(e);
+                let empty = matches!(event, Event::Empty(_));
+                if is_rdf(&scopes, &qname, "Description") && !empty {
+                    description = Some(depth);
+                } else if description == Some(depth - 1)
+                    && scopes
+                        .resolve(&qname)
+                        .is_some_and(|(u, l)| u == field.uri && l == field.local)
+                    && !empty
+                {
+                    inside = Some(depth);
+                } else if inside.is_some() && is_rdf(&scopes, &qname, "li") {
+                    if empty {
+                        items.push(String::new());
+                    } else {
+                        in_li = true;
+                        text.clear();
+                    }
+                }
+                if empty {
+                    scopes.pop();
+                    depth -= 1;
+                }
+            }
+            Event::Text(t) if in_li => text.push_str(t),
+            Event::GeneralRef(r) if in_li => {
+                if let Some(c) = r.resolve_char_ref().ok().flatten() {
+                    text.push(c);
+                } else if let Some(c) = predefined_entity(r) {
+                    text.push(c);
+                }
+            }
+            Event::End(e) => {
+                let qname = e.name().as_ref().to_string();
+                if in_li && is_rdf(&scopes, &qname, "li") {
+                    items.push(std::mem::take(&mut text));
+                    in_li = false;
+                }
+                if inside == Some(depth) {
+                    inside = None;
+                }
+                if description == Some(depth) {
+                    description = None;
+                }
+                scopes.pop();
+                depth -= 1;
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(items)
+}
+
+/// Remplace la liste `field` d'un paquet XMP par `items` (vide : retirée) ; tout le reste
+/// est recopié tel quel. La liste est écrite en élément du premier `rdf:Description`.
+/// Paquet inchangé si la liste l'est déjà (octet pour octet).
+pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<String> {
+    if read_list(xml, field)? == items {
+        return Ok(xml.to_string());
+    }
+    let mut reader = new_reader(xml);
+    let mut writer = Writer::new(Vec::new());
+    let mut scopes = Scopes::default();
+    let mut depth = 0usize;
+    let mut done_first = false;
+    let mut first: Option<usize> = None;
+    let mut inside_description: Option<usize> = None;
+    let mut skip: Option<usize> = None;
+    let mut pending: Option<Event<'static>> = None;
+    let mut child_indent = String::from("\n   ");
+    let name = (field.uri, field.local, field.prefix);
+    let write = |writer: &mut Writer<Vec<u8>>, event: Event<'_>| -> Result<()> {
+        writer
+            .write_event(event)
+            .map_err(|e| XmpError::Malformed(e.to_string()))
+    };
+    loop {
+        let event = reader.read_event()?;
+        if skip.is_some() {
+            match &event {
+                Event::Start(_) => depth += 1,
+                Event::End(_) => {
+                    if skip == Some(depth) {
+                        skip = None;
+                    }
+                    depth -= 1;
+                }
+                Event::Eof => break,
+                _ => {}
+            }
+            continue;
+        }
+        match event {
+            Event::Text(ref t) if t.chars().all(char::is_whitespace) => {
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                pending = Some(event.into_owned());
+            }
+            Event::Start(ref e) | Event::Empty(ref e) => {
+                let is_empty = matches!(event, Event::Empty(_));
+                scopes.push(e)?;
+                depth += 1;
+                let qname = name_of(e);
+                let ours = inside_description == Some(depth - 1)
+                    && scopes
+                        .resolve(&qname)
+                        .is_some_and(|(u, l)| u == field.uri && l == field.local);
+                if ours {
+                    // Ancienne liste : retirée (avec les espaces qui la précèdent).
+                    pending = None;
+                    scopes.pop();
+                    if is_empty {
+                        depth -= 1;
+                    } else {
+                        skip = Some(depth);
+                    }
+                    continue;
+                }
+                if let Some(Event::Text(t)) = &pending
+                    && inside_description == Some(depth - 1)
+                {
+                    child_indent = t.to_string();
+                }
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                if is_rdf(&scopes, &qname, "Description") {
+                    let is_first = !done_first;
+                    done_first = true;
+                    if is_first {
+                        first = Some(depth);
+                    }
+                    if is_empty {
+                        if is_first && !items.is_empty() {
+                            write(&mut writer, Event::Start(e.borrow()))?;
+                            write_seq(&mut writer, &scopes, name, items, &child_indent)?;
+                            write(&mut writer, Event::End(e.to_end()))?;
+                        } else {
+                            write(&mut writer, event.clone())?;
+                        }
+                        scopes.pop();
+                        depth -= 1;
+                        continue;
+                    }
+                    write(&mut writer, event.clone())?;
+                    inside_description = Some(depth);
+                    continue;
+                }
+                write(&mut writer, event.clone())?;
+                if is_empty {
+                    scopes.pop();
+                    depth -= 1;
+                }
+            }
+            Event::End(ref e) => {
+                if inside_description == Some(depth) {
+                    if first == Some(depth) && !items.is_empty() {
+                        write_seq(&mut writer, &scopes, name, items, &child_indent)?;
+                    }
+                    inside_description = None;
+                }
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                write(&mut writer, Event::End(e.borrow()))?;
+                scopes.pop();
+                depth -= 1;
+            }
+            Event::Eof => break,
+            other => {
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                write(&mut writer, other)?;
+            }
+        }
+    }
+    if let Some(p) = pending.take() {
+        write(&mut writer, p)?;
+    }
+    String::from_utf8(writer.into_inner()).map_err(|e| XmpError::Malformed(e.to_string()))
+}
+
+/// Liste `field` de `image`, lue dans son sidecar le plus récent ; vide sans sidecar.
+pub fn read_list_of(image: &Path, field: ListField) -> Result<Vec<String>> {
+    match fs::read_to_string(sidecar_path(image, Convention::default())) {
+        Ok(text) => read_list(&text, field),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Écrit la liste `field` de `image` dans son sidecar le plus récent (créé selon `default`
+/// s'il n'existe pas ; rien n'est créé pour une liste vide), comme [`write()`] : relu juste
+/// avant, seule la liste change, écriture atomique. Renvoie le sidecar utilisé.
+pub fn write_list(
+    image: &Path,
+    field: ListField,
+    items: &[String],
+    default: Convention,
+) -> Result<PathBuf> {
+    let path = sidecar_path(image, default);
+    let original = match fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+    if original.is_none() && items.is_empty() {
+        return Ok(path);
+    }
+    let base = original.as_deref().unwrap_or(NEW_PACKET);
+    let updated = apply_list(base, field, items)?;
+    if original.as_deref() == Some(updated.as_str()) {
+        return Ok(path);
+    }
+    let tmp = path.with_extension(format!("xmp.{}.tmp", std::process::id()));
+    fs::write(&tmp, &updated)?;
+    if let Err(e) = fs::rename(&tmp, &path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.into());
+    }
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -1228,6 +1512,44 @@ mod tests {
             flag,
             colors: colors.to_vec(),
         }
+    }
+
+    #[test]
+    fn a_list_is_written_read_back_and_left_alone_by_the_notes() {
+        let items = vec![
+            r#"{"name":"Story & co","crop":[0.1,0,0.5,1]}"#.to_string(),
+            "<deux>".to_string(),
+        ];
+        let with = apply_list(DARKTABLE, VERSIONS, &items).unwrap();
+        assert_eq!(
+            read_list(&with, VERSIONS).unwrap(),
+            items,
+            "relue à l'identique"
+        );
+        assert!(with.contains("xmlns:tri=\"urn:tri:xmp:1.0\""));
+        assert!(
+            with.contains("&amp; co") && with.contains("&lt;deux&gt;"),
+            "échappée"
+        );
+        // Tout le reste intact : retirer la liste redonne le fichier d'origine.
+        assert_eq!(apply_list(&with, VERSIONS, &[]).unwrap(), DARKTABLE);
+        // Inchangée : octet pour octet.
+        assert_eq!(apply_list(&with, VERSIONS, &items).unwrap(), with);
+        // Les notes ne la touchent pas.
+        let rated = apply(&with, &notes(3, Flag::Accepted, &[Color::Red])).unwrap();
+        assert_eq!(read_list(&rated, VERSIONS).unwrap(), items);
+        assert_eq!(parse(&rated).unwrap().stars, 3);
+        // Une seule liste, même réécrite.
+        let again = apply_list(&rated, VERSIONS, &items[..1]).unwrap();
+        assert_eq!(
+            again.matches("tri:Versions").count(),
+            2,
+            "ouverture et fermeture"
+        );
+        assert_eq!(read_list(&again, VERSIONS).unwrap(), items[..1]);
+        // Paquet neuf (rdf:Description vide) : liste ajoutée aussi.
+        let fresh = apply_list(NEW_PACKET, VERSIONS, &items).unwrap();
+        assert_eq!(read_list(&fresh, VERSIONS).unwrap(), items);
     }
 
     #[test]

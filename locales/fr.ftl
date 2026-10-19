@@ -68,6 +68,9 @@ history-modified = { $name } a été modifié ailleurs depuis (rien n'a été ch
 history-nothing = rien à annuler
 history-trash-one = { $name } mis à la corbeille
 history-create-dir = dossier { $name } créé
+history-version-created = version « { $version } » créée : { $name }
+history-version-changed = version « { $version } » modifiée : { $name }
+history-version-deleted = version « { $version } » supprimée : { $name }
 history-stars = { $n ->
     [0] 0 étoile
     [one] 1 étoile

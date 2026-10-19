@@ -632,7 +632,14 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   (`asis` : copie pure, espace d'origine gardé) ; **pas de choix du rendu** dans la boîte
   (Ctrl+E sur l'image voulue) ; **espace d'origine lu** (ICC, sinon EXIF DCF R03 / R98 :
   un JPEG boîtier peut être en Adobe RGB), converti par `moxcms` si le profil en demande
-  un autre. darktable trouvé aussi en **AppImage**
+  un autre.
+- [~] **Versions (recadrages)** (19/10/2026, `src/versions.rs`, `doc/versions.md`) :
+  décisions de l'utilisateur — on recadre ce qu'on voit (par-dessus darktable ; son usage :
+  pas de recadrage dans darktable), pas de redressement (travail de darktable), profil
+  d'export facultatif qui pré-remplit la boîte, badge dans la grille (pas une vignette par
+  version), cadre libre ou à rapport fixe avec voile gris autour, tout à la souris aussi,
+  flèches (classique) / hjkl (vim). **Moteur fait** (géométrie, `tri:Versions` en JSON
+  dans le XMP, annulable). Reste : l'interface, puis l'export d'une version. darktable trouvé aussi en **AppImage**
   (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
   dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des

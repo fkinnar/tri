@@ -82,7 +82,7 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
 | Profil | Format | Espace | Taille | Sans recompression |
 |---|---|---|---|---|
 | Retouche (`edit`) | TIFF 16 bits | ProPhoto linéaire | pleine | — |
-| JPEG tel quel (`asis`) | JPEG 95 | d'origine (`""`) | pleine | oui |
+| JPEG tel quel (`asis`) | JPEG 100 | d'origine (`""`) | pleine | oui |
 | Web (`web`) | JPEG 90 | sRGB | 2048 px | oui |
 
 « JPEG tel quel » (demandé le 19/10/2026) : un JPEG est copié sans rien toucher (taille,

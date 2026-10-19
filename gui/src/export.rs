@@ -36,6 +36,15 @@ impl Render {
     }
 }
 
+/// Exporte-t-on des JPEG (le JPEG boîtier, ou des JPEG d'origine) plutôt qu'un rendu ?
+pub fn exports_jpeg(render: Render, images: &[PathBuf]) -> bool {
+    let jpeg = |p: &PathBuf| {
+        p.extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"))
+    };
+    render == Render::Embedded || (!images.is_empty() && images.iter().all(jpeg))
+}
+
 /// Boîte ouverte.
 pub struct ExportDialog {
     /// Images à exporter (paires déjà réduites à leur RAW, voir [`tri::export::sources`]).
@@ -180,8 +189,33 @@ impl ExportDialog {
                 ui.add_space(6.0);
                 ui.label(t!("export-profile"));
                 for (i, p) in self.profiles.iter().enumerate() {
-                    let text = format!("{}   {}", profile_name(p), profile_summary(p));
-                    let row = ui.selectable_label(self.choice == i, text);
+                    // Le nom, puis les réglages en petit et en gris (retour du 19/10/2026 :
+                    // moins d'attraction pour l'œil).
+                    let mut text = egui::text::LayoutJob::default();
+                    let style = ui.style();
+                    let body = egui::TextStyle::Body.resolve(style);
+                    let small = egui::FontId::proportional(body.size * 0.85);
+                    let selected = self.choice == i;
+                    let strong = if selected {
+                        style.visuals.selection.stroke.color
+                    } else {
+                        style.visuals.text_color()
+                    };
+                    let weak = strong.gamma_multiply(0.6);
+                    text.append(
+                        &profile_name(p),
+                        0.0,
+                        egui::TextFormat::simple(body, strong),
+                    );
+                    text.append(
+                        &profile_summary(p),
+                        10.0,
+                        egui::TextFormat {
+                            valign: egui::Align::Center,
+                            ..egui::TextFormat::simple(small, weak)
+                        },
+                    );
+                    let row = ui.selectable_label(selected, text);
                     if row.clicked() {
                         self.choice = i;
                     }

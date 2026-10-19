@@ -147,7 +147,7 @@ impl Profile {
             // rien toucher (ni taille, ni espace couleur : un JPEG Adobe RGB le reste) ; un
             // RAW sort en JPEG pleine taille, dans l'espace du développement.
             Profile {
-                quality: 95,
+                quality: 100,
                 color: String::new(),
                 ..Profile::base("asis")
             },

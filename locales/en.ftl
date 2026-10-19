@@ -68,6 +68,9 @@ history-modified = { $name } was modified elsewhere since (nothing was changed)
 history-nothing = nothing to undo
 history-trash-one = { $name } moved to the trash
 history-create-dir = folder { $name } created
+history-version-created = version “{ $version }” created: { $name }
+history-version-changed = version “{ $version }” changed: { $name }
+history-version-deleted = version “{ $version }” deleted: { $name }
 history-stars = { $n ->
     [one] 1 star
    *[other] { $n } stars

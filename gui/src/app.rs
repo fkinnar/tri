@@ -205,8 +205,9 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
-    /// Profil d'export choisi la dernière fois (session).
-    export_choice: usize,
+    /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
+    /// JPEG (boîtier ou d'origine), retenus à part.
+    export_choice: [Option<usize>; 2],
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
     /// Échec de la dernière action sur un fichier (barre d'état).
@@ -504,7 +505,7 @@ impl TriApp {
             auto_advance: gui.auto_advance,
             rating_dialog: None,
             file_dialog: None,
-            export_choice: 0,
+            export_choice: [None; 2],
             export_job: None,
             file_error: None,
             selection: Default::default(),
@@ -4509,16 +4510,26 @@ impl TriApp {
             Action::FileExport => {
                 let darktable =
                     tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
+                // On exporte ce qu'on regarde : en plein écran, la source affichée.
+                let render = crate::export::Render::of(
+                    (self.mode != Mode::Grid).then_some(self.source),
+                    darktable,
+                );
+                // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
+                // du 19/10/2026) ; le choix de la séance est retenu à part de celui des rendus.
+                let jpeg = crate::export::exports_jpeg(render, &paths);
+                let profiles = &self.settings.export.profiles;
+                let choice = self.export_choice[usize::from(jpeg)].unwrap_or_else(|| {
+                    jpeg.then(|| profiles.0.iter().position(|p| p.id == "asis"))
+                        .flatten()
+                        .unwrap_or(0)
+                });
                 let dialog = crate::export::ExportDialog::new(
                     &paths,
                     &self.settings.export,
-                    self.export_choice,
+                    choice,
                     darktable,
-                    // On exporte ce qu'on regarde : en plein écran, la source affichée.
-                    crate::export::Render::of(
-                        (self.mode != Mode::Grid).then_some(self.source),
-                        darktable,
-                    ),
+                    render,
                     at,
                 );
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
@@ -4579,7 +4590,8 @@ impl TriApp {
                 choice,
             } => {
                 self.file_dialog = None;
-                self.export_choice = choice;
+                self.export_choice[usize::from(crate::export::exports_jpeg(render, &images))] =
+                    Some(choice);
                 self.start_export(ctx, images, profile, folder, render);
             }
             crate::files::Outcome::Done { select, step } => {
@@ -9170,12 +9182,17 @@ mod tests {
             Some(crate::files::FileDialog::Export(_))
         ));
         // Profils fournis et dossier proposé (sous-dossier `export` des images).
-        h.get_by_label_contains("Retouche   TIFF 16 bits · ProPhoto (linéaire)");
-        h.get_by_label_contains("Web   JPEG 90 % · sRGB · 2048 px au plus");
+        h.get_by_label_contains("TIFF 16 bits · ProPhoto (linéaire)");
+        h.get_by_label_contains("JPEG 90 % · sRGB · 2048 px au plus");
         // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
         h.get_by_label_contains("darktable absent");
         // ↓ ↓ : profil Web ; Entrée : export en fond, puis bilan.
-        h.get_by_label_contains("JPEG tel quel   JPEG 95 % · espace d'origine · pleine définition");
+        h.get_by_label_contains("JPEG 100 % · espace d'origine · pleine définition");
+        // Des JPEG : « JPEG tel quel » proposé d'abord.
+        let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
+            panic!("boîte d'export attendue");
+        };
+        assert_eq!(dialog.choice(), 1);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
