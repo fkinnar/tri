@@ -859,16 +859,15 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         .into());
     };
     profile.check()?;
-    // Le profil s'applique-t-il à ce qu'on exporte (`applies_to`) ?
-    let flat = args.embedded
-        || images
-            .iter()
-            .all(|p| tri::media::kind_of(p) == Some(tri::media::MediaKind::Flat));
-    if !profile.applies_to.allows(flat) {
-        let key = if flat {
-            "cli-export-raw-only"
-        } else {
+    // Images rangées : RAW, images déjà développées (le JPEG d'une paire aussi, sauf
+    // `--embedded`) ; le profil doit s'appliquer à tout (`applies_to`).
+    let batch = tri::export::Batch::new(images, args.embedded);
+    let kind = batch.kind(args.embedded);
+    if !kind.allows(profile) {
+        let key = if profile.applies_to == tri::export::AppliesTo::Flat {
             "cli-export-as-is-raw"
+        } else {
+            "cli-export-raw-only"
         };
         return Err(t!(key, profile = id).into());
     }
@@ -877,12 +876,12 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         profile.passthrough = true;
     }
     let profile = &profile;
-    let sources = tri::export::sources(images);
     // `--to`, sinon le dossier du profil (relatif : à côté de chaque image).
     let folder = match &args.to {
         Some(to) => to.display().to_string(),
         None => profile.folder.clone(),
     };
+    let sources: Vec<&PathBuf> = batch.raws.iter().chain(&batch.flats).collect();
     let dest = sources
         .first()
         .map(|first| tri::export::folder_for(&folder, first))
@@ -922,33 +921,36 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     // darktable s'il est là (sauf `--libraw`), sinon rendu de base par LibRaw.
     let darktable = (!args.libraw && !args.embedded)
         .then(|| tri::develop::find_darktable(&settings.develop.darktable))
-        .flatten();
-    let report = match darktable {
-        Some(cli) => {
-            let dt = tri::develop::Darktable {
+        .flatten()
+        .map(|cli| -> AnyResult<tri::develop::Darktable> {
+            Ok(tri::develop::Darktable {
                 cli,
                 config_dir: settings.open_cache()?.root().join("darktable-export"),
                 high_quality: true,
-            };
-            // Accentuation de sortie : par un TIFF temporaire (darktable n'en fait pas).
-            if profile.sharpen == tri::export::Sharpen::None {
-                tri::export::export(&dt, &sources, profile, &folder, &cancel, progress)?
-            } else {
-                tri::export::export_via_tiff(&dt, &sources, &request, &cancel, progress)?
-            }
-        }
+            })
+        })
+        .transpose()?;
+    let renderer = match &darktable {
+        Some(dt) => tri::export::Renderer::Darktable(dt),
         None => {
-            if !args.embedded {
+            if !args.embedded && !batch.raws.is_empty() {
                 eprintln!("{}", t!("cli-export-libraw"));
             }
-            let local = if args.embedded {
+            tri::export::Renderer::Local(if args.embedded {
                 tri::export::Local::Embedded
             } else {
                 tri::export::Local::LibRaw
-            };
-            tri::export::export_libraw(&sources, &request, local, &cancel, progress)?
+            })
         }
     };
+    let report = tri::export::run(
+        &batch,
+        renderer,
+        &request,
+        &settings.export.camera_suffix,
+        &cancel,
+        progress,
+    )?;
     for (image, error) in &report.errors {
         eprintln!("{} : {error}", image.display());
     }

@@ -107,6 +107,10 @@ high_quality = false
 # ou qui ne s'applique pas : le premier de la liste.
 default_raw = "edit"
 default_flat = "asis"
+# Paire RAW + JPEG sélectionnée : les deux sont exportés (le RAW rendu par darktable ou
+# LibRaw, le JPEG développé par l'appareil) ; le JPEG prend ce suffixe :
+# DSCF0001.jpg (rendu du RAW) et DSCF0001-camera.jpg (JPEG de l'appareil).
+camera_suffix = "-camera"
 
 [export.sharpening]
 # Accentuation de sortie (clé sharpen des profils), appliquée après la réduction, comme

@@ -326,7 +326,28 @@ export-title = { $n ->
    *[other] Export { $n } images
 }
 export-title-version = Export the “{ $name }” version
+export-contents-darktable = { $n ->
+    [one] 1 RAW, developed by darktable
+   *[other] { $n } RAW, developed by darktable
+}
+export-contents-libraw = { $n ->
+    [one] 1 RAW, basic rendering (LibRaw)
+   *[other] { $n } RAW, basic rendering (LibRaw)
+}
+export-contents-embedded = { $n ->
+    [one] the camera JPEG of 1 RAW
+   *[other] the camera JPEG of { $n } RAW
+}
+export-contents-flat = { $n ->
+    [one] 1 already developed image
+   *[other] { $n } already developed images
+}
+export-contents-paired = { $n ->
+    [one] 1 camera JPEG (pair, suffixed name)
+   *[other] { $n } camera JPEGs (pairs, suffixed names)
+}
 export-profile = Export profile
+export-profile-tip = Up / down arrows: profile · Tab: folder · Enter: export
 export-destination = Folder
 export-create = will be created
 export-goes-to = Destination: { $dest }

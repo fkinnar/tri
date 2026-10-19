@@ -649,6 +649,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   `sharpen` = none / screen / print par profil, masque flou après réduction,
   `[export.sharpening]` ; darktable par TIFF 16 bits temporaire (`export_via_tiff`).
   Une version n'est jamais « tel quel » (`is_as_is`, déduit du profil).
+- [x] **Paires exportées toutes les deux** (retour du 19/10/2026) : rendu du RAW +
+  JPEG de l'appareil suffixé (`[export] camera_suffix`, `-camera`), sauf en JPEG boîtier ;
+  mélange = profils communs (`Kind`, `Batch`, `run`) ; ce qui part écrit sous le titre de
+  la boîte ; clavier à la liste des profils ; clic dans la boîte qui ne traverse plus.
 - **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, juste après les
   versions) : fenêtre de réglages, section Export — nouveau profil, dupliquer, supprimer
   (profils de l'utilisateur seulement), mêmes contrôles et refus des incohérences. darktable trouvé aussi en **AppImage**

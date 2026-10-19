@@ -525,6 +525,8 @@ pub struct ExportSettings {
     pub default_raw: String,
     /// Profil proposé pour une image déjà développée (JPEG boîtier, JPEG…).
     pub default_flat: String,
+    /// Ajouté au nom du JPEG d'une paire exporté avec son RAW (`DSCF0001-camera.jpg`).
+    pub camera_suffix: String,
     /// Accentuation de sortie (`[export.sharpening]`).
     pub sharpening: Sharpening,
     /// Profils (`[export.profiles.<id>]`).
@@ -536,6 +538,7 @@ impl Default for ExportSettings {
         Self {
             default_raw: "edit".into(),
             default_flat: "asis".into(),
+            camera_suffix: "-camera".into(),
             sharpening: Sharpening::default(),
             profiles: Profiles::default(),
         }
@@ -1013,6 +1016,9 @@ pub struct Request<'a> {
     pub cut: Option<&'a Cut>,
     /// Paramètres de l'accentuation de sortie.
     pub sharpening: Sharpening,
+    /// JPEG de paires dont le RAW est aussi exporté, et le suffixe ajouté à leur nom
+    /// (`DSCF0001-camera.jpg` à côté de `DSCF0001.jpg`, rendu du RAW).
+    pub paired: Option<(&'a HashSet<PathBuf>, &'a str)>,
 }
 
 impl<'a> Request<'a> {
@@ -1023,6 +1029,7 @@ impl<'a> Request<'a> {
             folder,
             cut: None,
             sharpening: Sharpening::default(),
+            paired: None,
         }
     }
 
@@ -1034,6 +1041,164 @@ impl<'a> Request<'a> {
     /// Paramètres de l'accentuation (`[export.sharpening]`).
     pub fn sharpening(self, sharpening: Sharpening) -> Request<'a> {
         Request { sharpening, ..self }
+    }
+
+    /// Ajouté au nom du fichier de `image` : version (`-Story`), puis JPEG de paire
+    /// (`-camera`).
+    fn extra(&self, image: &Path) -> String {
+        let mut extra = self.cut.map(Cut::suffix).unwrap_or_default();
+        if let Some((paired, suffix)) = self.paired
+            && paired.contains(image)
+        {
+            extra.push_str(suffix);
+        }
+        extra
+    }
+}
+
+/// Ce que contient un export : des RAW (rendus), des images déjà développées (JPEG,
+/// TIFF… : copiées, converties ou réduites), ou les deux.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// Seulement des RAW.
+    Raw,
+    /// Seulement des images déjà développées (JPEG boîtier compris).
+    Flat,
+    /// Les deux.
+    Mixed,
+}
+
+impl Kind {
+    /// Le profil s'applique-t-il à cet export ? Pour un mélange : seulement les profils
+    /// valables pour les deux (le plus petit dénominateur, retour du 19/10/2026).
+    pub fn allows(self, profile: &Profile) -> bool {
+        match self {
+            Kind::Raw => profile.applies_to.allows(false),
+            Kind::Flat => profile.applies_to.allows(true),
+            Kind::Mixed => profile.applies_to == AppliesTo::All,
+        }
+    }
+}
+
+/// Images d'un export, rangées : RAW, images déjà développées, et parmi elles les JPEG de
+/// paires dont le RAW est aussi exporté.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Batch {
+    /// RAW (rendus par darktable, LibRaw, ou leur JPEG boîtier).
+    pub raws: Vec<PathBuf>,
+    /// Images déjà développées.
+    pub flats: Vec<PathBuf>,
+    /// JPEG de paires (leur RAW est dans `raws`) : exportés aussi, nom suffixé.
+    pub paired: HashSet<PathBuf>,
+}
+
+impl Batch {
+    /// Range `images` (sans doublon). Retour du 19/10/2026 : le JPEG d'une paire est
+    /// exporté **en plus** de son RAW (l'un développé par l'appareil, l'autre par darktable
+    /// ou LibRaw), sous un autre nom ; sauf `embedded` (on exporte le JPEG boîtier des
+    /// RAW : ce serait deux fois la même image de l'appareil), où il est laissé de côté.
+    pub fn new(images: &[PathBuf], embedded: bool) -> Batch {
+        let images = if embedded {
+            sources(images)
+        } else {
+            let mut seen = HashSet::new();
+            images.iter().filter(|p| seen.insert(*p)).cloned().collect()
+        };
+        let (raws, flats): (Vec<PathBuf>, Vec<PathBuf>) = images
+            .into_iter()
+            .partition(|p| kind_of(p) == Some(MediaKind::Raw));
+        let raw_stems: HashSet<PathBuf> = raws.iter().map(|p| p.with_extension("")).collect();
+        let paired = flats
+            .iter()
+            .filter(|p| raw_stems.contains(&p.with_extension("")))
+            .cloned()
+            .collect();
+        Batch {
+            raws,
+            flats,
+            paired,
+        }
+    }
+
+    /// Ce que contient l'export ; `embedded` : les RAW sont exportés par leur JPEG
+    /// boîtier, une image déjà développée.
+    pub fn kind(&self, embedded: bool) -> Kind {
+        let raws = !self.raws.is_empty() && !embedded;
+        let flats = !self.flats.is_empty() || (embedded && !self.raws.is_empty());
+        match (raws, flats) {
+            (true, true) => Kind::Mixed,
+            (true, false) => Kind::Raw,
+            _ => Kind::Flat,
+        }
+    }
+
+    /// Nombre d'images exportées.
+    pub fn len(&self) -> usize {
+        self.raws.len() + self.flats.len()
+    }
+
+    /// Vrai si rien n'est à exporter.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// Comment les RAW d'un export sont rendus.
+#[derive(Clone, Copy, Debug)]
+pub enum Renderer<'a> {
+    /// Par darktable.
+    Darktable(&'a Darktable),
+    /// Sans darktable : LibRaw ou JPEG boîtier.
+    Local(Local),
+}
+
+/// Exporte `batch` : les RAW par `renderer` (darktable passe par un TIFF temporaire s'il
+/// faut recadrer ou accentuer), puis les images déjà développées (copiées, converties ou
+/// réduites ; JPEG de paire suffixé de `pair_suffix`). Une progression, un bilan.
+pub fn run(
+    batch: &Batch,
+    renderer: Renderer<'_>,
+    req: &Request<'_>,
+    pair_suffix: &str,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &Path),
+) -> Result<Report, DevelopError> {
+    let total = batch.len();
+    let mut report = Report::default();
+    if !batch.raws.is_empty() {
+        let mut step = |done: usize, _: usize, path: &Path| progress(done, total, path);
+        let part = match renderer {
+            Renderer::Darktable(dt)
+                if req.cut.is_some() || req.profile.sharpen != Sharpen::None =>
+            {
+                export_via_tiff(dt, &batch.raws, req, cancel, &mut step)?
+            }
+            Renderer::Darktable(dt) => {
+                export(dt, &batch.raws, req.profile, req.folder, cancel, &mut step)?
+            }
+            Renderer::Local(local) => export_libraw(&batch.raws, req, local, cancel, &mut step)?,
+        };
+        report.merge(part);
+    }
+    if !batch.flats.is_empty() {
+        let offset = report.written.len();
+        let flats = Request {
+            paired: Some((&batch.paired, pair_suffix)),
+            ..*req
+        };
+        let step = |done: usize, _: usize, path: &Path| progress(offset + done, total, path);
+        let part = export_libraw(&batch.flats, &flats, Local::LibRaw, cancel, step)?;
+        report.merge(part);
+    }
+    Ok(report)
+}
+
+impl Report {
+    fn merge(&mut self, other: Report) {
+        self.written.extend(other.written);
+        self.failed += other.failed;
+        self.errors.extend(other.errors);
+        self.passthrough += other.passthrough;
     }
 }
 
@@ -1085,7 +1250,7 @@ fn export_one(
     local: Local,
     cancel: &AtomicBool,
 ) -> Result<(PathBuf, bool), DevelopError> {
-    let (profile, folder, cut) = (req.profile, req.folder, req.cut);
+    let (profile, cut) = (req.profile, req.cut);
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
     let encode = |p: moxcms::ColorProfile| p.encode().map_err(|e| failed(&format!("{e:?}")));
     let (pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
@@ -1116,7 +1281,7 @@ fn export_one(
             && origin.is(&profile.color)
             && let Some(bytes) = jpeg
         {
-            return write_bytes(image, profile, folder, &bytes).map(|out| (out, true));
+            return write_bytes(image, req, &bytes).map(|out| (out, true));
         }
         let icc = if origin.is(&profile.color) {
             origin.icc()
@@ -1174,7 +1339,7 @@ fn finish(
     if let Some(u) = sharpening.of(profile.sharpen) {
         pixels = unsharp(&pixels, u);
     }
-    let extra = cut.map(Cut::suffix).unwrap_or_default();
+    let extra = req.extra(image);
     let out = output_path(image, profile, &extra, folder, profile.format.extension())?;
     write_image(&out, &pixels, profile, icc).map_err(|e| {
         let _ = std::fs::remove_file(&out);
@@ -1292,13 +1457,8 @@ fn output_path(
 }
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
-fn write_bytes(
-    image: &Path,
-    profile: &Profile,
-    folder: &str,
-    bytes: &[u8],
-) -> Result<PathBuf, DevelopError> {
-    let out = output_path(image, profile, "", folder, "jpg")?;
+fn write_bytes(image: &Path, req: &Request<'_>, bytes: &[u8]) -> Result<PathBuf, DevelopError> {
+    let out = output_path(image, req.profile, &req.extra(image), req.folder, "jpg")?;
     std::fs::write(&out, bytes).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(out)
 }
@@ -1571,6 +1731,54 @@ mod tests {
         assert_eq!(p.get("web").unwrap().sharpen, Sharpen::Screen);
         assert_eq!(p.get("edit").unwrap().sharpen, Sharpen::None);
         assert_eq!(p.get("asis").unwrap().sharpen, Sharpen::None);
+    }
+
+    #[test]
+    fn a_pair_exports_both_developments_under_two_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join("DSCF0001.RAF");
+        let jpg = dir.path().join("DSCF0001.JPG");
+        let alone = dir.path().join("autre.jpg");
+        std::fs::write(&raw, b"raw").unwrap();
+        image::RgbImage::from_pixel(30, 20, image::Rgb([90, 120, 150]))
+            .save(&jpg)
+            .unwrap();
+        std::fs::copy(&jpg, &alone).unwrap();
+        let images = vec![raw.clone(), jpg.clone(), alone.clone(), raw.clone()];
+        let batch = Batch::new(&images, false);
+        assert_eq!(batch.raws, std::slice::from_ref(&raw));
+        assert_eq!(batch.flats, [jpg.clone(), alone.clone()]);
+        assert!(batch.paired.contains(&jpg) && !batch.paired.contains(&alone));
+        assert_eq!(batch.kind(false), Kind::Mixed);
+        // JPEG boîtier : la paire une seule fois, tout est « déjà développé ».
+        let embedded = Batch::new(&images, true);
+        assert_eq!(embedded.flats, std::slice::from_ref(&alone));
+        assert_eq!(embedded.kind(true), Kind::Flat);
+        // Mélange : seulement les profils valables pour les deux.
+        let p = Profiles::default();
+        assert!(Kind::Mixed.allows(p.get("web").unwrap()));
+        assert!(!Kind::Mixed.allows(p.get("asis").unwrap()));
+        // Les images développées seules : le JPEG de paire prend le suffixe.
+        let only_flats = Batch {
+            raws: Vec::new(),
+            ..batch.clone()
+        };
+        let report = run(
+            &only_flats,
+            Renderer::Local(Local::LibRaw),
+            &Request::new(p.get("asis").unwrap(), "out"),
+            "-camera",
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        let names: Vec<String> = report
+            .written
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["DSCF0001-camera.jpg", "autre.jpg"]);
+        assert_eq!(report.passthrough, 2, "copiés tels quels");
     }
 
     #[test]

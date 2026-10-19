@@ -69,9 +69,7 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
   Lue au fil de l'eau, elle donne la progression et les fichiers vraiment écrits
   (`Report::written`). Les images sans fichier écrit sont comptées (`Report::failed`).
 - **Annulation** : le programme est arrêté ; les fichiers déjà écrits restent.
-- **Paires RAW+JPEG** (`sources`) : le JPEG d'une paire dont le RAW est aussi demandé
-  n'est pas exporté. Le développement est celui du RAW, et les deux donneraient le même
-  fichier.
+- **Paires RAW+JPEG** : voir « Paires RAW + JPEG, mélanges » (les deux sont exportés).
 - **Rien n'est écrit chez l'utilisateur** : configuration propre
   (`<cache>/darktable-export`, distincte de celle des rendus développés, pour que les deux
   puissent tourner en même temps), bibliothèque en mémoire, `write_sidecar_files=never`.
@@ -182,6 +180,32 @@ L'espace du profil d'export décide ensuite :
 - Autre espace : **conversion** par `moxcms` (16 bits), puis le profil ICC du nouvel
   espace. Un JPEG Adobe RGB exporté en « Web » sort donc en sRGB, comme il se doit pour
   le web.
+
+## Paires RAW + JPEG, mélanges
+
+Retour de l'utilisateur (19/10/2026) : le JPEG d'une paire a été développé par l'appareil,
+le RAW l'est par darktable ou LibRaw ; ce sont deux images différentes, toutes deux à
+exporter.
+
+- `Batch::new` range l'export : les RAW (rendus), les images déjà développées (JPEG,
+  TIFF… : copiées, converties ou réduites), et parmi elles les **JPEG de paires** dont le
+  RAW est aussi exporté. Ceux-ci prennent le suffixe `[export] camera_suffix` (`-camera`) :
+  `DSCF0001.jpg` (rendu du RAW) et `DSCF0001-camera.jpg` (JPEG de l'appareil). Vérifié le
+  19/10/2026 sur une vraie paire, avec le profil Web, en 12,8 s.
+- Exception : en plein écran sur le **JPEG boîtier**, la paire ne part qu'une fois. Le
+  JPEG boîtier et le fichier JPG sont alors la même image de l'appareil.
+- `run` exporte les RAW par le moteur choisi (darktable, en passant par un TIFF
+  temporaire s'il faut recadrer ou accentuer ; LibRaw ; JPEG boîtier), puis les images
+  déjà développées, avec une seule progression et un seul bilan. La ligne de commande et
+  l'interface passent toutes deux par là.
+- **Profils proposés** (`Kind`) : RAW seuls, profils qui s'appliquent aux RAW ; images
+  développées seules, ceux qui s'appliquent à elles ; **mélange**, seulement ceux qui
+  s'appliquent à tout (`applies_to = "all"`), le plus petit dénominateur.
+- La boîte le dit sous son titre, par exemple « 1 RAW, développé par darktable · 1 JPEG
+  de l'appareil (paire, nom suffixé) ».
+- Le profil proposé est retrouvé par son **identifiant** (le dernier choisi pour ce type
+  d'export, sinon `default_raw` / `default_flat`), puisque la liste change selon ce qu'on
+  exporte.
 
 ## Sans recompression (`passthrough`)
 

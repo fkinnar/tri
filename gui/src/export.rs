@@ -39,8 +39,34 @@ impl Render {
 /// Exporte-t-on des images déjà développées (JPEG boîtier, JPEG, TIFF…) plutôt que des
 /// rendus de RAW ? Décide des profils proposés ([`tri::export::AppliesTo`]).
 pub fn exports_flat(render: Render, images: &[PathBuf]) -> bool {
-    let flat = |p: &PathBuf| tri::media::kind_of(p) == Some(tri::media::MediaKind::Flat);
-    render == Render::Embedded || (!images.is_empty() && images.iter().all(flat))
+    export_kind(render, images) == tri::export::Kind::Flat
+}
+
+/// Ce que contient l'export de `images` vu en `render` : RAW, images déjà développées, ou
+/// les deux (paires RAW + JPEG comprises, voir [`tri::export::Batch`]).
+pub fn export_kind(render: Render, images: &[PathBuf]) -> tri::export::Kind {
+    let embedded = render == Render::Embedded;
+    tri::export::Batch::new(images, embedded).kind(embedded)
+}
+
+/// Profil proposé : `preferred` (le dernier choisi, ou celui d'une version), sinon celui
+/// des réglages pour ce type d'export (`default_raw`, `default_flat`), sinon le premier ;
+/// sa place dans `profiles`.
+fn proposed(
+    profiles: &[Profile],
+    preferred: Option<&str>,
+    settings: &tri::export::ExportSettings,
+    kind: tri::export::Kind,
+) -> usize {
+    let default = if kind == tri::export::Kind::Flat {
+        &settings.default_flat
+    } else {
+        &settings.default_raw
+    };
+    preferred
+        .and_then(|id| profiles.iter().position(|p| p.id == id))
+        .or_else(|| profiles.iter().position(|p| p.id == *default))
+        .unwrap_or(0)
 }
 
 /// Boîte ouverte.
@@ -69,6 +95,11 @@ pub struct ExportDialog {
     render: Render,
     /// Version exportée (recadrage), sinon l'image entière.
     cut: Option<tri::export::Cut>,
+    /// Ce qui part, pour le dire sous le titre.
+    batch: tri::export::Batch,
+    /// Identifiant de la liste des profils (image précédente) : focus au départ, Entrée y
+    /// exporte.
+    combo: Option<egui::Id>,
 }
 
 /// Résultat d'une image de la boîte.
@@ -142,21 +173,30 @@ pub fn profile_summary(p: &Profile) -> String {
 }
 
 impl ExportDialog {
-    /// Boîte pour `images`, profil `choice` présélectionné, avec son dossier ; `render` :
-    /// l'image proposée (voir [`Render::of`]).
+    /// Boîte pour `images`, profil `preferred` proposé (identifiant ; voir [`proposed`]),
+    /// avec son dossier ; `render` : l'image exportée (voir [`Render::of`]).
     pub fn new(
         images: &[PathBuf],
         settings: &tri::export::ExportSettings,
-        choice: usize,
+        preferred: Option<&str>,
         darktable: bool,
         render: Render,
         at: Pos2,
     ) -> ExportDialog {
-        let images = tri::export::sources(images);
-        // Seulement les profils qui s'appliquent à ce qu'on exporte (`applies_to`).
-        let flat = exports_flat(render, &images);
-        let profiles: Vec<Profile> = settings.applicable(flat).into_iter().cloned().collect();
-        let choice = choice.min(profiles.len().saturating_sub(1));
+        // RAW, images déjà développées, JPEG de paires (exportés aussi, retour du
+        // 19/10/2026) ; seulement les profils qui s'appliquent à tout (`applies_to`).
+        let embedded = render == Render::Embedded;
+        let batch = tri::export::Batch::new(images, embedded);
+        let kind = batch.kind(embedded);
+        let profiles: Vec<Profile> = settings
+            .profiles
+            .0
+            .iter()
+            .filter(|p| kind.allows(p))
+            .cloned()
+            .collect();
+        let choice = proposed(&profiles, preferred, settings, kind);
+        let images: Vec<PathBuf> = batch.raws.iter().chain(&batch.flats).cloned().collect();
         ExportDialog {
             choice,
             input: profiles
@@ -168,6 +208,8 @@ impl ExportDialog {
             darktable,
             render,
             cut: None,
+            batch,
+            combo: None,
             images,
             profiles,
             field: Default::default(),
@@ -188,6 +230,9 @@ impl ExportDialog {
                 i.consume_key(Modifiers::NONE, Key::ArrowDown),
             )
         });
+        // Entrée sur la liste des profils : exporter (sans ouvrir la liste).
+        let enter_on_combo = self.combo.is_some_and(|id| ctx.memory(|m| m.has_focus(id)))
+            && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
         let last = self.profiles.len().saturating_sub(1);
         if up {
             self.choice = self.choice.saturating_sub(1);
@@ -203,6 +248,9 @@ impl ExportDialog {
             })
             .show(ctx, |ui| {
                 ui.add_space(6.0);
+                // Ce qui part (retour du 19/10/2026 : on ne savait pas quelle image).
+                ui.weak(self.contents());
+                ui.add_space(4.0);
                 ui.label(t!("export-profile"));
                 // Liste déroulante (retour du 19/10/2026 : avec beaucoup de profils, une
                 // liste rendait la boîte trop haute) ; flèches haut / bas sans l'ouvrir.
@@ -238,7 +286,7 @@ impl ExportDialog {
                     .get(self.choice)
                     .map(|p| label(p, false))
                     .unwrap_or_default();
-                egui::ComboBox::from_id_salt("export_profile")
+                let combo = egui::ComboBox::from_id_salt("export_profile")
                     .selected_text(current)
                     .width(420.0)
                     .show_ui(ui, |ui| {
@@ -248,7 +296,15 @@ impl ExportDialog {
                                 self.choice = i;
                             }
                         }
-                    });
+                    })
+                    .response
+                    .on_hover_text(t!("export-profile-tip"));
+                // Au départ, le clavier est à la liste des profils (flèches haut / bas ;
+                // Tab : le dossier), retour du 19/10/2026 : rien ne le disait.
+                if std::mem::take(&mut self.fresh) {
+                    combo.request_focus();
+                }
+                self.combo = Some(combo.id);
                 // Le dossier suit le profil, tant qu'on ne l'a pas modifié.
                 if !self.edited
                     && let Some(p) = self.profiles.get(self.choice)
@@ -260,9 +316,6 @@ impl ExportDialog {
                 ui.add_space(6.0);
                 ui.label(t!("export-destination"));
                 let field = self.field.show(ui, id, &mut self.input, 420.0);
-                if std::mem::take(&mut self.fresh) {
-                    field.request_focus();
-                }
                 if field.changed() {
                     self.edited = true;
                 }
@@ -313,7 +366,7 @@ impl ExportDialog {
                     confirm = ui
                         .add_enabled(ok, egui::Button::new(t!("export-button")))
                         .clicked()
-                        || (enter && ok);
+                        || ((enter || enter_on_combo) && ok);
                     cancel = ui.button(t!("cancel")).clicked();
                     ui.weak(t!("enter-or-escape"));
                 });
@@ -335,6 +388,29 @@ impl ExportDialog {
         } else {
             Outcome::Open
         }
+    }
+
+    /// Ce qui part, en clair : « 1 RAW, développé par darktable · 1 JPEG de l'appareil
+    /// (nom suivi de -camera) ».
+    fn contents(&self) -> String {
+        let b = &self.batch;
+        let mut parts = Vec::new();
+        if !b.raws.is_empty() {
+            let n = b.raws.len();
+            parts.push(match self.render {
+                Render::Embedded => t!("export-contents-embedded", n = n),
+                Render::LibRaw => t!("export-contents-libraw", n = n),
+                Render::Darktable => t!("export-contents-darktable", n = n),
+            });
+        }
+        let alone = b.flats.len() - b.paired.len();
+        if alone > 0 {
+            parts.push(t!("export-contents-flat", n = alone));
+        }
+        if !b.paired.is_empty() {
+            parts.push(t!("export-contents-paired", n = b.paired.len()));
+        }
+        parts.join(" · ")
     }
 
     /// Exporter la version `cut` (recadrage) plutôt que l'image entière.
@@ -361,6 +437,7 @@ impl ExportDialog {
         self
     }
 
+    #[cfg(test)]
     /// Profil choisi (retenu pour la prochaine boîte).
     pub fn choice(&self) -> usize {
         self.choice
@@ -397,6 +474,8 @@ pub struct Order {
     pub cut: Option<tri::export::Cut>,
     /// Paramètres de l'accentuation de sortie.
     pub sharpening: tri::export::Sharpening,
+    /// Suffixe du JPEG d'une paire exporté avec son RAW.
+    pub pair_suffix: String,
 }
 
 /// Export en cours, dans un fil à part (darktable : plusieurs secondes par image).
@@ -424,6 +503,7 @@ impl Job {
             folder,
             cut,
             sharpening,
+            pair_suffix,
         } = order;
         // Dossier montré : celui de la première image (relatif : un par dossier d'images).
         let dest = images
@@ -444,16 +524,14 @@ impl Job {
                 let req = tri::export::Request::new(&profile, &folder)
                     .cut(cut.as_ref())
                     .sharpening(sharpening);
-                let result = match &dt {
-                    // darktable ne recadre ni n'accentue : par un TIFF 16 bits temporaire.
-                    Some(dt) if cut.is_some() || profile.sharpen != tri::export::Sharpen::None => {
-                        tri::export::export_via_tiff(dt, &images, &req, &cancel, progress)
-                    }
-                    Some(dt) => {
-                        tri::export::export(dt, &images, &profile, &folder, &cancel, progress)
-                    }
-                    None => tri::export::export_libraw(&images, &req, local, &cancel, progress),
+                let embedded = local == tri::export::Local::Embedded && dt.is_none();
+                let batch = tri::export::Batch::new(&images, embedded);
+                let renderer = match &dt {
+                    Some(dt) => tri::export::Renderer::Darktable(dt),
+                    None => tri::export::Renderer::Local(local),
                 };
+                let result =
+                    tri::export::run(&batch, renderer, &req, &pair_suffix, &cancel, progress);
                 ctx.request_repaint();
                 result
             })
@@ -511,7 +589,7 @@ mod tests {
         assert!(exports_flat(Render::LibRaw, &jpeg));
         let settings = tri::export::ExportSettings::default();
         let dialog = |render, images: &[PathBuf]| {
-            ExportDialog::new(images, &settings, 0, true, render, Pos2::ZERO)
+            ExportDialog::new(images, &settings, None, true, render, Pos2::ZERO)
         };
         assert!(!dialog(Render::Darktable, &raw).lists_as_is());
         assert!(dialog(Render::Embedded, &raw).lists_as_is());

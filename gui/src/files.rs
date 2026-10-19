@@ -97,15 +97,13 @@ pub enum Outcome {
     },
     /// Échec (message pour la barre d'état) ; la boîte est fermée.
     Failed(String),
-    /// Export demandé (lancé en fond par l'application) ; `choice` : profil choisi, retenu
-    /// pour la prochaine fois.
+    /// Export demandé (lancé en fond par l'application).
     Export {
         images: Vec<PathBuf>,
         profile: tri::export::Profile,
         folder: String,
         render: crate::export::Render,
         cut: Option<tri::export::Cut>,
-        choice: usize,
     },
 }
 
@@ -196,7 +194,6 @@ impl FileDialog {
                     folder,
                     render,
                     cut,
-                    choice: e.choice(),
                 },
             },
             FileDialog::NewFolder {

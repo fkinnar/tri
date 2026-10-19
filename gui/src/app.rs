@@ -213,7 +213,7 @@ pub struct TriApp {
     versions: HashMap<PathBuf, tri::versions::Versions>,
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
-    export_choice: [Option<usize>; 2],
+    export_choice: [Option<String>; 2],
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
     /// Échec de la dernière action sur un fichier (barre d'état).
@@ -518,7 +518,7 @@ impl TriApp {
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
-            export_choice: [None; 2],
+            export_choice: [None, None],
             export_job: None,
             file_error: None,
             selection: Default::default(),
@@ -4890,17 +4890,15 @@ impl TriApp {
                 let render = crate::export::Render::of(Some(source), darktable);
                 let images = vec![path];
                 let flat = crate::export::exports_flat(render, &images);
-                let applicable = self.settings.export.applicable(flat);
-                let choice = version
+                // Son profil, sinon le dernier choisi, sinon celui des réglages.
+                let preferred = version
                     .profile
-                    .as_ref()
-                    .and_then(|id| applicable.iter().position(|p| p.id == *id))
-                    .or(self.export_choice[usize::from(flat)])
-                    .unwrap_or_else(|| self.settings.export.default_index(flat));
+                    .clone()
+                    .or_else(|| self.export_choice[usize::from(flat)].clone());
                 let dialog = crate::export::ExportDialog::new(
                     &images,
                     &self.settings.export,
-                    choice,
+                    preferred.as_deref(),
                     darktable,
                     render,
                     at,
@@ -4925,12 +4923,11 @@ impl TriApp {
                 let jpeg = crate::export::exports_flat(render, &paths);
                 // Le dernier choisi dans la séance, sinon celui des réglages
                 // (`default_raw`, `default_flat`).
-                let choice = self.export_choice[usize::from(jpeg)]
-                    .unwrap_or_else(|| self.settings.export.default_index(jpeg));
+                let preferred = self.export_choice[usize::from(jpeg)].clone();
                 let dialog = crate::export::ExportDialog::new(
                     &paths,
                     &self.settings.export,
-                    choice,
+                    preferred.as_deref(),
                     darktable,
                     render,
                     at,
@@ -4991,11 +4988,10 @@ impl TriApp {
                 folder,
                 render,
                 cut,
-                choice,
             } => {
                 self.file_dialog = None;
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
-                    Some(choice);
+                    Some(profile.id.clone());
                 self.start_export(ctx, images, profile, folder, render, cut);
             }
             crate::files::Outcome::Done { select, step } => {
@@ -5051,6 +5047,7 @@ impl TriApp {
             folder,
             cut,
             sharpening: self.settings.export.sharpening,
+            pair_suffix: self.settings.export.camera_suffix.clone(),
         };
         self.export_job = Some(crate::export::Job::start(dt, local, order, ctx));
     }
@@ -5660,12 +5657,18 @@ impl TriApp {
         self.view_height = output.inner_rect.height();
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
         // vidée, comme dans un gestionnaire de fichiers.
+        // Seulement si le clic tombe sur la grille elle-même, pas sur une boîte ou une liste
+        // déroulante posée dessus (retour du 19/10/2026 : choisir un profil d'export à la
+        // souris vidait la sélection).
+        let layer = ui.layer_id();
         let clicked_empty = ui.input(|i| {
             i.pointer.primary_clicked()
                 && i.pointer
                     .interact_pos()
                     .is_some_and(|p| output.inner_rect.contains(p))
-        });
+        }) && ui
+            .input(|i| i.pointer.interact_pos())
+            .is_some_and(|p| ui.ctx().layer_id_at(p) == Some(layer));
         if clicked_empty && !self.over_cell && !self.selection.is_visual() {
             self.cursor_hidden = true;
             self.selection.clear();
@@ -7154,7 +7157,7 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, name)| {
-                let pixel = image::Rgb([40 * i as u8, 100, 160]);
+                let pixel = image::Rgb([((40 * i) % 256) as u8, 100, 160]);
                 (*name, image::RgbImage::from_pixel(w, h, pixel))
             })
             .collect();
@@ -9918,6 +9921,44 @@ mod tests {
         let saved = tri::versions::read(&image).unwrap();
         assert_eq!(saved.list[0].name, "Story");
         assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
+    }
+
+    #[test]
+    fn export_profiles_follow_the_arrows_with_a_multiple_selection() {
+        // Assez d'images pour que la grille défile (comme un vrai dossier de 472 images).
+        let names: Vec<String> = (0..80).map(|i| format!("img{i:02}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&names, 32, 24);
+        h.run_steps(3);
+        // Deux images sélectionnées (Espace), puis Ctrl+E.
+        press(&mut h, Key::Space, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert_eq!(h.state().selection.visible(&h.state().files), 2);
+        press(&mut h, Key::E, Modifiers::CTRL);
+        let choice = |h: &Harness<'_, TriApp>| match &h.state().file_dialog {
+            Some(crate::files::FileDialog::Export(d)) => d.choice(),
+            _ => panic!("boîte d'export attendue"),
+        };
+        let first = choice(&h);
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(choice(&h), first + 1, "flèche bas : profil suivant");
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        assert_eq!(choice(&h), first);
+        assert_eq!(
+            h.state().selection.visible(&h.state().files),
+            2,
+            "sélection gardée"
+        );
+        // Un clic dans la boîte (ici sur son titre, au-dessus de la grille) ne vide pas la
+        // sélection.
+        h.get_by_label_contains("Exporter 2 images").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().selection.visible(&h.state().files),
+            2,
+            "clic dans la boîte"
+        );
     }
 
     #[test]

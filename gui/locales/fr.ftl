@@ -328,7 +328,28 @@ export-title = { $n ->
    *[other] Exporter { $n } images
 }
 export-title-version = Exporter la version « { $name } »
+export-contents-darktable = { $n ->
+    [one] 1 RAW, développé par darktable
+   *[other] { $n } RAW, développés par darktable
+}
+export-contents-libraw = { $n ->
+    [one] 1 RAW, rendu de base (LibRaw)
+   *[other] { $n } RAW, rendu de base (LibRaw)
+}
+export-contents-embedded = { $n ->
+    [one] le JPEG boîtier de 1 RAW
+   *[other] le JPEG boîtier de { $n } RAW
+}
+export-contents-flat = { $n ->
+    [one] 1 image déjà développée
+   *[other] { $n } images déjà développées
+}
+export-contents-paired = { $n ->
+    [one] 1 JPEG de l'appareil (paire, nom suffixé)
+   *[other] { $n } JPEG de l'appareil (paires, noms suffixés)
+}
 export-profile = Profil d'export
+export-profile-tip = Flèches haut / bas : profil · Tab : dossier · Entrée : exporter
 export-destination = Dossier
 export-create = sera créé
 export-goes-to = Destination : { $dest }
