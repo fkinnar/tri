@@ -18,7 +18,11 @@ marge ou une diagonale réciproque en dépendent.
 ## Deux sortes de plugins, un seul trait
 
 - **Écrits en Rust** et compilés avec `tri` : les grilles intégrées (`builtin`, `Grid` :
-  tiers, nombre d'or, diagonales et diagonales réciproques). Couleur et opacité :
+  tiers, nombre d'or, spirale d'or — demandée le 19/10/2026 : « certains aiment » —,
+  diagonales et diagonales réciproques). La spirale : quarts de cercle dans les carrés
+  successifs du rectangle d'or, approchés par des segments, étirée sur l'image comme dans
+  Lightroom (pivotée pour une image en hauteur, sans quoi elle serait écrasée) ;
+  retournable dans un fichier (`flip`). Couleur et opacité :
   `[gui.colors] overlay`, `[gui.view] overlay_opacity`.
 - **Définis par l'utilisateur, sans code** : un fichier TOML par superposition dans le
   dossier `overlays` du dossier de données (`load_dir`, `user_dir`), lu à chaque pression
@@ -38,7 +42,7 @@ nom (défaut : le nom du fichier) et des formes `[[shape]]`, selon leur `kind` :
 | `text` | `text`, `anchor`, `size` (hauteur, fraction du petit côté), `margin`, `color`, `opacity` | bas droite, 0,04, 0,03, blanc, 1 |
 | `image` | `path` (relatif au fichier, ou `~/…`), `anchor`, `width` (fraction de la largeur), `margin`, `opacity` | bas droite, 0,15, 0,03, 1 |
 | `frame` | `ratio` (`"4:5"`, largeur:hauteur), `color`, `opacity`, `shade` (voile hors cadre) | blanc, 1, 0,5 |
-| `grid` | `grid` (`thirds`, `golden`, `diagonals`), `color`, `opacity` | blanc, 0,6 |
+| `grid` | `grid` (`thirds`, `golden`, `spiral`, `diagonals`), `color`, `opacity`, `flip` (`x`, `y`, `xy`) | blanc, 0,6, aucun |
 
 Ancrages : `top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`,
 `bottom`, `bottom-right`. Une clé inconnue est une erreur (faute de frappe signalée).
@@ -49,7 +53,7 @@ une grille après un cadre est celle du recadrage.
 
 ## Dans l'interface
 
-`t` : superposition suivante (aucune, tiers, nombre d'or, diagonales, puis celles de
+`t` : superposition suivante (aucune, tiers, nombre d'or, spirale, diagonales, puis celles de
 l'utilisateur), `Maj+T` : précédente ; son nom dans la barre d'état. En plein écran et en
 comparaison, sous le repère du collimateur. Traits de `[gui.view] overlay_line_width`
 points, avec un liseré sombre ; logos chargés une fois (rechargés si les fichiers sont

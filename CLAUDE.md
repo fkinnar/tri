@@ -348,6 +348,12 @@ Proposition : sortir cette étape du logiciel de développement.
 - **Stockage** : un recadrage est une donnée de l'utilisateur → plutôt dans le sidecar
   XMP de l'image maîtresse (espace de noms `tri:`), comme les notes, pour survivre aux
   déplacements de fichiers.
+- **Recadrage et superpositions** (demandé le 19/10/2026) : recadrer **avec la
+  superposition affichée**, calculée sur le cadrage **en temps réel** (grilles, spirale,
+  texte et logo dans le rectangle de recadrage pendant qu'on tire les poignées). Déjà
+  possible dans la structure : `Overlay::shapes(aspect)` prend le rapport réel (rien n'est
+  figé en 3:2 : 4:3 du moyen format, 1:1…), et le moteur place déjà des formes dans une
+  zone (formes après un cadre `frame`) ; le calcul coûte une fraction de milliseconde.
 - **Sans export physique** (précision du 18/10/2026) : avec darktable, `tri` peut
   produire lui-même l'image maîtresse, `darktable-cli <RAW> <sidecar .xmp> <sortie>`
   (tout l'historique de développement, taille de sortie au choix), et la garder dans son

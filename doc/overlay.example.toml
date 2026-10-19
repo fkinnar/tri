@@ -38,7 +38,8 @@ margin = 0.03
 color = "#ffffff"
 opacity = 0.9
 
-# Grille de composition : thirds (tiers), golden (nombre d'or) ou diagonals.
+# Grille de composition : thirds (tiers), golden (nombre d'or), spiral (spirale d'or) ou
+# diagonals ; flip = "x", "y" ou "xy" pour la retourner (une spirale enroulée ailleurs).
 [[shape]]
 kind = "grid"
 grid = "thirds"

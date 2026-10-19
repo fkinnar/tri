@@ -143,6 +143,95 @@ pub enum GridKind {
     Golden,
     /// Diagonales et diagonales réciproques (perpendiculaires depuis les coins opposés).
     Diagonals,
+    /// Spirale d'or (Fibonacci), étirée sur l'image comme dans Lightroom ; elle s'enroule
+    /// vers le bas à droite (retournable : `flip`).
+    Spiral,
+}
+
+/// Spirale d'or : quarts de cercle dans les carrés successifs du rectangle d'or (φ × 1),
+/// approchés par des segments, ramenés à l'image (0 à 1).
+fn spiral_lines(color: Rgba) -> Vec<Shape> {
+    const PHI: f32 = std::f32::consts::GOLDEN_RATIO;
+    const SQUARES: usize = 10;
+    const STEPS: usize = 12;
+    let mut out = Vec::new();
+    // Rectangle restant : coin haut gauche et taille.
+    let (mut x, mut y, mut w, mut h) = (0.0_f32, 0.0_f32, PHI, 1.0_f32);
+    let norm = |p: [f32; 2]| [p[0] / PHI, p[1]];
+    for i in 0..SQUARES {
+        let s = w.min(h);
+        // Carré retiré tour à tour à gauche, en haut, à droite, en bas ; centre de l'arc
+        // (coin intérieur) et ses deux extrémités.
+        let (center, from, to) = match i % 4 {
+            0 => {
+                let r = ([x + s, y + s], [x, y + s], [x + s, y]);
+                (x, w) = (x + s, w - s);
+                r
+            }
+            1 => {
+                let r = ([x, y + s], [x, y], [x + s, y + s]);
+                (y, h) = (y + s, h - s);
+                r
+            }
+            2 => {
+                let r = ([x + w - s, y], [x + w, y], [x + w - s, y + s]);
+                w -= s;
+                r
+            }
+            _ => {
+                let r = ([x + s, y + h - s], [x + s, y + h], [x, y + h - s]);
+                h -= s;
+                r
+            }
+        };
+        let angle = |p: [f32; 2]| (p[1] - center[1]).atan2(p[0] - center[0]);
+        let (a0, mut a1) = (angle(from), angle(to));
+        // Le quart de tour le plus court.
+        while a1 - a0 > std::f32::consts::PI {
+            a1 -= std::f32::consts::TAU;
+        }
+        while a0 - a1 > std::f32::consts::PI {
+            a1 += std::f32::consts::TAU;
+        }
+        let point = |t: f32| {
+            let a = a0 + (a1 - a0) * t;
+            norm([center[0] + s * a.cos(), center[1] + s * a.sin()])
+        };
+        for k in 0..STEPS {
+            out.push(Shape::Line {
+                from: point(k as f32 / STEPS as f32),
+                to: point((k + 1) as f32 / STEPS as f32),
+                color,
+            });
+        }
+    }
+    out
+}
+
+/// Retournement d'une grille (`flip` : `"x"`, `"y"`, `"xy"`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Flip {
+    /// Tel quel.
+    #[default]
+    None,
+    /// Miroir gauche / droite.
+    X,
+    /// Miroir haut / bas.
+    Y,
+    /// Les deux (demi-tour).
+    Xy,
+}
+
+impl Flip {
+    fn apply(self, p: [f32; 2]) -> [f32; 2] {
+        match self {
+            Flip::None => p,
+            Flip::X => [1.0 - p[0], p[1]],
+            Flip::Y => [p[0], 1.0 - p[1]],
+            Flip::Xy => [1.0 - p[0], 1.0 - p[1]],
+        }
+    }
 }
 
 /// Lignes d'une grille, en coordonnées relatives (le rapport `aspect` sert aux
@@ -160,6 +249,20 @@ fn grid_lines(kind: GridKind, aspect: f32, color: Rgba) -> Vec<Shape> {
     match kind {
         GridKind::Thirds => cross(1.0 / 3.0, 2.0 / 3.0),
         GridKind::Golden => cross(0.381_966, 0.618_034),
+        // Image en hauteur : rectangle d'or vertical (x et y échangés), sans quoi la
+        // spirale serait écrasée.
+        GridKind::Spiral if aspect < 1.0 => spiral_lines(color)
+            .into_iter()
+            .map(|s| match s {
+                Shape::Line { from, to, color } => Shape::Line {
+                    from: [from[1], from[0]],
+                    to: [to[1], to[0]],
+                    color,
+                },
+                other => other,
+            })
+            .collect(),
+        GridKind::Spiral => spiral_lines(color),
         GridKind::Diagonals => {
             // Pied de la perpendiculaire à la diagonale (0,0)-(1,1) depuis (1,0), et
             // depuis (0,1) : dans l'image réelle (largeur a, hauteur 1), t = a² / (a² + 1).
@@ -191,6 +294,7 @@ impl Overlay for Grid {
             GridKind::Thirds => crate::t!("overlay-thirds"),
             GridKind::Golden => crate::t!("overlay-golden"),
             GridKind::Diagonals => crate::t!("overlay-diagonals"),
+            GridKind::Spiral => crate::t!("overlay-spiral"),
         }
     }
 
@@ -199,12 +303,18 @@ impl Overlay for Grid {
     }
 }
 
-/// Les superpositions intégrées, dans l'ordre : tiers, nombre d'or, diagonales.
+/// Les superpositions intégrées, dans l'ordre : tiers, nombre d'or, spirale d'or,
+/// diagonales.
 pub fn builtin(color: Rgba) -> Vec<Box<dyn Overlay>> {
-    [GridKind::Thirds, GridKind::Golden, GridKind::Diagonals]
-        .into_iter()
-        .map(|kind| Box::new(Grid { kind, color }) as Box<dyn Overlay>)
-        .collect()
+    [
+        GridKind::Thirds,
+        GridKind::Golden,
+        GridKind::Spiral,
+        GridKind::Diagonals,
+    ]
+    .into_iter()
+    .map(|kind| Box::new(Grid { kind, color }) as Box<dyn Overlay>)
+    .collect()
 }
 
 /// Une forme d'un fichier de superposition (section `[[shape]]`).
@@ -257,6 +367,8 @@ enum ShapeSpec {
         color: String,
         #[serde(default = "default_grid_opacity")]
         opacity: f32,
+        #[serde(default)]
+        flip: Flip,
     },
 }
 
@@ -318,6 +430,7 @@ enum Resolved {
     Grid {
         grid: GridKind,
         color: Rgba,
+        flip: Flip,
     },
 }
 
@@ -415,9 +528,11 @@ impl UserOverlay {
                     grid,
                     color: c,
                     opacity,
+                    flip,
                 } => Resolved::Grid {
                     grid,
                     color: color(&c, opacity)?,
+                    flip,
                 },
             });
         }
@@ -603,7 +718,18 @@ fn local_shapes(shape: &Resolved, aspect: f32) -> Vec<Shape> {
                 fill: None,
             });
         }
-        Resolved::Grid { grid, color } => out.extend(grid_lines(*grid, aspect, *color)),
+        Resolved::Grid { grid, color, flip } => out.extend(
+            grid_lines(*grid, aspect, *color)
+                .into_iter()
+                .map(|s| match s {
+                    Shape::Line { from, to, color } => Shape::Line {
+                        from: flip.apply(from),
+                        to: flip.apply(to),
+                        color,
+                    },
+                    other => other,
+                }),
+        ),
     }
     out
 }
@@ -661,6 +787,43 @@ mod tests {
         assert!(matches!(lines[0], Shape::Line { from, .. } if close(from[0], 1.0 / 3.0)));
         let golden = grid_lines(GridKind::Golden, 1.5, WHITE);
         assert!(matches!(golden[1], Shape::Line { from, .. } if close(from[0], 0.618_034)));
+    }
+
+    #[test]
+    fn the_golden_spiral_is_continuous_and_winds_inward() {
+        let lines = spiral_lines(WHITE);
+        let points: Vec<([f32; 2], [f32; 2])> = lines
+            .iter()
+            .map(|s| match s {
+                Shape::Line { from, to, .. } => (*from, *to),
+                _ => panic!(),
+            })
+            .collect();
+        // D'un seul tenant : chaque segment part de la fin du précédent.
+        for pair in points.windows(2) {
+            let (a, b) = (pair[0].1, pair[1].0);
+            assert!(close(a[0], b[0]) && close(a[1], b[1]), "{a:?} → {b:?}");
+        }
+        // Part du coin bas gauche, s'enroule vers l'œil (≈ 0,72 × 0,72 du cadre), dans
+        // l'image.
+        assert!(close(points[0].0[0], 0.0) && close(points[0].0[1], 1.0));
+        let end = points.last().unwrap().1;
+        assert!(
+            (end[0] - 0.724).abs() < 0.02 && (end[1] - 0.724).abs() < 0.03,
+            "{end:?}"
+        );
+        assert!(
+            points
+                .iter()
+                .all(|(a, _)| (-1e-4..=1.0001).contains(&a[0]) && (-1e-4..=1.0001).contains(&a[1]))
+        );
+        // En hauteur : pivotée (x et y échangés).
+        let portrait = grid_lines(GridKind::Spiral, 0.66, WHITE);
+        assert!(
+            matches!(portrait[0], Shape::Line { from, .. } if close(from[0], 1.0) && close(from[1], 0.0))
+        );
+        // Retournée dans un fichier : miroir.
+        assert_eq!(Flip::Xy.apply([0.25, 0.1]), [0.75, 0.9]);
     }
 
     #[test]

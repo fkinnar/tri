@@ -6347,16 +6347,16 @@ mod tests {
         // Un fichier mal écrit est signalé (les autres restent utilisables).
         let notice = h.state().notice.clone().unwrap();
         assert!(notice.1 && notice.0.contains("cassé"), "{notice:?}");
-        // Trois grilles intégrées, puis le fichier de l'utilisateur, puis aucune.
-        assert_eq!(h.state().overlays.len(), 4);
-        for _ in 0..3 {
+        // Quatre grilles intégrées, puis le fichier de l'utilisateur, puis aucune.
+        assert_eq!(h.state().overlays.len(), 5);
+        for _ in 0..4 {
             press(&mut h, Key::T, Modifiers::NONE);
         }
         assert_eq!(h.state().overlays[h.state().overlay - 1].name(), "Insta");
         press(&mut h, Key::T, Modifiers::NONE);
         assert_eq!(h.state().overlay, 0, "après la dernière : aucune");
         press(&mut h, Key::T, Modifiers::SHIFT);
-        assert_eq!(h.state().overlay, 4, "Maj+T : en arrière");
+        assert_eq!(h.state().overlay, 5, "Maj+T : en arrière");
     }
 
     #[test]

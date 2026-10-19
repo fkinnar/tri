@@ -203,6 +203,7 @@ cli-sharpness-summary = { $n } images, médiane { $median } : { $blurry } floues
 ## Superpositions
 overlay-thirds = Tiers
 overlay-golden = Nombre d'or
+overlay-spiral = Spirale d'or
 overlay-diagonals = Diagonales
 overlay-bad-color = couleur « { $color } » : attendu "#rrggbb"
 overlay-bad-ratio = format « { $ratio } » : attendu largeur:hauteur, par exemple "4:5"

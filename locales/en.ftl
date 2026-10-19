@@ -202,6 +202,7 @@ cli-sharpness-summary = { $n } images, median { $median }: { $blurry } blurry (b
 ## Overlays
 overlay-thirds = Thirds
 overlay-golden = Golden ratio
+overlay-spiral = Golden spiral
 overlay-diagonals = Diagonals
 overlay-bad-color = colour “{ $color }”: expected "#rrggbb"
 overlay-bad-ratio = format “{ $ratio }”: expected width:height, for example "4:5"
