@@ -276,6 +276,8 @@ pub enum Action {
     CropRotate,
     /// Recadrage : enregistrer la version.
     CropSave,
+    /// Recadrage : préréglage suivant.
+    CropPreset,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
@@ -343,7 +345,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 144] = [
+    pub const ALL: [Action; 145] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -410,6 +412,7 @@ impl Action {
         Action::CropRatio(6),
         Action::CropRotate,
         Action::CropSave,
+        Action::CropPreset,
         Action::VersionNext,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
@@ -531,7 +534,7 @@ impl Action {
             | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint
             | OverlayNext | OverlayOrient | FocusMode | Develop => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
-            | VersionNext => Group::Crop,
+            | CropPreset | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -620,6 +623,7 @@ impl Action {
             Action::CropRatio(_) => "core.crop.ratio.4_3",
             Action::CropRotate => "core.crop.rotate",
             Action::CropSave => "core.crop.save",
+            Action::CropPreset => "core.crop.preset",
             Action::VersionNext => "core.view.version_next",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
@@ -770,7 +774,9 @@ impl Action {
             | FolderDelete | FolderFavorite => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
-            CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave => Some(Scope::Crop),
+            CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset => {
+                Some(Scope::Crop)
+            }
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
                 Some(Scope::Histogram)
             }
@@ -1136,6 +1142,7 @@ const CROP: &[Binding] = {
         (&[shifted(Key::Num7)], CropRatio(6)),
         (&[plain(Key::X)], CropRotate),
         (&[plain(Key::Enter)], CropSave),
+        (&[plain(Key::P)], CropPreset),
     ]
 };
 

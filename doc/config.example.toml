@@ -191,6 +191,24 @@ passthrough = true
 applies_to = "all"
 sharpen = "screen"
 
+# Préréglages de recadrage (versions, r en plein écran) : [versions.presets.<identifiant>],
+# autant que voulu ; choisis dans la barre du recadrage (ou p), puis on ajuste le cadre.
+# Une clé absente vient du préréglage fourni de même identifiant (story, post).
+# name : nom de la version créée (vide : nom fourni traduit, sinon l'identifiant) ;
+# ratio : "free", "original", ou "l:h" dans l'orientation voulue ("9:16" : portrait) ;
+# profile : profil d'export proposé (identifiant), "" : aucun.
+[versions.presets.story]
+# Story (Instagram…) : 9:16, pour le web.
+name = ""
+ratio = "9:16"
+profile = "web"
+
+[versions.presets.post]
+# Publication : 4:5, pour le web.
+name = ""
+ratio = "4:5"
+profile = "web"
+
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
 # modifiées par un autre logiciel (darktable…) apparaissent d'elles-mêmes, une fois le

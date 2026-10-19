@@ -34,6 +34,8 @@ pub struct Crop {
     drag: Option<(Handle, Rect, Pos2)>,
     /// Premier dessin : le champ du nom ne prend pas le focus (le clavier reste au cadre).
     pub fresh: bool,
+    /// Préréglage appliqué (identifiant).
+    pub preset: Option<String>,
 }
 
 /// Ce que la barre du recadrage demande.
@@ -42,6 +44,10 @@ pub enum BarAction {
     Save,
     /// Abandonner.
     Cancel,
+    /// Appliquer le préréglage n°.
+    Preset(usize),
+    /// Enregistrer le cadre en cours comme préréglage.
+    SavePreset,
 }
 
 /// Nom affiché d'un rapport (« Libre », « Original », « 4:5 »…).
@@ -71,6 +77,7 @@ impl Crop {
             source,
             drag: None,
             fresh: true,
+            preset: None,
         }
     }
 
@@ -88,7 +95,21 @@ impl Crop {
             source: version.source,
             drag: None,
             fresh: true,
+            preset: None,
         }
+    }
+
+    /// Applique un préréglage : son rapport exact (orientation comprise), son nom et son
+    /// profil ; le cadre se recentre au plus grand, on l'ajuste ensuite.
+    pub fn apply_preset(&mut self, id: &str, name: String, ratio: Ratio, profile: Option<String>) {
+        self.ratio = ratio;
+        if let Some(aspect) = self.aspect {
+            self.rect = Rect::fit(ratio, aspect);
+        }
+        self.name = name;
+        self.name_edited = true;
+        self.profile = profile;
+        self.preset = Some(id.to_string());
     }
 
     /// Proportions de l'image connues (cadre dessiné au moins une fois, ou image déjà
@@ -313,12 +334,38 @@ impl Crop {
         frame
     }
 
-    /// Barre du recadrage (sous l'image) : rapports, orientation, nom, profil d'export,
-    /// enregistrer / annuler. `profiles` : (identifiant, nom affiché).
-    pub fn bar(&mut self, ui: &mut Ui, profiles: &[(String, String)]) -> Option<BarAction> {
+    /// Barre du recadrage (sous l'image) : préréglage, rapports, orientation, nom, profil
+    /// d'export, enregistrer / annuler. `profiles` et `presets` : (identifiant, nom affiché).
+    pub fn bar(
+        &mut self,
+        ui: &mut Ui,
+        profiles: &[(String, String)],
+        presets: &[(String, String)],
+    ) -> Option<BarAction> {
         let mut action = None;
         ui.horizontal_wrapped(|ui| {
             ui.label(t!("crop-bar-title"));
+            if !presets.is_empty() {
+                let none = t!("crop-preset-none");
+                let current = self
+                    .preset
+                    .as_ref()
+                    .and_then(|id| presets.iter().find(|(p, _)| p == id))
+                    .map_or(none, |(_, name)| name.clone());
+                egui::ComboBox::from_id_salt("crop_preset")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for (i, (id, name)) in presets.iter().enumerate() {
+                            let on = self.preset.as_deref() == Some(id.as_str());
+                            if ui.selectable_label(on, name).clicked() {
+                                action = Some(BarAction::Preset(i));
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text(t!("crop-preset-tip"));
+                ui.separator();
+            }
             for preset in Ratio::PRESETS {
                 let on = preset.same_shape(self.ratio);
                 // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
@@ -372,6 +419,13 @@ impl Crop {
             }
             if ui.button(t!("cancel")).clicked() {
                 action = Some(BarAction::Cancel);
+            }
+            if ui
+                .small_button(t!("crop-preset-save"))
+                .on_hover_text(t!("crop-preset-save-tip"))
+                .clicked()
+            {
+                action = Some(BarAction::SavePreset);
             }
         });
         self.fresh = false;

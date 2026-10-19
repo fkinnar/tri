@@ -359,6 +359,138 @@ impl Handle {
     }
 }
 
+/// Préréglage de recadrage (idée de l'utilisateur, 19/10/2026) : « Story » = 9:16 et le
+/// profil d'export Web. On le choisit dans la barre du recadrage, puis on ajuste le cadre.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preset {
+    /// Identifiant (`[versions.presets.<id>]`).
+    pub id: String,
+    /// Nom (de la version créée) ; vide : nom traduit des préréglages fournis, sinon
+    /// l'identifiant.
+    pub name: String,
+    /// Rapport, orientation comprise (9:16 : portrait).
+    pub ratio: Ratio,
+    /// Profil d'export proposé ; vide : aucun.
+    pub profile: String,
+}
+
+impl Preset {
+    fn new(id: &str, ratio: Ratio, profile: &str) -> Preset {
+        Preset {
+            id: id.into(),
+            name: String::new(),
+            ratio,
+            profile: profile.into(),
+        }
+    }
+
+    /// Les préréglages fournis : story (9:16) et publication (4:5), pour le web.
+    pub fn defaults() -> Vec<Preset> {
+        vec![
+            Preset::new("story", Ratio::Fixed(9, 16), "web"),
+            Preset::new("post", Ratio::Fixed(4, 5), "web"),
+        ]
+    }
+}
+
+/// Un préréglage tel qu'écrit dans le fichier : chaque clé absente vient du préréglage
+/// fourni de même identifiant (comme les profils d'export).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct PresetToml {
+    name: Option<String>,
+    ratio: Option<String>,
+    profile: Option<String>,
+}
+
+/// Les préréglages : fournis, puis ceux de l'utilisateur (par identifiant).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Presets(pub Vec<Preset>);
+
+impl Default for Presets {
+    fn default() -> Self {
+        Presets(Preset::defaults())
+    }
+}
+
+impl<'de> Deserialize<'de> for Presets {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let written = std::collections::BTreeMap::<String, PresetToml>::deserialize(d)?;
+        let mut list = Preset::defaults();
+        for (id, t) in written {
+            let index = match list.iter().position(|p| p.id == id) {
+                Some(i) => i,
+                None => {
+                    list.push(Preset::new(&id, Ratio::Free, ""));
+                    list.len() - 1
+                }
+            };
+            let p = &mut list[index];
+            if let Some(v) = t.name {
+                p.name = v;
+            }
+            if let Some(v) = t.ratio {
+                p.ratio = Ratio::parse(&v).ok_or_else(|| {
+                    serde::de::Error::custom(crate::t!(
+                        "preset-bad-ratio",
+                        preset = id.as_str(),
+                        value = v.as_str()
+                    ))
+                })?;
+            }
+            if let Some(v) = t.profile {
+                p.profile = v;
+            }
+        }
+        Ok(Presets(list))
+    }
+}
+
+/// Réglages des versions (section `[versions]`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VersionSettings {
+    /// Préréglages de recadrage (`[versions.presets.<id>]`).
+    pub presets: Presets,
+}
+
+/// Identifiant libre pour un nouveau préréglage ou profil nommé `name` : minuscules,
+/// lettres et chiffres (accents retirés), tirets ; suivi d'un numéro s'il est déjà pris.
+pub fn new_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
+    let plain: String = name
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'à' | 'â' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'î' | 'ï' => 'i',
+            'ô' | 'ö' => 'o',
+            'ù' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            c if c.is_ascii_alphanumeric() => c,
+            _ => '-',
+        })
+        .collect();
+    let base: String = plain
+        .split('-')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let base = if base.is_empty() {
+        "preset".to_string()
+    } else {
+        base
+    };
+    if !taken(&base) {
+        return base;
+    }
+    (2..)
+        .map(|n| format!("{base}-{n}"))
+        .find(|id| !taken(id))
+        .expect("un identifiant libre")
+}
+
 /// Une version d'une photo.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Version {
@@ -518,6 +650,33 @@ mod tests {
         // Jamais plus petit que le minimum, jamais retourné.
         let r = start.drag(Handle::BottomRight, -9.0, -9.0, Ratio::Free, 1.5);
         assert!(r.w >= MIN_SIDE && r.h >= MIN_SIDE);
+    }
+
+    #[test]
+    fn presets_come_with_defaults_and_complete_from_them() {
+        #[derive(Deserialize)]
+        struct S {
+            versions: VersionSettings,
+        }
+        let s: S = toml::from_str(
+            "[versions.presets.story]\nprofile = \"\"\n[versions.presets.tirage]\nname = \"Tirage A4\"\nratio = \"3:2\"\nprofile = \"edit\"\n",
+        )
+        .unwrap();
+        let p = &s.versions.presets.0;
+        let ids: Vec<&str> = p.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["story", "post", "tirage"]);
+        assert_eq!(
+            p[0].ratio,
+            Ratio::Fixed(9, 16),
+            "le reste du préréglage fourni"
+        );
+        assert_eq!(p[0].profile, "");
+        assert_eq!(p[2].ratio, Ratio::Fixed(3, 2));
+        assert!(toml::from_str::<S>("[versions.presets.x]\nratio = \"large\"\n").is_err());
+        let taken = |id: &str| ["story", "tirage-a4"].contains(&id);
+        assert_eq!(new_id("Tirage A4", taken), "tirage-a4-2");
+        assert_eq!(new_id("Été 2026 !", taken), "ete-2026");
+        assert_eq!(new_id("  ", taken), "preset");
     }
 
     #[test]

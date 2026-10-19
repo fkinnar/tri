@@ -432,6 +432,10 @@ impl TriApp {
         self.settings.files = new.files;
         self.settings.xmp = new.xmp;
         self.settings.offload = new.offload;
+        // Profils d'export, préréglages de recadrage, darktable : aussi à chaud.
+        self.settings.export = new.export;
+        self.settings.versions = new.versions;
+        self.settings.develop = new.develop;
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -1783,7 +1787,8 @@ impl TriApp {
                     | Action::CropSize(_)
                     | Action::CropRatio(_)
                     | Action::CropRotate
-                    | Action::CropSave => self.perform(ctx, action),
+                    | Action::CropSave
+                    | Action::CropPreset => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -2068,6 +2073,7 @@ impl TriApp {
                 }
             }
             Action::CropSave => self.save_crop(),
+            Action::CropPreset => self.next_preset(),
             Action::VersionNext => {
                 if self.mode == Mode::View
                     && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
@@ -3235,6 +3241,82 @@ impl TriApp {
         let aspect = self.image_aspect(&path);
         self.crop = Some(crate::crop::Crop::new(path, source, aspect));
         self.request_zoom();
+    }
+
+    /// Applique le préréglage n° `index` au recadrage en cours.
+    fn apply_preset(&mut self, index: usize) {
+        let Some(preset) = self.settings.versions.presets.0.get(index).cloned() else {
+            return;
+        };
+        // Profil : seulement s'il existe et s'applique (jamais « tel quel » pour une version).
+        let flat = self.crop.as_ref().is_some_and(|c| {
+            c.source == tri::versions::Source::Embedded
+                || tri::media::kind_of(&c.image) == Some(MediaKind::Flat)
+        });
+        let profile = self
+            .settings
+            .export
+            .applicable(flat)
+            .into_iter()
+            .find(|p| p.id == preset.profile && !p.is_as_is())
+            .map(|p| p.id.clone());
+        if let Some(crop) = &mut self.crop {
+            crop.apply_preset(&preset.id, preset_name(&preset), preset.ratio, profile);
+        }
+    }
+
+    /// `p` pendant le recadrage : préréglage suivant.
+    fn next_preset(&mut self) {
+        let presets = &self.settings.versions.presets.0;
+        if presets.is_empty() {
+            return;
+        }
+        let current = self
+            .crop
+            .as_ref()
+            .and_then(|c| c.preset.as_ref())
+            .and_then(|id| presets.iter().position(|p| p.id == *id));
+        let next = current.map_or(0, |i| (i + 1) % presets.len());
+        self.apply_preset(next);
+    }
+
+    /// Enregistre le cadre en cours comme préréglage (rapport, nom, profil), dans le
+    /// fichier de configuration (commentaires et autres clés gardés), puis l'applique.
+    fn save_preset(&mut self) {
+        let Some(crop) = &self.crop else { return };
+        let name = crop.name.trim().to_string();
+        let (ratio, profile) = (crop.ratio, crop.profile.clone().unwrap_or_default());
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let presets = &self.settings.versions.presets.0;
+        let id = tri::versions::new_id(&name, |id| presets.iter().any(|p| p.id == id));
+        let section = format!("versions.presets.{id}");
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            use tri::config_edit::Value;
+            file.set(&section, "name", &Value::Str(name.clone()))?;
+            file.set(&section, "ratio", &Value::Str(ratio.label()))?;
+            file.set(&section, "profile", &Value::Str(profile))?;
+            let settings = tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save()
+                .map_err(|e| format!("{} : {e}", path.display()))?;
+            Ok(settings)
+        });
+        match result {
+            Ok(settings) => {
+                self.settings.versions = settings.versions;
+                if let Some(crop) = &mut self.crop {
+                    crop.preset = Some(id);
+                }
+                self.notice = Some((t!("crop-preset-saved", name = name), false));
+            }
+            Err(e) => self.notice = Some((e, true)),
+        }
     }
 
     /// Enregistre la version du recadrage en cours (annulable), dans le sidecar de l'image.
@@ -6552,15 +6634,25 @@ impl eframe::App for TriApp {
                 .filter(|p| !p.is_as_is())
                 .map(|p| (p.id.clone(), crate::export::profile_name(p)))
                 .collect();
+            let presets: Vec<(String, String)> = self
+                .settings
+                .versions
+                .presets
+                .0
+                .iter()
+                .map(|p| (p.id.clone(), preset_name(p)))
+                .collect();
             let mut action = None;
             egui::Panel::bottom("crop").show(ui, |ui| {
                 if let Some(crop) = &mut self.crop {
-                    action = crop.bar(ui, &profiles);
+                    action = crop.bar(ui, &profiles, &presets);
                 }
             });
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
                 Some(crate::crop::BarAction::Cancel) => self.crop = None,
+                Some(crate::crop::BarAction::Preset(i)) => self.apply_preset(i),
+                Some(crate::crop::BarAction::SavePreset) => self.save_preset(),
                 None => {}
             }
         } else if self.rating_bar
@@ -7009,6 +7101,19 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
         rows.sort_by_key(|(a, _, score)| (std::cmp::Reverse(*score), a.label().len()));
     }
     rows.into_iter().map(|(a, k, _)| (a, k)).collect()
+}
+
+/// Nom affiché d'un préréglage de recadrage : le sien, sinon le nom traduit des
+/// préréglages fournis, sinon l'identifiant.
+fn preset_name(p: &tri::versions::Preset) -> String {
+    if !p.name.trim().is_empty() {
+        return p.name.clone();
+    }
+    match p.id.as_str() {
+        "story" => t!("preset-story"),
+        "post" => t!("preset-post"),
+        id => id.to_string(),
+    }
 }
 
 /// Geste sur les versions dans le bandeau.
@@ -9778,6 +9883,41 @@ mod tests {
             "Échap ferme le recadrage seulement"
         );
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
+    }
+
+    #[test]
+    fn presets_set_ratio_name_and_profile_and_new_ones_are_saved() {
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        h.state_mut().config_path = Some(config.clone());
+        h.run_steps(3);
+        let image = h.state().files[0].path.clone();
+        press(&mut h, Key::R, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        // p : premier préréglage, « Story » (9:16, Web).
+        press(&mut h, Key::P, Modifiers::NONE);
+        let crop = h.state().crop.as_ref().unwrap();
+        assert_eq!(crop.ratio, tri::versions::Ratio::Fixed(9, 16));
+        assert_eq!(crop.name, "Story");
+        assert_eq!(crop.profile.as_deref(), Some("web"));
+        // Enregistrer comme préréglage : écrit dans le fichier, identifiant libre.
+        h.get_by_label("Enregistrer comme préréglage").click();
+        h.run_steps(2);
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(text.contains("[versions.presets.story-2]"), "{text}");
+        assert!(text.contains("ratio = \"9:16\""), "{text}");
+        assert_eq!(
+            h.state().settings.versions.presets.0.len(),
+            3,
+            "appliqué à chaud"
+        );
+        // Entrée : la version prend le nom et le profil du préréglage.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let saved = tri::versions::read(&image).unwrap();
+        assert_eq!(saved.list[0].name, "Story");
+        assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
     }
 
     #[test]

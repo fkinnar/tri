@@ -95,6 +95,12 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
     // Profils d'export (`[export.profiles.<id>]`) : espaces couleur selon la profondeur du
     // profil fourni (ProPhoto et les linéaires seulement en 16 bits), affinés à
     // l'affichage selon les valeurs du fichier (`fits`).
+    // Préréglages de recadrage : rapports proposés, dans les deux orientations.
+    if section.starts_with("versions.presets.") && key == "ratio" {
+        return Some(&[
+            "free", "original", "1:1", "4:5", "5:4", "2:3", "3:2", "9:16", "16:9", "3:4", "4:3",
+        ]);
+    }
     if let Some(id) = section.strip_prefix("export.profiles.") {
         let deep = tri::export::Profiles::default()
             .get(id)

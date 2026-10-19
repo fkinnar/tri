@@ -105,6 +105,8 @@ pub struct EngineSettings {
     pub develop: crate::develop::DevelopSettings,
     /// Export (profils, destination).
     pub export: crate::export::ExportSettings,
+    /// Versions (préréglages de recadrage).
+    pub versions: crate::versions::VersionSettings,
     /// Calcul de l'exposition (histogrammes, saturés / bouchés).
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.

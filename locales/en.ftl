@@ -240,5 +240,6 @@ export-bad-intent = export profile “{ $profile }”: unknown rendering intent 
 export-needs-16-bits = export profile “{ $profile }”: “{ $color }” needs 16 bits or more (gradients break up in 8 bits), so 16-bit TIFF or PNG
 export-libraw-color = export profile “{ $profile }”: the “{ $color }” color space needs darktable (without darktable: sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
 export-libraw-bits = export profile “{ $profile }”: 32-bit TIFF needs darktable
+preset-bad-ratio = preset “{ $preset }”: unknown ratio “{ $value }” (free, original, or w:h such as 9:16)
 export-bad-icc = unreadable image color profile: no conversion possible (“JPEG as is” keeps it as it is)
 export-version-empty = darktable rendered nothing for this version

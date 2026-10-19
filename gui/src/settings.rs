@@ -40,6 +40,8 @@ pub struct AppSettings {
     pub develop: tri::develop::DevelopSettings,
     /// `[export]` (moteur) : profils d'export, destination.
     pub export: tri::export::ExportSettings,
+    /// `[versions]` (moteur) : préréglages de recadrage.
+    pub versions: tri::versions::VersionSettings,
     /// `[exposure]` (moteur).
     pub exposure: tri::exposure::ExposureSettings,
     /// `[offload]` (moteur).
@@ -74,6 +76,7 @@ impl AppSettings {
             watch: self.watch,
             develop: self.develop.clone(),
             export: self.export.clone(),
+            versions: self.versions.clone(),
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),

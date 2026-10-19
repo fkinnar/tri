@@ -642,9 +642,9 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   dans le XMP, annulable). **Interface faite** (19/10/2026) : `r`, voile et poignées,
   barre des rapports, versions sous les notes, `n` ; badge dans la grille ; export d'une
   version (`Ctrl+E`, `DSCF0001-Story.jpg`, darktable par TIFF 16 bits temporaire).
-- **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026) : nom, rapport et
-  orientation, profil d'export (« Story Insta » : 9:16, Web) ; choisi dans la barre du
-  recadrage, puis on ajuste. À faire avec la création des profils d'export.
+- [x] **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026, faits le même
+  soir) : `[versions.presets.<id>]` (story 9:16 et post 4:5, Web), liste dans la barre du
+  recadrage, `p`, « Enregistrer comme préréglage » (écrit dans la configuration).
 - [x] **Accentuation de sortie** (idée de l'utilisateur, 19/10/2026, comme Lightroom) :
   `sharpen` = none / screen / print par profil, masque flou après réduction,
   `[export.sharpening]` ; darktable par TIFF 16 bits temporaire (`export_via_tiff`).

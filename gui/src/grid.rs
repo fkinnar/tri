@@ -104,6 +104,7 @@ pub fn navigate(
         | Action::CropRatio(_)
         | Action::CropRotate
         | Action::CropSave
+        | Action::CropPreset
         | Action::VersionNext
         | Action::Send(_)
         | Action::Undo

@@ -135,9 +135,28 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - Le cadre est en proportions de l'image **vue** : sur un développé darktable recadré
   (2763 × 4912 pour le RAF de test), ce sont ses proportions, pas celles du capteur.
 
-## À venir
+## Préréglages de recadrage
 
-- **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026) : « Story Insta » = nom,
-  rapport et orientation (9:16), profil d'export (Web). On choisit le préréglage, on
-  ajuste le cadre, Entrée.
-- Création des profils d'export depuis l'interface.
+Idée de l'utilisateur (19/10/2026) : « Story Insta » = un nom, un rapport avec son
+orientation (9:16) et un profil d'export (Web). On choisit le préréglage, on ajuste le
+cadre, Entrée.
+
+- **Stockage** : `[versions.presets.<id>]` (`VersionSettings`, `Presets`), avec `name`,
+  `ratio` (`"free"`, `"original"`, ou `"l:h"` dans l'orientation voulue) et `profile`
+  (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
+  pour les profils d'export. Préréglages fournis : `story` (9:16, Web) et `post` (4:5,
+  Web).
+- **Barre du recadrage** : liste « Préréglage » ; `p` passe au suivant.
+  - Choisir un préréglage applique son rapport **exact**, son nom et son profil.
+  - Le profil n'est appliqué que s'il existe et s'applique, et jamais un profil « tel
+    quel ».
+  - Le cadre se recentre au plus grand de ce rapport, puis on l'ajuste.
+- **Enregistrer comme préréglage** : le rapport, le nom et le profil du cadre en cours
+  sont écrits dans le fichier de configuration, sans perdre les commentaires
+  (`config_edit`). L'identifiant est tiré du nom (`versions::new_id` : minuscules,
+  accents retirés, numéro s'il est pris). Appliqué à chaud.
+- Fenêtre de réglages : liste déroulante des rapports pour `ratio`.
+
+Au passage (19/10/2026) : les profils d'export, les préréglages et darktable modifiés
+dans la fenêtre de réglages s'appliquent désormais **à chaud** (auparavant, il fallait
+relancer).
