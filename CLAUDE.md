@@ -301,6 +301,30 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   d'un style en ligne de commande) ; darktable expose aussi une API Lua. Serait un plugin
   au sens du `CLAUDE.md` (statique), pas une fonction du cœur.
 
+## Après la V1 : réglages de visualisation (idée de l'utilisateur, 19/10/2026)
+
+**Après la V1** (« un gros chantier »). Pas un logiciel de développement : des réglages
+simples **utiles au tri**, non destructifs, avec une bascule avant / après.
+
+- **Réglages** : correction d'exposition (simple), **uniformisation d'exposition**,
+  **noir et blanc** (mélange par canal R / V / B, préréglages façon filtres), contraste
+  global, balance des blancs (moins prioritaire). Une **courbe** : possible, « à la limite
+  de ce qui est utile au tri ».
+- **Où ils s'appliquent** : exposition et balance des blancs sur les données du capteur
+  pour le rendu RAW (LibRaw : `exp_shift`, multiplicateurs ; hautes lumières récupérables) ;
+  approximation sur l'image pour le JPEG boîtier et les images plates (le brûlé ne
+  revient pas, à signaler) ; contraste et noir et blanc sur l'image affichée. Histogramme
+  et zones restent ceux des données réelles (bascule possible vers l'après-réglage).
+- **Stockage** (décidé) : dans le **sidecar XMP**, sous une balise propre à `tri`
+  (espace de noms `tri:`), sans interférer avec le reste ; illisible par les autres
+  logiciels (leurs réglages sont internes, non standard), assumé.
+- **Profils** (décidé) : réglages nommés (« mon N&B ») gardés par `tri`, réappliqués
+  plus tard à une sélection ou une pile.
+- **Uniformisation** (décidé) : on sélectionne plusieurs images, on en désigne une comme
+  **référence**, et l'exposition des autres s'aligne sur elle, **en tenant compte des
+  réglages déjà posés** (noir et blanc, courbe…) : l'écart se mesure après réglages.
+  Point de départ : histogrammes RAW en IL déjà en cache d'analyse.
+
 ## Après la V1 : l'« après-développement » (idée de l'utilisateur, 18/10/2026)
 
 **Pas avant une V1 qui marche et documentée.** Aujourd'hui `tri` gère l'*avant*
