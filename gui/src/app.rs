@@ -4517,11 +4517,18 @@ impl TriApp {
                 );
                 // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
                 // du 19/10/2026) ; le choix de la séance est retenu à part de celui des rendus.
-                let jpeg = crate::export::exports_jpeg(render, &paths);
-                // Indices dans la liste de la boîte (sans « tel quel » pour un rendu).
-                let profiles = &self.settings.export.profiles;
+                let jpeg = crate::export::exports_flat(render, &paths);
+                // Indice dans la liste de la boîte (profils qui s'appliquent seulement).
+                let shown: Vec<&tri::export::Profile> = self
+                    .settings
+                    .export
+                    .profiles
+                    .0
+                    .iter()
+                    .filter(|p| p.applies_to.allows(jpeg))
+                    .collect();
                 let choice = self.export_choice[usize::from(jpeg)].unwrap_or_else(|| {
-                    jpeg.then(|| profiles.0.iter().position(|p| p.is_as_is()))
+                    jpeg.then(|| shown.iter().position(|p| p.is_as_is()))
                         .flatten()
                         .unwrap_or(0)
                 });
@@ -4591,7 +4598,7 @@ impl TriApp {
                 choice,
             } => {
                 self.file_dialog = None;
-                self.export_choice[usize::from(crate::export::exports_jpeg(render, &images))] =
+                self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(choice);
                 self.start_export(ctx, images, profile, folder, render);
             }

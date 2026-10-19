@@ -118,7 +118,10 @@ high_quality = false
 #   "" ou "." : à côté d'elles) ; variables de darktable permises ($(YEAR)…).
 # passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
 #   boîtier écrit tel quel ; défaut) ; une image à réduire est réencodée ; sans effet sur
-#   un rendu darktable ou LibRaw, ni hors JPEG.
+#   un rendu darktable ou LibRaw, ni hors JPEG ;
+# applies_to : "all" (partout), "raw" (rendu d'un RAW : darktable, LibRaw) ou "flat" (image
+#   déjà développée : JPEG boîtier, JPEG, TIFF…) ; la boîte d'export ne propose que les
+#   profils qui conviennent.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -131,6 +134,7 @@ max_side = 0
 suffix = ""
 folder = "export"
 passthrough = true
+applies_to = "all"
 
 [export.profiles.asis]
 # JPEG tel quel : un JPEG d'origine est copié sans rien toucher (taille, espace couleur :
@@ -146,6 +150,7 @@ max_side = 0
 suffix = ""
 folder = "export"
 passthrough = true
+applies_to = "flat"
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -159,6 +164,7 @@ max_side = 2048
 suffix = ""
 folder = "export"
 passthrough = true
+applies_to = "all"
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP

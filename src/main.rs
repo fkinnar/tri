@@ -859,13 +859,18 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         .into());
     };
     profile.check()?;
-    // « Tel quel » : pour exporter des JPEG seulement (un RAW n'a pas d'espace couleur).
-    let raw_render = !args.embedded
-        && images
+    // Le profil s'applique-t-il à ce qu'on exporte (`applies_to`) ?
+    let flat = args.embedded
+        || images
             .iter()
-            .any(|p| tri::media::kind_of(p) == Some(tri::media::MediaKind::Raw));
-    if profile.is_as_is() && raw_render {
-        return Err(t!("cli-export-as-is-raw", profile = id).into());
+            .all(|p| tri::media::kind_of(p) == Some(tri::media::MediaKind::Flat));
+    if !profile.applies_to.allows(flat) {
+        let key = if flat {
+            "cli-export-raw-only"
+        } else {
+            "cli-export-as-is-raw"
+        };
+        return Err(t!(key, profile = id).into());
     }
     let mut profile = profile.clone();
     if args.passthrough {

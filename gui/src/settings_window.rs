@@ -104,6 +104,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
             "color" if deep => Some(&tri::export::COLORS),
             "color" => Some(&tri::export::COLORS_8BIT),
             "intent" => Some(&tri::export::INTENTS),
+            "applies_to" => Some(&["all", "raw", "flat"]),
             _ => None,
         };
     }

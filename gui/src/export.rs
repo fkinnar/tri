@@ -36,13 +36,11 @@ impl Render {
     }
 }
 
-/// Exporte-t-on des JPEG (le JPEG boîtier, ou des JPEG d'origine) plutôt qu'un rendu ?
-pub fn exports_jpeg(render: Render, images: &[PathBuf]) -> bool {
-    let jpeg = |p: &PathBuf| {
-        p.extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"))
-    };
-    render == Render::Embedded || (!images.is_empty() && images.iter().all(jpeg))
+/// Exporte-t-on des images déjà développées (JPEG boîtier, JPEG, TIFF…) plutôt que des
+/// rendus de RAW ? Décide des profils proposés ([`tri::export::AppliesTo`]).
+pub fn exports_flat(render: Render, images: &[PathBuf]) -> bool {
+    let flat = |p: &PathBuf| tri::media::kind_of(p) == Some(tri::media::MediaKind::Flat);
+    render == Render::Embedded || (!images.is_empty() && images.iter().all(flat))
 }
 
 /// Boîte ouverte.
@@ -147,13 +145,13 @@ impl ExportDialog {
         at: Pos2,
     ) -> ExportDialog {
         let images = tri::export::sources(images);
-        // Un rendu (RAW) : pas de profil « tel quel », sans objet (un RAW n'a pas d'espace).
-        let jpeg = exports_jpeg(render, &images);
+        // Seulement les profils qui s'appliquent à ce qu'on exporte (`applies_to`).
+        let flat = exports_flat(render, &images);
         let profiles: Vec<Profile> = settings
             .profiles
             .0
             .iter()
-            .filter(|p| jpeg || !p.is_as_is())
+            .filter(|p| p.applies_to.allows(flat))
             .cloned()
             .collect();
         let choice = choice.min(profiles.len().saturating_sub(1));
@@ -443,13 +441,13 @@ mod tests {
         assert_eq!(Render::of(Some(Source::Raw), true), Render::LibRaw);
         assert_eq!(Render::of(Some(Source::Developed), true), Render::Darktable);
         assert_eq!(Render::of(Some(Source::Developed), false), Render::LibRaw);
-        // « JPEG tel quel » : seulement pour exporter des JPEG.
+        // « JPEG tel quel » (`applies_to = "flat"`) : seulement pour des images développées.
         let raw = [PathBuf::from("a/DSCF1.RAF")];
         let jpeg = [PathBuf::from("a/DSCF1.JPG")];
-        assert!(!exports_jpeg(Render::LibRaw, &raw));
-        assert!(!exports_jpeg(Render::Darktable, &raw));
-        assert!(exports_jpeg(Render::Embedded, &raw));
-        assert!(exports_jpeg(Render::LibRaw, &jpeg));
+        assert!(!exports_flat(Render::LibRaw, &raw));
+        assert!(!exports_flat(Render::Darktable, &raw));
+        assert!(exports_flat(Render::Embedded, &raw));
+        assert!(exports_flat(Render::LibRaw, &jpeg));
         let settings = tri::export::ExportSettings::default();
         let dialog = |render, images: &[PathBuf]| {
             ExportDialog::new(images, &settings, 0, true, render, Pos2::ZERO)

@@ -194,7 +194,8 @@ cli-dry-run = (--dry-run: nothing was changed)
 cli-export-unknown-profile = unknown export profile: { $profile } (profiles: { $known })
 cli-export-plan = export “{ $profile }” ({ $summary }) to { $dest }:
 cli-export-libraw = darktable missing (or --libraw): basic LibRaw rendering
-cli-export-as-is-raw = the “{ $profile }” profile copies JPEGs as they are: a RAW has no color space, its rendering needs one (another profile, or --embedded for its camera JPEG)
+cli-export-as-is-raw = the “{ $profile }” profile only applies to already developed images (applies_to): a RAW has no color space, its rendering needs one (another profile, or --embedded for its camera JPEG)
+cli-export-raw-only = the “{ $profile }” profile only applies to rendering a RAW (applies_to)
 cli-export-passthrough = of which { $n } without recompression
 cli-export-done = { $n ->
     [one] 1 file written

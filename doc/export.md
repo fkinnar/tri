@@ -79,19 +79,23 @@ X-T4, en JPEG 2048 px : 13,5 s en tout.
 
 ## Profils fournis
 
-| Profil | Format | Espace | Taille | Sans recompression |
-|---|---|---|---|---|
-| Retouche (`edit`) | TIFF 16 bits | ProPhoto linéaire | pleine | — |
-| JPEG tel quel (`asis`) | JPEG 100 | d'origine (`""`) | pleine | oui |
-| Web (`web`) | JPEG 90 | sRGB | 2048 px | oui |
+| Profil | Format | Espace | Taille | Sans recompression | S'applique à |
+|---|---|---|---|---|---|
+| Retouche (`edit`) | TIFF 16 bits | ProPhoto linéaire | pleine | — | tout |
+| JPEG tel quel (`asis`) | JPEG | d'origine (`""`) | pleine | oui | images développées |
+| Web (`web`) | JPEG 90 | sRGB | 2048 px | oui | tout |
 
 « JPEG tel quel » (demandé le 19/10/2026) : un JPEG est copié sans rien toucher (taille,
 espace : un JPEG Adobe RGB le reste ; pas de qualité affichée, c'est celle du fichier
 d'origine). **Pour exporter des JPEG seulement** (JPEG boîtier, JPEG d'origine) : un RAW
-n'a pas d'espace couleur, son rendu doit en recevoir un. La boîte ne le propose donc pas
-pour un rendu darktable ou LibRaw (`Profile::is_as_is`, `exports_jpeg`), et la ligne de
-commande le refuse sur un RAW (sauf `--embedded`). Quand on exporte un JPEG, il est
-proposé d'abord.
+n'a pas d'espace couleur, son rendu doit en recevoir un. Quand on exporte un JPEG, il
+est proposé d'abord.
+
+**À quoi s'applique un profil** (`applies_to`, idée de l'utilisateur, 19/10/2026) :
+`"all"` (défaut), `"raw"` (rendu d'un RAW : darktable, LibRaw) ou `"flat"` (image déjà
+développée : JPEG boîtier, JPEG, TIFF…). « JPEG tel quel » vaut `"flat"`. La boîte ne
+propose que les profils qui s'appliquent à ce qu'on exporte (`AppliesTo::allows`,
+`exports_flat`), et la ligne de commande refuse les autres, avec la raison.
 
 ## Réglages (`[export]`)
 

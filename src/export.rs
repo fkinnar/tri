@@ -77,6 +77,32 @@ impl Format {
     }
 }
 
+/// Ce à quoi un profil s'applique (idée de l'utilisateur, 19/10/2026).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AppliesTo {
+    /// Partout.
+    #[default]
+    All,
+    /// Au rendu d'un RAW (darktable, LibRaw).
+    Raw,
+    /// À une image déjà développée : JPEG boîtier, JPEG, TIFF… (« JPEG tel quel » : un RAW
+    /// n'a pas d'espace couleur, son rendu doit en recevoir un).
+    Flat,
+}
+
+impl AppliesTo {
+    /// Le profil vaut-il pour un export de RAW rendus (`flat` faux) ou d'images déjà
+    /// développées (`flat` vrai) ?
+    pub fn allows(self, flat: bool) -> bool {
+        match self {
+            AppliesTo::All => true,
+            AppliesTo::Raw => !flat,
+            AppliesTo::Flat => flat,
+        }
+    }
+}
+
 /// Profil d'export : ce qu'on produit pour un usage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Profile {
@@ -112,6 +138,9 @@ pub struct Profile {
     /// (orientation posée dans l'EXIF) ; une image à réduire est réencodée. Sans effet sur
     /// un rendu (darktable, LibRaw) ni hors JPEG.
     pub passthrough: bool,
+    /// Ce à quoi il s'applique : `"all"`, `"raw"` (rendu d'un RAW), `"flat"` (image déjà
+    /// développée) ; la boîte d'export ne propose que les profils qui conviennent.
+    pub applies_to: AppliesTo,
 }
 
 impl Profile {
@@ -131,6 +160,7 @@ impl Profile {
             // Retour de l'utilisateur (19/10/2026) : par défaut, ne jamais recompresser un
             // JPEG quand on peut l'éviter.
             passthrough: true,
+            applies_to: AppliesTo::All,
         }
     }
 
@@ -149,6 +179,7 @@ impl Profile {
             Profile {
                 quality: 100,
                 color: String::new(),
+                applies_to: AppliesTo::Flat,
                 ..Profile::base("asis")
             },
             Profile {
@@ -159,8 +190,7 @@ impl Profile {
     }
 
     /// Profil « tel quel » : un JPEG copié sans rien toucher (sans recompression, espace
-    /// d'origine, pleine taille). N'a de sens que pour exporter un JPEG : un RAW n'a pas
-    /// d'espace couleur, son rendu doit en recevoir un (retour du 19/10/2026).
+    /// d'origine, pleine taille) ; sa qualité affichée n'a pas de sens.
     pub fn is_as_is(&self) -> bool {
         self.format == Format::Jpeg
             && self.passthrough
@@ -301,6 +331,7 @@ struct ProfileToml {
     suffix: Option<String>,
     folder: Option<String>,
     passthrough: Option<bool>,
+    applies_to: Option<AppliesTo>,
 }
 
 /// Les profils d'export, dans l'ordre : profils fournis, puis ceux de l'utilisateur (par
@@ -360,6 +391,9 @@ impl<'de> Deserialize<'de> for Profiles {
             }
             if let Some(v) = t.passthrough {
                 p.passthrough = v;
+            }
+            if let Some(v) = t.applies_to {
+                p.applies_to = v;
             }
         }
         // Profil incohérent (ProPhoto en JPEG…) : refusé dès la lecture, comme toute
@@ -1146,6 +1180,26 @@ mod tests {
                 .iter()
                 .all(|c| COLORS.contains(c) && color_fits(c, 8))
         );
+    }
+
+    #[test]
+    fn a_profile_says_what_it_applies_to() {
+        let p = Profiles::default();
+        assert_eq!(p.get("asis").unwrap().applies_to, AppliesTo::Flat);
+        assert_eq!(p.get("web").unwrap().applies_to, AppliesTo::All);
+        assert!(AppliesTo::Flat.allows(true) && !AppliesTo::Flat.allows(false));
+        assert!(AppliesTo::Raw.allows(false) && !AppliesTo::Raw.allows(true));
+        assert!(AppliesTo::All.allows(true) && AppliesTo::All.allows(false));
+        #[derive(Deserialize)]
+        struct S {
+            export: ExportSettings,
+        }
+        let s: S = toml::from_str("[export.profiles.web]\napplies_to = \"raw\"\n").unwrap();
+        assert_eq!(
+            s.export.profiles.get("web").unwrap().applies_to,
+            AppliesTo::Raw
+        );
+        assert!(toml::from_str::<S>("[export.profiles.web]\napplies_to = \"tout\"\n").is_err());
     }
 
     #[test]
