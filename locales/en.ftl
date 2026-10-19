@@ -241,3 +241,4 @@ export-needs-16-bits = export profile “{ $profile }”: “{ $color }” needs
 export-libraw-color = export profile “{ $profile }”: the “{ $color }” color space needs darktable (without darktable: sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
 export-libraw-bits = export profile “{ $profile }”: 32-bit TIFF needs darktable
 export-bad-icc = unreadable image color profile: no conversion possible (“JPEG as is” keeps it as it is)
+export-version-empty = darktable rendered nothing for this version

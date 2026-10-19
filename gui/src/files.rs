@@ -104,6 +104,7 @@ pub enum Outcome {
         profile: tri::export::Profile,
         folder: String,
         render: crate::export::Render,
+        cut: Option<tri::export::Cut>,
         choice: usize,
     },
 }
@@ -188,11 +189,13 @@ impl FileDialog {
                     profile,
                     folder,
                     render,
+                    cut,
                 } => Outcome::Export {
                     images,
                     profile: *profile,
                     folder,
                     render,
+                    cut,
                     choice: e.choice(),
                 },
             },

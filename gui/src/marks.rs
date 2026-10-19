@@ -435,6 +435,32 @@ pub fn warning(painter: &Painter, rect: Rect, color: Color32) {
     painter.circle_filled(c + vec2(0.0, h * 0.33), h * 0.065, hole);
 }
 
+/// Icône de recadrage : deux équerres croisées (badge des versions dans la grille).
+pub fn crop_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let stroke = Stroke::new((s * 0.13).max(1.2), color);
+    let (min, max) = (rect.min, rect.max);
+    let k = s * 0.22;
+    // Équerre du haut à gauche, qui dépasse en haut et à gauche.
+    painter.add(Shape::line(
+        vec![
+            pos2(min.x + k, min.y),
+            pos2(min.x + k, max.y - k),
+            pos2(max.x, max.y - k),
+        ],
+        stroke,
+    ));
+    // Équerre du bas à droite.
+    painter.add(Shape::line(
+        vec![
+            pos2(min.x, min.y + k),
+            pos2(max.x - k, min.y + k),
+            pos2(max.x - k, max.y),
+        ],
+        stroke,
+    ));
+}
+
 /// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
 /// pointe de flèche au bout.
 pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {

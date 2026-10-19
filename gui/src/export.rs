@@ -67,6 +67,8 @@ pub struct ExportDialog {
     darktable: bool,
     /// Image exportée : selon ce qu'on regarde, modifiable ici (voir [`Render::of`]).
     render: Render,
+    /// Version exportée (recadrage), sinon l'image entière.
+    cut: Option<tri::export::Cut>,
 }
 
 /// Résultat d'une image de la boîte.
@@ -81,6 +83,7 @@ pub enum Outcome {
         profile: Box<Profile>,
         folder: String,
         render: Render,
+        cut: Option<tri::export::Cut>,
     },
 }
 
@@ -159,6 +162,7 @@ impl ExportDialog {
             passthrough: (profiles.get(choice).is_some_and(|p| p.passthrough), choice),
             darktable,
             render,
+            cut: None,
             images,
             profiles,
             field: Default::default(),
@@ -188,7 +192,10 @@ impl ExportDialog {
         }
         let (mut confirm, mut cancel) = (false, false);
         let modal = crate::app::modal_at("export_dialog", self.at)
-            .title(t!("export-title", n = n))
+            .title(match &self.cut {
+                Some(cut) => t!("export-title-version", name = cut.name.as_str()),
+                None => t!("export-title", n = n),
+            })
             .show(ctx, |ui| {
                 ui.add_space(6.0);
                 ui.label(t!("export-profile"));
@@ -315,6 +322,7 @@ impl ExportDialog {
                 }),
                 folder: self.input.trim().to_string(),
                 render: self.render,
+                cut: self.cut.clone(),
             };
         }
         if cancel || modal.should_close() {
@@ -322,6 +330,12 @@ impl ExportDialog {
         } else {
             Outcome::Open
         }
+    }
+
+    /// Exporter la version `cut` (recadrage) plutôt que l'image entière.
+    pub fn with_cut(mut self, cut: tri::export::Cut) -> ExportDialog {
+        self.cut = Some(cut);
+        self
     }
 
     /// Profil choisi (retenu pour la prochaine boîte).
@@ -367,6 +381,7 @@ impl Job {
         images: Vec<PathBuf>,
         profile: Profile,
         folder: String,
+        cut: Option<tri::export::Cut>,
         ctx: &egui::Context,
     ) -> Job {
         // Dossier montré : celui de la première image (relatif : un par dossier d'images).
@@ -385,12 +400,33 @@ impl Job {
                     done.store(n, Ordering::Relaxed);
                     ctx.request_repaint();
                 };
-                let result = match &dt {
-                    Some(dt) => {
+                let result = match (&dt, &cut) {
+                    // Version par darktable : rendu temporaire, puis recadré.
+                    (Some(dt), Some(cut)) => images
+                        .first()
+                        .map(|image| {
+                            let report = tri::export::export_version_darktable(
+                                dt, image, &profile, &folder, cut, &cancel,
+                            );
+                            if let Ok(r) = &report
+                                && let Some(out) = r.written.first()
+                            {
+                                progress(1, 1, out);
+                            }
+                            report
+                        })
+                        .unwrap_or_else(|| Ok(tri::export::Report::default())),
+                    (Some(dt), None) => {
                         tri::export::export(dt, &images, &profile, &folder, &cancel, progress)
                     }
-                    None => tri::export::export_libraw(
-                        &images, &profile, &folder, local, &cancel, progress,
+                    (None, cut) => tri::export::export_libraw(
+                        &images,
+                        &profile,
+                        &folder,
+                        local,
+                        cut.as_ref(),
+                        &cancel,
+                        progress,
                     ),
                 };
                 ctx.request_repaint();

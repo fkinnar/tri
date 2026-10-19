@@ -102,7 +102,35 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - Réglages `[gui.crop]` : `step`, `shade`, `shade_opacity`, `line_width`, `handle_size`,
   `handle_grab`.
 
+- **Grille** : badge en haut à gauche des vignettes qui ont des versions (icône de
+  recadrage dessinée et leur nombre). Versions lues dans les sidecars à la demande, puis
+  gardées ; relues après une modification (enregistrement, annulation, surveillance du
+  dossier).
+- La barre du recadrage ne propose que les profils d'export qui s'appliquent à l'image
+  recadrée (`applies_to` : pas « JPEG tel quel » sur un rendu de RAW).
+
+## Export d'une version
+
+- `Ctrl+E` sur une version montrée l'exporte, elle seule, sur l'image où elle a été
+  recadrée (sa `source`) ; la boîte est titrée « Exporter la version « Story » » et
+  pré-remplie avec son profil s'il en a un (sinon le dernier choisi, sinon le profil par
+  défaut).
+- Fichier : `DSCF0001-Story.jpg` (`export::Cut`, nom nettoyé des caractères interdits par
+  les systèmes : `3:2` donne `3_2`).
+- **LibRaw ou JPEG boîtier** : rendu, puis recadrage, puis réduction et écriture
+  (`export_libraw` avec `Some(cut)`). Pas de copie sans recompression : recadrer, c'est
+  recompresser.
+- **darktable** : `export_version_darktable` rend un **TIFF 16 bits temporaire** dans
+  l'espace du profil, en pleine définition ; il est ensuite recadré, réduit et écrit au
+  format du profil, avec le profil ICC du TIFF. Il n'y a ainsi qu'une seule compression,
+  et le TIFF est supprimé. Vérifié le 19/10/2026 sur le RAF de l'utilisateur (test ignoré
+  `darktable_exports_a_cropped_version`).
+- Le cadre est en proportions de l'image **vue** : sur un développé darktable recadré
+  (2763 × 4912 pour le RAF de test), ce sont ses proportions, pas celles du capteur.
+
 ## À venir
 
-Le badge dans la grille, et l'export d'une version (rendu, puis cadre, puis profil ;
-`Ctrl+E` sur une version pré-remplit la boîte avec son profil).
+- **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026) : « Story Insta » = nom,
+  rapport et orientation (9:16), profil d'export (Web). On choisit le préréglage, on
+  ajuste le cadre, Entrée.
+- Création des profils d'export depuis l'interface.

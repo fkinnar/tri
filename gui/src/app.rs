@@ -969,6 +969,8 @@ impl TriApp {
             for i in developed {
                 self.developed_ready(i);
             }
+            // Versions peut-être changées ailleurs : relues à la demande.
+            self.versions.clear();
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
             if !changed.is_empty() {
@@ -3148,6 +3150,20 @@ impl TriApp {
         (size.y > 0.0).then(|| f64::from(size.x / size.y))
     }
 
+    /// Version montrée en plein écran (image et version), s'il y en a une.
+    fn shown_version(&self) -> Option<(PathBuf, tri::versions::Version)> {
+        if self.mode != Mode::View {
+            return None;
+        }
+        let file = self.files.get(self.selected)?;
+        let (path, index) = self.version_shown.as_ref()?;
+        if *path != file.path {
+            return None;
+        }
+        let version = self.versions.get(path)?.list.get(*index)?.clone();
+        Some((path.clone(), version))
+    }
+
     /// Versions de `path` (lues dans son sidecar à la première demande).
     fn versions_of(&mut self, path: &Path) -> &tri::versions::Versions {
         self.versions
@@ -4776,6 +4792,44 @@ impl TriApp {
                     }
                 }
             }
+            Action::FileExport if self.shown_version().is_some() => {
+                // Version montrée : elle seule, sur l'image où elle a été recadrée, avec son
+                // profil s'il en a un.
+                let Some((path, version)) = self.shown_version() else {
+                    return;
+                };
+                let darktable =
+                    tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
+                let source = match version.source {
+                    tri::versions::Source::Embedded => Source::Embedded,
+                    tri::versions::Source::Raw => Source::Raw,
+                    tri::versions::Source::Developed => Source::Developed,
+                };
+                let render = crate::export::Render::of(Some(source), darktable);
+                let images = vec![path];
+                let flat = crate::export::exports_flat(render, &images);
+                let applicable = self.settings.export.applicable(flat);
+                let choice = version
+                    .profile
+                    .as_ref()
+                    .and_then(|id| applicable.iter().position(|p| p.id == *id))
+                    .or(self.export_choice[usize::from(flat)])
+                    .unwrap_or_else(|| self.settings.export.default_index(flat));
+                let dialog = crate::export::ExportDialog::new(
+                    &images,
+                    &self.settings.export,
+                    choice,
+                    darktable,
+                    render,
+                    at,
+                )
+                .with_cut(tri::export::Cut {
+                    crop: version.crop,
+                    name: version.name.clone(),
+                });
+                self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
+                Ok(())
+            }
             Action::FileExport => {
                 let darktable =
                     tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
@@ -4854,12 +4908,13 @@ impl TriApp {
                 profile,
                 folder,
                 render,
+                cut,
                 choice,
             } => {
                 self.file_dialog = None;
                 self.export_choice[usize::from(crate::export::exports_flat(render, &images))] =
                     Some(choice);
-                self.start_export(ctx, images, profile, folder, render);
+                self.start_export(ctx, images, profile, folder, render, cut);
             }
             crate::files::Outcome::Done { select, step } => {
                 if let Some(step) = step {
@@ -4885,6 +4940,7 @@ impl TriApp {
         profile: tri::export::Profile,
         folder: String,
         render: crate::export::Render,
+        cut: Option<tri::export::Cut>,
     ) {
         if self.export_job.is_some() {
             self.notice = Some((t!("export-busy"), true));
@@ -4908,7 +4964,7 @@ impl TriApp {
         });
         trace(|| format!("export : {} images vers {folder}", images.len()));
         self.export_job = Some(crate::export::Job::start(
-            dt, local, images, profile, folder, ctx,
+            dt, local, images, profile, folder, cut, ctx,
         ));
     }
 
@@ -5697,6 +5753,29 @@ impl TriApp {
             painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
             marks::row(painter, left_center, notes, size, &colors);
         }
+        // Versions (recadrages) en haut à gauche : icône de recadrage et leur nombre, sur
+        // fond sombre (une vignette par version surchargerait la grille).
+        let versions = self.versions_of(&file.path).list.len();
+        if versions > 0 {
+            let size = g.marks;
+            let painter = ui.painter();
+            let font = FontId::proportional(size * 0.9);
+            let text = versions.to_string();
+            let galley = painter.layout_no_wrap(text, font, Color32::WHITE);
+            let icon = Rect::from_min_size(image_area.min + vec2(5.0, 5.0), vec2(size, size));
+            let back = Rect::from_min_max(
+                icon.min,
+                pos2(icon.max.x + 3.0 + galley.size().x, icon.max.y),
+            )
+            .expand(2.0);
+            painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
+            marks::crop_icon(painter, icon.shrink(size * 0.12), Color32::WHITE);
+            painter.galley(
+                pos2(icon.max.x + 3.0, icon.center().y - galley.size().y / 2.0),
+                galley,
+                Color32::WHITE,
+            );
+        }
         // Badges d'exposition en haut à droite : brûlée (rouge), bouchée (bleu).
         if let Some((over, under)) = self.clip_fractions(index, deadline) {
             let h = self.gui.histogram;
@@ -6454,13 +6533,16 @@ impl eframe::App for TriApp {
                 .show(ui, |ui| self.folder_panel(ui));
         }
         // Recadrage : sa barre, à la place du bandeau de notation.
-        if self.crop.is_some() {
+        if let Some(crop) = &self.crop {
+            // Profils qui s'appliquent à l'image recadrée (pas « JPEG tel quel » sur un
+            // rendu de RAW, retour du 19/10/2026).
+            let flat = crop.source == tri::versions::Source::Embedded
+                || tri::media::kind_of(&crop.image) == Some(MediaKind::Flat);
             let profiles: Vec<(String, String)> = self
                 .settings
                 .export
-                .profiles
-                .0
-                .iter()
+                .applicable(flat)
+                .into_iter()
                 .map(|p| (p.id.clone(), crate::export::profile_name(p)))
                 .collect();
             let mut action = None;
@@ -9651,6 +9733,19 @@ mod tests {
             h.state().version_shown,
             Some((image.clone(), 0)),
             "remontrée"
+        );
+        // Ctrl+E sur la version montrée : elle seule, recadrée, nommée d'après elle.
+        press(&mut h, Key::E, Modifiers::CTRL);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.notice.is_some()
+        });
+        let out = dir.path().join("photos/export/img0-3_2.jpg");
+        assert!(out.is_file(), "{:?}", h.state().notice);
+        let (w, h2) = image::image_dimensions(&out).unwrap();
+        assert!(
+            (f64::from(w) / f64::from(h2) - 1.5).abs() < 0.05,
+            "3:2 : {w} × {h2}"
         );
         // n : version suivante (ici la seule), puis l'original.
         press(&mut h, Key::N, Modifiers::NONE);

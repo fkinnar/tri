@@ -864,6 +864,36 @@ fn developed(image: &Path) -> Result<Developed, DevelopError> {
     })
 }
 
+/// Version (recadrage, [`crate::versions`]) à exporter : son cadre et son nom (ajouté au
+/// nom du fichier : `DSCF0001-Story.jpg`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cut {
+    /// Cadre, en proportions de l'image.
+    pub crop: crate::versions::Rect,
+    /// Nom de la version.
+    pub name: String,
+}
+
+impl Cut {
+    /// Pour un nom de fichier : `-` puis le nom, sans les caractères interdits par les
+    /// systèmes (`/ \ : * ? " < > |`).
+    fn suffix(&self) -> String {
+        let clean: String = self
+            .name
+            .trim()
+            .chars()
+            .map(|c| {
+                if "/\\:*?\"<>|".contains(c) || c.is_control() {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        format!("-{clean}")
+    }
+}
+
 /// Exporte `images` **sans darktable** : RAW développés par LibRaw (le rendu « plat » de
 /// `tri` : balance des blancs du boîtier, sans luminosité automatique) ou leur JPEG
 /// boîtier (`local`), images plates réencodées. Une image déjà développée (JPEG boîtier,
@@ -876,6 +906,7 @@ pub fn export_libraw(
     profile: &Profile,
     folder: &str,
     local: Local,
+    cut: Option<&Cut>,
     cancel: &AtomicBool,
     mut progress: impl FnMut(usize, usize, &Path),
 ) -> Result<Report, DevelopError> {
@@ -887,7 +918,7 @@ pub fn export_libraw(
         if cancel.load(Ordering::Relaxed) {
             return Err(DevelopError::Cancelled);
         }
-        match export_one(image, profile, local, folder, cancel) {
+        match export_one(image, profile, local, folder, cut, cancel) {
             Ok((out, copied)) => {
                 report.passthrough += usize::from(copied);
                 report.written.push(out);
@@ -911,11 +942,12 @@ fn export_one(
     profile: &Profile,
     local: Local,
     folder: &str,
+    cut: Option<&Cut>,
     cancel: &AtomicBool,
 ) -> Result<(PathBuf, bool), DevelopError> {
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
     let encode = |p: moxcms::ColorProfile| p.encode().map_err(|e| failed(&format!("{e:?}")));
-    let (mut pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
+    let (pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
         let (space, target) = libraw_space(&profile.color).expect("vérifié");
         let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
         let pixels = raw
@@ -933,8 +965,10 @@ fn export_one(
         } = developed(image)?;
         let (w, h) = pixels.dimensions();
         let fits = profile.max_side == 0 || w.max(h) <= profile.max_side;
-        // Sans recompression : JPEG vers JPEG, sans réduction, sans changer d'espace.
+        // Sans recompression : JPEG vers JPEG, sans recadrage ni réduction, sans changer
+        // d'espace.
         if profile.passthrough
+            && cut.is_none()
             && profile.format == Format::Jpeg
             && fits
             && origin.is(&profile.color)
@@ -967,6 +1001,24 @@ fn export_one(
         };
         (pixels, icc)
     };
+    finish(image, pixels, icc.as_deref(), profile, folder, cut).map(|out| (out, false))
+}
+
+/// Fin d'un export : recadrage (version), réduction au côté maximal du profil, écriture
+/// au format du profil avec le profil ICC `icc`.
+fn finish(
+    image: &Path,
+    mut pixels: crate::raw::Rgb16,
+    icc: Option<&[u8]>,
+    profile: &Profile,
+    folder: &str,
+    cut: Option<&Cut>,
+) -> Result<PathBuf, DevelopError> {
+    if let Some(cut) = cut {
+        let (w, h) = pixels.dimensions();
+        let (x, y, cw, ch) = cut.crop.pixels(w, h);
+        pixels = image::imageops::crop_imm(&pixels, x, y, cw, ch).to_image();
+    }
     let (w, h) = pixels.dimensions();
     let side = profile.max_side;
     if side > 0 && w.max(h) > side {
@@ -977,18 +1029,78 @@ fn export_one(
         );
         pixels = image::imageops::resize(&pixels, nw, nh, image::imageops::FilterType::Lanczos3);
     }
-    let out = output_path(image, profile, folder, profile.format.extension())?;
-    write_image(&out, &pixels, profile, icc.as_deref()).map_err(|e| {
+    let extra = cut.map(Cut::suffix).unwrap_or_default();
+    let out = output_path(image, profile, &extra, folder, profile.format.extension())?;
+    write_image(&out, &pixels, profile, icc).map_err(|e| {
         let _ = std::fs::remove_file(&out);
-        failed(&e)
+        DevelopError::Other(e.to_string())
     })?;
-    Ok((out, false))
+    Ok(out)
+}
+
+/// Exporte la version `cut` de `image` **par darktable** : rendu en TIFF 16 bits
+/// temporaire (espace du profil, pleine définition), puis recadré, réduit et écrit au
+/// format du profil. Une seule compression, jamais deux.
+pub fn export_version_darktable(
+    dt: &Darktable,
+    image: &Path,
+    profile: &Profile,
+    folder: &str,
+    cut: &Cut,
+    cancel: &AtomicBool,
+) -> Result<Report, DevelopError> {
+    use image::ImageDecoder;
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
+    let tmp = dt
+        .config_dir
+        .join(format!("version-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let render = Profile {
+        format: Format::Tiff,
+        bits: 16,
+        max_side: 0,
+        suffix: String::new(),
+        passthrough: false,
+        applies_to: AppliesTo::All,
+        ..profile.clone()
+    };
+    let result = (|| {
+        let report = export(
+            dt,
+            &[image.to_path_buf()],
+            &render,
+            &tmp.display().to_string(),
+            cancel,
+            |_, _, _| {},
+        )?;
+        let rendered = report
+            .written
+            .first()
+            .ok_or_else(|| DevelopError::Other(crate::t!("export-version-empty")))?;
+        let mut decoder = image::ImageReader::open(rendered)
+            .and_then(|r| r.with_guessed_format())
+            .map_err(|e| failed(&e))?
+            .into_decoder()
+            .map_err(|e| failed(&e))?;
+        let icc = decoder.icc_profile().ok().flatten();
+        let pixels = image::DynamicImage::from_decoder(decoder)
+            .map_err(|e| failed(&e))?
+            .into_rgb16();
+        let out = finish(image, pixels, icc.as_deref(), profile, folder, Some(cut))?;
+        Ok(Report {
+            written: vec![out],
+            ..Report::default()
+        })
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
 }
 
 /// Fichier de sortie de `image` (dossier créé, jamais d'écrasement).
 fn output_path(
     image: &Path,
     profile: &Profile,
+    extra: &str,
     folder: &str,
     ext: &str,
 ) -> Result<PathBuf, DevelopError> {
@@ -998,7 +1110,11 @@ fn output_path(
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    Ok(unique_path(&dir, &format!("{stem}{}", profile.suffix), ext))
+    Ok(unique_path(
+        &dir,
+        &format!("{stem}{}{extra}", profile.suffix),
+        ext,
+    ))
 }
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
@@ -1008,7 +1124,7 @@ fn write_bytes(
     folder: &str,
     bytes: &[u8],
 ) -> Result<PathBuf, DevelopError> {
-    let out = output_path(image, profile, folder, "jpg")?;
+    let out = output_path(image, profile, "", folder, "jpg")?;
     std::fs::write(&out, bytes).map_err(|e| DevelopError::Other(e.to_string()))?;
     Ok(out)
 }
@@ -1391,6 +1507,7 @@ mod tests {
                 &profile,
                 "export",
                 Local::LibRaw,
+                None,
                 &AtomicBool::new(false),
                 |_, _, _| {},
             )
@@ -1423,6 +1540,7 @@ mod tests {
             &prophoto,
             "export",
             Local::LibRaw,
+            None,
             &AtomicBool::new(false),
             |_, _, _| {},
         )
@@ -1461,6 +1579,7 @@ mod tests {
                 p,
                 "out",
                 Local::Embedded,
+                None,
                 &cancel,
                 |_, _, _| {},
             )
@@ -1508,6 +1627,7 @@ mod tests {
                 p,
                 "out",
                 Local::Embedded,
+                None,
                 &AtomicBool::new(false),
                 |_, _, _| {},
             )
@@ -1535,6 +1655,47 @@ mod tests {
         assert_ne!(px, [20, 220, 40], "converti : {px:?}");
     }
 
+    /// Version exportée par darktable (rendu TIFF 16 bits temporaire, recadré, puis
+    /// profil) : `TRI_TEST_DARKTABLE_RAW`, copié.
+    #[test]
+    #[ignore]
+    fn darktable_exports_a_cropped_version() {
+        let cli = crate::develop::find_darktable("auto").expect("darktable installé");
+        let original = PathBuf::from(std::env::var("TRI_TEST_DARKTABLE_RAW").expect("RAW de test"));
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join(original.file_name().unwrap());
+        std::fs::copy(&original, &raw).unwrap();
+        let mut name = original.file_name().unwrap().to_os_string();
+        name.push(".xmp");
+        std::fs::copy(original.with_file_name(&name), raw.with_file_name(&name)).unwrap();
+        let dt = Darktable {
+            cli,
+            config_dir: dir.path().join("cfg"),
+            high_quality: true,
+        };
+        // Cadre 1:1 calculé sur l'image vue : le développé, recadré dans darktable
+        // (2763 × 4912 pour le RAW de test), pas sur l'image entière du capteur.
+        let ratio = crate::versions::Ratio::Fixed(1, 1);
+        let cut = Cut {
+            crop: crate::versions::Rect::fit(ratio, 2763.0 / 4912.0),
+            name: "Story".into(),
+        };
+        let web = Profiles::default().get("web").unwrap().clone();
+        let report =
+            export_version_darktable(&dt, &raw, &web, "export", &cut, &AtomicBool::new(false))
+                .unwrap();
+        let out = &report.written[0];
+        assert_eq!(out.file_name().unwrap(), "DSCF0331-Story.jpg");
+        let (w, h) = image::image_dimensions(out).unwrap();
+        assert_eq!(w.max(h), 2048, "côté long du profil Web");
+        assert!(w.abs_diff(h) <= 2, "carré : {w} × {h}");
+        assert!(
+            !dt.config_dir
+                .join(format!("version-{}", std::process::id()))
+                .exists()
+        );
+    }
+
     /// Export LibRaw réel : `TRI_TEST_RAW` (RAW hors du dépôt), copié.
     #[test]
     #[ignore]
@@ -1550,6 +1711,7 @@ mod tests {
             profiles.get("edit").unwrap(),
             "export",
             Local::LibRaw,
+            None,
             &AtomicBool::new(false),
             |_, _, _| {},
         )

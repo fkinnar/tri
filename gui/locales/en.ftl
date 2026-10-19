@@ -317,6 +317,7 @@ export-title = { $n ->
     [one] Export 1 image
    *[other] Export { $n } images
 }
+export-title-version = Export the “{ $name }” version
 export-profile = Export profile
 export-destination = Folder
 export-create = will be created

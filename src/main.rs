@@ -939,7 +939,7 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             } else {
                 tri::export::Local::LibRaw
             };
-            tri::export::export_libraw(&sources, profile, &folder, local, &cancel, progress)?
+            tri::export::export_libraw(&sources, profile, &folder, local, None, &cancel, progress)?
         }
     };
     for (image, error) in &report.errors {

@@ -640,8 +640,11 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   version), cadre libre ou à rapport fixe avec voile gris autour, tout à la souris aussi,
   flèches (classique) / hjkl (vim). **Moteur fait** (géométrie, `tri:Versions` en JSON
   dans le XMP, annulable). **Interface faite** (19/10/2026) : `r`, voile et poignées,
-  barre des rapports, versions sous les notes, `n`. Reste : badge dans la grille, export
-  d'une version.
+  barre des rapports, versions sous les notes, `n` ; badge dans la grille ; export d'une
+  version (`Ctrl+E`, `DSCF0001-Story.jpg`, darktable par TIFF 16 bits temporaire).
+- **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026) : nom, rapport et
+  orientation, profil d'export (« Story Insta » : 9:16, Web) ; choisi dans la barre du
+  recadrage, puis on ajuste. À faire avec la création des profils d'export.
 - **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, juste après les
   versions) : fenêtre de réglages, section Export — nouveau profil, dupliquer, supprimer
   (profils de l'utilisateur seulement), mêmes contrôles et refus des incohérences. darktable trouvé aussi en **AppImage**
