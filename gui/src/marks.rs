@@ -382,6 +382,20 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
                 }
             }
         }
+        Action::Develop => {
+            // Développer : un petit diaphragme (cercle et lamelles en hélice).
+            let c = rect.center();
+            let r = rect.width().min(rect.height()) * 0.45;
+            let stroke = Stroke::new((r * 0.16).max(1.2), color);
+            painter.circle_stroke(c, r, stroke);
+            for k in 0..6 {
+                let phi = std::f32::consts::TAU * k as f32 / 6.0 + 0.3;
+                let (n, t) = (vec2(phi.cos(), phi.sin()), vec2(-phi.sin(), phi.cos()));
+                let base = c + n * r * 0.36;
+                let length = (r * r - (r * 0.36).powi(2)).sqrt();
+                painter.line_segment([base - t * r * 0.2, base + t * length], stroke);
+            }
+        }
         Action::ToggleZoom => {
             // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
             painter.text(

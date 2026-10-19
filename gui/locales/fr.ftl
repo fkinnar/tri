@@ -433,6 +433,9 @@ shown-image-full = Image · 100 %
 shown-exposure = Analyse d'exposition
 shown-developed = Développé dans darktable
 view-info-developed-pending = { " · " }développement darktable en cours…
+action-plugin-darktable-develop = Développer dans darktable (l'image affichée)
+view-info-developed-none = { " · " }pas encore développé ({ $keys })
+develop-not-found = darktable introuvable (réglage [develop] darktable)
 shown-image = Image
 
 ## Histogramme

@@ -251,6 +251,8 @@ pub enum Action {
     Search,
     /// Mode concentration : plein écran du système, panneaux et barres masqués.
     FocusMode,
+    /// Développer l'image affichée dans darktable (plugin de rendu), puis l'afficher.
+    Develop,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -309,7 +311,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 123] = [
+    pub const ALL: [Action; 124] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -395,6 +397,7 @@ impl Action {
         Action::MetaCopyAll,
         Action::Search,
         Action::FocusMode,
+        Action::Develop,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -474,7 +477,7 @@ impl Action {
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint
-            | OverlayNext | OverlayOrient | FocusMode => Group::View,
+            | OverlayNext | OverlayOrient | FocusMode | Develop => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -588,6 +591,7 @@ impl Action {
             Action::ToggleFolderPanel => "core.view.folders",
             Action::Search => "core.search",
             Action::FocusMode => "core.view.focus_mode",
+            Action::Develop => "plugin.darktable.develop",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
@@ -894,6 +898,8 @@ const BASICS: &[Binding] = {
         // Mode concentration : F11 (plein écran des applications), Ctrl+Maj+F (sur macOS,
         // F11 montre le bureau).
         (&[plain(Key::F11)], FocusMode),
+        // Développer dans darktable : à la demande seulement (quelques secondes).
+        (&[shifted(Key::B)], Develop),
         (&[ctrl_shift(Key::F)], FocusMode),
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (&[plain(Key::Questionmark)], Help),

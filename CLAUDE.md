@@ -609,7 +609,9 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   (`[gui.colors] neutral_*`), à ajuster avec une capture de Lightroom.
 - [x] **Plugin de rendu darktable** (19/10/2026) : `src/develop.rs`, niveau
   `Developed`, source « développé » (`b`) ; `darktable-cli` en processus séparé,
-  configuration propre et bibliothèque en mémoire, sidecars jamais écrits. Ensuite :
+  configuration propre et bibliothèque en mémoire, sidecars jamais écrits. **Rendu
+  sur demande seulement** (retour du 19/10/2026 : 10 s d'attente souvent pour rien) :
+  `Maj+B` ou bouton du bandeau ; `b` n'inclut le développé que s'il existe déjà. Ensuite :
   RawTherapee / ART sur le même trait, envoi de JPEG développés.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».

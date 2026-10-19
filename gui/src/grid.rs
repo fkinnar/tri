@@ -136,6 +136,7 @@ pub fn navigate(
         | Action::ToggleFolderPanel
         | Action::Search
         | Action::FocusMode
+        | Action::Develop
         | Action::RefreshFolders
         | Action::ToggleHistogram
         | Action::HistogramScale

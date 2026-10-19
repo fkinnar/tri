@@ -1955,7 +1955,11 @@ impl TriApp {
             Action::StackChoose => self.choose_cover(),
             Action::ToggleSource => {
                 // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
-                self.source = self.source.next(self.darktable);
+                // Le développé n'entre dans la rotation que s'il existe déjà pour l'image
+                // (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B le
+                // calcule.
+                let developed = self.darktable && self.developed_ready(self.selected);
+                self.source = self.source.next(developed);
                 self.request_zoom();
             }
             Action::Compare => self.start_compare(),
@@ -1992,6 +1996,7 @@ impl TriApp {
             }
             // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
             Action::Search => self.start_search(),
+            Action::Develop => self.develop_current(),
             Action::FocusMode => {
                 self.focus_mode = !self.focus_mode;
                 ctx.send_viewport_cmd(ViewportCommand::Fullscreen(self.focus_mode));
@@ -2555,8 +2560,9 @@ impl TriApp {
             if self.source == Source::Raw && kind == MediaKind::Raw {
                 wanted.push((rank == 0, i, Level::Standard));
             }
-            // Développé : le rendu darktable (plusieurs secondes ; l'image affichée d'abord).
-            if self.source == Source::Developed {
+            // Développé : seulement s'il est déjà fait (en cache), jamais calculé d'office
+            // (Maj+B le demande pour l'image affichée).
+            if self.source == Source::Developed && self.developed_ready(i) {
                 wanted.push((rank == 0, i, Level::Developed));
             }
             if self.zoom.is_some() || (self.loupe_on && rank == 0) {
@@ -3001,6 +3007,38 @@ impl TriApp {
                     ui.label(t!("focus-mode-on", keys = keys));
                 });
             });
+    }
+
+    /// Le développé de l'image `index` existe : calculé dans la séance, ou retrouvé dans le
+    /// cache (séance précédente ; sa clé suit le sidecar, un développement modifié n'y est
+    /// plus).
+    fn developed_ready(&self, index: usize) -> bool {
+        if self.ready(index, Level::Developed) {
+            return true;
+        }
+        let (Some(engine), Some(file)) = (&self.engine, self.files.get(index)) else {
+            return false;
+        };
+        tri::preview::key(file, Level::Developed, &engine.preview)
+            .is_ok_and(|key| engine.cache.contains(&key))
+    }
+
+    /// Maj+B ou le bouton : développer l'image affichée dans darktable, puis l'afficher (à
+    /// la demande seulement : quelques secondes).
+    fn develop_current(&mut self) {
+        if !self.darktable {
+            self.notice = Some((t!("develop-not-found"), true));
+            return;
+        }
+        if self.files.is_empty() {
+            return;
+        }
+        if self.mode == Mode::Grid {
+            self.mode = Mode::View;
+        }
+        self.source = Source::Developed;
+        self.request(self.selected, Level::Developed);
+        self.request_zoom();
     }
 
     /// Relit les superpositions : grilles intégrées (couleur et opacité des réglages),
@@ -3696,9 +3734,16 @@ impl TriApp {
         // survol de la barre d'état, ici en clair).
         let developed = &self.status[index].developed;
         if self.source == Source::Developed && shown != Some(Level::Developed) {
+            let asked = self
+                .requested
+                .contains(&(file.path.clone(), Level::Developed));
             info.push_str(&match developed {
                 Avail::Failed(e) => format!(" · {e}"),
-                _ => t!("view-info-developed-pending"),
+                _ if asked => t!("view-info-developed-pending"),
+                _ => t!(
+                    "view-info-developed-none",
+                    keys = self.keymap.keys_for(Action::Develop).join(" / ")
+                ),
             });
         } else if raw_pending {
             info.push_str(&t!("view-info-raw-pending"));
@@ -4600,6 +4645,10 @@ impl TriApp {
                     }
                     actions.push(Action::StackMode);
                 }
+                // Développer dans darktable (si darktable est là), à côté du 1:1.
+                if self.mode == Mode::View && self.darktable {
+                    actions.push(Action::Develop);
+                }
                 actions.push(Action::ToggleZoom);
                 for action in actions {
                     let (rect, response) =
@@ -4608,6 +4657,7 @@ impl TriApp {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
                         Action::StackMode => self.stacking,
+                        Action::Develop => self.source == Source::Developed,
                         _ => false,
                     };
                     if active {
@@ -4636,6 +4686,7 @@ impl TriApp {
                 | Action::NavUp
                 | Action::NavDown
                 | Action::StackMode
+                | Action::Develop
                 | Action::ToggleZoom),
             ) => {
                 let ctx = ui.ctx().clone();
@@ -8897,8 +8948,21 @@ mod tests {
             Source::Embedded,
             "sans darktable : deux sources"
         );
-        // Avec darktable : boîtier, RAW, développé, boîtier.
+        // darktable là, mais rien de développé : b ne lance jamais de rendu (10 s pour
+        // rien) et reste boîtier ↔ RAW.
         h.state_mut().darktable = true;
+        for expected in [Source::Raw, Source::Embedded] {
+            press(&mut h, Key::B, Modifiers::NONE);
+            assert_eq!(h.state().source, expected);
+        }
+        assert!(
+            h.state()
+                .requested
+                .iter()
+                .all(|(_, l)| *l != Level::Developed)
+        );
+        // Développé (fait plus tôt, ou retrouvé en cache) : il entre dans la rotation.
+        set(&mut h.state_mut().status, 0, Level::Developed, Avail::Ready);
         for expected in [Source::Raw, Source::Developed, Source::Embedded] {
             press(&mut h, Key::B, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
@@ -8913,8 +8977,9 @@ mod tests {
         h.run_steps(3);
         h.state_mut().darktable = true;
         press(&mut h, Key::Enter, Modifiers::NONE);
-        h.state_mut().source = Source::Developed;
-        h.state_mut().request_zoom();
+        // Maj+B : développer l'image affichée (à la demande seulement).
+        press(&mut h, Key::B, Modifiers::SHIFT);
+        assert_eq!(h.state().source, Source::Developed);
         run_until(&mut h, |app| {
             matches!(app.status[0].developed, Avail::Failed(_))
         });

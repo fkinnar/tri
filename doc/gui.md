@@ -184,9 +184,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
-- **Développé dans darktable** (19/10/2026, voir `develop.md`) : `b` passe du JPEG
-  boîtier au rendu RAW puis au développé (si darktable est trouvé), rendu à la demande
-  en quelques secondes, gardé en cache ; collimateur et zones masqués sur le développé.
+- **Développé dans darktable** (19/10/2026, voir `develop.md`) : `Maj+B` ou le bouton
+  diaphragme lance le rendu (quelques secondes, gardé en cache) ; ensuite seulement, `b`
+  passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
 - **Icône, barre du haut, mode concentration** (19/10/2026) : icône choisie parmi trois
   pistes (un « t » et l'étoile de la note, `scripts/make-icon.py`, images dans
   `gui/assets`) pour la fenêtre, le Dock et la barre des tâches ; **barre du haut** avec
