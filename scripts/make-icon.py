@@ -88,22 +88,24 @@ def wordmark(height):
     stars = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d, ds = ImageDraw.Draw(letters), ImageDraw.Draw(stars)
     white = (255, 255, 255, 255)
-    base, xtop, gap = big - 2, big * 0.38, sw * 0.75
+    # Lettres larges (retour du 19/10/2026 : « un peu étroites ») : crochet, barre,
+    # épaule et espaces plus amples, même hauteur.
+    base, xtop, gap = big - 2, big * 0.38, sw * 1.0
     # t : fût, barre, crochet qui finit sur la ligne de base.
-    hook, cx = big * 0.17, sw * 1.15
+    hook, cx = big * 0.23, sw * 1.3
     y1 = base - sw / 2 - hook
     d.rounded_rectangle([cx - sw / 2, 0, cx + sw / 2, sw * 2], radius=sw / 2, fill=white)
     d.rectangle([cx - sw / 2, sw, cx + sw / 2, y1 + 1], fill=white)
-    d.rounded_rectangle([cx - sw * 1.05, xtop, cx + sw * 1.2, xtop + sw * 0.82], radius=sw * 0.41, fill=white)
+    d.rounded_rectangle([cx - sw * 1.3, xtop, cx + sw * 1.5, xtop + sw * 0.82], radius=sw * 0.41, fill=white)
     ro = hook + sw / 2
     d.arc([cx + hook - ro, y1 - ro, cx + hook + ro, y1 + ro], start=90, end=180, fill=white, width=int(sw))
     ex, ey = cx + hook, y1 + hook
     d.ellipse([ex - sw / 2, ey - sw / 2, ex + sw / 2, ey + sw / 2], fill=white)
-    t_right = max(cx + sw * 1.2, ex + sw / 2)
+    t_right = max(cx + sw * 1.5, ex + sw / 2)
     # Étoile au-dessus, entre le t et le r.
-    star(ds, cx + sw * 1.55, big * 0.15, big * 0.14, big * 0.058, STAR)
+    star(ds, cx + sw * 1.75, big * 0.15, big * 0.14, big * 0.058, STAR)
     # r : fût de la hauteur d'x à la base, épaule en quart de cercle vers la droite.
-    rx, sh = t_right + gap + sw / 2, big * 0.16
+    rx, sh = t_right + gap + sw / 2, big * 0.24
     d.rounded_rectangle([rx - sw / 2, xtop, rx + sw / 2, base], radius=sw / 2, fill=white)
     cy, ro = xtop + sh, sh + sw / 2
     d.arc([rx + sh - ro, cy - ro, rx + sh + ro, cy + ro], start=180, end=270, fill=white, width=int(sw))

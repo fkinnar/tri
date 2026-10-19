@@ -52,7 +52,9 @@ jobs:
           "LIBRAW_DIR=$root" >> $env:GITHUB_ENV
           # Nom de la bibliothèque selon le port vcpkg (raw.lib, libraw.lib…).
           Get-ChildItem "$root\lib" -Filter "*raw*.lib" | ForEach-Object { Write-Host "trouvé : $($_.Name)" }
-          $lib = Get-ChildItem "$root\lib" -Filter "*raw*.lib" | Where-Object { $_.BaseName -notmatch "_r$" } | Select-Object -First 1
+          # raw.lib si présente, sinon raw_r.lib (variante sûre en plusieurs fils, la seule
+          # que construit le port vcpkg de LibRaw 0.22).
+          $lib = Get-ChildItem "$root\lib" -Filter "*raw*.lib" | Sort-Object { $_.BaseName -match "_r$" } | Select-Object -First 1
           "LIBRAW_LIB=$($lib.BaseName)" >> $env:GITHUB_ENV
           "$root\bin" >> $env:GITHUB_PATH
           "C:\Program Files\NASM" >> $env:GITHUB_PATH
