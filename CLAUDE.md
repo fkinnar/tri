@@ -637,6 +637,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   à tester.
 - Puis, une fois corrections et ajouts finis : **licence** (`LICENSE`, `doc/licensing.md`)
   et **builds fournis** pour macOS, Linux et Windows (que personne ne doive compiler).
+  **Avancé le 19/10/2026** : licence **GPL-3.0-or-later** (`LICENSE`), version
+  **`1.0.0-alpha.1`** (alpha, dépôt privé ; la **bêta sera publique**), `README.md`,
+  `CHANGELOG.md` ; binaires **sans HEIC** ; builds par **GitHub Actions**
+  (`.github/workflows/ci.yml`, à la main ou sur tag, pour ménager les minutes) ; code
+  Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/build.md`). Restent :
+  paquets prêts à installer (`.app`, archive Linux, zip Windows), notices des
+  dépendances.
 - **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
   la V1 »).
 

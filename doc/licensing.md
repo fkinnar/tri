@@ -200,7 +200,11 @@ s'y substituer derrière la même fonction `flat::decode`.
 
 ---
 
-## 4. Choix de la licence de `tri` (à décider)
+## 4. Choix de la licence de `tri` : **GPL-3.0-or-later** (décidé le 19/10/2026)
+
+Choix de l'utilisateur : les versions modifiées et distribuées restent libres. Fichier
+`LICENSE` (texte officiel de gnu.org), champ `license` des deux `Cargo.toml`. Comparaison
+qui a servi à décider :
 
 Les deux familles sont compatibles avec les dépendances actuelles, à condition de respecter
 le §1 (liaison dynamique, pas de x265 livré si la licence est permissive).
@@ -225,10 +229,12 @@ demande l'accord de tous les contributeurs.
 
 ## 5. Avant une première publication
 
-- [ ] Choisir la licence de `tri`, ajouter `LICENSE` et le champ `license` dans `Cargo.toml`.
+- [x] Choisir la licence de `tri`, ajouter `LICENSE` et le champ `license` dans `Cargo.toml`
+      (GPL-3.0-or-later, 19/10/2026).
 - [ ] Générer le fichier des notices des crates (ex. `cargo-about`).
-- [ ] Décider du traitement de HEIF dans les binaires distribués (§3). Au minimum :
-      `--no-default-features`, ou une libheif compilée sans x265.
+- [x] Décider du traitement de HEIF dans les binaires distribués (§3) : **sans HEIC**
+      (décidé le 19/10/2026), builds sans la feature `heif` ; à rouvrir avec les décodeurs
+      du système (ImageIO, WIC).
 - [ ] Si des bibliothèques LGPL sont livrées : inclure leurs licences et un lien vers leur
       code source exact.
 - [ ] Vérifier qu'aucun binaire distribué ne contient ou ne dépend de x265.

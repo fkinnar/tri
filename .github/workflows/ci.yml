@@ -1,0 +1,79 @@
+# Compilation, vérifications et tests sur macOS, Linux et Windows, puis binaires en
+# artefacts. Lancé à la main (onglet Actions) ou à chaque version (tag v…), pas à chaque
+# envoi : dépôt privé, minutes gratuites limitées (macOS compte 10×). Voir doc/build.md.
+#
+# Binaires sans HEIC (décidé le 19/10/2026, brevets HEVC, doc/licensing.md) : sans la
+# feature `heif`, avec libjpeg-turbo.
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  FEATURES: --no-default-features --features tri/turbojpeg,tri-gui/turbojpeg
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Dépendances (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libraw-dev zlib1g-dev cmake nasm pkg-config build-essential
+
+      - name: Dépendances (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libraw cmake nasm pkg-config
+
+      # LibRaw par vcpkg (préinstallé sur les machines Windows de GitHub) : build.rs lit
+      # LIBRAW_DIR (include/, lib/), les DLL sont dans bin/ pour les tests.
+      - name: Dépendances (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          vcpkg install libraw:x64-windows
+          choco install nasm -y --no-progress
+          $root = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
+          "LIBRAW_DIR=$root" >> $env:GITHUB_ENV
+          "$root\bin" >> $env:GITHUB_PATH
+          "C:\Program Files\NASM" >> $env:GITHUB_PATH
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets ${{ env.FEATURES }} -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace ${{ env.FEATURES }}
+
+      - name: Binaires
+        run: cargo build --release --workspace ${{ env.FEATURES }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tri-${{ matrix.os }}
+          path: |
+            target/release/tri-gui
+            target/release/tri
+            target/release/tri-gui.exe
+            target/release/tri.exe
+            LICENSE
+            README.md
+            CHANGELOG.md
+          if-no-files-found: warn

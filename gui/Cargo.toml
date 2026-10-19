@@ -1,8 +1,10 @@
 [package]
 name = "tri-gui"
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 description = "Interface graphique (egui) de tri, visionneuse RAW"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/fkinnar/tri"
 
 [[bin]]
 name = "tri-gui"

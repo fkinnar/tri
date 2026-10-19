@@ -167,3 +167,16 @@ Premier passage le 19/10/2026 : tout se compile, clippy propre (une fonction de 
 réservée à Unix marquée comme telle). Restent à vérifier sur une vraie machine : la
 compilation des bibliothèques C (LibRaw via `LIBRAW_DIR`, libjpeg-turbo, libheif) et
 l'exécution (chemins, lettres de lecteur, éjection, corbeille).
+
+## Builds sur macOS, Linux et Windows : GitHub Actions (19/10/2026)
+
+`.github/workflows/ci.yml` : sur les trois systèmes, dépendances (apt, Homebrew, vcpkg
+pour LibRaw sous Windows), `cargo fmt --check`, clippy (`-D warnings`), tests, binaires
+en release, déposés en artefacts avec `LICENSE`, `README.md`, `CHANGELOG.md`. Sans HEIC
+(feature `heif` retirée : brevets HEVC, voir `licensing.md`), avec libjpeg-turbo.
+
+Lancé à la main (onglet Actions, ou `gh workflow run ci.yml`) ou à chaque version
+(`git tag v1.0.0-alpha.1 && git push --tags`), pas à chaque envoi : dépôt privé, minutes
+gratuites limitées. Restent à faire pour des versions prêtes à installer : application
+macOS (`.app` avec LibRaw et libomp dedans, noms d'installation réécrits), archive Linux
+(ou AppImage), zip Windows avec les DLL de vcpkg, et les notices des dépendances.
