@@ -1,5 +1,5 @@
 # Exemple de superposition (voir overlay.md) : à copier dans le dossier « overlays » du
-# dossier de données de tri, un fichier par superposition. La touche t les fait défiler
+# dossier de données de tri, un fichier par superposition. La touche o les fait défiler
 # en plein écran, après les grilles intégrées (tiers, nombre d'or, diagonales).
 
 # Nom affiché (défaut : le nom du fichier).

@@ -177,14 +177,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   meilleure d'une rafale par élimination) ; `Entrée` ou double-clic l'ouvre en plein écran ;
   Échap ou `c` revient à la grille. `z` : **1:1 lié**, au même point relatif de chaque
   image, déplacé ensemble (glisser n'importe laquelle, Maj + flèches) ; `b` change la
-  source de toutes ; `o` superpose les zones. Le moteur sert toutes les images comparées
+  source de toutes ; `w` superpose les zones. Le moteur sert toutes les images comparées
   (`Scheduler::set_shown`), pas seulement l'image courante et ses voisines.
 - **Sélection multiple** (17/10/2026, moteur : `tri::selection`, voir `selection.md`) :
   `Espace` marque, `v` mode visuel (plage qui suit le curseur, `v` valide, Échap annule),
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
-- **Superpositions** (`t` / `Maj+T`, 19/10/2026, voir `overlay.md`) : grilles intégrées
+- **Superpositions** (`o`, `Maj+O` orientation, comme Lightroom, 19/10/2026, voir
+  `overlay.md` ; les zones saturées / bouchées passent de `o` à `w`) : grilles intégrées
   et superpositions de l'utilisateur (texte, logo, format 4:5…), en plein écran et en
   comparaison ; nom dans la barre d'état.
 - **AirDrop** (19/10/2026, voir `send.md`) : action `plugin.airdrop.send`, bouton de
@@ -244,8 +245,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   du pointeur ; défiler déplace l'image zoomée. Au-delà de l'ajusté, c'est le 1:1 qui est
   affiché, réduit ou agrandi ; l'échelle s'affiche (« 200 % ») ; elle est gardée d'une
   image à l'autre, comme la position, et vaut aussi en comparaison. **Loupe** : en vue
-  ajustée, tant que `loupe_key` (Maj) est maintenue, après `loupe_delay_ms` (pour ne pas
-  clignoter pendant Maj+P), un carré de `loupe_size` points sous le pointeur montre
+  ajustée, tant que `loupe_key` est maintenue (`t` par défaut depuis le 19/10/2026 :
+  avec Maj, chaque raccourci Maj+… la faisait apparaître ; une touche libre ou un
+  modificateur, une touche déjà liée à une action est signalée ; `<` impossible, egui
+  n'en reçoit que le caractère), après `loupe_delay_ms` (pas de clignotement sur une
+  pression brève), un carré de `loupe_size` points sous le pointeur montre
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
   en attendant (« 100 % en cours »).
 - **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
@@ -419,7 +423,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     saturation** par défaut (`Maj+I` : linéaire), graduations, pastilles rouge / bleue si
     des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant
     saturation, parts saturées et bouchées ;
-  - **zones** superposées à l'image (`o`) : masque du moteur en texture (échantillonnage au
+  - **zones** superposées à l'image (`w`, « warnings » ; `o` jusqu'au 19/10/2026) : masque du moteur en texture (échantillonnage au
     plus proche), étiré sur l'image (aussi à 100 %). Saturé **par canal** (demandé le
     17/10/2026, comme FastRawViewer) : un seul canal → sa couleur (`clip_red`,
     `clip_green`, `clip_blue`), deux canaux → couleurs additionnées (rouge + vert =
@@ -800,7 +804,7 @@ lecture en fond (64 × 48), `Maj+M` masque le panneau.
 
 Exposition (17/10/2026) : une image blanche ajoutée au dossier donne une part saturée
 > 99 % (badge) ; en plein écran, histogramme affiché par défaut, `i` le masque, `Maj+I`
-passe en linéaire, `o` affiche les zones (masque en texture). Unitaires (`histogram.rs`) :
+passe en linéaire, `w` affiche les zones (masque en texture). Unitaires (`histogram.rs`) :
 regroupement en colonnes sans perte de pixel, placement en IL (blanc dans la dernière
 colonne, noir dans la première), couleurs du masque, nombres à la française.
 

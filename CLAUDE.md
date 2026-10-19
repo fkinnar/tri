@@ -595,7 +595,8 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   dans le vide) pour une vue d'ensemble des piles.
 - [x] **Deux premiers plugins** (19/10/2026, pour éprouver l'architecture) :
   superpositions (`src/overlay.rs` : grilles en Rust, et fichiers TOML de l'utilisateur
-  — texte, logo, format 4:5 —, `t`) et envoi par **AirDrop** (`src/send.rs`,
+  — texte, logo, format 4:5 —, `o` et `Maj+O` comme Lightroom ; zones d'exposition
+  déplacées sur `w`) et envoi par **AirDrop** (`src/send.rs`,
   `NSSharingService`, action `plugin.airdrop.send`). Choix discuté : traits Rust
   statiques pour le cœur ; plus tard, pour les plugins des utilisateurs (IA en Python…),
   un **processus externe parlant JSON** (n'importe quel langage, isolé, « JSON à la
@@ -768,8 +769,9 @@ explicitement par l'utilisateur comme important.
 ### Affichage
 - [x] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 % (fait
       le 18/10/2026).
-- [x] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée (Maj maintenue,
-      fait le 18/10/2026).
+- [x] **Loupe à 100 %** sous le pointeur, sans quitter la vue ajustée (fait le
+      18/10/2026 avec Maj ; `t` maintenue depuis le 19/10/2026, Maj gênait les
+      raccourcis Maj+…, touche réglable).
 - [x] **Retouches demandées le 17/10/2026 au soir (pour le 18/10)**, faites le 18/10 :
       icône Actualiser, grand histogramme déplaçable, courbe lissée (classes + noyau
       gaussien), pastilles au-delà de 0,1 % des pixels :

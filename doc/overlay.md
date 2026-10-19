@@ -53,8 +53,10 @@ une grille après un cadre est celle du recadrage.
 
 ## Dans l'interface
 
-`t` : superposition suivante (aucune, tiers, nombre d'or, spirale, diagonales, puis celles de
-l'utilisateur), `Maj+T` : précédente ; son nom dans la barre d'état. En plein écran et en
+`o` : superposition suivante (aucune, tiers, nombre d'or, spirale, diagonales, puis celles de
+l'utilisateur), comme dans Lightroom ; son nom dans la barre d'état. `Maj+O` fait tourner
+les lignes (l'œil de la spirale passe d'un coin à l'autre, 4 orientations, gardées d'une
+image à l'autre) ; un texte ou un logo ne se retournent pas. En plein écran et en
 comparaison, sous le repère du collimateur. Traits de `[gui.view] overlay_line_width`
 points, avec un liseré sombre ; logos chargés une fois (rechargés si les fichiers sont
 relus).

@@ -221,11 +221,13 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
-    /// Superpositions (t) : grilles intégrées et celles de l'utilisateur, relues à chaque
+    /// Superpositions (o) : grilles intégrées et celles de l'utilisateur, relues à chaque
     /// changement (un fichier modifié se voit à la pression suivante) ; celle affichée
     /// (0 : aucune) ; logos chargés (`None` : illisible).
     overlays: Vec<Box<dyn tri::overlay::Overlay>>,
     overlay: usize,
+    /// Orientation des lignes des superpositions (Maj+O), gardée d'une image à l'autre.
+    overlay_flip: tri::overlay::Flip,
     overlay_textures: HashMap<PathBuf, Option<egui::TextureHandle>>,
     /// Défilement de l'aide (tests).
     #[cfg(test)]
@@ -490,6 +492,7 @@ impl TriApp {
             cursor_hidden: false,
             overlays: Vec::new(),
             overlay: 0,
+            overlay_flip: tri::overlay::Flip::None,
             overlay_textures: HashMap::new(),
             #[cfg(test)]
             help_offset: 0.0,
@@ -1872,8 +1875,12 @@ impl TriApp {
             Action::Compare => self.start_compare(),
             Action::TogglePeaking => self.peaking = !self.peaking,
             Action::ToggleFocusPoint => self.focus_point = !self.focus_point,
-            Action::OverlayNext => self.cycle_overlay(true),
-            Action::OverlayPrev => self.cycle_overlay(false),
+            Action::OverlayNext => self.cycle_overlay(),
+            Action::OverlayOrient => {
+                self.overlay_flip = self.overlay_flip.next();
+                let rank = self.overlay_flip.rank();
+                self.notice = Some((t!("overlay-orientation", n = rank), false));
+            }
             Action::PeakingColor => {
                 // Changer de couleur montre la carte si elle était masquée.
                 let n = self.gui.sharpness.colors.len().max(1);
@@ -2671,15 +2678,10 @@ impl TriApp {
         error
     }
 
-    /// Superposition suivante (ou précédente) ; aucune entre la dernière et la première.
-    fn cycle_overlay(&mut self, forward: bool) {
+    /// Superposition suivante ; aucune après la dernière.
+    fn cycle_overlay(&mut self) {
         let error = self.reload_overlays();
-        let n = self.overlays.len() + 1;
-        self.overlay = if forward {
-            (self.overlay + 1) % n
-        } else {
-            (self.overlay + n - 1) % n
-        };
+        self.overlay = (self.overlay + 1) % (self.overlays.len() + 1);
         self.notice = Some(match error {
             Some(e) => (e, true),
             None => match self
@@ -2714,6 +2716,8 @@ impl TriApp {
         for shape in shapes {
             match shape {
                 tri::overlay::Shape::Line { from, to, color: c } => {
+                    // Lignes seulement : un texte ou un logo ne se retournent pas.
+                    let (from, to) = (self.overlay_flip.apply(from), self.overlay_flip.apply(to));
                     // Liseré sombre dessous : lisible sur un ciel comme sur une ombre.
                     let shadow = Color32::from_black_alpha(c.0[3] / 3);
                     painter
@@ -3073,12 +3077,7 @@ impl TriApp {
         image_rect: Option<Rect>,
     ) {
         let z = self.gui.zoom.clone();
-        let held = ctx.input(|i| match z.loupe_key {
-            crate::settings::LoupeKey::Shift => i.modifiers.shift,
-            crate::settings::LoupeKey::Ctrl => i.modifiers.ctrl,
-            crate::settings::LoupeKey::Alt => i.modifiers.alt,
-            crate::settings::LoupeKey::None => false,
-        });
+        let held = ctx.input(|i| z.loupe_key.held(i));
         let pointer = ctx.input(|i| i.pointer.hover_pos());
         let over = match (image_rect, pointer) {
             (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
@@ -6342,7 +6341,7 @@ mod tests {
         )
         .unwrap();
         press(&mut h, Key::Enter, Modifiers::NONE);
-        press(&mut h, Key::T, Modifiers::NONE);
+        press(&mut h, Key::O, Modifiers::NONE);
         assert_eq!(h.state().overlay, 1);
         // Un fichier mal écrit est signalé (les autres restent utilisables).
         let notice = h.state().notice.clone().unwrap();
@@ -6350,13 +6349,19 @@ mod tests {
         // Quatre grilles intégrées, puis le fichier de l'utilisateur, puis aucune.
         assert_eq!(h.state().overlays.len(), 5);
         for _ in 0..4 {
-            press(&mut h, Key::T, Modifiers::NONE);
+            press(&mut h, Key::O, Modifiers::NONE);
         }
         assert_eq!(h.state().overlays[h.state().overlay - 1].name(), "Insta");
-        press(&mut h, Key::T, Modifiers::NONE);
+        press(&mut h, Key::O, Modifiers::NONE);
         assert_eq!(h.state().overlay, 0, "après la dernière : aucune");
-        press(&mut h, Key::T, Modifiers::SHIFT);
-        assert_eq!(h.state().overlay, 5, "Maj+T : en arrière");
+        // Maj+O : quatre orientations, puis retour au départ.
+        press(&mut h, Key::O, Modifiers::SHIFT);
+        assert_eq!(h.state().overlay_flip, tri::overlay::Flip::X);
+        assert!(h.state().notice.as_ref().unwrap().0.contains("2 / 4"));
+        for _ in 0..3 {
+            press(&mut h, Key::O, Modifiers::SHIFT);
+        }
+        assert_eq!(h.state().overlay_flip, tri::overlay::Flip::None);
     }
 
     #[test]
@@ -7634,7 +7639,7 @@ mod tests {
         h.event(UiEvent::Zoom(1000.0));
         h.run_steps(3);
         assert_eq!(h.state().zoom_scale, h.state().gui.zoom.max, "plafonné");
-        // Loupe : Maj maintenue, en vue ajustée.
+        // Loupe : `t` maintenue (défaut), en vue ajustée ; Maj ne la montre plus.
         press(&mut h, Key::Z, Modifiers::NONE);
         if h.state().zoom.is_some() {
             press(&mut h, Key::Z, Modifiers::NONE);
@@ -7643,8 +7648,19 @@ mod tests {
         h.event(UiEvent::ModifiersChanged(Modifiers::SHIFT));
         h.hover_at(center + vec2(1.0, 0.0));
         h.run_steps(3);
-        assert!(h.state().loupe_on, "loupe");
+        assert!(!h.state().loupe_on, "Maj : plus de loupe");
         h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        let key = |pressed| UiEvent::Key {
+            key: Key::T,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        h.event(key(true));
+        h.run_steps(3);
+        assert!(h.state().loupe_on, "loupe");
+        h.event(key(false));
         h.run_steps(3);
         assert!(!h.state().loupe_on, "lâchée");
     }
@@ -7718,8 +7734,8 @@ mod tests {
             "Maj+I : linéaire"
         );
         assert!(!h.state().clipping);
-        press(&mut h, Key::O, Modifiers::NONE);
-        assert!(h.state().clipping, "o : zones");
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert!(h.state().clipping, "w : zones");
         h.run_steps(2);
         assert!(
             h.state().mask_textures.contains(&white_path),

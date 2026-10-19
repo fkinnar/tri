@@ -224,7 +224,30 @@ pub enum Flip {
 }
 
 impl Flip {
-    fn apply(self, p: [f32; 2]) -> [f32; 2] {
+    /// Orientation suivante : l'œil de la spirale passe d'un coin au suivant, dans le
+    /// sens des aiguilles d'une montre (aucune, miroir gauche / droite, demi-tour, miroir
+    /// haut / bas).
+    pub fn next(self) -> Flip {
+        match self {
+            Flip::None => Flip::X,
+            Flip::X => Flip::Xy,
+            Flip::Xy => Flip::Y,
+            Flip::Y => Flip::None,
+        }
+    }
+
+    /// Rang de l'orientation, de 1 à 4 (affichage).
+    pub fn rank(self) -> usize {
+        match self {
+            Flip::None => 1,
+            Flip::X => 2,
+            Flip::Xy => 3,
+            Flip::Y => 4,
+        }
+    }
+
+    /// Point retourné.
+    pub fn apply(self, p: [f32; 2]) -> [f32; 2] {
         match self {
             Flip::None => p,
             Flip::X => [1.0 - p[0], p[1]],

@@ -201,8 +201,8 @@ pub enum Action {
     ToggleFocusPoint,
     /// Superposition suivante (aucune, grilles, celles de l'utilisateur).
     OverlayNext,
-    /// Superposition précédente.
-    OverlayPrev,
+    /// Orientation des lignes de la superposition (œil de la spirale d'un coin à l'autre).
+    OverlayOrient,
     /// Sélectionner / désélectionner l'image courante.
     SelectToggle,
     /// Mode visuel : la plage suit l'image courante.
@@ -393,7 +393,7 @@ impl Action {
         Action::PeakingColor,
         Action::ToggleFocusPoint,
         Action::OverlayNext,
-        Action::OverlayPrev,
+        Action::OverlayOrient,
         Action::SelectAll,
         Action::SelectClear,
         Action::FileRename,
@@ -518,7 +518,7 @@ impl Action {
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint | OverlayNext
-            | OverlayPrev => Group::View,
+            | OverlayOrient => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -580,7 +580,7 @@ impl Action {
             Action::PeakingColor => "core.view.peaking_color",
             Action::ToggleFocusPoint => "core.view.focus_point",
             Action::OverlayNext => "core.view.overlay",
-            Action::OverlayPrev => "core.view.overlay_prev",
+            Action::OverlayOrient => "core.view.overlay_orient",
             Action::SelectToggle => "core.select.toggle",
             Action::SelectVisual => "core.select.visual",
             Action::SelectAll => "core.select.all",
@@ -1079,13 +1079,16 @@ const RATING: &[Binding] = {
         (&[shifted(Key::I)], HistogramScale),
         (&[shifted(Key::E)], HistogramLarge),
         (&[shifted(Key::C)], HistogramChannel),
-        (&[plain(Key::O)], ToggleClipping),
+        // Zones saturées / bouchées : `w` (« warnings », alertes ; `o` est aux superpositions,
+        // comme dans Lightroom, retour du 19/10/2026).
+        (&[plain(Key::W)], ToggleClipping),
         (&[plain(Key::P)], TogglePeaking),
         (&[ctrl(Key::P)], PeakingColor),
         (&[plain(Key::M)], ToggleFocusPoint),
-        // Superpositions (« tracé ») : grilles, puis celles de l'utilisateur.
-        (&[plain(Key::T)], OverlayNext),
-        (&[shifted(Key::T)], OverlayPrev),
+        // Superpositions, comme Lightroom : `o` la suivante (grilles, puis celles de
+        // l'utilisateur), Maj+O fait tourner la spirale (et les autres lignes).
+        (&[plain(Key::O)], OverlayNext),
+        (&[shifted(Key::O)], OverlayOrient),
         (&[shifted(Key::M)], ToggleMetadata),
     ]
 };
@@ -1319,6 +1322,14 @@ impl Keymap {
         self.focus = focus;
     }
 
+    /// Vrai si `key` seule (sans modificateur) déclenche une action ou commence une
+    /// séquence, dans le panneau des images.
+    pub fn binds(&self, key: Key) -> bool {
+        let mut images = self.clone();
+        images.focus = Scope::Images;
+        images.lookup(&[plain(key)]) != Lookup::None
+    }
+
     fn lookup(&self, keys: &[Chord]) -> Lookup {
         let usable = |a: &Action| a.scope().is_none_or(|s| s == self.focus);
         // Une touche du panneau actif l'emporte sur une action générale.
@@ -1407,7 +1418,7 @@ impl Keymap {
 /// Touche désignée par `name` : nom affiché par l'aide (« Flèche gauche », « Échap »,
 /// « g »), ou nom d'egui (« ArrowLeft », « Escape », « PageUp », « 1 »...), sans tenir
 /// compte de la casse.
-fn key_named(name: &str) -> Option<Key> {
+pub fn key_named(name: &str) -> Option<Key> {
     let lower = name.to_lowercase();
     // Noms de toutes les langues : une configuration reste valable si la langue change.
     Key::ALL
@@ -1788,7 +1799,7 @@ mod tests {
         assert_eq!(km.action(Key::J, none), Some(Action::NavDown));
         assert_eq!(km.action(Key::G, none), None, "g seul : début de « gg »");
         assert_eq!(km.action(Key::G, Modifiers::SHIFT), Some(Action::NavLast));
-        assert_eq!(km.action(Key::W, none), None, "touche libre");
+        assert_eq!(km.action(Key::T, none), None, "touche libre");
     }
 
     #[test]

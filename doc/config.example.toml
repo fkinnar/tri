@@ -338,7 +338,7 @@ zoom_on_focus_point = true
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
-# Superpositions (t / Maj+T, voir overlay.md) : épaisseur des traits (points) ; opacité
+# Superpositions (o, Maj+O pour l'orientation, voir overlay.md) : épaisseur des traits (points) ; opacité
 # des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
 overlay_line_width = 1.0
 overlay_opacity = 0.6
@@ -351,10 +351,12 @@ overlay_opacity = 0.6
 steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
 max = 4.0
 min = 0.1
-# Loupe, en vue ajustée : tant que cette touche est maintenue ("shift", "ctrl", "alt" ou
-# "none" : pas de loupe), l'image à 100 % (loupe_scale) sous le pointeur, dans un carré de
-# loupe_size points, après loupe_delay_ms (pour ne pas clignoter pendant Maj+P).
-loupe_key = "shift"
+# Loupe, en vue ajustée : tant que cette touche est maintenue (une touche libre, écrite
+# comme dans [keys] : "t", "F3"… ; ou "shift", "ctrl", "alt" ; "none" : pas de loupe),
+# l'image à 100 % (loupe_scale) sous le pointeur, dans un carré de loupe_size points,
+# après loupe_delay_ms (pour ne pas clignoter sur une pression brève). Une touche déjà
+# liée à une action est signalée.
+loupe_key = "t"
 loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 1.0

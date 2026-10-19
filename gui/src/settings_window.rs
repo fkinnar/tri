@@ -99,7 +99,6 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("xmp", "sidecar") => &["darktable", "adobe"],
         ("i18n", "language") => &["auto", "fr", "en"],
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
-        ("gui.zoom", "loupe_key") => &["shift", "ctrl", "alt", "none"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })
@@ -881,7 +880,6 @@ mod tests {
             ("xmp", "sidecar"),
             ("i18n", "language"),
             ("gui.view", "focus_marker"),
-            ("gui.zoom", "loupe_key"),
             ("gui.histogram", "scale"),
         ] {
             assert!(schema.default_of(section, key).is_some(), "{section}.{key}");

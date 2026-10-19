@@ -92,6 +92,13 @@ impl AppSettings {
         };
         let (keymap, more) = keymap.with_overrides(&self.keys);
         warnings.extend(more);
+        // Touche de loupe aussi liée à une action : les deux se gêneraient.
+        if let LoupeKey::Key(key) = self.gui.zoom.loupe_key
+            && keymap.binds(key)
+        {
+            let name = crate::actions::key_label(key);
+            warnings.push(t!("loupe-key-taken", key = name));
+        }
         (keymap, warnings)
     }
 }
@@ -364,12 +371,12 @@ impl Default for CompareSettings {
     }
 }
 
-/// Touche à maintenir pour la loupe.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// Touche à maintenir pour la loupe : un modificateur, ou une touche ordinaire (retour du
+/// 19/10/2026 : avec Maj, chaque raccourci Maj+… faisait apparaître la loupe ; `t` par
+/// défaut, libre dans les deux jeux de raccourcis).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoupeKey {
     /// Maj.
-    #[default]
     Shift,
     /// Ctrl.
     Ctrl,
@@ -377,6 +384,42 @@ pub enum LoupeKey {
     Alt,
     /// Pas de loupe.
     None,
+    /// Une touche (nom comme dans `[keys]` : « t », « Espace », « F3 »).
+    Key(egui::Key),
+}
+
+impl Default for LoupeKey {
+    fn default() -> Self {
+        LoupeKey::Key(egui::Key::T)
+    }
+}
+
+impl<'de> Deserialize<'de> for LoupeKey {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(d)?;
+        Ok(match name.to_lowercase().as_str() {
+            "shift" => LoupeKey::Shift,
+            "ctrl" => LoupeKey::Ctrl,
+            "alt" => LoupeKey::Alt,
+            "none" => LoupeKey::None,
+            _ => LoupeKey::Key(crate::actions::key_named(&name).ok_or_else(|| {
+                serde::de::Error::custom(t!("loupe-key-unknown", key = name.as_str()))
+            })?),
+        })
+    }
+}
+
+impl LoupeKey {
+    /// Vrai si la touche est maintenue dans `input`.
+    pub fn held(self, input: &egui::InputState) -> bool {
+        match self {
+            LoupeKey::Shift => input.modifiers.shift,
+            LoupeKey::Ctrl => input.modifiers.ctrl,
+            LoupeKey::Alt => input.modifiers.alt,
+            LoupeKey::None => false,
+            LoupeKey::Key(key) => input.key_down(key),
+        }
+    }
 }
 
 /// Section `[gui.zoom]` : zoom continu et loupe (décidé le 18/10/2026).
@@ -406,7 +449,7 @@ impl Default for ZoomSettings {
             steps: vec![0.125, 0.25, 0.5, 1.0, 2.0, 4.0],
             max: 4.0,
             min: 0.1,
-            loupe_key: LoupeKey::Shift,
+            loupe_key: LoupeKey::default(),
             loupe_delay_ms: 150,
             loupe_size: 320.0,
             loupe_scale: 1.0,
@@ -448,7 +491,7 @@ pub struct ViewSettings {
     /// Mode pile (plein écran) : au bout de la pile, ← / → repartent de l'autre bout
     /// (sinon on s'arrête).
     pub stack_wrap: bool,
-    /// Superpositions (t) : épaisseur des traits (points).
+    /// Superpositions (o) : épaisseur des traits (points).
     pub overlay_line_width: f32,
     /// Grilles intégrées (tiers, nombre d'or, diagonales) : opacité des lignes.
     pub overlay_opacity: f32,
@@ -907,6 +950,32 @@ mod tests {
             AppSettings::default().keymap().1.is_empty(),
             "défauts sans conflit"
         );
+    }
+
+    #[test]
+    fn the_loupe_key_is_a_modifier_or_any_key() {
+        let parse = |v: &str| {
+            tri::settings::parse::<AppSettings>(&format!("[gui.zoom]\nloupe_key = \"{v}\"\n"))
+                .map(|s| s.gui.zoom.loupe_key)
+        };
+        assert_eq!(parse("t"), Ok(LoupeKey::Key(egui::Key::T)));
+        assert_eq!(parse("F3"), Ok(LoupeKey::Key(egui::Key::F3)));
+        assert_eq!(parse("shift"), Ok(LoupeKey::Shift));
+        assert_eq!(parse("none"), Ok(LoupeKey::None));
+        assert!(
+            parse("touche-magique")
+                .unwrap_err()
+                .contains("touche-magique")
+        );
+        assert_eq!(
+            ZoomSettings::default().loupe_key,
+            LoupeKey::Key(egui::Key::T)
+        );
+        // Libre par défaut ; une touche déjà prise est signalée.
+        assert!(AppSettings::default().keymap().1.is_empty());
+        let mut taken = AppSettings::default();
+        taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::O);
+        assert_eq!(taken.keymap().1.len(), 1, "o : superpositions");
     }
 
     #[test]

@@ -85,7 +85,7 @@ pub fn navigate(
         | Action::PeakingColor
         | Action::ToggleFocusPoint
         | Action::OverlayNext
-        | Action::OverlayPrev
+        | Action::OverlayOrient
         | Action::SelectVisual
         | Action::SelectAll
         | Action::SelectClear
