@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -435,7 +435,7 @@ pub fn export(
     }
     let (args, conf) = profile.darktable_args().map_err(DevelopError::Failed)?;
     std::fs::create_dir_all(&dt.config_dir).map_err(|e| DevelopError::Failed(e.to_string()))?;
-    let mut cmd = Command::new(&dt.cli);
+    let mut cmd = dt.cli.command();
     for image in &images {
         cmd.arg("--import").arg(image);
     }

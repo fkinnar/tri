@@ -19,8 +19,9 @@ use std::time::Duration;
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DevelopSettings {
-    /// `darktable-cli` : `"auto"` (cherché dans le `PATH` et aux emplacements habituels),
-    /// un chemin, ou `""` (pas de rendu darktable).
+    /// `darktable-cli` : `"auto"` (cherché dans le `PATH`, aux emplacements habituels,
+    /// puis en Flatpak sous Linux), un chemin, `"flatpak"` (celui du Flatpak
+    /// `org.darktable.Darktable`), ou `""` (pas de rendu darktable).
     pub darktable: String,
     /// Rendu darktable en haute qualité (`--hq`) : un peu plus fidèle, un peu plus lent.
     pub high_quality: bool,
@@ -44,36 +45,95 @@ fn darktable_defaults(os: &str) -> Vec<PathBuf> {
         "windows" => vec![PathBuf::from(
             r"C:\Program Files\darktable\bin\darktable-cli.exe",
         )],
+        // Le lanceur Flatpak exporté (`/var/lib/flatpak/exports/bin/…`) ouvre l'interface
+        // de darktable, pas `darktable-cli` : le Flatpak passe par `flatpak()`.
         _ => vec![
             PathBuf::from("/usr/bin/darktable-cli"),
             PathBuf::from("/usr/local/bin/darktable-cli"),
-            PathBuf::from("/var/lib/flatpak/exports/bin/org.darktable.Darktable"),
         ],
     }
 }
 
+/// Comment lancer `darktable-cli` : un programme, et des arguments à mettre devant les
+/// nôtres (Flatpak : `flatpak run --command=darktable-cli org.darktable.Darktable`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cli {
+    /// Programme lancé.
+    pub program: PathBuf,
+    /// Arguments placés avant ceux de `tri`.
+    pub args: Vec<String>,
+}
+
+impl Cli {
+    /// `darktable-cli` installé normalement (paquet, `.app`, installeur).
+    pub fn native(path: PathBuf) -> Cli {
+        Cli {
+            program: path,
+            args: Vec::new(),
+        }
+    }
+
+    /// La commande, prête à recevoir les arguments de `tri`.
+    pub fn command(&self) -> Command {
+        let mut cmd = Command::new(&self.program);
+        cmd.args(&self.args);
+        cmd
+    }
+}
+
+/// Identifiant Flatpak de darktable (Flathub).
+pub const FLATPAK_APP: &str = "org.darktable.Darktable";
+
+/// darktable en Flatpak (installation système ou utilisateur), s'il est installé : le
+/// Gestionnaire de logiciels de Linux Mint l'installe ainsi (constaté le 19/10/2026), sans
+/// `darktable-cli` dans le `PATH`.
+fn flatpak() -> Option<Cli> {
+    let installed = Command::new("flatpak")
+        .args(["info", FLATPAK_APP])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    installed.then(|| Cli {
+        program: PathBuf::from("flatpak"),
+        args: vec![
+            "run".into(),
+            "--command=darktable-cli".into(),
+            FLATPAK_APP.into(),
+        ],
+    })
+}
+
 /// `darktable-cli` selon le réglage `setting` (voir [`DevelopSettings::darktable`]) :
 /// `None` s'il est désactivé ou introuvable.
-pub fn find_darktable(setting: &str) -> Option<PathBuf> {
+pub fn find_darktable(setting: &str) -> Option<Cli> {
     let setting = setting.trim();
-    if setting.is_empty() {
-        return None;
-    }
-    if setting != "auto" {
-        let path = PathBuf::from(setting);
-        return path.is_file().then_some(path);
+    match setting {
+        "" => return None,
+        "flatpak" => return flatpak(),
+        "auto" => {}
+        path => {
+            let path = PathBuf::from(path);
+            return path.is_file().then(|| Cli::native(path));
+        }
     }
     let exe = if cfg!(windows) {
         "darktable-cli.exe"
     } else {
         "darktable-cli"
     };
-    std::env::var_os("PATH")
+    let native = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
         .map(|dir| dir.join(exe))
         .chain(darktable_defaults(std::env::consts::OS))
         .find(|p| p.is_file())
+        .map(Cli::native);
+    if native.is_some() || !cfg!(target_os = "linux") {
+        return native;
+    }
+    flatpak()
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il porte un vrai développement : un
@@ -145,7 +205,7 @@ impl std::error::Error for DevelopError {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Darktable {
     /// `darktable-cli` ([`find_darktable`]).
-    pub cli: PathBuf,
+    pub cli: Cli,
     /// Configuration propre à `tri` (dans son cache) : jamais celle de l'utilisateur.
     pub config_dir: PathBuf,
     /// Haute qualité (`--hq`).
@@ -179,7 +239,9 @@ fn render_darktable(
     std::fs::create_dir_all(&dt.config_dir).map_err(|e| DevelopError::Failed(e.to_string()))?;
     let _ = std::fs::remove_file(out);
     let side = side.to_string();
-    let mut child = Command::new(&dt.cli)
+    let mut child = dt
+        .cli
+        .command()
         .arg(image)
         .arg(sidecar)
         .arg(out)
@@ -258,9 +320,21 @@ mod tests {
         assert_eq!(find_darktable(""), None, "désactivé");
         assert_eq!(find_darktable("/nulle/part/darktable-cli"), None);
         // « auto » : trouvé seulement s'il est installé ; jamais d'erreur.
-        if let Some(path) = find_darktable("auto") {
-            assert!(path.is_file());
+        if let Some(cli) = find_darktable("auto") {
+            assert!(cli.args.is_empty() == cli.program.is_file(), "{cli:?}");
         }
+        // Flatpak : arguments devant ceux de tri.
+        let flatpak = Cli {
+            program: "flatpak".into(),
+            args: vec![
+                "run".into(),
+                "--command=darktable-cli".into(),
+                FLATPAK_APP.into(),
+            ],
+        };
+        let cmd = flatpak.command();
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args, ["run", "--command=darktable-cli", FLATPAK_APP]);
     }
 
     /// Rendu réel : seulement si darktable est installé et `TRI_TEST_DARKTABLE_RAW` désigne

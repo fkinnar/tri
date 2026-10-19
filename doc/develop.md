@@ -17,7 +17,15 @@ tomber `tri`, et sa licence reste la sienne. RawTherapee (`rawtherapee-cli`, pro
 
 - `find_darktable(réglage)` : `[develop] darktable` = `"auto"` (le `PATH`, puis les
   emplacements habituels : `/Applications/darktable.app/…` sur macOS, `/usr/bin` sous
-  Linux, `Program Files` sous Windows), un chemin, ou `""` (jamais).
+  Linux, `Program Files` sous Windows), un chemin, ou `""` (jamais). Sous Linux, s'il
+  n'est pas trouvé : le **Flatpak** `org.darktable.Darktable` (installation système ou
+  utilisateur, `flatpak info`), lancé par `flatpak run --command=darktable-cli
+  org.darktable.Darktable` (`Cli` : programme et arguments placés devant ceux de `tri`) ;
+  `"flatpak"` le choisit d'office. Constaté le 19/10/2026 sur Linux Mint : le Gestionnaire
+  de logiciels installe darktable en Flatpak, sans `darktable-cli` dans le `PATH` (et son
+  lanceur exporté ouvre l'interface, pas `darktable-cli`). Le Flatpak doit pouvoir lire
+  les images et le cache de `tri` (dossier personnel) : à vérifier pour des images hors
+  du dossier personnel.
 - `darktable_sidecar(image)` : `IMAGE.RAF.xmp`, **seulement s'il porte un vrai
   développement** (`darktable:history_end` > 0) : un sidecar écrit par `tri` seul (notes)
   n'en a pas.
