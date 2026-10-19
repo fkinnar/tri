@@ -391,8 +391,8 @@ impl TriApp {
         if new.i18n.language != self.settings.i18n.language {
             crate::i18n::init(new.i18n.language);
         }
-        if new.gui.theme != self.gui.theme {
-            ctx.set_theme(new.gui.theme);
+        if new.gui.theme != self.gui.theme || new.gui.colors != self.gui.colors {
+            new.gui.theme.apply(ctx, &new.gui.colors);
         }
         let (keymap, warnings) = new.keymap();
         self.keymap = keymap;
@@ -3151,7 +3151,7 @@ impl TriApp {
             let id = ui.scope_id().with(("compare", &file.path));
             let response = ui.interact(rect, id, Sense::click_and_drag());
             let painter = ui.painter_at(rect);
-            painter.rect_filled(rect, 0.0, self.gui.colors.view_background);
+            painter.rect_filled(rect, 0.0, self.gui.theme.view_background(&self.gui.colors));
             let zoom_level = view::zoom_level(file.kind, self.source);
             let desired = view::pick(file.kind, self.source, zoomed, |l| self.ready(index, l));
             let shown = view::pick(file.kind, self.source, zoomed, |l| {
@@ -3378,7 +3378,11 @@ impl TriApp {
         let whole = Rect::from_min_size(pos - vec2(point.x * size.x, point.y * size.y), size);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         let clipped = painter.with_clip_rect(square);
-        clipped.rect_filled(square, 0.0, self.gui.colors.view_background);
+        clipped.rect_filled(
+            square,
+            0.0,
+            self.gui.theme.view_background(&self.gui.colors),
+        );
         clipped.image(texture, whole, uv, Color32::WHITE);
         painter.rect_stroke(
             square,
@@ -3422,7 +3426,11 @@ impl TriApp {
         let (view_rect, response) =
             ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         let painter = ui.painter_at(view_rect);
-        painter.rect_filled(view_rect, 0.0, self.gui.colors.view_background);
+        painter.rect_filled(
+            view_rect,
+            0.0,
+            self.gui.theme.view_background(&self.gui.colors),
+        );
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
 
         // Texture à afficher, et dimensions d'origine (pixels) de l'image qu'elle représente.
@@ -4907,11 +4915,8 @@ impl TriApp {
             // Piles actives : deux gris en alternance d'un groupe au suivant, une photo
             // isolée formant un groupe d'une image (retours du 18/10/2026 : cadres et
             // traits ne se lisaient pas ; « pourquoi 3 cas quand 2 suffisent »).
-            Color32::from(if group % 2 == 1 {
-                colors.stack_band
-            } else {
-                colors.stack_band_alt
-            })
+            let (band, alt) = self.gui.theme.stack_bands(&colors);
+            if group % 2 == 1 { band } else { alt }
         } else {
             visuals.extreme_bg_color
         };
@@ -5780,7 +5785,12 @@ impl eframe::App for TriApp {
         if self.filter_bar && self.mode == Mode::Grid && self.error.is_none() {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
-        egui::CentralPanel::default().show(ui, |ui| {
+        // Fond central : gris neutre avec ce thème (grille et plein écran).
+        let mut central = egui::CentralPanel::default();
+        if let Some(fill) = self.gui.theme.center(&self.gui.colors) {
+            central = central.frame(egui::Frame::central_panel(ui.style()).fill(fill));
+        }
+        central.show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {

@@ -226,7 +226,9 @@ language = "auto"
 # dir = "/chemin/vers/données"
 
 [gui]
-# "dark", "light" ou "system".
+# "dark", "light", "system" ou "neutral" (gris neutre, façon Lightroom : panneaux gris
+# foncé, fond central gris neutre, qui ne fausse pas le jugement des images ; couleurs :
+# [gui.colors] neutral_*).
 theme = "dark"
 # Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, Ctrl+C / Ctrl+X copier /
 # déplacer vers, Ctrl+Z / Ctrl+Y), "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, dw / yw,
@@ -493,6 +495,13 @@ blur_drop = "#6eaae6"
 # (une photo isolée est un groupe d'une image).
 stack_band = "#383838"
 stack_band_alt = "#181818"
+# Thème gris neutre (theme = "neutral") : panneaux, fond central, cellules de la grille,
+# fonds des piles (un groupe sur deux, l'autre).
+neutral_panel = "#2e2e2e"
+neutral_center = "#505050"
+neutral_cell = "#5e5e5e"
+neutral_stack_band = "#6e6e6e"
+neutral_stack_band_alt = "#464646"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
 stack_mark = "#8c8c8c"
 badge = "#78aae6"

@@ -88,7 +88,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             trace::trace(|| "fenêtre ouverte".into());
-            cc.egui_ctx.set_theme(settings.gui.theme);
+            settings.gui.theme.apply(&cc.egui_ctx, &settings.gui.colors);
             // Fichier de la fenêtre de réglages : celui lu, sinon celui demandé ou
             // l'emplacement par défaut (créé au premier changement).
             let path = loaded.path.or(config).or_else(tri::settings::default_path);

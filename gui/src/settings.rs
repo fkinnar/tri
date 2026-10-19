@@ -243,6 +243,56 @@ pub enum Theme {
     Light,
     /// Celui du système.
     System,
+    /// Gris neutre (idée de l'utilisateur, 19/10/2026, façon Lightroom) : panneaux gris
+    /// foncé, fond central gris neutre, qui ne fausse pas le jugement des images comme un
+    /// fond noir (plus claires et plus contrastées qu'elles ne sont). Couleurs :
+    /// `[gui.colors] neutral_*`.
+    Neutral,
+}
+
+impl Theme {
+    /// Applique le thème à `ctx` : le gris neutre retouche les fonds du thème sombre
+    /// d'egui ; les autres thèmes les remettent d'origine (rien d'autre n'est touché).
+    pub fn apply(self, ctx: &egui::Context, colors: &Colors) {
+        ctx.set_theme(self);
+        let dark = egui::Visuals::dark();
+        ctx.style_mut_of(egui::Theme::Dark, |style| {
+            let v = &mut style.visuals;
+            if self == Theme::Neutral {
+                v.panel_fill = colors.neutral_panel.into();
+                v.window_fill = colors.neutral_panel.into();
+                v.extreme_bg_color = colors.neutral_cell.into();
+            } else {
+                v.panel_fill = dark.panel_fill;
+                v.window_fill = dark.window_fill;
+                v.extreme_bg_color = dark.extreme_bg_color;
+            }
+        });
+    }
+
+    /// Fond central (grille, plein écran) : gris neutre pour ce thème, sinon celui du
+    /// thème.
+    pub fn center(self, colors: &Colors) -> Option<Color32> {
+        (self == Theme::Neutral).then(|| colors.neutral_center.into())
+    }
+
+    /// Fond du plein écran, de la comparaison et de la loupe : le gris central pour ce
+    /// thème, sinon `view_background`.
+    pub fn view_background(self, colors: &Colors) -> Color32 {
+        self.center(colors).unwrap_or(colors.view_background.into())
+    }
+
+    /// Fonds des piles (un groupe sur deux, l'autre) : accordés au thème.
+    pub fn stack_bands(self, colors: &Colors) -> (Color32, Color32) {
+        if self == Theme::Neutral {
+            (
+                colors.neutral_stack_band.into(),
+                colors.neutral_stack_band_alt.into(),
+            )
+        } else {
+            (colors.stack_band.into(), colors.stack_band_alt.into())
+        }
+    }
 }
 
 impl From<Theme> for egui::ThemePreference {
@@ -251,6 +301,7 @@ impl From<Theme> for egui::ThemePreference {
             Theme::Dark => egui::ThemePreference::Dark,
             Theme::Light => egui::ThemePreference::Light,
             Theme::System => egui::ThemePreference::System,
+            Theme::Neutral => egui::ThemePreference::Dark,
         }
     }
 }
@@ -752,6 +803,16 @@ pub struct Colors {
     pub stack_band: Color,
     /// Fond de l'autre pile sur deux (voir `stack_band`).
     pub stack_band_alt: Color,
+    /// Thème gris neutre : panneaux et boîtes.
+    pub neutral_panel: Color,
+    /// Thème gris neutre : fond central (grille, plein écran).
+    pub neutral_center: Color,
+    /// Thème gris neutre : cellules de la grille (un peu plus claires que le fond).
+    pub neutral_cell: Color,
+    /// Thème gris neutre : fonds des piles, un groupe sur deux et l'autre.
+    pub neutral_stack_band: Color,
+    /// Voir `neutral_stack_band`.
+    pub neutral_stack_band_alt: Color,
     /// Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
     pub stack_mark: Color,
     /// Badge « RAW » des cellules.
@@ -813,6 +874,11 @@ impl Default for Colors {
             blur_drop: Color([110, 170, 230]),
             stack_band: Color([56, 56, 56]),
             stack_band_alt: Color([24, 24, 24]),
+            neutral_panel: Color([46, 46, 46]),
+            neutral_center: Color([80, 80, 80]),
+            neutral_cell: Color([94, 94, 94]),
+            neutral_stack_band: Color([110, 110, 110]),
+            neutral_stack_band_alt: Color([70, 70, 70]),
             stack_mark: Color([140, 140, 140]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
@@ -964,6 +1030,31 @@ mod tests {
         assert!(
             AppSettings::default().keymap().1.is_empty(),
             "défauts sans conflit"
+        );
+    }
+
+    #[test]
+    fn the_neutral_theme_has_its_own_greys() {
+        let c = Colors::default();
+        assert_eq!(Theme::Dark.center(&c), None);
+        assert_eq!(Theme::Neutral.center(&c), Some(c.neutral_center.into()));
+        assert_eq!(
+            Theme::Neutral.view_background(&c),
+            Color32::from(c.neutral_center)
+        );
+        assert_eq!(
+            Theme::Dark.view_background(&c),
+            Color32::from(c.view_background)
+        );
+        assert_eq!(
+            Theme::Neutral.stack_bands(&c),
+            (c.neutral_stack_band.into(), c.neutral_stack_band_alt.into())
+        );
+        let parsed: AppSettings = tri::settings::parse("[gui]\ntheme = \"neutral\"\n").unwrap();
+        assert_eq!(parsed.gui.theme, Theme::Neutral);
+        assert_eq!(
+            egui::ThemePreference::from(Theme::Neutral),
+            egui::ThemePreference::Dark
         );
     }
 

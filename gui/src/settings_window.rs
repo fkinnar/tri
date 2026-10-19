@@ -94,7 +94,7 @@ fn section_title(ui: &Ui, name: &str, strong: bool) -> egui::text::LayoutJob {
 fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
     Some(match (section, key) {
         ("gui", "profile") => &["classic", "vim", "both"],
-        ("gui", "theme") => &["dark", "light", "system"],
+        ("gui", "theme") => &["dark", "light", "system", "neutral"],
         ("gui", "raw_previews") => &["on-demand", "background"],
         ("xmp", "sidecar") => &["darktable", "adobe"],
         ("i18n", "language") => &["auto", "fr", "en"],

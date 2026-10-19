@@ -603,9 +603,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   frontière ») plutôt que Lua ou Python embarqués.
 - [x] **Recherche** (19/10/2026) : `/` et Ctrl+F ; filtre flou par nom dans la grille,
   dossiers cherchés en fond depuis le dossier pointé (`~/…`, `/…`), `tri::fuzzy`.
-- [ ] **Thème « gris neutre »** (idée de l'utilisateur, 19/10/2026, façon Lightroom :
+- [x] **Thème « gris neutre »** (idée de l'utilisateur, 19/10/2026, façon Lightroom :
   panneaux gris foncé, fond central gris neutre, qui ne fausse pas le jugement des
-  images) ; capture de référence attendue. Nom sans marque (`neutral`).
+  images) : **fait** le jour même, `theme = "neutral"` (nom sans marque), tons réglables
+  (`[gui.colors] neutral_*`), à ajuster avec une capture de Lightroom.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**
