@@ -20,8 +20,9 @@ use std::time::Duration;
 #[serde(default, deny_unknown_fields)]
 pub struct DevelopSettings {
     /// `darktable-cli` : `"auto"` (cherché dans le `PATH`, aux emplacements habituels,
-    /// puis en Flatpak sous Linux), un chemin, `"flatpak"` (celui du Flatpak
-    /// `org.darktable.Darktable`), ou `""` (pas de rendu darktable).
+    /// puis sous Linux en AppImage et en Flatpak), un chemin (`darktable-cli` ou une
+    /// AppImage de darktable), `"flatpak"` (celui du Flatpak `org.darktable.Darktable`),
+    /// ou `""` (pas de rendu darktable).
     pub darktable: String,
     /// Rendu darktable en haute qualité (`--hq`) : un peu plus fidèle, un peu plus lent.
     pub high_quality: bool,
@@ -114,8 +115,8 @@ pub fn find_darktable(setting: &str) -> Option<Cli> {
         "flatpak" => return flatpak(),
         "auto" => {}
         path => {
-            let path = PathBuf::from(path);
-            return path.is_file().then(|| Cli::native(path));
+            let path = crate::settings::expand_home(path);
+            return path.is_file().then(|| cli_for(path));
         }
     }
     let exe = if cfg!(windows) {
@@ -133,7 +134,56 @@ pub fn find_darktable(setting: &str) -> Option<Cli> {
     if native.is_some() || !cfg!(target_os = "linux") {
         return native;
     }
-    flatpak()
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    appimage(home.as_deref()).map(cli_for).or_else(flatpak)
+}
+
+/// Un exécutable donné : AppImage de darktable (le binaire `darktable-cli` qu'elle
+/// contient est choisi par son nom en premier argument, documenté par darktable :
+/// « invocation per OS »), sinon `darktable-cli` lui-même.
+fn cli_for(path: PathBuf) -> Cli {
+    if is_appimage(&path) {
+        Cli {
+            program: path,
+            args: vec!["darktable-cli".into()],
+        }
+    } else {
+        Cli::native(path)
+    }
+}
+
+fn is_appimage(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("appimage"))
+}
+
+/// AppImage de darktable aux emplacements habituels (`~/AppImages` de Gear Lever ou
+/// AppImageLauncher, `~/Applications`, `~/.local/bin`, `~/bin`, téléchargements, `/opt`) :
+/// la plus récente. Constaté le 19/10/2026 sur la machine Linux Mint de l'utilisateur
+/// (`~/AppImages/darktable.appimage`), format que darktable propose lui-même pour Linux.
+fn appimage(home: Option<&Path>) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = [
+        "AppImages",
+        "Applications",
+        ".local/bin",
+        "bin",
+        "Downloads",
+        "Téléchargements",
+    ]
+    .iter()
+    .filter_map(|d| home.map(|h| h.join(d)))
+    .collect();
+    dirs.push(PathBuf::from("/opt"));
+    dirs.iter()
+        .flat_map(|d| std::fs::read_dir(d).into_iter().flatten().flatten())
+        .map(|e| e.path())
+        .filter(|p| {
+            is_appimage(p)
+                && p.is_file()
+                && p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().to_lowercase().contains("darktable"))
+        })
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il porte un vrai développement : un
@@ -332,6 +382,21 @@ mod tests {
                 FLATPAK_APP.into(),
             ],
         };
+        // AppImage : le binaire voulu en premier argument.
+        let dir = tempfile::tempdir().unwrap();
+        let apps = dir.path().join("AppImages");
+        std::fs::create_dir(&apps).unwrap();
+        assert_eq!(appimage(Some(dir.path())), None);
+        std::fs::write(apps.join("autre.AppImage"), b"").unwrap();
+        std::fs::write(apps.join("darktable.appimage"), b"").unwrap();
+        let found = appimage(Some(dir.path())).unwrap();
+        assert_eq!(found, apps.join("darktable.appimage"));
+        assert_eq!(cli_for(found).args, ["darktable-cli"]);
+        assert!(
+            cli_for(PathBuf::from("/usr/bin/darktable-cli"))
+                .args
+                .is_empty()
+        );
         let cmd = flatpak.command();
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args, ["run", "--command=darktable-cli", FLATPAK_APP]);

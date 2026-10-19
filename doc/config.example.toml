@@ -90,8 +90,9 @@ watch_ms = 2000
 # Voir ses développements dans tri (Maj+B en plein écran, puis b : JPEG boîtier, rendu
 # RAW, développé) : darktable-cli refait l'image avec l'historique du sidecar .xmp, à la
 # demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
-# "auto" : cherché dans le PATH, aux emplacements habituels, puis en Flatpak sous Linux
-# (org.darktable.Darktable, celui du Gestionnaire de logiciels de Mint) ; un chemin ;
+# "auto" : cherché dans le PATH, aux emplacements habituels, puis sous Linux en AppImage
+# (~/AppImages, ~/Applications, ~/.local/bin, ~/bin, téléchargements, /opt) et en
+# Flatpak (org.darktable.Darktable) ; un chemin (darktable-cli, ou une AppImage) ;
 # "flatpak" : celui du Flatpak ; "" : jamais.
 # Rien n'est écrit chez vous (configuration propre, bibliothèque en mémoire).
 darktable = "auto"
