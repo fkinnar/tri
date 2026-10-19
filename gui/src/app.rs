@@ -9187,7 +9187,7 @@ mod tests {
         // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
         h.get_by_label_contains("darktable absent");
         // ↓ ↓ : profil Web ; Entrée : export en fond, puis bilan.
-        h.get_by_label_contains("JPEG 100 % · espace d'origine · pleine définition");
+        h.get_by_label_contains("JPEG · espace d'origine · pleine définition");
         // Des JPEG : « JPEG tel quel » proposé d'abord.
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");

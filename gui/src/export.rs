@@ -107,7 +107,11 @@ pub fn profile_name(p: &Profile) -> String {
 
 /// Résumé d'un profil : « TIFF 16 bits · ProPhoto (linéaire) · pleine définition ».
 pub fn profile_summary(p: &Profile) -> String {
+    // Copie telle quelle (sans recompression, espace d'origine, pleine taille) : la
+    // qualité est celle du fichier d'origine, pas celle du profil (retour du 19/10/2026).
+    let as_is = p.passthrough && p.color.trim().is_empty() && p.max_side == 0;
     let format = match p.format {
+        Format::Jpeg if as_is => "JPEG".to_string(),
         Format::Jpeg => t!("export-format-jpeg", quality = p.quality),
         Format::Tiff => t!("export-format-tiff", bits = p.bits),
         Format::Png => t!("export-format-png", bits = p.bits),
