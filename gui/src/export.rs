@@ -232,7 +232,6 @@ impl ExportDialog {
                     self.input = p.folder.clone();
                     self.field.replaced();
                 }
-                ui.weak(t!("export-profile-hint"));
                 ui.add_space(6.0);
                 ui.label(t!("export-destination"));
                 let field = self.field.show(ui, id, &mut self.input, 420.0);
@@ -243,7 +242,6 @@ impl ExportDialog {
                     self.edited = true;
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                ui.weak(t!("export-folder-hint"));
                 // Où ira la première image (relatif : à côté de chaque image).
                 if let Some(first) = self.images.first() {
                     let dest = tri::export::folder_for(&self.input, first);
@@ -281,11 +279,6 @@ impl ExportDialog {
                     ui.checkbox(&mut self.passthrough.0, t!("export-passthrough"))
                         .on_hover_text(t!("export-passthrough-tip"));
                 }
-                ui.weak(match self.render {
-                    Render::Darktable => t!("export-how"),
-                    Render::LibRaw => t!("export-how-libraw"),
-                    Render::Embedded => t!("export-how-embedded"),
-                });
                 if let Some(reason) = &unsupported {
                     ui.colored_label(ui.visuals().error_fg_color, reason);
                 }

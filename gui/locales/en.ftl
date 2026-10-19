@@ -282,15 +282,10 @@ export-title = { $n ->
    *[other] Export { $n } images
 }
 export-profile = Export profile
-export-profile-hint = up / down arrows: profile · profiles in the settings (Ctrl+,), Export section
-export-destination = Folder (Tab completes)
+export-destination = Folder
 export-create = will be created
-export-folder-hint = /… absolute · ~/… home folder · otherwise relative to each image (empty or “.”: next to it)
 export-goes-to = Destination: { $dest }
-export-how = Developed by darktable from their .xmp (without a development: darktable's defaults). Nothing is overwritten.
-export-how-libraw = Basic LibRaw rendering (camera white balance, no adjustments), as with the b key. Nothing is overwritten.
 export-no-darktable = darktable missing: basic LibRaw rendering.
-export-how-embedded = The camera JPEG (the RAW's embedded preview, at its size), in its original color space or converted to the profile's. Nothing is overwritten.
 export-passthrough = Without recompression
 export-passthrough-tip = Original JPEG copied as is, camera JPEG written as is (orientation in the EXIF). An image to shrink (profile size) is re-encoded.
 export-button = Export

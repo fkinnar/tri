@@ -284,15 +284,10 @@ export-title = { $n ->
    *[other] Exporter { $n } images
 }
 export-profile = Profil d'export
-export-profile-hint = flèches haut / bas : profil · profils dans les réglages (Ctrl+,), section Export
-export-destination = Dossier (Tab complète)
+export-destination = Dossier
 export-create = sera créé
-export-folder-hint = /… absolu · ~/… dossier personnel · sinon relatif à chaque image (vide ou « . » : à côté d'elle)
 export-goes-to = Destination : { $dest }
-export-how = Développées par darktable d'après leur .xmp (sans développement : réglages par défaut de darktable). Rien n'est écrasé.
-export-how-libraw = Rendu de base par LibRaw (balance des blancs du boîtier, sans réglages), comme la touche b. Rien n'est écrasé.
 export-no-darktable = darktable absent : rendu de base par LibRaw.
-export-how-embedded = Le JPEG boîtier (aperçu embarqué du RAW, à sa taille), dans son espace d'origine ou converti vers celui du profil. Rien n'est écrasé.
 export-passthrough = Sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, JPEG boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du profil) est réencodée.
 export-button = Exporter
