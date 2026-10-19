@@ -221,6 +221,8 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// Boîte de regroupement tout juste ouverte : la case « regrouper » prend le clavier.
+    group_dialog_fresh: bool,
     /// Recherche par nom de fichier (filtre de la grille, `/`, Ctrl+F).
     name_query: String,
     /// Champ de recherche à qui donner le clavier à la prochaine image.
@@ -512,6 +514,7 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            group_dialog_fresh: false,
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
@@ -2175,7 +2178,10 @@ impl TriApp {
             }
             Action::StackToggle => self.toggle_stack(),
             Action::StacksAll => self.toggle_all_stacks(),
-            Action::GroupingWindow => self.group_dialog = !self.group_dialog,
+            Action::GroupingWindow => {
+                self.group_dialog = !self.group_dialog;
+                self.group_dialog_fresh = self.group_dialog;
+            }
             // Navigation dans la vue : les images cachées dans une pile repliée sont
             // sautées.
             nav => {
@@ -5483,7 +5489,12 @@ impl TriApp {
         let modal = modal_at("group_dialog", at)
             .title(t!("groups-title"))
             .show(ctx, |ui| {
-                ui.checkbox(&mut stacking, t!("groups-enabled"));
+                // Le clavier sur la case dès l'ouverture (retour du 19/10/2026 : il
+                // fallait deux Tab) : Espace coche, Tab passe au seuil.
+                let enabled = ui.checkbox(&mut stacking, t!("groups-enabled"));
+                if std::mem::take(&mut self.group_dialog_fresh) {
+                    enabled.request_focus();
+                }
                 ui.add_space(4.0);
                 ui.label(t!("groups-threshold"));
                 ui.add(egui::Slider::new(&mut threshold, 0.0..=1.0).step_by(0.01));
@@ -7904,6 +7915,22 @@ mod tests {
         press(&mut h, Key::X, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert!(h.state().notice.as_ref().unwrap().0.contains("emplacement"));
+    }
+
+    #[test]
+    fn the_grouping_dialog_gives_the_keyboard_to_its_checkbox() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(!h.state().stacking);
+        press(&mut h, Key::G, Modifiers::CTRL);
+        assert!(h.state().group_dialog);
+        // Espace coche aussitôt (plus de Tab pour atteindre la case).
+        press(&mut h, Key::Space, Modifiers::NONE);
+        assert!(h.state().stacking, "Ctrl+G puis Espace : piles actives");
+        assert!(
+            h.state().selection.is_empty(),
+            "Espace n'a pas sélectionné l'image"
+        );
     }
 
     #[test]
