@@ -9553,20 +9553,20 @@ mod tests {
             h.state().file_dialog,
             Some(crate::files::FileDialog::Export(_))
         ));
-        // Profils fournis et dossier proposé (sous-dossier `export` des images).
-        h.get_by_label_contains("TIFF 16 bits · ProPhoto (linéaire)");
-        h.get_by_label_contains("JPEG 90 % · sRGB · 2048 px au plus");
         // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
         h.get_by_label_contains("darktable absent");
-        // ↓ ↓ : profil Web ; Entrée : export en fond, puis bilan.
-        h.get_by_label_contains("JPEG · espace d'origine · pleine définition");
-        // Des JPEG : « JPEG tel quel » proposé d'abord.
+        // Des JPEG : « JPEG tel quel » proposé d'abord (liste déroulante).
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
         };
         assert_eq!(dialog.choice(), 1);
+        // ↓ ↓ (sans ouvrir la liste) : profil Web ; Entrée : export en fond, puis bilan.
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
+            panic!("boîte d'export attendue");
+        };
+        assert_eq!(dialog.choice(), 2, "Web");
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         run_until(&mut h, |app| {

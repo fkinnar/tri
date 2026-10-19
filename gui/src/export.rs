@@ -192,20 +192,20 @@ impl ExportDialog {
             .show(ctx, |ui| {
                 ui.add_space(6.0);
                 ui.label(t!("export-profile"));
-                for (i, p) in self.profiles.iter().enumerate() {
-                    // Le nom, puis les réglages en petit et en gris (retour du 19/10/2026 :
-                    // moins d'attraction pour l'œil).
-                    let mut text = egui::text::LayoutJob::default();
-                    let style = ui.style();
-                    let body = egui::TextStyle::Body.resolve(style);
+                // Liste déroulante (retour du 19/10/2026 : avec beaucoup de profils, une
+                // liste rendait la boîte trop haute) ; flèches haut / bas sans l'ouvrir.
+                let style = ui.style().clone();
+                let label = |p: &Profile, selected: bool| {
+                    // Le nom, puis les réglages en petit et en gris (moins d'attraction).
+                    let body = egui::TextStyle::Body.resolve(&style);
                     let small = egui::FontId::proportional(body.size * 0.85);
-                    let selected = self.choice == i;
                     let strong = if selected {
                         style.visuals.selection.stroke.color
                     } else {
                         style.visuals.text_color()
                     };
                     let weak = strong.gamma_multiply(0.6);
+                    let mut text = egui::text::LayoutJob::default();
                     text.append(
                         &profile_name(p),
                         0.0,
@@ -219,11 +219,24 @@ impl ExportDialog {
                             ..egui::TextFormat::simple(small, weak)
                         },
                     );
-                    let row = ui.selectable_label(selected, text);
-                    if row.clicked() {
-                        self.choice = i;
-                    }
-                }
+                    text
+                };
+                let current = self
+                    .profiles
+                    .get(self.choice)
+                    .map(|p| label(p, false))
+                    .unwrap_or_default();
+                egui::ComboBox::from_id_salt("export_profile")
+                    .selected_text(current)
+                    .width(420.0)
+                    .show_ui(ui, |ui| {
+                        for (i, p) in self.profiles.iter().enumerate() {
+                            let selected = self.choice == i;
+                            if ui.selectable_label(selected, label(p, selected)).clicked() {
+                                self.choice = i;
+                            }
+                        }
+                    });
                 // Le dossier suit le profil, tant qu'on ne l'a pas modifié.
                 if !self.edited
                     && let Some(p) = self.profiles.get(self.choice)
