@@ -48,6 +48,9 @@ pub struct ExportDialog {
     input: String,
     /// Dossier modifié à la main : il ne suit plus le profil choisi.
     edited: bool,
+    /// JPEG sans recompression (case de la boîte) et le profil dont elle vient : elle
+    /// reprend la valeur du profil quand on en change (voir [`Profile::passthrough`]).
+    passthrough: (bool, usize),
     field: crate::path_field::PathField,
     at: Pos2,
     /// Première image : le champ prend le focus.
@@ -139,6 +142,7 @@ impl ExportDialog {
                 .map(|p| p.folder.clone())
                 .unwrap_or_default(),
             edited: false,
+            passthrough: (profiles.get(choice).is_some_and(|p| p.passthrough), choice),
             darktable,
             render,
             images,
@@ -240,6 +244,19 @@ impl ExportDialog {
                 let unsupported = local
                     .zip(self.profiles.get(self.choice))
                     .and_then(|(local, p)| tri::export::libraw_check(p, local).err());
+                // Sans recompression : JPEG, depuis un JPEG (boîtier, ou image plate).
+                if self.passthrough.1 != self.choice {
+                    let profile = self.profiles.get(self.choice);
+                    self.passthrough = (profile.is_some_and(|p| p.passthrough), self.choice);
+                }
+                let jpeg = self
+                    .profiles
+                    .get(self.choice)
+                    .is_some_and(|p| p.format == tri::export::Format::Jpeg);
+                if jpeg && local.is_some() {
+                    ui.checkbox(&mut self.passthrough.0, t!("export-passthrough"))
+                        .on_hover_text(t!("export-passthrough-tip"));
+                }
                 ui.weak(match self.render {
                     Render::Darktable => t!("export-how"),
                     Render::LibRaw => t!("export-how-libraw"),
@@ -262,7 +279,10 @@ impl ExportDialog {
         if confirm {
             return Outcome::Start {
                 images: std::mem::take(&mut self.images),
-                profile: Box::new(self.profiles[self.choice].clone()),
+                profile: Box::new(tri::export::Profile {
+                    passthrough: self.passthrough.0,
+                    ..self.profiles[self.choice].clone()
+                }),
                 folder: self.input.trim().to_string(),
                 render: self.render,
             };

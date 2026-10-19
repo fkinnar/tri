@@ -107,6 +107,11 @@ pub struct Profile {
     /// chaque image** (`"export"` : un sous-dossier à côté des images ; `""` ou `"."` :
     /// à côté d'elles). Les variables de darktable (`$(YEAR)`…) y sont permises.
     pub folder: String,
+    /// JPEG **sans recompression** quand c'est possible (idée de l'utilisateur,
+    /// 19/10/2026) : un JPEG d'origine copié tel quel, un JPEG boîtier écrit tel quel
+    /// (orientation posée dans l'EXIF) ; une image à réduire est réencodée. Sans effet sur
+    /// un rendu (darktable, LibRaw) ni hors JPEG.
+    pub passthrough: bool,
 }
 
 impl Profile {
@@ -123,6 +128,7 @@ impl Profile {
             max_side: 0,
             suffix: String::new(),
             folder: "export".into(),
+            passthrough: false,
         }
     }
 
@@ -274,6 +280,7 @@ struct ProfileToml {
     max_side: Option<u32>,
     suffix: Option<String>,
     folder: Option<String>,
+    passthrough: Option<bool>,
 }
 
 /// Les profils d'export, dans l'ordre : profils fournis, puis ceux de l'utilisateur (par
@@ -330,6 +337,9 @@ impl<'de> Deserialize<'de> for Profiles {
             }
             if let Some(v) = t.folder {
                 p.folder = v;
+            }
+            if let Some(v) = t.passthrough {
+                p.passthrough = v;
             }
         }
         // Profil incohérent (ProPhoto en JPEG…) : refusé dès la lecture, comme toute
@@ -417,6 +427,8 @@ pub struct Report {
     pub failed: usize,
     /// Raisons connues des échecs (export LibRaw : image par image).
     pub errors: Vec<(PathBuf, String)>,
+    /// Fichiers écrits sans recompression (voir [`Profile::passthrough`]).
+    pub passthrough: usize,
 }
 
 /// Exporte `images` (voir [`sources`]) avec `profile` dans `folder` (le dossier du
@@ -644,6 +656,27 @@ pub fn export_libraw(
         if cancel.load(Ordering::Relaxed) {
             return Err(DevelopError::Cancelled);
         }
+        // Sans recompression, si possible.
+        if profile.passthrough && profile.format == Format::Jpeg {
+            match passthrough(image, local, profile.max_side) {
+                Ok(Some(bytes)) => {
+                    let out = write_passthrough(image, profile, folder, &bytes)?;
+                    report.passthrough += 1;
+                    report.written.push(out);
+                    progress(
+                        report.written.len(),
+                        total,
+                        report.written.last().expect("ajouté"),
+                    );
+                    continue;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    report.errors.push((image.clone(), e.to_string()));
+                    continue;
+                }
+            }
+        }
         match export_one(image, profile, local, space, &icc, folder, cancel) {
             Ok(out) => {
                 report.written.push(out);
@@ -723,6 +756,57 @@ fn export_one(
         let _ = std::fs::remove_file(&out);
         failed(&e)
     })?;
+    Ok(out)
+}
+
+/// Octets JPEG à écrire tels quels pour `image`, si possible : JPEG d'origine (image
+/// plate), ou JPEG boîtier d'un RAW avec l'orientation du RAW posée dans son EXIF, et pas
+/// plus grand que `max_side` (0 : toute taille). `None` : à réencoder.
+fn passthrough(image: &Path, local: Local, max_side: u32) -> Result<Option<Vec<u8>>, DevelopError> {
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
+    let fits = |bytes: &[u8]| {
+        crate::jpeg::dimensions(bytes).is_some_and(|(w, h)| max_side == 0 || w.max(h) <= max_side)
+    };
+    match kind_of(image) {
+        Some(MediaKind::Raw) if local == Local::Embedded => {
+            let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
+            let orientation = match raw.orientation() {
+                crate::bitmap::Rotation::None => 1,
+                crate::bitmap::Rotation::Cw90 => 6,
+                crate::bitmap::Rotation::Cw180 => 3,
+                crate::bitmap::Rotation::Cw270 => 8,
+            };
+            match raw.thumbnail() {
+                Ok(crate::raw::Thumbnail::Jpeg(bytes)) if fits(&bytes) => {
+                    Ok(crate::jpeg::set_orientation(&bytes, orientation))
+                }
+                _ => Ok(None),
+            }
+        }
+        Some(MediaKind::Flat) => {
+            let bytes = std::fs::read(image).map_err(|e| failed(&e))?;
+            Ok((crate::jpeg::dimensions(&bytes).is_some() && fits(&bytes)).then_some(bytes))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
+fn write_passthrough(
+    image: &Path,
+    profile: &Profile,
+    folder: &str,
+    bytes: &[u8],
+) -> Result<PathBuf, DevelopError> {
+    let failed = |e: std::io::Error| DevelopError::Other(e.to_string());
+    let dir = folder_for(folder, image);
+    std::fs::create_dir_all(&dir).map_err(failed)?;
+    let stem = image
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let out = unique_path(&dir, &format!("{stem}{}", profile.suffix), "jpg");
+    std::fs::write(&out, bytes).map_err(failed)?;
     Ok(out)
 }
 
@@ -1096,6 +1180,45 @@ mod tests {
         .unwrap();
         assert_eq!(report.failed, 1);
         assert!(report.written.is_empty());
+    }
+
+    #[test]
+    fn a_jpeg_is_copied_untouched_unless_it_must_shrink() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.jpg");
+        image::RgbImage::from_pixel(300, 200, image::Rgb([200, 100, 50]))
+            .save(&src)
+            .unwrap();
+        let original = std::fs::read(&src).unwrap();
+        let profile = |max_side| Profile {
+            passthrough: true,
+            max_side,
+            ..Profile::base("web")
+        };
+        let cancel = AtomicBool::new(false);
+        let run = |p: &Profile| {
+            export_libraw(
+                std::slice::from_ref(&src),
+                p,
+                "out",
+                Local::Embedded,
+                &cancel,
+                |_, _, _| {},
+            )
+            .unwrap()
+        };
+        // Assez petite : copiée octet par octet.
+        let report = run(&profile(2048));
+        assert_eq!(report.passthrough, 1);
+        assert_eq!(std::fs::read(&report.written[0]).unwrap(), original);
+        // À réduire : réencodée (pas de copie possible), sans écraser la première.
+        let report = run(&profile(150));
+        assert_eq!(report.passthrough, 0);
+        assert_eq!(report.written[0], dir.path().join("out/photo_01.jpg"));
+        assert_eq!(
+            image::image_dimensions(&report.written[0]).unwrap(),
+            (150, 100)
+        );
     }
 
     /// Export LibRaw réel : `TRI_TEST_RAW` (RAW hors du dépôt), copié.

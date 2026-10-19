@@ -160,6 +160,130 @@ mod turbo {
     }
 }
 
+/// Segments d'un JPEG avant les données compressées : (marqueur, début du segment, fin).
+/// `None` si ce n'est pas un JPEG lisible.
+fn segments(bytes: &[u8]) -> Option<Vec<(u8, usize, usize)>> {
+    if bytes.get(..2) != Some(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut at = 2;
+    loop {
+        // Octets de remplissage 0xFF possibles entre deux segments.
+        while bytes.get(at) == Some(&0xFF) && bytes.get(at + 1) == Some(&0xFF) {
+            at += 1;
+        }
+        if bytes.get(at) != Some(&0xFF) {
+            return None;
+        }
+        let marker = *bytes.get(at + 1)?;
+        let len = usize::from(u16::from_be_bytes([
+            *bytes.get(at + 2)?,
+            *bytes.get(at + 3)?,
+        ]));
+        let end = at + 2 + len;
+        if len < 2 || end > bytes.len() {
+            return None;
+        }
+        out.push((marker, at, end));
+        if marker == 0xDA {
+            return Some(out);
+        }
+        at = end;
+    }
+}
+
+/// Dimensions (largeur, hauteur) d'un JPEG, lues dans son en-tête, sans le décoder.
+pub fn dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    let (_, start, _) = segments(bytes)?
+        .into_iter()
+        .find(|&(m, _, _)| matches!(m, 0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF))?;
+    let h = u16::from_be_bytes([bytes[start + 5], bytes[start + 6]]);
+    let w = u16::from_be_bytes([bytes[start + 7], bytes[start + 8]]);
+    Some((u32::from(w), u32::from(h)))
+}
+
+/// Le même JPEG avec la balise EXIF d'orientation `value` (1 à 8), **sans recompresser** :
+/// l'export « sans recompression » d'un JPEG boîtier, dont l'orientation est celle du RAW.
+/// Balise existante : modifiée sur place ; sinon un segment EXIF minimal est ajouté (après
+/// l'en-tête JFIF), à la place d'un segment EXIF sans orientation. `None` : JPEG illisible.
+pub fn set_orientation(bytes: &[u8], value: u16) -> Option<Vec<u8>> {
+    let segs = segments(bytes)?;
+    let exif = segs
+        .iter()
+        .find(|&&(m, s, _)| m == 0xE1 && bytes.get(s + 4..s + 10) == Some(b"Exif\0\0"));
+    if let Some(&(_, start, end)) = exif
+        && let Some(at) = orientation_offset(&bytes[start + 10..end])
+    {
+        let mut out = bytes.to_vec();
+        let tiff = start + 10;
+        let big = &bytes[tiff..tiff + 2] == b"MM";
+        let v = if big {
+            value.to_be_bytes()
+        } else {
+            value.to_le_bytes()
+        };
+        out[tiff + at..tiff + at + 2].copy_from_slice(&v);
+        return Some(out);
+    }
+    // Segment EXIF minimal (TIFF gros-boutiste, IFD0 d'une entrée : 0x0112, SHORT).
+    let mut app1 = vec![0xFF, 0xE1, 0, 34];
+    app1.extend_from_slice(b"Exif\0\0MM\0\x2A\0\0\0\x08\0\x01\x01\x12\0\x03\0\0\0\x01");
+    app1.extend_from_slice(&value.to_be_bytes());
+    app1.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+    let after_jfif = segs
+        .first()
+        .filter(|&&(m, _, _)| m == 0xE0)
+        .map_or(2, |&(_, _, end)| end);
+    let mut out = bytes[..after_jfif].to_vec();
+    out.extend_from_slice(&app1);
+    let mut rest = after_jfif;
+    if let Some(&(_, start, end)) = exif {
+        // L'ancien segment EXIF (sans orientation) est remplacé : deux seraient invalides.
+        out.extend_from_slice(&bytes[after_jfif..start]);
+        rest = end;
+    }
+    out.extend_from_slice(&bytes[rest..]);
+    Some(out)
+}
+
+/// Position, dans les données TIFF d'un EXIF, de la valeur de la balise d'orientation de
+/// l'IFD0 (type SHORT), s'il y en a une.
+fn orientation_offset(tiff: &[u8]) -> Option<usize> {
+    let big = match tiff.get(..2)? {
+        b"MM" => true,
+        b"II" => false,
+        _ => return None,
+    };
+    let u16_at = |at: usize| -> Option<u16> {
+        let b = [*tiff.get(at)?, *tiff.get(at + 1)?];
+        Some(if big {
+            u16::from_be_bytes(b)
+        } else {
+            u16::from_le_bytes(b)
+        })
+    };
+    let u32_at = |at: usize| -> Option<u32> {
+        let b = [
+            *tiff.get(at)?,
+            *tiff.get(at + 1)?,
+            *tiff.get(at + 2)?,
+            *tiff.get(at + 3)?,
+        ];
+        Some(if big {
+            u32::from_be_bytes(b)
+        } else {
+            u32::from_le_bytes(b)
+        })
+    };
+    let ifd = u32_at(4)? as usize;
+    let count = usize::from(u16_at(ifd)?);
+    (0..count)
+        .map(|i| ifd + 2 + i * 12)
+        .find(|&e| u16_at(e) == Some(0x0112) && u16_at(e + 2) == Some(3))
+        .map(|e| e + 8)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +348,35 @@ mod tests {
     #[test]
     fn garbage_is_an_error() {
         assert!(decode(b"pas un jpeg", 0).is_err());
+    }
+
+    #[test]
+    fn dimensions_and_orientation_without_recompressing() {
+        let bmp = Bitmap {
+            width: 64,
+            height: 40,
+            data: vec![120; 64 * 40 * 3],
+        };
+        let bytes = encode(&bmp, 90, Chroma::Half).unwrap();
+        assert_eq!(dimensions(&bytes), Some((64, 40)));
+        assert_eq!(dimensions(b"pas un jpeg"), None);
+        // Sans EXIF : segment ajouté ; les données compressées restent identiques.
+        let turned = set_orientation(&bytes, 6).unwrap();
+        assert!(turned.ends_with(&bytes[bytes.len() - 100..]));
+        let read = |b: &[u8]| {
+            exif::Reader::new()
+                .read_from_container(&mut std::io::Cursor::new(b))
+                .unwrap()
+                .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
+                .and_then(|f| f.value.get_uint(0))
+        };
+        assert_eq!(read(&turned), Some(6));
+        // Balise existante : modifiée sur place (même taille).
+        let again = set_orientation(&turned, 8).unwrap();
+        assert_eq!(again.len(), turned.len());
+        assert_eq!(read(&again), Some(8));
+        assert_eq!(dimensions(&again), Some((64, 40)));
+        // Toujours décodable.
+        assert_eq!(decode(&again, 0).unwrap().width, 64);
     }
 }

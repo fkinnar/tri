@@ -135,6 +135,26 @@ RAW à sa taille (71 % du capteur sur un X-T4), redressé, réencodé selon le p
 **en sRGB seulement**, puisque c'est son espace : un profil ProPhoto est refusé, avec la
 raison. Une image plate est exportée telle quelle, réencodée.
 
+## Sans recompression (`passthrough`)
+
+Idée de l'utilisateur (19/10/2026) : ne pas recompresser une seconde fois un fichier déjà
+compressé. Réglage de chaque profil (`passthrough`, désactivé par défaut), case « Sans
+recompression » de la boîte, `--passthrough` en ligne de commande. Il ne s'applique
+qu'aux profils JPEG, depuis un JPEG :
+
+- **JPEG d'origine** (image plate) : copié tel quel, octet par octet (EXIF, profil
+  compris).
+- **JPEG boîtier** d'un RAW : ses octets sont écrits tels quels ; seule l'**orientation**
+  du RAW est posée dans son EXIF, sans recompresser (`jpeg::set_orientation` : balise
+  modifiée sur place, ou segment EXIF minimal ajouté). Vérifié sur un RAF X-T4 : données
+  compressées identiques à l'aperçu embarqué extrait par ExifTool, même taille de
+  fichier, « Rotate 90 CW ».
+- Une image **plus grande que le côté maximal du profil** est réencodée (réduire, c'est
+  recompresser). Un **rendu** (darktable, LibRaw) n'a rien de compressé à garder : sans
+  effet, et la case n'est pas proposée.
+- Le bilan dit combien de fichiers ont été écrits sans recompression
+  (`Report::passthrough`).
+
 ## Sans darktable : LibRaw
 
 Étape 2 du plan (19/10/2026, « plus simple », selon l'utilisateur) : sans darktable
@@ -181,7 +201,7 @@ darktable.
     première image.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
     d'état (bouton × pour l'arrêter), puis un bilan.
-- `tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--dry-run]` :
+- `tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]` :
   `--to` remplace le dossier du profil (même règle) ; `--libraw` force le rendu LibRaw,
   `--embedded` exporte le JPEG boîtier.
 

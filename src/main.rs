@@ -37,11 +37,12 @@
 //!       montre l'image dans le gestionnaire de fichiers ;
 //!   tri --edit <image>...
 //!       ouvre les images dans l'éditeur externe (`[files] editor`), voir `tri::files` ;
-//!   tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--dry-run]
+//!   tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]
 //!       exporte les images développées par darktable avec un profil d'export
 //!       (`[export.profiles.<profil>]`) ; dossier : `--to`, sinon celui du profil ; sans
 //!       darktable (ou `--libraw`) : rendu de base par LibRaw ; `--embedded` : le JPEG
-//!       boîtier ; voir `tri::export`.
+//!       boîtier ; `--passthrough` : JPEG sans recompression si possible ; voir
+//!       `tri::export`.
 //!
 //! Toutes les commandes lisent le fichier de configuration (`--config FICHIER`, sinon
 //! l'emplacement par défaut, voir `tri::settings`) ; les options ci-dessus l'emportent sur
@@ -92,6 +93,8 @@ struct Args {
     libraw: bool,
     /// `--embedded` : exporter le JPEG boîtier.
     embedded: bool,
+    /// `--passthrough` : JPEG sans recompression si possible.
+    passthrough: bool,
     permanent: bool,
     kind: KindFilter,
     depth: Option<usize>,
@@ -169,6 +172,7 @@ fn parse() -> AnyResult<Args> {
             "--move" => args.file_action = Some(FileAction::Move),
             "--libraw" => args.libraw = true,
             "--embedded" => args.embedded = true,
+            "--passthrough" => args.passthrough = true,
             "--export" => {
                 args.file_action = Some(FileAction::Export);
                 args.export_profile = Some(value()?);
@@ -855,6 +859,11 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         .into());
     };
     profile.check()?;
+    let mut profile = profile.clone();
+    if args.passthrough {
+        profile.passthrough = true;
+    }
+    let profile = &profile;
     let sources = tri::export::sources(images);
     // `--to`, sinon le dossier du profil (relatif : à côté de chaque image).
     let folder = match &args.to {
@@ -924,6 +933,9 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
         eprintln!("{} : {error}", image.display());
     }
     println!("{}", t!("cli-export-done", n = report.written.len()));
+    if report.passthrough > 0 {
+        println!("{}", t!("cli-export-passthrough", n = report.passthrough));
+    }
     if report.failed > 0 {
         return Err(t!("cli-export-failed", failed = report.failed).into());
     }

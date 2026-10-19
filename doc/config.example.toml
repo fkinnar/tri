@@ -116,6 +116,9 @@ high_quality = false
 # folder : dossier des fichiers : "/…" absolu, "~/…" depuis le dossier personnel, sinon
 #   relatif au dossier de chaque image ("export" : un sous-dossier à côté des images,
 #   "" ou "." : à côté d'elles) ; variables de darktable permises ($(YEAR)…).
+# passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
+#   boîtier écrit tel quel) ; une image à réduire est réencodée ; sans effet sur un rendu
+#   darktable ou LibRaw.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -127,6 +130,7 @@ intent = ""
 max_side = 0
 suffix = ""
 folder = "export"
+passthrough = false
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -139,6 +143,7 @@ intent = ""
 max_side = 2048
 suffix = ""
 folder = "export"
+passthrough = false
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP

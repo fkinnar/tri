@@ -4643,10 +4643,13 @@ impl TriApp {
         };
         let dest = crate::files::tilde(&job.dest);
         self.notice = Some(match result {
-            Ok(report) if report.failed == 0 => (
-                t!("export-done", n = report.written.len(), dest = dest),
-                false,
-            ),
+            Ok(report) if report.failed == 0 => {
+                let mut text = t!("export-done", n = report.written.len(), dest = dest);
+                if report.passthrough > 0 {
+                    text.push_str(&t!("export-done-passthrough", n = report.passthrough));
+                }
+                (text, false)
+            }
             Ok(report) => (
                 t!(
                     "export-partial",
@@ -9189,6 +9192,8 @@ mod tests {
         assert_eq!(dialog.choice(), 1);
         // En grille, sans darktable : rendu LibRaw.
         assert_eq!(dialog.render(), crate::export::Render::LibRaw);
+        // JPEG, rendu local : la case « sans recompression » est proposée.
+        h.get_by_label("Sans recompression");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         // On exporte ce qu'on regarde : plein écran sur le JPEG boîtier, puis le rendu RAW.

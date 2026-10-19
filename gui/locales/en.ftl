@@ -294,6 +294,8 @@ export-renderer = Rendering:
 export-renderer-libraw = LibRaw (basic)
 export-renderer-embedded = Camera JPEG
 export-how-embedded = The camera JPEG (the RAW's embedded preview, at its size), in sRGB; non-RAW images as they are. Nothing is overwritten.
+export-passthrough = Without recompression
+export-passthrough-tip = Original JPEG copied as is, camera JPEG written as is (orientation in the EXIF). An image to shrink (profile size) is re-encoded.
 export-button = Export
 export-profile-edit = Editing
 export-profile-web = Web
@@ -309,6 +311,7 @@ export-done = { $n ->
     [one] 1 image exported to { $dest }
    *[other] { $n } images exported to { $dest }
 }
+export-done-passthrough = { " " }({ $n } without recompression)
 export-partial = { $n } exported, { $failed } failed (unreadable by darktable?), to { $dest }
 export-cancelled = Export stopped (files already written are kept).
 export-progress = Export “{ $profile }” { $done }/{ $total }

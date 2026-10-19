@@ -55,3 +55,13 @@ libjpeg-turbo : IJG AND BSD-3-Clause AND Zlib, permissives, compilée depuis ses
 liée statiquement (voir [build.md](build.md#libjpeg-turbo-compilée-avec-le-projet)) ; crates `turbojpeg` et
 `turbojpeg-sys` : Unlicense OR MIT. Aucun brevet actif sur le JPEG de base. Voir
 [licensing.md](licensing.md).
+
+## Sans décoder : dimensions et orientation
+
+Pour l'export « sans recompression » (19/10/2026, voir [export.md](export.md)) :
+
+- `dimensions(bytes)` lit la taille dans l'en-tête (segment SOF), sans décoder ;
+- `set_orientation(bytes, valeur)` pose la balise EXIF d'orientation (1 à 8) sans toucher
+  aux données compressées : la balise de l'IFD0 est modifiée sur place si elle existe ;
+  sinon, un segment EXIF minimal est ajouté après l'en-tête JFIF, et remplace un segment
+  EXIF sans orientation (deux segments EXIF seraient invalides).

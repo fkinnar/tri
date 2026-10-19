@@ -625,7 +625,9 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   `export_libraw`, rendu 16 bits dans l'espace voulu, profils ICC générés par `moxcms`,
   plates en sRGB seulement, `--libraw`). **On exporte ce qu'on regarde** (règle de
   l'utilisateur) : grille = darktable sinon LibRaw ; plein écran = la source affichée
-  (développé, rendu RAW, ou JPEG boîtier en sRGB, `--embedded`). darktable trouvé aussi en **AppImage**
+  (développé, rendu RAW, ou JPEG boîtier en sRGB, `--embedded`). **Sans recompression**
+  (`passthrough`, idée de l'utilisateur) : JPEG d'origine copié, JPEG boîtier écrit tel
+  quel avec l'orientation posée dans l'EXIF ; une image à réduire est réencodée. darktable trouvé aussi en **AppImage**
   (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
   dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des

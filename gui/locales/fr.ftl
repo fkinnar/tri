@@ -296,6 +296,8 @@ export-renderer = Rendu :
 export-renderer-libraw = LibRaw (rendu de base)
 export-renderer-embedded = JPEG boîtier
 export-how-embedded = Le JPEG boîtier (aperçu embarqué du RAW, à sa taille), en sRGB ; images non RAW telles quelles. Rien n'est écrasé.
+export-passthrough = Sans recompression
+export-passthrough-tip = JPEG d'origine copié tel quel, JPEG boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du profil) est réencodée.
 export-button = Exporter
 export-profile-edit = Retouche
 export-profile-web = Web
@@ -311,6 +313,7 @@ export-done = { $n ->
     [one] 1 image exportée dans { $dest }
    *[other] { $n } images exportées dans { $dest }
 }
+export-done-passthrough = { " " }(dont { $n } sans recompression)
 export-partial = { $n } exportées, { $failed } en échec (illisibles par darktable ?), dans { $dest }
 export-cancelled = Export arrêté (les fichiers déjà écrits restent).
 export-progress = Export « { $profile } » { $done }/{ $total }

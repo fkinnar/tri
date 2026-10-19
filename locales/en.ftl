@@ -137,7 +137,7 @@ cli-usage =
       tri --copy|--move <image>... --to <folder> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
-      tri --export <profile> <image>... [--to <folder>] [--libraw|--embedded] [--dry-run]
+      tri --export <profile> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
     common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
 cli-unknown-option = unknown option: { $option }
@@ -191,6 +191,7 @@ cli-dry-run = (--dry-run: nothing was changed)
 cli-export-unknown-profile = unknown export profile: { $profile } (profiles: { $known })
 cli-export-plan = export “{ $profile }” ({ $summary }) to { $dest }:
 cli-export-libraw = darktable missing (or --libraw): basic LibRaw rendering
+cli-export-passthrough = of which { $n } without recompression
 cli-export-done = { $n ->
     [one] 1 file written
    *[other] { $n } files written
