@@ -16,8 +16,17 @@ clavier (jeu « classique » ou « vim »), à la souris aussi.
 
 ## Installer
 
-Pas encore de version prête à installer : elles viendront avec la bêta (macOS, Linux,
-Windows). En attendant, compiler depuis les sources :
+**Paquets prêts à installer** (sans HEIC, voir [doc/packaging.md](doc/packaging.md)) :
+
+- **macOS** (`.dmg`) : glisser `tri.app` dans Applications. L'app n'est pas encore
+  signée par Apple : au premier lancement, macOS refuse ; ouvrir alors **Réglages
+  système → Confidentialité et sécurité → « Ouvrir quand même »**.
+- **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 ou plus récent) : décompresser, puis
+  `./install.sh` (dans `~/.local`, sans droits administrateur ; `--uninstall` pour
+  retirer). `tri` apparaît dans le menu des applications.
+- **Windows** : à venir.
+
+**Compiler depuis les sources** :
 
 1. Rust (stable récent, édition 2024) : <https://rustup.rs>
 2. Les bibliothèques système, voir [`prerequisites.sh`](prerequisites.sh) :

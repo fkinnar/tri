@@ -647,9 +647,11 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   **`1.0.0-alpha.1`** (alpha, dépôt privé ; la **bêta sera publique**), `README.md`,
   `CHANGELOG.md` ; binaires **sans HEIC** ; builds par **GitHub Actions**
   (`.github/workflows/ci.yml`, à la main ou sur tag, pour ménager les minutes) ; code
-  Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/build.md`). Restent :
-  paquets prêts à installer (`.app`, archive Linux, zip Windows), notices des
-  dépendances. Icône choisie (« t » et étoile, `scripts/make-icon.py`), barre du haut
+  Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/build.md`). **Paquets
+  faits** le 19/10/2026 (`scripts/package.py`, `doc/packaging.md`) : `tri.app` en `.dmg`
+  (bibliothèques dans `Frameworks`, signature ad hoc ; Developer ID et notarisation pour
+  la bêta publique, `--sign`), archive Linux avec `install.sh` (LibRaw livrée, rpath),
+  notices `cargo about` et licences des bibliothèques. Reste : zip Windows. Icône choisie (« t » et étoile, `scripts/make-icon.py`), barre du haut
   (icône et nom à gauche), mode concentration (F11).
 - **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
   la V1 »).

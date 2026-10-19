@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>tri : licences des crates Rust</title>
+<style>
+body { font-family: sans-serif; max-width: 60em; margin: 2em auto; padding: 0 1em; }
+pre { white-space: pre-wrap; background: #f4f4f4; padding: 1em; }
+</style>
+</head>
+<body>
+<h1>Licences des crates Rust compilées dans tri</h1>
+<ul>
+{{#each overview}}
+<li><a href="#{{id}}">{{name}}</a> ({{count}})</li>
+{{/each}}
+</ul>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Utilisée par :</p>
+<ul>
+{{#each used_by}}
+<li>{{crate.name}} {{crate.version}}</li>
+{{/each}}
+</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body>
+</html>

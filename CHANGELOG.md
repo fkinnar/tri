@@ -2,7 +2,8 @@
 
 ## 1.0.0-alpha.1 — 19/10/2026
 
-Première version de test (dépôt privé ; la bêta sera publique).
+Première version de test (dépôt privé ; la bêta sera publique). Paquets prêts à
+installer pour macOS (`.dmg`) et Linux (`.tar.gz`), sans HEIC ; Windows à venir.
 
 - **Dossiers** : panneau des dossiers (volumes, favoris, recherche `/`), surveillance du
   dossier ouvert, déchargement de cartes (copie vérifiée, doublons, éjection).

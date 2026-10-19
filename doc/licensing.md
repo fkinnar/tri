@@ -82,7 +82,10 @@ avec leur notice. En développement seulement : `egui_kittest` (MIT OR Apache-2.
 
 Obligation pratique : reproduire les notices de copyright et de licence de ces crates dans la
 distribution. Un outil comme [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
-génère ce fichier automatiquement. À vérifier (maintenance) avant adoption.
+génère ce fichier automatiquement. **Adopté le 19/10/2026** (MIT OR Apache-2.0, Embark
+Studios, version 0.9.2 d'août 2026 : maintenu) : outil de construction seulement, rien
+n'entre dans le binaire ; `about.toml`, `scripts/package.py`, voir
+[packaging.md](packaging.md).
 
 ### Ce qu'impose la LGPL (LibRaw, libheif, libde265)
 
@@ -231,12 +234,17 @@ demande l'accord de tous les contributeurs.
 
 - [x] Choisir la licence de `tri`, ajouter `LICENSE` et le champ `license` dans `Cargo.toml`
       (GPL-3.0-or-later, 19/10/2026).
-- [ ] Générer le fichier des notices des crates (ex. `cargo-about`).
+- [x] Générer le fichier des notices des crates (`cargo-about`, `licenses/rust-crates.html`
+      dans les paquets, 19/10/2026).
 - [x] Décider du traitement de HEIF dans les binaires distribués (§3) : **sans HEIC**
       (décidé le 19/10/2026), builds sans la feature `heif` ; à rouvrir avec les décodeurs
       du système (ImageIO, WIC).
-- [ ] Si des bibliothèques LGPL sont livrées : inclure leurs licences et un lien vers leur
-      code source exact.
-- [ ] Vérifier qu'aucun binaire distribué ne contient ou ne dépend de x265.
+- [x] Si des bibliothèques LGPL sont livrées : inclure leurs licences et un lien vers leur
+      code source exact (`licenses/README.md` des paquets, 19/10/2026). Pour la bêta
+      publique, joindre aussi l'archive source de LibRaw à la publication (plus sûr
+      qu'un lien qui peut disparaître).
+- [x] Vérifier qu'aucun binaire distribué ne contient ou ne dépend de x265 : sans la
+      feature `heif`, ni libheif ni x265 (vérifié par `otool -L` sur le paquet macOS,
+      19/10/2026).
 - [ ] Relire ce document : les versions, licences et pratiques des distributions ont pu
       changer.

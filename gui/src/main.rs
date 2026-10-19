@@ -79,6 +79,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("tri")
+            // Wayland : relie la fenêtre au fichier `tri.desktop` (icône, nom).
+            .with_app_id("tri")
             .with_icon(app::window_icon())
             .with_inner_size(settings.gui.window),
         ..Default::default()
