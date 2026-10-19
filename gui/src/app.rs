@@ -8197,7 +8197,9 @@ mod tests {
     /// Fait tourner l'interface jusqu'à ce que `done` soit vrai (le moteur travaille dans
     /// d'autres threads), au plus 20 s.
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(20);
+        // Large : les machines d'intégration continue sont plus lentes (20 s ne suffisaient
+        // pas au zoom sur une image de 4000 × 3000) ; rapide quand tout va bien.
+        let deadline = Instant::now() + Duration::from_secs(60);
         while !done(h.state()) {
             assert!(Instant::now() < deadline, "délai dépassé");
             h.run_steps(1);
@@ -8900,7 +8902,9 @@ mod tests {
     fn help_rows_are_grouped_then_ranked_by_search() {
         let keymap = Keymap::default();
         let all = help_rows(&keymap, "");
-        assert_eq!(all.len(), Action::ALL.len());
+        // Toutes les actions disponibles sur ce système (AirDrop : macOS seulement).
+        let available = Action::ALL.iter().filter(|a| a.available()).count();
+        assert_eq!(all.len(), available);
         let ranks: Vec<usize> = all
             .iter()
             .map(|(a, _)| Group::ALL.iter().position(|g| *g == a.group()).unwrap())

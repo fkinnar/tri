@@ -50,6 +50,10 @@ jobs:
           choco install nasm -y --no-progress
           $root = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
           "LIBRAW_DIR=$root" >> $env:GITHUB_ENV
+          # Nom de la bibliothèque selon le port vcpkg (raw.lib, libraw.lib…).
+          Get-ChildItem "$root\lib" -Filter "*raw*.lib" | ForEach-Object { Write-Host "trouvé : $($_.Name)" }
+          $lib = Get-ChildItem "$root\lib" -Filter "*raw*.lib" | Where-Object { $_.BaseName -notmatch "_r$" } | Select-Object -First 1
+          "LIBRAW_LIB=$($lib.BaseName)" >> $env:GITHUB_ENV
           "$root\bin" >> $env:GITHUB_PATH
           "C:\Program Files\NASM" >> $env:GITHUB_PATH
 
