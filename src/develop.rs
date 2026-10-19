@@ -234,6 +234,8 @@ pub enum DevelopError {
     Cancelled,
     /// Échec du programme (dernière ligne de son message d'erreur).
     Failed(String),
+    /// Échec hors de darktable (export par LibRaw ou du JPEG boîtier), message tel quel.
+    Other(String),
 }
 
 impl std::fmt::Display for DevelopError {
@@ -245,6 +247,7 @@ impl std::fmt::Display for DevelopError {
             DevelopError::Failed(e) => {
                 write!(f, "{}", crate::t!("develop-failed", error = e.as_str()))
             }
+            DevelopError::Other(e) => write!(f, "{e}"),
         }
     }
 }

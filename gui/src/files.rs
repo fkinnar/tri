@@ -103,6 +103,7 @@ pub enum Outcome {
         images: Vec<PathBuf>,
         profile: tri::export::Profile,
         folder: String,
+        render: crate::export::Render,
         choice: usize,
     },
 }
@@ -186,10 +187,12 @@ impl FileDialog {
                     images,
                     profile,
                     folder,
+                    render,
                 } => Outcome::Export {
                     images,
-                    profile,
+                    profile: *profile,
                     folder,
+                    render,
                     choice: e.choice(),
                 },
             },

@@ -88,6 +88,8 @@ unsafe extern "C" {
     pub fn libraw_set_output_bps(lr: *mut LibRawData, value: c_int);
     pub fn libraw_set_bright(lr: *mut LibRawData, value: c_float);
     pub fn libraw_set_no_auto_bright(lr: *mut LibRawData, value: c_int);
+    pub fn libraw_set_output_color(lr: *mut LibRawData, value: c_int);
+    pub fn libraw_set_gamma(lr: *mut LibRawData, index: c_int, value: c_float);
     pub fn libraw_set_progress_handler(
         lr: *mut LibRawData,
         cb: Option<ProgressCallback>,

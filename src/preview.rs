@@ -311,6 +311,15 @@ fn raw_embedded(file: &MediaFile, side: u32, min: u32) -> Result<Bitmap> {
     Ok(bmp.fit(side).rotate(rotation))
 }
 
+/// JPEG embarqué (« JPEG boîtier ») d'un RAW, à sa taille et redressé : export de ce
+/// qu'on regarde en plein écran (voir `tri::export`).
+pub fn embedded_full(path: &std::path::Path) -> Result<Bitmap> {
+    let mut raw = RawFile::open(path)?;
+    let rotation = raw.orientation();
+    let bmp = embedded_bitmap(&mut raw, 0).ok_or(PreviewError::NoEmbeddedPreview)?;
+    Ok(bmp.rotate(rotation))
+}
+
 /// Vignette d'un RAW : aperçu embarqué, réduit puis redressé selon l'orientation du RAW.
 /// Sans aperçu exploitable, repli sur un rendu `half_size`.
 fn raw_thumbnail(file: &MediaFile, settings: &Settings, cancel: &AtomicBool) -> Result<Bitmap> {

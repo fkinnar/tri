@@ -621,8 +621,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   refusé par le moteur, masqué dans les listes). La ProPhoto de darktable est linéaire
   (gamma 1,8 : fichier `.icc`). Dossier **propre à chaque profil** (`folder` : `/…`,
   `~/…`, sinon relatif à chaque image, `""` / `"."` à côté de la source ;
-  `$(FILE_FOLDER)` de darktable). Étapes suivantes : versions recadrées dans `tri`
-  (instructions dans le XMP), repli LibRaw sans darktable.
+  `$(FILE_FOLDER)` de darktable). **Repli LibRaw fait** le même jour (étape 2 :
+  `export_libraw`, rendu 16 bits dans l'espace voulu, profils ICC générés par `moxcms`,
+  plates en sRGB seulement, `--libraw`). **On exporte ce qu'on regarde** (règle de
+  l'utilisateur) : grille = darktable sinon LibRaw ; plein écran = la source affichée
+  (développé, rendu RAW, ou JPEG boîtier en sRGB, `--embedded`). darktable trouvé aussi en **AppImage**
+  (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
+  dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**

@@ -415,6 +415,8 @@ pub struct Report {
     pub written: Vec<PathBuf>,
     /// Images demandées sans fichier écrit (illisibles par darktable…).
     pub failed: usize,
+    /// Raisons connues des échecs (export LibRaw : image par image).
+    pub errors: Vec<(PathBuf, String)>,
 }
 
 /// Exporte `images` (voir [`sources`]) avec `profile` dans `folder` (le dossier du
@@ -516,6 +518,274 @@ pub fn export(
     }
     report.failed = total.saturating_sub(report.written.len());
     Ok(report)
+}
+
+// --- Sans darktable : LibRaw, ou le JPEG boîtier -----------------------------------------
+
+/// Image exportée sans darktable : on exporte ce qu'on regarde (idée de l'utilisateur,
+/// 19/10/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Local {
+    /// Rendu de base par LibRaw (la touche `b`, « rendu RAW »).
+    LibRaw,
+    /// Le JPEG embarqué du RAW (« JPEG boîtier »), à sa taille.
+    Embedded,
+}
+
+/// Le profil peut-il être exporté **sans darktable** depuis `local` ? Sinon, la raison :
+/// pas de fichier `.icc` ni de Display P3 (LibRaw ne les produit pas), pas de TIFF 32 bits ;
+/// le JPEG boîtier, en sRGB seulement (c'est son espace).
+pub fn libraw_check(profile: &Profile, local: Local) -> Result<(), String> {
+    profile.check()?;
+    if local == Local::Embedded && !is_srgb(&profile.color) {
+        return Err(crate::t!(
+            "export-embedded-color",
+            profile = profile.id.as_str()
+        ));
+    }
+    if libraw_space(&profile.color).is_none() {
+        return Err(crate::t!(
+            "export-libraw-color",
+            profile = profile.id.as_str(),
+            color = profile.color.as_str()
+        ));
+    }
+    if profile.bits > 16 {
+        return Err(crate::t!(
+            "export-libraw-bits",
+            profile = profile.id.as_str()
+        ));
+    }
+    Ok(())
+}
+
+fn is_srgb(color: &str) -> bool {
+    matches!(color.trim().to_lowercase().as_str(), "" | "srgb")
+}
+
+/// Espace de sortie LibRaw et profil ICC (généré par `moxcms`) d'un espace de profil.
+/// Mêmes espaces que darktable : ProPhoto, Rec709 et Rec2020 **linéaires** ; sRGB et Adobe
+/// RGB avec leur courbe. `""` (celui du développement) : sRGB, l'espace des aperçus.
+fn libraw_space(color: &str) -> Option<(crate::raw::OutputSpace, moxcms::ColorProfile)> {
+    use crate::raw::OutputSpace;
+    use moxcms::{ColorProfile, ToneReprCurve};
+    let linear = |mut p: ColorProfile, name: &str| {
+        // Courbe vide : identité (norme ICC, `curv` sans entrée).
+        p.red_trc = Some(ToneReprCurve::Lut(Vec::new()));
+        p.green_trc = Some(ToneReprCurve::Lut(Vec::new()));
+        p.blue_trc = Some(ToneReprCurve::Lut(Vec::new()));
+        p.description = Some(moxcms::ProfileText::PlainString(name.into()));
+        p
+    };
+    let flat = (1.0, 1.0);
+    Some(match color.trim().to_lowercase().as_str() {
+        "" | "srgb" => (
+            OutputSpace {
+                color: 1,
+                gamma: (1.0 / 2.4, 12.92),
+            },
+            ColorProfile::new_srgb(),
+        ),
+        "adobergb" => (
+            OutputSpace {
+                color: 2,
+                gamma: (1.0 / 2.199_218_8, 0.0),
+            },
+            ColorProfile::new_adobe_rgb(),
+        ),
+        "prophoto" => (
+            OutputSpace {
+                color: 4,
+                gamma: flat,
+            },
+            linear(ColorProfile::new_pro_photo_rgb(), "Linear ProPhoto RGB"),
+        ),
+        "rec709" => (
+            OutputSpace {
+                color: 1,
+                gamma: flat,
+            },
+            linear(ColorProfile::new_srgb(), "Linear Rec709 RGB"),
+        ),
+        "rec2020" => (
+            OutputSpace {
+                color: 8,
+                gamma: flat,
+            },
+            linear(ColorProfile::new_bt2020(), "Linear Rec2020 RGB"),
+        ),
+        _ => return None,
+    })
+}
+
+/// Exporte `images` **sans darktable** : RAW développés par LibRaw (le rendu « plat » de
+/// `tri` : balance des blancs du boîtier, sans luminosité automatique) ou leur JPEG
+/// boîtier (`local`), images plates réencodées (en sRGB seulement : leur espace d'origine
+/// est inconnu). Même dossier, mêmes
+/// noms et même progression que [`export`] ; une image en échec n'arrête pas les autres
+/// (raison dans [`Report::errors`]).
+pub fn export_libraw(
+    images: &[PathBuf],
+    profile: &Profile,
+    folder: &str,
+    local: Local,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &Path),
+) -> Result<Report, DevelopError> {
+    libraw_check(profile, local).map_err(DevelopError::Other)?;
+    let (space, icc) = libraw_space(&profile.color).expect("vérifié");
+    let icc = icc
+        .encode()
+        .map_err(|e| DevelopError::Other(format!("{e:?}")))?;
+    let images = sources(images);
+    let total = images.len();
+    let mut report = Report::default();
+    for image in &images {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(DevelopError::Cancelled);
+        }
+        match export_one(image, profile, local, space, &icc, folder, cancel) {
+            Ok(out) => {
+                report.written.push(out);
+                progress(
+                    report.written.len(),
+                    total,
+                    report.written.last().expect("ajouté"),
+                );
+            }
+            Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
+            Err(e) => report.errors.push((image.clone(), e.to_string())),
+        }
+    }
+    report.failed = report.errors.len();
+    Ok(report)
+}
+
+fn export_one(
+    image: &Path,
+    profile: &Profile,
+    local: Local,
+    space: crate::raw::OutputSpace,
+    icc: &[u8],
+    folder: &str,
+    cancel: &AtomicBool,
+) -> Result<PathBuf, DevelopError> {
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
+    let to16 = |bmp: crate::bitmap::Bitmap| {
+        let data = bmp.data.iter().map(|&v| u16::from(v) * 257).collect();
+        crate::raw::Rgb16::from_raw(bmp.width, bmp.height, data)
+            .ok_or_else(|| DevelopError::Other("image".into()))
+    };
+    let mut pixels = match kind_of(image) {
+        Some(MediaKind::Raw) if local == Local::Embedded => {
+            to16(crate::preview::embedded_full(image).map_err(|e| failed(&e))?)?
+        }
+        Some(MediaKind::Raw) => {
+            let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
+            raw.render_deep(&crate::raw::RenderOptions::default(), space, cancel)
+                .map_err(|e| match e {
+                    crate::raw::RawError::Cancelled => DevelopError::Cancelled,
+                    e => failed(&e),
+                })?
+        }
+        _ => {
+            if !is_srgb(&profile.color) {
+                return Err(DevelopError::Other(crate::t!("export-libraw-flat")));
+            }
+            match crate::flat::decode_deep(image).map_err(|e| failed(&e))? {
+                crate::flat::Deep::Bits16(img) => img,
+                crate::flat::Deep::Bits8(bmp) => to16(bmp)?,
+            }
+        }
+    };
+    let (w, h) = pixels.dimensions();
+    let side = profile.max_side;
+    if side > 0 && w.max(h) > side {
+        let scale = f64::from(side) / f64::from(w.max(h));
+        let (nw, nh) = (
+            ((f64::from(w) * scale).round() as u32).max(1),
+            ((f64::from(h) * scale).round() as u32).max(1),
+        );
+        pixels = image::imageops::resize(&pixels, nw, nh, image::imageops::FilterType::Lanczos3);
+    }
+    let dir = folder_for(folder, image);
+    std::fs::create_dir_all(&dir).map_err(|e| failed(&e))?;
+    let stem = image
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let out = unique_path(
+        &dir,
+        &format!("{stem}{}", profile.suffix),
+        profile.format.extension(),
+    );
+    write_image(&out, &pixels, profile, icc).map_err(|e| {
+        let _ = std::fs::remove_file(&out);
+        failed(&e)
+    })?;
+    Ok(out)
+}
+
+/// `dir/nom.ext`, ou `nom_01.ext`, `nom_02.ext`… : jamais d'écrasement (comme darktable).
+fn unique_path(dir: &Path, name: &str, ext: &str) -> PathBuf {
+    let first = dir.join(format!("{name}.{ext}"));
+    if !first.exists() {
+        return first;
+    }
+    (1..)
+        .map(|n| dir.join(format!("{name}_{n:02}.{ext}")))
+        .find(|p| !p.exists())
+        .expect("un nom libre")
+}
+
+/// Écrit `pixels` au format du profil, avec le profil ICC `icc`.
+fn write_image(
+    out: &Path,
+    pixels: &crate::raw::Rgb16,
+    profile: &Profile,
+    icc: &[u8],
+) -> Result<(), image::ImageError> {
+    use image::{ExtendedColorType, ImageEncoder};
+    let (w, h) = pixels.dimensions();
+    let file = std::io::BufWriter::new(std::fs::File::create(out)?);
+    let eight = || -> Vec<u8> {
+        pixels
+            .as_raw()
+            .iter()
+            .map(|&v| ((u32::from(v) + 128) / 257) as u8)
+            .collect()
+    };
+    let sixteen = || -> Vec<u8> {
+        pixels
+            .as_raw()
+            .iter()
+            .flat_map(|v| v.to_ne_bytes())
+            .collect()
+    };
+    let deep = profile.bits >= 16;
+    let (bytes, color) = if deep {
+        (sixteen(), ExtendedColorType::Rgb16)
+    } else {
+        (eight(), ExtendedColorType::Rgb8)
+    };
+    let unsupported = |e| image::ImageError::Unsupported(e);
+    match profile.format {
+        Format::Jpeg => {
+            let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(file, profile.quality);
+            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            enc.write_image(&eight(), w, h, ExtendedColorType::Rgb8)
+        }
+        Format::Tiff => {
+            let mut enc = image::codecs::tiff::TiffEncoder::new(file);
+            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            enc.write_image(&bytes, w, h, color)
+        }
+        Format::Png => {
+            let mut enc = image::codecs::png::PngEncoder::new(file);
+            enc.set_icc_profile(icc.to_vec()).map_err(unsupported)?;
+            enc.write_image(&bytes, w, h, color)
+        }
+    }
 }
 
 /// Chemin d'une ligne « `[export_job] exported to `…'` » de darktable.
@@ -719,6 +989,142 @@ mod tests {
             Some(PathBuf::from("/tmp/out/DSCF0331.tif"))
         );
         assert_eq!(exported_path("[export] creating pixelpipe"), None);
+    }
+
+    #[test]
+    fn without_darktable_most_profiles_still_work() {
+        let p = Profiles::default();
+        assert!(
+            libraw_check(p.get("edit").unwrap(), Local::LibRaw).is_ok(),
+            "Retouche"
+        );
+        assert!(
+            libraw_check(p.get("web").unwrap(), Local::LibRaw).is_ok(),
+            "Web"
+        );
+        let p3 = Profile {
+            color: "display-p3".into(),
+            ..Profile::base("p3")
+        };
+        assert!(libraw_check(&p3, Local::LibRaw).unwrap_err().contains("p3"));
+        let float = Profile {
+            format: Format::Tiff,
+            bits: 32,
+            color: "prophoto".into(),
+            ..Profile::base("f32")
+        };
+        assert!(libraw_check(&float, Local::LibRaw).is_err());
+        // JPEG boîtier : sRGB seulement (Web oui, Retouche ProPhoto non).
+        assert!(libraw_check(p.get("web").unwrap(), Local::Embedded).is_ok());
+        assert!(libraw_check(p.get("edit").unwrap(), Local::Embedded).is_err());
+        for color in ["", "srgb", "adobergb", "prophoto", "rec709", "rec2020"] {
+            let (_, icc) = libraw_space(color).unwrap();
+            assert!(icc.encode().is_ok(), "{color}");
+        }
+    }
+
+    #[test]
+    fn nothing_is_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = unique_path(dir.path(), "DSCF0001-web", "jpg");
+        assert_eq!(first, dir.path().join("DSCF0001-web.jpg"));
+        std::fs::write(&first, b"x").unwrap();
+        let second = unique_path(dir.path(), "DSCF0001-web", "jpg");
+        assert_eq!(second, dir.path().join("DSCF0001-web_01.jpg"));
+    }
+
+    #[test]
+    fn a_flat_image_is_exported_with_its_icc_profile() {
+        use image::ImageDecoder;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("photo.png");
+        image::RgbImage::from_pixel(300, 200, image::Rgb([200, 100, 50]))
+            .save(&src)
+            .unwrap();
+        for (format, bits, ext) in [
+            (Format::Jpeg, 8, "jpg"),
+            (Format::Tiff, 16, "tif"),
+            (Format::Png, 16, "png"),
+        ] {
+            let profile = Profile {
+                format,
+                bits,
+                max_side: 150,
+                suffix: "-test".into(),
+                ..Profile::base("t")
+            };
+            let report = export_libraw(
+                std::slice::from_ref(&src),
+                &profile,
+                "export",
+                Local::LibRaw,
+                &AtomicBool::new(false),
+                |_, _, _| {},
+            )
+            .unwrap();
+            assert_eq!(report.failed, 0, "{:?}", report.errors);
+            let out = &report.written[0];
+            assert_eq!(*out, dir.path().join(format!("export/photo-test.{ext}")));
+            let reader = image::ImageReader::open(out)
+                .unwrap()
+                .with_guessed_format()
+                .unwrap();
+            let mut decoder = reader.into_decoder().unwrap();
+            assert_eq!(decoder.dimensions(), (150, 100), "{ext}");
+            assert!(
+                decoder.icc_profile().unwrap().is_some(),
+                "profil ICC dans le {ext}"
+            );
+            let depth = decoder.color_type().bits_per_pixel() / 3;
+            assert_eq!(depth, u16::from(bits), "{ext}");
+        }
+        // Une image plate vers ProPhoto : refusée (espace d'origine inconnu), raison donnée.
+        let prophoto = Profile {
+            format: Format::Tiff,
+            bits: 16,
+            color: "prophoto".into(),
+            ..Profile::base("pp")
+        };
+        let report = export_libraw(
+            &[src],
+            &prophoto,
+            "export",
+            Local::LibRaw,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(report.failed, 1);
+        assert!(report.written.is_empty());
+    }
+
+    /// Export LibRaw réel : `TRI_TEST_RAW` (RAW hors du dépôt), copié.
+    #[test]
+    #[ignore]
+    fn libraw_exports_a_raw_in_16_bit_prophoto() {
+        use image::ImageDecoder;
+        let original = PathBuf::from(std::env::var("TRI_TEST_RAW").expect("RAW de test"));
+        let dir = tempfile::tempdir().unwrap();
+        let raw = dir.path().join(original.file_name().unwrap());
+        std::fs::copy(&original, &raw).unwrap();
+        let profiles = Profiles::default();
+        let report = export_libraw(
+            &[raw],
+            profiles.get("edit").unwrap(),
+            "export",
+            Local::LibRaw,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(report.failed, 0, "{:?}", report.errors);
+        let reader = image::ImageReader::open(&report.written[0])
+            .unwrap()
+            .with_guessed_format()
+            .unwrap();
+        let mut decoder = reader.into_decoder().unwrap();
+        assert_eq!(decoder.color_type(), image::ColorType::Rgb16);
+        assert!(decoder.icc_profile().unwrap().is_some());
     }
 
     /// Export réel : seulement si darktable est installé et `TRI_TEST_DARKTABLE_RAW`

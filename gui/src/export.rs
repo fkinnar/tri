@@ -11,6 +11,31 @@ use eframe::egui::{self, Key, Modifiers, Pos2};
 use tri::develop::{Darktable, DevelopError};
 use tri::export::{Format, Profile, Report};
 
+/// Image exportée : on exporte ce qu'on regarde (idée de l'utilisateur, 19/10/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Render {
+    /// Développée par darktable (son `.xmp`).
+    Darktable,
+    /// Rendu de base par LibRaw (« rendu RAW »).
+    LibRaw,
+    /// JPEG boîtier (aperçu embarqué du RAW).
+    Embedded,
+}
+
+impl Render {
+    /// Ce qu'on regarde : en plein écran, la source affichée ; en grille (`None`),
+    /// darktable s'il est là, sinon LibRaw.
+    pub fn of(viewing: Option<crate::view::Source>, darktable: bool) -> Render {
+        use crate::view::Source;
+        match viewing {
+            Some(Source::Raw) => Render::LibRaw,
+            Some(Source::Embedded) => Render::Embedded,
+            Some(Source::Developed) | None if darktable => Render::Darktable,
+            _ => Render::LibRaw,
+        }
+    }
+}
+
 /// Boîte ouverte.
 pub struct ExportDialog {
     /// Images à exporter (paires déjà réduites à leur RAW, voir [`tri::export::sources`]).
@@ -27,6 +52,11 @@ pub struct ExportDialog {
     at: Pos2,
     /// Première image : le champ prend le focus.
     fresh: bool,
+    /// darktable trouvé ; sinon export par LibRaw (rendu de base), voir
+    /// [`tri::export::export_libraw`].
+    darktable: bool,
+    /// Image exportée : selon ce qu'on regarde, modifiable ici (voir [`Render::of`]).
+    render: Render,
 }
 
 /// Résultat d'une image de la boîte.
@@ -38,8 +68,9 @@ pub enum Outcome {
     /// Export demandé ; `folder` : celui du profil, ou un autre pour cette fois.
     Start {
         images: Vec<PathBuf>,
-        profile: Profile,
+        profile: Box<Profile>,
         folder: String,
+        render: Render,
     },
 }
 
@@ -88,11 +119,14 @@ pub fn profile_summary(p: &Profile) -> String {
 }
 
 impl ExportDialog {
-    /// Boîte pour `images`, profil `choice` présélectionné, avec son dossier.
+    /// Boîte pour `images`, profil `choice` présélectionné, avec son dossier ; `render` :
+    /// l'image proposée (voir [`Render::of`]).
     pub fn new(
         images: &[PathBuf],
         settings: &tri::export::ExportSettings,
         choice: usize,
+        darktable: bool,
+        render: Render,
         at: Pos2,
     ) -> ExportDialog {
         let images = tri::export::sources(images);
@@ -105,6 +139,8 @@ impl ExportDialog {
                 .map(|p| p.folder.clone())
                 .unwrap_or_default(),
             edited: false,
+            darktable,
+            render,
             images,
             profiles,
             field: Default::default(),
@@ -175,10 +211,46 @@ impl ExportDialog {
                     ui.weak(text);
                 }
                 ui.add_space(6.0);
-                ui.weak(t!("export-how"));
+                // Image exportée : darktable (s'il est là), rendu LibRaw, JPEG boîtier.
+                ui.horizontal(|ui| {
+                    ui.label(t!("export-renderer"));
+                    if self.darktable {
+                        ui.selectable_value(&mut self.render, Render::Darktable, "darktable");
+                    }
+                    ui.selectable_value(
+                        &mut self.render,
+                        Render::LibRaw,
+                        t!("export-renderer-libraw"),
+                    );
+                    ui.selectable_value(
+                        &mut self.render,
+                        Render::Embedded,
+                        t!("export-renderer-embedded"),
+                    );
+                });
+                if !self.darktable {
+                    ui.weak(t!("export-no-darktable"));
+                }
+                // Sans darktable : ce que LibRaw et le JPEG boîtier ne savent pas faire.
+                let local = match self.render {
+                    Render::Darktable => None,
+                    Render::LibRaw => Some(tri::export::Local::LibRaw),
+                    Render::Embedded => Some(tri::export::Local::Embedded),
+                };
+                let unsupported = local
+                    .zip(self.profiles.get(self.choice))
+                    .and_then(|(local, p)| tri::export::libraw_check(p, local).err());
+                ui.weak(match self.render {
+                    Render::Darktable => t!("export-how"),
+                    Render::LibRaw => t!("export-how-libraw"),
+                    Render::Embedded => t!("export-how-embedded"),
+                });
+                if let Some(reason) = &unsupported {
+                    ui.colored_label(ui.visuals().error_fg_color, reason);
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let ok = n > 0 && !self.profiles.is_empty();
+                    let ok = n > 0 && !self.profiles.is_empty() && unsupported.is_none();
                     confirm = ui
                         .add_enabled(ok, egui::Button::new(t!("export-button")))
                         .clicked()
@@ -190,8 +262,9 @@ impl ExportDialog {
         if confirm {
             return Outcome::Start {
                 images: std::mem::take(&mut self.images),
-                profile: self.profiles[self.choice].clone(),
+                profile: Box::new(self.profiles[self.choice].clone()),
                 folder: self.input.trim().to_string(),
+                render: self.render,
             };
         }
         if cancel || modal.should_close() {
@@ -204,6 +277,12 @@ impl ExportDialog {
     /// Profil choisi (retenu pour la prochaine boîte).
     pub fn choice(&self) -> usize {
         self.choice
+    }
+
+    /// Image exportée choisie.
+    #[cfg(test)]
+    pub fn render(&self) -> Render {
+        self.render
     }
 }
 
@@ -218,9 +297,11 @@ pub struct Job {
 }
 
 impl Job {
-    /// Lance l'export ; `ctx` est redessiné à chaque fichier écrit.
+    /// Lance l'export : par darktable (`dt`), sinon depuis `local` ; `ctx` est redessiné à
+    /// chaque fichier écrit.
     pub fn start(
-        dt: Darktable,
+        dt: Option<Darktable>,
+        local: tri::export::Local,
         images: Vec<PathBuf>,
         profile: Profile,
         folder: String,
@@ -238,11 +319,18 @@ impl Job {
         let handle = {
             let (done, cancel, ctx) = (done.clone(), cancel.clone(), ctx.clone());
             std::thread::spawn(move || {
-                let result =
-                    tri::export::export(&dt, &images, &profile, &folder, &cancel, |n, _, _| {
-                        done.store(n, Ordering::Relaxed);
-                        ctx.request_repaint();
-                    });
+                let progress = |n: usize, _: usize, _: &Path| {
+                    done.store(n, Ordering::Relaxed);
+                    ctx.request_repaint();
+                };
+                let result = match &dt {
+                    Some(dt) => {
+                        tri::export::export(dt, &images, &profile, &folder, &cancel, progress)
+                    }
+                    None => tri::export::export_libraw(
+                        &images, &profile, &folder, local, &cancel, progress,
+                    ),
+                };
                 ctx.request_repaint();
                 result
             })
@@ -273,5 +361,23 @@ impl Job {
                 .join()
                 .unwrap_or_else(|_| Err(DevelopError::Failed("export".into()))),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::view::Source;
+
+    #[test]
+    fn what_is_exported_is_what_is_looked_at() {
+        // Grille : darktable s'il est là, sinon LibRaw.
+        assert_eq!(Render::of(None, true), Render::Darktable);
+        assert_eq!(Render::of(None, false), Render::LibRaw);
+        // Plein écran : la source affichée.
+        assert_eq!(Render::of(Some(Source::Embedded), true), Render::Embedded);
+        assert_eq!(Render::of(Some(Source::Raw), true), Render::LibRaw);
+        assert_eq!(Render::of(Some(Source::Developed), true), Render::Darktable);
+        assert_eq!(Render::of(Some(Source::Developed), false), Render::LibRaw);
     }
 }

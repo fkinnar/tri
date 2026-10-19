@@ -8,8 +8,8 @@ usage. Les usages de l'utilisateur sont les profils fournis :
   éditeur externe ;
 - **Web** (`web`) : JPEG sRGB qualité 90, 2048 pixels au plus.
 
-Étapes suivantes, prévues : versions recadrées dans `tri` (stockées comme instructions dans
-le XMP), puis un repli LibRaw sans darktable.
+Sans darktable, l'export passe par LibRaw (voir plus bas). Étape suivante prévue : les
+versions recadrées dans `tri` (stockées comme instructions dans le XMP).
 
 ## darktable fait tout
 
@@ -115,6 +115,61 @@ de `folder` (`folder_for`, `output_pattern`) :
 Vérifié le 19/10/2026 : sous-dossiers créés par darktable, accents et espaces compris
 (`séance été/export/…`), et `"."` à côté du RAF.
 
+## On exporte ce qu'on regarde
+
+Règle de l'utilisateur (19/10/2026) : l'image exportée est celle qu'on regarde.
+
+| Où | Image exportée |
+|---|---|
+| Grille | développée par darktable s'il est là, sinon rendu LibRaw |
+| Plein écran, développé (`Maj+B`) | développée par darktable |
+| Plein écran, rendu RAW (`b`) | rendu LibRaw |
+| Plein écran, JPEG boîtier | le JPEG boîtier (aperçu embarqué, à sa taille) |
+
+La boîte d'export la présélectionne (`Render::of`) et permet d'en changer pour cette
+fois : darktable (s'il est là), LibRaw, JPEG boîtier. En ligne de commande : darktable
+s'il est là, `--libraw` ou `--embedded` pour les autres.
+
+Le **JPEG boîtier** (`Local::Embedded`, `preview::embedded_full`) est l'aperçu embarqué du
+RAW à sa taille (71 % du capteur sur un X-T4), redressé, réencodé selon le profil. Il est
+**en sRGB seulement**, puisque c'est son espace : un profil ProPhoto est refusé, avec la
+raison. Une image plate est exportée telle quelle, réencodée.
+
+## Sans darktable : LibRaw
+
+Étape 2 du plan (19/10/2026, « plus simple », selon l'utilisateur) : sans darktable
+installé (ou `--libraw` en ligne de commande), l'export passe par LibRaw
+(`export_libraw`). On obtient le **rendu de base** de `tri`, celui de la touche `b` :
+balance des blancs du boîtier, pas de luminosité automatique, aucun réglage. C'est
+l'exposition réelle de la prise de vue, plus plate que les réglages par défaut de
+darktable.
+
+- **RAW** : `RawFile::render_deep`, rendu complet en **16 bits** directement dans
+  l'espace demandé (`params.output_color` et `params.gamm` de LibRaw).
+  | Espace | LibRaw | Profil ICC intégré |
+  |---|---|---|
+  | `srgb`, `""` | 1, courbe sRGB (1/2,4, 12,92) | sRGB |
+  | `adobergb` | 2, gamma 2,2 | Adobe RGB |
+  | `prophoto` | 4, linéaire | « Linear ProPhoto RGB », comme darktable |
+  | `rec709` | 1, linéaire | « Linear Rec709 RGB » |
+  | `rec2020` | 8, linéaire | « Linear Rec2020 RGB » |
+
+  Display P3, un fichier `.icc` et le TIFF 32 bits demandent darktable : `libraw_check`
+  le dit, la boîte d'export aussi, et le bouton reste grisé.
+- **Images plates** (JPEG, TIFF…) : réencodées, et **en sRGB seulement**. Leur espace
+  d'origine est inconnu ; les convertir vers ProPhoto n'aurait pas de sens.
+- Réduction Lanczos3 en 16 bits (`image::imageops::resize`), puis écriture par le crate
+  `image` : JPEG (8 bits, qualité du profil), TIFF ou PNG en 8 ou 16 bits.
+- **Profils ICC** : générés par `moxcms`, la gestion couleur en pur Rust déjà compilée
+  par `image` (voir [licensing.md](licensing.md)), puis intégrés aux fichiers. Aucun
+  fichier `.icc` n'est livré.
+- Même dossier, mêmes noms, même règle : rien n'est écrasé (`unique_path` : `_01`…).
+  Une image en échec n'arrête pas les autres ; la raison est dans `Report::errors`.
+- Mesuré le 19/10/2026 (deux RAF X-T4, Mac Apple Silicon) : TIFF 16 bits ProPhoto en
+  pleine définition, 8,6 s pour les deux. Comparé visuellement à l'export darktable de la
+  même image : cadrage, orientation et couleurs cohérents, darktable plus clair (ses
+  réglages par défaut).
+
 ## Interface et ligne de commande
 
 - `Ctrl+E` (`Cmd+E` sur macOS), action `core.file.export` : boîte sur la sélection (ou
@@ -126,8 +181,9 @@ Vérifié le 19/10/2026 : sous-dossiers créés par darktable, accents et espace
     première image.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
     d'état (bouton × pour l'arrêter), puis un bilan.
-- `tri --export <profil> <image>... [--to <dossier>] [--dry-run]` : `--to` remplace le
-  dossier du profil (même règle).
+- `tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--dry-run]` :
+  `--to` remplace le dossier du profil (même règle) ; `--libraw` force le rendu LibRaw,
+  `--embedded` exporte le JPEG boîtier.
 
 ## Tests
 

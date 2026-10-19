@@ -4507,10 +4507,18 @@ impl TriApp {
                 }
             }
             Action::FileExport => {
+                let darktable =
+                    tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
                 let dialog = crate::export::ExportDialog::new(
                     &paths,
                     &self.settings.export,
                     self.export_choice,
+                    darktable,
+                    // On exporte ce qu'on regarde : en plein écran, la source affichée.
+                    crate::export::Render::of(
+                        (self.mode != Mode::Grid).then_some(self.source),
+                        darktable,
+                    ),
                     at,
                 );
                 self.file_dialog = Some(crate::files::FileDialog::Export(Box::new(dialog)));
@@ -4567,11 +4575,12 @@ impl TriApp {
                 images,
                 profile,
                 folder,
+                render,
                 choice,
             } => {
                 self.file_dialog = None;
                 self.export_choice = choice;
-                self.start_export(ctx, images, profile, folder);
+                self.start_export(ctx, images, profile, folder, render);
             }
             crate::files::Outcome::Done { select, step } => {
                 if let Some(step) = step {
@@ -4596,25 +4605,32 @@ impl TriApp {
         images: Vec<PathBuf>,
         profile: tri::export::Profile,
         folder: String,
+        render: crate::export::Render,
     ) {
         if self.export_job.is_some() {
             self.notice = Some((t!("export-busy"), true));
             return;
         }
-        let Some(cli) = tri::develop::find_darktable(&self.settings.develop.darktable) else {
-            self.notice = Some((t!("develop-not-found"), true));
-            return;
-        };
         let Some(engine) = &self.engine else { return };
         // Configuration à part de celle des rendus développés : deux darktable peuvent
-        // tourner en même temps (un rendu demandé par Maj+B pendant un export).
-        let dt = tri::develop::Darktable {
+        // tourner en même temps (un rendu demandé par Maj+B pendant un export). Sans
+        // darktable : LibRaw (rendu de base).
+        let darktable = (render == crate::export::Render::Darktable)
+            .then(|| tri::develop::find_darktable(&self.settings.develop.darktable))
+            .flatten();
+        let local = match render {
+            crate::export::Render::Embedded => tri::export::Local::Embedded,
+            _ => tri::export::Local::LibRaw,
+        };
+        let dt = darktable.map(|cli| tri::develop::Darktable {
             cli,
             config_dir: engine.cache.root().join("darktable-export"),
             high_quality: true,
-        };
+        });
         trace(|| format!("export : {} images vers {folder}", images.len()));
-        self.export_job = Some(crate::export::Job::start(dt, images, profile, folder, ctx));
+        self.export_job = Some(crate::export::Job::start(
+            dt, local, images, profile, folder, ctx,
+        ));
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -9153,23 +9169,44 @@ mod tests {
         // Profils fournis et dossier proposé (sous-dossier `export` des images).
         h.get_by_label_contains("Retouche   TIFF 16 bits · ProPhoto (linéaire)");
         h.get_by_label_contains("Web   JPEG 90 % · sRGB · 2048 px au plus");
-        // ↓ : profil Web ; Entrée : export demandé. Sans darktable (tests), la raison
-        // est donnée et rien n'est lancé.
+        // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
+        h.get_by_label_contains("darktable absent");
+        // ↓ : profil Web ; Entrée : export en fond, puis bilan.
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
-        assert!(h.state().export_job.is_none());
+        run_until(&mut h, |app| {
+            app.export_job.is_none() && app.notice.is_some()
+        });
         let notice = h.state().notice.clone().unwrap();
-        assert!(notice.0.contains("darktable"), "{notice:?}");
-        assert!(!dir.path().join("photos/export").exists(), "rien d'écrit");
+        assert!(notice.0.contains("1 image exportée"), "{notice:?}");
+        assert!(dir.path().join("photos/export/img0.jpg").is_file());
         // Rouverte : le profil choisi la dernière fois.
         press(&mut h, Key::E, Modifiers::CTRL);
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
         };
         assert_eq!(dialog.choice(), 1);
+        // En grille, sans darktable : rendu LibRaw.
+        assert_eq!(dialog.render(), crate::export::Render::LibRaw);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
+        // On exporte ce qu'on regarde : plein écran sur le JPEG boîtier, puis le rendu RAW.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        for (key, expected) in [
+            (None, crate::export::Render::Embedded),
+            (Some(Key::B), crate::export::Render::LibRaw),
+        ] {
+            if let Some(key) = key {
+                press(&mut h, key, Modifiers::NONE);
+            }
+            press(&mut h, Key::E, Modifiers::CTRL);
+            let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
+                panic!("boîte d'export attendue");
+            };
+            assert_eq!(dialog.render(), expected);
+            press(&mut h, Key::Escape, Modifiers::NONE);
+        }
     }
 
     #[test]

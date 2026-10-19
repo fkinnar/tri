@@ -13,6 +13,8 @@ repository = "https://github.com/fkinnar/tri"
 blake3 = "1"
 kamadak-exif = "0.6"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
+# Profils ICC des exports sans darktable (déjà compilé par `image`, même version).
+moxcms = "0.8"
 libheif-rs = { version = "3", default-features = false, features = ["v1_17"], optional = true }
 quick-xml = "0.42"
 serde = { version = "1", features = ["derive"] }

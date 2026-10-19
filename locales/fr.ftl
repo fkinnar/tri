@@ -138,7 +138,7 @@ cli-usage =
       tri --copy|--move <image>... --to <dossier> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
-      tri --export <profil> <image>... [--to <dossier>] [--dry-run]
+      tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--dry-run]
     option commune : --config FICHIER (réglages ; défaut : emplacement du système)
 cli-unknown-convention = convention inconnue : { $value } (darktable ou adobe)
 cli-unknown-option = option inconnue : { $option }
@@ -191,6 +191,7 @@ cli-delete-kept = gardé (partagé) :
 cli-dry-run = (--dry-run : rien n'a été modifié)
 cli-export-unknown-profile = profil d'export inconnu : { $profile } (profils : { $known })
 cli-export-plan = export « { $profile } » ({ $summary }) vers { $dest } :
+cli-export-libraw = darktable absent (ou --libraw) : rendu de base par LibRaw
 cli-export-done = { $n ->
     [one] 1 fichier écrit
    *[other] { $n } fichiers écrits
@@ -232,3 +233,7 @@ export-bad-quality = profil d'export « { $profile } » : qualité { $quality } 
 export-bad-color = profil d'export « { $profile } » : espace couleur inconnu « { $value } »
 export-bad-intent = profil d'export « { $profile } » : intention de rendu inconnue « { $value } »
 export-needs-16-bits = profil d'export « { $profile } » : « { $color } » demande 16 bits ou plus (en 8 bits, les dégradés se cassent), donc TIFF ou PNG en 16 bits
+export-libraw-color = profil d'export « { $profile } » : l'espace « { $color } » demande darktable (sans darktable : sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
+export-libraw-bits = profil d'export « { $profile } » : le TIFF 32 bits demande darktable
+export-libraw-flat = image non RAW : sans darktable, exportée en sRGB seulement
+export-embedded-color = profil d'export « { $profile } » : le JPEG boîtier s'exporte en sRGB seulement (c'est son espace)

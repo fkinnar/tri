@@ -46,6 +46,27 @@ impl Default for RenderOptions {
     }
 }
 
+/// Espace couleur de sortie d'un rendu (`params.output_color` de LibRaw) et sa courbe de
+/// tonalité (`params.gamm` : inverse de l'exposant, pente de la partie linéaire).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OutputSpace {
+    /// 1 sRGB, 2 Adobe RGB, 4 ProPhoto, 8 Rec2020 (primaires de LibRaw).
+    pub color: i32,
+    /// `(1 / exposant, pente)` : `(1.0, 1.0)` linéaire.
+    pub gamma: (f32, f32),
+}
+
+impl OutputSpace {
+    /// Celui des aperçus : sRGB, courbe BT.709 (défaut de LibRaw).
+    pub const PREVIEW: OutputSpace = OutputSpace {
+        color: 1,
+        gamma: (0.45, 4.5),
+    };
+}
+
+/// Image RGB 16 bits (rendu pour l'export).
+pub type Rgb16 = image::ImageBuffer<image::Rgb<u16>, Vec<u16>>;
+
 /// Erreurs du module raw.
 #[derive(Debug)]
 pub enum RawError {
@@ -158,6 +179,33 @@ impl MemImage {
 
     fn to_bitmap(&self) -> Result<Bitmap> {
         bitmap_from_processed(self.header(), self.bytes())
+    }
+
+    /// Image 16 bits RGB (valeurs dans l'ordre des octets de la machine, comme LibRaw les
+    /// écrit).
+    fn to_rgb16(&self) -> Result<Rgb16> {
+        let h = self.header();
+        let unsupported = RawError::UnsupportedImage {
+            kind: h.kind,
+            colors: h.colors,
+            bits: h.bits,
+        };
+        if h.kind != ffi::IMAGE_BITMAP || h.bits != 16 || h.colors != 3 {
+            return Err(unsupported);
+        }
+        let (width, height) = (u32::from(h.width), u32::from(h.height));
+        let values = width as usize * height as usize * 3;
+        let bytes = self.bytes();
+        if bytes.len() < values * 2 {
+            return Err(unsupported);
+        }
+        let data = bytes[..values * 2]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&b| u16::from_ne_bytes(b))
+            .collect();
+        Rgb16::from_raw(width, height, data).ok_or(unsupported)
     }
 }
 
@@ -379,6 +427,28 @@ impl RawFile {
         options: &RenderOptions,
         cancel: &AtomicBool,
     ) -> Result<Bitmap> {
+        self.process(options, 8, OutputSpace::PREVIEW, cancel)?
+            .to_bitmap()
+    }
+
+    /// Développement complet en RGB **16 bits**, dans l'espace `space` (export sans
+    /// darktable, voir `tri::export`) ; orientation appliquée, annulable.
+    pub fn render_deep(
+        &mut self,
+        options: &RenderOptions,
+        space: OutputSpace,
+        cancel: &AtomicBool,
+    ) -> Result<Rgb16> {
+        self.process(options, 16, space, cancel)?.to_rgb16()
+    }
+
+    fn process(
+        &mut self,
+        options: &RenderOptions,
+        bits: c_int,
+        space: OutputSpace,
+        cancel: &AtomicBool,
+    ) -> Result<MemImage> {
         if cancel.load(Ordering::Relaxed) {
             return Err(RawError::Cancelled);
         }
@@ -398,7 +468,10 @@ impl RawFile {
         };
         let _reset = ResetHandler(self.ptr);
         unsafe {
-            ffi::libraw_set_output_bps(self.ptr, 8);
+            ffi::libraw_set_output_bps(self.ptr, bits);
+            ffi::libraw_set_output_color(self.ptr, space.color);
+            ffi::libraw_set_gamma(self.ptr, 0, space.gamma.0);
+            ffi::libraw_set_gamma(self.ptr, 1, space.gamma.1);
             ffi::tri_libraw_set_use_camera_wb(self.ptr, options.camera_wb.into());
             ffi::tri_libraw_set_half_size(self.ptr, options.half_size.into());
             ffi::libraw_set_bright(self.ptr, options.bright);
@@ -407,11 +480,10 @@ impl RawFile {
         check(unsafe { ffi::libraw_unpack(self.ptr) })?;
         check(unsafe { ffi::libraw_dcraw_process(self.ptr) })?;
         let mut err: c_int = 0;
-        let img = MemImage::new(
+        MemImage::new(
             unsafe { ffi::libraw_dcraw_make_mem_image(self.ptr, &mut err) },
             err,
-        )?;
-        img.to_bitmap()
+        )
     }
 }
 
