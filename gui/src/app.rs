@@ -7279,6 +7279,52 @@ mod tests {
         );
     }
 
+    /// Robustesse (plantage du 19/10/2026 sur macOS, origine inconnue) : des images
+    /// retirées du dossier pendant chaque mode (grille, plein écran zoomé, comparaison,
+    /// piles) ne doivent jamais faire planter le dessin.
+    #[test]
+    fn images_removed_elsewhere_in_every_mode_do_not_crash() {
+        let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"];
+        for mode in 0..4 {
+            let (mut h, dir) = harness_files(&names, 64, 48);
+            h.run_steps(3);
+            let photos = dir.path().join("photos");
+            h.state_mut().stacking = mode == 3;
+            h.state_mut().stacks_dirty = true;
+            press(&mut h, Key::End, Modifiers::NONE);
+            match mode {
+                1 => {
+                    press(&mut h, Key::Enter, Modifiers::NONE);
+                    press(&mut h, Key::Z, Modifiers::NONE);
+                }
+                2 => {
+                    press(&mut h, Key::A, Modifiers::CTRL);
+                    press(&mut h, Key::C, Modifiers::NONE);
+                }
+                _ => {}
+            }
+            h.run_steps(2);
+            // Les trois dernières disparaissent (déplacées par un autre logiciel).
+            for name in &names[2..] {
+                std::fs::remove_file(photos.join(name)).unwrap();
+            }
+            h.state_mut().reload_folder(None);
+            h.run_steps(5);
+            assert_eq!(h.state().files.len(), 2, "mode {mode}");
+            assert!(h.state().selected < 2, "mode {mode}");
+            // Puis toutes : dossier vide.
+            for name in &names[..2] {
+                std::fs::remove_file(photos.join(name)).unwrap();
+            }
+            h.state_mut().reload_folder(None);
+            h.run_steps(5);
+            assert!(h.state().files.is_empty(), "mode {mode}");
+            for key in [Key::ArrowRight, Key::Enter, Key::Escape, Key::Num3] {
+                press(&mut h, key, Modifiers::NONE);
+            }
+        }
+    }
+
     #[test]
     fn changes_made_elsewhere_show_up_by_themselves() {
         let (mut h, dir) = harness();
