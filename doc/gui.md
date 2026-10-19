@@ -145,9 +145,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   zones saturées en jaune et bouchées en bleu (`analysis_over`, `analysis_under`), d'après
   le masque d'exposition du moteur (bits par canal, `tri::exposure::mask`) ; tous canaux :
   saturé dans un canal quelconque, bouché dans l'ensemble des canaux
-  (`histogram::analysis_image`, testé ; hauteur `analysis_height`). Mise en page (retour
-  du 18/10/2026) : un bloc horizontal sur toute la largeur restante, fond un peu plus
-  clair que la boîte (`analysis_lighten`), image centrée sur toute la hauteur, légende empilée en bas à droite (alignée à droite). Le pointeur
+  (`histogram::analysis_image`, testé). Mise en page : depuis le 19/10/2026, un carré à
+  droite de l'histogramme, à sa hauteur, fond un peu plus clair que la boîte
+  (`analysis_lighten`), image centrée, sans légende (voir plus bas). Le pointeur
   « saisir » de la boîte déplaçable ne remplace plus celui d'un élément (main sur les
   pastilles).
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
@@ -184,9 +184,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
-- **Grand histogramme revu** (19/10/2026) : image d'analyse dans un bloc presque carré
-  (le carré de l'image, `[gui.histogram] analysis_height` = 300, plus la légende), calé
-  à droite ; l'échelle se bascule par une **icône** à gauche des pastilles de canal
+- **Grand histogramme revu** (19/10/2026) : photo d'analyse dans un **carré à droite de
+  l'histogramme, à sa hauteur**, sans légende (« les couleurs parlent d'elles-mêmes ») ;
+  masquée par défaut (`[gui.histogram] analysis`), `p` ou l'icône de photo (à gauche de
+  celle de l'échelle, en couleur d'accent quand elle est montrée) la basculent, et
+  l'histogramme prend alors toute la largeur ; statistiques dessous. Les déplacements
+  (flèches, hjkl, Début / Fin, pages) passent sous la boîte : on parcourt les images,
+  l'histogramme suit. L'échelle se bascule par une **icône** à gauche des pastilles de canal
   (droite : linéaire, courbe logarithmique : IL ; elle montre l'échelle en cours), plus
   par un bouton texte à côté de « Fermer ».
 - **Superpositions** (`o`, `Maj+O` orientation, comme Lightroom, 19/10/2026, voir

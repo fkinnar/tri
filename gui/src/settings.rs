@@ -686,9 +686,10 @@ pub struct HistogramSettings {
     pub stats_tail: f32,
     /// Grand histogramme : diamètre des pastilles de choix du canal (points).
     pub channel_dot: f32,
-    /// Grand histogramme : côté du carré de l'image d'analyse (zones saturées /
-    /// bouchées sur l'image en gris), à droite de la boîte (points).
-    pub analysis_height: f32,
+    /// Grand histogramme : photo d'analyse (zones saturées / bouchées sur l'image en
+    /// gris) affichée à l'ouverture, à droite de l'histogramme et à sa hauteur (`p`
+    /// bascule).
+    pub analysis: bool,
     /// Fond du bloc de l'image d'analyse : fond de la boîte éclairci de cette part vers
     /// le blanc (0 à 1).
     pub analysis_lighten: f32,
@@ -712,7 +713,7 @@ impl Default for HistogramSettings {
             fill_strength: 0.55,
             stats_tail: 0.01,
             channel_dot: 11.0,
-            analysis_height: 300.0,
+            analysis: false,
             analysis_lighten: 0.06,
         }
     }

@@ -143,6 +143,7 @@ pub fn navigate(
         | Action::HistogramGreen
         | Action::HistogramBlue
         | Action::HistogramAll
+        | Action::HistogramPhoto
         | Action::ToggleClipping
         | Action::ToggleMetadata
         | Action::Open

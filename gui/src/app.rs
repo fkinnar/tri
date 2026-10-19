@@ -253,6 +253,8 @@ pub struct TriApp {
     histogram: bool,
     /// Grand histogramme, en boîte modale au milieu de l'écran.
     histogram_large: bool,
+    /// Grand histogramme : photo d'analyse affichée à sa droite (`p`).
+    histogram_photo: bool,
     /// Échelle de l'histogramme.
     histogram_scale: HistogramScale,
     /// Grand histogramme : un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : tous.
@@ -514,6 +516,7 @@ impl TriApp {
             meta: None,
             histogram: gui.histogram.visible,
             histogram_large: false,
+            histogram_photo: gui.histogram.analysis,
             histogram_scale: gui.histogram.scale,
             histogram_channel: None,
             analysis_texture: None,
@@ -1693,7 +1696,18 @@ impl TriApp {
                     | Action::HistogramRed
                     | Action::HistogramGreen
                     | Action::HistogramBlue
-                    | Action::HistogramAll => self.perform(ctx, action),
+                    | Action::HistogramAll
+                    | Action::HistogramPhoto => self.perform(ctx, action),
+                    // Se déplacer d'image en image sous la boîte (retour du 19/10/2026) :
+                    // l'histogramme suit l'image courante.
+                    Action::NavPrev
+                    | Action::NavNext
+                    | Action::NavUp
+                    | Action::NavDown
+                    | Action::NavFirst
+                    | Action::NavLast
+                    | Action::NavPageUp
+                    | Action::NavPageDown => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -2104,6 +2118,7 @@ impl TriApp {
             Action::HistogramGreen => self.histogram_channel = Some(1),
             Action::HistogramBlue => self.histogram_channel = Some(2),
             Action::HistogramAll => self.histogram_channel = None,
+            Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -3796,24 +3811,13 @@ impl TriApp {
         Some(texture)
     }
 
-    /// Bloc de l'image d'analyse, à droite des statistiques : fond un peu plus clair que
-    /// la boîte, image centrée, légende empilée en bas à droite (retours du 18/10/2026).
-    fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle) {
+    /// Photo d'analyse dans un bloc carré de côté `side` (la hauteur de l'histogramme, à
+    /// sa droite). Sans légende (retour du 19/10/2026 : les couleurs parlent d'elles-mêmes,
+    /// et le carré seul est plus élégant).
+    fn analysis_block(&self, ui: &mut Ui, texture: &TextureHandle, side: f32) {
         let settings = &self.gui.histogram;
         let margin = self.gui.dialogs.spacing.max(4.0);
-        let c = &self.gui.colors;
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let galleys = [
-            (t!("analysis-over"), Color32::from(c.analysis_over)),
-            (t!("analysis-under"), Color32::from(c.analysis_under)),
-        ]
-        .map(|(text, color)| ui.painter().layout_no_wrap(text, font.clone(), color));
-        let legend_w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
-        // Presque carré (retour du 19/10/2026) : un carré pour l'image, plus la place de
-        // la légende ; le bloc pleine largeur laissait surtout du gris.
-        let side = settings.analysis_height;
-        let size = vec2(side + legend_w + 3.0 * margin, side + 2.0 * margin);
-        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
         let painter = ui.painter();
         let fill = ui.visuals().window_fill;
         let k = settings.analysis_lighten.clamp(0.0, 1.0);
@@ -3823,19 +3827,7 @@ impl TriApp {
             4.0,
             Color32::from_rgb(lighten(fill.r()), lighten(fill.g()), lighten(fill.b())),
         );
-        let inner = rect.shrink(margin);
-        // Légende : les deux mots l'un au-dessus de l'autre, en bas à droite du bloc,
-        // alignés à droite ; l'image dans le carré à leur gauche (retour du 18/10/2026 :
-        // la photo est petite, chaque ligne gagnée compte).
-        let mut y = inner.max.y;
-        for g in galleys.into_iter().rev() {
-            y -= g.size().y;
-            painter.galley(pos2(inner.max.x - g.size().x, y), g, Color32::WHITE);
-        }
-        let room = Rect::from_min_max(
-            inner.min,
-            pos2(inner.max.x - legend_w - margin, inner.max.y),
-        );
+        let room = rect.shrink(margin);
         let image = texture.size_vec2();
         let fit = (room.width() / image.x)
             .min(room.height() / image.y)
@@ -3867,109 +3859,136 @@ impl TriApp {
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
         let dialog = modal_at("histogram_dialog", at).title(name).free_width();
+        let mut toggle_photo = false;
         let modal = dialog.show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            match &exposure {
-                Some(e) => {
-                    let look = histogram::Look {
-                        scale: self.histogram_scale,
-                        details: true,
-                        channel: self.histogram_channel,
-                    };
-                    histogram::draw(
-                        ui.painter(),
-                        rect,
-                        e,
-                        look,
-                        &self.gui.histogram,
-                        &self.gui.colors,
-                    );
-                    // Pastilles : rouge, vert, bleu, blanc (tous les canaux).
-                    let names = [
-                        t!("stats-red"),
-                        t!("stats-green"),
-                        t!("stats-blue"),
-                        t!("stats-all"),
-                    ];
-                    let dots = histogram::channel_dots(rect, self.gui.histogram.channel_dot);
-                    let direct = [
-                        Action::HistogramRed,
-                        Action::HistogramGreen,
-                        Action::HistogramBlue,
-                        Action::HistogramAll,
-                    ];
-                    // Échelle : icône à gauche des pastilles, qui montre celle en cours.
-                    let button = histogram::scale_button(rect, self.gui.histogram.channel_dot);
-                    let (current, other) = match self.histogram_scale {
-                        HistogramScale::Ev => {
-                            (t!("histogram-scale-ev"), t!("histogram-scale-linear"))
-                        }
-                        HistogramScale::Linear => {
-                            (t!("histogram-scale-linear"), t!("histogram-scale-ev"))
-                        }
-                    };
-                    let tip = t!(
-                        "histogram-scale-tip",
-                        current = current,
-                        other = other,
-                        keys = self.keymap.keys_for(Action::HistogramScale).join(" / ")
-                    );
-                    let response = ui
-                        .interact(button, egui::Id::unique("histogram_scale"), Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(tip);
-                    let color = if response.hovered() {
-                        ui.visuals().strong_text_color()
-                    } else {
-                        ui.visuals().text_color()
-                    };
-                    histogram::scale_icon(ui.painter(), button, self.histogram_scale, color);
-                    if response.clicked() {
-                        scale = true;
-                    }
-                    for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
-                        let tip = t!(
-                            "histogram-channel-tip",
-                            channel = name,
-                            key = self.keymap.keys_for(direct[i]).join(" / "),
-                            keys = self.keymap.keys_for(Action::HistogramChannel).join(" / ")
+            // Photo d'analyse à droite de l'histogramme, à sa hauteur (retour du
+            // 19/10/2026 : boîte plus compacte) ; sans elle, l'histogramme prend toute la
+            // largeur.
+            let spacing = self.gui.dialogs.spacing;
+            let photo = analysis
+                .as_ref()
+                .filter(|_| self.histogram_photo && exposure.is_some());
+            let block = photo.map_or(0.0, |_| size.y + spacing);
+            let row = ui.horizontal_top(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(vec2(size.x - block, size.y), Sense::hover());
+                match &exposure {
+                    Some(e) => {
+                        let look = histogram::Look {
+                            scale: self.histogram_scale,
+                            details: true,
+                            channel: self.histogram_channel,
+                        };
+                        histogram::draw(
+                            ui.painter(),
+                            rect,
+                            e,
+                            look,
+                            &self.gui.histogram,
+                            &self.gui.colors,
                         );
-                        if ui
-                            .interact(
-                                dot.expand(3.0),
-                                egui::Id::unique("histogram_channel").with(i),
-                                Sense::click(),
-                            )
+                        // Pastilles : rouge, vert, bleu, blanc (tous les canaux).
+                        let names = [
+                            t!("stats-red"),
+                            t!("stats-green"),
+                            t!("stats-blue"),
+                            t!("stats-all"),
+                        ];
+                        let dots = histogram::channel_dots(rect, self.gui.histogram.channel_dot);
+                        let direct = [
+                            Action::HistogramRed,
+                            Action::HistogramGreen,
+                            Action::HistogramBlue,
+                            Action::HistogramAll,
+                        ];
+                        // Échelle : icône à gauche des pastilles, qui montre celle en cours.
+                        let button = histogram::scale_button(rect, self.gui.histogram.channel_dot);
+                        let (current, other) = match self.histogram_scale {
+                            HistogramScale::Ev => {
+                                (t!("histogram-scale-ev"), t!("histogram-scale-linear"))
+                            }
+                            HistogramScale::Linear => {
+                                (t!("histogram-scale-linear"), t!("histogram-scale-ev"))
+                            }
+                        };
+                        let tip = t!(
+                            "histogram-scale-tip",
+                            current = current,
+                            other = other,
+                            keys = self.keymap.keys_for(Action::HistogramScale).join(" / ")
+                        );
+                        let response = ui
+                            .interact(button, egui::Id::unique("histogram_scale"), Sense::click())
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .on_hover_text(tip)
-                            .clicked()
-                        {
-                            channel = Some((i < 3).then_some(i));
+                            .on_hover_text(tip);
+                        let color = if response.hovered() {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().text_color()
+                        };
+                        histogram::scale_icon(ui.painter(), button, self.histogram_scale, color);
+                        if response.clicked() {
+                            scale = true;
+                        }
+                        // Photo d'analyse : icône à gauche de l'échelle, en couleur d'accent
+                        // quand elle est montrée.
+                        let button = histogram::photo_button(rect, self.gui.histogram.channel_dot);
+                        let key = self.keymap.keys_for(Action::HistogramPhoto).join(" / ");
+                        let response = ui
+                            .interact(button, egui::Id::unique("histogram_photo"), Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text(t!("histogram-photo-tip", keys = key));
+                        let color = if self.histogram_photo {
+                            ui.visuals().selection.stroke.color
+                        } else if response.hovered() {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().text_color()
+                        };
+                        histogram::photo_icon(ui.painter(), button, color);
+                        if response.clicked() {
+                            toggle_photo = true;
+                        }
+                        for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
+                            let tip = t!(
+                                "histogram-channel-tip",
+                                channel = name,
+                                key = self.keymap.keys_for(direct[i]).join(" / "),
+                                keys = self.keymap.keys_for(Action::HistogramChannel).join(" / ")
+                            );
+                            if ui
+                                .interact(
+                                    dot.expand(3.0),
+                                    egui::Id::unique("histogram_channel").with(i),
+                                    Sense::click(),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .on_hover_text(tip)
+                                .clicked()
+                            {
+                                channel = Some((i < 3).then_some(i));
+                            }
                         }
                     }
-                }
-                None => {
-                    ui.painter().text(
-                        rect.center(),
-                        Align2::CENTER_CENTER,
-                        t!("histogram-computing"),
-                        FontId::proportional(14.0),
-                        ui.visuals().weak_text_color(),
-                    );
-                }
-            }
-            if let Some(e) = &exposure {
-                // Statistiques, et à leur droite l'image d'analyse (zones du canal choisi
-                // sur l'image en gris).
-                ui.horizontal_top(|ui| {
-                    ui.vertical(|ui| self.histogram_stats(ui, e));
-                    if let Some(texture) = &analysis {
-                        // Calée à droite de la boîte.
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            self.analysis_block(ui, texture);
-                        });
+                    None => {
+                        ui.painter().text(
+                            rect.center(),
+                            Align2::CENTER_CENTER,
+                            t!("histogram-computing"),
+                            FontId::proportional(14.0),
+                            ui.visuals().weak_text_color(),
+                        );
                     }
-                });
+                }
+                if let Some(texture) = photo {
+                    ui.add_space(spacing);
+                    self.analysis_block(ui, texture, size.y);
+                }
+            });
+            let _ = row;
+            if let Some(e) = &exposure {
+                // Statistiques sous l'histogramme, sur toute la largeur.
+                self.histogram_stats(ui, e);
                 // Sur des données RAW, pas de luminance : chaque photosite ne mesure
                 // qu'une couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sous
                 // le tableau et l'image : sur la ligne du tableau, elle l'élargissait et
@@ -3988,6 +4007,9 @@ impl TriApp {
         }
         if let Some(channel) = channel {
             self.histogram_channel = channel;
+        }
+        if toggle_photo {
+            self.histogram_photo = !self.histogram_photo;
         }
         if close || modal.should_close() {
             self.histogram_large = false;
@@ -8189,14 +8211,24 @@ mod tests {
         // L'échelle est une icône dans l'histogramme (19/10/2026), plus un bouton texte
         // à côté de « Fermer ».
         assert!(h.query_by_label("Échelle linéaire").is_none());
+        // p : photo d'analyse affichée / masquée (masquée par défaut).
+        assert!(!h.state().histogram_photo);
+        press(&mut h, Key::P, Modifiers::NONE);
+        assert!(h.state().histogram_photo, "p la montre");
+        press(&mut h, Key::P, Modifiers::NONE);
+        assert!(!h.state().histogram_photo, "p la masque");
         press(&mut h, Key::I, Modifiers::SHIFT);
         assert_eq!(
             h.state().histogram_scale,
             HistogramScale::Linear,
             "Maj+I dans la boîte"
         );
+        // Les déplacements passent sous la boîte : l'histogramme suit l'image courante.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
-        assert_eq!(h.state().selected, 0, "la grille ne bouge pas derrière");
+        assert_eq!(h.state().selected, 1, "→ : image suivante");
+        assert!(h.state().histogram_large, "boîte toujours ouverte");
+        press(&mut h, Key::H, Modifiers::NONE);
+        assert_eq!(h.state().selected, 0, "h aussi");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large, "Échap la ferme");
         assert_eq!(h.state().mode, Mode::Grid);

@@ -439,12 +439,12 @@ fill_strength = 0.55
 # les pixels isolés (0,01 : centiles 1 % et 99 %).
 stats_tail = 0.01
 # Grand histogramme : diamètre des pastilles de canal (rouge, vert, bleu, blanc = tous ;
-# Maj+C les fait tourner), côté du carré de l'image d'analyse, calée à droite de la
-# boîte, légende à côté (en gris, zones saturées / bouchées en analysis_over /
-# analysis_under, du canal choisi), et éclaircissement de son fond par rapport à celui
-# de la boîte (0 à 1).
+# Maj+C les fait tourner) ; photo d'analyse (en gris, zones saturées / bouchées en
+# analysis_over / analysis_under, du canal choisi) affichée à l'ouverture, à droite de
+# l'histogramme et à sa hauteur (p ou l'icône de photo la montrent ou la masquent) ;
+# éclaircissement de son fond par rapport à celui de la boîte (0 à 1).
 channel_dot = 11.0
-analysis_height = 300.0
+analysis = false
 analysis_lighten = 0.06
 
 [gui.sharpness]

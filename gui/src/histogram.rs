@@ -98,6 +98,31 @@ pub fn scale_button(rect: Rect, dot: f32) -> Rect {
     )
 }
 
+/// Bouton de la photo d'analyse : à gauche du bouton d'échelle, même taille.
+pub fn photo_button(rect: Rect, dot: f32) -> Rect {
+    let scale = scale_button(rect, dot);
+    scale.translate(vec2(-(scale.width() + dot * 0.6), 0.0))
+}
+
+/// Icône d'une photo (cadre, montagne, soleil) dans `rect`.
+pub fn photo_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.12);
+    let stroke = Stroke::new((rect.width() * 0.08).max(1.2), color);
+    painter.rect_stroke(r, 2.0, stroke, egui::StrokeKind::Middle);
+    let at = |x: f32, y: f32| pos2(r.left() + x * r.width(), r.top() + y * r.height());
+    painter.add(egui::Shape::line(
+        vec![
+            at(0.08, 0.85),
+            at(0.4, 0.45),
+            at(0.62, 0.7),
+            at(0.75, 0.55),
+            at(0.92, 0.8),
+        ],
+        stroke,
+    ));
+    painter.circle_filled(at(0.72, 0.28), r.width() * 0.09, color);
+}
+
 /// Icône de l'échelle `scale` dans `rect` : une droite pour le linéaire, une courbe
 /// logarithmique pour l'échelle en IL.
 pub fn scale_icon(painter: &Painter, rect: Rect, scale: HistogramScale, color: Color32) {

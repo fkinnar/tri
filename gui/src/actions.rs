@@ -320,6 +320,8 @@ pub enum Action {
     HistogramBlue,
     /// Grand histogramme ouvert : tous les canaux.
     HistogramAll,
+    /// Grand histogramme ouvert : afficher / masquer la photo d'analyse à sa droite.
+    HistogramPhoto,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -356,7 +358,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 120] = [
+    pub const ALL: [Action; 121] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -450,6 +452,7 @@ impl Action {
         Action::HistogramGreen,
         Action::HistogramBlue,
         Action::HistogramAll,
+        Action::HistogramPhoto,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -517,8 +520,8 @@ impl Action {
             ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint | OverlayNext
-            | OverlayOrient => Group::View,
+            | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint
+            | OverlayNext | OverlayOrient => Group::View,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -639,6 +642,7 @@ impl Action {
             Action::HistogramGreen => "core.histogram.green",
             Action::HistogramBlue => "core.histogram.blue",
             Action::HistogramAll => "core.histogram.all",
+            Action::HistogramPhoto => "core.histogram.photo",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -731,7 +735,9 @@ impl Action {
             | FolderDelete | FolderFavorite => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
-            HistogramRed | HistogramGreen | HistogramBlue | HistogramAll => Some(Scope::Histogram),
+            HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
+                Some(Scope::Histogram)
+            }
             _ => None,
         }
     }
@@ -992,6 +998,8 @@ const HISTOGRAM: &[Binding] = {
         (&[plain(Key::G)], HistogramGreen),
         (&[plain(Key::B)], HistogramBlue),
         (&[plain(Key::A)], HistogramAll),
+        // p : la photo d'analyse (zones sur l'image en gris), à droite de l'histogramme.
+        (&[plain(Key::P)], HistogramPhoto),
     ]
 };
 
