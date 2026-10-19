@@ -7907,7 +7907,13 @@ mod tests {
         // Une case à cocher (réglage booléen) : pas un bouton d'egui.
         h.event(UiEvent::Text("auto_advance".into()));
         h.run_steps(2);
-        let rect = h.get_by_role(egui::accesskit::Role::CheckBox).rect();
+        // La première : `[gui] auto_advance` (la recherche floue en trouve d'autres, dont
+        // le texte contient ces lettres dans l'ordre).
+        let rect = h
+            .query_all_by_role(egui::accesskit::Role::CheckBox)
+            .next()
+            .expect("une case")
+            .rect();
         // On a tapé : pointeur masqué jusqu'à ce que la souris bouge.
         h.hover_at(rect.center() + vec2(1.0, 0.0));
         h.run_steps(1);
