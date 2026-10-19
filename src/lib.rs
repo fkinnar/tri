@@ -30,6 +30,7 @@ pub mod files;
 pub mod filter;
 pub mod flat;
 pub mod folder;
+pub mod fuzzy;
 pub mod history;
 pub mod i18n;
 pub mod jpeg;

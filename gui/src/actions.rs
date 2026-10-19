@@ -56,63 +56,9 @@ impl Group {
     }
 }
 
-/// Lettre sans accent, en minuscule (recherche floue).
-fn fold(c: char) -> char {
-    let c = c.to_lowercase().next().unwrap_or(c);
-    match c {
-        'à' | 'â' | 'ä' | 'á' => 'a',
-        'é' | 'è' | 'ê' | 'ë' => 'e',
-        'î' | 'ï' | 'í' => 'i',
-        'ô' | 'ö' | 'ó' => 'o',
-        'ù' | 'û' | 'ü' | 'ú' => 'u',
-        'ç' => 'c',
-        'œ' => 'o',
-        other => other,
-    }
-}
-
-/// Score de `query` dans `text` à la façon de fzf : chaque mot de la requête (séparés par
-/// des espaces) doit s'y retrouver lettre par lettre, dans l'ordre, éventuellement avec
-/// des trous (« pnd » trouve « panneau des dossiers »), sans tenir compte des accents ni
-/// de la casse. `None` : pas de correspondance ; plus le score est grand, meilleure elle
-/// est (lettres consécutives, débuts de mots). Requête vide : `Some(0)`.
-pub fn fuzzy_score(query: &str, text: &str) -> Option<i32> {
-    let text: Vec<char> = text.chars().map(fold).collect();
-    let mut total = 0;
-    for word in query.split_whitespace() {
-        let word: Vec<char> = word.chars().map(fold).collect();
-        total += word_score(&word, &text)?;
-    }
-    Some(total)
-}
-
-fn word_score(word: &[char], text: &[char]) -> Option<i32> {
-    // Meilleure correspondance gloutonne depuis chaque départ possible.
-    let first = *word.first()?;
-    (0..text.len())
-        .filter(|&i| text[i] == first)
-        .filter_map(|start| {
-            let (mut score, mut pos, mut previous) = (0, start, None::<usize>);
-            for &c in word {
-                let found = (pos..text.len()).find(|&i| text[i] == c)?;
-                score += 10;
-                if previous.is_some_and(|p| p + 1 == found) {
-                    score += 15; // lettres consécutives
-                }
-                if found == 0 || !text[found - 1].is_alphanumeric() {
-                    // Début de mot : surtout pour la première lettre (« pnd »).
-                    score += if previous.is_none() { 20 } else { 5 };
-                }
-                if let Some(p) = previous {
-                    score -= (found - p - 1).min(10) as i32; // trou
-                }
-                previous = Some(found);
-                pos = found + 1;
-            }
-            Some(score)
-        })
-        .max()
-}
+/// Recherche floue à la fzf : dans le moteur ([`tri::fuzzy`]), pour l'aide, les réglages,
+/// les filtres de la grille et la recherche de dossiers.
+pub use tri::fuzzy::score as fuzzy_score;
 
 /// Filtres sur le drapeau proposés à l'utilisateur.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -300,6 +246,9 @@ pub enum Action {
     Send(&'static str),
     /// Copier toute la pile de l'image vers un dossier (`yw`).
     FileCopyStack,
+    /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
+    /// un dossier (aussi `/`, sauf en plein écran où il vaut « ajusté »).
+    Search,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -358,7 +307,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 121] = [
+    pub const ALL: [Action; 122] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -442,6 +391,7 @@ impl Action {
         Action::MetaSelectUp,
         Action::MetaSelectDown,
         Action::MetaCopyAll,
+        Action::Search,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -516,7 +466,7 @@ impl Action {
         use Action::*;
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
-            | Open | Back => Group::Navigation,
+            | Open | Back | Search => Group::Navigation,
             ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
@@ -633,6 +583,7 @@ impl Action {
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
             Action::ToggleFolderPanel => "core.view.folders",
+            Action::Search => "core.search",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
@@ -933,6 +884,9 @@ const BASICS: &[Binding] = {
         (&[plain(Key::B)], ToggleSource),
         (&[plain(Key::Escape)], Back),
         (&[plain(Key::F1)], Help),
+        // Rechercher : Ctrl+F partout ; `/` aussi en grille et dans le panneau des
+        // dossiers (en plein écran, `/` reste « ajusté », voir `TriApp::perform`).
+        (&[ctrl(Key::F)], Search),
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (&[plain(Key::Questionmark)], Help),
         (&[shifted(Key::Questionmark)], Help),

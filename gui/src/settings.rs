@@ -287,6 +287,8 @@ pub struct GridSettings {
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
     pub stacks: bool,
+    /// Champ de recherche par nom de la barre des filtres (`/`, Ctrl+F) : largeur (points).
+    pub search_width: f32,
 }
 
 impl Default for GridSettings {
@@ -305,6 +307,7 @@ impl Default for GridSettings {
             blur_badge: true,
             stack_slider: 110.0,
             stacks: false,
+            search_width: 200.0,
         }
     }
 }
@@ -557,6 +560,10 @@ pub struct FolderSettings {
     pub indent: f32,
     /// Montrer les dossiers cachés (`.xxx`).
     pub hidden: bool,
+    /// Recherche de dossiers (`/`) : niveaux de sous-dossiers parcourus au plus.
+    pub search_depth: usize,
+    /// Recherche de dossiers : nombre de résultats au plus.
+    pub search_results: usize,
 }
 
 impl Default for FolderSettings {
@@ -566,6 +573,8 @@ impl Default for FolderSettings {
             width: 240.0,
             indent: 14.0,
             hidden: false,
+            search_depth: 4,
+            search_results: 200,
         }
     }
 }

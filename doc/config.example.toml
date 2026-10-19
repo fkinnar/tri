@@ -311,6 +311,8 @@ stack_slider = 110.0
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
 stacks = false
+# Recherche par nom de fichier (/ ou Ctrl+F en grille) : largeur du champ (points).
+search_width = 200.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -403,6 +405,10 @@ visible = true
 width = 240.0
 indent = 14.0
 hidden = false
+# Recherche de dossiers (/ ou Ctrl+F dans le panneau) : niveaux de sous-dossiers
+# parcourus au plus, et nombre de résultats au plus.
+search_depth = 4
+search_results = 200
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

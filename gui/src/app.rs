@@ -221,6 +221,19 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// Recherche par nom de fichier (filtre de la grille, `/`, Ctrl+F).
+    name_query: String,
+    /// Champ de recherche à qui donner le clavier à la prochaine image.
+    focus_request: Option<egui::Id>,
+    /// Champ de recherche qui avait le clavier à l'image précédente : egui le retire dès
+    /// qu'Échap arrive, avant les raccourcis ; c'est lui qui dit à qui Échap revient.
+    search_focused: Option<egui::Id>,
+    /// Recherche de dossiers (panneau des dossiers) : texte, parcours en fond, résultats
+    /// (meilleurs d'abord) et celui pointé.
+    folder_query: String,
+    folder_search: Option<tri::places::DirSearch>,
+    folder_results: Vec<(PathBuf, i32)>,
+    folder_result: usize,
     /// Superpositions (o) : grilles intégrées et celles de l'utilisateur, relues à chaque
     /// changement (un fichier modifié se voit à la pression suivante) ; celle affichée
     /// (0 : aucune) ; logos chargés (`None` : illisible).
@@ -499,6 +512,13 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            name_query: String::new(),
+            focus_request: None,
+            search_focused: None,
+            folder_query: String::new(),
+            folder_search: None,
+            folder_results: Vec::new(),
+            folder_result: 0,
             overlays: Vec::new(),
             overlay: 0,
             overlay_flip: tri::overlay::Flip::None,
@@ -943,6 +963,11 @@ impl TriApp {
                 self.tree.refresh();
             }
         });
+        // Recherche de dossiers (retour du 19/10/2026) : sous le titre ; pendant la
+        // recherche, les résultats remplacent l'arborescence.
+        if self.folder_search_ui(ui) {
+            return;
+        }
         ui.separator();
         // Dossier ouvert montré à sa première ligne (son favori en tête, s'il en est un).
         let mut reveal = std::mem::take(&mut self.reveal_folder);
@@ -1263,6 +1288,11 @@ impl TriApp {
             .apply(groups),
             None => groups,
         };
+        // Recherche par nom (`/`) : le même trait que les autres filtres.
+        let groups = tri::fuzzy::NameFilter {
+            query: &self.name_query,
+        }
+        .apply(groups);
         self.blurry_applied = self.blurry_now();
         self.files = groups.into_iter().flatten().collect();
         self.status = vec![Status::default(); self.files.len()];
@@ -1850,6 +1880,8 @@ impl TriApp {
                     }
                 }
             }
+            // Échap dans un champ de recherche : la recherche d'abord.
+            Action::Back if self.search_escape(ctx) => {}
             Action::Back if self.focus != crate::actions::Scope::Images => {
                 self.focus = crate::actions::Scope::Images;
             }
@@ -1925,6 +1957,13 @@ impl TriApp {
                     };
                     self.request_zoom();
                 }
+            }
+            // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
+            Action::Search => self.start_search(),
+            Action::ZoomFit
+                if self.mode == Mode::Grid || self.focus == crate::actions::Scope::Folders =>
+            {
+                self.start_search()
             }
             // Paliers (+, -), 100 % (*), ajusté (/) : comme Lightroom.
             Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::Zoom100
@@ -2092,6 +2131,7 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::FilterClear => {
+                self.name_query.clear();
                 self.filter = KindFilter::All;
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
@@ -2674,6 +2714,191 @@ impl TriApp {
             }
             self.zoom_focus_pending = None;
         }
+    }
+
+    /// Touches de la recherche, pour les bulles et les indications.
+    fn search_keys(&self) -> String {
+        let mut keys = vec!["/".to_string()];
+        keys.extend(self.keymap.keys_for(Action::Search));
+        keys.join(", ")
+    }
+
+    /// Ouvre la recherche : dans le panneau des dossiers s'il a le clavier, sinon celle de
+    /// la grille (barre des filtres montrée, retour à la grille depuis le plein écran).
+    fn start_search(&mut self) {
+        if self.focus == crate::actions::Scope::Folders && self.folder_panel {
+            self.focus_request = Some(folder_search_id());
+            return;
+        }
+        if self.mode != Mode::Grid {
+            if self.mode == Mode::Compare {
+                self.leave_compare();
+            }
+            self.mode = Mode::Grid;
+            self.zoom = None;
+        }
+        self.filter_bar = true;
+        self.focus = crate::actions::Scope::Images;
+        self.focus_request = Some(grid_search_id());
+    }
+
+    /// Échap dans un champ de recherche : la grille efface son filtre, le panneau des
+    /// dossiers referme la recherche. Vrai si l'action est prise.
+    fn search_escape(&mut self, ctx: &egui::Context) -> bool {
+        let field = self.search_focused.take();
+        if field == Some(grid_search_id()) {
+            ctx.memory_mut(|m| m.surrender_focus(grid_search_id()));
+            if !self.name_query.is_empty() {
+                self.name_query.clear();
+                self.refilter(Reveal::Minimal);
+            }
+            return true;
+        }
+        if field == Some(folder_search_id()) {
+            ctx.memory_mut(|m| m.surrender_focus(folder_search_id()));
+            self.close_folder_search();
+            return true;
+        }
+        false
+    }
+
+    /// Referme la recherche de dossiers (l'arborescence revient).
+    fn close_folder_search(&mut self) {
+        self.folder_query.clear();
+        self.folder_search = None;
+        self.folder_results.clear();
+        self.folder_result = 0;
+    }
+
+    /// Relance la recherche de dossiers sur le texte tapé : depuis le dossier pointé dans
+    /// le panneau (sinon celui ouvert, sinon le dossier personnel), `~/…` ou `/…`.
+    fn restart_folder_search(&mut self, ctx: &egui::Context) {
+        self.folder_results.clear();
+        self.folder_result = 0;
+        if self.folder_query.trim().is_empty() {
+            self.folder_search = None;
+            return;
+        }
+        let home = tri::places::home();
+        let current = self
+            .tree
+            .cursor_path()
+            .or_else(|| (!self.folder.is_none()).then(|| self.folder.dir.clone()))
+            .or_else(|| home.clone())
+            .unwrap_or_else(|| PathBuf::from("/"));
+        let query = tri::places::parse_dir_query(&self.folder_query, &current, home.as_deref());
+        let f = self.gui.folders;
+        let repaint = ctx.clone();
+        self.folder_search = Some(tri::places::DirSearch::start(
+            query,
+            f.search_depth,
+            f.hidden,
+            f.search_results,
+            move || repaint.request_repaint(),
+        ));
+    }
+
+    /// Ouvre le dossier trouvé `path` : la recherche se referme, l'arborescence le montre.
+    fn open_found_folder(&mut self, path: PathBuf) {
+        self.close_folder_search();
+        self.tree.reveal(&path);
+        self.tree.point_at(&path);
+        self.open_folder(&path);
+        self.reveal_folder = true;
+        self.focus = crate::actions::Scope::Images;
+    }
+
+    /// Champ de recherche du panneau des dossiers et, pendant une recherche, ses
+    /// résultats (↑ / ↓ choisissent, Entrée ou un clic ouvre). Vrai si les résultats
+    /// remplacent l'arborescence.
+    fn folder_search_ui(&mut self, ui: &mut Ui) -> bool {
+        let focused_search = ui.memory(|m| m.has_focus(folder_search_id()));
+        if focused_search {
+            let (up, down) = ui.input_mut(|i| {
+                (
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                )
+            });
+            let last = self.folder_results.len().saturating_sub(1);
+            if up {
+                self.folder_result = self.folder_result.saturating_sub(1);
+            }
+            if down {
+                self.folder_result = (self.folder_result + 1).min(last);
+            }
+        }
+        let field = ui
+            .add(
+                egui::TextEdit::singleline(&mut self.folder_query)
+                    .id(folder_search_id())
+                    .hint_text(t!("search-folder-hint"))
+                    .desired_width(f32::INFINITY),
+            )
+            .on_hover_text(t!("search-folder-tip", keys = self.search_keys()));
+        if self.focus_request == Some(folder_search_id()) {
+            field.request_focus();
+            self.focus_request = None;
+        }
+        if field.changed() {
+            let ctx = ui.ctx().clone();
+            self.restart_folder_search(&ctx);
+        }
+        let enter = field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if field.has_focus() {
+            self.search_focused = Some(folder_search_id());
+        }
+        let Some(search) = self.folder_search.as_ref() else {
+            return false;
+        };
+        let new = search.take();
+        let base = search.query().base.clone();
+        let running = !search.is_done();
+        if !new.is_empty() {
+            self.folder_results.extend(new);
+            // Meilleurs d'abord ; à score égal, les moins profonds.
+            self.folder_results.sort_by(|a, b| {
+                b.1.cmp(&a.1)
+                    .then(a.0.components().count().cmp(&b.0.components().count()))
+            });
+        }
+        ui.separator();
+        ui.weak(t!("search-folder-in", base = base.display().to_string()));
+        if running {
+            ui.weak(t!("search-folder-running"));
+        } else if self.folder_results.is_empty() {
+            ui.weak(t!("search-folder-none"));
+        }
+        let mut open = None;
+        if enter && let Some((path, _)) = self.folder_results.get(self.folder_result) {
+            open = Some(path.clone());
+        }
+        let accent = Color32::from(self.gui.dialogs.title_color);
+        ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+            for (i, (path, _)) in self.folder_results.iter().enumerate() {
+                let relative = path.strip_prefix(&base).unwrap_or(path);
+                let label =
+                    ui.selectable_label(i == self.folder_result, relative.display().to_string());
+                if i == self.folder_result {
+                    ui.painter().rect_stroke(
+                        label.rect.expand(1.0),
+                        3.0,
+                        egui::Stroke::new(1.5, accent),
+                        egui::StrokeKind::Outside,
+                    );
+                    if focused_search {
+                        label.scroll_to_me(None);
+                    }
+                }
+                if label.clicked() {
+                    open = Some(path.clone());
+                }
+            }
+        });
+        if let Some(path) = open {
+            self.open_found_folder(path);
+        }
+        true
     }
 
     /// Relit les superpositions : grilles intégrées (couleur et opacité des réglages),
@@ -4317,6 +4542,9 @@ impl TriApp {
             Some(tri::sharpness::BlurRule::OnlyBlurry) => parts.push(t!("filter-bar-only-blurry")),
             None => {}
         }
+        if !self.name_query.trim().is_empty() {
+            parts.push(t!("filter-summary-name", query = self.name_query.trim()));
+        }
         if parts.is_empty() {
             t!("filter-all")
         } else {
@@ -4327,6 +4555,7 @@ impl TriApp {
     /// Barre de filtres, à la souris : chaque clic déclenche la même action que le clavier.
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
+        let mut refilter = false;
         let colors = self.gui.colors;
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -4521,7 +4750,8 @@ impl TriApp {
             ui.separator();
             let any = self.filter != KindFilter::All
                 || !self.notes_rule.is_empty()
-                || self.blur_rule.is_some();
+                || self.blur_rule.is_some()
+                || !self.name_query.trim().is_empty();
             if ui
                 .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
                 .on_hover_text(self.action_tip(Action::FilterClear))
@@ -4535,7 +4765,29 @@ impl TriApp {
                 n = self.folder.files.len()
             ))
             .on_hover_text(t!("filter-bar-count-tip"));
+            // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
+            ui.add_space(self.gui.dialogs.spacing);
+            let hint = t!("search-grid-hint", keys = self.search_keys());
+            let field = ui.add(
+                egui::TextEdit::singleline(&mut self.name_query)
+                    .id(grid_search_id())
+                    .hint_text(hint)
+                    .desired_width(self.gui.grid.search_width),
+            );
+            if self.focus_request == Some(grid_search_id()) {
+                field.request_focus();
+                self.focus_request = None;
+            }
+            if field.changed() {
+                refilter = true;
+            }
+            if field.has_focus() {
+                self.search_focused = Some(grid_search_id());
+            }
         });
+        if refilter {
+            self.refilter(Reveal::Minimal);
+        }
         let ctx = ui.ctx().clone();
         for action in clicked {
             self.perform(&ctx, action);
@@ -5476,6 +5728,8 @@ impl eframe::App for TriApp {
             self.mouse_active = true;
         }
         self.handle_keys(&ctx);
+        // Les champs de recherche dessinés dans cette image disent s'ils ont le clavier.
+        self.search_focused = None;
         self.update_loads(&ctx);
 
         let status_click = egui::Panel::bottom("status")
@@ -5650,6 +5904,16 @@ fn uses_cursor(action: Action) -> bool {
             | Action::StackToggle
             | Action::StackChoose
     )
+}
+
+/// Champ de recherche par nom de la grille.
+fn grid_search_id() -> egui::Id {
+    egui::Id::unique("grid_search")
+}
+
+/// Champ de recherche du panneau des dossiers.
+fn folder_search_id() -> egui::Id {
+    egui::Id::unique("folder_search")
 }
 
 /// Position d'un niveau dans `TriApp::progress`, `None` pour le 1:1 (non suivi).
@@ -7375,6 +7639,88 @@ mod tests {
                 press(&mut h, key, Modifiers::NONE);
             }
         }
+    }
+
+    #[test]
+    fn slash_searches_the_grid_by_name() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        // `/` en grille : le champ de recherche prend le clavier.
+        h.event(UiEvent::Text("/".into()));
+        h.run_steps(3);
+        assert!(
+            h.ctx.memory(|m| m.has_focus(grid_search_id())),
+            "champ actif"
+        );
+        h.event(UiEvent::Text("img1".into()));
+        h.run_steps(3);
+        assert_eq!(names(&h), ["img1.jpg"], "filtre en direct");
+        assert!(h.state().filter_summary().contains("img1"));
+        // Entrée : le filtre reste, le clavier revient à la grille.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!h.ctx.memory(|m| m.has_focus(grid_search_id())));
+        assert_eq!(names(&h).len(), 1);
+        // Ctrl+F y retourne ; Échap efface le filtre.
+        press(&mut h, Key::F, Modifiers::CTRL);
+        assert!(h.ctx.memory(|m| m.has_focus(grid_search_id())));
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(names(&h).len(), 3, "Échap : filtre effacé");
+        assert!(h.state().name_query.is_empty());
+        // En plein écran, `/` reste « ajusté » (pas de recherche).
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        h.event(UiEvent::Text("/".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(!h.ctx.memory(|m| m.has_focus(grid_search_id())));
+    }
+
+    #[test]
+    fn slash_searches_folders_from_the_pointed_one() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        for d in ["séances/2026/2026-10-17_Dehors", "séances/2025/Plage"] {
+            std::fs::create_dir_all(dir.path().join(d)).unwrap();
+        }
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        h.state_mut().tree.point_at(dir.path());
+        h.event(UiEvent::Text("/".into()));
+        h.run_steps(3);
+        assert!(
+            h.ctx.memory(|m| m.has_focus(folder_search_id())),
+            "champ des dossiers"
+        );
+        h.event(UiEvent::Text("dehors".into()));
+        run_until(&mut h, |app| {
+            app.folder_search.as_ref().is_some_and(|s| s.is_done())
+                && !app.folder_results.is_empty()
+        });
+        h.run_steps(2);
+        let target = dir.path().join("séances/2026/2026-10-17_Dehors");
+        assert_eq!(h.state().folder_results[0].0, target);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(
+            h.state().folder.dir,
+            target,
+            "Entrée ouvre le dossier trouvé"
+        );
+        assert!(h.state().folder_search.is_none(), "recherche refermée");
+        // Échap referme une recherche en cours, l'arborescence revient.
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::F, Modifiers::CTRL);
+        h.event(UiEvent::Text("plage".into()));
+        h.run_steps(3);
+        assert!(h.state().folder_search.is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().folder_search.is_none() && h.state().folder_query.is_empty());
     }
 
     #[test]

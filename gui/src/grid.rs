@@ -134,6 +134,7 @@ pub fn navigate(
         | Action::MetaDown
         | Action::MetaCopy
         | Action::ToggleFolderPanel
+        | Action::Search
         | Action::RefreshFolders
         | Action::ToggleHistogram
         | Action::HistogramScale

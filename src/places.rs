@@ -444,6 +444,169 @@ fn device_of(mounts: &str, path: &Path) -> Option<String> {
     })
 }
 
+/// Recherche de dossiers (panneau des dossiers, `/`, retour du 19/10/2026) : d'où elle
+/// part et ce qu'elle cherche.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DirQuery {
+    /// Dossier de départ : ses sous-dossiers sont parcourus.
+    pub base: PathBuf,
+    /// Motif cherché en flou ([`crate::fuzzy`]) sur le chemin relatif à `base`.
+    pub pattern: String,
+}
+
+/// Lit ce qui est tapé : `~/…` part du dossier personnel `home`, `/…` de la racine ou du
+/// plus long chemin existant tapé en tête (`/Volumes/Work/dehors` : de `/Volumes/Work`),
+/// sinon du dossier `current` (celui pointé dans le panneau).
+pub fn parse_dir_query(text: &str, current: &Path, home: Option<&Path>) -> DirQuery {
+    let text = text.trim_start();
+    if let (Some(home), Some(rest)) = (
+        home,
+        text.strip_prefix("~/").or((text == "~").then_some("")),
+    ) {
+        return DirQuery {
+            base: home.to_path_buf(),
+            pattern: rest.to_string(),
+        };
+    }
+    if Path::new(text).is_absolute() {
+        // Le plus long préfixe, coupé à un séparateur, qui soit un dossier existant.
+        let cuts = text
+            .char_indices()
+            .filter(|(_, c)| std::path::is_separator(*c))
+            .map(|(i, _)| i + 1)
+            .collect::<Vec<_>>();
+        for &cut in cuts.iter().rev() {
+            let base = Path::new(&text[..cut]);
+            if base.is_dir() {
+                return DirQuery {
+                    base: base.to_path_buf(),
+                    pattern: text[cut..].to_string(),
+                };
+            }
+        }
+    }
+    DirQuery {
+        base: current.to_path_buf(),
+        pattern: text.to_string(),
+    }
+}
+
+/// Dossier personnel de l'utilisateur (`HOME`, `USERPROFILE` sous Windows).
+pub fn home() -> Option<PathBuf> {
+    home_dir(std::env::consts::OS, |name| std::env::var_os(name))
+}
+
+/// Recherche de dossiers en fond ([`walk_dirs`] et [`crate::fuzzy`]) : les dossiers dont
+/// le chemin relatif à la base correspond au motif arrivent au fil de l'eau, avec leur
+/// score. S'arrête après `limit` correspondances, ou quand on la lâche (nouvelle lettre).
+pub struct DirSearch {
+    query: DirQuery,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    results: std::sync::mpsc::Receiver<(PathBuf, i32)>,
+}
+
+impl DirSearch {
+    /// Lance la recherche ; `notify` est appelé à chaque résultat et à la fin (redessiner).
+    pub fn start(
+        query: DirQuery,
+        depth: usize,
+        hidden: bool,
+        limit: usize,
+        notify: impl Fn() + Send + 'static,
+    ) -> DirSearch {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let done = std::sync::Arc::new(AtomicBool::new(false));
+        let (tx, results) = std::sync::mpsc::channel();
+        {
+            let (cancel, done, q) = (cancel.clone(), done.clone(), query.clone());
+            std::thread::spawn(move || {
+                let mut count = 0;
+                walk_dirs(&q.base, depth, hidden, &cancel, |dir| {
+                    let relative = dir.strip_prefix(&q.base).unwrap_or(dir);
+                    if let Some(score) =
+                        crate::fuzzy::score(&q.pattern, &relative.to_string_lossy())
+                    {
+                        count += 1;
+                        if tx.send((dir.to_path_buf(), score)).is_err() {
+                            return false;
+                        }
+                        notify();
+                    }
+                    count < limit
+                });
+                done.store(true, Ordering::Relaxed);
+                notify();
+            });
+        }
+        DirSearch {
+            query,
+            cancel,
+            done,
+            results,
+        }
+    }
+
+    /// La requête lue.
+    pub fn query(&self) -> &DirQuery {
+        &self.query
+    }
+
+    /// Résultats arrivés depuis le dernier appel.
+    pub fn take(&self) -> Vec<(PathBuf, i32)> {
+        self.results.try_iter().collect()
+    }
+
+    /// Vrai quand le parcours est fini (ou arrêté).
+    pub fn is_done(&self) -> bool {
+        self.done.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl Drop for DirSearch {
+    fn drop(&mut self) {
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Parcourt les sous-dossiers de `base` en largeur (les plus proches d'abord), sur
+/// `depth` niveaux au plus, sans les dossiers cachés (sauf `hidden`) ni les sauvegardes
+/// Time Machine. `found` reçoit chaque dossier et renvoie faux pour arrêter ; `cancel`
+/// interrompt (une nouvelle lettre tapée).
+pub fn walk_dirs(
+    base: &Path,
+    depth: usize,
+    hidden: bool,
+    cancel: &std::sync::atomic::AtomicBool,
+    mut found: impl FnMut(&Path) -> bool,
+) {
+    use std::sync::atomic::Ordering;
+    let mut level = vec![base.to_path_buf()];
+    for _ in 0..depth {
+        let mut next = Vec::new();
+        for dir in &level {
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
+            for child in subfolders(dir, hidden).unwrap_or_default() {
+                if is_backup(&child) {
+                    continue;
+                }
+                if !found(&child) {
+                    return;
+                }
+                next.push(child);
+            }
+        }
+        if next.is_empty() {
+            return;
+        }
+        level = next;
+    }
+}
+
 /// Une ligne de l'arborescence affichée : un emplacement (profondeur 0) ou un dossier.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
@@ -761,6 +924,72 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| OsString::from(v))
         }
+    }
+
+    #[test]
+    fn a_background_search_finds_matching_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        for d in ["2025/Plage", "2026/2026-10-17_Self_Dehors", "2026/Studio"] {
+            std::fs::create_dir_all(dir.path().join(d)).unwrap();
+        }
+        let query = parse_dir_query("2026 dehors", dir.path(), None);
+        let search = DirSearch::start(query, 4, false, 100, || {});
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !search.is_done() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let found: Vec<PathBuf> = search.take().into_iter().map(|(p, _)| p).collect();
+        assert_eq!(found, [dir.path().join("2026/2026-10-17_Self_Dehors")]);
+    }
+
+    #[test]
+    fn folder_queries_start_where_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("Work/2026/Dehors")).unwrap();
+        let current = Path::new("/ici");
+        let home = root.join("Work");
+        let q = |t: &str| parse_dir_query(t, current, Some(&home));
+        assert_eq!(q("dehors").base, current);
+        assert_eq!(q("dehors").pattern, "dehors");
+        assert_eq!(q("~/deh").base, home);
+        assert_eq!(q("~/deh").pattern, "deh");
+        assert_eq!(q("~").base, home);
+        let typed = format!("{}/Work/2026/deh", root.display());
+        assert_eq!(
+            q(&typed).base,
+            root.join("Work/2026"),
+            "plus long chemin existant"
+        );
+        assert_eq!(q(&typed).pattern, "deh");
+        assert_eq!(q("/zzz").base, Path::new("/"), "racine");
+    }
+
+    #[test]
+    fn folders_are_walked_breadth_first_within_depth() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for d in ["a/b/c/d", "e", ".cachée/x"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let mut seen = Vec::new();
+        walk_dirs(root, 3, false, &cancel, |p| {
+            seen.push(p.strip_prefix(root).unwrap().to_path_buf());
+            true
+        });
+        let names: Vec<String> = seen.iter().map(|p| p.display().to_string()).collect();
+        assert_eq!(
+            names,
+            ["a", "e", "a/b", "a/b/c"],
+            "en largeur, 3 niveaux, sans les cachés"
+        );
+        let mut count = 0;
+        walk_dirs(root, 3, true, &cancel, |_| {
+            count += 1;
+            count < 2
+        });
+        assert_eq!(count, 2, "arrêt demandé");
     }
 
     #[test]

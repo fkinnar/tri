@@ -91,6 +91,17 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
 - un même dossier présent sous deux emplacements (`/Volumes/SD` sous « Volumes » et sous
   la racine) est déplié aux deux endroits (état rangé par chemin).
 
+## Recherche de dossiers (19/10/2026)
+
+`/` ou Ctrl+F dans le panneau des dossiers. `parse_dir_query(texte, courant, home)` lit
+d'où part la recherche : `~/…` du dossier personnel, `/…` de la racine ou du plus long
+chemin existant tapé en tête (`/Volumes/Work/dehors`), sinon du dossier pointé ; le reste
+est le motif, cherché en flou (`tri::fuzzy`) sur le chemin relatif. `walk_dirs` parcourt
+en largeur (les plus proches d'abord), borné en profondeur (`[gui.folders]
+search_depth`), sans dossiers cachés ni sauvegardes Time Machine, annulable.
+`DirSearch` le fait en fond : résultats au fil de l'eau (`take`), `search_results` au
+plus, arrêt quand on la lâche (nouvelle lettre). `home()` : le dossier personnel.
+
 ## Favoris (18/10/2026)
 
 Dossiers choisis par l'utilisateur, montrés en tête de l'arborescence (avant les

@@ -184,6 +184,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
   désélectionne avant de quitter le plein écran. Notes, corbeille et éditeur s'appliquent
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
+- **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
+  écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ après le compteur de
+  la barre des filtres (`[gui.grid] search_width`), filtre en direct par nom de fichier
+  (`tri::fuzzy::NameFilter`, combiné aux autres filtres, « Effacer » le vide aussi) ;
+  Entrée garde le filtre et rend le clavier à la grille, Échap l'efface. **Dossiers** :
+  champ sous le titre ; pendant la recherche, les résultats remplacent l'arborescence
+  (voir `places.md` : `~/…`, `/…`, sinon depuis le dossier pointé) ; ↑ ↓ choisissent,
+  Entrée ou un clic ouvre (et montre le dossier dans l'arborescence), Échap referme.
+  egui retire le clavier au champ dès qu'Échap arrive : `search_focused` retient le champ
+  actif de l'image précédente pour qu'Échap lui revienne.
 - **Grand histogramme revu** (19/10/2026) : photo d'analyse dans un **carré à droite de
   l'histogramme, à sa hauteur**, sans légende (« les couleurs parlent d'elles-mêmes ») ;
   masquée par défaut (`[gui.histogram] analysis`), `p` ou l'icône de photo (à gauche de
