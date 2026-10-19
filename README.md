@@ -20,7 +20,8 @@ clavier (jeu « classique » ou « vim »), à la souris aussi.
 
 - **macOS** (`.dmg`) : glisser `tri.app` dans Applications. L'app n'est pas encore
   signée par Apple : au premier lancement, macOS refuse ; ouvrir alors **Réglages
-  système → Confidentialité et sécurité → « Ouvrir quand même »**.
+  système → Confidentialité et sécurité → « Ouvrir quand même »**, ou retirer la
+  quarantaine dans un terminal : `xattr -dr com.apple.quarantine /Applications/tri.app`.
 - **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 ou plus récent) : décompresser, puis
   `./install.sh` (dans `~/.local`, sans droits administrateur ; `--uninstall` pour
   retirer). `tri` apparaît dans le menu des applications.

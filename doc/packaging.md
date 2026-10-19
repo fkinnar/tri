@@ -51,7 +51,10 @@ Sur Apple Silicon, tout binaire doit être signé ; modifier les bibliothèques
 hoc »** (sans identité). Ça suffit pour lancer l'app, mais un `.dmg` téléchargé est mis en
 quarantaine : au premier lancement, macOS refuse, puis **Réglages système →
 Confidentialité et sécurité → « Ouvrir quand même »** (le clic droit → Ouvrir ne suffit
-plus depuis macOS 15). Acceptable pour l'alpha (testeurs prévenus).
+plus depuis macOS 15), ou dans un terminal `xattr -dr com.apple.quarantine
+/Applications/tri.app` (retire seulement la quarantaine ; `xattr -cr` efface tous les
+attributs étendus, plus large que nécessaire). Acceptable pour l'alpha (testeurs
+prévenus).
 
 Pour la **bêta publique**, il faudra signer et notariser :
 
