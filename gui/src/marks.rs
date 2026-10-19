@@ -418,6 +418,23 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
     }
 }
 
+/// Avertissement : triangle plein et point d'exclamation évidé (vignette impossible à
+/// calculer). Dessiné, pas de glyphe « ⚠ » : la police de l'interface ne l'a pas.
+pub fn warning(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center();
+    let h = s * 0.85;
+    let w = h * 1.1;
+    let top = c + vec2(0.0, -h * 0.5);
+    let triangle = vec![top, c + vec2(w * 0.5, h * 0.5), c + vec2(-w * 0.5, h * 0.5)];
+    painter.add(Shape::convex_polygon(triangle, color, Stroke::NONE));
+    // Point d'exclamation, de la couleur du fond (évidé).
+    let hole = Color32::from_black_alpha(200);
+    let bar = Stroke::new(h * 0.11, hole);
+    painter.line_segment([c + vec2(0.0, -h * 0.17), c + vec2(0.0, h * 0.18)], bar);
+    painter.circle_filled(c + vec2(0.0, h * 0.33), h * 0.065, hole);
+}
+
 /// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
 /// pointe de flèche au bout.
 pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {

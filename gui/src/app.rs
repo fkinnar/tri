@@ -5177,13 +5177,8 @@ impl TriApp {
                 ui.painter().image(texture.id(), dest, uv, tint);
             }
             (None, Avail::Failed(error)) => {
-                ui.painter().text(
-                    image_area.center(),
-                    Align2::CENTER_CENTER,
-                    "⚠",
-                    FontId::proportional(28.0),
-                    colors.warning.into(),
-                );
+                let mark = Rect::from_center_size(image_area.center(), vec2(32.0, 32.0));
+                marks::warning(ui.painter(), mark, colors.warning.into());
                 response.clone().on_hover_text(error.clone());
             }
             (None, _) => {} // en attente : cellule vide
@@ -6515,6 +6510,23 @@ mod tests {
 
     fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
         h.key_press_modifiers(modifiers, key);
+        h.run_steps(3);
+    }
+
+    #[test]
+    fn a_failed_thumbnail_shows_a_drawn_warning() {
+        // Vignette impossible à calculer : avertissement dessiné, pas de glyphe « ⚠ »
+        // (absent de la police : case vide en usage, panique dans les tests ; vu sous
+        // Windows, CI du 19/10/2026).
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.status.iter().all(|s| s.thumbnail == Avail::Ready)
+        });
+        let app = h.state_mut();
+        app.textures.clear();
+        for s in &mut app.status {
+            s.thumbnail = Avail::Failed("fichier illisible".into());
+        }
         h.run_steps(3);
     }
 

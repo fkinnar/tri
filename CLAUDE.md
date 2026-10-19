@@ -653,6 +653,15 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   la bêta publique, `--sign`), archive Linux avec `install.sh` (LibRaw livrée, rpath),
   notices `cargo about` et licences des bibliothèques. Reste : zip Windows. Icône choisie (« t » et étoile, `scripts/make-icon.py`), barre du haut
   (icône et nom à gauche), mode concentration (F11).
+- **Mots-clés** (angle mort des spécifications, signalé par l'utilisateur le 19/10/2026 :
+  « un gros chantier si on veut le faire bien ») : à concevoir avec lui avant de coder.
+  Points à trancher : champs XMP (`dc:subject` à plat, lisible partout ;
+  `lr:hierarchicalSubject` « Lieu|France|Bretagne » de Lightroom et darktable ;
+  `digiKam:TagsList` ; tout lire, écrire les plus répandus, ne rien perdre comme pour les
+  notes) ; vocabulaire (mots-clés du dossier, liste globale de `tri`, import de la liste
+  de Lightroom, fichier texte indenté) ; saisie au clavier avec complétion floue, sur la
+  sélection ; filtre par mot-clé (même trait `Filter`) ; panneau ou boîte ; mots-clés
+  hiérarchiques, synonymes ; annulation (historique) ; place par rapport à la V1.
 - **AirDrop** reporté après tout ça (bon test de l'architecture des plugins, voir « Après
   la V1 »).
 
