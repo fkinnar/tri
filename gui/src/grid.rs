@@ -98,6 +98,13 @@ pub fn navigate(
         | Action::FileDeleteStack
         | Action::FileCopyStack
         | Action::FileExport
+        | Action::Crop
+        | Action::CropMove(_)
+        | Action::CropSize(_)
+        | Action::CropRatio(_)
+        | Action::CropRotate
+        | Action::CropSave
+        | Action::VersionNext
         | Action::Send(_)
         | Action::Undo
         | Action::Redo

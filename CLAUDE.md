@@ -639,7 +639,12 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   d'export facultatif qui pré-remplit la boîte, badge dans la grille (pas une vignette par
   version), cadre libre ou à rapport fixe avec voile gris autour, tout à la souris aussi,
   flèches (classique) / hjkl (vim). **Moteur fait** (géométrie, `tri:Versions` en JSON
-  dans le XMP, annulable). Reste : l'interface, puis l'export d'une version. darktable trouvé aussi en **AppImage**
+  dans le XMP, annulable). **Interface faite** (19/10/2026) : `r`, voile et poignées,
+  barre des rapports, versions sous les notes, `n`. Reste : badge dans la grille, export
+  d'une version.
+- **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, juste après les
+  versions) : fenêtre de réglages, section Export — nouveau profil, dupliquer, supprimer
+  (profils de l'utilisateur seulement), mêmes contrôles et refus des incohérences. darktable trouvé aussi en **AppImage**
   (`~/AppImages`…, vérifié sous Mint) et en Flatpak. Étape suivante : versions recadrées
   dans `tri` (instructions dans le XMP), à discuter d'abord (interface).
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des

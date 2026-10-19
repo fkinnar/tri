@@ -205,6 +205,12 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
+    /// Recadrage en cours (plein écran, `r`) : une version de l'image.
+    crop: Option<crate::crop::Crop>,
+    /// Version montrée en plein écran : (image, place dans sa liste).
+    version_shown: Option<(PathBuf, usize)>,
+    /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
+    versions: HashMap<PathBuf, tri::versions::Versions>,
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<usize>; 2],
@@ -505,6 +511,9 @@ impl TriApp {
             auto_advance: gui.auto_advance,
             rating_dialog: None,
             file_dialog: None,
+            crop: None,
+            version_shown: None,
+            versions: HashMap::new(),
             export_choice: [None; 2],
             export_job: None,
             file_error: None,
@@ -1764,6 +1773,20 @@ impl TriApp {
                 }
                 continue;
             }
+            // Recadrage : ses touches, Échap abandonne.
+            if self.crop.is_some() {
+                match action {
+                    Action::Back => self.crop = None,
+                    Action::CropMove(_)
+                    | Action::CropSize(_)
+                    | Action::CropRatio(_)
+                    | Action::CropRotate
+                    | Action::CropSave => self.perform(ctx, action),
+                    _ if action.works_over_overlay() => self.perform(ctx, action),
+                    _ => {}
+                }
+                continue;
+            }
             // Grand histogramme : échelle, fermeture (Échap, même touche).
             if self.histogram_large {
                 match action {
@@ -2012,6 +2035,56 @@ impl TriApp {
             // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
             Action::Search => self.start_search(),
             Action::Develop => self.develop_current(),
+            Action::Crop => self.start_crop(),
+            Action::CropMove(dir) | Action::CropSize(dir) => {
+                let step = self.gui.crop.step;
+                let (dx, dy) = match dir {
+                    crate::actions::Dir::Left => (-step, 0.0),
+                    crate::actions::Dir::Right => (step, 0.0),
+                    crate::actions::Dir::Up => (0.0, -step),
+                    crate::actions::Dir::Down => (0.0, step),
+                };
+                if let Some(crop) = &mut self.crop {
+                    if matches!(action, Action::CropMove(_)) {
+                        crop.nudge(dx, dy);
+                    } else {
+                        crop.grow(dx, dy);
+                    }
+                }
+            }
+            Action::CropRatio(n) => {
+                if let (Some(crop), Some(&ratio)) = (
+                    &mut self.crop,
+                    tri::versions::Ratio::PRESETS.get(usize::from(n)),
+                ) {
+                    crop.set_ratio(ratio);
+                }
+            }
+            Action::CropRotate => {
+                if let Some(crop) = &mut self.crop {
+                    crop.rotate();
+                }
+            }
+            Action::CropSave => self.save_crop(),
+            Action::VersionNext => {
+                if self.mode == Mode::View
+                    && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
+                {
+                    let n = self.versions_of(&path).list.len();
+                    let current = self
+                        .version_shown
+                        .as_ref()
+                        .filter(|(p, _)| *p == path)
+                        .map(|(_, i)| *i);
+                    let next = match current {
+                        None if n > 0 => Some(0),
+                        Some(i) if i + 1 < n => Some(i + 1),
+                        _ => None,
+                    };
+                    self.version_shown = next.map(|i| (path, i));
+                    self.zoom = None;
+                }
+            }
             Action::FocusMode => {
                 self.focus_mode = !self.focus_mode;
                 ctx.send_viewport_cmd(ViewportCommand::Fullscreen(self.focus_mode));
@@ -3051,6 +3124,157 @@ impl TriApp {
         current
     }
 
+    /// Rapport largeur / hauteur de `path` tel qu'affiché (redressé), d'après une image déjà
+    /// chargée ; `None` si aucune ne l'est.
+    fn image_aspect(&mut self, path: &Path) -> Option<f64> {
+        let big = [
+            Level::Developed,
+            Level::Standard,
+            Level::Embedded,
+            Level::EmbeddedFull,
+            Level::Full,
+        ]
+        .into_iter()
+        .find_map(|level| {
+            self.big
+                .get(&(path.to_path_buf(), level))
+                .map(|b| b.original)
+        });
+        let size = big.or_else(|| {
+            self.textures
+                .get(&path.to_path_buf())
+                .map(|t| t.size_vec2())
+        })?;
+        (size.y > 0.0).then(|| f64::from(size.x / size.y))
+    }
+
+    /// Versions de `path` (lues dans son sidecar à la première demande).
+    fn versions_of(&mut self, path: &Path) -> &tri::versions::Versions {
+        self.versions
+            .entry(path.to_path_buf())
+            .or_insert_with(|| tri::versions::read(path).unwrap_or_default())
+    }
+
+    /// Rouvre le cadre de la version `index` de `path`, sur l'image où elle a été faite.
+    fn edit_version(&mut self, path: &Path, index: usize) {
+        let Some(version) = self.versions_of(path).list.get(index).cloned() else {
+            return;
+        };
+        self.source = match version.source {
+            tri::versions::Source::Embedded => Source::Embedded,
+            tri::versions::Source::Raw => Source::Raw,
+            tri::versions::Source::Developed => Source::Developed,
+        };
+        self.zoom = None;
+        self.version_shown = None;
+        self.crop = Some(crate::crop::Crop::edit(path.to_path_buf(), index, &version));
+        self.request_zoom();
+    }
+
+    /// Supprime la version `index` de `path` (annulable).
+    fn delete_version(&mut self, path: &Path, index: usize) {
+        let convention = self.settings.xmp.sidecar;
+        let result = tri::versions::read(path).and_then(|mut versions| {
+            let before = versions.items();
+            if index >= versions.list.len() {
+                return Ok(None);
+            }
+            let removed = versions.list.remove(index);
+            tri::versions::write(path, &versions, convention)?;
+            Ok(Some((before, versions.items(), removed.name)))
+        });
+        self.versions.remove(path);
+        self.version_shown = None;
+        match result {
+            Ok(Some((before, after, name))) => {
+                self.history.push(tri::history::Step::Versions {
+                    image: path.to_path_buf(),
+                    before,
+                    after,
+                    change: tri::history::VersionChange::Deleted(name.clone()),
+                });
+                self.notice = Some((t!("versions-deleted", name = name), false));
+            }
+            Ok(None) => {}
+            Err(e) => self.notice = Some((t!("crop-failed", error = e.to_string()), true)),
+        }
+    }
+
+    /// `r` : recadrer l'image (nouvelle version) ; en plein écran, ajusté (depuis la grille,
+    /// l'ouvre). On recadre ce qu'on voit : la source affichée.
+    fn start_crop(&mut self) {
+        let Some(file) = self.files.get(self.selected) else {
+            return;
+        };
+        let path = file.path.clone();
+        if self.mode != Mode::View {
+            self.mode = Mode::View;
+        }
+        self.zoom = None;
+        let source = match self.source {
+            Source::Embedded => tri::versions::Source::Embedded,
+            Source::Raw => tri::versions::Source::Raw,
+            Source::Developed => tri::versions::Source::Developed,
+        };
+        let aspect = self.image_aspect(&path);
+        self.crop = Some(crate::crop::Crop::new(path, source, aspect));
+        self.request_zoom();
+    }
+
+    /// Enregistre la version du recadrage en cours (annulable), dans le sidecar de l'image.
+    fn save_crop(&mut self) {
+        // Proportions de l'image pas encore connues (rien d'affiché) : le cadre serait faux.
+        if !self.crop.as_ref().is_some_and(crate::crop::Crop::ready) {
+            return;
+        }
+        let Some(crop) = self.crop.take() else {
+            return;
+        };
+        let image = crop.image.clone();
+        let convention = self.settings.xmp.sidecar;
+        let result = tri::versions::read(&image).and_then(|mut versions| {
+            let before = versions.items();
+            let mut version = crop.version();
+            let change = match crop.editing.filter(|&i| i < versions.list.len()) {
+                Some(i) => {
+                    versions.list[i] = version.clone();
+                    tri::history::VersionChange::Changed(version.name.clone())
+                }
+                None => {
+                    version.name = versions.new_name(&version.name);
+                    versions.list.push(version.clone());
+                    tri::history::VersionChange::Created(version.name.clone())
+                }
+            };
+            tri::versions::write(&image, &versions, convention)?;
+            Ok((before, versions.items(), change, version.name))
+        });
+        match result {
+            Ok((before, after, change, name)) => {
+                self.versions.remove(&image);
+                // La version enregistrée est montrée.
+                let index = self
+                    .versions_of(&image)
+                    .list
+                    .iter()
+                    .position(|v| v.name == name);
+                self.version_shown = index.map(|i| (image.clone(), i));
+                self.history.push(tri::history::Step::Versions {
+                    image: image.clone(),
+                    before,
+                    after,
+                    change,
+                });
+                self.notice = Some((t!("crop-saved", name = name), false));
+            }
+            Err(e) => {
+                self.notice = Some((t!("crop-failed", error = e.to_string()), true));
+                // Le recadrage reste ouvert : rien n'est perdu.
+                self.crop = Some(crop);
+            }
+        }
+    }
+
     /// Maj+B ou le bouton : développer l'image affichée dans darktable, puis l'afficher (à
     /// la demande seulement : quelques secondes).
     fn develop_current(&mut self) {
@@ -3617,6 +3841,13 @@ impl TriApp {
         };
         let mut image_rect = None;
         let mut sensor_ratio = None;
+        // Version montrée (ni zoomée ni en cours de recadrage) : son cadre.
+        let shown_crop = self
+            .version_shown
+            .as_ref()
+            .filter(|(p, _)| *p == file.path && self.zoom.is_none() && self.crop.is_none())
+            .and_then(|(p, i)| self.versions.get(p).and_then(|v| v.list.get(*i)))
+            .map(|v| v.crop);
         if let Some((texture, original, ratio)) = drawable {
             sensor_ratio = ratio;
             // Taille du 1:1 en pixels : connue si c'est lui qui est affiché ; sinon estimée
@@ -3659,7 +3890,14 @@ impl TriApp {
                     self.zoom = Some(center);
                     view::zoom_rect(view_rect, size, center)
                 }
-                _ => view::fit_rect(view_rect, original),
+                // Version montrée : seulement son cadre, ajusté à la vue.
+                _ => match shown_crop {
+                    Some(c) => view::fit_rect(
+                        view_rect,
+                        vec2(original.x * c.w as f32, original.y * c.h as f32),
+                    ),
+                    None => view::fit_rect(view_rect, original),
+                },
             };
             // Échelle de l'ajusté, rapportée au 100 % (connu ou estimé), pour les paliers.
             let px = zoom_px
@@ -3671,13 +3909,23 @@ impl TriApp {
                 .unwrap_or(original);
             let ppp = ctx.pixels_per_point();
             self.fit_scale = (view_rect.width() * ppp / px.x).min(view_rect.height() * ppp / px.y);
+            let uv = match shown_crop {
+                Some(c) => {
+                    Rect::from_min_size(pos2(c.x as f32, c.y as f32), vec2(c.w as f32, c.h as f32))
+                }
+                None => uv,
+            };
             painter.image(texture.id(), rect, uv, Color32::WHITE);
             image_rect = Some(rect);
-            self.zoom_input(&ctx, &response, view_rect, rect, px);
+            // Recadrage : la souris règle le cadre, pas le zoom.
+            if self.crop.is_none() {
+                self.zoom_input(&ctx, &response, view_rect, rect, px);
+            }
             // Zones saturées / bouchées, étirées sur l'image (aussi zoomée). Pas sur le
             // développé : recadré, il ne correspond plus au capteur.
             if self.clipping
                 && shown != Some(Level::Developed)
+                && shown_crop.is_none()
                 && let Some(texture) = self.mask_texture(&ctx, index)
             {
                 let opacity = self.gui.histogram.clipping_opacity;
@@ -3689,9 +3937,17 @@ impl TriApp {
                 );
             }
         }
-        self.draw_overlay(&ctx, &painter, image_rect);
+        // Recadrage : voile, cadre et poignées ; la superposition se cale sur le cadre.
+        let crop_frame = match (&mut self.crop, image_rect) {
+            (Some(crop), Some(rect)) if crop.image == file.path => {
+                Some(crop.show(&painter, &response, rect, &self.gui.crop))
+            }
+            _ => None,
+        };
+        self.draw_overlay(&ctx, &painter, crop_frame.or(image_rect));
         // Collimateur : placé sur le capteur entier, faux sur un développé recadré.
-        let sensor_rect = image_rect.filter(|_| shown != Some(Level::Developed));
+        let sensor_rect =
+            image_rect.filter(|_| shown != Some(Level::Developed) && shown_crop.is_none());
         self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
@@ -3752,6 +4008,17 @@ impl TriApp {
                 }
             }
             None => info.push_str(&t!("view-info-preview-computing")),
+        }
+        // Version montrée : son nom.
+        if shown_crop.is_some()
+            && let Some(name) = self
+                .version_shown
+                .as_ref()
+                .and_then(|(p, i)| self.versions.get(p).and_then(|v| v.list.get(*i)))
+                .map(|v| v.name.clone())
+        {
+            info.push_str(" · ");
+            info.push_str(&name);
         }
         // Mode RAW, mais faute de mieux c'est encore le JPEG qui est affiché : le dire.
         let raw_pending = self.source == Source::Raw
@@ -4056,7 +4323,9 @@ impl TriApp {
             let focus = match self.focus {
                 crate::actions::Scope::Folders => Some(t!("focus-folders")),
                 crate::actions::Scope::Metadata => Some(t!("focus-metadata")),
-                crate::actions::Scope::Images | crate::actions::Scope::Histogram => None,
+                crate::actions::Scope::Images
+                | crate::actions::Scope::Histogram
+                | crate::actions::Scope::Crop => None,
             };
             if let Some(focus) = focus {
                 ui.separator();
@@ -4679,6 +4948,7 @@ impl TriApp {
     /// ou plein écran, zoom) ; `select` : image à sélectionner (nouveau nom), sinon la
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
+        self.versions.clear();
         match Folder::open(&self.folder.dir, 1, self.settings.xmp.sidecar) {
             Ok(folder) => self.folder = folder,
             Err(e) => {
@@ -4780,10 +5050,28 @@ impl TriApp {
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
+        // Versions de l'image (plein écran) : pastilles, puis modifier / supprimer.
+        let path = file.path.clone();
+        let versions: Vec<String> = if self.mode == Mode::View {
+            self.versions_of(&path)
+                .list
+                .iter()
+                .map(|v| v.name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let shown = self
+            .version_shown
+            .as_ref()
+            .filter(|(p, _)| *p == path)
+            .map(|(_, i)| *i);
+        let mut version_action: Option<VersionAction> = None;
         ui.horizontal(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size);
             ui.weak(name);
+
             // En comparaison, seule l'image active est notée.
             if marked > 1 && self.mode != Mode::Compare {
                 ui.colored_label(
@@ -4841,6 +5129,33 @@ impl TriApp {
                 }
             });
         });
+        // Versions : une ligne à elles (au bout de la ligne des notes, les icônes de
+        // droite les recouvraient sur un écran étroit).
+        if !versions.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(t!("versions-title"));
+                if ui
+                    .selectable_label(shown.is_none(), t!("versions-original"))
+                    .clicked()
+                {
+                    version_action = Some(VersionAction::Show(None));
+                }
+                for (i, name) in versions.iter().enumerate() {
+                    if ui.selectable_label(shown == Some(i), name).clicked() {
+                        version_action = Some(VersionAction::Show(Some(i)));
+                    }
+                }
+                if let Some(i) = shown {
+                    ui.separator();
+                    if ui.small_button(t!("versions-edit")).clicked() {
+                        version_action = Some(VersionAction::Edit(i));
+                    }
+                    if ui.small_button(t!("versions-delete")).clicked() {
+                        version_action = Some(VersionAction::Delete(i));
+                    }
+                }
+            });
+        }
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
             Some(
@@ -4856,6 +5171,15 @@ impl TriApp {
                 self.perform(&ctx, action);
             }
             Some(action) => self.rate_selected(action),
+            None => {}
+        }
+        match version_action {
+            Some(VersionAction::Show(i)) => {
+                self.version_shown = i.map(|i| (path.clone(), i));
+                self.zoom = None;
+            }
+            Some(VersionAction::Edit(i)) => self.edit_version(&path, i),
+            Some(VersionAction::Delete(i)) => self.delete_version(&path, i),
             None => {}
         }
     }
@@ -5448,6 +5772,10 @@ impl TriApp {
     fn effective_focus(&self) -> crate::actions::Scope {
         use crate::actions::Scope;
         // Grand histogramme ouvert : r, g, b, a choisissent le canal.
+        // Recadrage : le cadre prend les touches (flèches ou hjkl, rapports, x, Entrée).
+        if self.crop.is_some() {
+            return Scope::Crop;
+        }
         if self.histogram_large {
             return Scope::Histogram;
         }
@@ -5494,7 +5822,7 @@ impl TriApp {
                 self.metadata_panel = true;
                 self.scroll_to_cursor = true;
             }
-            Scope::Images | Scope::Histogram => {}
+            Scope::Images | Scope::Histogram | Scope::Crop => {}
         }
     }
 
@@ -5675,6 +6003,9 @@ impl TriApp {
         applied: Vec<tri::history::Applied>,
         error: Option<tri::history::HistoryError>,
     ) {
+        // Versions peut-être changées : relues.
+        self.versions.clear();
+        self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
             self.after_folder_change(None, None);
         }
@@ -6122,7 +6453,32 @@ impl eframe::App for TriApp {
                 .default_size(self.gui.folders.width)
                 .show(ui, |ui| self.folder_panel(ui));
         }
-        if self.rating_bar && !self.focus_mode && !self.files.is_empty() && self.error.is_none() {
+        // Recadrage : sa barre, à la place du bandeau de notation.
+        if self.crop.is_some() {
+            let profiles: Vec<(String, String)> = self
+                .settings
+                .export
+                .profiles
+                .0
+                .iter()
+                .map(|p| (p.id.clone(), crate::export::profile_name(p)))
+                .collect();
+            let mut action = None;
+            egui::Panel::bottom("crop").show(ui, |ui| {
+                if let Some(crop) = &mut self.crop {
+                    action = crop.bar(ui, &profiles);
+                }
+            });
+            match action {
+                Some(crate::crop::BarAction::Save) => self.save_crop(),
+                Some(crate::crop::BarAction::Cancel) => self.crop = None,
+                None => {}
+            }
+        } else if self.rating_bar
+            && !self.focus_mode
+            && !self.files.is_empty()
+            && self.error.is_none()
+        {
             egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
         }
         if self.filter_bar && !self.focus_mode && self.mode == Mode::Grid && self.error.is_none() {
@@ -6564,6 +6920,16 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
         rows.sort_by_key(|(a, _, score)| (std::cmp::Reverse(*score), a.label().len()));
     }
     rows.into_iter().map(|(a, k, _)| (a, k)).collect()
+}
+
+/// Geste sur les versions dans le bandeau.
+enum VersionAction {
+    /// Montrer une version, ou l'original (`None`).
+    Show(Option<usize>),
+    /// Rouvrir son cadre.
+    Edit(usize),
+    /// La supprimer.
+    Delete(usize),
 }
 
 #[cfg(test)]
@@ -8866,20 +9232,28 @@ mod tests {
         // disparaissant, déplaceraient les icônes entre deux clics.
         run_until(&mut h, |app| app.progress.iter().all(|p| p.done >= p.total));
         h.run_steps(2);
-        let click = |h: &mut Harness<'_, TriApp>, what: &str| {
-            h.get_by_label_contains(what).click();
-            h.run_steps(2);
+        // Un clic, recommencé si l'icône a bougé entre-temps (suite de tests chargée : un
+        // calcul de fond qui finit change la barre d'état), jusqu'à ce que `state` change.
+        let click = |h: &mut Harness<'_, TriApp>, what: &str, state: fn(&TriApp) -> bool| {
+            let before = state(h.state());
+            for _ in 0..5 {
+                h.get_by_label_contains(what).click();
+                h.run_steps(2);
+                if state(h.state()) != before {
+                    break;
+                }
+            }
         };
         assert!(h.state().folder_panel && h.state().metadata_panel);
-        click(&mut h, "panneau des dossiers");
+        click(&mut h, "panneau des dossiers", |a| a.folder_panel);
         assert!(!h.state().folder_panel);
-        click(&mut h, "panneau des métadonnées");
+        click(&mut h, "panneau des métadonnées", |a| a.metadata_panel);
         assert!(!h.state().metadata_panel);
-        click(&mut h, "barre de filtres");
+        click(&mut h, "barre de filtres", |a| a.filter_bar);
         assert!(!h.state().filter_bar);
-        click(&mut h, "bandeau de notation");
+        click(&mut h, "bandeau de notation", |a| a.rating_bar);
         assert!(!h.state().rating_bar);
-        click(&mut h, "panneau des dossiers");
+        click(&mut h, "panneau des dossiers", |a| a.folder_panel);
         assert!(h.state().folder_panel, "et retour");
     }
 
@@ -9233,6 +9607,75 @@ mod tests {
             assert!(dialog.lists_as_is());
             press(&mut h, Key::Escape, Modifiers::NONE);
         }
+    }
+
+    #[test]
+    fn r_crops_a_version_saved_in_the_sidecar_and_undone() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = h.state().files[0].path.clone();
+        // r depuis la grille : plein écran et recadrage.
+        press(&mut h, Key::R, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().crop.is_some());
+        // Image affichée : le cadre connaît ses proportions (suite de tests chargée).
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        // 5 : 3:2 ; flèches : le cadre bouge, l'image reste la même.
+        press(&mut h, Key::Num5, Modifiers::NONE);
+        let before = h.state().crop.as_ref().unwrap().rect;
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, 0, "pas d'image suivante");
+        let after = h.state().crop.as_ref().unwrap().rect;
+        assert!(after.y > before.y, "déplacé : {before:?} → {after:?}");
+        // Entrée : enregistrée dans le sidecar, recadrage fermé.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().crop.is_none());
+        let saved = tri::versions::read(&image).unwrap();
+        assert_eq!(saved.list.len(), 1);
+        assert_eq!(saved.list[0].name, "3:2");
+        assert_eq!(saved.list[0].ratio, tri::versions::Ratio::Fixed(3, 2));
+        assert!(dir.path().join("photos/img0.jpg.xmp").is_file());
+        // Montrée tout de suite, pastille dans le bandeau.
+        assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
+        h.run_steps(2);
+        h.get_by_label("Original").click();
+        h.run_steps(2);
+        assert_eq!(h.state().version_shown, None);
+        h.get_by_label("3:2").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().version_shown,
+            Some((image.clone(), 0)),
+            "remontrée"
+        );
+        // n : version suivante (ici la seule), puis l'original.
+        press(&mut h, Key::N, Modifiers::NONE);
+        assert_eq!(h.state().version_shown, None);
+        press(&mut h, Key::N, Modifiers::NONE);
+        assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
+        // Supprimer (annulable), puis Ctrl+Z la remet.
+        h.get_by_label("Supprimer").click();
+        h.run_steps(2);
+        assert!(tri::versions::read(&image).unwrap().list.is_empty());
+        press(&mut h, Key::Z, Modifiers::CTRL);
+        assert_eq!(tri::versions::read(&image).unwrap().list.len(), 1);
+        // Et Ctrl+Z encore : la création défaite.
+        press(&mut h, Key::Z, Modifiers::CTRL);
+        assert!(tri::versions::read(&image).unwrap().list.is_empty());
+        // Échap abandonne sans rien écrire.
+        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().crop.is_none());
+        assert_eq!(
+            h.state().mode,
+            Mode::View,
+            "Échap ferme le recadrage seulement"
+        );
+        assert!(tri::versions::read(&image).unwrap().list.is_empty());
     }
 
     #[test]

@@ -67,7 +67,42 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Annulable** : `history::Step::Versions` garde la liste avant et après. Si le sidecar a
   été modifié ailleurs depuis, l'annulation est refusée et rien n'est écrasé.
 
+## Interface (`gui/src/crop.rs`)
+
+- **`r`** (`core.view.crop`) : recadrer l'image affichée (depuis la grille, ouvre le plein
+  écran). On recadre ce qu'on voit, à l'échelle ajustée.
+- **Voile** gris translucide autour du cadre, cadre blanc avec liseré sombre, huit
+  **poignées** : angles et côtés à la souris, glisser dedans pour déplacer. La
+  superposition choisie (`o`) se cale sur le cadre.
+- **Barre** sous l'image : rapports (libre, original, 1:1, 5:4, 3:2, 16:9, 4:3), le
+  bouton allumé dans l'orientation choisie (4:5) ; Portrait / Paysage ; nom (il suit le
+  rapport tant qu'on ne l'a pas tapé) ; profil d'export facultatif ; Enregistrer / Annuler.
+- **Clavier**, contexte « recadrage » (`Scope::Crop`, prioritaire tant que le cadre est
+  affiché) :
+  - flèches (classique) ou `hjkl` (vim) pour déplacer ;
+  - avec Maj : côté droit (gauche / droite) et bas (haut / bas) ;
+  - chiffres 1 à 7 (avec ou sans Maj, AZERTY) pour le rapport ;
+  - `x` pour l'orientation ;
+  - Entrée pour enregistrer, Échap pour abandonner.
+
+  Le pas du clavier : `[gui.crop] step`. Tout est réglable dans `[keys]`.
+- **Versions** d'une image en plein écran : une ligne à elles sous les notes (au bout de
+  la ligne des notes, les icônes de droite les recouvraient sur un écran étroit) :
+  - « Original » puis une pastille par version ;
+  - pour la version montrée : Modifier (rouvre son cadre, sur l'image où elle a été faite)
+    et Supprimer (annulable).
+  - `n` fait défiler l'original puis chaque version.
+  - Une version montrée n'affiche que son cadre, ajusté à la vue ; son nom suit la source
+    dans l'étiquette. Les repères placés sur le capteur (collimateur, zones) y sont
+    masqués.
+- Le cadre d'une nouvelle version suit les proportions réelles de l'image affichée : tant
+  qu'elles sont inconnues, rien n'est calculé, et l'enregistrement attend le premier
+  dessin. Il n'y a plus de proportions supposées (3:2) : une version enregistrée trop tôt
+  aurait eu un cadre faux.
+- Réglages `[gui.crop]` : `step`, `shade`, `shade_opacity`, `line_width`, `handle_size`,
+  `handle_grab`.
+
 ## À venir
 
-L'interface : le recadrage en plein écran, la liste des versions d'une photo, le badge
-dans la grille, et l'export d'une version (rendu, puis cadre, puis profil).
+Le badge dans la grille, et l'export d'une version (rendu, puis cadre, puis profil ;
+`Ctrl+E` sur une version pré-remplit la boîte avec son profil).

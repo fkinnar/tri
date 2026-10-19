@@ -183,6 +183,8 @@ pub struct GuiSettings {
     pub metadata: MetadataSettings,
     /// `[gui.sharpness]`.
     pub sharpness: SharpnessDisplay,
+    /// `[gui.crop]`.
+    pub crop: CropSettings,
 }
 
 impl Default for GuiSettings {
@@ -220,6 +222,7 @@ impl Default for GuiSettings {
             histogram: HistogramSettings::default(),
             metadata: MetadataSettings::default(),
             sharpness: SharpnessDisplay::default(),
+            crop: CropSettings::default(),
         }
     }
 }
@@ -459,6 +462,37 @@ impl Default for DialogSettings {
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,
+        }
+    }
+}
+
+/// Section `[gui.crop]` : recadrage (versions, `r` en plein écran).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CropSettings {
+    /// Pas du clavier (déplacer, agrandir), en proportion de l'image.
+    pub step: f64,
+    /// Couleur du voile autour du cadre.
+    pub shade: Color,
+    /// Opacité du voile (0 à 1).
+    pub shade_opacity: f32,
+    /// Épaisseur du cadre (points).
+    pub line_width: f32,
+    /// Côté des poignées (points).
+    pub handle_size: f32,
+    /// Distance de prise d'un bord ou d'un angle (points).
+    pub handle_grab: f32,
+}
+
+impl Default for CropSettings {
+    fn default() -> Self {
+        Self {
+            step: 0.01,
+            shade: Color([40, 40, 40]),
+            shade_opacity: 0.65,
+            line_width: 1.5,
+            handle_size: 9.0,
+            handle_grab: 10.0,
         }
     }
 }

@@ -32,16 +32,19 @@ pub enum Group {
     Files,
     /// Annuler, rétablir, historique.
     Edit,
+    /// Recadrage (versions).
+    Crop,
     /// Aide, quitter.
     App,
 }
 
 impl Group {
     /// Les thèmes, dans l'ordre de l'aide.
-    pub const ALL: [Group; 9] = [
+    pub const ALL: [Group; 10] = [
         Group::Navigation,
         Group::Selection,
         Group::View,
+        Group::Crop,
         Group::Rating,
         Group::Filters,
         Group::Panels,
@@ -59,6 +62,19 @@ impl Group {
 /// Recherche floue à la fzf : dans le moteur ([`tri::fuzzy`]), pour l'aide, les réglages,
 /// les filtres de la grille et la recherche de dossiers.
 pub use tri::fuzzy::score as fuzzy_score;
+
+/// Direction (recadrage au clavier).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dir {
+    /// Gauche.
+    Left,
+    /// Droite.
+    Right,
+    /// Haut.
+    Up,
+    /// Bas.
+    Down,
+}
 
 /// Filtres sur le drapeau proposés à l'utilisateur.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -248,6 +264,20 @@ pub enum Action {
     FileCopyStack,
     /// Exporter la sélection (profil d'export, darktable), voir [`tri::export`].
     FileExport,
+    /// Plein écran : recadrer l'image (créer une version, [`tri::versions`]).
+    Crop,
+    /// Recadrage : déplacer le cadre.
+    CropMove(Dir),
+    /// Recadrage : tirer le côté droit (gauche / droite) ou le bas (haut / bas).
+    CropSize(Dir),
+    /// Recadrage : rapport n° (dans [`tri::versions::Ratio::PRESETS`]).
+    CropRatio(u8),
+    /// Recadrage : portrait ↔ paysage.
+    CropRotate,
+    /// Recadrage : enregistrer la version.
+    CropSave,
+    /// Plein écran : version suivante de l'image (l'original, puis chaque version).
+    VersionNext,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
     /// un dossier (aussi `/`, sauf en plein écran où il vaut « ajusté »).
     Search,
@@ -313,7 +343,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 125] = [
+    pub const ALL: [Action; 144] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -362,6 +392,25 @@ impl Action {
         Action::FileDeleteStack,
         Action::FileCopyStack,
         Action::FileExport,
+        Action::Crop,
+        Action::CropMove(Dir::Left),
+        Action::CropMove(Dir::Right),
+        Action::CropMove(Dir::Up),
+        Action::CropMove(Dir::Down),
+        Action::CropSize(Dir::Left),
+        Action::CropSize(Dir::Right),
+        Action::CropSize(Dir::Up),
+        Action::CropSize(Dir::Down),
+        Action::CropRatio(0),
+        Action::CropRatio(1),
+        Action::CropRatio(2),
+        Action::CropRatio(3),
+        Action::CropRatio(4),
+        Action::CropRatio(5),
+        Action::CropRatio(6),
+        Action::CropRotate,
+        Action::CropSave,
+        Action::VersionNext,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
         Action::Redo,
@@ -481,6 +530,8 @@ impl Action {
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint
             | OverlayNext | OverlayOrient | FocusMode | Develop => Group::View,
+            Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
+            | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
@@ -551,6 +602,25 @@ impl Action {
             Action::FileDelete => "core.file.delete",
             Action::FileCopy => "core.file.copy",
             Action::FileExport => "core.file.export",
+            Action::Crop => "core.view.crop",
+            Action::CropMove(Dir::Left) => "core.crop.move.left",
+            Action::CropMove(Dir::Right) => "core.crop.move.right",
+            Action::CropMove(Dir::Up) => "core.crop.move.up",
+            Action::CropMove(Dir::Down) => "core.crop.move.down",
+            Action::CropSize(Dir::Left) => "core.crop.size.left",
+            Action::CropSize(Dir::Right) => "core.crop.size.right",
+            Action::CropSize(Dir::Up) => "core.crop.size.up",
+            Action::CropSize(Dir::Down) => "core.crop.size.down",
+            Action::CropRatio(0) => "core.crop.ratio.free",
+            Action::CropRatio(1) => "core.crop.ratio.original",
+            Action::CropRatio(2) => "core.crop.ratio.square",
+            Action::CropRatio(3) => "core.crop.ratio.5_4",
+            Action::CropRatio(4) => "core.crop.ratio.3_2",
+            Action::CropRatio(5) => "core.crop.ratio.16_9",
+            Action::CropRatio(_) => "core.crop.ratio.4_3",
+            Action::CropRotate => "core.crop.rotate",
+            Action::CropSave => "core.crop.save",
+            Action::VersionNext => "core.view.version_next",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
@@ -686,6 +756,8 @@ pub enum Scope {
     Metadata,
     /// Le grand histogramme (boîte ouverte).
     Histogram,
+    /// Le recadrage (plein écran).
+    Crop,
 }
 
 impl Action {
@@ -698,6 +770,7 @@ impl Action {
             | FolderDelete | FolderFavorite => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
+            CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave => Some(Scope::Crop),
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
                 Some(Scope::Histogram)
             }
@@ -820,6 +893,15 @@ const CLASSIC: &[Binding] = {
         (&[shifted(Key::ArrowRight)], PanRight),
         (&[shifted(Key::ArrowUp)], PanUp),
         (&[shifted(Key::ArrowDown)], PanDown),
+        // Recadrage : flèches pour déplacer le cadre, Maj pour le côté droit / le bas.
+        (&[plain(Key::ArrowLeft)], CropMove(Dir::Left)),
+        (&[plain(Key::ArrowRight)], CropMove(Dir::Right)),
+        (&[plain(Key::ArrowUp)], CropMove(Dir::Up)),
+        (&[plain(Key::ArrowDown)], CropMove(Dir::Down)),
+        (&[shifted(Key::ArrowLeft)], CropSize(Dir::Left)),
+        (&[shifted(Key::ArrowRight)], CropSize(Dir::Right)),
+        (&[shifted(Key::ArrowUp)], CropSize(Dir::Up)),
+        (&[shifted(Key::ArrowDown)], CropSize(Dir::Down)),
         // Copier / déplacer vers… : `Ctrl+C` / `Ctrl+X`, comme copier / couper d'un
         // gestionnaire de fichiers (`Cmd+C` sur macOS, voir `Chord::from_event`).
         (&[ctrl(Key::C)], FileCopy),
@@ -859,6 +941,15 @@ const VIM: &[Binding] = {
         (&[shifted(Key::L)], PanRight),
         (&[shifted(Key::K)], PanUp),
         (&[shifted(Key::J)], PanDown),
+        // Recadrage : hjkl pour déplacer le cadre, Maj pour le côté droit / le bas.
+        (&[plain(Key::H)], CropMove(Dir::Left)),
+        (&[plain(Key::L)], CropMove(Dir::Right)),
+        (&[plain(Key::K)], CropMove(Dir::Up)),
+        (&[plain(Key::J)], CropMove(Dir::Down)),
+        (&[shifted(Key::H)], CropSize(Dir::Left)),
+        (&[shifted(Key::L)], CropSize(Dir::Right)),
+        (&[shifted(Key::K)], CropSize(Dir::Up)),
+        (&[shifted(Key::J)], CropSize(Dir::Down)),
         // `y` copie (« yank »), `x` supprime (efface le caractère : ici l'image ; une
         // confirmation suit). Toute la pile : `dw` / `yw`, comme un mot (idée de
         // l'utilisateur, 18/10/2026 : une ligne de la grille, `dd`, n'a pas de sens). `y`
@@ -992,6 +1083,10 @@ const FILES: &[Binding] = {
         // Exporter (profil d'export, darktable) : `Ctrl+E`, comme Lightroom (`Cmd+E` sur
         // macOS, voir `Chord::from_event`).
         (&[ctrl(Key::E)], FileExport),
+        // Recadrer : r, comme Lightroom (plein écran ; depuis la grille, l'ouvre).
+        (&[plain(Key::R)], Crop),
+        // Versions de l'image : n, l'original puis chaque version.
+        (&[plain(Key::N)], VersionNext),
         // Annuler : `Ctrl+Z` / `Ctrl+Maj+Z` (et `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir
         // `Chord::from_event`) dans les deux profils, réflexe de tous.
         (&[ctrl(Key::Z)], Undo),
@@ -1017,8 +1112,32 @@ const FILES: &[Binding] = {
 
 /// Listes communes aux deux profils.
 const COMMON: &[&[Binding]] = &[
-    BASICS, RATING, FILTERS, SELECTION, FILES, FOLDERS, METADATA, HISTOGRAM,
+    BASICS, RATING, FILTERS, SELECTION, FILES, FOLDERS, METADATA, HISTOGRAM, CROP,
 ];
+
+/// Recadrage, commun aux deux profils : chiffres pour le rapport (avec ou sans Maj, pour
+/// l'AZERTY), x pour l'orientation (comme Lightroom), Entrée pour enregistrer.
+const CROP: &[Binding] = {
+    use Action::*;
+    &[
+        (&[plain(Key::Num1)], CropRatio(0)),
+        (&[shifted(Key::Num1)], CropRatio(0)),
+        (&[plain(Key::Num2)], CropRatio(1)),
+        (&[shifted(Key::Num2)], CropRatio(1)),
+        (&[plain(Key::Num3)], CropRatio(2)),
+        (&[shifted(Key::Num3)], CropRatio(2)),
+        (&[plain(Key::Num4)], CropRatio(3)),
+        (&[shifted(Key::Num4)], CropRatio(3)),
+        (&[plain(Key::Num5)], CropRatio(4)),
+        (&[shifted(Key::Num5)], CropRatio(4)),
+        (&[plain(Key::Num6)], CropRatio(5)),
+        (&[shifted(Key::Num6)], CropRatio(5)),
+        (&[plain(Key::Num7)], CropRatio(6)),
+        (&[shifted(Key::Num7)], CropRatio(6)),
+        (&[plain(Key::X)], CropRotate),
+        (&[plain(Key::Enter)], CropSave),
+    ]
+};
 
 /// Notation, commune aux deux profils, pensée aussi pour l'AZERTY : chiffres avec ou sans Maj
 /// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY),

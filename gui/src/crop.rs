@@ -1,0 +1,391 @@
+//! Recadrage en plein écran (19/10/2026) : la photo en grand, le cadre réglable (libre ou
+//! à rapport fixe) et un voile gris translucide autour, comme l'a demandé l'utilisateur.
+//! Tout se fait à la souris (poignées, barre des rapports, orientation) et au clavier
+//! (actions du contexte « recadrage »). La géométrie est dans le moteur
+//! ([`tri::versions`]) ; ici, seulement le dessin et les gestes.
+
+use std::path::PathBuf;
+
+use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect as ScreenRect, Response, Stroke, Ui};
+use tri::versions::{Handle, Ratio, Rect, Source, Version};
+
+use crate::settings::CropSettings;
+
+/// Recadrage en cours.
+pub struct Crop {
+    /// Image recadrée.
+    pub image: PathBuf,
+    /// Cadre (proportions de l'image vue).
+    pub rect: Rect,
+    /// Rapport.
+    pub ratio: Ratio,
+    /// Rapport largeur / hauteur de l'image vue (pixels), connu au premier dessin.
+    aspect: Option<f64>,
+    /// Version modifiée (sa place dans la liste), sinon nouvelle.
+    pub editing: Option<usize>,
+    /// Nom ; il suit le rapport tant qu'on ne l'a pas tapé.
+    pub name: String,
+    name_edited: bool,
+    /// Profil d'export associé (facultatif).
+    pub profile: Option<String>,
+    /// Image vue (développé, rendu RAW, JPEG boîtier).
+    pub source: Source,
+    /// Geste en cours : poignée, cadre au départ, point de départ.
+    drag: Option<(Handle, Rect, Pos2)>,
+    /// Premier dessin : le champ du nom ne prend pas le focus (le clavier reste au cadre).
+    pub fresh: bool,
+}
+
+/// Ce que la barre du recadrage demande.
+pub enum BarAction {
+    /// Enregistrer la version.
+    Save,
+    /// Abandonner.
+    Cancel,
+}
+
+/// Nom affiché d'un rapport (« Libre », « Original », « 4:5 »…).
+pub fn ratio_name(ratio: Ratio) -> String {
+    match ratio {
+        Ratio::Free => t!("crop-ratio-free"),
+        Ratio::Original { .. } => t!("crop-ratio-original"),
+        Ratio::Fixed(w, h) => format!("{w}:{h}"),
+    }
+}
+
+impl Crop {
+    /// Nouvelle version de `image` vue en `source` : cadre « original » sur toute l'image.
+    /// `aspect` : rapport largeur / hauteur de l'image, s'il est déjà connu (sinon au
+    /// premier dessin) ; connu, les touches tapées avant le premier dessin tombent juste.
+    pub fn new(image: PathBuf, source: Source, aspect: Option<f64>) -> Crop {
+        let ratio = Ratio::Original { flipped: false };
+        Crop {
+            image,
+            rect: Rect::FULL,
+            ratio,
+            aspect,
+            editing: None,
+            name: ratio_name(ratio),
+            name_edited: false,
+            profile: None,
+            source,
+            drag: None,
+            fresh: true,
+        }
+    }
+
+    /// Reprendre la version `index` (`version`).
+    pub fn edit(image: PathBuf, index: usize, version: &Version) -> Crop {
+        Crop {
+            image,
+            rect: version.crop,
+            ratio: version.ratio,
+            aspect: None,
+            editing: Some(index),
+            name: version.name.clone(),
+            name_edited: true,
+            profile: version.profile.clone(),
+            source: version.source,
+            drag: None,
+            fresh: true,
+        }
+    }
+
+    /// Proportions de l'image connues (cadre dessiné au moins une fois, ou image déjà
+    /// chargée) : on peut enregistrer sans risque de cadre faux.
+    pub fn ready(&self) -> bool {
+        self.aspect.is_some()
+    }
+
+    /// La version telle qu'elle sera enregistrée.
+    pub fn version(&self) -> Version {
+        Version {
+            name: self.name.trim().to_string(),
+            crop: self.rect,
+            ratio: self.ratio,
+            source: self.source,
+            profile: self.profile.clone(),
+        }
+    }
+
+    /// Change de rapport : même centre, au plus grand qui tienne (ou, pour un rapport
+    /// choisi alors que le cadre couvre toute l'image, le plus grand de ce rapport).
+    pub fn set_ratio(&mut self, ratio: Ratio) {
+        // Même forme que l'actuel : garder l'orientation choisie.
+        let ratio = if ratio.same_shape(self.ratio) {
+            self.ratio
+        } else {
+            ratio
+        };
+        self.ratio = ratio;
+        // Proportions encore inconnues : le cadre sera calculé au premier dessin.
+        if let Some(aspect) = self.aspect {
+            self.rect = if self.rect == Rect::FULL {
+                Rect::fit(ratio, aspect)
+            } else {
+                self.rect.with_ratio(ratio, aspect)
+            };
+        }
+        if !self.name_edited {
+            self.name = ratio_name(ratio);
+        }
+    }
+
+    /// Portrait ↔ paysage.
+    pub fn rotate(&mut self) {
+        self.ratio = self.ratio.rotated();
+        if let Some(aspect) = self.aspect {
+            self.rect = self.rect.with_ratio(self.ratio, aspect);
+        }
+        if !self.name_edited {
+            self.name = ratio_name(self.ratio);
+        }
+    }
+
+    /// Déplace le cadre de `(dx, dy)` (proportions de l'image).
+    pub fn nudge(&mut self, dx: f64, dy: f64) {
+        if let Some(aspect) = self.aspect {
+            self.rect = self.rect.drag(Handle::Move, dx, dy, self.ratio, aspect);
+        }
+    }
+
+    /// Tire le côté droit (`dx`) ou le bas (`dy`) du cadre.
+    pub fn grow(&mut self, dx: f64, dy: f64) {
+        let handle = if dx != 0.0 {
+            Handle::Right
+        } else {
+            Handle::Bottom
+        };
+        if let Some(aspect) = self.aspect {
+            self.rect = self.rect.drag(handle, dx, dy, self.ratio, aspect);
+        }
+    }
+
+    /// Cadre à l'écran, pour l'image dessinée en `image`.
+    pub fn screen_rect(&self, image: ScreenRect) -> ScreenRect {
+        let r = self.rect;
+        ScreenRect::from_min_size(
+            image.min + egui::vec2(r.x as f32 * image.width(), r.y as f32 * image.height()),
+            egui::vec2(r.w as f32 * image.width(), r.h as f32 * image.height()),
+        )
+    }
+
+    /// Gestes de la souris (`response` : celle de la vue) et dessin : voile, cadre et
+    /// poignées, sur l'image dessinée en `image` (vue ajustée). Renvoie le cadre à
+    /// l'écran (pour y dessiner la superposition choisie).
+    pub fn show(
+        &mut self,
+        painter: &egui::Painter,
+        response: &Response,
+        image: ScreenRect,
+        settings: &CropSettings,
+    ) -> ScreenRect {
+        if image.width() <= 0.0 || image.height() <= 0.0 {
+            return image;
+        }
+        let aspect = f64::from(image.width() / image.height());
+        // Proportions réelles de l'image affichée : connues maintenant, ou différentes de
+        // celles supposées (image chargée entre-temps) ; le cadre d'une nouvelle version
+        // suit (celui d'une version reprise est gardé tel quel).
+        let known = self.aspect;
+        if known.is_none_or(|a| (a - aspect).abs() > a * 0.005) {
+            self.aspect = Some(aspect);
+            if self.editing.is_none() {
+                self.rect = match known {
+                    None => Rect::fit(self.ratio, aspect),
+                    Some(_) => self.rect.with_ratio(self.ratio, aspect),
+                };
+            }
+        }
+        let frame = self.screen_rect(image);
+        let grab = settings.handle_grab;
+        // Poignée sous le pointeur.
+        let hit = |pos: Pos2| -> Option<Handle> {
+            let near = |a: f32, b: f32| (a - b).abs() <= grab;
+            let (l, r, t, b) = (frame.left(), frame.right(), frame.top(), frame.bottom());
+            let inside_x = pos.x > l - grab && pos.x < r + grab;
+            let inside_y = pos.y > t - grab && pos.y < b + grab;
+            let handle = match (
+                near(pos.x, l) && inside_y,
+                near(pos.x, r) && inside_y,
+                near(pos.y, t) && inside_x,
+                near(pos.y, b) && inside_x,
+            ) {
+                (true, _, true, _) => Handle::TopLeft,
+                (_, true, true, _) => Handle::TopRight,
+                (true, _, _, true) => Handle::BottomLeft,
+                (_, true, _, true) => Handle::BottomRight,
+                (true, _, _, _) => Handle::Left,
+                (_, true, _, _) => Handle::Right,
+                (_, _, true, _) => Handle::Top,
+                (_, _, _, true) => Handle::Bottom,
+                _ if frame.contains(pos) => Handle::Move,
+                _ => return None,
+            };
+            Some(handle)
+        };
+        if response.drag_started()
+            && let Some(pos) = response.interact_pointer_pos()
+            && let Some(handle) = hit(pos)
+        {
+            self.drag = Some((handle, self.rect, pos));
+        }
+        if let Some((handle, start, from)) = self.drag {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let d = pos - from;
+                self.rect = start.drag(
+                    handle,
+                    f64::from(d.x / image.width()),
+                    f64::from(d.y / image.height()),
+                    self.ratio,
+                    aspect,
+                );
+            }
+            if !response.dragged() {
+                self.drag = None;
+            }
+        }
+        let shown = self
+            .drag
+            .map(|(h, _, _)| h)
+            .or_else(|| response.hover_pos().and_then(hit));
+        if let Some(handle) = shown {
+            response.ctx.set_cursor_icon(cursor(handle));
+        }
+        // Voile autour du cadre.
+        let frame = self.screen_rect(image);
+        let shade = Color32::from_rgba_unmultiplied(
+            settings.shade.0[0],
+            settings.shade.0[1],
+            settings.shade.0[2],
+            (settings.shade_opacity.clamp(0.0, 1.0) * 255.0) as u8,
+        );
+        for r in [
+            ScreenRect::from_min_max(image.min, egui::pos2(image.max.x, frame.min.y)),
+            ScreenRect::from_min_max(egui::pos2(image.min.x, frame.max.y), image.max),
+            ScreenRect::from_min_max(
+                egui::pos2(image.min.x, frame.min.y),
+                egui::pos2(frame.min.x, frame.max.y),
+            ),
+            ScreenRect::from_min_max(
+                egui::pos2(frame.max.x, frame.min.y),
+                egui::pos2(image.max.x, frame.max.y),
+            ),
+        ] {
+            if r.width() > 0.0 && r.height() > 0.0 {
+                painter.rect_filled(r, 0.0, shade);
+            }
+        }
+        // Cadre et poignées (liseré sombre dessous : lisible sur tout fond).
+        let line = settings.line_width;
+        painter.rect_stroke(
+            frame,
+            0.0,
+            Stroke::new(line + 2.0, Color32::from_black_alpha(120)),
+            egui::StrokeKind::Middle,
+        );
+        painter.rect_stroke(
+            frame,
+            0.0,
+            Stroke::new(line, Color32::WHITE),
+            egui::StrokeKind::Middle,
+        );
+        let size = settings.handle_size;
+        for p in [
+            frame.left_top(),
+            frame.right_top(),
+            frame.left_bottom(),
+            frame.right_bottom(),
+            frame.center_top(),
+            frame.center_bottom(),
+            frame.left_center(),
+            frame.right_center(),
+        ] {
+            let r = ScreenRect::from_center_size(p, egui::vec2(size, size));
+            painter.rect_filled(r, 1.0, Color32::WHITE);
+            painter.rect_stroke(
+                r,
+                1.0,
+                Stroke::new(1.0, Color32::from_black_alpha(160)),
+                egui::StrokeKind::Outside,
+            );
+        }
+        frame
+    }
+
+    /// Barre du recadrage (sous l'image) : rapports, orientation, nom, profil d'export,
+    /// enregistrer / annuler. `profiles` : (identifiant, nom affiché).
+    pub fn bar(&mut self, ui: &mut Ui, profiles: &[(String, String)]) -> Option<BarAction> {
+        let mut action = None;
+        ui.horizontal_wrapped(|ui| {
+            ui.label(t!("crop-bar-title"));
+            for preset in Ratio::PRESETS {
+                let on = preset.same_shape(self.ratio);
+                // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
+                let shown = if on { self.ratio } else { preset };
+                if ui.selectable_label(on, ratio_name(shown)).clicked() {
+                    self.set_ratio(preset);
+                }
+            }
+            // Orientation : le libellé dit celle d'arrivée.
+            let portrait = self
+                .ratio
+                .value(self.aspect.unwrap_or(1.0))
+                .is_some_and(|r| r < 1.0);
+            let label = if portrait {
+                t!("crop-landscape")
+            } else {
+                t!("crop-portrait")
+            };
+            let can_turn = !matches!(self.ratio, Ratio::Free | Ratio::Fixed(1, 1));
+            if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
+                self.rotate();
+            }
+            ui.separator();
+            ui.label(t!("crop-name"));
+            let field = ui.add(egui::TextEdit::singleline(&mut self.name).desired_width(140.0));
+            if field.changed() {
+                self.name_edited = true;
+            }
+            ui.label(t!("crop-profile"));
+            let none = t!("crop-profile-none");
+            let current = self
+                .profile
+                .as_ref()
+                .and_then(|id| profiles.iter().find(|(p, _)| p == id))
+                .map_or(none.clone(), |(_, name)| name.clone());
+            egui::ComboBox::from_id_salt("crop_profile")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.profile, None, none);
+                    for (id, name) in profiles {
+                        ui.selectable_value(&mut self.profile, Some(id.clone()), name);
+                    }
+                });
+            ui.separator();
+            let ok = !self.name.trim().is_empty();
+            if ui
+                .add_enabled(ok, egui::Button::new(t!("crop-save")))
+                .clicked()
+            {
+                action = Some(BarAction::Save);
+            }
+            if ui.button(t!("cancel")).clicked() {
+                action = Some(BarAction::Cancel);
+            }
+        });
+        self.fresh = false;
+        action
+    }
+}
+
+/// Pointeur d'une poignée.
+fn cursor(handle: Handle) -> CursorIcon {
+    match handle {
+        Handle::Move => CursorIcon::Grab,
+        Handle::Left | Handle::Right => CursorIcon::ResizeHorizontal,
+        Handle::Top | Handle::Bottom => CursorIcon::ResizeVertical,
+        Handle::TopLeft | Handle::BottomRight => CursorIcon::ResizeNwSe,
+        Handle::TopRight | Handle::BottomLeft => CursorIcon::ResizeNeSw,
+    }
+}

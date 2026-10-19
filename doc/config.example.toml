@@ -493,6 +493,18 @@ gap = 4.0
 # Épaisseur du cadre de l'image active (celle que l'on note).
 frame = 3.0
 
+[gui.crop]
+# Recadrage (versions) : r en plein écran. Pas du clavier (flèches ou hjkl : déplacer ;
+# avec Maj : côté droit, bas), en proportion de l'image.
+step = 0.01
+# Voile autour du cadre : couleur et opacité (0 à 1).
+shade = "#282828"
+shade_opacity = 0.65
+# Épaisseur du cadre, côté des poignées, distance de prise d'un bord (points).
+line_width = 1.5
+handle_size = 9.0
+handle_grab = 10.0
+
 [gui.folders]
 # Panneau des dossiers, à gauche de la grille : affiché au démarrage (Maj+D l'affiche ou le
 # masque), largeur initiale (points, le bord se tire à la souris), retrait par niveau,
