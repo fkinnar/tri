@@ -15,14 +15,19 @@ pub enum Source {
     Embedded,
     /// Rendu RAW par LibRaw : fidèle aux données du capteur, calculé en fond.
     Raw,
+    /// Développé par darktable d'après le sidecar (19/10/2026) : l'image telle qu'on l'a
+    /// développée, à la demande.
+    Developed,
 }
 
 impl Source {
-    /// L'autre source.
-    pub fn toggled(self) -> Source {
+    /// Source suivante (`b`) : boîtier, RAW, puis développé si darktable est là
+    /// (`developed`), et retour au boîtier.
+    pub fn next(self, developed: bool) -> Source {
         match self {
             Source::Embedded => Source::Raw,
-            Source::Raw => Source::Embedded,
+            Source::Raw if developed => Source::Developed,
+            Source::Raw | Source::Developed => Source::Embedded,
         }
     }
 }
@@ -32,6 +37,8 @@ impl Source {
 pub fn zoom_level(kind: MediaKind, source: Source) -> Level {
     match (kind, source) {
         (MediaKind::Raw, Source::Embedded) => Level::EmbeddedFull,
+        // Pas de 1:1 développé (darktable rend à la taille de l'aperçu) : on zoome dedans.
+        (_, Source::Developed) => Level::Developed,
         _ => Level::Full,
     }
 }
@@ -50,6 +57,16 @@ pub fn pick(
         return Some(zoom);
     }
     let order: &[Level] = match (kind, preferred) {
+        // Développé : en attendant (ou sans développement), le rendu RAW, puis le boîtier.
+        (MediaKind::Raw, Source::Developed) => &[
+            Level::Developed,
+            Level::Standard,
+            Level::Embedded,
+            Level::Thumbnail,
+        ],
+        (MediaKind::Flat, Source::Developed) => {
+            &[Level::Developed, Level::Standard, Level::Thumbnail]
+        }
         (MediaKind::Flat, _) => &[Level::Standard, Level::Thumbnail],
         (MediaKind::Raw, Source::Embedded) => &[Level::Embedded, Level::Standard, Level::Thumbnail],
         (MediaKind::Raw, Source::Raw) => &[Level::Standard, Level::Embedded, Level::Thumbnail],
@@ -67,6 +84,7 @@ pub fn label(kind: MediaKind, level: Level) -> String {
         (MediaKind::Raw, Level::EmbeddedFull) => t!("shown-embedded-full"),
         (MediaKind::Flat, Level::Full) => t!("shown-image-full"),
         (_, Level::Exposure | Level::Sharpness | Level::Similarity) => t!("shown-exposure"),
+        (_, Level::Developed) => t!("shown-developed"),
         (MediaKind::Flat, _) => t!("shown-image"),
     }
 }
@@ -270,7 +288,24 @@ mod tests {
         );
         assert_eq!(zoom_level(MediaKind::Raw, Source::Raw), Level::Full);
         assert_eq!(zoom_level(MediaKind::Flat, Source::Embedded), Level::Full);
-        assert_eq!(Source::Embedded.toggled(), Source::Raw);
+        assert_eq!(
+            zoom_level(MediaKind::Raw, Source::Developed),
+            Level::Developed
+        );
+        // Développé pas encore prêt : le rendu RAW, puis le boîtier.
+        assert_eq!(
+            pick(MediaKind::Raw, Source::Developed, false, |l| l
+                == Level::Embedded),
+            Some(Level::Embedded)
+        );
+        assert_eq!(
+            pick(MediaKind::Raw, Source::Developed, false, |_| true),
+            Some(Level::Developed)
+        );
+        assert_eq!(Source::Raw.next(true), Source::Developed);
+        assert_eq!(Source::Raw.next(false), Source::Embedded);
+        assert_eq!(Source::Developed.next(true), Source::Embedded);
+        assert_eq!(Source::Embedded.next(false), Source::Raw);
     }
 
     #[test]

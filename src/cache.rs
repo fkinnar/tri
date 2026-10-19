@@ -41,11 +41,14 @@ pub enum Level {
     Sharpness,
     /// Empreinte de regroupement ([`crate::similarity::Signature`]). Entrée binaire.
     Similarity,
+    /// Image développée par un logiciel externe (darktable, [`crate::develop`]), à la taille
+    /// de l'aperçu standard : le JPEG du logiciel, rangé tel quel.
+    Developed,
 }
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 8] = [
+    pub const ALL: [Level; 9] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
@@ -54,6 +57,7 @@ impl Level {
         Level::Exposure,
         Level::Sharpness,
         Level::Similarity,
+        Level::Developed,
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
@@ -72,6 +76,7 @@ impl Level {
             Self::Exposure => "exposure",
             Self::Sharpness => "sharpness",
             Self::Similarity => "similarity",
+            Self::Developed => "developed",
         }
     }
 }

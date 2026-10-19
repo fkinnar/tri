@@ -93,6 +93,8 @@ pub enum PreviewError {
     Cancelled,
     /// Niveau qui n'est pas une image ([`Level::Exposure`] : voir [`exposure`]).
     NotAnImage,
+    /// Rendu par un logiciel de développement ([`Level::Developed`]).
+    Develop(crate::develop::DevelopError),
 }
 
 impl fmt::Display for PreviewError {
@@ -104,6 +106,7 @@ impl fmt::Display for PreviewError {
             Self::NoEmbeddedPreview => write!(f, "{}", crate::t!("preview-no-embedded")),
             Self::Cancelled => write!(f, "{}", crate::t!("preview-cancelled")),
             Self::NotAnImage => write!(f, "{}", crate::t!("preview-not-an-image")),
+            Self::Develop(e) => e.fmt(f),
         }
     }
 }
@@ -174,6 +177,8 @@ pub fn params(level: Level, settings: &Settings) -> String {
             settings.min_embedded_full
         ),
         Level::Full => format!("r{RULES_VERSION};{render}"),
+        // Le sidecar s'y ajoute dans `key` (propre à chaque image).
+        Level::Developed => format!("r{RULES_VERSION};darktable;side={}", sizes.standard),
         Level::Exposure => {
             let e = &settings.exposure;
             format!(
@@ -208,7 +213,15 @@ pub fn params(level: Level, settings: &Settings) -> String {
 
 /// Clé de cache de `file` au niveau `level`.
 pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Key> {
-    Key::new(&file.path, level, &params(level, settings))
+    let mut params = params(level, settings);
+    // Développé : le sidecar aussi (un développement modifié dans darktable refait le
+    // rendu).
+    if level == Level::Developed {
+        let stamp = crate::develop::darktable_sidecar(&file.path)
+            .map_or_else(|| "aucun".to_string(), |s| crate::develop::stamp(&s));
+        params.push_str(&format!(";xmp={stamp}"));
+    }
+    Key::new(&file.path, level, &params)
 }
 
 /// Vrai si `half_size` suffit pour un aperçu de `side` pixels : la moitié du côté long du
@@ -267,6 +280,11 @@ pub fn compute(
         (_, Level::Exposure | Level::Sharpness | Level::Similarity) => {
             Err(PreviewError::NotAnImage)
         }
+        // Développé : par le producteur, qui connaît le logiciel
+        // (`scheduler::CachedPreviews`).
+        (_, Level::Developed) => Err(PreviewError::Develop(
+            crate::develop::DevelopError::Unavailable,
+        )),
     }
 }
 

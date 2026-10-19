@@ -352,6 +352,7 @@ settings-section-scheduler = Calculs en arrière-plan
 settings-section-xmp = Notes (XMP)
 settings-section-places = Emplacements
 settings-section-keys = Raccourcis
+settings-section-develop = Rendu darktable
 settings-section-watch = Surveillance du dossier
 settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte
@@ -430,6 +431,8 @@ shown-raw-full = Rendu RAW · 100 %
 shown-embedded-full = JPEG boîtier · 1:1
 shown-image-full = Image · 100 %
 shown-exposure = Analyse d'exposition
+shown-developed = Développé dans darktable
+view-info-developed-pending = { " · " }développement darktable en cours…
 shown-image = Image
 
 ## Histogramme

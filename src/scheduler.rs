@@ -45,6 +45,49 @@ pub struct CachedPreviews {
     pub cache: Cache,
     /// Réglages de calcul (tailles, rendu, seuils).
     pub settings: Settings,
+    /// darktable, pour le niveau [`Level::Developed`] (`None` : pas de rendu développé).
+    pub darktable: Option<crate::develop::Darktable>,
+}
+
+impl CachedPreviews {
+    /// Niveau développé : rendu par darktable dans un fichier temporaire (dans sa
+    /// configuration, sous le cache), puis le JPEG rangé tel quel dans le cache.
+    fn develop(&self, file: &MediaFile, cancel: &AtomicBool) -> Result<(), Failure> {
+        use crate::develop::{DevelopError, darktable_sidecar};
+        let failure = |e: DevelopError| match e {
+            DevelopError::Cancelled => Failure::Cancelled,
+            e => Failure::Error(e.to_string()),
+        };
+        let key = preview::key(file, Level::Developed, &self.settings)
+            .map_err(|e| Failure::Error(e.to_string()))?;
+        if self.cache.contains(&key) {
+            return Ok(());
+        }
+        let dt = self
+            .darktable
+            .as_ref()
+            .ok_or_else(|| failure(DevelopError::Unavailable))?;
+        let sidecar =
+            darktable_sidecar(&file.path).ok_or_else(|| failure(DevelopError::NotDeveloped))?;
+        let out = dt.config_dir.join(format!(
+            "rendu-{}-{:?}.jpg",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        dt.render(
+            &file.path,
+            &sidecar,
+            &out,
+            self.settings.sizes.standard,
+            cancel,
+        )
+        .map_err(failure)?;
+        let bytes = std::fs::read(&out).map_err(|e| Failure::Error(e.to_string()));
+        let _ = std::fs::remove_file(&out);
+        self.cache
+            .put_bytes(&key, &bytes?)
+            .map_err(|e| Failure::Error(e.to_string()))
+    }
 }
 
 impl Producer for CachedPreviews {
@@ -53,6 +96,9 @@ impl Producer for CachedPreviews {
     }
 
     fn produce(&self, file: &MediaFile, level: Level, cancel: &AtomicBool) -> Result<(), Failure> {
+        if level == Level::Developed {
+            return self.develop(file, cancel);
+        }
         match preview::ensure(&self.cache, file, level, &self.settings, cancel) {
             Ok(Outcome::Cached | Outcome::Computed) => Ok(()),
             Err(PreviewError::Cancelled) => Err(Failure::Cancelled),
@@ -247,7 +293,10 @@ type Job = (usize, Level);
 /// Vrai si la tâche passe par le worker lourd (LibRaw : rendu, ou décompression pour
 /// l'analyse d'exposition, elle aussi parallélisée en interne).
 fn is_heavy(kind: MediaKind, level: Level) -> bool {
-    kind == MediaKind::Raw && matches!(level, Level::Standard | Level::Full | Level::Exposure)
+    // Développé : un logiciel externe qui occupe toute la machine, RAW ou image plate.
+    level == Level::Developed
+        || kind == MediaKind::Raw
+            && matches!(level, Level::Standard | Level::Full | Level::Exposure)
 }
 
 /// Classe de priorité des aperçus boîtier de fond (ni l'image affichée, ni ses voisines).
@@ -289,6 +338,8 @@ fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u
         // Empreintes : vite faites, et le regroupement de la grille en dépend.
         Level::Similarity => (1, EMBEDDED_BACKGROUND),
         Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
+        // Développé (darktable, plusieurs secondes) : comme un ajusté, à la demande.
+        Level::Developed => (0, STANDARD_BACKGROUND),
     };
     let near = rank_in(group, index);
     // Autres images affichées : voisines (2) en plein écran, plus en comparaison.

@@ -349,6 +349,7 @@ settings-section-cache = Cache
 settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
 settings-section-keys = Shortcuts
+settings-section-develop = darktable rendering
 settings-section-watch = Folder watching
 settings-section-places = Places
 settings-section-exposure = Exposure
@@ -428,6 +429,8 @@ shown-raw-full = RAW render · 100 %
 shown-embedded-full = Camera JPEG · 1:1
 shown-image-full = Image · 100 %
 shown-exposure = Exposure analysis
+shown-developed = Developed in darktable
+view-info-developed-pending = { " · " }darktable development in progress…
 shown-image = Image
 
 ## Histogram

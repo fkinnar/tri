@@ -286,6 +286,8 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
     let producer = CachedPreviews {
         cache: cache.clone(),
         settings: preview,
+        // Rendus développés : dans l'interface seulement, à la demande.
+        darktable: None,
     };
     let scheduler = Scheduler::new(producer, config, move |e| {
         let _ = tx.send(e);

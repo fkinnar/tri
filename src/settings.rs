@@ -101,6 +101,8 @@ pub struct EngineSettings {
     pub places: crate::places::PlaceSettings,
     /// Surveillance du dossier ouvert.
     pub watch: crate::watch::WatchSettings,
+    /// Rendu par un logiciel de développement (darktable).
+    pub develop: crate::develop::DevelopSettings,
     /// Calcul de l'exposition (histogrammes, saturés / bouchés).
     pub exposure: crate::exposure::ExposureSettings,
     /// Déchargement des cartes.

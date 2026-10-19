@@ -607,6 +607,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   panneaux gris foncé, fond central gris neutre, qui ne fausse pas le jugement des
   images) : **fait** le jour même, `theme = "neutral"` (nom sans marque), tons réglables
   (`[gui.colors] neutral_*`), à ajuster avec une capture de Lightroom.
+- [x] **Plugin de rendu darktable** (19/10/2026) : `src/develop.rs`, niveau
+  `Developed`, source « développé » (`b`) ; `darktable-cli` en processus séparé,
+  configuration propre et bibliothèque en mémoire, sidecars jamais écrits. Ensuite :
+  RawTherapee / ART sur le même trait, envoi de JPEG développés.
 - **Windows** (prévu la semaine du 19/10/2026) : « un sérieux handicap pour capter des
   utilisateurs sinon ».
 - **Zoom continu** (clavier, roulette, pince au pavé tactile) et **au-delà de 100 %**

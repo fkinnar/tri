@@ -92,6 +92,8 @@ struct Status {
     exposure: Avail,
     sharpness: Avail,
     similarity: Avail,
+    /// Développé par darktable (à la demande).
+    developed: Avail,
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
@@ -221,6 +223,8 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
+    /// darktable trouvé au démarrage du moteur : la source « développé » est proposée.
+    darktable: bool,
     /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
     /// fermés : ils reviennent tels quels en sortant).
     focus_mode: bool,
@@ -523,6 +527,7 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
+            darktable: false,
             focus_mode: false,
             focus_mode_since: None,
             logo: None,
@@ -1511,9 +1516,21 @@ impl TriApp {
         }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
+        // darktable, s'il est installé : rendus développés à la demande (configuration
+        // propre dans le cache de tri, jamais celle de l'utilisateur).
+        let darktable = tri::develop::find_darktable(&self.settings.develop.darktable).map(|cli| {
+            tri::develop::Darktable {
+                cli,
+                config_dir: cache.root().join("darktable"),
+                high_quality: self.settings.develop.high_quality,
+            }
+        });
+        trace(|| format!("darktable : {:?}", darktable.as_ref().map(|d| &d.cli)));
+        self.darktable = darktable.is_some();
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings: preview,
+            darktable,
         };
         let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Scheduler::new(producer, config, move |event| {
@@ -1938,7 +1955,7 @@ impl TriApp {
             Action::StackChoose => self.choose_cover(),
             Action::ToggleSource => {
                 // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
-                self.source = self.source.toggled();
+                self.source = self.source.next(self.darktable);
                 self.request_zoom();
             }
             Action::Compare => self.start_compare(),
@@ -2538,6 +2555,10 @@ impl TriApp {
             if self.source == Source::Raw && kind == MediaKind::Raw {
                 wanted.push((rank == 0, i, Level::Standard));
             }
+            // Développé : le rendu darktable (plusieurs secondes ; l'image affichée d'abord).
+            if self.source == Source::Developed {
+                wanted.push((rank == 0, i, Level::Developed));
+            }
             if self.zoom.is_some() || (self.loupe_on && rank == 0) {
                 let level = view::zoom_level(kind, self.source);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
@@ -2566,6 +2587,7 @@ impl TriApp {
             Level::Exposure => &s.exposure,
             Level::Sharpness => &s.sharpness,
             Level::Similarity => &s.similarity,
+            Level::Developed => &s.developed,
         };
         *avail == Avail::Ready
     }
@@ -3274,8 +3296,11 @@ impl TriApp {
                 };
                 painter.image(texture.id(), image_rect, uv, Color32::WHITE);
                 self.draw_overlay(&ctx, &painter, Some(image_rect));
-                self.draw_focus_point(&ctx, &painter, &file, Some(image_rect));
+                // Repères du capteur : faux sur un développé recadré.
+                let sensor = shown != Some(Level::Developed);
+                self.draw_focus_point(&ctx, &painter, &file, sensor.then_some(image_rect));
                 if self.clipping
+                    && sensor
                     && let Some(mask) = self.mask_texture(&ctx, index)
                 {
                     let opacity = self.gui.histogram.clipping_opacity;
@@ -3581,8 +3606,10 @@ impl TriApp {
             painter.image(texture.id(), rect, uv, Color32::WHITE);
             image_rect = Some(rect);
             self.zoom_input(&ctx, &response, view_rect, rect, px);
-            // Zones saturées / bouchées, étirées sur l'image (aussi zoomée).
+            // Zones saturées / bouchées, étirées sur l'image (aussi zoomée). Pas sur le
+            // développé : recadré, il ne correspond plus au capteur.
             if self.clipping
+                && shown != Some(Level::Developed)
                 && let Some(texture) = self.mask_texture(&ctx, index)
             {
                 let opacity = self.gui.histogram.clipping_opacity;
@@ -3595,7 +3622,9 @@ impl TriApp {
             }
         }
         self.draw_overlay(&ctx, &painter, image_rect);
-        self.draw_focus_point(&ctx, &painter, &file, image_rect);
+        // Collimateur : placé sur le capteur entier, faux sur un développé recadré.
+        let sensor_rect = image_rect.filter(|_| shown != Some(Level::Developed));
+        self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
         let peaking = self.peaking_overlay(
@@ -3663,7 +3692,15 @@ impl TriApp {
                 shown,
                 Some(Level::Thumbnail | Level::Embedded | Level::EmbeddedFull)
             );
-        if raw_pending {
+        // Développé : en cours, ou pas de développement pour cette image (raison au
+        // survol de la barre d'état, ici en clair).
+        let developed = &self.status[index].developed;
+        if self.source == Source::Developed && shown != Some(Level::Developed) {
+            info.push_str(&match developed {
+                Avail::Failed(e) => format!(" · {e}"),
+                _ => t!("view-info-developed-pending"),
+            });
+        } else if raw_pending {
             info.push_str(&t!("view-info-raw-pending"));
         } else if zoomed && shown != Some(zoom_level) {
             info.push_str(&match zoom_level {
@@ -6045,7 +6082,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Exposure => Some(3),
         Level::Sharpness => Some(4),
         Level::Similarity => Some(5),
-        Level::EmbeddedFull | Level::Full => None,
+        Level::EmbeddedFull | Level::Full | Level::Developed => None,
     }
 }
 
@@ -6060,6 +6097,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Exposure => s.exposure = avail,
             Level::Sharpness => s.sharpness = avail,
             Level::Similarity => s.similarity = avail,
+            Level::Developed => s.developed = avail,
         }
     }
 }
@@ -6375,6 +6413,9 @@ mod tests {
         settings.gui.key_ambiguous_timeout_ms = 0;
         // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
         settings.gui.profile = crate::actions::Profile::Both;
+        // Pas de darktable dans les tests (installé ou non sur la machine) : un test le
+        // simule là où il le faut.
+        settings.develop.darktable = String::new();
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
@@ -8851,7 +8892,39 @@ mod tests {
         press(&mut h, Key::B, Modifiers::NONE);
         assert_eq!(h.state().source, Source::Raw);
         press(&mut h, Key::B, Modifiers::NONE);
-        assert_eq!(h.state().source, Source::Embedded);
+        assert_eq!(
+            h.state().source,
+            Source::Embedded,
+            "sans darktable : deux sources"
+        );
+        // Avec darktable : boîtier, RAW, développé, boîtier.
+        h.state_mut().darktable = true;
+        for expected in [Source::Raw, Source::Developed, Source::Embedded] {
+            press(&mut h, Key::B, Modifiers::NONE);
+            assert_eq!(h.state().source, expected);
+        }
+    }
+
+    #[test]
+    fn an_image_without_development_says_so_and_falls_back() {
+        // darktable « présent » (simulé) mais un sidecar sans historique : le rendu
+        // échoue proprement, l'image reste visible (rendu RAW ou boîtier) avec la raison.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().darktable = true;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().source = Source::Developed;
+        h.state_mut().request_zoom();
+        run_until(&mut h, |app| {
+            matches!(app.status[0].developed, Avail::Failed(_))
+        });
+        h.run_steps(3);
+        assert!(h.state().last_shown.1.is_some(), "une image reste affichée");
+        // La raison est donnée (affichée en surimpression à côté de la source).
+        let Avail::Failed(reason) = &h.state().status[0].developed else {
+            unreachable!()
+        };
+        assert!(reason.contains("darktable"), "{reason}");
     }
 
     #[test]

@@ -86,6 +86,16 @@ fixed = []
 # dans le panneau des dossiers ; 0 : pas de surveillance (F5 ou « Actualiser »).
 watch_ms = 2000
 
+[develop]
+# Voir ses développements dans tri (b en plein écran : JPEG boîtier, rendu RAW, puis
+# développé) : darktable-cli refait l'image avec l'historique du sidecar .xmp, à la
+# demande (quelques secondes par image), gardée en cache et refaite si le .xmp change.
+# "auto" : cherché dans le PATH et aux emplacements habituels ; un chemin ; "" : jamais.
+# Rien n'est écrit chez vous (configuration propre, bibliothèque en mémoire).
+darktable = "auto"
+# Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
+high_quality = false
+
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
 # modifiées par un autre logiciel (darktable…) apparaissent d'elles-mêmes, une fois le

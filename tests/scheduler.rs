@@ -763,6 +763,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings,
+            darktable: None,
         };
         let scheduler = Scheduler::new(
             producer,
@@ -832,6 +833,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings,
+            darktable: None,
         };
         let scheduler = Scheduler::new(
             producer,

@@ -36,6 +36,8 @@ pub struct AppSettings {
     pub places: tri::places::PlaceSettings,
     /// `[watch]` (moteur) : surveillance du dossier ouvert.
     pub watch: tri::watch::WatchSettings,
+    /// `[develop]` (moteur) : rendu par darktable.
+    pub develop: tri::develop::DevelopSettings,
     /// `[exposure]` (moteur).
     pub exposure: tri::exposure::ExposureSettings,
     /// `[offload]` (moteur).
@@ -68,6 +70,7 @@ impl AppSettings {
             xmp: self.xmp,
             places: self.places.clone(),
             watch: self.watch,
+            develop: self.develop.clone(),
             exposure: self.exposure,
             offload: self.offload.clone(),
             data: self.data.clone(),

@@ -30,6 +30,7 @@ existe.
 | [selection.md](selection.md) | Module `tri::selection` : sélection multiple (marques, mode visuel, cibles des actions) |
 | [folder.md](folder.md) | Module `tri::folder` : dossier ouvert (images, notes, liste filtrée) |
 | [offload.md](offload.md) | Module `tri::offload` : déchargement d'une carte (copie vérifiée, historique, suppression) |
+| [develop.md](develop.md) | Module `tri::develop` : rendu par darktable (plugin qui pilote `darktable-cli`) |
 | [fuzzy.md](fuzzy.md) | Module `tri::fuzzy` : recherche floue (filtre par nom, dossiers, aide) |
 | [overlay.md](overlay.md) | Module `tri::overlay` : superpositions (grilles, texte, logo, format), plugins écrits en Rust ou fichiers TOML |
 | [send.md](send.md) | Module `tri::send` : plugins d'envoi (AirDrop) |
