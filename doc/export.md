@@ -204,6 +204,28 @@ commande. Il ne s'applique qu'aux profils JPEG, depuis un JPEG, **dans le même 
 - Le bilan dit combien de fichiers ont été écrits sans recompression
   (`Report::passthrough`).
 
+## Accentuation de sortie (`sharpen`)
+
+Idée de l'utilisateur (19/10/2026), comme Lightroom : accentuer pour la destination, pour
+compenser la douceur due à la réduction (écran) ou à l'encre (tirage). Clé `sharpen` de
+chaque profil : `"none"` (Retouche, JPEG tel quel : l'éditeur externe ou rien),
+`"screen"` (Web), `"print"`.
+
+- **Masque flou** (`unsharp`), en 16 bits, **après la réduction**, comme Lightroom :
+  `original + force × (original − flou gaussien)`, là où la différence dépasse un seuil.
+  Le seuil évite d'accentuer le bruit. La fonction du crate `image` n'a pas de réglage de
+  force, d'où une version maison.
+- Paramètres dans `[export.sharpening]`, pour l'écran et le tirage :
+  `screen_radius` / `screen_amount` / `screen_threshold`, et de même `print_*`. Par
+  défaut : écran 0,6 px, force 0,6, seuil 2 niveaux ; tirage 1,2 px, force 0,9, seuil 3.
+  Valeurs de départ, à ajuster à l'usage.
+- **darktable** n'accentue pas pour nous : un profil qui accentue (ou une version) passe
+  par `export_via_tiff`. darktable rend un TIFF 16 bits temporaire, en un seul
+  lancement, qui est ensuite recadré, réduit, accentué et écrit. Une seule compression.
+- Une **copie sans recompression** n'est pas accentuée : accentuer, c'est réencoder. Un
+  profil qui accentue n'est donc jamais « tel quel ».
+- Résumé dans la boîte : « … · accentuation écran ».
+
 ## Sans darktable : LibRaw
 
 Étape 2 du plan (19/10/2026, « plus simple », selon l'utilisateur) : sans darktable

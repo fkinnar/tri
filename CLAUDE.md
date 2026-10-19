@@ -645,6 +645,10 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
 - **Préréglages de recadrage** (idée de l'utilisateur, 19/10/2026) : nom, rapport et
   orientation, profil d'export (« Story Insta » : 9:16, Web) ; choisi dans la barre du
   recadrage, puis on ajuste. À faire avec la création des profils d'export.
+- [x] **Accentuation de sortie** (idée de l'utilisateur, 19/10/2026, comme Lightroom) :
+  `sharpen` = none / screen / print par profil, masque flou après réduction,
+  `[export.sharpening]` ; darktable par TIFF 16 bits temporaire (`export_via_tiff`).
+  Une version n'est jamais « tel quel » (`is_as_is`, déduit du profil).
 - **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, juste après les
   versions) : fenêtre de réglages, section Export — nouveau profil, dupliquer, supprimer
   (profils de l'utilisateur seulement), mêmes contrôles et refus des incohérences. darktable trouvé aussi en **AppImage**

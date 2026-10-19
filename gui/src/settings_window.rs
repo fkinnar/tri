@@ -105,6 +105,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
             "color" => Some(&tri::export::COLORS_8BIT),
             "intent" => Some(&tri::export::INTENTS),
             "applies_to" => Some(&["all", "raw", "flat"]),
+            "sharpen" => Some(&["none", "screen", "print"]),
             _ => None,
         };
     }

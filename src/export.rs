@@ -77,6 +77,102 @@ impl Format {
     }
 }
 
+/// Accentuation de sortie (idée de l'utilisateur, 19/10/2026, comme Lightroom) : compense
+/// la douceur due à la réduction (écran) ou à l'encre (tirage). Appliquée après la
+/// réduction ; paramètres dans [`Sharpening`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Sharpen {
+    /// Aucune.
+    #[default]
+    None,
+    /// Pour l'écran : légère et fine.
+    Screen,
+    /// Pour le tirage : rayon plus large.
+    Print,
+}
+
+/// Paramètres d'un masque flou (accentuation).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Unsharp {
+    /// Rayon (écart type du flou gaussien), en pixels de l'image écrite.
+    pub radius: f32,
+    /// Force : 1,0 ajoute toute la différence avec l'image floue.
+    pub amount: f32,
+    /// Seuil, en niveaux sur 8 bits : en dessous, rien (pas de bruit accentué).
+    pub threshold: f32,
+}
+
+/// Réglages de l'accentuation (section `[export.sharpening]`).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Sharpening {
+    /// Écran : rayon (pixels).
+    pub screen_radius: f32,
+    /// Écran : force.
+    pub screen_amount: f32,
+    /// Écran : seuil (niveaux sur 8 bits).
+    pub screen_threshold: f32,
+    /// Tirage : rayon (pixels).
+    pub print_radius: f32,
+    /// Tirage : force.
+    pub print_amount: f32,
+    /// Tirage : seuil (niveaux sur 8 bits).
+    pub print_threshold: f32,
+}
+
+impl Default for Sharpening {
+    fn default() -> Self {
+        Self {
+            screen_radius: 0.6,
+            screen_amount: 0.6,
+            screen_threshold: 2.0,
+            print_radius: 1.2,
+            print_amount: 0.9,
+            print_threshold: 3.0,
+        }
+    }
+}
+
+impl Eq for Sharpening {}
+
+impl Sharpening {
+    /// Paramètres de `sharpen` ; `None` : pas d'accentuation.
+    pub fn of(&self, sharpen: Sharpen) -> Option<Unsharp> {
+        match sharpen {
+            Sharpen::None => None,
+            Sharpen::Screen => Some(Unsharp {
+                radius: self.screen_radius,
+                amount: self.screen_amount,
+                threshold: self.screen_threshold,
+            }),
+            Sharpen::Print => Some(Unsharp {
+                radius: self.print_radius,
+                amount: self.print_amount,
+                threshold: self.print_threshold,
+            }),
+        }
+    }
+}
+
+/// Accentue `pixels` (masque flou) : `original + force × (original − flou)`, là où la
+/// différence dépasse le seuil.
+pub fn unsharp(pixels: &crate::raw::Rgb16, u: Unsharp) -> crate::raw::Rgb16 {
+    if u.radius <= 0.0 || u.amount <= 0.0 {
+        return pixels.clone();
+    }
+    let blurred = image::imageops::blur(pixels, u.radius);
+    let threshold = u.threshold.max(0.0) * 257.0;
+    let mut out = pixels.clone();
+    for (o, b) in out.iter_mut().zip(blurred.iter()) {
+        let d = f32::from(*o) - f32::from(*b);
+        if d.abs() > threshold {
+            *o = (f32::from(*o) + u.amount * d).round().clamp(0.0, 65535.0) as u16;
+        }
+    }
+    out
+}
+
 /// Ce à quoi un profil s'applique (idée de l'utilisateur, 19/10/2026).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -141,6 +237,8 @@ pub struct Profile {
     /// Ce à quoi il s'applique : `"all"`, `"raw"` (rendu d'un RAW), `"flat"` (image déjà
     /// développée) ; la boîte d'export ne propose que les profils qui conviennent.
     pub applies_to: AppliesTo,
+    /// Accentuation de sortie : `"none"`, `"screen"`, `"print"`.
+    pub sharpen: Sharpen,
 }
 
 impl Profile {
@@ -161,6 +259,7 @@ impl Profile {
             // JPEG quand on peut l'éviter.
             passthrough: true,
             applies_to: AppliesTo::All,
+            sharpen: Sharpen::None,
         }
     }
 
@@ -184,6 +283,7 @@ impl Profile {
             },
             Profile {
                 max_side: 2048,
+                sharpen: Sharpen::Screen,
                 ..Profile::base("web")
             },
         ]
@@ -196,6 +296,7 @@ impl Profile {
             && self.passthrough
             && self.color.trim().is_empty()
             && self.max_side == 0
+            && self.sharpen == Sharpen::None
     }
 
     /// Le profil est-il cohérent ? Sinon, la raison.
@@ -332,6 +433,7 @@ struct ProfileToml {
     folder: Option<String>,
     passthrough: Option<bool>,
     applies_to: Option<AppliesTo>,
+    sharpen: Option<Sharpen>,
 }
 
 /// Les profils d'export, dans l'ordre : profils fournis, puis ceux de l'utilisateur (par
@@ -395,6 +497,9 @@ impl<'de> Deserialize<'de> for Profiles {
             if let Some(v) = t.applies_to {
                 p.applies_to = v;
             }
+            if let Some(v) = t.sharpen {
+                p.sharpen = v;
+            }
         }
         // Profil incohérent (ProPhoto en JPEG…) : refusé dès la lecture, comme toute
         // valeur invalide (la fenêtre de réglages refuse la modification et dit pourquoi).
@@ -420,6 +525,8 @@ pub struct ExportSettings {
     pub default_raw: String,
     /// Profil proposé pour une image déjà développée (JPEG boîtier, JPEG…).
     pub default_flat: String,
+    /// Accentuation de sortie (`[export.sharpening]`).
+    pub sharpening: Sharpening,
     /// Profils (`[export.profiles.<id>]`).
     pub profiles: Profiles,
 }
@@ -429,6 +536,7 @@ impl Default for ExportSettings {
         Self {
             default_raw: "edit".into(),
             default_flat: "asis".into(),
+            sharpening: Sharpening::default(),
             profiles: Profiles::default(),
         }
     }
@@ -894,6 +1002,41 @@ impl Cut {
     }
 }
 
+/// Ce qu'on exporte, hors images : profil, dossier, version (recadrage) et accentuation.
+#[derive(Clone, Copy, Debug)]
+pub struct Request<'a> {
+    /// Profil d'export.
+    pub profile: &'a Profile,
+    /// Dossier (voir [`Profile::folder`]).
+    pub folder: &'a str,
+    /// Version à exporter (recadrage), sinon l'image entière.
+    pub cut: Option<&'a Cut>,
+    /// Paramètres de l'accentuation de sortie.
+    pub sharpening: Sharpening,
+}
+
+impl<'a> Request<'a> {
+    /// Image entière, accentuation par défaut.
+    pub fn new(profile: &'a Profile, folder: &'a str) -> Request<'a> {
+        Request {
+            profile,
+            folder,
+            cut: None,
+            sharpening: Sharpening::default(),
+        }
+    }
+
+    /// Exporter la version `cut`.
+    pub fn cut(self, cut: Option<&'a Cut>) -> Request<'a> {
+        Request { cut, ..self }
+    }
+
+    /// Paramètres de l'accentuation (`[export.sharpening]`).
+    pub fn sharpening(self, sharpening: Sharpening) -> Request<'a> {
+        Request { sharpening, ..self }
+    }
+}
+
 /// Exporte `images` **sans darktable** : RAW développés par LibRaw (le rendu « plat » de
 /// `tri` : balance des blancs du boîtier, sans luminosité automatique) ou leur JPEG
 /// boîtier (`local`), images plates réencodées. Une image déjà développée (JPEG boîtier,
@@ -903,13 +1046,12 @@ impl Cut {
 /// (raison dans [`Report::errors`]).
 pub fn export_libraw(
     images: &[PathBuf],
-    profile: &Profile,
-    folder: &str,
+    req: &Request<'_>,
     local: Local,
-    cut: Option<&Cut>,
     cancel: &AtomicBool,
     mut progress: impl FnMut(usize, usize, &Path),
 ) -> Result<Report, DevelopError> {
+    let profile = req.profile;
     libraw_check(profile, local).map_err(DevelopError::Other)?;
     let images = sources(images);
     let total = images.len();
@@ -918,7 +1060,7 @@ pub fn export_libraw(
         if cancel.load(Ordering::Relaxed) {
             return Err(DevelopError::Cancelled);
         }
-        match export_one(image, profile, local, folder, cut, cancel) {
+        match export_one(image, req, local, cancel) {
             Ok((out, copied)) => {
                 report.passthrough += usize::from(copied);
                 report.written.push(out);
@@ -939,12 +1081,11 @@ pub fn export_libraw(
 /// Exporte une image ; `true` : copiée sans recompression.
 fn export_one(
     image: &Path,
-    profile: &Profile,
+    req: &Request<'_>,
     local: Local,
-    folder: &str,
-    cut: Option<&Cut>,
     cancel: &AtomicBool,
 ) -> Result<(PathBuf, bool), DevelopError> {
+    let (profile, folder, cut) = (req.profile, req.folder, req.cut);
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
     let encode = |p: moxcms::ColorProfile| p.encode().map_err(|e| failed(&format!("{e:?}")));
     let (pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
@@ -969,6 +1110,7 @@ fn export_one(
         // d'espace.
         if profile.passthrough
             && cut.is_none()
+            && profile.sharpen == Sharpen::None
             && profile.format == Format::Jpeg
             && fits
             && origin.is(&profile.color)
@@ -1001,19 +1143,18 @@ fn export_one(
         };
         (pixels, icc)
     };
-    finish(image, pixels, icc.as_deref(), profile, folder, cut).map(|out| (out, false))
+    finish(image, pixels, icc.as_deref(), req).map(|out| (out, false))
 }
 
-/// Fin d'un export : recadrage (version), réduction au côté maximal du profil, écriture
-/// au format du profil avec le profil ICC `icc`.
+/// Fin d'un export : recadrage (version), réduction au côté maximal du profil,
+/// accentuation de sortie, écriture au format du profil avec le profil ICC `icc`.
 fn finish(
     image: &Path,
     mut pixels: crate::raw::Rgb16,
     icc: Option<&[u8]>,
-    profile: &Profile,
-    folder: &str,
-    cut: Option<&Cut>,
+    req: &Request<'_>,
 ) -> Result<PathBuf, DevelopError> {
+    let (profile, folder, cut, sharpening) = (req.profile, req.folder, req.cut, &req.sharpening);
     if let Some(cut) = cut {
         let (w, h) = pixels.dimensions();
         let (x, y, cw, ch) = cut.crop.pixels(w, h);
@@ -1029,6 +1170,10 @@ fn finish(
         );
         pixels = image::imageops::resize(&pixels, nw, nh, image::imageops::FilterType::Lanczos3);
     }
+    // Après la réduction, comme Lightroom : on accentue ce qui sera vu.
+    if let Some(u) = sharpening.of(profile.sharpen) {
+        pixels = unsharp(&pixels, u);
+    }
     let extra = cut.map(Cut::suffix).unwrap_or_default();
     let out = output_path(image, profile, &extra, folder, profile.format.extension())?;
     write_image(&out, &pixels, profile, icc).map_err(|e| {
@@ -1038,22 +1183,22 @@ fn finish(
     Ok(out)
 }
 
-/// Exporte la version `cut` de `image` **par darktable** : rendu en TIFF 16 bits
-/// temporaire (espace du profil, pleine définition), puis recadré, réduit et écrit au
-/// format du profil. Une seule compression, jamais deux.
-pub fn export_version_darktable(
+/// Exporte `images` **par darktable, en passant par un TIFF 16 bits temporaire** (espace
+/// du profil, pleine définition, un seul lancement), puis recadré (version `cut`), réduit,
+/// accentué et écrit au format du profil : pour ce que darktable ne fait pas lui-même. Une
+/// seule compression, jamais deux.
+pub fn export_via_tiff(
     dt: &Darktable,
-    image: &Path,
-    profile: &Profile,
-    folder: &str,
-    cut: &Cut,
+    images: &[PathBuf],
+    req: &Request<'_>,
     cancel: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &Path),
 ) -> Result<Report, DevelopError> {
+    let profile = req.profile;
     use image::ImageDecoder;
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
-    let tmp = dt
-        .config_dir
-        .join(format!("version-{}", std::process::id()));
+    let images = sources(images);
+    let tmp = dt.config_dir.join(format!("render-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let render = Profile {
         format: Format::Tiff,
@@ -1062,35 +1207,64 @@ pub fn export_version_darktable(
         suffix: String::new(),
         passthrough: false,
         applies_to: AppliesTo::All,
+        sharpen: Sharpen::None,
         ..profile.clone()
     };
     let result = (|| {
-        let report = export(
+        let rendered = export(
             dt,
-            &[image.to_path_buf()],
+            &images,
             &render,
             &tmp.display().to_string(),
             cancel,
             |_, _, _| {},
         )?;
-        let rendered = report
-            .written
-            .first()
-            .ok_or_else(|| DevelopError::Other(crate::t!("export-version-empty")))?;
-        let mut decoder = image::ImageReader::open(rendered)
-            .and_then(|r| r.with_guessed_format())
-            .map_err(|e| failed(&e))?
-            .into_decoder()
-            .map_err(|e| failed(&e))?;
-        let icc = decoder.icc_profile().ok().flatten();
-        let pixels = image::DynamicImage::from_decoder(decoder)
-            .map_err(|e| failed(&e))?
-            .into_rgb16();
-        let out = finish(image, pixels, icc.as_deref(), profile, folder, Some(cut))?;
-        Ok(Report {
-            written: vec![out],
-            ..Report::default()
-        })
+        let total = images.len();
+        let mut used = vec![false; total];
+        let mut report = Report::default();
+        for file in &rendered.written {
+            // L'image d'origine du rendu : même nom (darktable ajoute « _01 » en cas de
+            // doublon de nom).
+            let stem = file
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let base = stem.rsplit_once('_').map_or(stem.as_str(), |(b, _)| b);
+            let Some(i) = (0..total).find(|&i| {
+                !used[i]
+                    && images[i]
+                        .file_stem()
+                        .is_some_and(|s| s.to_string_lossy() == stem || s.to_string_lossy() == base)
+            }) else {
+                continue;
+            };
+            used[i] = true;
+            let mut decoder = image::ImageReader::open(file)
+                .and_then(|r| r.with_guessed_format())
+                .map_err(|e| failed(&e))?
+                .into_decoder()
+                .map_err(|e| failed(&e))?;
+            let icc = decoder.icc_profile().ok().flatten();
+            let pixels = image::DynamicImage::from_decoder(decoder)
+                .map_err(|e| failed(&e))?
+                .into_rgb16();
+            match finish(&images[i], pixels, icc.as_deref(), req) {
+                Ok(out) => {
+                    report.written.push(out);
+                    progress(
+                        report.written.len(),
+                        total,
+                        report.written.last().expect("ajouté"),
+                    );
+                }
+                Err(e) => report.errors.push((images[i].clone(), e.to_string())),
+            }
+        }
+        if report.written.is_empty() && report.errors.is_empty() && total > 0 {
+            return Err(DevelopError::Other(crate::t!("export-version-empty")));
+        }
+        report.failed = total - report.written.len();
+        Ok(report)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
     result
@@ -1375,6 +1549,31 @@ mod tests {
     }
 
     #[test]
+    fn output_sharpening_raises_edges_and_leaves_flat_areas_alone() {
+        // Marche grise : 20 000 / 40 000.
+        let step = crate::raw::Rgb16::from_fn(40, 20, |x, _| {
+            let v = if x < 20 { 20_000 } else { 40_000 };
+            image::Rgb([v, v, v])
+        });
+        let s = Sharpening::default();
+        let sharp = unsharp(&step, s.of(Sharpen::Screen).unwrap());
+        // Au bord, le côté clair éclaircit, le côté sombre fonce ; loin du bord, rien.
+        assert!(sharp.get_pixel(20, 10)[0] > 40_000);
+        assert!(sharp.get_pixel(19, 10)[0] < 20_000);
+        assert_eq!(sharp.get_pixel(2, 10)[0], 20_000);
+        assert_eq!(sharp.get_pixel(37, 10)[0], 40_000);
+        // Tirage : rayon plus large, le halo s'étend plus loin.
+        let print = unsharp(&step, s.of(Sharpen::Print).unwrap());
+        assert!(print.get_pixel(21, 10)[0] > sharp.get_pixel(21, 10)[0]);
+        assert_eq!(s.of(Sharpen::None), None);
+        // Profils fournis : Web accentue pour l'écran, Retouche et JPEG tel quel jamais.
+        let p = Profiles::default();
+        assert_eq!(p.get("web").unwrap().sharpen, Sharpen::Screen);
+        assert_eq!(p.get("edit").unwrap().sharpen, Sharpen::None);
+        assert_eq!(p.get("asis").unwrap().sharpen, Sharpen::None);
+    }
+
+    #[test]
     fn a_pairs_jpeg_is_not_exported_twice() {
         let images: Vec<PathBuf> = [
             "a/DSCF1.RAF",
@@ -1504,10 +1703,8 @@ mod tests {
             };
             let report = export_libraw(
                 std::slice::from_ref(&src),
-                &profile,
-                "export",
+                &Request::new(&profile, "export"),
                 Local::LibRaw,
-                None,
                 &AtomicBool::new(false),
                 |_, _, _| {},
             )
@@ -1537,10 +1734,8 @@ mod tests {
         };
         let report = export_libraw(
             &[src],
-            &prophoto,
-            "export",
+            &Request::new(&prophoto, "export"),
             Local::LibRaw,
-            None,
             &AtomicBool::new(false),
             |_, _, _| {},
         )
@@ -1576,10 +1771,8 @@ mod tests {
         let run = |p: &Profile| {
             export_libraw(
                 std::slice::from_ref(&src),
-                p,
-                "out",
+                &Request::new(p, "out"),
                 Local::Embedded,
-                None,
                 &cancel,
                 |_, _, _| {},
             )
@@ -1624,10 +1817,8 @@ mod tests {
         let run = |p: &Profile| {
             export_libraw(
                 std::slice::from_ref(&src),
-                p,
-                "out",
+                &Request::new(p, "out"),
                 Local::Embedded,
-                None,
                 &AtomicBool::new(false),
                 |_, _, _| {},
             )
@@ -1681,9 +1872,14 @@ mod tests {
             name: "Story".into(),
         };
         let web = Profiles::default().get("web").unwrap().clone();
-        let report =
-            export_version_darktable(&dt, &raw, &web, "export", &cut, &AtomicBool::new(false))
-                .unwrap();
+        let report = export_via_tiff(
+            &dt,
+            std::slice::from_ref(&raw),
+            &Request::new(&web, "export").cut(Some(&cut)),
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
         let out = &report.written[0];
         assert_eq!(out.file_name().unwrap(), "DSCF0331-Story.jpg");
         let (w, h) = image::image_dimensions(out).unwrap();
@@ -1691,7 +1887,7 @@ mod tests {
         assert!(w.abs_diff(h) <= 2, "carré : {w} × {h}");
         assert!(
             !dt.config_dir
-                .join(format!("version-{}", std::process::id()))
+                .join(format!("render-{}", std::process::id()))
                 .exists()
         );
     }
@@ -1708,10 +1904,8 @@ mod tests {
         let profiles = Profiles::default();
         let report = export_libraw(
             &[raw],
-            profiles.get("edit").unwrap(),
-            "export",
+            &Request::new(profiles.get("edit").unwrap(), "export"),
             Local::LibRaw,
-            None,
             &AtomicBool::new(false),
             |_, _, _| {},
         )

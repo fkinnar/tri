@@ -133,7 +133,12 @@ pub fn profile_summary(p: &Profile) -> String {
         0 => t!("export-size-full"),
         side => t!("export-size-max", side = side),
     };
-    format!("{format} · {color} · {size}")
+    let sharpen = match p.sharpen {
+        tri::export::Sharpen::None => String::new(),
+        tri::export::Sharpen::Screen => format!(" · {}", t!("export-sharpen-screen")),
+        tri::export::Sharpen::Print => format!(" · {}", t!("export-sharpen-print")),
+    };
+    format!("{format} · {color} · {size}{sharpen}")
 }
 
 impl ExportDialog {
@@ -335,6 +340,24 @@ impl ExportDialog {
     /// Exporter la version `cut` (recadrage) plutôt que l'image entière.
     pub fn with_cut(mut self, cut: tri::export::Cut) -> ExportDialog {
         self.cut = Some(cut);
+        // Une version recadrée n'est jamais « telle quelle » : pas de JPEG tel quel. Le
+        // profil choisi est retrouvé par son identifiant dans la liste réduite.
+        let id = self.profiles.get(self.choice).map(|p| p.id.clone());
+        self.profiles.retain(|p| !p.is_as_is());
+        // « JPEG tel quel » retiré : le premier profil JPEG (Web par défaut), plus naturel
+        // pour un recadrage qu'un TIFF de retouche.
+        self.choice = id
+            .and_then(|id| self.profiles.iter().position(|p| p.id == id))
+            .or_else(|| {
+                self.profiles
+                    .iter()
+                    .position(|p| p.format == tri::export::Format::Jpeg)
+            })
+            .unwrap_or(0);
+        if let Some(p) = self.profiles.get(self.choice) {
+            self.input = p.folder.clone();
+            self.passthrough = (p.passthrough, self.choice);
+        }
         self
     }
 
@@ -362,6 +385,20 @@ impl ExportDialog {
     }
 }
 
+/// Ce qu'un export doit produire (images, profil, dossier, version, accentuation).
+pub struct Order {
+    /// Images.
+    pub images: Vec<PathBuf>,
+    /// Profil.
+    pub profile: Profile,
+    /// Dossier (celui du profil, ou un autre pour cette fois).
+    pub folder: String,
+    /// Version (recadrage), sinon l'image entière.
+    pub cut: Option<tri::export::Cut>,
+    /// Paramètres de l'accentuation de sortie.
+    pub sharpening: tri::export::Sharpening,
+}
+
 /// Export en cours, dans un fil à part (darktable : plusieurs secondes par image).
 pub struct Job {
     pub done: Arc<AtomicUsize>,
@@ -378,12 +415,16 @@ impl Job {
     pub fn start(
         dt: Option<Darktable>,
         local: tri::export::Local,
-        images: Vec<PathBuf>,
-        profile: Profile,
-        folder: String,
-        cut: Option<tri::export::Cut>,
+        order: Order,
         ctx: &egui::Context,
     ) -> Job {
+        let Order {
+            images,
+            profile,
+            folder,
+            cut,
+            sharpening,
+        } = order;
         // Dossier montré : celui de la première image (relatif : un par dossier d'images).
         let dest = images
             .first()
@@ -400,34 +441,18 @@ impl Job {
                     done.store(n, Ordering::Relaxed);
                     ctx.request_repaint();
                 };
-                let result = match (&dt, &cut) {
-                    // Version par darktable : rendu temporaire, puis recadré.
-                    (Some(dt), Some(cut)) => images
-                        .first()
-                        .map(|image| {
-                            let report = tri::export::export_version_darktable(
-                                dt, image, &profile, &folder, cut, &cancel,
-                            );
-                            if let Ok(r) = &report
-                                && let Some(out) = r.written.first()
-                            {
-                                progress(1, 1, out);
-                            }
-                            report
-                        })
-                        .unwrap_or_else(|| Ok(tri::export::Report::default())),
-                    (Some(dt), None) => {
+                let req = tri::export::Request::new(&profile, &folder)
+                    .cut(cut.as_ref())
+                    .sharpening(sharpening);
+                let result = match &dt {
+                    // darktable ne recadre ni n'accentue : par un TIFF 16 bits temporaire.
+                    Some(dt) if cut.is_some() || profile.sharpen != tri::export::Sharpen::None => {
+                        tri::export::export_via_tiff(dt, &images, &req, &cancel, progress)
+                    }
+                    Some(dt) => {
                         tri::export::export(dt, &images, &profile, &folder, &cancel, progress)
                     }
-                    (None, cut) => tri::export::export_libraw(
-                        &images,
-                        &profile,
-                        &folder,
-                        local,
-                        cut.as_ref(),
-                        &cancel,
-                        progress,
-                    ),
+                    None => tri::export::export_libraw(&images, &req, local, &cancel, progress),
                 };
                 ctx.request_repaint();
                 result

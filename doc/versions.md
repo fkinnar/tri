@@ -107,7 +107,14 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   gardées ; relues après une modification (enregistrement, annulation, surveillance du
   dossier).
 - La barre du recadrage ne propose que les profils d'export qui s'appliquent à l'image
-  recadrée (`applies_to` : pas « JPEG tel quel » sur un rendu de RAW).
+  recadrée (`applies_to`), et **jamais un profil « tel quel »**, quelle que soit l'image.
+  Un recadrage change l'image, donc un profil qui ne change rien n'a pas de sens.
+  Question de l'utilisateur (19/10/2026) : « tel quel » est déduit du profil
+  (`Profile::is_as_is` : JPEG, sans recompression, espace d'origine, pleine taille, sans
+  accentuation), pas d'un réglage. Un profil de l'utilisateur ainsi réglé est traité de
+  même.
+- Export d'une version sans profil : le profil choisi, sinon le premier profil JPEG (Web
+  par défaut), plutôt qu'un TIFF de retouche.
 
 ## Export d'une version
 

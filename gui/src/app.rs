@@ -4963,9 +4963,14 @@ impl TriApp {
             high_quality: true,
         });
         trace(|| format!("export : {} images vers {folder}", images.len()));
-        self.export_job = Some(crate::export::Job::start(
-            dt, local, images, profile, folder, cut, ctx,
-        ));
+        let order = crate::export::Order {
+            images,
+            profile,
+            folder,
+            cut,
+            sharpening: self.settings.export.sharpening,
+        };
+        self.export_job = Some(crate::export::Job::start(dt, local, order, ctx));
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -6543,6 +6548,8 @@ impl eframe::App for TriApp {
                 .export
                 .applicable(flat)
                 .into_iter()
+                // Une version recadrée n'est jamais « telle quelle ».
+                .filter(|p| !p.is_as_is())
                 .map(|p| (p.id.clone(), crate::export::profile_name(p)))
                 .collect();
             let mut action = None;

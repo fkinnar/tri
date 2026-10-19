@@ -913,6 +913,8 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     if args.dry_run {
         return Ok(());
     }
+    let request =
+        tri::export::Request::new(profile, &folder).sharpening(settings.export.sharpening);
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let progress = |done: usize, total: usize, path: &std::path::Path| {
         eprintln!("{done}/{total} {}", path.display());
@@ -928,7 +930,12 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
                 config_dir: settings.open_cache()?.root().join("darktable-export"),
                 high_quality: true,
             };
-            tri::export::export(&dt, &sources, profile, &folder, &cancel, progress)?
+            // Accentuation de sortie : par un TIFF temporaire (darktable n'en fait pas).
+            if profile.sharpen == tri::export::Sharpen::None {
+                tri::export::export(&dt, &sources, profile, &folder, &cancel, progress)?
+            } else {
+                tri::export::export_via_tiff(&dt, &sources, &request, &cancel, progress)?
+            }
         }
         None => {
             if !args.embedded {
@@ -939,7 +946,7 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             } else {
                 tri::export::Local::LibRaw
             };
-            tri::export::export_libraw(&sources, profile, &folder, local, None, &cancel, progress)?
+            tri::export::export_libraw(&sources, &request, local, &cancel, progress)?
         }
     };
     for (image, error) in &report.errors {

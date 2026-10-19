@@ -108,6 +108,19 @@ high_quality = false
 default_raw = "edit"
 default_flat = "asis"
 
+[export.sharpening]
+# Accentuation de sortie (clé sharpen des profils), appliquée après la réduction, comme
+# Lightroom : masque flou de rayon radius (pixels de l'image écrite), de force amount
+# (1,0 : toute la différence avec l'image floue), au-delà d'un seuil threshold (niveaux
+# sur 8 bits : en dessous, rien, pour ne pas accentuer le bruit). Avec darktable, un
+# profil qui accentue passe par un TIFF 16 bits temporaire (une seule compression).
+screen_radius = 0.6
+screen_amount = 0.6
+screen_threshold = 2.0
+print_radius = 1.2
+print_amount = 0.9
+print_threshold = 3.0
+
 # Profils d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
 # vient du profil fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
@@ -128,7 +141,9 @@ default_flat = "asis"
 #   un rendu darktable ou LibRaw, ni hors JPEG ;
 # applies_to : "all" (partout), "raw" (rendu d'un RAW : darktable, LibRaw) ou "flat" (image
 #   déjà développée : JPEG boîtier, JPEG, TIFF…) ; la boîte d'export ne propose que les
-#   profils qui conviennent.
+#   profils qui conviennent ;
+# sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
+#   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée.
 [export.profiles.edit]
 # Vers un éditeur externe : TIFF 16 bits, ProPhoto (linéaire), pleine définition.
 name = ""
@@ -142,6 +157,7 @@ suffix = ""
 folder = "export"
 passthrough = true
 applies_to = "all"
+sharpen = "none"
 
 [export.profiles.asis]
 # JPEG tel quel : un JPEG d'origine est copié sans rien toucher (taille, espace couleur :
@@ -158,6 +174,7 @@ suffix = ""
 folder = "export"
 passthrough = true
 applies_to = "flat"
+sharpen = "none"
 
 [export.profiles.web]
 # Publication : JPEG sRGB, 2048 pixels au plus.
@@ -172,6 +189,7 @@ suffix = ""
 folder = "export"
 passthrough = true
 applies_to = "all"
+sharpen = "screen"
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
