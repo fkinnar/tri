@@ -538,6 +538,7 @@ stats-range-value = { $low } à { $high }
 stats-spread = Écart-type
 stats-over = Saturés
 stats-under = Bouchés
+stats-raw-luminance-short = RAW : pas de luminance, le vert en tient lieu · IL sous la saturation
 stats-raw-luminance = Données RAW : chaque photosite ne mesure qu'une couleur, pas de luminance ; le vert en est la meilleure approximation. Valeurs en IL sous la saturation.
 stats-all = Tous les canaux
 histogram-channel-tip = { $channel } ({ $key } ; { $keys } : canal suivant)

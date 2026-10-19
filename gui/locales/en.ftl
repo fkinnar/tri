@@ -533,6 +533,7 @@ stats-range-value = { $low } to { $high }
 stats-spread = Std. dev.
 stats-over = Clipped
 stats-under = Crushed
+stats-raw-luminance-short = RAW: no luminance, green stands in · EV below saturation
 stats-raw-luminance = RAW data: each photosite records a single colour, so there is no luminance; green is the best approximation. Values in EV below clipping.
 stats-all = All channels
 histogram-channel-tip = { $channel } ({ $key }; { $keys }: next channel)

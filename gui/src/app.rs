@@ -4218,17 +4218,23 @@ impl TriApp {
             if let Some(e) = &exposure {
                 // Statistiques sous l'histogramme, sur toute la largeur.
                 self.histogram_stats(ui, e);
-                // Sur des données RAW, pas de luminance : chaque photosite ne mesure
-                // qu'une couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sous
-                // le tableau et l'image : sur la ligne du tableau, elle l'élargissait et
-                // ne laissait presque plus de place à l'image.
-                if matches!(e.source, tri::exposure::Source::Raw { .. }) {
-                    ui.weak(t!("stats-raw-luminance"));
-                }
             }
             ui.horizontal(|ui| {
                 close = ui.button(t!("close")).clicked();
                 ui.weak(t!("or-escape"));
+                // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
+                // couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sur la ligne de
+                // « Fermer », à droite (retour du 19/10/2026) : sous le tableau, elle
+                // changeait la hauteur de la boîte en passant d'un RAW à une image plate.
+                if exposure
+                    .as_ref()
+                    .is_some_and(|e| matches!(e.source, tri::exposure::Source::Raw { .. }))
+                {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.weak(t!("stats-raw-luminance-short"))
+                            .on_hover_text(t!("stats-raw-luminance"));
+                    });
+                }
             });
         });
         if scale {
