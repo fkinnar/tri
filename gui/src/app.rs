@@ -4918,7 +4918,7 @@ impl TriApp {
             let (band, alt) = self.gui.theme.stack_bands(&colors);
             if group % 2 == 1 { band } else { alt }
         } else {
-            visuals.extreme_bg_color
+            self.gui.theme.cell(&colors, visuals)
         };
         let painter = ui.painter();
         painter.rect_filled(rect, 4.0, background);
@@ -5003,7 +5003,7 @@ impl TriApp {
         let text_color = if selected {
             visuals_text(ui, true)
         } else {
-            visuals_text(ui, false)
+            self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
         let badge = match file.kind {
             MediaKind::Raw => "RAW",

@@ -261,7 +261,7 @@ impl Theme {
             if self == Theme::Neutral {
                 v.panel_fill = colors.neutral_panel.into();
                 v.window_fill = colors.neutral_panel.into();
-                v.extreme_bg_color = colors.neutral_cell.into();
+                v.extreme_bg_color = colors.neutral_field.into();
             } else {
                 v.panel_fill = dark.panel_fill;
                 v.window_fill = dark.window_fill;
@@ -274,6 +274,26 @@ impl Theme {
     /// thème.
     pub fn center(self, colors: &Colors) -> Option<Color32> {
         (self == Theme::Neutral).then(|| colors.neutral_center.into())
+    }
+
+    /// Fond d'une cellule de la grille : `neutral_cell` pour ce thème, sinon le fond des
+    /// champs du thème (comme avant).
+    pub fn cell(self, colors: &Colors, visuals: &egui::Visuals) -> Color32 {
+        if self == Theme::Neutral {
+            colors.neutral_cell.into()
+        } else {
+            visuals.extreme_bg_color
+        }
+    }
+
+    /// Nom d'une image sur une cellule non sélectionnée : `neutral_cell_text` pour ce
+    /// thème, sinon `text` (la couleur de texte du thème).
+    pub fn cell_text(self, colors: &Colors, text: Color32) -> Color32 {
+        if self == Theme::Neutral {
+            colors.neutral_cell_text.into()
+        } else {
+            text
+        }
     }
 
     /// Fond du plein écran, de la comparaison et de la loupe : le gris central pour ce
@@ -809,6 +829,11 @@ pub struct Colors {
     pub neutral_center: Color,
     /// Thème gris neutre : cellules de la grille (un peu plus claires que le fond).
     pub neutral_cell: Color,
+    /// Thème gris neutre : champs de saisie (recherche, réglages).
+    pub neutral_field: Color,
+    /// Thème gris neutre : nom des images sur les cellules (sombre : lisible sur un gris
+    /// moyen, contrairement au gris du thème sombre).
+    pub neutral_cell_text: Color,
     /// Thème gris neutre : fonds des piles, un groupe sur deux et l'autre.
     pub neutral_stack_band: Color,
     /// Voir `neutral_stack_band`.
@@ -874,11 +899,14 @@ impl Default for Colors {
             blur_drop: Color([110, 170, 230]),
             stack_band: Color([56, 56, 56]),
             stack_band_alt: Color([24, 24, 24]),
-            neutral_panel: Color([46, 46, 46]),
-            neutral_center: Color([80, 80, 80]),
-            neutral_cell: Color([94, 94, 94]),
-            neutral_stack_band: Color([110, 110, 110]),
-            neutral_stack_band_alt: Color([70, 70, 70]),
+            // Relevés sur une capture de darktable (thème gris, 19/10/2026).
+            neutral_panel: Color([42, 42, 42]),
+            neutral_center: Color([94, 94, 94]),
+            neutral_cell: Color([118, 118, 118]),
+            neutral_field: Color([62, 62, 62]),
+            neutral_cell_text: Color([30, 30, 30]),
+            neutral_stack_band: Color([132, 132, 132]),
+            neutral_stack_band_alt: Color([106, 106, 106]),
             stack_mark: Color([140, 140, 140]),
             badge: Color([120, 170, 230]),
             warning: Color([230, 160, 60]),
@@ -1050,6 +1078,15 @@ mod tests {
             Theme::Neutral.stack_bands(&c),
             (c.neutral_stack_band.into(), c.neutral_stack_band_alt.into())
         );
+        // Cellules et champs séparés ; noms sombres sur les cellules.
+        let v = egui::Visuals::dark();
+        assert_eq!(Theme::Neutral.cell(&c, &v), Color32::from(c.neutral_cell));
+        assert_eq!(Theme::Dark.cell(&c, &v), v.extreme_bg_color);
+        assert_eq!(
+            Theme::Neutral.cell_text(&c, Color32::WHITE),
+            Color32::from(c.neutral_cell_text)
+        );
+        assert_eq!(Theme::Dark.cell_text(&c, Color32::WHITE), Color32::WHITE);
         let parsed: AppSettings = tri::settings::parse("[gui]\ntheme = \"neutral\"\n").unwrap();
         assert_eq!(parsed.gui.theme, Theme::Neutral);
         assert_eq!(

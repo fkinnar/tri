@@ -495,13 +495,17 @@ blur_drop = "#6eaae6"
 # (une photo isolée est un groupe d'une image).
 stack_band = "#383838"
 stack_band_alt = "#181818"
-# Thème gris neutre (theme = "neutral") : panneaux, fond central, cellules de la grille,
-# fonds des piles (un groupe sur deux, l'autre).
-neutral_panel = "#2e2e2e"
-neutral_center = "#505050"
-neutral_cell = "#5e5e5e"
-neutral_stack_band = "#6e6e6e"
-neutral_stack_band_alt = "#464646"
+# Thème gris neutre (theme = "neutral", tons relevés sur darktable) : panneaux, fond
+# central, cellules de la grille, champs de saisie, fonds des piles (un groupe sur
+# deux, l'autre).
+neutral_panel = "#2a2a2a"
+neutral_center = "#5e5e5e"
+neutral_cell = "#767676"
+neutral_field = "#3e3e3e"
+# Nom des images sur les cellules (sombre : lisible sur le gris des cellules).
+neutral_cell_text = "#1e1e1e"
+neutral_stack_band = "#848484"
+neutral_stack_band_alt = "#6a6a6a"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
 stack_mark = "#8c8c8c"
 badge = "#78aae6"

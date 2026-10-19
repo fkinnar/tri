@@ -187,7 +187,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Thème gris neutre** (`[gui] theme = "neutral"`, 19/10/2026, façon Lightroom) :
   panneaux gris foncé, fond central gris neutre en grille comme en plein écran (un fond
   noir fait paraître les images plus claires et plus contrastées), cellules un peu plus
-  claires, fonds des piles accordés ; couleurs `[gui.colors] neutral_*`. Retouche
+  claires, fonds des piles accordés, noms des images en sombre sur les cellules, champs
+  de saisie à part ; tons relevés sur une capture de darktable (panneaux `#2a2a2a`, fond
+  `#5e5e5e`, cellules `#767676`, champs `#3e3e3e`) ; couleurs `[gui.colors] neutral_*`. Retouche
   seulement les fonds du thème sombre d'egui (`Theme::apply`), remis d'origine en
   changeant de thème ; appliqué à chaud depuis les réglages.
 - **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
