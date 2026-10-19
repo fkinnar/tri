@@ -725,6 +725,10 @@ moitié transparente.
   l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
   section : `settings:keys`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
+- **Journal des plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est
+  consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de
+  données, avant l'arrêt ; un plantage pendant le dessin de la fenêtre (appelé depuis
+  AppKit sur macOS) ne laissait sinon qu'un rapport du système, sans le message.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

@@ -26,6 +26,7 @@ macro_rules! t {
 mod actions;
 mod app;
 mod compare;
+mod crash;
 mod files;
 mod grid;
 mod histogram;
@@ -68,6 +69,10 @@ fn main() -> eframe::Result {
         eprintln!("{}", tri::t!("warning-prefix", message = warning));
     }
     let mut settings = loaded.settings;
+    // Journal des plantages, dans le dossier de données (voir `crash.rs`).
+    if let Some(data) = settings.engine().data_dir() {
+        crash::install(data);
+    }
     if cache.is_some() {
         settings.cache.dir = cache;
     }
