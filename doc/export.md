@@ -33,7 +33,9 @@ Options vérifiées le 19/10/2026 sur darktable 5.6.2 (`darktable-cli --help`,
 d'export de darktable, sans les variantes HDR (PQ, HLG), inutiles pour un export photo.
 Attention : la **ProPhoto intégrée à darktable est linéaire** (« Linear ProPhoto RGB »,
 relu par ExifTool). Pour une ProPhoto gamma 1,8 classique, il faut donner le chemin d'un
-profil `.icc`.
+profil `.icc`. C'est celle qu'utilise l'utilisateur (confirmé le 19/10/2026 : la seule
+proposée par l'interface de darktable) : le profil « Retouche » donne donc le même fichier
+que son export darktable habituel.
 
 ## Pas de ProPhoto en JPEG
 
