@@ -12,14 +12,46 @@ use std::path::{Path, PathBuf};
 /// Nature d'un emplacement.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaceKind {
-    /// Volume monté : carte SD, disque externe ou interne, partage réseau.
+    /// Volume monté : carte SD, disque externe ou interne, appareil photo, téléphone.
     Volume,
-    /// Dossier personnel.
+    /// Partage réseau monté (SMB, NFS, SSHFS, WebDAV…).
+    Network,
+    /// Dossier personnel, ou un de ses dossiers habituels (Bureau, Documents,
+    /// Téléchargements, Images).
     Home,
     /// Racine du système de fichiers (arborescence complète).
     Root,
     /// Dossier favori, choisi par l'utilisateur (voir [`favorites`]).
     Favorite,
+}
+
+/// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
+/// disques amovibles, dossier personnel, favoris, puis seulement la racine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Section {
+    /// Volumes montés (cartes, disques, appareils).
+    Drives,
+    /// Partages réseau montés.
+    Network,
+    /// Dossier personnel et ses dossiers habituels.
+    Personal,
+    /// Favoris de l'utilisateur.
+    Favorites,
+    /// Racine du système de fichiers.
+    System,
+}
+
+impl PlaceKind {
+    /// Section où se range un emplacement de cette nature.
+    pub fn section(self) -> Section {
+        match self {
+            PlaceKind::Volume => Section::Drives,
+            PlaceKind::Network => Section::Network,
+            PlaceKind::Home => Section::Personal,
+            PlaceKind::Favorite => Section::Favorites,
+            PlaceKind::Root => Section::System,
+        }
+    }
 }
 
 /// Un emplacement : point de départ d'une arborescence.
@@ -121,19 +153,37 @@ pub fn places_filtered(filter: &PlaceSettings) -> Vec<Place> {
     places().into_iter().filter(|p| !filter.hides(p)).collect()
 }
 
-/// Emplacements de cette machine : volumes montés, dossier personnel, racine(s).
+/// Emplacements de cette machine : volumes montés, partages réseau, dossier personnel et
+/// ses dossiers habituels, racine(s).
 pub fn places() -> Vec<Place> {
+    let os = std::env::consts::OS;
     let env = |name: &str| std::env::var_os(name);
-    let mut places = volumes_in(&volume_dirs(std::env::consts::OS, env));
-    if std::env::consts::OS == "windows" {
+    let mut places = volumes_in(&volume_dirs(os, env));
+    if os == "windows" {
         places.extend(windows_drives());
     }
-    if let Some(home) = home_dir(std::env::consts::OS, env) {
+    // Partages réseau : ceux montés avec les volumes changent de section, les autres
+    // (montés ailleurs, `/etc/fstab`, GVFS) s'ajoutent.
+    let mut network = network_places(os);
+    for place in &mut places {
+        if let Some(i) = network.iter().position(|n| n.path == place.path) {
+            place.kind = PlaceKind::Network;
+            network.remove(i);
+        }
+    }
+    places.extend(network);
+    if let Some(home) = home_dir(os, env) {
+        let user_dirs = user_dirs(
+            os,
+            &home,
+            &fs::read_to_string(home.join(".config/user-dirs.dirs")).unwrap_or_default(),
+        );
         places.push(Place {
             name: crate::t!("places-home"),
             path: home,
             kind: PlaceKind::Home,
         });
+        places.extend(user_dirs.into_iter().filter(|p| p.path.is_dir()));
     }
     if std::env::consts::OS != "windows" {
         places.push(Place {
@@ -143,6 +193,154 @@ pub fn places() -> Vec<Place> {
         });
     }
     places
+}
+
+/// Dossiers habituels du dossier personnel `home`, comme la barre latérale du Finder
+/// (demandé le 20/10/2026) : Bureau, Documents, Téléchargements, Images. Sous Linux,
+/// ceux de `user-dirs.dirs` (`xdg-user-dirs` : noms de la langue du système, « Bureau »,
+/// « Images »…), contenu de ce fichier passé en `xdg` ; sinon les noms anglais. Le
+/// dossier personnel lui-même n'est jamais repris. Existence non vérifiée.
+fn user_dirs(os: &str, home: &Path, xdg: &str) -> Vec<Place> {
+    const DIRS: [(&str, &str, &str); 4] = [
+        ("DESKTOP", "Desktop", "places-desktop"),
+        ("DOCUMENTS", "Documents", "places-documents"),
+        ("DOWNLOAD", "Downloads", "places-downloads"),
+        ("PICTURES", "Pictures", "places-pictures"),
+    ];
+    // XDG_PICTURES_DIR="$HOME/Images" ; un chemin absolu est permis.
+    let from_xdg = |key: &str| {
+        xdg.lines().find_map(|line| {
+            let value = line.trim().strip_prefix(&format!("XDG_{key}_DIR="))?;
+            let value = value.trim().trim_matches('"');
+            Some(match value.strip_prefix("$HOME") {
+                Some(rest) => home.join(rest.trim_start_matches('/')),
+                None => PathBuf::from(value),
+            })
+        })
+    };
+    DIRS.iter()
+        .filter_map(|(key, english, label)| {
+            let path = match os {
+                "macos" | "windows" => home.join(english),
+                _ => from_xdg(key).unwrap_or_else(|| home.join(english)),
+            };
+            (path != home && path.is_absolute()).then(|| Place {
+                name: crate::t!(*label),
+                path,
+                kind: PlaceKind::Home,
+            })
+        })
+        .collect()
+}
+
+/// Types de systèmes de fichiers réseau, tels que les écrivent `mount` (macOS) et
+/// `/proc/mounts` (Linux).
+const NETWORK_FS: [&str; 13] = [
+    "smbfs",
+    "afpfs",
+    "nfs",
+    "nfs4",
+    "webdav",
+    "cifs",
+    "smb3",
+    "fuse.sshfs",
+    "sshfs",
+    "fuse.rclone",
+    "davfs",
+    "fuse.davfs2",
+    "ftp",
+];
+
+/// Partages réseau montés : points de montage d'un système de fichiers réseau (sortie de
+/// `mount` sur macOS, `/proc/mounts` sous Linux), et sous Linux les montages GVFS du
+/// gestionnaire de fichiers (`/run/user/<uid>/gvfs` ; un appareil photo ou un téléphone
+/// y est un volume). Rien sous Windows (lecteurs réseau : lettres de lecteur).
+fn network_places(os: &str) -> Vec<Place> {
+    let mut places: Vec<Place> = match os {
+        "macos" => std::process::Command::new("/sbin/mount")
+            .output()
+            .map(|o| network_mounts_macos(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default(),
+        "windows" => Vec::new(),
+        _ => network_mounts_linux(&fs::read_to_string("/proc/mounts").unwrap_or_default()),
+    }
+    .into_iter()
+    .map(|path| Place {
+        name: folder_name(&path),
+        path,
+        kind: PlaceKind::Network,
+    })
+    .collect();
+    #[cfg(unix)]
+    if os != "macos" {
+        use std::os::unix::fs::MetadataExt;
+        if let Ok(meta) = fs::metadata("/proc/self") {
+            let gvfs = PathBuf::from(format!("/run/user/{}/gvfs", meta.uid()));
+            places.extend(gvfs_places(&gvfs));
+        }
+    }
+    places.sort_by_key(|p| p.name.to_lowercase());
+    places
+}
+
+/// Points de montage réseau dans la sortie de `mount` (macOS) :
+/// `//moi@nas/photo on /Volumes/photo (smbfs, nodev, nosuid, mounted by moi)`.
+fn network_mounts_macos(text: &str) -> Vec<PathBuf> {
+    text.lines()
+        .filter_map(|line| {
+            let (rest, options) = line.rsplit_once(" (")?;
+            let fs_type = options.split([',', ')']).next()?.trim();
+            let (_, point) = rest.split_once(" on ")?;
+            NETWORK_FS.contains(&fs_type).then(|| PathBuf::from(point))
+        })
+        .collect()
+}
+
+/// Points de montage réseau dans `/proc/mounts` (Linux ; espaces écrits `\040`).
+fn network_mounts_linux(text: &str) -> Vec<PathBuf> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let (_, point, fs_type) = (fields.next()?, fields.next()?, fields.next()?);
+            NETWORK_FS
+                .contains(&fs_type)
+                .then(|| PathBuf::from(point.replace("\\040", " ")))
+        })
+        .collect()
+}
+
+/// Montages GVFS (Nautilus, Nemo…) dans `dir` : `smb-share:server=nas,share=photo` devient
+/// le partage réseau « photo (nas) » ; `mtp:host=…` (téléphone) et `gphoto2:host=…`
+/// (appareil photo) sont des volumes.
+fn gvfs_places(dir: &Path) -> Vec<Place> {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let raw = e.file_name().to_string_lossy().into_owned();
+            let (scheme, params) = raw.split_once(':')?;
+            let value = |key: &str| {
+                params
+                    .split(',')
+                    .find_map(|p| p.strip_prefix(key)?.strip_prefix('='))
+                    .map(|v| v.replace("%20", " "))
+            };
+            let host = value("server")
+                .or_else(|| value("host"))
+                .unwrap_or_default();
+            let (name, kind) = match (scheme, value("share")) {
+                ("mtp" | "gphoto2", _) => (host, PlaceKind::Volume),
+                (_, Some(share)) => (format!("{share} ({host})"), PlaceKind::Network),
+                _ => (host, PlaceKind::Network),
+            };
+            Some(Place {
+                name: if name.is_empty() { raw.clone() } else { name },
+                path: e.path(),
+                kind,
+            })
+        })
+        .collect()
 }
 
 /// Dossier personnel (`HOME`, ou `USERPROFILE` sous Windows), s'il est absolu.
@@ -625,8 +823,10 @@ pub struct Row {
     pub kind: Option<PlaceKind>,
     /// Emplacement qu'on peut éjecter (volume non fixé, voir [`PlaceSettings::fixed`]).
     pub ejectable: bool,
-    /// Dossier favori (en tête de liste, ou ailleurs dans l'arborescence).
+    /// Dossier favori (dans la section des favoris, ou ailleurs dans l'arborescence).
     pub favorite: bool,
+    /// Section du panneau où est la ligne (celle de son emplacement).
+    pub section: Section,
 }
 
 /// Arborescence des dossiers à partir des emplacements, indépendante de l'interface : ce
@@ -872,25 +1072,47 @@ impl Tree {
         }
     }
 
-    /// Lignes visibles, dans l'ordre d'affichage : les favoris présents, puis chaque
-    /// emplacement ; sous chacun, s'il est déplié, ses sous-dossiers, récursivement.
+    /// Lignes visibles, dans l'ordre d'affichage, section par section ([`Section`]) :
+    /// volumes, dossier personnel, favoris présents, racine ; sous chaque emplacement,
+    /// s'il est déplié, ses sous-dossiers, récursivement.
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
+        let mut places: Vec<&Place> = self.places.iter().collect();
+        // Tri stable : l'ordre des volumes entre eux est gardé.
+        places.sort_by_key(|p| p.kind.section());
+        let (before, after): (Vec<&Place>, Vec<&Place>) = places
+            .into_iter()
+            .partition(|p| p.kind.section() < Section::Favorites);
+        for place in before {
+            self.push_place(&mut rows, place);
+        }
         for path in &self.present {
             let first = rows.len();
-            self.push_rows(&mut rows, path, folder_name(path), 0);
+            self.push_rows(&mut rows, path, folder_name(path), 0, Section::Favorites);
             rows[first].kind = Some(PlaceKind::Favorite);
         }
-        for place in &self.places {
-            let first = rows.len();
-            self.push_rows(&mut rows, &place.path, place.name.clone(), 0);
-            rows[first].kind = Some(place.kind);
-            rows[first].ejectable = self.filter.ejectable(place);
+        for place in after {
+            self.push_place(&mut rows, place);
         }
         rows
     }
 
-    fn push_rows(&self, rows: &mut Vec<Row>, path: &Path, name: String, depth: usize) {
+    fn push_place(&self, rows: &mut Vec<Row>, place: &Place) {
+        let first = rows.len();
+        let section = place.kind.section();
+        self.push_rows(rows, &place.path, place.name.clone(), 0, section);
+        rows[first].kind = Some(place.kind);
+        rows[first].ejectable = self.filter.ejectable(place);
+    }
+
+    fn push_rows(
+        &self,
+        rows: &mut Vec<Row>,
+        path: &Path,
+        name: String,
+        depth: usize,
+        section: Section,
+    ) {
         let expanded = self.is_expanded(path);
         let children = self.children.get(path).filter(|_| expanded);
         rows.push(Row {
@@ -905,10 +1127,11 @@ impl Tree {
             kind: None,
             ejectable: false,
             favorite: self.is_favorite(path),
+            section,
         });
         if let Some(Ok(children)) = children {
             for child in children {
-                self.push_rows(rows, child, folder_name(child), depth + 1);
+                self.push_rows(rows, child, folder_name(child), depth + 1, section);
             }
         }
     }
@@ -994,7 +1217,108 @@ mod tests {
     }
 
     #[test]
-    fn favorites_come_first_and_follow_renames() {
+    fn the_panel_lists_drives_network_home_favorites_then_root() {
+        let dir = tempfile::tempdir().unwrap();
+        for d in ["home", "card", "nas", "fav"] {
+            std::fs::create_dir(dir.path().join(d)).unwrap();
+        }
+        let place = |name: &str, path: PathBuf, kind| Place {
+            name: name.into(),
+            path,
+            kind,
+        };
+        // Dans le désordre : la racine d'abord, comme le donnerait une autre plateforme.
+        let mut tree = Tree::with_places(
+            vec![
+                place("Racine", PathBuf::from("/"), PlaceKind::Root),
+                place("Perso", dir.path().join("home"), PlaceKind::Home),
+                place("SD", dir.path().join("card"), PlaceKind::Volume),
+                place("NAS", dir.path().join("nas"), PlaceKind::Network),
+            ],
+            false,
+        );
+        tree.set_favorites(vec![dir.path().join("fav")]);
+        let rows = tree.rows();
+        let got: Vec<(&str, Section)> = rows.iter().map(|r| (r.name.as_str(), r.section)).collect();
+        assert_eq!(
+            got,
+            [
+                ("SD", Section::Drives),
+                ("NAS", Section::Network),
+                ("Perso", Section::Personal),
+                ("fav", Section::Favorites),
+                ("Racine", Section::System),
+            ]
+        );
+        assert!(!rows[4].expanded, "racine repliée par défaut");
+    }
+
+    #[test]
+    fn personal_folders_follow_xdg_and_network_mounts_are_found() {
+        let home = Path::new("/home/fab");
+        let xdg = "# commentaire\nXDG_DESKTOP_DIR=\"$HOME/Bureau\"\n\
+                   XDG_DOWNLOAD_DIR=\"$HOME/\"\nXDG_PICTURES_DIR=\"/data/Photos\"\n";
+        let paths: Vec<PathBuf> = user_dirs("linux", home, xdg)
+            .into_iter()
+            .map(|p| p.path)
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                home.join("Bureau"),
+                home.join("Documents"),
+                PathBuf::from("/data/Photos")
+            ],
+            "Téléchargements = le dossier personnel : omis ; absent du fichier : nom anglais"
+        );
+        let mac: Vec<PathBuf> = user_dirs("macos", home, xdg)
+            .into_iter()
+            .map(|p| p.path)
+            .collect();
+        assert_eq!(mac[3], home.join("Pictures"));
+        let mount = "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n\
+                     //fab@nas._smb._tcp.local/photo on /Volumes/photo (smbfs, nodev, nosuid, mounted by fab)\n\
+                     /dev/disk5s1 on /Volumes/Work (apfs, local, nodev, nosuid, journaled)\n";
+        assert_eq!(
+            network_mounts_macos(mount),
+            [PathBuf::from("/Volumes/photo")]
+        );
+        let proc = "/dev/sda1 / ext4 rw 0 0\n\
+                    //nas/photo /mnt/nas\\040photo cifs rw,relatime 0 0\n\
+                    fab@srv:/ /home/fab/srv fuse.sshfs rw 0 0\n\
+                    gvfsd-fuse /run/user/1000/gvfs fuse.gvfsd-fuse rw 0 0\n";
+        assert_eq!(
+            network_mounts_linux(proc),
+            [
+                PathBuf::from("/mnt/nas photo"),
+                PathBuf::from("/home/fab/srv")
+            ]
+        );
+        let gvfs = tempfile::tempdir().unwrap();
+        for d in [
+            "smb-share:server=nas.local,share=photo",
+            "mtp:host=Google_Pixel_7",
+            "sftp:host=srv",
+        ] {
+            std::fs::create_dir(gvfs.path().join(d)).unwrap();
+        }
+        let mut found: Vec<(String, PlaceKind)> = gvfs_places(gvfs.path())
+            .into_iter()
+            .map(|p| (p.name, p.kind))
+            .collect();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            found,
+            [
+                ("Google_Pixel_7".to_string(), PlaceKind::Volume),
+                ("photo (nas.local)".to_string(), PlaceKind::Network),
+                ("srv".to_string(), PlaceKind::Network),
+            ]
+        );
+    }
+
+    #[test]
+    fn favorites_have_their_section_and_follow_renames() {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path().join("data");
         let root = dir.path().join("photos");
@@ -1016,9 +1340,15 @@ mod tests {
         tree.set_favorites(list);
         let rows = tree.rows();
         let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
-        assert_eq!(names, ["Séance", "2026", "Test"], "absent : omis");
-        assert_eq!(rows[0].kind, Some(PlaceKind::Favorite));
-        assert!(rows[0].favorite && !rows[2].favorite);
+        assert_eq!(
+            names,
+            ["Test", "Séance", "2026"],
+            "dossier personnel, puis les favoris (absent : omis)"
+        );
+        assert_eq!(rows[1].kind, Some(PlaceKind::Favorite));
+        assert_eq!(rows[0].section, Section::Personal);
+        assert_eq!(rows[1].section, Section::Favorites);
+        assert!(rows[1].favorite && !rows[0].favorite);
         // Le même dossier dans l'arborescence est marqué favori aussi.
         tree.expand(&root);
         assert!(tree.rows().iter().any(|r| r.depth == 1 && r.favorite));

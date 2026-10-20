@@ -656,6 +656,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
 - [x] **Rapport d'export** (idée de l'utilisateur, 20/10/2026) : `Ctrl+Maj+E` et bouton
   à côté du bilan, exports gardés entre les sessions (`src/export_log.rs`,
   `exports.jsonl`, `[export] report_max`), liens vers les dossiers, « Effacer la liste ».
+- [~] **Dossiers, retours du 20/10/2026** : copier / déplacer un dossier entier
+  (`files::plan_transfer_dir`, annulable ; `y` ne déplaçait que l'image), clic droit,
+  **glisser-déposer** (dossier ou images de la grille vers un dossier du panneau, boîte
+  toujours confirmée ; Option sur macOS, Ctrl ailleurs : copier), panneau en sections
+  titrées (disques amovibles, réseau, dossiers personnels avec Bureau / Documents /
+  Téléchargements / Images, favoris, puis système replié). Bug
+  corrigé : « Ajouter aux favoris » du clic droit ouvrait la suppression.
 - **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »
   dans l'interface (« profil » réservé aux profils couleur) ; noms du code et clés TOML
   (`[export.profiles]`) inchangés. Fenêtre de réglages : une entrée par famille, liste

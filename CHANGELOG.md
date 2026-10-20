@@ -2,6 +2,19 @@
 
 ## À venir
 
+- **Dossiers** : copier ou déplacer un dossier entier (`Ctrl+C` ou `y` / `Ctrl+X` dans
+  le panneau des dossiers, clic droit, annulable) ; `y` copiait les images
+  sélectionnées au lieu du dossier. **Glisser-déposer** d'un dossier ou d'images de la
+  grille sur un dossier, toujours confirmé (Option sur macOS, Ctrl ailleurs : copier).
+  Panneau rangé en sections titrées : disques amovibles, réseau (partages montés, GVFS
+  sous Linux), dossiers personnels (Bureau, Documents, Téléchargements, Images, comme le
+  Finder), favoris, puis le système. Le clic droit « Ajouter aux favoris » ouvrait la boîte de
+  suppression : corrigé.
+- **Plein écran** : après un développement darktable (Maj+B), les autres images ne
+  zoomaient plus (« pas encore développé ») ; une image sans développement se montre
+  maintenant dans la source d'avant, avec son 1:1.
+- **Piles** : le curseur de similarité ne déplie plus les piles pendant le réglage (on
+  voit les piles obtenues) ; Maj tenue pour les voir dépliées.
 - **Rapport d'export** (`Ctrl+Maj+E`, ou le bouton à côté du bilan d'un export) : les
   exports terminés, gardés d'une session à l'autre, avec un lien vers chaque dossier de
   destination ; effaçable.

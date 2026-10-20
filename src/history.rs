@@ -16,7 +16,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::files::{self, FileError, Rename, Transfer, TransferMode, Trashed};
+use crate::files::{self, DirTransfer, FileError, Rename, Transfer, TransferMode, Trashed};
 use crate::notes::NoteBook;
 use crate::xmp::{Color, Convention, Flag, Notes};
 
@@ -63,6 +63,14 @@ pub enum Step {
         /// Le plan exécuté.
         plan: Transfer,
         /// Fichiers écrits dans la destination.
+        written: Vec<(PathBuf, Print)>,
+    },
+    /// Copie ou déplacement d'un dossier entier ; `written` : fichiers écrits dans la
+    /// cible et leur empreinte (une copie modifiée depuis n'est pas supprimée).
+    TransferDir {
+        /// Le plan exécuté.
+        plan: DirTransfer,
+        /// Fichiers écrits dans la cible.
         written: Vec<(PathBuf, Print)>,
     },
     /// Mise à la corbeille (fichiers, ou un dossier entier).
@@ -186,6 +194,17 @@ pub fn transfer_step(plan: Transfer) -> Step {
     Step::Transfer { plan, written }
 }
 
+/// Le pas d'une copie ou d'un déplacement de dossier réussi (empreintes des fichiers
+/// écrits).
+pub fn transfer_dir_step(plan: DirTransfer) -> Step {
+    let written = plan
+        .files
+        .iter()
+        .filter_map(|(_, to)| Print::of(to).map(|p| (to.clone(), p)))
+        .collect();
+    Step::TransferDir { plan, written }
+}
+
 fn name(p: &Path) -> String {
     p.file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -257,6 +276,14 @@ impl Step {
                     TransferMode::Move => crate::t!("history-move", n = n, dest = dest),
                 }
             }
+            Step::TransferDir { plan, .. } => {
+                let (folder, dest) = (name(&plan.from), plan.to.parent().unwrap_or(Path::new("")));
+                let dest = dest.display().to_string();
+                match plan.mode {
+                    TransferMode::Copy => crate::t!("history-copy-dir", name = folder, dest = dest),
+                    TransferMode::Move => crate::t!("history-move-dir", name = folder, dest = dest),
+                }
+            }
             Step::Trash(items) => match items.as_slice() {
                 [one] => crate::t!("history-trash-one", name = name(&one.original)),
                 _ => crate::t!("history-trash", n = items.len()),
@@ -302,7 +329,7 @@ impl Step {
                     Vec::new()
                 }
             }
-            Step::CreateDir(_) => Vec::new(),
+            Step::CreateDir(_) | Step::TransferDir { .. } => Vec::new(),
             Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
             Step::Versions { image, .. } => vec![image.clone()],
         }
@@ -389,6 +416,47 @@ impl Step {
                 }
                 Ok(())
             }
+            Step::TransferDir { plan, written } => {
+                if !plan.to.is_dir() {
+                    return Err(HistoryError::Missing(plan.to.clone()));
+                }
+                match plan.mode {
+                    TransferMode::Copy => {
+                        // Copie retirée seulement telle qu'on l'a laissée : rien d'ajouté ni
+                        // de modifié depuis.
+                        for (path, print) in written.iter() {
+                            match Print::of(path) {
+                                None => return Err(HistoryError::Missing(path.clone())),
+                                Some(now) if now != *print => {
+                                    return Err(HistoryError::Modified(path.clone()));
+                                }
+                                _ => {}
+                            }
+                        }
+                        let known: std::collections::HashSet<&PathBuf> =
+                            written.iter().map(|(p, _)| p).collect();
+                        for entry in walkdir::WalkDir::new(&plan.to).min_depth(1) {
+                            let entry =
+                                entry.map_err(|_| HistoryError::Modified(plan.to.clone()))?;
+                            let path = entry.path().to_path_buf();
+                            if !entry.file_type().is_dir() && !known.contains(&path) {
+                                return Err(HistoryError::Modified(path));
+                            }
+                        }
+                        std::fs::remove_dir_all(&plan.to)
+                            .map_err(|e| FileError::Io(plan.to.clone(), e))?;
+                    }
+                    TransferMode::Move => {
+                        if plan.from.exists() {
+                            return Err(HistoryError::Files(FileError::Exists(plan.from.clone())));
+                        }
+                        let back = plan.from.parent().unwrap_or(Path::new("."));
+                        let undo = files::plan_transfer_dir(&plan.to, back, TransferMode::Move)?;
+                        files::transfer_dir(&undo, |_, _| {})?;
+                    }
+                }
+                Ok(())
+            }
             Step::Trash(items) => Ok(files::untrash(items)?),
             Step::CreateDir(path) => {
                 // Seulement vide : ce qu'on y a mis depuis ne disparaît pas.
@@ -437,6 +505,23 @@ impl Step {
                     Step::Transfer { written, .. } => written,
                     _ => Vec::new(),
                 };
+                Ok(())
+            }
+            Step::TransferDir { plan, written } => {
+                if !plan.from.is_dir() {
+                    return Err(HistoryError::Missing(plan.from.clone()));
+                }
+                let dest = plan.to.parent().unwrap_or(Path::new("."));
+                let again = files::plan_transfer_dir(&plan.from, dest, plan.mode)?;
+                files::transfer_dir(&again, |_, _| {})?;
+                if let Step::TransferDir {
+                    plan: p,
+                    written: w,
+                } = transfer_dir_step(again)
+                {
+                    *plan = p;
+                    *written = w;
+                }
                 Ok(())
             }
             Step::Trash(items) => {
@@ -759,6 +844,48 @@ mod tests {
         }]));
         assert!(!history.can_redo());
         assert_eq!(history.entries().len(), 2);
+    }
+
+    #[test]
+    fn a_folder_copy_and_move_are_undone_and_redone() {
+        let dir = tempfile::tempdir().unwrap();
+        let seance = dir.path().join("Séance");
+        let archive = dir.path().join("Archive");
+        std::fs::create_dir_all(seance.join("JPEG")).unwrap();
+        std::fs::create_dir(&archive).unwrap();
+        touch(&seance, &["A.RAF", "A.RAF.xmp"]);
+        touch(&seance.join("JPEG"), &["A.JPG"]);
+        let mut history = History::new(10);
+        // Copie : défaite, la copie disparaît ; refaite, elle revient.
+        let plan = files::plan_transfer_dir(&seance, &archive, TransferMode::Copy).unwrap();
+        files::transfer_dir(&plan, |_, _| {}).unwrap();
+        history.push(transfer_dir_step(plan));
+        let copy = archive.join("Séance");
+        assert!(copy.join("JPEG/A.JPG").exists() && seance.join("A.RAF").exists());
+        history.undo(Convention::Darktable).unwrap();
+        assert!(!copy.exists());
+        history.redo(Convention::Darktable).unwrap();
+        assert!(copy.join("A.RAF.xmp").exists());
+        // Un fichier ajouté dans la copie depuis : elle n'est pas retirée.
+        touch(&copy, &["B.RAF"]);
+        assert!(matches!(
+            history.undo(Convention::Darktable),
+            Err(HistoryError::Modified(_))
+        ));
+        assert!(copy.join("B.RAF").exists());
+        std::fs::remove_dir_all(&copy).unwrap();
+        // Déplacement : défait, le dossier revient à sa place.
+        let mut history = History::new(10);
+        let plan = files::plan_transfer_dir(&seance, &archive, TransferMode::Move).unwrap();
+        files::transfer_dir(&plan, |_, _| {}).unwrap();
+        let applied_label = transfer_dir_step(plan.clone()).describe();
+        assert!(applied_label.contains("Séance"), "{applied_label}");
+        history.push(transfer_dir_step(plan));
+        assert!(!seance.exists() && archive.join("Séance/JPEG/A.JPG").exists());
+        history.undo(Convention::Darktable).unwrap();
+        assert!(seance.join("JPEG/A.JPG").exists() && !archive.join("Séance").exists());
+        history.redo(Convention::Darktable).unwrap();
+        assert!(!seance.exists() && archive.join("Séance/A.RAF").exists());
     }
 
     #[test]

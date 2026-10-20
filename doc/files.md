@@ -104,12 +104,36 @@ gardent leurs notes.
   `destinations` du dossier de données, `[files] recent` au plus, disparues omises).
   Complétion de la saisie : `complete_dir` (sous-dossiers, casse ignorée, cachés
   seulement après un « . ») et `common_prefix`.
-- Ligne de commande : `tri --copy|--move <image>... --to <dossier> [--dry-run]`.
+- Ligne de commande : `tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]`.
 - Interface : `y` (copier, *yank* de vim) et `Ctrl+X` (déplacer, « couper » ; `x` supprime,
   comme dans vim), sur la sélection,
   et boutons du clic droit ; boîte avec champ (Tab complète, flèches haut / bas : récentes,
   dossier absent créé s'il n'en manque qu'un niveau), bascule copier / déplacer,
   progression pendant la copie (dans un fil : la fenêtre reste vivante).
+
+## Copier / déplacer un dossier (20/10/2026)
+
+`plan_transfer_dir(dossier, dest, mode)` prépare la copie ou le déplacement d'un dossier
+entier, sous-dossiers compris (`DirTransfer` : fichiers, sous-dossiers à créer, cible
+`dest/nom`) ; `transfer_dir(plan, progress)` l'exécute.
+
+- **Refusés** : un dossier dans lui-même ou un de ses sous-dossiers (`IntoItself`), là
+  où il est déjà (`SameFolder`), par-dessus un dossier du même nom (`Exists`).
+- **Déplacement sur le même volume** : un seul renommage, instantané.
+- **Autre volume, ou copie** : sous-dossiers créés, copies vérifiées de chaque fichier
+  (comme pour les images) ; pour un déplacement, les originaux ne partent qu'ensuite, et
+  les sous-dossiers vidés avec eux. Un fichier apparu entre-temps dans la source y reste,
+  avec ses dossiers. Sur une erreur, ce qui a été écrit est retiré.
+- **Annulable** (`history::Step::TransferDir`) : un déplacement revient à sa place ; une
+  copie n'est retirée que telle qu'on l'a laissée (rien d'ajouté ni de modifié depuis).
+- Interface : panneau des dossiers, `Ctrl+C` (classique) / `y` (vim) et `Ctrl+X`, ou
+  clic droit « Déplacer vers… » / « Copier vers… » ; la même boîte que pour les images.
+  **Glisser-déposer** : un dossier, ou des images de la grille (la sélection si l'image
+  glissée en fait partie), lâchés sur un dossier du panneau ouvrent cette boîte, remplie,
+  qui confirme toujours ; copier en tenant **Option (⌥)** sur macOS (comme le Finder ;
+  Ctrl + clic y est le clic droit), **Ctrl** ailleurs (Nautilus, Explorateur). Ce qu'on
+  glisse, et copier ou déplacer, s'écrit sous le pointeur. Les emplacements (volume,
+  dossier personnel, racine) ne bougent pas.
 
 ## Corbeille et annulation (18/10/2026)
 

@@ -379,6 +379,9 @@ pub struct TriApp {
     mode: Mode,
     /// Source préférée en plein écran pour les RAW (JPEG boîtier par défaut).
     source: Source,
+    /// Source d'avant le développé (boîtier ou RAW) : celle des images qui n'ont pas de
+    /// développement quand `source` est « développé » (retour du 20/10/2026).
+    base_source: Source,
     /// Zoom 100 % demandé : point de l'image (coordonnées relatives) au centre de la vue.
     /// Conservé d'une image à l'autre pour comparer la netteté au même endroit.
     zoom: Option<Vec2>,
@@ -640,6 +643,7 @@ impl TriApp {
             script_wait: None,
             mode: Mode::Grid,
             source: Source::default(),
+            base_source: Source::default(),
             zoom: None,
             zoom_scale: 1.0,
             fit_scale: 1.0,
@@ -1015,6 +1019,8 @@ impl TriApp {
         let mut eject = None;
         let mut offload = None;
         let mut menu: Option<(PathBuf, Action)> = None;
+        let mut dropped: Option<(Dragged, PathBuf)> = None;
+        drag_preview(ui.ctx());
         ui.horizontal(|ui| {
             ui.strong(t!("folders-title"));
             // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
@@ -1044,7 +1050,24 @@ impl TriApp {
         let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
         let accent = Color32::from(self.gui.dialogs.title_color);
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+            // Une section par nature d'emplacement, chacune sous son titre (demandé le
+            // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
+            let mut section = None;
             for (i, row) in self.tree.rows().into_iter().enumerate() {
+                if section != Some(row.section) {
+                    if section.is_some() {
+                        ui.separator();
+                    }
+                    section = Some(row.section);
+                    let title = match row.section {
+                        tri::places::Section::Drives => t!("folders-section-drives"),
+                        tri::places::Section::Network => t!("folders-section-network"),
+                        tri::places::Section::Personal => t!("folders-section-personal"),
+                        tri::places::Section::Favorites => t!("folders-section-favorites"),
+                        tri::places::Section::System => t!("folders-section-system"),
+                    };
+                    ui.label(egui::RichText::new(title).small().strong().weak());
+                }
                 let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     ui.add_space(row.depth as f32 * f.indent);
@@ -1061,6 +1084,32 @@ impl TriApp {
                     }
                     let current = row.path == self.folder.dir;
                     let label = ui.selectable_label(current, &row.name);
+                    // Glisser-déposer : un dossier se glisse (pas un emplacement) ; tout
+                    // dossier reçoit un dossier ou des images de la grille.
+                    let label = if row.depth > 0 {
+                        let label = label.interact(Sense::drag());
+                        label.dnd_set_drag_payload(Dragged::Folder(row.path.clone()));
+                        label
+                    } else {
+                        label
+                    };
+                    let target = |d: &Dragged| !matches!(d, Dragged::Folder(p) if *p == row.path);
+                    if label
+                        .dnd_hover_payload::<Dragged>()
+                        .is_some_and(|d| target(&d))
+                    {
+                        ui.painter().rect_stroke(
+                            label.rect.expand(2.0),
+                            3.0,
+                            egui::Stroke::new(2.0, accent),
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                    if let Some(d) = label.dnd_release_payload::<Dragged>()
+                        && target(&d)
+                    {
+                        dropped = Some(((*d).clone(), row.path.clone()));
+                    }
                     if label.clicked() && !current {
                         open = Some(row.path.clone());
                     }
@@ -1084,6 +1133,8 @@ impl TriApp {
                         entry(ui, Action::FolderCreate, t!("folder-menu-new"));
                         if row.depth > 0 {
                             entry(ui, Action::FolderRename, t!("folder-menu-rename"));
+                            entry(ui, Action::FolderMove, t!("folder-menu-move"));
+                            entry(ui, Action::FolderCopy, t!("folder-menu-copy"));
                             entry(ui, Action::FolderDelete, t!("folder-menu-delete"));
                         }
                         let favorite = if row.favorite {
@@ -1175,7 +1226,40 @@ impl TriApp {
                 Action::FolderOffload | Action::FolderEject => {
                     self.folder_drive_action(&ctx, action)
                 }
-                _ => self.folder_edit_action(&ctx, action),
+                // « Ajouter aux favoris » ouvrait la boîte de suppression (cas par défaut
+                // de `folder_edit_action`), corrigé le 20/10/2026.
+                Action::FolderFavorite => self.toggle_favorite(),
+                Action::FolderCopy | Action::FolderMove => {
+                    self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
+                }
+                Action::FolderCreate | Action::FolderRename | Action::FolderDelete => {
+                    self.folder_edit_action(&ctx, action)
+                }
+                _ => {}
+            }
+        }
+        // Glisser-déposer sur un dossier : la boîte « Copier / déplacer vers… », remplie,
+        // confirme toujours ; copier si la touche de copie est tenue au lâcher.
+        if let Some((dragged, dest)) = dropped {
+            let ctx = ui.ctx().clone();
+            let copy = drag_copies(&ctx);
+            match dragged {
+                Dragged::Folder(path) => self.transfer_folder(&ctx, path, copy, Some(&dest)),
+                Dragged::Images(paths) => {
+                    let mode = if copy {
+                        tri::files::TransferMode::Copy
+                    } else {
+                        tri::files::TransferMode::Move
+                    };
+                    let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+                    self.file_dialog = Some(crate::files::FileDialog::transfer(
+                        crate::files::Source::Images(paths),
+                        mode,
+                        Some(&dest),
+                        self.data_dir.as_deref(),
+                        at,
+                    ));
+                }
             }
         }
         if let Some(path) = open {
@@ -1447,7 +1531,8 @@ impl TriApp {
                 })
                 .unwrap_or(r.start)
         };
-        // Réglage du curseur de similarité : tout déplié, pour voir les piles se former.
+        // Réglage du curseur de similarité avec Maj : tout déplié, pour voir les piles se
+        // former.
         let preview = self.grouping_preview;
         let expanded = |r: &std::ops::Range<usize>| {
             preview || r.clone().any(|i| self.expanded.contains(&files[i].path))
@@ -1952,6 +2037,12 @@ impl TriApp {
                 self.folder_edit_action(ctx, action)
             }
             Action::FolderFavorite => self.toggle_favorite(),
+            Action::FolderCopy | Action::FolderMove => {
+                if let Some(i) = self.tree.cursor() {
+                    let path = self.tree.rows()[i].path.clone();
+                    self.transfer_folder(ctx, path, action == Action::FolderCopy, None);
+                }
+            }
             Action::MetaCopy | Action::MetaCopyAll => {
                 let first = usize::from(self.meta_has_histogram);
                 let (lo, hi) = if action == Action::MetaCopyAll {
@@ -2033,7 +2124,7 @@ impl TriApp {
                 // (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B le
                 // calcule.
                 let developed = self.darktable && self.developed_ready(self.selected);
-                self.source = self.source.next(developed);
+                self.set_source(self.source.next(developed));
                 self.request_zoom();
             }
             Action::Compare => self.start_compare(),
@@ -2684,7 +2775,7 @@ impl TriApp {
         for (rank, &i) in images.iter().enumerate() {
             let kind = self.files[i].kind;
             // Ajusté : en mode RAW, le rendu RAW (le JPEG boîtier est calculé en fond).
-            if self.source == Source::Raw && kind == MediaKind::Raw {
+            if self.source_for(&self.files[i]) == Source::Raw && kind == MediaKind::Raw {
                 wanted.push((rank == 0, i, Level::Standard));
             }
             // Développé : seulement s'il est déjà fait (en cache), jamais calculé d'office
@@ -2693,7 +2784,7 @@ impl TriApp {
                 wanted.push((rank == 0, i, Level::Developed));
             }
             if self.zoom.is_some() || (self.loupe_on && rank == 0) {
-                let level = view::zoom_level(kind, self.source);
+                let level = view::zoom_level(kind, self.source_for(&self.files[i]));
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
                 if !expensive || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell() {
@@ -2792,7 +2883,11 @@ impl TriApp {
         // Demandes au moteur (dédoublonnées : seules les nouvelles partent).
         self.request_zoom();
         // Repasser ici à la fin de l'attente, pour lancer le 100 % RAW.
-        if self.zoom.is_some() && self.source == Source::Raw {
+        let selected_source = self
+            .files
+            .get(self.selected)
+            .map_or(self.source, |f| self.source_for(f));
+        if self.zoom.is_some() && selected_source == Source::Raw {
             let left = self
                 .gui
                 .view
@@ -2811,7 +2906,7 @@ impl TriApp {
             && !zoomed
             && let Some(file) = self.files.get(self.selected)
         {
-            let level = view::zoom_level(file.kind, self.source);
+            let level = view::zoom_level(file.kind, self.source_for(file));
             let key = (file.path.clone(), level);
             if self.ready(self.selected, level)
                 && !self.loaded(self.selected, level)
@@ -2822,7 +2917,8 @@ impl TriApp {
         }
         for index in displayed {
             let kind = self.files[index].kind;
-            let level = view::pick(kind, self.source, zoomed, |l| self.ready(index, l));
+            let source = self.source_for(&self.files[index]);
+            let level = view::pick(kind, source, zoomed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
                 if !self.loaded(index, level) && !self.missing.contains(&key) {
@@ -3141,6 +3237,33 @@ impl TriApp {
     /// est plus. Un développé déjà chargé mais périmé est oublié (état, texture) : `b` ne
     /// le montre plus, Maj+B le refait (retour du 19/10/2026 : recadrage changé, l'ancien
     /// restait affiché).
+    /// Change la source choisie ; boîtier ou RAW deviennent aussi la source des images
+    /// sans développement quand on passe ensuite au développé.
+    fn set_source(&mut self, source: Source) {
+        if source != Source::Developed {
+            self.base_source = source;
+        }
+        self.source = source;
+    }
+
+    /// Source affichée pour `file` : la source choisie, sauf « développé » sur une image
+    /// qui n'a pas (encore) de développement : alors celle d'avant, avec son 1:1 (retour
+    /// du 20/10/2026 : après un Maj+B, plus aucune autre image ne zoomait).
+    fn source_for(&self, file: &MediaFile) -> Source {
+        if self.source != Source::Developed {
+            return self.source;
+        }
+        let developed = self.engine.as_ref().is_some_and(|engine| {
+            tri::preview::key(file, Level::Developed, &engine.preview)
+                .is_ok_and(|key| engine.cache.contains(&key))
+        });
+        if developed {
+            Source::Developed
+        } else {
+            self.base_source
+        }
+    }
+
     fn developed_ready(&mut self, index: usize) -> bool {
         let (Some(engine), Some(file)) = (&self.engine, self.files.get(index)) else {
             return false;
@@ -3211,11 +3334,11 @@ impl TriApp {
         let Some(version) = self.versions_of(path).list.get(index).cloned() else {
             return;
         };
-        self.source = match version.source {
+        self.set_source(match version.source {
             tri::versions::Source::Embedded => Source::Embedded,
             tri::versions::Source::Raw => Source::Raw,
             tri::versions::Source::Developed => Source::Developed,
-        };
+        });
         self.zoom = None;
         self.version_shown = None;
         self.crop = Some(crate::crop::Crop::edit(path.to_path_buf(), index, &version));
@@ -3262,7 +3385,8 @@ impl TriApp {
             self.mode = Mode::View;
         }
         self.zoom = None;
-        let source = match self.source {
+        // On recadre ce qu'on voit.
+        let source = match self.source_for(file) {
             Source::Embedded => tri::versions::Source::Embedded,
             Source::Raw => tri::versions::Source::Raw,
             Source::Developed => tri::versions::Source::Developed,
@@ -3415,7 +3539,7 @@ impl TriApp {
         if self.mode == Mode::Grid {
             self.mode = Mode::View;
         }
-        self.source = Source::Developed;
+        self.set_source(Source::Developed);
         // Périmé (sidecar modifié depuis) : oublié ici, donc recalculé.
         self.developed_ready(self.selected);
         self.request(self.selected, Level::Developed);
@@ -3602,8 +3726,12 @@ impl TriApp {
         at_one_to_one: bool,
         rect: Option<Rect>,
     ) -> Peaking {
-        let wanted = (self.peaking && at_one_to_one)
-            .then(|| (file.path.clone(), view::zoom_level(file.kind, self.source)));
+        let wanted = (self.peaking && at_one_to_one).then(|| {
+            (
+                file.path.clone(),
+                view::zoom_level(file.kind, self.source_for(file)),
+            )
+        });
         let Some(key) = wanted else {
             if self.peaking_asked.take().is_some()
                 && let Some(engine) = &self.engine
@@ -3673,9 +3801,10 @@ impl TriApp {
             let response = ui.interact(rect, id, Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, 0.0, self.gui.theme.view_background(&self.gui.colors));
-            let zoom_level = view::zoom_level(file.kind, self.source);
-            let desired = view::pick(file.kind, self.source, zoomed, |l| self.ready(index, l));
-            let shown = view::pick(file.kind, self.source, zoomed, |l| {
+            let source = self.source_for(&file);
+            let zoom_level = view::zoom_level(file.kind, source);
+            let desired = view::pick(file.kind, source, zoomed, |l| self.ready(index, l));
+            let shown = view::pick(file.kind, source, zoomed, |l| {
                 self.ready(index, l) && self.loaded(index, l)
             });
             waiting |= shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
@@ -3868,7 +3997,7 @@ impl TriApp {
         }
         let Some((rect, pos)) = over else { return };
         let file = &self.files[index];
-        let level = view::zoom_level(file.kind, self.source);
+        let level = view::zoom_level(file.kind, self.source_for(file));
         let ppp = ctx.pixels_per_point();
         // Le 1:1 s'il est chargé, sinon l'image affichée (agrandie, floue un instant).
         let full = self.big.get(&(file.path.clone(), level)).cloned();
@@ -3928,9 +4057,10 @@ impl TriApp {
         let index = self.selected;
         let file = self.files[index].clone();
         let zoomed = self.zoom.is_some();
-        let desired = view::pick(file.kind, self.source, zoomed, |l| self.ready(index, l));
+        let source = self.source_for(&file);
+        let desired = view::pick(file.kind, source, zoomed, |l| self.ready(index, l));
         // En attendant que l'image voulue soit chargée, la meilleure déjà affichable.
-        let shown = view::pick(file.kind, self.source, zoomed, |l| {
+        let shown = view::pick(file.kind, source, zoomed, |l| {
             self.ready(index, l) && self.loaded(index, l)
         });
         if (index, shown) != self.last_shown {
@@ -3939,7 +4069,7 @@ impl TriApp {
         }
         // En attente tant que l'image voulue n'est pas affichée, ou que le 1:1 demandé
         // n'est pas encore calculé.
-        let zoom_level = view::zoom_level(file.kind, self.source);
+        let zoom_level = view::zoom_level(file.kind, source);
         self.view_waiting =
             shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
 
@@ -4148,7 +4278,7 @@ impl TriApp {
             info.push_str(&name);
         }
         // Mode RAW, mais faute de mieux c'est encore le JPEG qui est affiché : le dire.
-        let raw_pending = self.source == Source::Raw
+        let raw_pending = self.source_for(&self.files[index]) == Source::Raw
             && file.kind == MediaKind::Raw
             && matches!(
                 shown,
@@ -4954,7 +5084,10 @@ impl TriApp {
                     tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
                 // On exporte ce qu'on regarde : en plein écran, la source affichée.
                 let render = crate::export::Render::of(
-                    (self.mode != Mode::Grid).then_some(self.source),
+                    self.files
+                        .get(self.selected)
+                        .filter(|_| self.mode != Mode::Grid)
+                        .map(|f| self.source_for(f)),
                     darktable,
                 );
                 // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
@@ -4981,8 +5114,9 @@ impl TriApp {
                     tri::files::TransferMode::Move
                 };
                 self.file_dialog = Some(crate::files::FileDialog::transfer(
-                    paths,
+                    crate::files::Source::Images(paths),
                     mode,
+                    None,
                     self.data_dir.as_deref(),
                     at,
                 ));
@@ -5567,7 +5701,10 @@ impl TriApp {
                     self.group_threshold = t;
                     self.stacks_dirty = true;
                 }
-                let adjusting = slider.dragged() || slider.has_focus();
+                // Piles dépliées pendant le réglage seulement si Maj est tenue (retour du
+                // 20/10/2026 : repliées, on voit directement les piles obtenues).
+                let shift = ui.input(|i| i.modifiers.shift);
+                let adjusting = (slider.dragged() || slider.has_focus()) && shift;
                 if adjusting != self.grouping_preview {
                     self.grouping_preview = adjusting;
                     self.stacks_dirty = true;
@@ -5730,9 +5867,21 @@ impl TriApp {
 
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
         let (g, colors) = (self.gui.grid, self.gui.colors);
-        let (rect, response) = ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click());
+        let (rect, response) =
+            ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click_and_drag());
         if response.contains_pointer() {
             self.over_cell = true;
+        }
+        // Glisser vers un dossier du panneau : l'image, ou toute la sélection si elle en
+        // fait partie.
+        if response.drag_started() {
+            let path = self.files[index].path.clone();
+            let images = if self.selection.contains(&path) {
+                self.selection.targets(&self.files, index)
+            } else {
+                vec![path]
+            };
+            response.dnd_set_drag_payload(Dragged::Images(images));
         }
         #[cfg(test)]
         self.cell_rects.push((index, rect));
@@ -6078,6 +6227,38 @@ impl TriApp {
                 at,
             },
         });
+    }
+
+    /// Boîte « Copier / déplacer vers… » pour le dossier `path` (panneau des dossiers :
+    /// clavier, clic droit, glisser-déposer) ; `dest` : destination déjà remplie (dossier
+    /// où on l'a lâché). Les emplacements (volume, dossier personnel, racine) ne bougent
+    /// pas.
+    fn transfer_folder(
+        &mut self,
+        ctx: &egui::Context,
+        path: PathBuf,
+        copy: bool,
+        dest: Option<&Path>,
+    ) {
+        if let Some(row) = self.tree.rows().iter().find(|r| r.path == path)
+            && row.depth == 0
+        {
+            self.notice = Some((t!("folders-place-root", name = row.name.clone()), true));
+            return;
+        }
+        let mode = if copy {
+            tri::files::TransferMode::Copy
+        } else {
+            tri::files::TransferMode::Move
+        };
+        let at = ctx.content_rect().center() - vec2(210.0, 160.0);
+        self.file_dialog = Some(crate::files::FileDialog::transfer(
+            crate::files::Source::Folder(path),
+            mode,
+            dest,
+            self.data_dir.as_deref(),
+            at,
+        ));
     }
 
     /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
@@ -6982,6 +7163,70 @@ enum StatusClick {
     DismissOffloaded,
     /// Réessayer une éjection refusée.
     RetryEject,
+}
+
+/// Ce qu'on glisse vers un dossier du panneau des dossiers (demandé le 20/10/2026) ; le
+/// lâcher ouvre la boîte « Copier / déplacer vers… », remplie, qui confirme.
+#[derive(Clone, Debug)]
+enum Dragged {
+    /// Un dossier du panneau.
+    Folder(PathBuf),
+    /// Des images de la grille (la sélection, si l'image glissée en fait partie).
+    Images(Vec<PathBuf>),
+}
+
+/// Vrai si le glisser-déposer copie au lieu de déplacer : Option (⌥) sur macOS comme le
+/// Finder (Ctrl + clic y est le clic droit), Ctrl ailleurs comme Nautilus et
+/// l'Explorateur (demandé le 20/10/2026).
+fn drag_copies(ctx: &egui::Context) -> bool {
+    ctx.input(|i| {
+        if cfg!(target_os = "macos") {
+            i.modifiers.alt
+        } else {
+            i.modifiers.ctrl
+        }
+    })
+}
+
+/// Pendant un glisser-déposer : ce qu'on glisse, et copier ou déplacer, sous le
+/// pointeur.
+fn drag_preview(ctx: &egui::Context) {
+    let Some(dragged) = egui::DragAndDrop::payload::<Dragged>(ctx) else {
+        return;
+    };
+    let Some(pos) = ctx.pointer_latest_pos() else {
+        return;
+    };
+    let text = match &*dragged {
+        Dragged::Folder(path) => path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        Dragged::Images(paths) => match paths.as_slice() {
+            [one] => one
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            _ => t!("drag-images", n = paths.len()),
+        },
+    };
+    let verb = if drag_copies(ctx) {
+        t!("drag-copy")
+    } else if cfg!(target_os = "macos") {
+        t!("drag-move")
+    } else {
+        t!("drag-move-ctrl")
+    };
+    egui::Area::new(egui::Id::unique("drag_preview"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(pos + vec2(14.0, 10.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.label(text);
+                ui.weak(verb);
+            });
+        });
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
@@ -8831,7 +9076,8 @@ mod tests {
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::H, Modifiers::NONE);
         h.state_mut().tree.point_at(&seance);
-        // m : favori, en tête de la liste ; le curseur reste dans l'arborescence.
+        // m : favori, dans sa section après le dossier personnel ; le curseur reste dans
+        // l'arborescence.
         press(&mut h, Key::M, Modifiers::NONE);
         let data = dir.path().join("data");
         assert_eq!(
@@ -8840,10 +9086,18 @@ mod tests {
             "écrit"
         );
         let rows = h.state().tree.rows();
-        assert_eq!(rows[0].path, seance);
-        assert_eq!(rows[0].kind, Some(PlaceKind::Favorite));
+        let favorite = |rows: &[tri::places::Row]| {
+            rows.iter()
+                .position(|r| r.kind == Some(PlaceKind::Favorite))
+        };
+        let f = favorite(&rows).expect("favori listé");
+        assert_eq!(rows[f].path, seance);
+        assert_eq!(rows[f].section, tri::places::Section::Favorites);
         let cursor = h.state().tree.cursor().unwrap();
-        assert!(cursor > 0 && rows[cursor].path == seance);
+        assert!(
+            cursor < f && rows[cursor].path == seance,
+            "sous le dossier personnel"
+        );
         h.run_steps(2);
         assert!(h.query_by_label_contains("ajouté aux favoris").is_some());
         // Renommé depuis le panneau : le favori suit.
@@ -8856,12 +9110,14 @@ mod tests {
             tri::places::favorites(&data),
             std::slice::from_ref(&renamed)
         );
-        assert_eq!(h.state().tree.rows()[0].path, renamed);
+        let rows = h.state().tree.rows();
+        let f = favorite(&rows).expect("favori listé");
+        assert_eq!(rows[f].path, renamed);
         // m sur la ligne du favori : retiré.
-        h.state_mut().tree.set_cursor(0);
+        h.state_mut().tree.set_cursor(f);
         press(&mut h, Key::M, Modifiers::NONE);
         assert!(tri::places::favorites(&data).is_empty());
-        assert_ne!(h.state().tree.rows()[0].kind, Some(PlaceKind::Favorite));
+        assert_eq!(favorite(&h.state().tree.rows()), None);
     }
 
     #[test]
@@ -8931,6 +9187,77 @@ mod tests {
         press(&mut h, Key::X, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert!(h.state().notice.as_ref().unwrap().0.contains("emplacement"));
+    }
+
+    #[test]
+    fn a_folder_is_moved_from_the_panel_and_the_menu_adds_favorites() {
+        use crate::actions::Scope;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seance = dir.path().join("séance");
+        let archive = dir.path().join("archive");
+        std::fs::create_dir_all(seance.join("JPEG")).unwrap();
+        std::fs::create_dir(&archive).unwrap();
+        std::fs::write(seance.join("JPEG/A.JPG"), b"x").unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Folders);
+        h.state_mut().tree.point_at(&seance);
+        // Ctrl+X : déplacer le dossier (pas les images) ; destination tapée, Entrée.
+        press(&mut h, Key::X, Modifiers::CTRL);
+        h.run_steps(2);
+        assert!(
+            h.query_by_label_contains("Déplacer le dossier « séance »")
+                .is_some()
+        );
+        h.event(UiEvent::Text(archive.display().to_string()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let moved = archive.join("séance");
+        for _ in 0..200 {
+            if h.state().file_dialog.is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            h.run_steps(1);
+        }
+        assert!(h.state().file_dialog.is_none(), "déplacement terminé");
+        assert!(moved.join("JPEG/A.JPG").exists() && !seance.exists());
+        assert_eq!(h.state().tree.cursor_path(), Some(moved.clone()), "pointé");
+        // Annulé : le dossier revient.
+        press(&mut h, Key::U, Modifiers::NONE);
+        assert!(seance.join("JPEG/A.JPG").exists() && !moved.exists());
+        // Clic droit, « Ajouter aux favoris » : ajouté (ouvrait la boîte de suppression).
+        h.state_mut().tree.reload();
+        h.run_steps(2);
+        h.get_by_label("séance").click_secondary();
+        h.run_steps(2);
+        h.get_by_label("Ajouter aux favoris").click();
+        h.run_steps(2);
+        assert!(
+            h.state().file_dialog.is_none(),
+            "pas de boîte de suppression"
+        );
+        let data = dir.path().join("data");
+        assert_eq!(tri::places::favorites(&data), std::slice::from_ref(&seance));
+        // Clic droit, « Déplacer vers… » : la boîte du dossier visé.
+        h.get_by_label("archive").click_secondary();
+        h.run_steps(2);
+        h.get_by_label("Déplacer vers…").click();
+        h.run_steps(2);
+        assert!(
+            h.query_by_label_contains("Déplacer le dossier « archive »")
+                .is_some()
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none());
     }
 
     #[test]
@@ -10113,6 +10440,14 @@ mod tests {
             unreachable!()
         };
         assert!(reason.contains("darktable"), "{reason}");
+        // Sans développement, l'image se montre dans la source d'avant, et elle zoome
+        // (retour du 20/10/2026 : après un Maj+B, plus aucune image ne zoomait).
+        let file = h.state().files[0].clone();
+        assert_eq!(h.state().source_for(&file), Source::Embedded);
+        press(&mut h, Key::Z, Modifiers::NONE);
+        let level = view::zoom_level(file.kind, Source::Embedded);
+        run_until(&mut h, |app| app.big.contains(&(file.path.clone(), level)));
+        assert_eq!(h.state().source, Source::Developed, "le choix reste");
     }
 
     #[test]

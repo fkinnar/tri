@@ -136,6 +136,8 @@ pub fn navigate(
         | Action::FolderRename
         | Action::FolderDelete
         | Action::FolderFavorite
+        | Action::FolderCopy
+        | Action::FolderMove
         | Action::MetaOpen
         | Action::MetaSelectUp
         | Action::MetaSelectDown

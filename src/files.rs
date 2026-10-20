@@ -67,6 +67,8 @@ pub enum FileError {
     SameFolder(PathBuf),
     /// Copie relue différente de l'original.
     Mismatch(PathBuf),
+    /// Dossier copié ou déplacé dans lui-même (ou un de ses sous-dossiers).
+    IntoItself(PathBuf),
 }
 
 impl fmt::Display for FileError {
@@ -99,6 +101,11 @@ impl fmt::Display for FileError {
                 f,
                 "{}",
                 crate::t!("files-mismatch", path = p.display().to_string())
+            ),
+            Self::IntoItself(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-into-itself", path = p.display().to_string())
             ),
         }
     }
@@ -729,6 +736,162 @@ pub fn transfer(plan: &Transfer, mut progress: impl FnMut(usize, usize)) -> Resu
     Ok(())
 }
 
+/// Copie ou déplacement prévu d'un dossier entier (sous-dossiers compris) dans un autre.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DirTransfer {
+    /// Copier ou déplacer.
+    pub mode: TransferMode,
+    /// Dossier copié ou déplacé.
+    pub from: PathBuf,
+    /// Ce qu'il devient : `dest` / son nom.
+    pub to: PathBuf,
+    /// (source, cible) de chaque fichier, sous-dossiers compris.
+    pub files: Vec<(PathBuf, PathBuf)>,
+    /// Sous-dossiers à créer dans la cible (parents d'abord), `to` compris.
+    pub dirs: Vec<PathBuf>,
+}
+
+impl DirTransfer {
+    /// Nombre de fichiers.
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+
+    /// Vrai si le dossier ne contient aucun fichier.
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+}
+
+/// Prépare la copie ou le déplacement du dossier `dir` dans `dest` (il y garde son nom).
+/// Erreur si `dest` n'est pas un dossier, est déjà le dossier parent, est `dir` lui-même
+/// ou un de ses sous-dossiers, ou contient déjà ce nom (jamais d'écrasement).
+pub fn plan_transfer_dir(dir: &Path, dest: &Path, mode: TransferMode) -> Result<DirTransfer> {
+    if !dir.is_dir() {
+        return Err(FileError::NotADirectory(dir.to_path_buf()));
+    }
+    if !dest.is_dir() {
+        return Err(FileError::NotADirectory(dest.to_path_buf()));
+    }
+    let (from, into) = match (dir.canonicalize(), dest.canonicalize()) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(e), _) => return Err(FileError::Io(dir.to_path_buf(), e)),
+        (_, Err(e)) => return Err(FileError::Io(dest.to_path_buf(), e)),
+    };
+    if into.starts_with(&from) {
+        return Err(FileError::IntoItself(dir.to_path_buf()));
+    }
+    if from.parent() == Some(into.as_path()) {
+        return Err(FileError::SameFolder(dest.to_path_buf()));
+    }
+    let to = dest.join(dir.file_name().unwrap_or_default());
+    if to.exists() {
+        return Err(FileError::Exists(to));
+    }
+    let mut plan = DirTransfer {
+        mode,
+        from: dir.to_path_buf(),
+        to: to.clone(),
+        files: Vec::new(),
+        dirs: vec![to.clone()],
+    };
+    for entry in walkdir::WalkDir::new(dir).min_depth(1).sort_by_file_name() {
+        let entry = entry.map_err(|e| {
+            let path = e.path().unwrap_or(dir).to_path_buf();
+            FileError::Io(path, e.into())
+        })?;
+        let rel = entry.path().strip_prefix(dir).unwrap_or(entry.path());
+        let target = to.join(rel);
+        if entry.file_type().is_dir() {
+            plan.dirs.push(target);
+        } else {
+            plan.files.push((entry.path().to_path_buf(), target));
+        }
+    }
+    Ok(plan)
+}
+
+/// Exécute une copie ou un déplacement de dossier préparé par [`plan_transfer_dir`] ;
+/// `progress` reçoit (fichiers faits, total).
+///
+/// Déplacement sur le même volume : un seul renommage du dossier. Sinon (autre disque,
+/// carte, NAS) et pour une copie : sous-dossiers créés, copies vérifiées de **tous** les
+/// fichiers ; pour un déplacement, les originaux ne sont supprimés qu'ensuite (et les
+/// sous-dossiers vidés, s'il n'y reste rien d'autre). Sur une erreur, ce qui a été écrit
+/// est retiré.
+pub fn transfer_dir(plan: &DirTransfer, progress: impl FnMut(usize, usize)) -> Result<()> {
+    transfer_dir_with(plan, true, progress)
+}
+
+/// [`transfer_dir`] ; `rename` faux : comme vers un autre volume (copies puis
+/// suppression), pour les tests.
+fn transfer_dir_with(
+    plan: &DirTransfer,
+    rename: bool,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<()> {
+    let total = plan.len();
+    if plan.to.exists() {
+        return Err(FileError::Exists(plan.to.clone()));
+    }
+    if plan.mode == TransferMode::Move && rename {
+        match std::fs::rename(&plan.from, &plan.to) {
+            Ok(()) => {
+                progress(total, total);
+                return Ok(());
+            }
+            Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {}
+            Err(e) => return Err(FileError::Io(plan.from.clone(), e)),
+        }
+    }
+    let mut created_dirs: Vec<&PathBuf> = Vec::new();
+    let mut created: Vec<&PathBuf> = Vec::new();
+    let undo = |created: &[&PathBuf], dirs: &[&PathBuf]| {
+        for f in created {
+            let _ = std::fs::remove_file(f);
+        }
+        for d in dirs.iter().rev() {
+            let _ = std::fs::remove_dir(d);
+        }
+    };
+    for dir in &plan.dirs {
+        if let Err(e) = std::fs::create_dir(dir) {
+            undo(&created, &created_dirs);
+            return Err(FileError::Io(dir.clone(), e));
+        }
+        created_dirs.push(dir);
+    }
+    for (i, (from, to)) in plan.files.iter().enumerate() {
+        if let Err(e) = copy_verified(from, to) {
+            undo(&created, &created_dirs);
+            return Err(e);
+        }
+        created.push(to);
+        progress(i + 1, total);
+    }
+    if plan.mode == TransferMode::Move {
+        // Tout est copié et vérifié : les originaux peuvent partir. Un fichier apparu
+        // entre-temps dans la source y reste, avec ses dossiers.
+        for (from, _) in &plan.files {
+            std::fs::remove_file(from).map_err(|e| FileError::Io(from.clone(), e))?;
+        }
+        let mut dirs: Vec<PathBuf> = plan
+            .dirs
+            .iter()
+            .filter_map(|d| d.strip_prefix(&plan.to).ok())
+            .map(|rel| plan.from.join(rel))
+            .collect();
+        dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+        for d in dirs {
+            let _ = std::fs::remove_dir(d);
+        }
+    }
+    if total == 0 {
+        progress(0, 0);
+    }
+    Ok(())
+}
+
 /// Fichier des destinations récentes, dans le dossier de données.
 const RECENT_FILE: &str = "destinations";
 
@@ -1074,6 +1237,71 @@ mod tests {
         assert_eq!(recent_destinations(&data), [c.clone(), a.clone()]);
         std::fs::remove_dir(&a).unwrap();
         assert_eq!(recent_destinations(&data), [c], "disparue : omise");
+    }
+
+    #[test]
+    fn a_folder_is_copied_or_moved_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let seance = dir.path().join("Séance");
+        let dest = dir.path().join("Archive");
+        std::fs::create_dir_all(seance.join("JPEG/vide")).unwrap();
+        std::fs::create_dir(&dest).unwrap();
+        touch(&seance, &["A.RAF", "A.RAF.xmp"]);
+        touch(&seance.join("JPEG"), &["A.JPG"]);
+        // Refusés : dans lui-même, là où il est déjà, par-dessus un dossier du même nom.
+        assert!(matches!(
+            plan_transfer_dir(&seance, &seance.join("JPEG"), TransferMode::Move),
+            Err(FileError::IntoItself(_))
+        ));
+        assert!(matches!(
+            plan_transfer_dir(&seance, &seance, TransferMode::Move),
+            Err(FileError::IntoItself(_))
+        ));
+        assert!(matches!(
+            plan_transfer_dir(&seance, dir.path(), TransferMode::Move),
+            Err(FileError::SameFolder(_))
+        ));
+        assert!(matches!(
+            plan_transfer_dir(&seance, &dir.path().join("absent"), TransferMode::Move),
+            Err(FileError::NotADirectory(_))
+        ));
+        let plan = plan_transfer_dir(&seance, &dest, TransferMode::Copy).unwrap();
+        assert_eq!(plan.len(), 3);
+        assert_eq!(plan.to, dest.join("Séance"));
+        assert_eq!(plan.dirs.len(), 3, "le dossier, JPEG et JPEG/vide");
+        let mut steps = Vec::new();
+        transfer_dir(&plan, |done, total| steps.push((done, total))).unwrap();
+        assert_eq!(steps, [(1, 3), (2, 3), (3, 3)]);
+        let copy = dest.join("Séance");
+        assert!(copy.join("JPEG/A.JPG").is_file() && copy.join("JPEG/vide").is_dir());
+        assert!(seance.join("A.RAF").exists(), "copie : l'original reste");
+        assert!(matches!(
+            plan_transfer_dir(&seance, &dest, TransferMode::Move),
+            Err(FileError::Exists(_))
+        ));
+        // Déplacement comme vers un autre volume : copies, puis originaux supprimés ;
+        // un fichier apparu entre-temps dans la source y reste, avec ses dossiers.
+        std::fs::remove_dir_all(&copy).unwrap();
+        let plan = plan_transfer_dir(&seance, &dest, TransferMode::Move).unwrap();
+        touch(&seance.join("JPEG"), &["B.JPG"]);
+        transfer_dir_with(&plan, false, |_, _| {}).unwrap();
+        assert!(copy.join("JPEG/A.JPG").is_file() && copy.join("JPEG/vide").is_dir());
+        assert!(!seance.join("A.RAF").exists() && !seance.join("JPEG/vide").exists());
+        assert!(
+            seance.join("JPEG/B.JPG").exists(),
+            "apparu entre-temps : gardé"
+        );
+        std::fs::remove_file(seance.join("JPEG/B.JPG")).unwrap();
+        // Retour (même volume : un renommage).
+        let back = plan_transfer_dir(&copy, dir.path(), TransferMode::Move);
+        assert!(
+            matches!(back, Err(FileError::Exists(_))),
+            "Séance existe encore (vide)"
+        );
+        std::fs::remove_dir_all(&seance).unwrap();
+        let back = plan_transfer_dir(&copy, dir.path(), TransferMode::Move).unwrap();
+        transfer_dir(&back, |_, _| {}).unwrap();
+        assert!(!copy.exists() && seance.join("A.RAF.xmp").exists());
     }
 
     #[test]

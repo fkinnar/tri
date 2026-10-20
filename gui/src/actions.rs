@@ -237,6 +237,10 @@ pub enum Action {
     FolderDelete,
     /// Panneau des dossiers : ajouter le dossier pointé aux favoris, ou l'en retirer.
     FolderFavorite,
+    /// Panneau des dossiers : copier le dossier pointé vers… (une boîte confirme).
+    FolderCopy,
+    /// Panneau des dossiers : déplacer le dossier pointé vers… (une boîte confirme).
+    FolderMove,
     /// Panneau des métadonnées : ligne du dessus.
     MetaUp,
     /// Panneau des métadonnées : ligne du dessous.
@@ -347,7 +351,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 146] = [
+    pub const ALL: [Action; 148] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -446,6 +450,8 @@ impl Action {
         Action::FolderRename,
         Action::FolderDelete,
         Action::FolderFavorite,
+        Action::FolderCopy,
+        Action::FolderMove,
         Action::MetaUp,
         Action::MetaDown,
         Action::MetaCopy,
@@ -550,8 +556,8 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
-            | MetaCopyAll => Group::Panels,
+            | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
+            | MetaSelectDown | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | Quit => Group::App,
         }
@@ -657,6 +663,8 @@ impl Action {
             Action::FolderRename => "core.folders.rename",
             Action::FolderDelete => "core.folders.delete",
             Action::FolderFavorite => "core.folders.favorite",
+            Action::FolderCopy => "core.folders.copy",
+            Action::FolderMove => "core.folders.move",
             Action::MetaUp => "core.metadata.up",
             Action::MetaDown => "core.metadata.down",
             Action::MetaCopy => "core.metadata.copy",
@@ -775,7 +783,7 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite => Some(Scope::Folders),
+            | FolderDelete | FolderFavorite | FolderCopy | FolderMove => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset => {
@@ -915,6 +923,7 @@ const CLASSIC: &[Binding] = {
         // Copier / déplacer vers… : `Ctrl+C` / `Ctrl+X`, comme copier / couper d'un
         // gestionnaire de fichiers (`Cmd+C` sur macOS, voir `Chord::from_event`).
         (&[ctrl(Key::C)], FileCopy),
+        (&[ctrl(Key::C)], FolderCopy),
         // Toute la pile : Maj en plus (corbeille confirmée, comme toujours).
         (&[ctrl_shift(Key::C)], FileCopyStack),
         (&[shifted(Key::Delete)], FileDeleteStack),
@@ -978,6 +987,7 @@ const VIM: &[Binding] = {
         (&[plain(Key::G), plain(Key::G)], FolderFirst),
         (&[shifted(Key::G)], FolderLast),
         (&[plain(Key::X)], FolderDelete),
+        (&[plain(Key::Y)], FolderCopy),
         // Panneau des métadonnées : `y` copie, Maj + j / k étendent, Maj+Y copie tout.
         (&[plain(Key::K)], MetaUp),
         (&[plain(Key::J)], MetaDown),
@@ -1050,6 +1060,9 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::Backspace)], FolderDelete),
         // Favori : `m` (« mark »), comme les marque-pages de nvim-tree.
         (&[plain(Key::M)], FolderFavorite),
+        // Copier / déplacer le dossier vers… : comme pour les images (`Ctrl+C` / `y`,
+        // `Ctrl+X`), la boîte permet de passer de l'un à l'autre.
+        (&[ctrl(Key::X)], FolderMove),
     ]
 };
 
@@ -2043,12 +2056,13 @@ mod tests {
             Some(Action::Stars(3)),
             "le reste passe"
         );
-        // `y` commence aussi `y w` : il attend la suite, puis copie.
-        assert_eq!(seq.feed_one(&km, key(Key::Y), now), None);
-        assert_eq!(
-            seq.expire(now + Duration::from_secs(2)),
-            Some(Action::FileCopy)
-        );
+        // `y` copie le dossier pointé, pas les images (retour du 20/10/2026).
+        let y = seq
+            .feed_one(&km, key(Key::Y), now)
+            .or_else(|| seq.expire(now + Duration::from_secs(2)));
+        assert_eq!(y, Some(Action::FolderCopy));
+        let ctrl_x = Chord::from_event(Key::X, Modifiers::CTRL).unwrap();
+        assert_eq!(seq.feed_one(&km, ctrl_x, now), Some(Action::FolderMove));
         km.set_focus(Scope::Metadata);
         assert_eq!(seq.feed_one(&km, key(Key::Y), now), Some(Action::MetaCopy));
         let ctrl_c = Chord::from_event(Key::C, Modifiers::CTRL).unwrap();

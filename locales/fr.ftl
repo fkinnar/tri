@@ -61,6 +61,7 @@ files-launch-failed = lancement de « { $program } » impossible : { $error }
 files-not-a-directory = { $path } n'est pas un dossier
 files-same-folder = les images sont déjà dans { $path }
 files-mismatch = copie de { $path } différente de l'original (rien n'a été gardé)
+files-into-itself = impossible de mettre { $path } dans lui-même
 files-not-in-trash = { $path } n'est plus dans la corbeille
 history-notes-changed = { $name } : notes modifiées ailleurs depuis (rien n'a été changé)
 history-missing = { $name } est introuvable (déplacé ou supprimé ailleurs)
@@ -89,6 +90,8 @@ history-purple = violet
 history-notes-one = { $what } : { $name }
 history-notes-many = { $what } : { $n } images
 history-rename = { $from } renommé en { $to }
+history-copy-dir = dossier { $name } copié vers { $dest }
+history-move-dir = dossier { $name } déplacé vers { $dest }
 history-copy = { $n ->
     [one] 1 image copiée vers { $dest }
    *[other] { $n } images copiées vers { $dest }
@@ -118,6 +121,10 @@ offload-unnamed-file = fichier sans nom
 offload-verify-failed = la copie relue diffère de l'original (support défectueux ?)
 offload-copy-missing = copie absente ou différente : conservé
 places-home = Dossier personnel
+places-desktop = Bureau
+places-documents = Documents
+places-downloads = Téléchargements
+places-pictures = Images
 places-root = Racine (/)
 settings-defaults-used = { $warning } ; réglages par défaut utilisés
 settings-file-error = configuration { $path } : { $error }
@@ -138,7 +145,7 @@ cli-usage =
       tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
       tri --rename <image> <nom> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
-      tri --copy|--move <image>... --to <dossier> [--dry-run]
+      tri --copy|--move <image>...|<dossier> --to <dossier> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
       tri --export <préréglage> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]

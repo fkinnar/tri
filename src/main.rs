@@ -806,6 +806,20 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
             } else {
                 tri::files::TransferMode::Move
             };
+            // Un dossier seul : copié ou déplacé en entier, sous-dossiers compris.
+            if let [dir] = images.as_slice()
+                && dir.is_dir()
+            {
+                let plan = tri::files::plan_transfer_dir(dir, &dest, mode)?;
+                println!("{} → {}", plan.from.display(), plan.to.display());
+                if !args.dry_run {
+                    tri::files::transfer_dir(&plan, |done, total| {
+                        eprint!("\r{done}/{total}");
+                    })?;
+                    eprintln!();
+                }
+                return Ok(());
+            }
             let plan = tri::files::plan_transfer(&images, &dest, mode, s)?;
             for (from, to) in &plan.files {
                 println!("{} → {}", from.display(), to.display());

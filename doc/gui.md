@@ -44,8 +44,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   contre fond plein) règlent le premier problème sans créer le second. Le pointeur, et
   avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
   la souris, dans la grille comme en plein écran.
-- **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements (volumes
-  montés, dossier personnel, racine) dépliables en arborescence, lue à la demande par le
+- **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
+  en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) :
+  disques amovibles, réseau, dossiers personnels (avec Bureau, Documents,
+  Téléchargements, Images), favoris, puis seulement le système (racine, repliée), lue à la demande par le
   moteur (`places::Tree`, voir [places.md](places.md)). Le triangle déplie ou replie (le
   double-clic sur le nom aussi), un clic sur le nom ouvre le dossier sans redémarrer
   (`folder::Folder`, voir [folder.md](folder.md)) : les filtres sont gardés, la sélection
@@ -187,6 +189,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Développé dans darktable** (19/10/2026, voir `develop.md`) : `Maj+B` ou le bouton
   diaphragme lance le rendu (quelques secondes, gardé en cache) ; ensuite seulement, `b`
   passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
+  Le choix « développé » reste d'une image à l'autre, mais une image **sans
+  développement** se montre dans la source d'avant (boîtier ou RAW), avec son 1:1 ;
+  « pas encore développé (Maj+B) » le dit (`TriApp::source_for`, retour du 20/10/2026 :
+  après un Maj+B, plus aucune autre image ne zoomait).
 - **Exporter** (19/10/2026, voir `export.md`) : `Ctrl+E`, boîte (`gui/src/export.rs`) avec
   les préréglages d'export (flèches haut / bas sur la liste seulement, résumé de chacun ;
   Tab passe au dossier) et le dossier (complétion par Tab) ; export en fond, barre de progression et bouton × dans la barre d'état, bilan à
@@ -333,8 +339,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   alterne, deux cas au lieu de trois.
   Retours du 18/10/2026 (remplacés depuis) : cadre autour de chaque image et trait en
   bas ; **curseur de similarité** dans la barre des filtres (icône de
-  pile : `Ctrl+G`) : pendant le réglage, les piles sont dépliées, une sur deux sur un fond
-  plus clair (`stack_band`), seuil retenu pour le dossier au lâcher. **Mode pile** en
+  pile : `Ctrl+G`) : pendant le réglage, les piles restent repliées, on voit les piles
+  obtenues (retour du 20/10/2026) ; **Maj** tenue pendant le réglage les déplie, une sur
+  deux sur un fond plus clair (`stack_band`) ; seuil retenu pour le dossier au lâcher. **Mode pile** en
   plein écran (`Ctrl+S`, bouton du bandeau, inspiré du mode tri de Capture One) : ← / →
   parcourent la pile, images cachées comprises (au bout : arrêt, ou retour à l'autre bout
   avec `[gui.view] stack_wrap`), ↑ / ↓ passent à la couverture de la pile d'avant /

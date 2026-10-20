@@ -73,6 +73,21 @@ Les lignes d'emplacement de `Tree::rows` portent leur nature (`Row::kind`) et
 sauvegarde) ; `PlaceSettings::ejectable`, et `Tree::can_eject` à vérifier avant `eject`
 (l'interface le fait au moment de confirmer).
 
+## Dossiers personnels et réseau (20/10/2026)
+
+- **Dossiers habituels**, comme la barre latérale du Finder : Bureau, Documents,
+  Téléchargements, Images, après le dossier personnel (`user_dirs`). Sous Linux, ceux de
+  `~/.config/user-dirs.dirs` (`xdg-user-dirs` : « Bureau », « Images » sous Mint en
+  français, chemin absolu permis) ; sinon les noms anglais. Absents : omis.
+- **Partages réseau** (`PlaceKind::Network`) : points de montage d'un système de fichiers
+  réseau (SMB, AFP, NFS, WebDAV, SSHFS, rclone…), lus dans la sortie de `mount` (macOS)
+  ou `/proc/mounts` (Linux) ; un partage monté dans `/Volumes` ou `/media` change de
+  section, les autres (`/etc/fstab`, `~/nas`) s'ajoutent. Sous Linux aussi les montages
+  **GVFS** du gestionnaire de fichiers (`/run/user/<uid>/gvfs` : `smb-share:server=nas,
+  share=photo` devient « photo (nas) ») ; un téléphone (`mtp`) ou un appareil photo
+  (`gphoto2`) y est un volume. Pas d'éjection proposée pour un partage ; rien sous
+  Windows (lecteurs réseau : lettres de lecteur).
+
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 
 Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seulement si
@@ -83,7 +98,14 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
 - rien n'est parcouru d'avance : un dossier est lu quand on le **déplie** (`expand`,
   `toggle`), puis gardé ; instantané même sur un NAS ;
 - `rows()` : lignes visibles à plat (`Row { path, name, depth, expanded, error, kind,
-  ejectable, favorite }`), dans l'ordre d'affichage (favoris d'abord) ; un dossier illisible déplié porte son erreur ;
+  ejectable, favorite, section }`), dans l'ordre d'affichage ; un dossier illisible
+  déplié porte son erreur ;
+- **sections** (demandé le 20/10/2026 : trié, et passer le moins possible par la
+  racine) : `Section::Drives` (volumes montés), `Network` (partages réseau),
+  `Personal` (dossier personnel et ses dossiers habituels), `Favorites`, puis seulement
+  `System` (la racine, repliée tant qu'on ne l'ouvre pas) ; `PlaceKind::section`, et `Row::section` sur chaque ligne (les
+  sous-dossiers prennent celle de leur emplacement) : l'interface dessine un titre et un
+  trait à chaque changement de section ;
 - `reveal(path)` : déplie les dossiers parents de `path` sous l'emplacement le plus précis
   qui le contient (un volume avant la racine), pour montrer le dossier ouvert ;
 - `refresh()` : relit les emplacements (carte insérée) et les dossiers dépliés ;

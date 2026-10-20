@@ -48,9 +48,54 @@ pub enum FileDialog {
     },
 }
 
+/// Ce qu'on copie ou déplace.
+pub enum Source {
+    /// Des images (paires et sidecars suivent).
+    Images(Vec<PathBuf>),
+    /// Un dossier entier (panneau des dossiers).
+    Folder(PathBuf),
+}
+
+/// Plan d'une copie ou d'un déplacement, selon la source.
+enum Plan {
+    Images(files::Transfer),
+    Folder(files::DirTransfer),
+}
+
+impl Plan {
+    fn of(
+        source: &Source,
+        dest: &Path,
+        mode: TransferMode,
+        settings: &FileSettings,
+    ) -> Result<Plan, FileError> {
+        match source {
+            Source::Images(images) => {
+                files::plan_transfer(images, dest, mode, settings).map(Plan::Images)
+            }
+            Source::Folder(dir) => files::plan_transfer_dir(dir, dest, mode).map(Plan::Folder),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Plan::Images(p) => p.len(),
+            Plan::Folder(p) => p.len(),
+        }
+    }
+
+    /// Exécute le plan ; `progress` : (faits, total).
+    fn run(&self, progress: impl FnMut(usize, usize)) -> Result<(), FileError> {
+        match self {
+            Plan::Images(p) => files::transfer(p, progress),
+            Plan::Folder(p) => files::transfer_dir(p, progress),
+        }
+    }
+}
+
 /// Boîte « Copier / déplacer vers… ».
 pub struct Transfer {
-    images: Vec<PathBuf>,
+    source: Source,
     mode: TransferMode,
     /// Dossier de destination, en cours de saisie (`~` accepté).
     input: String,
@@ -73,7 +118,7 @@ struct Job {
     total: usize,
     dest: PathBuf,
     /// Le fil rend le plan exécuté (pour l'historique).
-    handle: Option<JoinHandle<Result<files::Transfer, FileError>>>,
+    handle: Option<JoinHandle<Result<Plan, FileError>>>,
 }
 
 /// Résultat d'une image de la boîte.
@@ -146,19 +191,21 @@ impl FileDialog {
         matches!(self, FileDialog::Transfer(t) if t.job.is_some())
     }
 
-    /// Boîte « Copier / déplacer vers… » pour `images` ; destinations récentes lues dans
-    /// le dossier de données `data`.
+    /// Boîte « Copier / déplacer vers… » pour `source` (des images ou un dossier) ;
+    /// `dest` : destination déjà remplie (glisser-déposer), sinon à saisir ;
+    /// destinations récentes lues dans le dossier de données `data`.
     pub fn transfer(
-        images: Vec<PathBuf>,
+        source: Source,
         mode: TransferMode,
+        dest: Option<&Path>,
         data: Option<&Path>,
         at: Pos2,
     ) -> FileDialog {
         let recents = data.map(files::recent_destinations).unwrap_or_default();
         FileDialog::Transfer(Box::new(Transfer {
-            images,
+            source,
             mode,
-            input: String::new(),
+            input: dest.map(tilde).unwrap_or_default(),
             at,
             fresh: true,
             field: Default::default(),
@@ -545,13 +592,9 @@ impl Transfer {
         if self.job.is_some() {
             return self.progress(ctx, settings, data);
         }
-        let n = self.images.len();
-        let title = match self.mode {
-            TransferMode::Copy => t!("transfer-copy-title", n = n),
-            TransferMode::Move => t!("transfer-move-title", n = n),
-        };
+        let title = self.title();
         let dest = tri::settings::expand_home(self.input.trim());
-        let plan = files::plan_transfer(&self.images, &dest, self.mode, settings);
+        let plan = Plan::of(&self.source, &dest, self.mode, settings);
         // Dossier absent dont le parent existe : il sera créé.
         let create = matches!(plan, Err(FileError::NotADirectory(_)))
             && !self.input.trim().is_empty()
@@ -605,11 +648,18 @@ impl Transfer {
                 ui.weak(t!("transfer-hint"));
                 ui.add_space(6.0);
                 match &plan {
-                    Ok(plan) => {
+                    Ok(Plan::Images(plan)) => {
                         ui.label(t!("transfer-files", n = plan.files.len()));
                         for (from, _) in &plan.shared {
                             ui.weak(t!("transfer-shared", name = file_name(from)));
                         }
+                    }
+                    Ok(Plan::Folder(plan)) => {
+                        ui.label(t!(
+                            "folder-contents",
+                            files = plan.files.len(),
+                            dirs = plan.dirs.len() - 1
+                        ));
                     }
                     Err(_) if create => {
                         ui.label(t!("transfer-create"));
@@ -662,6 +712,24 @@ impl Transfer {
         }
     }
 
+    /// Titre de la boîte : « Copier 3 images », « Déplacer le dossier « Séance » ».
+    fn title(&self) -> String {
+        match (&self.source, self.mode) {
+            (Source::Images(images), TransferMode::Copy) => {
+                t!("transfer-copy-title", n = images.len())
+            }
+            (Source::Images(images), TransferMode::Move) => {
+                t!("transfer-move-title", n = images.len())
+            }
+            (Source::Folder(dir), TransferMode::Copy) => {
+                t!("transfer-folder-copy-title", name = file_name(dir))
+            }
+            (Source::Folder(dir), TransferMode::Move) => {
+                t!("transfer-folder-move-title", name = file_name(dir))
+            }
+        }
+    }
+
     fn use_recent(&mut self, i: usize) {
         if let Some(path) = self.recents.get(i) {
             self.recent = Some(i);
@@ -677,7 +745,7 @@ impl Transfer {
             self.error = Some(format!("{} : {e}", dest.display()));
             return;
         }
-        let plan = match files::plan_transfer(&self.images, dest, self.mode, settings) {
+        let plan = match Plan::of(&self.source, dest, self.mode, settings) {
             Ok(plan) => plan,
             Err(e) => {
                 self.error = Some(e.to_string());
@@ -688,7 +756,7 @@ impl Transfer {
         let total = plan.len();
         let (counter, ctx) = (done.clone(), ctx.clone());
         let handle = std::thread::spawn(move || {
-            files::transfer(&plan, |n, _| {
+            plan.run(|n, _| {
                 counter.store(n, Ordering::Relaxed);
                 ctx.request_repaint();
             })
@@ -719,9 +787,19 @@ impl Transfer {
                     if let Some(data) = data {
                         let _ = files::remember_destination(data, &job.dest, settings.recent);
                     }
-                    Outcome::Done {
-                        select: None,
-                        step: Some(tri::history::transfer_step(plan)),
+                    match plan {
+                        Plan::Images(plan) => Outcome::Done {
+                            select: None,
+                            step: Some(tri::history::transfer_step(plan)),
+                        },
+                        // Dossier déplacé : comme un renommage (favoris, dossier ouvert
+                        // dedans) ; pointé à sa nouvelle place.
+                        Plan::Folder(plan) => Outcome::Folder {
+                            point: Some(plan.to.clone()),
+                            renamed: (plan.mode == TransferMode::Move)
+                                .then(|| (plan.from.clone(), plan.to.clone())),
+                            step: Some(tri::history::transfer_dir_step(plan)),
+                        },
                     }
                 }
                 Some(Ok(Err(e))) => Outcome::Failed(t!("transfer-failed", error = e.to_string())),
@@ -729,9 +807,9 @@ impl Transfer {
             };
         }
         let done = job.done.load(Ordering::Relaxed);
-        let title = match self.mode {
-            TransferMode::Copy => t!("transfer-copy-title", n = self.images.len()),
-            TransferMode::Move => t!("transfer-move-title", n = self.images.len()),
+        let title = self.title();
+        let Some(job) = &self.job else {
+            return Outcome::Open;
         };
         crate::app::modal_at("transfer_dialog", self.at)
             .title(title)

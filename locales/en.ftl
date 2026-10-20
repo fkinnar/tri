@@ -61,6 +61,7 @@ files-launch-failed = cannot launch "{ $program }": { $error }
 files-not-a-directory = { $path } is not a folder
 files-same-folder = the images are already in { $path }
 files-mismatch = copy of { $path } differs from the original (nothing was kept)
+files-into-itself = cannot put { $path } inside itself
 files-not-in-trash = { $path } is no longer in the trash
 history-notes-changed = { $name }: ratings changed elsewhere since (nothing was changed)
 history-missing = { $name } cannot be found (moved or deleted elsewhere)
@@ -88,6 +89,8 @@ history-purple = purple
 history-notes-one = { $what }: { $name }
 history-notes-many = { $what }: { $n } images
 history-rename = { $from } renamed to { $to }
+history-copy-dir = folder { $name } copied to { $dest }
+history-move-dir = folder { $name } moved to { $dest }
 history-copy = { $n ->
     [one] 1 image copied to { $dest }
    *[other] { $n } images copied to { $dest }
@@ -117,6 +120,10 @@ offload-unnamed-file = file without a name
 offload-verify-failed = the copy read back differs from the original (faulty medium?)
 offload-copy-missing = copy missing or different: kept
 places-home = Home folder
+places-desktop = Desktop
+places-documents = Documents
+places-downloads = Downloads
+places-pictures = Pictures
 places-root = Root (/)
 settings-defaults-used = { $warning }; default settings used
 settings-file-error = configuration { $path }: { $error }
@@ -137,7 +144,7 @@ cli-usage =
       tri --offload <card> [--to <root>] [--folder <name>] [--raw-only] [--dry-run] [--previews] [--delete-copied [--delete-left]] [--eject]
       tri --rename <image> <name> [--dry-run]
       tri --delete <image>... [--permanent] [--dry-run]
-      tri --copy|--move <image>... --to <folder> [--dry-run]
+      tri --copy|--move <image>...|<folder> --to <folder> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
       tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
