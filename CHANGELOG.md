@@ -1,6 +1,9 @@
 # Historique
 
-## À venir
+## 1.0.0-alpha.2 — 21/10/2026
+
+Deuxième version de test, la première publiée avec ses paquets sur la page Releases
+(dépôt public). Paquets macOS (`.dmg`) et Linux (`.tar.gz`), sans HEIC ; Windows à venir.
 
 - **Dossiers** : copier ou déplacer un dossier entier (`Ctrl+C` ou `y` / `Ctrl+X` dans
   le panneau des dossiers, clic droit, annulable) ; `y` copiait les images

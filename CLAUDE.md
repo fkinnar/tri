@@ -372,6 +372,9 @@ Proposition : sortir cette étape du logiciel de développement.
 
 ## Préférences de travail à respecter
 
+- **Messages de commit en anglais** (demandé le 21/10/2026 : « soyons universels »),
+  comme le `README.md` et la doc `doc/en/` ; la conversation reste en français.
+
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
 - **Objectif : publication open source si le projet aboutit.** La licence n'est pas encore
   choisie (MIT/Apache-2.0 ou GPL-3.0, comparaison dans `doc/licensing.md`). Toute nouvelle
