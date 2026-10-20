@@ -65,6 +65,7 @@ action-core-file-reveal = { $os ->
 }
 action-core-file-edit = Open in the external editor
 action-core-file-copy = Copy to…
+action-core-file-export-report = Export report
 action-core-file-export = Export…
 action-core-view-crop = Crop (new version)
 action-core-view-version_next = Next version of the image (original, then each version)
@@ -194,15 +195,15 @@ crop-ratio-original = Original
 crop-portrait = Portrait
 crop-landscape = Landscape
 crop-name = Name
-crop-profile = Profile
+crop-profile = Export
 crop-profile-none = None
 crop-save = Save
 crop-saved = Version “{ $name }” saved
 crop-failed = Version not saved: { $error }
 crop-preset-none = Preset
-crop-preset-tip = Preset: ratio, name and export profile (p: next)
-crop-preset-save = Save as preset
-crop-preset-save-tip = Ratio, name and profile of the current frame, kept in the settings
+crop-preset-tip = Crop preset: ratio, name and export preset (p: next)
+crop-preset-save = Save as crop preset
+crop-preset-save-tip = Save as crop preset: ratio, name and export of the current frame, kept in the settings
 crop-preset-saved = Preset “{ $name }” saved
 preset-story = Story
 preset-post = Post
@@ -346,14 +347,14 @@ export-contents-paired = { $n ->
     [one] 1 camera JPEG (pair, suffixed name)
    *[other] { $n } camera JPEGs (pairs, suffixed names)
 }
-export-profile = Export profile
-export-profile-tip = Up / down arrows: profile · Tab: folder · Enter: export
+export-profile = Export preset
+export-profile-tip = Up / down arrows: preset · Tab: folder · Enter: export
 export-destination = Folder
 export-create = will be created
 export-goes-to = Destination: { $dest }
 export-no-darktable = darktable missing: basic LibRaw rendering.
 export-passthrough = Without recompression
-export-passthrough-tip = Original JPEG copied as is, camera JPEG written as is (orientation in the EXIF). An image to shrink (profile size) is re-encoded.
+export-passthrough-tip = Original JPEG copied as is, camera JPEG written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-button = Export
 export-profile-edit = Editing
 export-profile-asis = JPEG as is
@@ -377,6 +378,40 @@ export-partial = { $n } exported, { $failed } failed (unreadable by darktable?),
 export-cancelled = Export stopped (files already written are kept).
 export-progress = Export “{ $profile }” { $done }/{ $total }
 export-cancel = Stop the export
+export-report-title = Export report
+export-report-empty = No export yet.
+export-report-version = version “{ $name }”
+export-report-summary = { $total ->
+    [one] { $written } file from 1 image
+   *[other] { $written } files from { $total } images
+}
+export-report-passthrough = ({ $n } without recompression)
+export-report-now = just now
+export-report-minutes = { $n } min ago
+export-report-hours = { $n } h ago
+export-report-days = { $n ->
+    [one] 1 day ago
+   *[other] { $n } days ago
+}
+export-report-months = { $n ->
+    [one] 1 month ago
+   *[other] { $n } months ago
+}
+export-report-years = { $n ->
+    [one] 1 year ago
+   *[other] { $n } years ago
+}
+export-report-files = { $n ->
+    [one] 1 file
+   *[other] { $n } files
+}
+export-report-errors = { $n ->
+    [one] 1 failure
+   *[other] { $n } failures
+}
+export-report-reveal = Show in the file manager
+export-report-clear = Clear the list
+export-report-open = Export report
 rename-failed = cannot rename: { $error }
 transfer-copy-title = { $n ->
     [one] Copy { $n } image to…
@@ -438,7 +473,7 @@ settings-keys-record = record…
 settings-keys-record-tip = Type the shortcut (a sequence: one key after the other, Escape included); it is added once the sequence delay passes with no new key ([gui] key_sequence_timeout_ms).
 settings-keys-recording = type the shortcut… { $keys }
 settings-keys-type-hint = or type: g g
-settings-keys-default = Back to the profile's shortcuts
+settings-keys-default = Back to the chosen set's shortcuts
 settings-reset = default
 settings-default = default value: { $value }
 settings-restart = on next launch
@@ -451,18 +486,23 @@ settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
 settings-section-keys = Shortcuts
 settings-section-develop = darktable rendering
-settings-section-export-profile-user = Export profile “{ $id }”
+settings-section-export-profile-user = Export preset “{ $id }”
 settings-section-versions-preset-user = Crop preset “{ $id }”
-settings-new-name = New:
-settings-new-from-this = Create from this one
-settings-delete-this = Delete this one
+settings-section-export-profiles = Export presets
+settings-section-versions-presets = Crop presets
+settings-member-new = New…
+settings-member-name = Name:
+settings-member-create = Create
+settings-member-create-tip = Copy of the one shown, under this name
+settings-member-delete = Delete
+settings-member-builtin = Provided with tri: editable, not deletable
 settings-section-versions-presets-story = Crop preset “Story”
 settings-section-versions-presets-post = Crop preset “Post”
 settings-section-export = Export
 settings-section-export-sharpening = Output sharpening
-settings-section-export-profiles-edit = Export profile “Editing”
-settings-section-export-profiles-asis = Export profile “JPEG as is”
-settings-section-export-profiles-web = Export profile “Web”
+settings-section-export-profiles-edit = Export preset “Editing”
+settings-section-export-profiles-asis = Export preset “JPEG as is”
+settings-section-export-profiles-web = Export preset “Web”
 settings-section-watch = Folder watching
 settings-section-places = Places
 settings-section-exposure = Exposure

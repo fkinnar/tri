@@ -88,6 +88,64 @@ fn builtin(section: &str) -> bool {
     }
 }
 
+/// Nom affiché d'un profil ou préréglage : celui du fichier, sinon celui d'un fourni
+/// (traduit), sinon son identifiant.
+fn member_name(file: &ConfigFile, section: &str) -> String {
+    let Some(((parent, _, _), id)) = family(section) else {
+        return section.to_string();
+    };
+    if let Some(Value::Str(name)) = file.get(section, "name")
+        && !name.trim().is_empty()
+    {
+        return name;
+    }
+    let key = if parent == "export.profiles" {
+        format!("export-profile-{id}")
+    } else {
+        format!("preset-{id}")
+    };
+    if builtin(section) && tri::i18n::has(tri::i18n::language(), &key) {
+        tri::i18n::translate(&key, None)
+    } else {
+        id.to_string()
+    }
+}
+
+/// Sections de la liste de gauche : une seule entrée par famille (son premier membre),
+/// le profil voulu se choisit à droite (retour du 20/10/2026 : une entrée par profil
+/// encombrait la liste).
+fn listed(schema: &Schema) -> Vec<usize> {
+    let mut seen = Vec::new();
+    (0..schema.sections.len())
+        .filter(|&i| match family(&schema.sections[i].name) {
+            Some((f, _)) if seen.contains(&f.0) => false,
+            Some((f, _)) => {
+                seen.push(f.0);
+                true
+            }
+            None => true,
+        })
+        .collect()
+}
+
+/// Entrée de la liste de gauche qui montre la section `i` (le premier membre de sa
+/// famille).
+fn listed_of(schema: &Schema, i: usize) -> usize {
+    let parent = schema
+        .sections
+        .get(i)
+        .and_then(|s| family(&s.name))
+        .map(|(f, _)| f.0);
+    match parent {
+        Some(parent) => schema
+            .sections
+            .iter()
+            .position(|s| family(&s.name).is_some_and(|(f, _)| f.0 == parent))
+            .unwrap_or(i),
+        None => i,
+    }
+}
+
 /// Libellé lisible d'une section (« Couleurs » pour `gui.colors`), traduit ; à défaut,
 /// son nom (profil ou préréglage ajouté : « Profil d'export « tirage » »).
 pub fn section_label(name: &str) -> String {
@@ -213,8 +271,9 @@ pub struct SettingsWindow {
     /// Défilement de la liste des sections (tests).
     #[cfg(test)]
     sections_offset: f32,
-    /// Nom d'un nouveau profil ou préréglage, en cours de saisie.
-    new_name: String,
+    /// Nom d'un nouveau profil ou préréglage, en cours de saisie (`Some` après
+    /// « Nouveau… »).
+    new_name: Option<String>,
 }
 
 /// Ce que la fenêtre demande à l'application.
@@ -242,7 +301,7 @@ impl SettingsWindow {
             focus_first: false,
             #[cfg(test)]
             sections_offset: 0.0,
-            new_name: String::new(),
+            new_name: None,
             sequence_timeout: settings.gui.key_sequence_timeout(),
             file,
             section: 0,
@@ -327,7 +386,7 @@ impl SettingsWindow {
         }
         let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
         self.dirty = true;
-        self.new_name.clear();
+        self.new_name = None;
         self.show_section(&target);
         Some(settings)
     }
@@ -437,12 +496,17 @@ impl SettingsWindow {
                     i.consume_key(Modifiers::NONE, Key::ArrowDown),
                 )
             });
-            let last = schema.sections.len().saturating_sub(1);
+            let listed = listed(schema);
+            let at = listed_of(schema, self.section);
+            let pos = listed.iter().position(|&i| i == at).unwrap_or(0);
             if up {
-                self.section = self.section.saturating_sub(1);
+                self.section = listed[pos.saturating_sub(1)];
             }
             if down {
-                self.section = (self.section + 1).min(last);
+                self.section = listed[(pos + 1).min(listed.len() - 1)];
+            }
+            if up || down {
+                self.new_name = None;
             }
             self.section_moved |= up || down;
         }
@@ -552,17 +616,19 @@ impl SettingsWindow {
             .max_height(height)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    for (i, section) in schema.sections.iter().enumerate() {
-                        let label = ui.selectable_label(
-                            self.section == i,
-                            section_title(ui, &section.name, false),
-                        );
-                        if self.section == i && self.section_moved {
+                    let at = listed_of(schema, self.section);
+                    for i in listed(schema) {
+                        let name = &schema.sections[i].name;
+                        // Une famille : son nom (« Profils d'export [export.profiles] »).
+                        let name = family(name).map_or(name.as_str(), |(f, _)| f.0);
+                        let label = ui.selectable_label(at == i, section_title(ui, name, false));
+                        if at == i && self.section_moved {
                             label.scroll_to_me(None);
                         }
-                        if label.clicked() && self.section != i {
+                        if label.clicked() && at != i {
                             self.section = i;
                             self.section_moved = true;
+                            self.new_name = None;
                         }
                     }
                 });
@@ -573,6 +639,93 @@ impl SettingsWindow {
         }
     }
 
+    /// En-tête d'un profil d'export ou d'un préréglage : la famille (titre et explication),
+    /// la liste de ses membres, « Nouveau… » (copie de celui montré) et « Supprimer » (ceux
+    /// de l'utilisateur seulement).
+    fn family_header(&mut self, ui: &mut Ui, section: &str) -> Option<AppSettings> {
+        let ((parent, _, _), _) = family(section)?;
+        ui.label(section_title(ui, parent, true));
+        // L'explication de la famille est sur son premier membre dans l'exemple.
+        if let Some(doc) = schema()
+            .sections
+            .iter()
+            .find(|s| family(&s.name).is_some_and(|(f, _)| f.0 == parent))
+            .map(|s| &s.doc)
+            .filter(|d| !d.is_empty())
+        {
+            ui.weak(doc);
+        }
+        ui.add_space(6.0);
+        let schema = self.schema();
+        let members: Vec<(usize, String)> = schema
+            .sections
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| family(&s.name).is_some_and(|(f, _)| f.0 == parent))
+            .map(|(i, s)| (i, s.name.clone()))
+            .collect();
+        let mut pick = None;
+        let mut delete = false;
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt(("settings_member", parent))
+                .selected_text(member_name(&self.file, section))
+                .show_ui(ui, |ui| {
+                    for (i, name) in &members {
+                        let label = member_name(&self.file, name);
+                        if ui.selectable_label(name == section, label).clicked() {
+                            pick = Some(*i);
+                        }
+                    }
+                });
+            if ui.button(t!("settings-member-new")).clicked() {
+                self.new_name = Some(String::new());
+            }
+            let own = !builtin(section);
+            delete = ui
+                .add_enabled(own, egui::Button::new(t!("settings-member-delete")))
+                .on_disabled_hover_text(t!("settings-member-builtin"))
+                .clicked();
+        });
+        if let Some(i) = pick {
+            self.section = i;
+            self.section_moved = true;
+            self.new_name = None;
+        }
+        // « Nouveau… » : nom du nouveau, copie de celui montré.
+        let mut create = false;
+        if let Some(mut name) = self.new_name.take() {
+            let mut keep = true;
+            ui.horizontal(|ui| {
+                ui.label(t!("settings-member-name"));
+                let field = ui.add(egui::TextEdit::singleline(&mut name).desired_width(160.0));
+                if name.is_empty() && !field.has_focus() && !field.lost_focus() {
+                    field.request_focus();
+                }
+                let ok = !name.trim().is_empty();
+                create = ui
+                    .add_enabled(ok, egui::Button::new(t!("settings-member-create")))
+                    .on_hover_text(t!("settings-member-create-tip"))
+                    .clicked()
+                    || (ok && field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
+                keep = !ui.button(t!("cancel")).clicked();
+            });
+            if keep {
+                self.new_name = Some(name);
+            }
+        }
+        ui.add_space(6.0);
+        if create
+            && let Some(name) = self.new_name.clone()
+            && let Some(s) = self.create_from(section, &name)
+        {
+            return Some(s);
+        }
+        if delete {
+            return self.delete_section(section);
+        }
+        None
+    }
+
     /// Les réglages d'une section ; `only` : les seules clés à montrer (recherche).
     fn section_entries(
         &mut self,
@@ -581,7 +734,14 @@ impl SettingsWindow {
         only: Option<&[&str]>,
     ) -> Option<AppSettings> {
         let mut changed = None;
-        if only.is_none() {
+        // Profil d'export ou préréglage : en-tête de sa famille.
+        if only.is_none() && family(&section.name).is_some() {
+            let header = self.family_header(ui, &section.name);
+            if header.is_some() {
+                return header;
+            }
+        }
+        if only.is_none() && family(&section.name).is_none() {
             ui.label(section_title(ui, &section.name, true));
             if !section.doc.is_empty() {
                 ui.weak(&section.doc);
@@ -592,34 +752,6 @@ impl SettingsWindow {
             ui.add_space(6.0);
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
-            }
-            // Profil d'export ou préréglage : en créer un à partir de celui-ci, supprimer
-            // ceux de l'utilisateur.
-            if family(&section.name).is_some() {
-                let mut create = false;
-                let mut delete = false;
-                ui.horizontal(|ui| {
-                    ui.label(t!("settings-new-name"));
-                    let field =
-                        ui.add(egui::TextEdit::singleline(&mut self.new_name).desired_width(160.0));
-                    let ok = !self.new_name.trim().is_empty();
-                    create = ui
-                        .add_enabled(ok, egui::Button::new(t!("settings-new-from-this")))
-                        .clicked()
-                        || (ok && field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
-                    if !builtin(&section.name) {
-                        ui.separator();
-                        delete = ui.button(t!("settings-delete-this")).clicked();
-                    }
-                });
-                ui.add_space(6.0);
-                let name = self.new_name.clone();
-                if create && let Some(s) = self.create_from(&section.name, &name) {
-                    return Some(s);
-                }
-                if delete && let Some(s) = self.delete_section(&section.name) {
-                    return Some(s);
-                }
             }
         }
         for group in &section.groups {
@@ -1264,9 +1396,21 @@ mod tests {
             "à la suite des profils"
         );
         assert_eq!(w.section, at, "montré");
+        // Une seule entrée par famille à gauche, qui montre le profil choisi.
+        let shown: Vec<&str> = listed(&schema)
+            .into_iter()
+            .map(|i| schema.sections[i].name.as_str())
+            .filter(|n| n.starts_with("export.profiles."))
+            .collect();
+        assert_eq!(shown, ["export.profiles.edit"]);
+        assert_eq!(names[listed_of(&schema, at)], "export.profiles.edit");
+        assert_eq!(
+            member_name(&w.file, "export.profiles.tirage-a4"),
+            "Tirage A4"
+        );
         assert_eq!(
             section_label("export.profiles.tirage-a4"),
-            "Profil d'export « tirage-a4 »"
+            "Préréglage d'export « tirage-a4 »"
         );
         // Modifiable comme les autres.
         let s = w

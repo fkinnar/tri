@@ -264,6 +264,8 @@ pub enum Action {
     FileCopyStack,
     /// Exporter la sélection (profil d'export, darktable), voir [`tri::export`].
     FileExport,
+    /// Rapport d'export : les exports terminés et leurs dossiers ([`tri::export_log`]).
+    ExportReport,
     /// Plein écran : recadrer l'image (créer une version, [`tri::versions`]).
     Crop,
     /// Recadrage : déplacer le cadre.
@@ -345,7 +347,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 145] = [
+    pub const ALL: [Action; 146] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -394,6 +396,7 @@ impl Action {
         Action::FileDeleteStack,
         Action::FileCopyStack,
         Action::FileExport,
+        Action::ExportReport,
         Action::Crop,
         Action::CropMove(Dir::Left),
         Action::CropMove(Dir::Right),
@@ -541,7 +544,7 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
             | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
-            | FileDeleteStack | FileCopyStack | FileExport | Send(_) => Group::Files,
+            | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
@@ -605,6 +608,7 @@ impl Action {
             Action::FileDelete => "core.file.delete",
             Action::FileCopy => "core.file.copy",
             Action::FileExport => "core.file.export",
+            Action::ExportReport => "core.file.export.report",
             Action::Crop => "core.view.crop",
             Action::CropMove(Dir::Left) => "core.crop.move.left",
             Action::CropMove(Dir::Right) => "core.crop.move.right",
@@ -1089,6 +1093,8 @@ const FILES: &[Binding] = {
         // Exporter (profil d'export, darktable) : `Ctrl+E`, comme Lightroom (`Cmd+E` sur
         // macOS, voir `Chord::from_event`).
         (&[ctrl(Key::E)], FileExport),
+        // Rapport d'export : Ctrl+Maj+E, à côté de l'export.
+        (&[ctrl_shift(Key::E)], ExportReport),
         // Recadrer : r, comme Lightroom (plein écran ; depuis la grille, l'ouvre).
         (&[plain(Key::R)], Crop),
         // Versions de l'image : n, l'original puis chaque version.

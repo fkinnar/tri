@@ -151,13 +151,16 @@ cadre, Entrée.
   - Le profil n'est appliqué que s'il existe et s'applique, et jamais un profil « tel
     quel ».
   - Le cadre se recentre au plus grand de ce rapport, puis on l'ajuste.
-- **Enregistrer comme préréglage** : le rapport, le nom et le profil du cadre en cours
+- **Enregistrer comme préréglage** (petite disquette à côté de la liste des
+  préréglages ; Enregistrer et Annuler à droite de la barre, à part, retour du
+  20/10/2026) : le rapport, le nom et le profil du cadre en cours
   sont écrits dans le fichier de configuration, sans perdre les commentaires
   (`config_edit`). L'identifiant est tiré du nom (`versions::new_id` : minuscules,
   accents retirés, numéro s'il est pris). Appliqué à chaud.
-- Fenêtre de réglages : liste déroulante des rapports pour `ratio` ; créer un préréglage
-  à partir d'un autre, supprimer ceux de l'utilisateur (comme les profils d'export, voir
-  `export.md`).
+- Fenêtre de réglages : une seule entrée « Préréglages de recadrage », liste déroulante
+  des préréglages, « Nouveau… » (copie de celui affiché), « Supprimer » (ceux de
+  l'utilisateur) ; liste déroulante des rapports pour `ratio` (comme les profils
+  d'export, voir `export.md`).
 
 Au passage (19/10/2026) : les profils d'export, les préréglages et darktable modifiés
 dans la fenêtre de réglages s'appliquent désormais **à chaud** (auparavant, il fallait

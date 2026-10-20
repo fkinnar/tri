@@ -1,5 +1,19 @@
 # Historique
 
+## À venir
+
+- **Rapport d'export** (`Ctrl+Maj+E`, ou le bouton à côté du bilan d'un export) : les
+  exports terminés, gardés d'une session à l'autre, avec un lien vers chaque dossier de
+  destination ; effaçable.
+- **Vocabulaire** : « préréglage d'export », comme « préréglage de recadrage »
+  (« profil » reste aux profils couleur).
+- **Réglages** : une seule entrée pour les préréglages d'export et une pour ceux de
+  recadrage, avec une liste, « Nouveau… » et « Supprimer ».
+- **Recadrage** : « Enregistrer comme préréglage » devient une petite disquette à côté
+  de la liste des préréglages ; Enregistrer et Annuler à droite.
+- **Boîte d'export** : les flèches ne changent le préréglage que sur sa liste ; Tab passe
+  au dossier.
+
 ## 1.0.0-alpha.1 — 19/10/2026
 
 Première version de test (dépôt privé ; la bêta sera publique). Paquets prêts à

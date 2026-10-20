@@ -8,6 +8,13 @@ usage. Les usages de l'utilisateur sont les profils fournis :
   éditeur externe ;
 - **Web** (`web`) : JPEG sRGB qualité 90, 2048 pixels au plus.
 
+**Vocabulaire** (décidé le 20/10/2026) : l'interface et la ligne de commande disent
+**« préréglage d'export »**, comme « préréglage de recadrage » : un même mot pour la même
+idée, et « profil » reste aux **profils couleur** (ICC), sans ambiguïté dans la boîte
+d'export. Le code (`Profile`) et le fichier de configuration (`[export.profiles.<id>]`)
+gardent leurs noms, pour ne casser aucune configuration ; ce document dit encore
+« profil » par endroits, au sens de préréglage.
+
 Sans darktable, l'export passe par LibRaw (voir plus bas). Étape suivante prévue : les
 versions recadrées dans `tri` (stockées comme instructions dans le XMP).
 
@@ -288,17 +295,21 @@ darktable.
 ## Créer un profil depuis l'interface
 
 Demandé le 19/10/2026 : plus besoin d'éditer le fichier. Dans la fenêtre de réglages
-(`Ctrl+,`), chaque page de profil d'export propose :
+(`Ctrl+,`), une seule entrée **« Profils d'export »** à gauche (retour du 20/10/2026 : une
+entrée par profil encombrait la liste) ; à droite, l'explication commune, puis :
 
-- **« Nouveau : [nom] · Créer à partir de celui-ci »** : copie du profil affiché sous un
-  nouveau nom. **Toutes** ses valeurs sont écrites, pour que le nouveau profil ne dépende
-  pas des valeurs par défaut d'un autre. Identifiant tiré du nom (`versions::new_id`).
-  Ensuite, il se règle comme les autres (listes déroulantes, refus des incohérences).
-- **« Supprimer celui-ci »** pour les profils de l'utilisateur seulement. Les profils
-  fournis se modifient mais ne se suppriment pas.
-- La fenêtre montre les profils de l'utilisateur à la suite des profils fournis, sur leur
-  modèle (`SettingsWindow::schema` : sections de l'exemple, plus celles trouvées dans le
-  fichier ; `ConfigFile::subtables`, `remove_table`), titrés « Profil d'export « tirage » ».
+- une **liste déroulante** des profils (fournis, puis ceux de l'utilisateur) : le profil
+  choisi se règle en dessous ;
+- **« Nouveau… »** : demande un nom, puis copie le profil affiché sous ce nom. **Toutes**
+  ses valeurs sont écrites, pour que le nouveau profil ne dépende pas des valeurs par
+  défaut d'un autre. Identifiant tiré du nom (`versions::new_id`). Ensuite, il se règle
+  comme les autres (listes déroulantes, refus des incohérences) ;
+- **« Supprimer »**, pour les profils de l'utilisateur seulement (grisé sur un profil
+  fourni : ils se modifient mais ne se suppriment pas).
+- En interne, chaque profil reste une section (`SettingsWindow::schema` : sections de
+  l'exemple, plus celles trouvées dans le fichier ; `ConfigFile::subtables`,
+  `remove_table`) ; la liste de gauche n'en montre qu'une par famille (`listed`), et la
+  recherche les trouve toutes (« Profil d'export « tirage » »).
 - Appliqué à chaud : le profil est aussitôt proposé dans la boîte d'export.
 
 Les préréglages de recadrage se créent de la même façon (voir `versions.md`).
@@ -307,13 +318,30 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
 
 - `Ctrl+E` (`Cmd+E` sur macOS), action `core.file.export` : boîte sur la sélection (ou
   l'image courante).
-  - **Profil** : flèches haut / bas ou clic ; le dernier choisi est retenu pendant la
-    session.
+  - **Préréglage** : flèches haut / bas quand la liste a le clavier (au départ), ou clic ;
+    Tab passe au dossier, où les flèches ne changent plus le préréglage (retour du
+    20/10/2026). Le dernier choisi est retenu pendant la session.
   - **Dossier** : celui du profil, qui suit le choix du profil ; modifiable pour cette
     fois (complétion par Tab), avec la règle rappelée et la destination réelle de la
     première image.
   - **Export** : Entrée. Il se fait en fond, avec une barre de progression dans la barre
     d'état (bouton × pour l'arrêter), puis un bilan.
+- **Rapport d'export** (`Ctrl+Maj+E`, action `core.file.export.report` ; idée de
+  l'utilisateur du 20/10/2026) : la liste des exports terminés, les plus récents en
+  haut, dans une zone à hauteur limitée qui défile. Pour chacun : préréglage, version,
+  fichiers écrits sur images demandées, depuis quand (« il y a 3 min » : pas de
+  bibliothèque de dates, et l'âge suffit), arrêt ou échec. Ses **dossiers** de
+  destination (un par dossier d'images si le dossier est relatif) sont des liens qui les
+  montrent dans le gestionnaire de fichiers (`files::reveal` sur leur premier fichier) ;
+  la liste des fichiers et les échecs se déplient. Bouton « Rapport d'export » dans la
+  barre d'état, **avant** le bilan d'un export (un long chemin ne le pousse pas hors de la
+  fenêtre). « Effacer la liste » vide le journal : petit balai en bas à droite (bulle
+  « Effacer la liste »), loin de Fermer (retour du 20/10/2026).
+  - Moteur : `tri::export_log` (`Entry`, `read`, `append`, `clear`), fichier
+    `exports.jsonl` du dossier de données (un objet JSON par ligne : un export ajouté ne
+    réécrit pas le reste ; ligne illisible ignorée). Gardé d'une session à l'autre,
+    limité aux `[export] report_max` plus récents (500 ; 0 : sans limite) pour ne pas
+    grossir pendant des années.
 - `tri --export <profil> <image>... [--to <dossier>] [--libraw|--embedded] [--passthrough] [--dry-run]` :
   `--to` remplace le dossier du profil (même règle) ; `--libraw` force le rendu LibRaw,
   `--embedded` exporte le JPEG boîtier.

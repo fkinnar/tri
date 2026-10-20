@@ -98,6 +98,7 @@ pub fn navigate(
         | Action::FileDeleteStack
         | Action::FileCopyStack
         | Action::FileExport
+        | Action::ExportReport
         | Action::Crop
         | Action::CropMove(_)
         | Action::CropSize(_)

@@ -580,6 +580,9 @@ pub struct ExportSettings {
     pub sharpening: Sharpening,
     /// Profils (`[export.profiles.<id>]`).
     pub profiles: Profiles,
+    /// Exports gardés dans le rapport d'export (les plus récents ; 0 : sans limite), voir
+    /// [`crate::export_log`].
+    pub report_max: usize,
 }
 
 impl Default for ExportSettings {
@@ -590,6 +593,7 @@ impl Default for ExportSettings {
             camera_suffix: "-camera".into(),
             sharpening: Sharpening::default(),
             profiles: Profiles::default(),
+            report_max: 500,
         }
     }
 }

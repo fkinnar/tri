@@ -100,9 +100,9 @@ darktable = "auto"
 high_quality = false
 
 [export]
-# Export d'images développées par darktable (Ctrl+E), avec un profil par usage. Rien
+# Export d'images développées par darktable (Ctrl+E), avec un préréglage par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
-# Profil proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
+# Préréglage proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
 # développée (JPEG boîtier, JPEG…) ; dans la séance, le dernier choisi l'emporte. Inconnu
 # ou qui ne s'applique pas : le premier de la liste.
 default_raw = "edit"
@@ -111,13 +111,16 @@ default_flat = "asis"
 # LibRaw, le JPEG développé par l'appareil) ; le JPEG prend ce suffixe :
 # DSCF0001.jpg (rendu du RAW) et DSCF0001-camera.jpg (JPEG de l'appareil).
 camera_suffix = "-camera"
+# Rapport d'export (Ctrl+Maj+E) : exports terminés gardés d'une session à l'autre, les
+# plus récents (0 : sans limite) ; effaçable depuis le rapport.
+report_max = 500
 
 [export.sharpening]
-# Accentuation de sortie (clé sharpen des profils), appliquée après la réduction, comme
+# Accentuation de sortie (clé sharpen des préréglages), appliquée après la réduction, comme
 # Lightroom : masque flou de rayon radius (pixels de l'image écrite), de force amount
 # (1,0 : toute la différence avec l'image floue), au-delà d'un seuil threshold (niveaux
 # sur 8 bits : en dessous, rien, pour ne pas accentuer le bruit). Avec darktable, un
-# profil qui accentue passe par un TIFF 16 bits temporaire (une seule compression).
+# préréglage qui accentue passe par un TIFF 16 bits temporaire (une seule compression).
 screen_radius = 0.6
 screen_amount = 0.6
 screen_threshold = 2.0
@@ -125,8 +128,8 @@ print_radius = 1.2
 print_amount = 0.9
 print_threshold = 3.0
 
-# Profils d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
-# vient du profil fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
+# Préréglages d'export : [export.profiles.<identifiant>], autant que voulu. Une clé absente
+# vient du préréglage fourni de même identifiant (edit, asis, web), sinon d'un JPEG sRGB.
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
 # format : "jpeg", "tiff" ou "png" ; bits : 8 (JPEG), 8 ou 16 (PNG), 8, 16 ou 32 (TIFF) ;
 # quality : qualité JPEG (1 à 100) ;
@@ -145,7 +148,7 @@ print_threshold = 3.0
 #   un rendu darktable ou LibRaw, ni hors JPEG ;
 # applies_to : "all" (partout), "raw" (rendu d'un RAW : darktable, LibRaw) ou "flat" (image
 #   déjà développée : JPEG boîtier, JPEG, TIFF…) ; la boîte d'export ne propose que les
-#   profils qui conviennent ;
+#   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
 #   dans [export.sharpening] ; une copie sans recompression n'est pas accentuée.
 [export.profiles.edit]
@@ -200,7 +203,7 @@ sharpen = "screen"
 # Une clé absente vient du préréglage fourni de même identifiant (story, post).
 # name : nom de la version créée (vide : nom fourni traduit, sinon l'identifiant) ;
 # ratio : "free", "original", ou "l:h" dans l'orientation voulue ("9:16" : portrait) ;
-# profile : profil d'export proposé (identifiant), "" : aucun.
+# profile : préréglage d'export proposé (identifiant), "" : aucun.
 [versions.presets.story]
 # Story (Instagram…) : 9:16, pour le web.
 name = ""

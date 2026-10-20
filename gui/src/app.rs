@@ -216,6 +216,17 @@ pub struct TriApp {
     export_choice: [Option<String>; 2],
     /// Export en cours (darktable, en fond), suivi dans la barre d'état.
     export_job: Option<crate::export::Job>,
+    /// Journal des exports terminés (rapport d'export, `Ctrl+Maj+E`), gardé dans le dossier
+    /// de données ([`tri::export_log`]).
+    export_log: Vec<tri::export_log::Entry>,
+    /// Rapport d'export ouvert.
+    export_report: bool,
+    /// Image (passe d'egui) où il s'est ouvert : le clic du bouton de la barre d'état qui
+    /// l'ouvre tombe sur son fond dans la même image, et ne doit pas le refermer.
+    export_report_since: u64,
+    /// Bilan du dernier export dans la barre d'état : tant qu'il y est, un bouton ouvre le
+    /// rapport.
+    export_notice: Option<String>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
     files: Vec<MediaFile>,
@@ -520,6 +531,13 @@ impl TriApp {
             versions: HashMap::new(),
             export_choice: [None, None],
             export_job: None,
+            export_log: data
+                .as_deref()
+                .map(tri::export_log::read)
+                .unwrap_or_default(),
+            export_report: false,
+            export_report_since: 0,
+            export_notice: None,
             file_error: None,
             selection: Default::default(),
             scores: HashMap::new(),
@@ -1740,6 +1758,13 @@ impl TriApp {
                 }
                 continue;
             }
+            // Rapport d'export : Échap ou son raccourci le ferment.
+            if self.export_report {
+                if matches!(action, Action::Back | Action::ExportReport) {
+                    self.export_report = false;
+                }
+                continue;
+            }
             // Historique : annuler / rétablir pas à pas restent possibles, Échap ferme.
             if self.history_open {
                 match action {
@@ -1877,6 +1902,10 @@ impl TriApp {
                 self.after_history(result.map(|a| vec![a]).map_err(Some));
             }
             Action::History => self.history_open = !self.history_open,
+            Action::ExportReport => {
+                self.export_report = !self.export_report;
+                self.export_report_since = ctx.cumulative_pass_nr();
+            }
             Action::FocusLeft | Action::FocusRight | Action::FocusNext => self.move_focus(action),
             Action::FolderUp => self.tree_cursor(|t| t.move_cursor(-1)),
             Action::FolderDown => self.tree_cursor(|t| t.move_cursor(1)),
@@ -4431,6 +4460,16 @@ impl TriApp {
             }
             if let Some((text, error)) = &self.notice {
                 ui.separator();
+                // Bilan d'un export : le rapport, à un clic (ou Ctrl+Maj+E) ; avant le texte,
+                // qu'un long chemin ne le pousse pas hors de la fenêtre.
+                if self.export_notice.as_ref() == Some(text)
+                    && ui
+                        .small_button(t!("export-report-open"))
+                        .on_hover_text(self.action_tip(Action::ExportReport))
+                        .clicked()
+                {
+                    clicked = Some(StatusClick::Action(Action::ExportReport));
+                }
                 if *error {
                     ui.colored_label(self.gui.colors.error, text);
                 } else {
@@ -5061,6 +5100,19 @@ impl TriApp {
             return;
         };
         let dest = crate::files::tilde(&job.dest);
+        // Au rapport d'export, gardé d'une session à l'autre.
+        let entry = job.entry(&result);
+        let max = self.settings.export.report_max;
+        if let Some(data) = &self.data_dir
+            && let Err(e) = tri::export_log::append(data, &entry, max)
+        {
+            self.file_error = Some(e.to_string());
+        }
+        self.export_log.push(entry);
+        if max > 0 && self.export_log.len() > max {
+            let extra = self.export_log.len() - max;
+            self.export_log.drain(..extra);
+        }
         self.notice = Some(match result {
             Ok(report) if report.failed == 0 => {
                 let mut text = t!("export-done", n = report.written.len(), dest = dest);
@@ -5081,6 +5133,7 @@ impl TriApp {
             Err(tri::develop::DevelopError::Cancelled) => (t!("export-cancelled"), false),
             Err(e) => (e.to_string(), true),
         });
+        self.export_notice = self.notice.as_ref().map(|(text, _)| text.clone());
         self.export_job = None;
     }
 
@@ -6287,6 +6340,37 @@ impl TriApp {
         }
     }
 
+    /// Rapport d'export (`Ctrl+Maj+E`) : voir [`crate::export::report_dialog`].
+    fn export_report_dialog(&mut self, ctx: &egui::Context) {
+        if !self.export_report {
+            return;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        match crate::export::report_dialog(ctx, &self.export_log, now) {
+            Some(crate::export::ReportAction::Reveal(file)) => {
+                if let Err(e) = tri::files::reveal(&file) {
+                    self.file_error = Some(e.to_string());
+                }
+            }
+            Some(crate::export::ReportAction::Clear) => {
+                self.export_log.clear();
+                if let Some(data) = &self.data_dir
+                    && let Err(e) = tri::export_log::clear(data)
+                {
+                    self.file_error = Some(e.to_string());
+                }
+            }
+            Some(crate::export::ReportAction::Close)
+                if ctx.cumulative_pass_nr() > self.export_report_since =>
+            {
+                self.export_report = false;
+            }
+            Some(crate::export::ReportAction::Close) | None => {}
+        }
+    }
+
     /// Fenêtre de regroupement (`Ctrl+G`, comme Capture One) : regrouper ou non, le seuil
     /// (la grille derrière suit en direct), l'écart de temps maximal ; le seuil est retenu
     /// pour le dossier à la fermeture.
@@ -6699,6 +6783,7 @@ impl eframe::App for TriApp {
         }
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
+        self.export_report_dialog(&ctx);
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
         self.file_dialog(&ctx);
@@ -9785,6 +9870,38 @@ mod tests {
         let notice = h.state().notice.clone().unwrap();
         assert!(notice.0.contains("1 image exportée"), "{notice:?}");
         assert!(dir.path().join("photos/export/img0.jpg").is_file());
+        // Rapport d'export : gardé dans le dossier de données, bouton à côté du bilan.
+        let data = h
+            .state()
+            .data_dir
+            .clone()
+            .expect("dossier de données des tests");
+        assert!(data.starts_with(dir.path()), "jamais les vraies données");
+        let log = tri::export_log::read(&data);
+        assert_eq!(log.len(), 1);
+        assert_eq!(log[0].written.len(), 1);
+        assert_eq!(h.state().export_log, log);
+        // Clic recommencé si le bouton a bougé (barre d'état : calculs de fond qui finissent).
+        run_until(&mut h, |app| app.progress.iter().all(|p| p.done >= p.total));
+        for _ in 0..5 {
+            h.get_by_label("Rapport d'export").click();
+            h.run_steps(2);
+            if h.state().export_report {
+                break;
+            }
+        }
+        assert!(h.state().export_report);
+        wait_for_label(&mut h, "Effacer la liste");
+        h.get_by_label("Effacer la liste").click();
+        h.run_steps(2);
+        assert!(h.state().export_log.is_empty());
+        assert!(tri::export_log::read(&data).is_empty(), "effacé du disque");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().export_report);
+        press(&mut h, Key::E, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(h.state().export_report, "Ctrl+Maj+E");
+        press(&mut h, Key::E, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(!h.state().export_report);
         // Rouverte : le profil choisi la dernière fois.
         press(&mut h, Key::E, Modifiers::CTRL);
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
@@ -9919,7 +10036,8 @@ mod tests {
         assert_eq!(crop.name, "Story");
         assert_eq!(crop.profile.as_deref(), Some("web"));
         // Enregistrer comme préréglage : écrit dans le fichier, identifiant libre.
-        h.get_by_label("Enregistrer comme préréglage").click();
+        h.get_by_label("Enregistrer comme préréglage de recadrage")
+            .click();
         h.run_steps(2);
         let text = std::fs::read_to_string(&config).unwrap();
         assert!(text.contains("[versions.presets.story-2]"), "{text}");

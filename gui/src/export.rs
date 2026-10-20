@@ -218,21 +218,29 @@ impl ExportDialog {
         }
     }
 
-    /// Affiche la boîte. Flèches haut / bas : profil ; Entrée : exporter.
+    /// Affiche la boîte. Flèches haut / bas sur la liste : préréglage ; Tab : contrôle
+    /// suivant ; Entrée : exporter.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome {
         let n = self.images.len();
         let id = destination_field_id();
-        // Flèches haut / bas : changent de profil même depuis le champ (Tab y complète le
-        // chemin).
-        let (up, down) = ctx.input_mut(|i| {
-            (
-                i.consume_key(Modifiers::NONE, Key::ArrowUp),
-                i.consume_key(Modifiers::NONE, Key::ArrowDown),
-            )
-        });
+        // Flèches haut / bas : changent de préréglage quand la liste a le clavier, et
+        // seulement là (retour du 20/10/2026 : depuis le dossier, elles changeaient le
+        // préréglage, et depuis la liste, elles passaient au dossier). Tab passe d'un
+        // contrôle à l'autre.
+        let on_combo = self.combo.is_some_and(|id| ctx.memory(|m| m.has_focus(id)));
+        let (up, down) = if on_combo {
+            ctx.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::NONE, Key::ArrowUp),
+                    i.consume_key(Modifiers::NONE, Key::ArrowDown),
+                )
+            })
+        } else {
+            (false, false)
+        };
         // Entrée sur la liste des profils : exporter (sans ouvrir la liste).
-        let enter_on_combo = self.combo.is_some_and(|id| ctx.memory(|m| m.has_focus(id)))
-            && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
+        let enter_on_combo =
+            on_combo && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
         let last = self.profiles.len().saturating_sub(1);
         if up {
             self.choice = self.choice.saturating_sub(1);
@@ -305,6 +313,17 @@ impl ExportDialog {
                     combo.request_focus();
                 }
                 self.combo = Some(combo.id);
+                // Les flèches restent à la liste : egui ne s'en sert pas pour déplacer le
+                // clavier vers le contrôle voisin.
+                ui.memory_mut(|m| {
+                    m.set_focus_lock_filter(
+                        combo.id,
+                        egui::EventFilter {
+                            vertical_arrows: true,
+                            ..Default::default()
+                        },
+                    );
+                });
                 // Le dossier suit le profil, tant qu'on ne l'a pas modifié.
                 if !self.edited
                     && let Some(p) = self.profiles.get(self.choice)
@@ -484,6 +503,8 @@ pub struct Job {
     pub total: usize,
     pub dest: PathBuf,
     pub profile: String,
+    /// Version exportée (recadrage), sinon l'image entière.
+    pub version: Option<String>,
     cancel: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<Report, DevelopError>>>,
 }
@@ -514,6 +535,7 @@ impl Job {
         let cancel = Arc::new(AtomicBool::new(false));
         let total = images.len();
         let name = profile_name(&profile);
+        let version = cut.as_ref().map(|c| c.name.clone());
         let handle = {
             let (done, cancel, ctx) = (done.clone(), cancel.clone(), ctx.clone());
             std::thread::spawn(move || {
@@ -541,8 +563,25 @@ impl Job {
             total,
             dest,
             profile: name,
+            version,
             cancel,
             handle: Some(handle),
+        }
+    }
+
+    /// L'export fini, pour le rapport d'export ([`tri::export_log`]).
+    pub fn entry(&self, result: &Result<Report, DevelopError>) -> tri::export_log::Entry {
+        let entry = tri::export_log::Entry::now(&self.profile, self.version.as_deref(), self.total);
+        match result {
+            Ok(report) => entry.with_report(report),
+            Err(DevelopError::Cancelled) => tri::export_log::Entry {
+                stopped: Some(tri::export_log::Stop::Cancelled),
+                ..entry
+            },
+            Err(e) => tri::export_log::Entry {
+                stopped: Some(tri::export_log::Stop::Failed(e.to_string())),
+                ..entry
+            },
         }
     }
 
@@ -563,6 +602,166 @@ impl Job {
                 .unwrap_or_else(|_| Err(DevelopError::Failed("export".into()))),
         )
     }
+}
+
+/// Ce que demande le rapport d'export.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReportAction {
+    /// Montrer ce fichier (et donc son dossier) dans le gestionnaire de fichiers.
+    Reveal(PathBuf),
+    /// Effacer le journal.
+    Clear,
+    /// Fermer le rapport.
+    Close,
+}
+
+/// « il y a 3 min » : âge d'un export, en secondes.
+fn ago(seconds: u64) -> String {
+    let n = |unit: u64| seconds / unit;
+    match seconds {
+        0..60 => t!("export-report-now"),
+        60..3_600 => t!("export-report-minutes", n = n(60)),
+        3_600..86_400 => t!("export-report-hours", n = n(3_600)),
+        86_400..2_592_000 => t!("export-report-days", n = n(86_400)),
+        2_592_000..31_536_000 => t!("export-report-months", n = n(2_592_000)),
+        _ => t!("export-report-years", n = n(31_536_000)),
+    }
+}
+
+/// Rapport d'export (`Ctrl+Maj+E`, idée de l'utilisateur du 20/10/2026) : les exports
+/// terminés, les plus récents en haut, dans une liste à hauteur limitée ; pour chacun, le
+/// préréglage, ce qui a été écrit, et ses dossiers (un clic les montre dans le
+/// gestionnaire de fichiers) ; les fichiers et les échecs se déplient. `now` : secondes
+/// depuis 1970.
+pub fn report_dialog(
+    ctx: &egui::Context,
+    entries: &[tri::export_log::Entry],
+    now: u64,
+) -> Option<ReportAction> {
+    let mut action = None;
+    let size = ctx.content_rect().size();
+    let at = ctx.content_rect().center() - egui::vec2(280.0, size.y * 0.3);
+    let modal = crate::app::modal_at("export_report", at)
+        .title(t!("export-report-title"))
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            ui.add_space(4.0);
+            if entries.is_empty() {
+                ui.weak(t!("export-report-empty"));
+            }
+            egui::ScrollArea::vertical()
+                .max_height(size.y * 0.55)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for (i, entry) in entries.iter().enumerate().rev() {
+                        if i + 1 < entries.len() {
+                            ui.separator();
+                        }
+                        if let Some(a) = report_entry(ui, i, entry, now) {
+                            action = Some(a);
+                        }
+                    }
+                });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.button(t!("close")).clicked() {
+                    action = Some(ReportAction::Close);
+                }
+                ui.weak(t!("or-escape"));
+                // Effacer la liste : petit balai à droite, loin de Fermer (retour du
+                // 20/10/2026).
+                if !entries.is_empty() {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+                        let label = t!("export-report-clear");
+                        let (rect, response) = crate::marks::icon_button(ui, size, &label, &label);
+                        let color = ui.style().interact(&response).fg_stroke.color;
+                        crate::marks::broom(ui.painter(), rect.shrink(size * 0.18), color);
+                        if response.clicked() {
+                            action = Some(ReportAction::Clear);
+                        }
+                    });
+                }
+            });
+        });
+    if modal.should_close() {
+        action = Some(ReportAction::Close);
+    }
+    action
+}
+
+/// Un export du rapport ; `i` : son rang (identifiants des parties dépliables).
+fn report_entry(
+    ui: &mut egui::Ui,
+    i: usize,
+    entry: &tri::export_log::Entry,
+    now: u64,
+) -> Option<ReportAction> {
+    let mut action = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.strong(&entry.preset);
+        if let Some(version) = &entry.version {
+            ui.label(t!("export-report-version", name = version.as_str()));
+        }
+        ui.weak(t!(
+            "export-report-summary",
+            written = entry.written.len(),
+            total = entry.total
+        ));
+        if entry.passthrough > 0 {
+            ui.weak(t!("export-report-passthrough", n = entry.passthrough));
+        }
+        ui.weak(ago(entry.age(now)));
+    });
+    match &entry.stopped {
+        Some(tri::export_log::Stop::Cancelled) => {
+            ui.weak(t!("export-cancelled"));
+        }
+        Some(tri::export_log::Stop::Failed(message)) => {
+            ui.colored_label(ui.visuals().error_fg_color, message);
+        }
+        None => {}
+    }
+    for (dir, files) in entry.folders() {
+        let first = files[0].clone();
+        let link = ui
+            .link(crate::files::tilde(&dir))
+            .on_hover_text(t!("export-report-reveal"));
+        if link.clicked() {
+            action = Some(ReportAction::Reveal(first));
+        }
+        egui::CollapsingHeader::new(t!("export-report-files", n = files.len()))
+            .id_salt(("export_report_files", i, &dir))
+            .show(ui, |ui| {
+                for file in files {
+                    let name = file
+                        .file_name()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    if ui
+                        .link(name)
+                        .on_hover_text(t!("export-report-reveal"))
+                        .clicked()
+                    {
+                        action = Some(ReportAction::Reveal(file.clone()));
+                    }
+                }
+            });
+    }
+    if !entry.errors.is_empty() {
+        let title = egui::RichText::new(t!("export-report-errors", n = entry.errors.len()))
+            .color(ui.visuals().error_fg_color);
+        egui::CollapsingHeader::new(title)
+            .id_salt(("export_report_errors", i))
+            .show(ui, |ui| {
+                for (image, error) in &entry.errors {
+                    let name = image
+                        .file_name()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    ui.label(format!("{name} : {error}"));
+                }
+            });
+    }
+    action
 }
 
 #[cfg(test)]
@@ -593,5 +792,53 @@ mod tests {
         };
         assert!(!dialog(Render::Darktable, &raw).lists_as_is());
         assert!(dialog(Render::Embedded, &raw).lists_as_is());
+    }
+
+    #[test]
+    fn arrows_change_the_preset_only_on_the_list() {
+        crate::i18n::ensure();
+        let images = [PathBuf::from("a/DSCF1.RAF")];
+        let settings = tri::export::ExportSettings::default();
+        let dialog = ExportDialog::new(&images, &settings, None, true, Render::LibRaw, Pos2::ZERO);
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(700.0, 500.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, d: &mut ExportDialog| {
+                    d.show(ui.ctx());
+                },
+                dialog,
+            );
+        h.run_steps(3);
+        let start = h.state().choice;
+        assert!(h.state().profiles.len() > 1, "au moins deux préréglages");
+        // Sur la liste : la flèche change de préréglage, la liste garde le clavier.
+        let key = if start == 0 {
+            Key::ArrowDown
+        } else {
+            Key::ArrowUp
+        };
+        h.key_press(key);
+        h.run_steps(2);
+        let moved = h.state().choice;
+        assert_ne!(moved, start);
+        let combo = h.state().combo;
+        assert_eq!(
+            h.ctx.memory(|m| m.focused()),
+            combo,
+            "clavier resté à la liste"
+        );
+        // Tab : le dossier ; les flèches n'y changent plus le préréglage.
+        h.key_press(Key::Tab);
+        h.run_steps(2);
+        assert_eq!(h.ctx.memory(|m| m.focused()), Some(destination_field_id()));
+        h.key_press(Key::ArrowUp);
+        h.key_press(Key::ArrowDown);
+        h.run_steps(2);
+        assert_eq!(
+            h.state().choice,
+            moved,
+            "préréglage inchangé depuis le dossier"
+        );
     }
 }

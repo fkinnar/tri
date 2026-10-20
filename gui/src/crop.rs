@@ -343,73 +343,12 @@ impl Crop {
         presets: &[(String, String)],
     ) -> Option<BarAction> {
         let mut action = None;
-        ui.horizontal_wrapped(|ui| {
-            ui.label(t!("crop-bar-title"));
-            if !presets.is_empty() {
-                let none = t!("crop-preset-none");
-                let current = self
-                    .preset
-                    .as_ref()
-                    .and_then(|id| presets.iter().find(|(p, _)| p == id))
-                    .map_or(none, |(_, name)| name.clone());
-                egui::ComboBox::from_id_salt("crop_preset")
-                    .selected_text(current)
-                    .show_ui(ui, |ui| {
-                        for (i, (id, name)) in presets.iter().enumerate() {
-                            let on = self.preset.as_deref() == Some(id.as_str());
-                            if ui.selectable_label(on, name).clicked() {
-                                action = Some(BarAction::Preset(i));
-                            }
-                        }
-                    })
-                    .response
-                    .on_hover_text(t!("crop-preset-tip"));
-                ui.separator();
+        // Enregistrer et Annuler à droite, à part (retour du 20/10/2026) ; le reste à gauche,
+        // dans la place qui reste.
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button(t!("cancel")).clicked() {
+                action = Some(BarAction::Cancel);
             }
-            for preset in Ratio::PRESETS {
-                let on = preset.same_shape(self.ratio);
-                // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
-                let shown = if on { self.ratio } else { preset };
-                if ui.selectable_label(on, ratio_name(shown)).clicked() {
-                    self.set_ratio(preset);
-                }
-            }
-            // Orientation : le libellé dit celle d'arrivée.
-            let portrait = self
-                .ratio
-                .value(self.aspect.unwrap_or(1.0))
-                .is_some_and(|r| r < 1.0);
-            let label = if portrait {
-                t!("crop-landscape")
-            } else {
-                t!("crop-portrait")
-            };
-            let can_turn = !matches!(self.ratio, Ratio::Free | Ratio::Fixed(1, 1));
-            if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
-                self.rotate();
-            }
-            ui.separator();
-            ui.label(t!("crop-name"));
-            let field = ui.add(egui::TextEdit::singleline(&mut self.name).desired_width(140.0));
-            if field.changed() {
-                self.name_edited = true;
-            }
-            ui.label(t!("crop-profile"));
-            let none = t!("crop-profile-none");
-            let current = self
-                .profile
-                .as_ref()
-                .and_then(|id| profiles.iter().find(|(p, _)| p == id))
-                .map_or(none.clone(), |(_, name)| name.clone());
-            egui::ComboBox::from_id_salt("crop_profile")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.profile, None, none);
-                    for (id, name) in profiles {
-                        ui.selectable_value(&mut self.profile, Some(id.clone()), name);
-                    }
-                });
-            ui.separator();
             let ok = !self.name.trim().is_empty();
             if ui
                 .add_enabled(ok, egui::Button::new(t!("crop-save")))
@@ -417,19 +356,121 @@ impl Crop {
             {
                 action = Some(BarAction::Save);
             }
-            if ui.button(t!("cancel")).clicked() {
-                action = Some(BarAction::Cancel);
-            }
-            if ui
-                .small_button(t!("crop-preset-save"))
-                .on_hover_text(t!("crop-preset-save-tip"))
-                .clicked()
-            {
-                action = Some(BarAction::SavePreset);
-            }
+            ui.add_space(ui.spacing().item_spacing.x * 4.0);
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.horizontal_wrapped(|ui| self.bar_left(ui, profiles, presets, &mut action));
+            });
         });
         self.fresh = false;
         action
+    }
+
+    /// Partie gauche de la barre : préréglages, rapports, orientation, nom et profil.
+    fn bar_left(
+        &mut self,
+        ui: &mut Ui,
+        profiles: &[(String, String)],
+        presets: &[(String, String)],
+        action: &mut Option<BarAction>,
+    ) {
+        ui.label(t!("crop-bar-title"));
+        if !presets.is_empty() {
+            let none = t!("crop-preset-none");
+            let current = self
+                .preset
+                .as_ref()
+                .and_then(|id| presets.iter().find(|(p, _)| p == id))
+                .map_or(none, |(_, name)| name.clone());
+            egui::ComboBox::from_id_salt("crop_preset")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    for (i, (id, name)) in presets.iter().enumerate() {
+                        let on = self.preset.as_deref() == Some(id.as_str());
+                        if ui.selectable_label(on, name).clicked() {
+                            *action = Some(BarAction::Preset(i));
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(t!("crop-preset-tip"));
+            // Enregistrer comme préréglage : petite disquette collée à la liste.
+            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            let (rect, response) = crate::marks::icon_button(
+                ui,
+                size,
+                &t!("crop-preset-save"),
+                &t!("crop-preset-save-tip"),
+            );
+            let color = ui.style().interact(&response).fg_stroke.color;
+            crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
+            if response.clicked() {
+                *action = Some(BarAction::SavePreset);
+            }
+            ui.separator();
+        }
+        for preset in Ratio::PRESETS {
+            let on = preset.same_shape(self.ratio);
+            // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
+            let shown = if on { self.ratio } else { preset };
+            if ui.selectable_label(on, ratio_name(shown)).clicked() {
+                self.set_ratio(preset);
+            }
+        }
+        // Orientation : le libellé dit celle d'arrivée.
+        let portrait = self
+            .ratio
+            .value(self.aspect.unwrap_or(1.0))
+            .is_some_and(|r| r < 1.0);
+        let label = if portrait {
+            t!("crop-landscape")
+        } else {
+            t!("crop-portrait")
+        };
+        let can_turn = !matches!(self.ratio, Ratio::Free | Ratio::Fixed(1, 1));
+        if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
+            self.rotate();
+        }
+        ui.separator();
+        // Chaque libellé reste avec son champ : à la ligne avant le libellé s'ils ne tiennent
+        // pas ensemble.
+        let name_width = 140.0;
+        keep_together(ui, &t!("crop-name"), name_width);
+        ui.label(t!("crop-name"));
+        let field = ui.add(egui::TextEdit::singleline(&mut self.name).desired_width(name_width));
+        if field.changed() {
+            self.name_edited = true;
+        }
+        keep_together(ui, &t!("crop-profile"), ui.spacing().combo_width);
+        ui.label(t!("crop-profile"));
+        let none = t!("crop-profile-none");
+        let current = self
+            .profile
+            .as_ref()
+            .and_then(|id| profiles.iter().find(|(p, _)| p == id))
+            .map_or(none.clone(), |(_, name)| name.clone());
+        egui::ComboBox::from_id_salt("crop_profile")
+            .selected_text(current)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.profile, None, none);
+                for (id, name) in profiles {
+                    ui.selectable_value(&mut self.profile, Some(id.clone()), name);
+                }
+            });
+    }
+}
+
+/// Dans une ligne qui passe à la ligne : passe à la suivante si le libellé `label` et un
+/// champ de largeur `width` qui le suit ne tiennent pas ensemble sur celle-ci.
+fn keep_together(ui: &mut Ui, label: &str, width: f32) {
+    let text = egui::WidgetText::from(label).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Extend),
+        f32::INFINITY,
+        egui::TextStyle::Body,
+    );
+    let need = text.size().x + width + 3.0 * ui.spacing().item_spacing.x;
+    if ui.available_size_before_wrap().x < need {
+        ui.end_row();
     }
 }
 

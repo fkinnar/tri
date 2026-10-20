@@ -461,6 +461,65 @@ pub fn crop_icon(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// Disquette (enregistrer) dans `rect` : contour au coin haut droit coupé, volet en
+/// haut, étiquette en bas.
+pub fn floppy(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let rect = Rect::from_center_size(rect.center(), vec2(s, s));
+    let stroke = Stroke::new((s * 0.11).max(1.2), color);
+    let (min, max) = (rect.min, rect.max);
+    let cut = s * 0.22;
+    painter.add(Shape::closed_line(
+        vec![
+            min,
+            pos2(max.x - cut, min.y),
+            pos2(max.x, min.y + cut),
+            max,
+            pos2(min.x, max.y),
+        ],
+        stroke,
+    ));
+    // Volet métallique, en haut.
+    painter.rect_filled(
+        Rect::from_min_max(
+            pos2(min.x + s * 0.25, min.y),
+            pos2(max.x - s * 0.32, min.y + s * 0.3),
+        ),
+        0.0,
+        color,
+    );
+    // Étiquette, en bas.
+    painter.rect_stroke(
+        Rect::from_min_max(
+            pos2(min.x + s * 0.2, min.y + s * 0.55),
+            pos2(max.x - s * 0.2, max.y),
+        ),
+        0.0,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+}
+
+/// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en
+/// éventail vers le bas à gauche.
+pub fn broom(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let o = rect.center() - vec2(s, s) / 2.0;
+    let p = |x: f32, y: f32| o + vec2(x * s, y * s);
+    let stroke = Stroke::new((s * 0.11).max(1.2), color);
+    painter.add(Shape::line_segment([p(0.95, 0.05), p(0.52, 0.48)], stroke));
+    // Ligature, perpendiculaire au manche.
+    painter.add(Shape::line_segment([p(0.36, 0.46), p(0.54, 0.64)], stroke));
+    // Brins : de la ligature vers une base plus large.
+    let thin = Stroke::new((s * 0.08).max(1.0), color);
+    for i in 0..5 {
+        let t = i as f32 / 4.0;
+        let from = p(0.38 + 0.14 * t, 0.48 + 0.14 * t);
+        let to = p(0.02 + 0.42 * t, 0.56 + 0.42 * t);
+        painter.add(Shape::line_segment([from, to], thin));
+    }
+}
+
 /// Flèche circulaire (actualiser) dans `rect` : arc de cercle ouvert en haut à droite,
 /// pointe de flèche au bout.
 pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {

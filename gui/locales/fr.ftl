@@ -64,6 +64,7 @@ action-core-file-reveal = { $os ->
 }
 action-core-file-edit = Ouvrir dans l'éditeur externe
 action-core-file-copy = Copier vers…
+action-core-file-export-report = Rapport d'export
 action-core-file-export = Exporter…
 action-core-view-crop = Recadrer (nouvelle version)
 action-core-view-version_next = Version suivante de l'image (original, puis chaque version)
@@ -193,15 +194,15 @@ crop-ratio-original = Original
 crop-portrait = Portrait
 crop-landscape = Paysage
 crop-name = Nom
-crop-profile = Profil
+crop-profile = Export
 crop-profile-none = Aucun
 crop-save = Enregistrer
 crop-saved = Version « { $name } » enregistrée
 crop-failed = Version non enregistrée : { $error }
 crop-preset-none = Préréglage
-crop-preset-tip = Préréglage : rapport, nom et profil d'export (p : suivant)
-crop-preset-save = Enregistrer comme préréglage
-crop-preset-save-tip = Rapport, nom et profil du cadre en cours, gardés dans les réglages
+crop-preset-tip = Préréglage de recadrage : rapport, nom et préréglage d'export (p : suivant)
+crop-preset-save = Enregistrer comme préréglage de recadrage
+crop-preset-save-tip = Enregistrer comme préréglage de recadrage : rapport, nom et export du cadre en cours, gardés dans les réglages
 crop-preset-saved = Préréglage « { $name } » enregistré
 preset-story = Story
 preset-post = Publication
@@ -348,14 +349,14 @@ export-contents-paired = { $n ->
     [one] 1 JPEG de l'appareil (paire, nom suffixé)
    *[other] { $n } JPEG de l'appareil (paires, noms suffixés)
 }
-export-profile = Profil d'export
-export-profile-tip = Flèches haut / bas : profil · Tab : dossier · Entrée : exporter
+export-profile = Préréglage d'export
+export-profile-tip = Flèches haut / bas : préréglage · Tab : dossier · Entrée : exporter
 export-destination = Dossier
 export-create = sera créé
 export-goes-to = Destination : { $dest }
 export-no-darktable = darktable absent : rendu de base par LibRaw.
 export-passthrough = Sans recompression
-export-passthrough-tip = JPEG d'origine copié tel quel, JPEG boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du profil) est réencodée.
+export-passthrough-tip = JPEG d'origine copié tel quel, JPEG boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-button = Exporter
 export-profile-edit = Retouche
 export-profile-asis = JPEG tel quel
@@ -379,6 +380,37 @@ export-partial = { $n } exportées, { $failed } en échec (illisibles par darkta
 export-cancelled = Export arrêté (les fichiers déjà écrits restent).
 export-progress = Export « { $profile } » { $done }/{ $total }
 export-cancel = Arrêter l'export
+export-report-title = Rapport d'export
+export-report-empty = Aucun export pour l'instant.
+export-report-version = version « { $name } »
+export-report-summary = { $total ->
+    [one] { $written } fichier sur 1 image
+   *[other] { $written } fichiers sur { $total } images
+}
+export-report-passthrough = (dont { $n } sans recompression)
+export-report-now = à l'instant
+export-report-minutes = il y a { $n } min
+export-report-hours = il y a { $n } h
+export-report-days = { $n ->
+    [one] il y a 1 jour
+   *[other] il y a { $n } jours
+}
+export-report-months = il y a { $n } mois
+export-report-years = { $n ->
+    [one] il y a 1 an
+   *[other] il y a { $n } ans
+}
+export-report-files = { $n ->
+    [one] 1 fichier
+   *[other] { $n } fichiers
+}
+export-report-errors = { $n ->
+    [one] 1 échec
+   *[other] { $n } échecs
+}
+export-report-reveal = Afficher dans le gestionnaire de fichiers
+export-report-clear = Effacer la liste
+export-report-open = Rapport d'export
 rename-failed = renommage impossible : { $error }
 transfer-copy-title = { $n ->
     [one] Copier { $n } image vers…
@@ -441,7 +473,7 @@ settings-keys-record = enregistrer…
 settings-keys-record-tip = Tape le raccourci (une séquence : touche après touche, Échap compris) ; il est ajouté après le délai des séquences sans nouvelle touche ([gui] key_sequence_timeout_ms).
 settings-keys-recording = tape le raccourci… { $keys }
 settings-keys-type-hint = ou taper : g g
-settings-keys-default = Revenir aux raccourcis du profil
+settings-keys-default = Revenir aux raccourcis du jeu choisi
 settings-default = valeur par défaut : { $value }
 settings-restart = au prochain lancement
 settings-section-restart = Réglages du moteur : appliqués au prochain lancement.
@@ -454,18 +486,23 @@ settings-section-xmp = Notes (XMP)
 settings-section-places = Emplacements
 settings-section-keys = Raccourcis
 settings-section-develop = Rendu darktable
-settings-section-export-profile-user = Profil d'export « { $id } »
+settings-section-export-profile-user = Préréglage d'export « { $id } »
 settings-section-versions-preset-user = Préréglage de recadrage « { $id } »
-settings-new-name = Nouveau :
-settings-new-from-this = Créer à partir de celui-ci
-settings-delete-this = Supprimer celui-ci
+settings-section-export-profiles = Préréglages d'export
+settings-section-versions-presets = Préréglages de recadrage
+settings-member-new = Nouveau…
+settings-member-name = Nom :
+settings-member-create = Créer
+settings-member-create-tip = Copie de celui montré, sous ce nom
+settings-member-delete = Supprimer
+settings-member-builtin = Fourni avec tri : modifiable, pas supprimable
 settings-section-versions-presets-story = Préréglage de recadrage « Story »
 settings-section-versions-presets-post = Préréglage de recadrage « Publication »
 settings-section-export = Export
 settings-section-export-sharpening = Accentuation de sortie
-settings-section-export-profiles-edit = Profil d'export « Retouche »
-settings-section-export-profiles-asis = Profil d'export « JPEG tel quel »
-settings-section-export-profiles-web = Profil d'export « Web »
+settings-section-export-profiles-edit = Préréglage d'export « Retouche »
+settings-section-export-profiles-asis = Préréglage d'export « JPEG tel quel »
+settings-section-export-profiles-web = Préréglage d'export « Web »
 settings-section-watch = Surveillance du dossier
 settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte

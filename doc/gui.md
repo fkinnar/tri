@@ -188,13 +188,17 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   diaphragme lance le rendu (quelques secondes, gardé en cache) ; ensuite seulement, `b`
   passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
 - **Exporter** (19/10/2026, voir `export.md`) : `Ctrl+E`, boîte (`gui/src/export.rs`) avec
-  les profils d'export (flèches haut / bas, résumé de chacun) et le dossier (complétion par
-  Tab) ; export en fond, barre de progression et bouton × dans la barre d'état, bilan à
+  les préréglages d'export (flèches haut / bas sur la liste seulement, résumé de chacun ;
+  Tab passe au dossier) et le dossier (complétion par Tab) ; export en fond, barre de progression et bouton × dans la barre d'état, bilan à
   la fin. Profil choisi retenu pendant la session. Image exportée : ce qu'on regarde
   (grille : darktable, sinon LibRaw ; plein écran : la source affichée), modifiable dans
   la boîte (`export::Render`). Boîte épurée (retour du 19/10/2026) : profils, dossier et
   destination réelle seulement ; les explications (flèches, règle du dossier, rendu) sont
   dans la doc.
+- **Rapport d'export** (20/10/2026, voir `export.md`) : `Ctrl+Maj+E` ou bouton
+  « Rapport d'export » avant le bilan dans la barre d'état ; `export::report_dialog`,
+  journal `TriApp::export_log` lu au lancement. Le clic du bouton qui l'ouvre tombe aussi
+  sur le fond de la boîte dans la même image : ignoré (`export_report_since`).
 - **Icône, barre du haut, mode concentration** (19/10/2026) : icône choisie parmi trois
   pistes (un « t » et l'étoile de la note, `scripts/make-icon.py`, images dans
   `gui/assets`) pour la fenêtre, le Dock et la barre des tâches ; **barre du haut** avec

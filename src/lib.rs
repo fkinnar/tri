@@ -27,6 +27,7 @@ pub mod cache;
 pub mod config_edit;
 pub mod develop;
 pub mod export;
+pub mod export_log;
 pub mod exposure;
 pub mod files;
 pub mod filter;

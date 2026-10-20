@@ -653,6 +653,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   JPEG de l'appareil suffixé (`[export] camera_suffix`, `-camera`), sauf en JPEG boîtier ;
   mélange = profils communs (`Kind`, `Batch`, `run`) ; ce qui part écrit sous le titre de
   la boîte ; clavier à la liste des profils ; clic dans la boîte qui ne traverse plus.
+- [x] **Rapport d'export** (idée de l'utilisateur, 20/10/2026) : `Ctrl+Maj+E` et bouton
+  à côté du bilan, exports gardés entre les sessions (`src/export_log.rs`,
+  `exports.jsonl`, `[export] report_max`), liens vers les dossiers, « Effacer la liste ».
+- **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »
+  dans l'interface (« profil » réservé aux profils couleur) ; noms du code et clés TOML
+  (`[export.profiles]`) inchangés. Fenêtre de réglages : une entrée par famille, liste
+  déroulante, « Nouveau… », « Supprimer ».
 - [x] **Créer un profil d'export depuis l'interface** (demandé le 19/10/2026, fait dans la
   nuit) : fenêtre de réglages, page d'un profil — « Créer à partir de celui-ci » (toutes
   les valeurs écrites), « Supprimer celui-ci » (profils de l'utilisateur seulement) ;

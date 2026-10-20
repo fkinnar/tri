@@ -140,7 +140,7 @@ cli-usage =
       tri --copy|--move <image>... --to <folder> [--dry-run]
       tri --reveal <image>
       tri --edit <image>...
-      tri --export <profile> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
+      tri --export <preset> <image>... [--to <folder>] [--libraw|--embedded] [--passthrough] [--dry-run]
     common option: --config FILE (settings; default: the system location)
 cli-unknown-convention = unknown convention: { $value } (darktable or adobe)
 cli-unknown-option = unknown option: { $option }
@@ -191,11 +191,11 @@ cli-delete-trash = trash:
 cli-delete-permanent = deleted:
 cli-delete-kept = kept (shared):
 cli-dry-run = (--dry-run: nothing was changed)
-cli-export-unknown-profile = unknown export profile: { $profile } (profiles: { $known })
+cli-export-unknown-profile = unknown export preset: { $profile } (presets: { $known })
 cli-export-plan = export “{ $profile }” ({ $summary }) to { $dest }:
 cli-export-libraw = darktable missing (or --libraw): basic LibRaw rendering
-cli-export-as-is-raw = the “{ $profile }” profile only applies to already developed images (applies_to): a RAW has no color space, its rendering needs one (another profile, or --embedded for its camera JPEG)
-cli-export-raw-only = the “{ $profile }” profile only applies to rendering a RAW (applies_to)
+cli-export-as-is-raw = the “{ $profile }” preset only applies to already developed images (applies_to): a RAW has no color space, its rendering needs one (another preset, or --embedded for its camera JPEG)
+cli-export-raw-only = the “{ $profile }” preset only applies to rendering a RAW (applies_to)
 cli-export-passthrough = of which { $n } without recompression
 cli-export-done = { $n ->
     [one] 1 file written
@@ -233,13 +233,13 @@ send-refused = { $name } refuses these files
 develop-none = no darktable development for this image
 develop-unavailable = darktable not found ([develop] darktable setting)
 develop-failed = darktable: { $error }
-export-bad-bits = export profile “{ $profile }”: { $bits } bits not possible in { $format }
-export-bad-quality = export profile “{ $profile }”: quality { $quality } outside 1 to 100
-export-bad-color = export profile “{ $profile }”: unknown color space “{ $value }”
-export-bad-intent = export profile “{ $profile }”: unknown rendering intent “{ $value }”
-export-needs-16-bits = export profile “{ $profile }”: “{ $color }” needs 16 bits or more (gradients break up in 8 bits), so 16-bit TIFF or PNG
-export-libraw-color = export profile “{ $profile }”: the “{ $color }” color space needs darktable (without darktable: sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
-export-libraw-bits = export profile “{ $profile }”: 32-bit TIFF needs darktable
+export-bad-bits = export preset “{ $profile }”: { $bits } bits not possible in { $format }
+export-bad-quality = export preset “{ $profile }”: quality { $quality } outside 1 to 100
+export-bad-color = export preset “{ $profile }”: unknown color space “{ $value }”
+export-bad-intent = export preset “{ $profile }”: unknown rendering intent “{ $value }”
+export-needs-16-bits = export preset “{ $profile }”: “{ $color }” needs 16 bits or more (gradients break up in 8 bits), so 16-bit TIFF or PNG
+export-libraw-color = export preset “{ $profile }”: the “{ $color }” color space needs darktable (without darktable: sRGB, Adobe RGB, ProPhoto, Rec709, Rec2020)
+export-libraw-bits = export preset “{ $profile }”: 32-bit TIFF needs darktable
 preset-bad-ratio = preset “{ $preset }”: unknown ratio “{ $value }” (free, original, or w:h such as 9:16)
 export-bad-icc = unreadable image color profile: no conversion possible (“JPEG as is” keeps it as it is)
 export-version-empty = darktable rendered nothing for this version
