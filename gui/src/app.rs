@@ -7305,6 +7305,7 @@ mod tests {
         // Ctrl+H : la liste ; « État au lancement » défait tout.
         press(&mut h, Key::H, Modifiers::CTRL);
         assert!(h.state().history_open);
+        wait_for_label(&mut h, "État au lancement");
         h.get_by_label("État au lancement").click();
         h.run_steps(3);
         assert_eq!(h.state().history.position(), 0);
@@ -7313,6 +7314,7 @@ mod tests {
         assert_eq!(h.state().files.len(), 3, "dossier relu");
         // Le pas le plus récent : tout refait.
         let label = h.state().history.entries()[1].label.clone();
+        wait_for_label(&mut h, &label);
         h.get_by_label(&label).click();
         h.run_steps(3);
         assert_eq!(h.state().history.position(), 2);
@@ -9168,6 +9170,17 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(60);
         while !done(h.state()) {
             assert!(Instant::now() < deadline, "délai dépassé");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// Attend qu'un élément de libellé `label` soit affiché (une fenêtre egui peut demander
+    /// une image de plus pour apparaître, plus sur une machine d'intégration continue lente).
+    fn wait_for_label(h: &mut Harness<'_, TriApp>, label: &str) {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.query_by_label(label).is_none() {
+            assert!(Instant::now() < deadline, "« {label} » jamais affiché");
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
