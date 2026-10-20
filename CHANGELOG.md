@@ -13,6 +13,13 @@
 - **Flou** : curseur de sévérité dans la barre des filtres (au centre les réglages, à
   droite plus strict, à gauche plus souple), en direct, retenu par dossier ; le panneau
   des métadonnées donne aussi le rapport à la pile.
+- **Plein écran** : résolution de ce qu'on regarde (une version : son cadre, réduit par
+  son préréglage d'export).
+- **Réglages** : le préréglage d'export d'un préréglage de recadrage se choisit dans une
+  liste (plus de faute de frappe possible).
+- **Barre des filtres** : deux interrupteurs à icône, RAW et JPEG, à la place de « Tout /
+  RAW / Plates » ; curseur du flou montré seulement avec un filtre sur la netteté, de la
+  largeur de celui des piles.
 - **Sous-dossiers** : case du panneau des dossiers, leurs images dans la grille aussi
   (3 niveaux par défaut), choix gardé.
 - **Copier / déplacer vers…** : titre sans verbe et bouton « Valider » ; destinations

@@ -667,8 +667,11 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   **sévérité du flou** (centre = réglages, droite plus strict, gauche plus souple ; idée
   de l'utilisateur : même logique à venir pour le curseur des piles, inversé, centre
   calculé d'après le dossier, à mesurer sur ses séances). **À faire un jour** : fusion
-  d'un dossier dans un dossier du même nom ; mot plus clair que « Plates » (retour d'un
-  testeur).
+  d'un dossier dans un dossier du même nom. « Plates » remplacé (retour d'un testeur) :
+  interrupteurs à icône RAW et JPG dans la barre des filtres (21/10/2026). Résolution en
+  plein écran (version : cadre et préréglage d'export) ; **à faire** : vraie résolution
+  du développé, en lisant le recadrage darktable (module `crop`, `darktable:history`) et
+  les modules qui changent la taille (redressement, perspective).
 - **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »
   dans l'interface (« profil » réservé aux profils couleur) ; noms du code et clés TOML
   (`[export.profiles]`) inchangés. Fenêtre de réglages : une entrée par famille, liste

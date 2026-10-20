@@ -420,8 +420,8 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
-            stack_slider: 110.0,
-            blur_slider: 80.0,
+            stack_slider: 90.0,
+            blur_slider: 90.0,
             stacks: false,
             search_width: 200.0,
         }

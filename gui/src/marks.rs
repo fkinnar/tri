@@ -500,6 +500,50 @@ pub fn floppy(painter: &Painter, rect: Rect, color: Color32) {
     );
 }
 
+/// Icône de type de fichier dans `rect` (plus haut que large) : une page au coin plié et,
+/// en travers du bas, un bandeau plein où `label` (« RAW », « JPG ») s'écrit en creux,
+/// couleur `back` (filtre par type, demandé le 21/10/2026 : des icônes plutôt que du
+/// texte).
+pub fn file_type(painter: &Painter, rect: Rect, label: &str, color: Color32, back: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let stroke = Stroke::new((h * 0.07).max(1.0), color);
+    // Page : plus étroite que le bandeau, coin haut droit plié.
+    let (left, right) = (rect.min.x + w * 0.16, rect.max.x - w * 0.16);
+    let (top, bottom) = (rect.min.y, rect.max.y);
+    let fold = (right - left) * 0.32;
+    painter.add(Shape::closed_line(
+        vec![
+            pos2(left, top),
+            pos2(right - fold, top),
+            pos2(right, top + fold),
+            pos2(right, bottom),
+            pos2(left, bottom),
+        ],
+        stroke,
+    ));
+    painter.line_segment(
+        [pos2(right - fold, top), pos2(right - fold, top + fold)],
+        stroke,
+    );
+    painter.line_segment(
+        [pos2(right - fold, top + fold), pos2(right, top + fold)],
+        stroke,
+    );
+    // Bandeau plein, débordant de la page, et le type en creux.
+    let band = Rect::from_min_max(
+        pos2(rect.min.x, top + h * 0.36),
+        pos2(rect.max.x, top + h * 0.9),
+    );
+    painter.rect_filled(band, h * 0.06, color);
+    painter.text(
+        band.center(),
+        egui::Align2::CENTER_CENTER,
+        label,
+        egui::FontId::proportional(band.height() * 0.9),
+        back,
+    );
+}
+
 /// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en
 /// éventail vers le bas à gauche.
 pub fn broom(painter: &Painter, rect: Rect, color: Color32) {

@@ -3396,6 +3396,68 @@ impl TriApp {
         (size.y > 0.0).then(|| f64::from(size.x / size.y))
     }
 
+    /// Résolution de `file` telle qu'on la regarde (pixels, orientation appliquée) : celle
+    /// du 100 % de la source affichée (le 1:1 s'il est chargé ; sinon les dimensions lues
+    /// dans les métadonnées pour un rendu RAW ou une image plate, celle du dernier 1:1 de
+    /// JPEG boîtier vu) ; pour une `version`, son cadre, ramené au côté long de son
+    /// préréglage d'export s'il en réduit la taille. Développé : aucune pour l'instant.
+    fn shown_resolution(
+        &mut self,
+        ctx: &egui::Context,
+        file: &MediaFile,
+        version: Option<&tri::versions::Version>,
+    ) -> Option<(u32, u32)> {
+        let source = self.source_for(file);
+        // Développé : darktable rend à la taille de l'aperçu, recadrage de darktable
+        // compris ; sa vraie résolution demande de lire ce recadrage dans le sidecar (à
+        // faire). Rien plutôt qu'une taille fausse.
+        if source == Source::Developed {
+            return None;
+        }
+        let level = view::zoom_level(file.kind, source);
+        let loaded = |app: &mut Self, level| {
+            app.big
+                .get(&(file.path.clone(), level))
+                .map(|b| b.original)
+                .filter(|o| o.x > 0.0 && o.y > 0.0)
+        };
+        let metadata = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
+            .get(file)
+            .and_then(|m| m.as_ref().ok())
+            .and_then(|m| m.size)
+            .map(|(w, h)| vec2(w as f32, h as f32));
+        let native = loaded(self, level).or_else(|| match (file.kind, source) {
+            // JPEG boîtier : la taille d'un 1:1 déjà vu (même boîtier, le plus souvent),
+            // au rapport de l'image.
+            (MediaKind::Raw, Source::Embedded) => {
+                let aspect = metadata.map(|m| m.x / m.y)?;
+                self.last_zoom_size
+                    .get(&Level::EmbeddedFull)
+                    .map(|&last| view::estimate_zoom_size(last, aspect))
+            }
+            _ => metadata,
+        })?;
+        let (mut w, mut h) = (native.x as f64, native.y as f64);
+        if let Some(v) = version {
+            w *= v.crop.w;
+            h *= v.crop.h;
+            let side = v
+                .profile
+                .as_deref()
+                .and_then(|id| self.settings.export.profiles.get(id))
+                .map_or(0, |p| p.max_side);
+            let long = w.max(h);
+            if side > 0 && long > f64::from(side) {
+                let k = f64::from(side) / long;
+                w *= k;
+                h *= k;
+            }
+        }
+        Some((w.round() as u32, h.round() as u32))
+    }
+
     /// Version montrée en plein écran (image et version), s'il y en a une.
     fn shown_version(&self) -> Option<(PathBuf, tri::versions::Version)> {
         if self.mode != Mode::View {
@@ -4364,6 +4426,17 @@ impl TriApp {
         {
             info.push_str(" · ");
             info.push_str(&name);
+        }
+        // Résolution de ce qu'on regarde (demandé le 21/10/2026) : celle de l'image à
+        // 100 % ; une version, son cadre, réduit si son préréglage d'export le réduit.
+        let version = shown_crop.and(
+            self.version_shown
+                .as_ref()
+                .and_then(|(p, i)| self.versions.get(p).and_then(|v| v.list.get(*i)))
+                .cloned(),
+        );
+        if let Some((w, h)) = self.shown_resolution(&ctx, &file, version.as_ref()) {
+            info.push_str(&t!("view-info-resolution", width = w, height = h));
         }
         // Mode RAW, mais faute de mieux c'est encore le JPEG qui est affiché : le dire.
         let raw_pending = self.source_for(&self.files[index]) == Source::Raw
@@ -5662,23 +5735,62 @@ impl TriApp {
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
         // de portable, la barre débordait).
         ui.horizontal_wrapped(|ui| {
-            let type_tip = self.action_tip(Action::FilterCycle);
-            for (kind, label) in [
-                (KindFilter::All, t!("filter-bar-all")),
-                (KindFilter::RawOnly, "RAW".to_string()),
-                (KindFilter::FlatOnly, t!("filter-bar-flat")),
+            // Deux interrupteurs, RAW et JPEG (retour du 21/10/2026, à la place de « Tout »,
+            // « RAW », « Plates ») : allumé, ce type est montré ; un des deux reste allumé.
+            let (raw, jpeg) = match self.filter {
+                KindFilter::All => (true, true),
+                KindFilter::RawOnly => (true, false),
+                KindFilter::FlatOnly => (false, true),
+            };
+            let height = self.gui.grid.marks + 10.0;
+            for (is_raw, on, label, tip) in [
+                (true, raw, "RAW", t!("filter-bar-raw-tip")),
+                (false, jpeg, "JPG", t!("filter-bar-flat-tip")),
             ] {
-                if ui
-                    .selectable_label(self.filter == kind, label)
-                    .on_hover_text(&type_tip)
-                    .clicked()
-                {
-                    // Le type tourne en boucle : autant de crans que nécessaire.
-                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
-                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
-                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
-                    for _ in 0..(to + 3 - from) % 3 {
-                        clicked.push(Action::FilterCycle);
+                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(height * 1.3, height), Sense::click());
+                let name = if is_raw { "RAW" } else { "JPEG" };
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::accesskit::Role::Button, true, on, name)
+                });
+                let response = response
+                    .on_hover_text(tip)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if on {
+                    ui.painter()
+                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
+                } else if response.hovered() {
+                    let fill = ui.visuals().widgets.hovered.weak_bg_fill;
+                    ui.painter().rect_filled(rect.expand(2.0), 4.0, fill);
+                }
+                let (color, back) = if on {
+                    (
+                        ui.visuals().strong_text_color(),
+                        ui.visuals().selection.bg_fill,
+                    )
+                } else {
+                    (ui.visuals().weak_text_color(), ui.visuals().panel_fill)
+                };
+                marks::file_type(ui.painter(), rect.shrink(1.0), label, color, back);
+                if response.clicked() {
+                    let (raw, jpeg) = if is_raw { (!raw, jpeg) } else { (raw, !jpeg) };
+                    let kind = match (raw, jpeg) {
+                        (true, true) => Some(KindFilter::All),
+                        (true, false) => Some(KindFilter::RawOnly),
+                        (false, true) => Some(KindFilter::FlatOnly),
+                        // Les deux éteints : rien à montrer, refusé.
+                        (false, false) => None,
+                    };
+                    if let Some(kind) = kind {
+                        // Le type tourne en boucle (même action que le clavier) : autant de
+                        // crans que nécessaire.
+                        let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
+                        let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
+                        let to = order.iter().position(|&k| k == kind).unwrap_or(0);
+                        for _ in 0..(to + 3 - from) % 3 {
+                            clicked.push(Action::FilterCycle);
+                        }
                     }
                 }
             }
@@ -5742,7 +5854,10 @@ impl TriApp {
                     clicked.push(action);
                 }
             }
-            self.blur_slider(ui);
+            // Seulement avec un filtre sur la netteté, comme celui des piles avec les piles.
+            if self.blur_rule.is_some() {
+                self.blur_slider(ui);
+            }
             ui.separator();
             for color in Color::ALL {
                 let tip = self.action_tip(Action::FilterColor(color));
@@ -8362,6 +8477,42 @@ mod tests {
     }
 
     #[test]
+    fn the_full_screen_view_gives_the_resolution_of_what_is_shown() {
+        let (mut h, _dir) = harness_images(vec![("a.png", checkerboard(4, 0))]);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let file = h.state().files[0].clone();
+        let ctx = h.ctx.clone();
+        let mut size = None;
+        for _ in 0..500 {
+            size = h.state_mut().shown_resolution(&ctx, &file, None);
+            if size.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            h.run_steps(1);
+        }
+        assert_eq!(size, Some((240, 160)));
+        // Une version : son cadre ; son préréglage d'export le réduit au besoin.
+        let mut version = tri::versions::Version {
+            name: "Moitié".into(),
+            crop: [0.0, 0.0, 0.5, 1.0].into(),
+            ratio: tri::versions::Ratio::Free,
+            source: tri::versions::Source::Embedded,
+            profile: None,
+        };
+        let shown = |h: &mut Harness<'_, TriApp>, v: &tri::versions::Version| {
+            h.state_mut().shown_resolution(&ctx, &file, Some(v))
+        };
+        assert_eq!(shown(&mut h, &version), Some((120, 160)));
+        let mut small = tri::export::Profile::defaults()[0].clone();
+        small.id = "petit".into();
+        small.max_side = 80;
+        h.state_mut().settings.export.profiles.0.push(small);
+        version.profile = Some("petit".into());
+        assert_eq!(shown(&mut h, &version), Some((60, 80)));
+    }
+
+    #[test]
     fn m_toggles_the_focus_point() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -8782,16 +8933,28 @@ mod tests {
         press(&mut h, Key::F, Modifiers::SHIFT);
         assert!(h.query_by_label("Effacer").is_none());
         press(&mut h, Key::F, Modifiers::SHIFT);
-        h.get_by_label("RAW").click();
+        // Deux interrupteurs : JPEG éteint, les RAW seuls ; rallumé, tout ; RAW éteint,
+        // les JPEG seuls ; le dernier allumé ne s'éteint pas.
+        h.get_by_label("JPEG").click();
         h.run_steps(3);
         assert_eq!(
             h.state().filter,
             KindFilter::RawOnly,
             "clic : même action que le clavier"
         );
-        h.get_by_label("Plates").click();
+        h.get_by_label("JPEG").click();
+        h.run_steps(3);
+        assert_eq!(h.state().filter, KindFilter::All);
+        h.get_by_label("RAW").click();
         h.run_steps(3);
         assert_eq!(h.state().filter, KindFilter::FlatOnly);
+        h.get_by_label("JPEG").click();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().filter,
+            KindFilter::FlatOnly,
+            "un des deux reste allumé"
+        );
         h.get_by_label("Effacer").click();
         h.run_steps(3);
         assert_eq!(h.state().filter, KindFilter::All);

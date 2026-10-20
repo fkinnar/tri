@@ -169,6 +169,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   = masquer les rejetées, croix rouge = rejetées seulement ; goutte d'eau barrée =
   masquer les floues, goutte = floues seulement, `[gui.colors] blur_drop` ; couleurs),
   compteur « 26/26 » ; le libellé complet et le raccourci de chaque bouton au survol.
+  Type de fichier (21/10/2026, retour d'un testeur : « Plates » n'était pas clair) : deux
+  **interrupteurs à icône**, RAW et JPG (JPEG, TIFF, PNG, HEIC…), à la place de « Tout /
+  RAW / Plates » ; allumé, le type est montré, l'un des deux reste allumé
+  (`marks::file_type`). Curseur de sévérité du flou montré seulement avec un filtre sur
+  la netteté, comme celui des piles avec les piles ; même largeur (90 points).
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
@@ -191,6 +196,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Développé dans darktable** (19/10/2026, voir `develop.md`) : `Maj+B` ou le bouton
   diaphragme lance le rendu (quelques secondes, gardé en cache) ; ensuite seulement, `b`
   passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
+  **Résolution** dans la ligne d'information (21/10/2026, `TriApp::shown_resolution`) :
+  celle de l'image à 100 % dans la source affichée (1:1 chargé, sinon dimensions des
+  métadonnées, ou dernier 1:1 de JPEG boîtier vu) ; pour une version, son cadre, réduit au
+  côté long de son préréglage d'export. Rien pour le développé : darktable rend à la
+  taille de l'aperçu, son recadrage compris ; la vraie taille demandera de lire ce
+  recadrage dans le sidecar (à faire).
   Le choix « développé » reste d'une image à l'autre, mais une image **sans
   développement** se montre dans la source d'avant (boîtier ou RAW), avec son 1:1 ;
   « pas encore développé (Maj+B) » le dit (`TriApp::source_for`, retour du 20/10/2026 :
@@ -880,7 +891,7 @@ colonne, noir dans la première), couleurs du masque, nombres à la française.
 
 Filtres (17/10/2026) : `f Maj+2`, `f 0`, `f u` (deux fois : retiré), `f 9`, `f °`,
 `f Échap` ; rejeter sous « sans les rejetées » sélectionne l'image suivante ; barre
-masquée / affichée par Maj+F, clics sur RAW, Plates, Effacer.
+masquée / affichée par Maj+F, clics sur les interrupteurs JPEG et RAW, Effacer.
 
 Notation (17/10/2026) : Maj+3, Maj+X, 8 puis « ° » (événement `Text`) écrivent le sidecar
 de l'image sélectionnée (relu du disque : 3 étoiles, rejetée, violet seul), l'image

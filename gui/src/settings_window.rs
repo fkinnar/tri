@@ -1081,6 +1081,47 @@ impl SettingsWindow {
                     }
                     widget = Some(r);
                 }
+                // Préréglage d'export d'un préréglage de recadrage : la liste des
+                // préréglages d'export (retour du 21/10/2026 : un champ texte laissait
+                // passer une faute de frappe), « aucun » en tête.
+                Value::Str(s)
+                    if section.starts_with("versions.presets.") && entry.key == "profile" =>
+                {
+                    let mut v = s.clone();
+                    let profiles: Vec<(String, String)> = self
+                        .schema()
+                        .sections
+                        .iter()
+                        .filter_map(|sec| match family(&sec.name) {
+                            Some((("export.profiles", _, _), id)) => {
+                                Some((id.to_string(), member_name(&self.file, &sec.name)))
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    let none = t!("settings-profile-none");
+                    let shown = if v.is_empty() {
+                        none.clone()
+                    } else {
+                        profiles
+                            .iter()
+                            .find(|(id, _)| *id == v)
+                            .map_or_else(|| v.clone(), |(_, name)| name.clone())
+                    };
+                    let combo = egui::ComboBox::from_id_salt(("settings_profile", &id))
+                        .selected_text(shown)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut v, String::new(), none);
+                            for (pid, name) in &profiles {
+                                ui.selectable_value(&mut v, pid.clone(), name)
+                                    .on_hover_text(pid);
+                            }
+                        });
+                    widget = Some(combo.response);
+                    if v != *s {
+                        new = Some(Value::Str(v));
+                    }
+                }
                 Value::Str(s) if choices(section, &entry.key).is_some() => {
                     let mut v = s.clone();
                     let combo = egui::ComboBox::from_id_salt(("settings_choice", &id))
