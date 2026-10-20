@@ -107,6 +107,7 @@ action-core-stack-choose = Make it the stack cover (its pick)
 stack-chosen = { $name }: cover of its stack
 stack-position = stack: { $n } / { $total }
 stack-slider-tip = Similarity: to the right, larger stacks; hold Shift while adjusting to expand the stacks ({ $keys }: fine settings)
+blur-slider-tip = Blur strictness: to the right stricter (more blurry photos), to the left more lenient; in the middle, the settings. Double click: back to the middle
 stack-icon-tip = Right click: fine settings ({ $keys })
 action-core-panel-left = Keyboard to the left panel
 action-core-panel-right = Keyboard to the right panel
@@ -229,6 +230,8 @@ folders-section-favorites = Favourites
 folders-section-system = System
 folders-refresh = Refresh
 folders-refresh-tip = Re-read volumes and folders (F5). A plugged-in drive also shows up by itself within a few seconds.
+folders-subfolders = Subfolders
+folders-subfolders-tip = Also show the images of subfolders ({ $n } levels at most, [gui.folders] subfolders_depth)
 folders-collapse = Collapse
 folders-expand = Expand
 folders-unreadable = unreadable
@@ -420,13 +423,9 @@ export-report-reveal = Show in the file manager
 export-report-clear = Clear the list
 export-report-open = Export report
 rename-failed = cannot rename: { $error }
-transfer-copy-title = { $n ->
-    [one] Copy { $n } image to…
-   *[other] Copy { $n } images to…
-}
-transfer-move-title = { $n ->
-    [one] Move { $n } image to…
-   *[other] Move { $n } images to…
+transfer-title = { $n ->
+    [one] { $n } image to…
+   *[other] { $n } images to…
 }
 transfer-files = { $n ->
     [one] { $n } file (pairs and XMP sidecars included)
@@ -436,14 +435,12 @@ transfer-shared = { $name } is shared with an image that stays: copied
 transfer-create = the folder will be created
 transfer-copy = Copy
 transfer-move = Move
-transfer-create-copy = Create and copy
-transfer-create-move = Create and move
+transfer-confirm = Confirm
 transfer-hint = Tab: complete · up / down arrows: recent destinations
 transfer-recent = Recent
 transfer-progress = { $done } / { $total } files
 transfer-failed = copy / move failed: { $error }
-transfer-folder-copy-title = Copy the folder “{ $name }” to…
-transfer-folder-move-title = Move the folder “{ $name }” to…
+transfer-folder-title = Folder “{ $name }” to…
 drag-images = { $n } images
 drag-move = move (⌥: copy)
 drag-move-ctrl = move (Ctrl: copy)
@@ -695,6 +692,7 @@ filter-bar-count-tip = images shown / images in the folder
 badge-blurry = blurry
 panel-sharpness = Sharpness
 panel-sharpness-value = { $score } (× { $folder } the folder, × { $neighbours } the neighbours)
+panel-sharpness-value-stack = { $score } (× { $folder } the folder, × { $stack } the stack)
 panel-sharpness-blurry = { " " }· blurry
 
 ## Histogram statistics

@@ -48,9 +48,22 @@ fn is_sidecar(path: &Path) -> bool {
 impl Snapshot {
     /// État actuel de `dir` (le dossier seul, sans sous-dossiers).
     pub fn of(dir: &Path) -> std::io::Result<Snapshot> {
+        Snapshot::of_depth(dir, 1)
+    }
+
+    /// État actuel de `dir` sur `depth` niveaux (1 : le dossier seul), comme
+    /// `media::scan` : dossiers cachés écartés.
+    pub fn of_depth(dir: &Path, depth: usize) -> std::io::Result<Snapshot> {
         let mut snapshot = Snapshot::default();
-        for entry in std::fs::read_dir(dir)?.flatten() {
-            let path = entry.path();
+        std::fs::read_dir(dir)?;
+        let entries = walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .max_depth(depth.max(1))
+            .into_iter()
+            .filter_entry(|e| e.depth() == 0 || !crate::media::is_hidden_dir(e))
+            .flatten();
+        for entry in entries {
+            let path = entry.path().to_path_buf();
             let sidecar = is_sidecar(&path);
             if !sidecar && crate::media::kind_of(&path).is_none() {
                 continue;
@@ -113,6 +126,7 @@ pub struct FolderWatch {
     /// Dernier état signalé (ou resynchronisé), auquel on compare.
     known: Arc<Mutex<Snapshot>>,
     dir: PathBuf,
+    depth: usize,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -124,8 +138,21 @@ impl FolderWatch {
         interval: Duration,
         on_change: impl Fn(Changes) + Send + 'static,
     ) -> FolderWatch {
+        FolderWatch::start_depth(dir, 1, interval, on_change)
+    }
+
+    /// [`FolderWatch::start`], sur `depth` niveaux de sous-dossiers (1 : le dossier seul ;
+    /// dossier ouvert avec ses sous-dossiers).
+    pub fn start_depth(
+        dir: &Path,
+        depth: usize,
+        interval: Duration,
+        on_change: impl Fn(Changes) + Send + 'static,
+    ) -> FolderWatch {
         let stop = Arc::new(AtomicBool::new(false));
-        let known = Arc::new(Mutex::new(Snapshot::of(dir).unwrap_or_default()));
+        let known = Arc::new(Mutex::new(
+            Snapshot::of_depth(dir, depth).unwrap_or_default(),
+        ));
         let thread = {
             let (stop, known, dir) = (stop.clone(), known.clone(), dir.to_path_buf());
             std::thread::Builder::new()
@@ -138,7 +165,7 @@ impl FolderWatch {
                         if stop.load(Ordering::Relaxed) {
                             break;
                         }
-                        let Ok(now) = Snapshot::of(&dir) else {
+                        let Ok(now) = Snapshot::of_depth(&dir, depth) else {
                             last = None;
                             continue;
                         };
@@ -164,6 +191,7 @@ impl FolderWatch {
             stop,
             known,
             dir: dir.to_path_buf(),
+            depth,
             thread,
         }
     }
@@ -173,10 +201,15 @@ impl FolderWatch {
         &self.dir
     }
 
+    /// Niveaux surveillés (1 : le dossier seul).
+    pub fn depth(&self) -> usize {
+        self.depth
+    }
+
     /// Prend l'état actuel pour référence, sans rien signaler : après un changement fait
     /// par `tri` lui-même (renommage, corbeille, dossier relu), déjà pris en compte.
     pub fn sync(&self) {
-        if let Ok(now) = Snapshot::of(&self.dir) {
+        if let Ok(now) = Snapshot::of_depth(&self.dir, self.depth) {
             *self.known.lock().unwrap() = now;
         }
     }

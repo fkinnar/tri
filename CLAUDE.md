@@ -662,7 +662,13 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   toujours confirmée ; Option sur macOS, Ctrl ailleurs : copier), panneau en sections
   titrées (disques amovibles, réseau, dossiers personnels avec Bureau / Documents /
   Téléchargements / Images, favoris, puis système replié). Bug
-  corrigé : « Ajouter aux favoris » du clic droit ouvrait la suppression.
+  corrigé : « Ajouter aux favoris » du clic droit ouvrait la suppression. Puis : case
+  « Sous-dossiers » (images des sous-dossiers dans la grille, gardée), curseur de
+  **sévérité du flou** (centre = réglages, droite plus strict, gauche plus souple ; idée
+  de l'utilisateur : même logique à venir pour le curseur des piles, inversé, centre
+  calculé d'après le dossier, à mesurer sur ses séances). **À faire un jour** : fusion
+  d'un dossier dans un dossier du même nom ; mot plus clair que « Plates » (retour d'un
+  testeur).
 - **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »
   dans l'interface (« profil » réservé aux profils couleur) ; noms du code et clés TOML
   (`[export.profiles]`) inchangés. Fenêtre de réglages : une entrée par famille, liste

@@ -10,6 +10,13 @@
   sous Linux), dossiers personnels (Bureau, Documents, Téléchargements, Images, comme le
   Finder), favoris, puis le système. Le clic droit « Ajouter aux favoris » ouvrait la boîte de
   suppression : corrigé.
+- **Flou** : curseur de sévérité dans la barre des filtres (au centre les réglages, à
+  droite plus strict, à gauche plus souple), en direct, retenu par dossier ; le panneau
+  des métadonnées donne aussi le rapport à la pile.
+- **Sous-dossiers** : case du panneau des dossiers, leurs images dans la grille aussi
+  (3 niveaux par défaut), choix gardé.
+- **Copier / déplacer vers…** : titre sans verbe et bouton « Valider » ; destinations
+  récentes sans doublons.
 - **Plein écran** : après un développement darktable (Maj+B), les autres images ne
   zoomaient plus (« pas encore développé ») ; une image sans développement se montre
   maintenant dans la source d'avant, avec son 1:1.

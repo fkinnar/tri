@@ -154,6 +154,22 @@ blanche dont l'opacité marque les contours, et **teintée au dessin** : changer
 ne recalcule rien. Une seule carte est gardée (celle de l'image affichée) ; quitter le 1:1
 retire la demande en cours.
 
+### Curseur de sévérité (20/10/2026)
+
+Demandé par l'utilisateur après un portrait à très grande ouverture (yeux nets, tout le
+reste flou, jugé « floue » alors qu'elle est utilisable) : un curseur dans la barre des
+filtres, à côté des gouttes. **Au centre** les seuils des réglages, **à droite plus
+strict** (plus de photos floues), **à gauche plus souple**. Il multiplie les trois seuils
+du jugement (`blur_ratio`, `neighbour_ratio`, `group_ratio`) par `strictness_span ^
+sévérité` (×0,5 à ×2 par défaut, sans dépasser 1) : `SharpnessSettings::with_strictness`.
+Effet en direct (badges, filtre « floues »), instantané : les scores sont en cache, seul
+le jugement est refait. Retenu par dossier au lâcher (`sharpness::folder_strictness`,
+fichier `blur-strictness.tsv` du dossier de données) ; double-clic : retour au centre
+(repère). Le panneau des métadonnées donne le score rapporté au dossier et aux voisines
+(ou à la pile) : de quoi comprendre un jugement. Même principe à venir pour le curseur
+des piles (centre calculé d'après le dossier). Le vrai remède à ce cas limite reste une
+détection du sujet (yeux), plus tard.
+
 ## Tests
 
 Score (`src/sharpness.rs`) : un flou divise le score par plus de deux, un sujet net sur un

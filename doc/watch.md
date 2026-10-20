@@ -15,6 +15,10 @@ souvent. Même principe que la surveillance des volumes (`places::Monitor`). Co�
 lecture du dossier par seconde (quelques millisecondes pour quelques milliers de
 fichiers en local).
 
+Dossier ouvert avec ses sous-dossiers (case du panneau, 20/10/2026) :
+`FolderWatch::start_depth` / `Snapshot::of_depth` regardent les mêmes niveaux que la
+grille, dossiers cachés écartés comme dans `media::scan`.
+
 ## Un signal par changement, une fois le dossier stable
 
 Un changement n'est signalé que quand deux lectures successives sont identiques : une

@@ -323,6 +323,11 @@ neighbour_ratio = 0.8
 group_min = 3
 group_ratio = 0.8
 group_threshold = 0.45
+# Curseur de sévérité de la barre des filtres (à côté des gouttes) : au centre, les seuils
+# ci-dessus ; tout à droite (plus strict, plus de photos floues) ils sont multipliés par
+# strictness_span, tout à gauche (plus souple) divisés par lui (sans dépasser 1). Le
+# réglage est retenu par dossier.
+strictness_span = 2.0
 # Scores de tout le dossier calculés en fond (cache d'analyse).
 background = true
 
@@ -446,6 +451,8 @@ marked_frame = 3.0
 blur_badge = true
 # Largeur du curseur de similarité de la barre des filtres.
 stack_slider = 110.0
+# Largeur du curseur de sévérité du flou de la barre des filtres.
+blur_slider = 80.0
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
@@ -560,6 +567,9 @@ hidden = false
 # parcourus au plus, et nombre de résultats au plus.
 search_depth = 4
 search_results = 200
+# Case « Sous-dossiers » du panneau (gardée d'une session à l'autre) : les images des
+# sous-dossiers du dossier ouvert s'affichent aussi, sur ce nombre de niveaux au plus.
+subfolders_depth = 3
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

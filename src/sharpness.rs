@@ -17,7 +17,7 @@
 //! médiane du dossier** ([`BlurFilter`]). Voir `doc/sharpness.md`.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -79,6 +79,11 @@ pub struct SharpnessSettings {
     /// netteté dépasse la rafale (mesuré le 18/10/2026 : 0,45 garde 14 photos ratées sur
     /// 15 sans faux positif, et retire les faux positifs d'un dossier aux sujets variés).
     pub group_threshold: f32,
+    /// Sévérité réglée au curseur de la barre des filtres (-1 à 1, 0 au centre) : les
+    /// trois seuils (`blur_ratio`, `neighbour_ratio`, `group_ratio`) sont multipliés par
+    /// `strictness_span` à la puissance de la sévérité, ×0,5 à ×2 par défaut (voir
+    /// [`SharpnessSettings::with_strictness`]).
+    pub strictness_span: f32,
     /// Calcul du score de tout le dossier en fond (cache d'analyse).
     pub background: bool,
 }
@@ -100,9 +105,49 @@ impl Default for SharpnessSettings {
             group_min: 3,
             group_ratio: 0.8,
             group_threshold: 0.45,
+            strictness_span: 2.0,
             background: true,
         }
     }
+}
+
+impl SharpnessSettings {
+    /// Ces réglages, à la sévérité `strictness` (-1 à 1 ; 0 : tels quels), demandée le
+    /// 20/10/2026 : à droite plus strict (plus de photos jugées floues), à gauche plus
+    /// souple (un portrait aux yeux seuls nets, sur fond très flou, passe). Les trois
+    /// seuils du jugement sont multipliés par `strictness_span ^ strictness`, sans
+    /// dépasser 1 (plus net que la médiane n'est jamais flou).
+    pub fn with_strictness(&self, strictness: f32) -> SharpnessSettings {
+        let factor = self
+            .strictness_span
+            .max(1.0)
+            .powf(strictness.clamp(-1.0, 1.0));
+        let scaled = |r: f32| (r * factor).min(1.0);
+        SharpnessSettings {
+            blur_ratio: scaled(self.blur_ratio),
+            neighbour_ratio: scaled(self.neighbour_ratio),
+            group_ratio: scaled(self.group_ratio),
+            ..*self
+        }
+    }
+}
+
+/// Fichier des sévérités par dossier, dans le dossier de données.
+const STRICTNESS: &str = "blur-strictness.tsv";
+
+/// Sévérité du jugement retenue pour le dossier `dir` (curseur de la barre des filtres),
+/// s'il y en a une.
+pub fn folder_strictness(data: &Path, dir: &Path) -> Option<f32> {
+    crate::folder::folder_value(data, STRICTNESS, dir)
+}
+
+/// Retient la sévérité `strictness` pour le dossier `dir` ; `None` : l'oublie (centre).
+pub fn remember_strictness(
+    data: &Path,
+    dir: &Path,
+    strictness: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
 }
 
 /// Score de netteté d'une image.
@@ -549,6 +594,40 @@ mod tests {
         assert_eq!(p.mask[3], 0, "bord de l'image jamais marqué");
         assert_eq!(p.marked, 6);
         assert!((p.fraction() - 6.0 / 40.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn strictness_scales_the_judgement_and_is_kept_per_folder() {
+        let s = SharpnessSettings::default();
+        assert_eq!(s.with_strictness(0.0), s, "au centre : tels quels");
+        let lenient = s.with_strictness(-1.0);
+        assert!((lenient.blur_ratio - 0.25).abs() < 1e-6);
+        assert!((lenient.neighbour_ratio - 0.4).abs() < 1e-6);
+        let strict = s.with_strictness(1.0);
+        assert!((strict.blur_ratio - 1.0).abs() < 1e-6);
+        assert_eq!(
+            strict.neighbour_ratio, 1.0,
+            "jamais au-dessus de la médiane"
+        );
+        assert_eq!(s.with_strictness(5.0), strict, "borné");
+        // Une photo à 0,45 × le dossier : floue au centre, nette à gauche.
+        let ordered: Vec<(PathBuf, Option<f32>)> = [10.0, 10.0, 4.5, 10.0, 10.0]
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| (PathBuf::from(format!("{i}.jpg")), Some(v)))
+            .collect();
+        let no_neighbours = SharpnessSettings { neighbours: 0, ..s };
+        let p = PathBuf::from("2.jpg");
+        assert!(judge(&ordered, &no_neighbours)[&p].blurry);
+        assert!(!judge(&ordered, &no_neighbours.with_strictness(-0.5))[&p].blurry);
+        // Retenue par dossier, oubliée au centre.
+        let dir = tempfile::tempdir().unwrap();
+        let (data, a) = (dir.path(), Path::new("/photos/a"));
+        assert_eq!(folder_strictness(data, a), None);
+        remember_strictness(data, a, Some(-0.4)).unwrap();
+        assert_eq!(folder_strictness(data, a), Some(-0.4));
+        remember_strictness(data, a, None).unwrap();
+        assert_eq!(folder_strictness(data, a), None);
     }
 
     #[test]

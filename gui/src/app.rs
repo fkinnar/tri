@@ -340,6 +340,12 @@ pub struct TriApp {
     stacking: bool,
     /// Seuil de regroupement du dossier ouvert, et écart de temps maximal (secondes).
     group_threshold: f32,
+    /// Sévérité du jugement de netteté (-1 souple à 1 strict, 0 : les seuils des
+    /// réglages), réglée au curseur de la barre des filtres, retenue par dossier.
+    blur_strictness: f32,
+    /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
+    /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
+    subfolders: bool,
     group_gap: f32,
     /// Fenêtre de regroupement ouverte (`Ctrl+G`).
     group_dialog: bool,
@@ -463,8 +469,10 @@ impl TriApp {
                 .then(|| tri::folder::last(data.as_deref()?))
                 .flatten()
         });
+        let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
+        let depth = folder_depth(subfolders, &gui);
         let (folder, error) = match &dir {
-            Some(dir) => match Folder::open(dir, 1, settings.xmp.sidecar) {
+            Some(dir) => match Folder::open(dir, depth, settings.xmp.sidecar) {
                 Ok(folder) => {
                     if let Some(data) = &data {
                         let _ = tri::folder::remember(data, &folder.dir);
@@ -622,6 +630,8 @@ impl TriApp {
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_threshold: settings.similarity.threshold,
+            blur_strictness: 0.0,
+            subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
             chosen: settings
@@ -729,7 +739,7 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
-        match Folder::open(dir, 1, self.settings.xmp.sidecar) {
+        match Folder::open(dir, self.folder_depth(), self.settings.xmp.sidecar) {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
@@ -741,6 +751,11 @@ impl TriApp {
                     .data_dir()
                     .and_then(|d| tri::similarity::folder_threshold(&d, &folder.dir))
                     .unwrap_or(self.settings.similarity.threshold);
+                self.blur_strictness = self
+                    .settings
+                    .data_dir()
+                    .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
+                    .unwrap_or(0.0);
                 self.folder = folder;
                 self.error = None;
             }
@@ -855,12 +870,22 @@ impl TriApp {
                     let ratio = |r: Option<f32>| {
                         r.map_or("-".to_string(), |r| tri::i18n::decimal(r as f64, 2))
                     };
-                    let mut text = t!(
-                        "panel-sharpness-value",
-                        score = tri::i18n::decimal(j.score as f64, 1),
-                        folder = ratio(j.folder_ratio),
-                        neighbours = ratio(j.neighbour_ratio)
-                    );
+                    let score = tri::i18n::decimal(j.score as f64, 1);
+                    // Dans une pile, jugée contre elle (et le dossier), pas ses voisines.
+                    let mut text = match j.group_ratio {
+                        Some(g) => t!(
+                            "panel-sharpness-value-stack",
+                            score = score,
+                            folder = ratio(j.folder_ratio),
+                            stack = ratio(Some(g))
+                        ),
+                        None => t!(
+                            "panel-sharpness-value",
+                            score = score,
+                            folder = ratio(j.folder_ratio),
+                            neighbours = ratio(j.neighbour_ratio)
+                        ),
+                    };
                     if j.blurry {
                         text.push_str(&t!("panel-sharpness-blurry"));
                     }
@@ -955,15 +980,16 @@ impl TriApp {
             self.watch = None;
             return;
         }
-        let current = self
-            .watch
-            .as_ref()
-            .is_some_and(|(w, _, ms)| w.dir() == self.folder.dir && *ms == interval);
+        let depth = self.folder_depth();
+        let current = self.watch.as_ref().is_some_and(|(w, _, ms)| {
+            w.dir() == self.folder.dir && w.depth() == depth && *ms == interval
+        });
         if !current {
             let (tx, rx) = mpsc::channel();
             let repaint = ctx.clone();
-            let watch = tri::watch::FolderWatch::start(
+            let watch = tri::watch::FolderWatch::start_depth(
                 &self.folder.dir,
+                depth,
                 Duration::from_millis(interval),
                 move |changes| {
                     let _ = tx.send(changes);
@@ -1035,6 +1061,20 @@ impl TriApp {
             marks::refresh(ui.painter(), rect.shrink(size * 0.2), color);
             if response.clicked() {
                 self.tree.refresh();
+            }
+            // Descendre dans les sous-dossiers (demandé le 20/10/2026) : leurs images dans
+            // la grille aussi ; choix gardé d'une session à l'autre.
+            let mut on = self.subfolders;
+            let tip = t!(
+                "folders-subfolders-tip",
+                n = self.gui.folders.subfolders_depth
+            );
+            if ui
+                .checkbox(&mut on, t!("folders-subfolders"))
+                .on_hover_text(tip)
+                .changed()
+            {
+                self.set_subfolders(on);
             }
         });
         // Recherche de dossiers (retour du 19/10/2026) : sous le titre ; pendant la
@@ -1465,6 +1505,53 @@ impl TriApp {
         self.tell_shown();
     }
 
+    /// Curseur de sévérité du flou (demandé le 20/10/2026), à côté des gouttes : au
+    /// centre les seuils des réglages, à droite plus strict, à gauche plus souple ; effet
+    /// en direct (badges, filtre), retenu pour le dossier au lâcher, double-clic : retour
+    /// au centre (repère).
+    fn blur_slider(&mut self, ui: &mut Ui) {
+        ui.spacing_mut().slider_width = self.gui.grid.blur_slider;
+        let mut t = self.blur_strictness;
+        let slider = ui
+            .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
+            .on_hover_text(t!("blur-slider-tip"));
+        // Repère du centre : la valeur des réglages.
+        let rail = slider.rect.shrink2(vec2(slider.rect.height() / 2.0, 0.0));
+        let x = rail.center().x;
+        let tick = ui.visuals().weak_text_color();
+        ui.painter().line_segment(
+            [
+                egui::pos2(x, rail.top() + 1.0),
+                egui::pos2(x, rail.top() + rail.height() * 0.25),
+            ],
+            egui::Stroke::new(1.0, tick),
+        );
+        let reset = slider.double_clicked();
+        if reset {
+            t = 0.0;
+        }
+        if t != self.blur_strictness {
+            self.set_blur_strictness(t);
+        }
+        if (slider.drag_stopped() || reset)
+            && let Some(data) = self.settings.data_dir()
+            && !self.folder.is_none()
+        {
+            let keep = (self.blur_strictness != 0.0).then_some(self.blur_strictness);
+            let _ = tri::sharpness::remember_strictness(&data, &self.folder.dir, keep);
+        }
+    }
+
+    /// Nouvelle sévérité du flou : jugement refait (instantané, les scores sont connus),
+    /// et la grille refiltrée si un filtre sur le flou est actif.
+    fn set_blur_strictness(&mut self, strictness: f32) {
+        self.blur_strictness = strictness;
+        self.rejudge();
+        if self.blur_rule.is_some() && self.blurry_now() != self.blurry_applied {
+            self.refilter(Reveal::Minimal);
+        }
+    }
+
     /// Juge la netteté de tout le dossier, dans l'ordre du dossier quels que soient les
     /// filtres (les voisines d'une photo sont celles prises juste avant et après) ; dans
     /// les piles d'images semblables quand les empreintes sont connues
@@ -1484,7 +1571,8 @@ impl TriApp {
         } else {
             Vec::new()
         };
-        self.judgements = tri::sharpness::judge_in_groups(&ordered, &groups, &s.sharpness);
+        let sharpness = s.sharpness.with_strictness(self.blur_strictness);
+        self.judgements = tri::sharpness::judge_in_groups(&ordered, &groups, &sharpness);
         self.stacks_dirty = true;
     }
 
@@ -5271,12 +5359,33 @@ impl TriApp {
         self.export_job = None;
     }
 
+    /// Niveaux parcourus à l'ouverture d'un dossier (1 : le dossier seul).
+    fn folder_depth(&self) -> usize {
+        folder_depth(self.subfolders, &self.gui)
+    }
+
+    /// Case « sous-dossiers » : retenue, et le dossier ouvert relu à la nouvelle
+    /// profondeur.
+    fn set_subfolders(&mut self, on: bool) {
+        self.subfolders = on;
+        if let Some(data) = self.settings.data_dir() {
+            let _ = tri::folder::remember_subfolders(&data, on);
+        }
+        if !self.folder.is_none() {
+            self.reload_folder(None);
+        }
+    }
+
     /// Relit le dossier ouvert après une action sur ses fichiers, en gardant la vue (grille
     /// ou plein écran, zoom) ; `select` : image à sélectionner (nouveau nom), sinon la
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
-        match Folder::open(&self.folder.dir, 1, self.settings.xmp.sidecar) {
+        match Folder::open(
+            &self.folder.dir,
+            self.folder_depth(),
+            self.settings.xmp.sidecar,
+        ) {
             Ok(folder) => self.folder = folder,
             Err(e) => {
                 self.file_error = Some(format!("{} : {e}", self.folder.dir.display()));
@@ -5633,6 +5742,7 @@ impl TriApp {
                     clicked.push(action);
                 }
             }
+            self.blur_slider(ui);
             ui.separator();
             for color in Color::ALL {
                 let tip = self.action_tip(Action::FilterColor(color));
@@ -7165,6 +7275,16 @@ enum StatusClick {
     RetryEject,
 }
 
+/// Niveaux parcourus à l'ouverture d'un dossier : 1 (le dossier seul), ou avec ses
+/// sous-dossiers (`[gui.folders] subfolders_depth` niveaux de plus).
+fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
+    if subfolders {
+        1 + gui.folders.subfolders_depth
+    } else {
+        1
+    }
+}
+
 /// Ce qu'on glisse vers un dossier du panneau des dossiers (demandé le 20/10/2026) ; le
 /// lâcher ouvre la boîte « Copier / déplacer vers… », remplie, qui confirme.
 #[derive(Clone, Debug)]
@@ -8224,6 +8344,21 @@ mod tests {
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 3);
+        // Curseur de sévérité tout à gauche : plus souple, une photo limite (0,45 × les
+        // autres) n'est plus floue et revient dans la grille ; au centre, de nouveau floue.
+        let scores: Vec<PathBuf> = h.state().scores.keys().cloned().collect();
+        for path in scores {
+            let value = if path == c { 4.5 } else { 10.0 };
+            h.state_mut().scores.insert(path, value);
+        }
+        h.state_mut().set_blur_strictness(0.0);
+        assert!(h.state().is_blurry(&c));
+        h.state_mut().set_blur_strictness(-1.0);
+        assert!(!h.state().is_blurry(&c));
+        assert_eq!(h.state().files.len(), 4);
+        h.state_mut().set_blur_strictness(0.0);
+        assert!(h.state().is_blurry(&c));
+        assert_eq!(h.state().files.len(), 3);
     }
 
     #[test]
@@ -9214,7 +9349,7 @@ mod tests {
         press(&mut h, Key::X, Modifiers::CTRL);
         h.run_steps(2);
         assert!(
-            h.query_by_label_contains("Déplacer le dossier « séance »")
+            h.query_by_label_contains("Dossier « séance » vers")
                 .is_some()
         );
         h.event(UiEvent::Text(archive.display().to_string()));
@@ -9253,7 +9388,7 @@ mod tests {
         h.get_by_label("Déplacer vers…").click();
         h.run_steps(2);
         assert!(
-            h.query_by_label_contains("Déplacer le dossier « archive »")
+            h.query_by_label_contains("Dossier « archive » vers")
                 .is_some()
         );
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -9367,7 +9502,7 @@ mod tests {
         press(&mut h, Key::Y, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none(), "y attend la suite");
         press(&mut h, Key::W, Modifiers::NONE);
-        assert!(h.query_by_label_contains("Copier 3 images").is_some());
+        assert!(h.query_by_label_contains("3 images vers").is_some());
         press(&mut h, Key::Escape, Modifiers::NONE);
         // Piles désactivées : expliqué, rien d'autre.
         h.state_mut().stacking = false;
@@ -9685,13 +9820,15 @@ mod tests {
         // Une case à cocher (réglage booléen) : pas un bouton d'egui.
         h.event(UiEvent::Text("auto_advance".into()));
         h.run_steps(2);
-        // La première : `[gui] auto_advance` (la recherche floue en trouve d'autres, dont
-        // le texte contient ces lettres dans l'ordre).
+        // La première de la fenêtre : `[gui] auto_advance` (la recherche floue en trouve
+        // d'autres, dont le texte contient ces lettres dans l'ordre) ; pas la case
+        // « Sous-dossiers » du panneau des dossiers, derrière.
+        let panel = h.state().gui.folders.width;
         let rect = h
             .query_all_by_role(egui::accesskit::Role::CheckBox)
-            .next()
-            .expect("une case")
-            .rect();
+            .map(|n| n.rect())
+            .find(|r| r.left() > panel)
+            .expect("une case");
         // On a tapé : pointeur masqué jusqu'à ce que la souris bouge.
         h.hover_at(rect.center() + vec2(1.0, 0.0));
         h.run_steps(1);

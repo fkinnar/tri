@@ -106,6 +106,7 @@ action-core-stack-choose = Choisir comme couverture de la pile (sa préférée)
 stack-chosen = { $name } : couverture de sa pile
 stack-position = pile : { $n } / { $total }
 stack-slider-tip = Ressemblance : vers la droite, des piles plus grandes ; Maj pendant le réglage : piles dépliées ({ $keys } : réglages fins)
+blur-slider-tip = Sévérité du flou : vers la droite plus strict (plus de photos floues), vers la gauche plus souple ; au centre, les réglages. Double-clic : retour au centre
 stack-icon-tip = Clic droit : réglages fins ({ $keys })
 action-core-panel-left = Clavier au panneau de gauche
 action-core-panel-right = Clavier au panneau de droite
@@ -228,6 +229,8 @@ folders-section-favorites = Favoris
 folders-section-system = Système
 folders-refresh = Actualiser
 folders-refresh-tip = Relire les volumes et les dossiers (F5). Un disque branché apparaît aussi de lui-même en quelques secondes.
+folders-subfolders = Sous-dossiers
+folders-subfolders-tip = Afficher aussi les images des sous-dossiers ({ $n } niveaux au plus, [gui.folders] subfolders_depth)
 folders-collapse = Replier
 folders-expand = Déplier
 folders-unreadable = illisible
@@ -419,13 +422,9 @@ export-report-reveal = Afficher dans le gestionnaire de fichiers
 export-report-clear = Effacer la liste
 export-report-open = Rapport d'export
 rename-failed = renommage impossible : { $error }
-transfer-copy-title = { $n ->
-    [one] Copier { $n } image vers…
-   *[other] Copier { $n } images vers…
-}
-transfer-move-title = { $n ->
-    [one] Déplacer { $n } image vers…
-   *[other] Déplacer { $n } images vers…
+transfer-title = { $n ->
+    [one] { $n } image vers…
+   *[other] { $n } images vers…
 }
 transfer-files = { $n ->
     [one] { $n } fichier (paires et sidecars XMP compris)
@@ -435,14 +434,12 @@ transfer-shared = { $name } est partagé avec une image qui reste : copié
 transfer-create = le dossier sera créé
 transfer-copy = Copier
 transfer-move = Déplacer
-transfer-create-copy = Créer et copier
-transfer-create-move = Créer et déplacer
+transfer-confirm = Valider
 transfer-hint = Tab : compléter · flèches haut / bas : destinations récentes
 transfer-recent = Récentes
 transfer-progress = { $done } / { $total } fichiers
 transfer-failed = copie / déplacement impossible : { $error }
-transfer-folder-copy-title = Copier le dossier « { $name } » vers…
-transfer-folder-move-title = Déplacer le dossier « { $name } » vers…
+transfer-folder-title = Dossier « { $name } » vers…
 drag-images = { $n } images
 drag-move = déplacer (⌥ : copier)
 drag-move-ctrl = déplacer (Ctrl : copier)
@@ -697,6 +694,7 @@ filter-bar-count-tip = images affichées / images du dossier
 badge-blurry = floue
 panel-sharpness = Netteté
 panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
+panel-sharpness-value-stack = { $score } (× { $folder } le dossier, × { $stack } la pile)
 panel-sharpness-blurry = { " " }· floue
 
 ## Statistiques de l'histogramme

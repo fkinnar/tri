@@ -78,6 +78,8 @@ pub fn scan(root: impl AsRef<Path>, depth: usize) -> io::Result<Vec<MediaFile>> 
         .min_depth(1)
         .max_depth(depth)
         .into_iter()
+        // Sous-dossiers cachés (`.thumbnails`, `.dtrash`…) écartés.
+        .filter_entry(|e| e.depth() == 0 || !is_hidden_dir(e))
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
         .filter_map(|e| {
@@ -90,6 +92,12 @@ pub fn scan(root: impl AsRef<Path>, depth: usize) -> io::Result<Vec<MediaFile>> 
         .collect();
     files.sort_by(compare);
     Ok(files)
+}
+
+/// Vrai pour un dossier caché (nom commençant par « . ») : ses images ne sont pas
+/// listées quand on parcourt les sous-dossiers.
+pub fn is_hidden_dir(entry: &walkdir::DirEntry) -> bool {
+    entry.file_type().is_dir() && entry.file_name().to_string_lossy().starts_with('.')
 }
 
 fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {

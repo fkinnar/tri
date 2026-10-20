@@ -685,12 +685,9 @@ impl Transfer {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let ok = plan.is_ok() || create;
-                    let label = match (self.mode, create) {
-                        (TransferMode::Copy, false) => t!("transfer-copy"),
-                        (TransferMode::Move, false) => t!("transfer-move"),
-                        (TransferMode::Copy, true) => t!("transfer-create-copy"),
-                        (TransferMode::Move, true) => t!("transfer-create-move"),
-                    };
+                    // « Valider » : le verbe n'est qu'à un endroit, le choix déplacer /
+                    // copier (retour du 20/10/2026 : trois « Déplacer » dans la boîte).
+                    let label = t!("transfer-confirm");
                     confirm =
                         ui.add_enabled(ok, egui::Button::new(label)).clicked() || (enter && ok);
                     cancel = ui.button(t!("cancel")).clicked();
@@ -712,21 +709,12 @@ impl Transfer {
         }
     }
 
-    /// Titre de la boîte : « Copier 3 images », « Déplacer le dossier « Séance » ».
+    /// Titre de la boîte, sans verbe (le choix déplacer / copier est en dessous) :
+    /// « 3 images vers… », « Dossier « Séance » vers… ».
     fn title(&self) -> String {
-        match (&self.source, self.mode) {
-            (Source::Images(images), TransferMode::Copy) => {
-                t!("transfer-copy-title", n = images.len())
-            }
-            (Source::Images(images), TransferMode::Move) => {
-                t!("transfer-move-title", n = images.len())
-            }
-            (Source::Folder(dir), TransferMode::Copy) => {
-                t!("transfer-folder-copy-title", name = file_name(dir))
-            }
-            (Source::Folder(dir), TransferMode::Move) => {
-                t!("transfer-folder-move-title", name = file_name(dir))
-            }
+        match &self.source {
+            Source::Images(images) => t!("transfer-title", n = images.len()),
+            Source::Folder(dir) => t!("transfer-folder-title", name = file_name(dir)),
         }
     }
 

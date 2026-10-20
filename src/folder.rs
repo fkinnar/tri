@@ -48,6 +48,56 @@ impl Folder {
     }
 }
 
+/// Valeur retenue pour le dossier `dir` dans le fichier `file` du dossier de données
+/// `data` (une ligne par dossier : valeur, tabulation, chemin), s'il y en a une : seuil
+/// des piles, sévérité du flou… réglés par un curseur et gardés par dossier.
+pub fn folder_value(data: &Path, file: &str, dir: &Path) -> Option<f32> {
+    let text = std::fs::read_to_string(data.join(file)).ok()?;
+    let wanted = dir.to_string_lossy();
+    text.lines()
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(_, path)| *path == wanted)
+        .and_then(|(v, _)| v.parse().ok())
+}
+
+/// Retient `value` pour le dossier `dir` dans le fichier `file` du dossier de données
+/// `data` ; `None` : l'oublie (valeur par défaut).
+pub fn remember_folder_value(
+    data: &Path,
+    file: &str,
+    dir: &Path,
+    value: Option<f32>,
+) -> io::Result<()> {
+    let path = data.join(file);
+    let wanted = dir.to_string_lossy().into_owned();
+    let mut lines: Vec<String> = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.split_once('\t').is_some_and(|(_, p)| p != wanted))
+        .map(str::to_string)
+        .collect();
+    if let Some(v) = value {
+        lines.push(format!("{v}\t{wanted}"));
+    }
+    std::fs::create_dir_all(data)?;
+    std::fs::write(path, lines.join("\n") + "\n")
+}
+
+/// Fichier du choix « descendre dans les sous-dossiers », dans le dossier de données.
+const SUBFOLDERS: &str = "subfolders";
+
+/// Vrai si les sous-dossiers du dossier ouvert sont parcourus aussi (case du panneau des
+/// dossiers, gardée d'une session à l'autre ; voir [`remember_subfolders`]).
+pub fn subfolders(data: &Path) -> bool {
+    std::fs::read_to_string(data.join(SUBFOLDERS)).is_ok_and(|t| t.trim() == "on")
+}
+
+/// Retient le choix « descendre dans les sous-dossiers ».
+pub fn remember_subfolders(data: &Path, on: bool) -> io::Result<()> {
+    std::fs::create_dir_all(data)?;
+    std::fs::write(data.join(SUBFOLDERS), if on { "on\n" } else { "off\n" })
+}
+
 /// Mémorise `dir` comme dernier dossier ouvert (fichier `last-folder` du dossier de
 /// données `data`, voir `EngineSettings::data_dir`), pour le rouvrir au prochain
 /// lancement.
@@ -100,6 +150,43 @@ mod tests {
         assert_eq!(last(data.path()).as_deref(), Some(photos.path()));
         drop(photos);
         assert_eq!(last(data.path()), None, "dossier disparu : rien");
+    }
+
+    #[test]
+    fn subfolders_are_listed_on_demand_and_the_choice_is_kept() {
+        let data = tempfile::tempdir().unwrap();
+        let photos = tempfile::tempdir().unwrap();
+        let p = photos.path();
+        for d in ["2026/jour 1", "2026/.cache", "a/b/c"] {
+            std::fs::create_dir_all(p.join(d)).unwrap();
+        }
+        for f in [
+            "x.jpg",
+            "2026/jour 1/y.jpg",
+            "2026/.cache/z.jpg",
+            "a/b/c/w.jpg",
+        ] {
+            std::fs::write(p.join(f), b"").unwrap();
+        }
+        let names = |depth| {
+            let folder = Folder::open(p, depth, Convention::Darktable).unwrap();
+            folder
+                .files
+                .iter()
+                .map(|f| f.path.strip_prefix(p).unwrap().to_path_buf())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(1), [PathBuf::from("x.jpg")]);
+        assert_eq!(
+            names(3),
+            [PathBuf::from("2026/jour 1/y.jpg"), PathBuf::from("x.jpg")],
+            "dossiers cachés écartés, 3 niveaux au plus"
+        );
+        assert!(!subfolders(data.path()), "pas encore choisi : non");
+        remember_subfolders(data.path(), true).unwrap();
+        assert!(subfolders(data.path()));
+        remember_subfolders(data.path(), false).unwrap();
+        assert!(!subfolders(data.path()));
     }
 
     #[test]

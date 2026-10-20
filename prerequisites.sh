@@ -10,3 +10,6 @@
 
 # Windows (non testé), avec vcpkg
 # vcpkg install libraw:x64-windows libheif:x64-windows   (+ CMake et NASM)
+
+# Paquets seulement (scripts/package.py, doc/packaging.md) : notices de licences des crates
+# cargo install cargo-about --locked --features cli

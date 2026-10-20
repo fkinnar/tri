@@ -134,6 +134,11 @@ entier, sous-dossiers compris (`DirTransfer` : fichiers, sous-dossiers à créer
   Ctrl + clic y est le clic droit), **Ctrl** ailleurs (Nautilus, Explorateur). Ce qu'on
   glisse, et copier ou déplacer, s'écrit sous le pointeur. Les emplacements (volume,
   dossier personnel, racine) ne bougent pas.
+- Boîte (retour du 20/10/2026) : titre sans verbe (« Dossier « Séance » vers… », « 3
+  images vers… »), le choix Déplacer / Copier, et **Valider** : le verbe n'apparaît qu'une
+  fois. Destinations récentes comparées en chemins (`~/Images/` complété par Tab et
+  `~/Images` ne font plus deux lignes). **À faire** : proposer de **fusionner** quand la
+  destination contient déjà un dossier du même nom (refusé pour l'instant).
 
 ## Corbeille et annulation (18/10/2026)
 

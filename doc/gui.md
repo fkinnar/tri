@@ -47,7 +47,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
   en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) :
   disques amovibles, réseau, dossiers personnels (avec Bureau, Documents,
-  Téléchargements, Images), favoris, puis seulement le système (racine, repliée), lue à la demande par le
+  Téléchargements, Images), favoris, puis seulement le système (racine, repliée) ; case
+  **Sous-dossiers** (20/10/2026, gardée) : les images des sous-dossiers s'affichent aussi
+  (`[gui.folders] subfolders_depth` niveaux), lue à la demande par le
   moteur (`places::Tree`, voir [places.md](places.md)). Le triangle déplie ou replie (le
   double-clic sur le nom aussi), un clic sur le nom ouvre le dossier sans redémarrer
   (`folder::Folder`, voir [folder.md](folder.md)) : les filtres sont gardés, la sélection

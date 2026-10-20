@@ -16,6 +16,14 @@ manipule quand on « ouvre un dossier ».
   octets bruts sous Unix (noms non UTF-8), UTF-8 ailleurs. L'interface rouvre ce dossier
   quand elle est lancée sans argument (`[gui] reopen_last`).
 
+- `subfolders(données)` / `remember_subfolders(données, oui)` : la case « Sous-dossiers »
+  du panneau des dossiers (20/10/2026), gardée d'une session à l'autre (fichier
+  `subfolders`) ; l'interface ouvre alors le dossier sur `1 + [gui.folders]
+  subfolders_depth` niveaux (`Folder::open`, `media::scan` : dossiers cachés écartés).
+- `folder_value` / `remember_folder_value` : une valeur retenue par dossier (seuil des
+  piles, sévérité du flou), une ligne « valeur, tabulation, chemin » dans un fichier du
+  dossier de données.
+
 Champs publics (`dir`, `files`, `notes`) : un dossier ouvert n'a pas d'invariant à
 protéger entre eux, et l'interface modifie les notes (`folder.notes.edit`).
 

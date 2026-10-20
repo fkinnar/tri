@@ -262,12 +262,7 @@ const THRESHOLDS: &str = "group-thresholds.tsv";
 
 /// Seuil retenu pour le dossier `dir` (fenêtre de regroupement), s'il y en a un.
 pub fn folder_threshold(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
-    let text = std::fs::read_to_string(data.join(THRESHOLDS)).ok()?;
-    let wanted = dir.to_string_lossy();
-    text.lines()
-        .filter_map(|l| l.split_once('\t'))
-        .find(|(_, path)| *path == wanted)
-        .and_then(|(t, _)| t.parse().ok())
+    crate::folder::folder_value(data, THRESHOLDS, dir)
 }
 
 /// Retient `threshold` pour le dossier `dir` ; `None` : l'oublie (seuil par défaut).
@@ -276,19 +271,7 @@ pub fn remember_threshold(
     dir: &std::path::Path,
     threshold: Option<f32>,
 ) -> std::io::Result<()> {
-    let path = data.join(THRESHOLDS);
-    let wanted = dir.to_string_lossy().into_owned();
-    let mut lines: Vec<String> = std::fs::read_to_string(&path)
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| l.split_once('\t').is_some_and(|(_, p)| p != wanted))
-        .map(str::to_string)
-        .collect();
-    if let Some(t) = threshold {
-        lines.push(format!("{t}\t{wanted}"));
-    }
-    std::fs::create_dir_all(data)?;
-    std::fs::write(path, lines.join("\n") + "\n")
+    crate::folder::remember_folder_value(data, THRESHOLDS, dir, threshold)
 }
 
 /// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.

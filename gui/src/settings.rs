@@ -396,6 +396,8 @@ pub struct GridSettings {
     pub blur_badge: bool,
     /// Largeur du curseur de similarité de la barre des filtres (points).
     pub stack_slider: f32,
+    /// Largeur du curseur de sévérité du flou de la barre des filtres (points).
+    pub blur_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -419,6 +421,7 @@ impl Default for GridSettings {
             marked_frame: 3.0,
             blur_badge: true,
             stack_slider: 110.0,
+            blur_slider: 80.0,
             stacks: false,
             search_width: 200.0,
         }
@@ -708,6 +711,9 @@ pub struct FolderSettings {
     pub search_depth: usize,
     /// Recherche de dossiers : nombre de résultats au plus.
     pub search_results: usize,
+    /// Case « sous-dossiers » du panneau : niveaux de sous-dossiers dont les images
+    /// s'affichent aussi dans la grille, au plus (en plus du dossier ouvert).
+    pub subfolders_depth: usize,
 }
 
 impl Default for FolderSettings {
@@ -719,6 +725,7 @@ impl Default for FolderSettings {
             hidden: false,
             search_depth: 4,
             search_results: 200,
+            subfolders_depth: 3,
         }
     }
 }

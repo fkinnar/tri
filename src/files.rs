@@ -902,20 +902,34 @@ pub fn recent_destinations(data: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
         .lines()
         .filter(|l| !l.trim().is_empty())
-        .map(PathBuf::from)
+        .map(|l| Path::new(l).components().collect::<PathBuf>())
         .filter(|p| p.is_dir())
-        .collect()
+        .fold(Vec::new(), |mut list, p| {
+            // Fichier écrit avant le 20/10/2026 : doublons possibles (`~/Images/`).
+            if !list.contains(&p) {
+                list.push(p);
+            }
+            list
+        })
 }
 
 /// Met `dest` en tête des destinations récentes, `max` au plus.
 pub fn remember_destination(data: &Path, dest: &Path, max: usize) -> io::Result<()> {
     let path = data.join(RECENT_FILE);
-    let mut list: Vec<String> = vec![dest.to_string_lossy().into_owned()];
+    // Comparées en chemins : `~/Images/` (complété par Tab) et `~/Images` sont la même
+    // (doublons vus le 20/10/2026) ; gardées sans séparateur final.
+    let clean = |p: &Path| p.components().collect::<PathBuf>();
+    let mut list: Vec<PathBuf> = vec![clean(dest)];
     for line in std::fs::read_to_string(&path).unwrap_or_default().lines() {
-        if !line.trim().is_empty() && !list.iter().any(|l| l == line) {
-            list.push(line.to_string());
+        let p = clean(Path::new(line));
+        if !line.trim().is_empty() && !list.contains(&p) {
+            list.push(p);
         }
     }
+    let mut list: Vec<String> = list
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
     list.truncate(max.max(1));
     std::fs::create_dir_all(data)?;
     std::fs::write(path, list.join("\n") + "\n")
@@ -1235,6 +1249,10 @@ mod tests {
             remember_destination(&data, d, 2).unwrap();
         }
         assert_eq!(recent_destinations(&data), [c.clone(), a.clone()]);
+        // Avec le séparateur final de la complétion : la même destination.
+        let typed = PathBuf::from(format!("{}{}", a.display(), std::path::MAIN_SEPARATOR));
+        remember_destination(&data, &typed, 2).unwrap();
+        assert_eq!(recent_destinations(&data), [a.clone(), c.clone()]);
         std::fs::remove_dir(&a).unwrap();
         assert_eq!(recent_destinations(&data), [c], "disparue : omise");
     }
