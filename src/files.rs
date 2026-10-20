@@ -6,7 +6,7 @@
 //! **paire RAW+JPEG** aussi (`[files] pairs`), comme pour les notes. Chaque action se
 //! prépare d'abord (`plan_*`) : la liste des fichiers touchés est montrée avant d'agir, et
 //! les erreurs prévisibles (nom déjà pris) arrivent avant la première modification. Voir
-//! `doc/files.md`.
+//! `doc/en/files.md`.
 
 use std::collections::HashSet;
 use std::fmt;

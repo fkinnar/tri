@@ -10,7 +10,7 @@ cargo run --release -p tri-gui -- <dossier> [--cache <dossier du cache>] [--conf
 
 Tous les réglages (thème, raccourcis, dimensions de la grille, délais, capacités, couleurs,
 et ceux du moteur) viennent du fichier de configuration : voir [settings.md](settings.md)
-et [config.example.toml](config.example.toml). Une configuration invalide est signalée en
+et [config.example.toml](../config.example.toml). Une configuration invalide est signalée en
 rouge dans la barre d'état (détail au survol), et les réglages par défaut sont utilisés.
 
 Toujours en **`--release`** pour s'en servir : en build de débogage, le code Rust n'est pas
@@ -198,8 +198,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
   **Résolution** dans la ligne d'information (21/10/2026, `TriApp::shown_resolution`) :
   celle de l'image à 100 % dans la source affichée (1:1 chargé, sinon dimensions des
-  métadonnées, ou dernier 1:1 de JPEG boîtier vu) ; pour une version, son cadre, réduit au
-  côté long de son préréglage d'export. Rien pour le développé : darktable rend à la
+  métadonnées ; JPEG boîtier : `Metadata::embedded_size`, lue dans l'en-tête du JPEG
+  embarqué) ; pour une version, son cadre, réduit au côté long de son préréglage
+  d'export ; **pendant le recadrage**, le cadre en cours et le préréglage d'export de la
+  barre (en direct). Rien pour le développé : darktable rend à la
   taille de l'aperçu, son recadrage compris ; la vraie taille demandera de lire ce
   recadrage dans le sidecar (à faire).
   Le choix « développé » reste d'une image à l'autre, mais une image **sans

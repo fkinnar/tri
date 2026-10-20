@@ -3,7 +3,7 @@
 //!
 //! [`NoteBook`] garde en mémoire les notes de toutes les images affichées : filtrer reste
 //! instantané, seule une modification touche le disque. Le format des sidecars est l'affaire
-//! du module [`crate::xmp`]. Voir `doc/notes.md`.
+//! du module [`crate::xmp`]. Voir `doc/en/notes.md`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -5,7 +5,7 @@
 //! réglable) plutôt que par les notifications du système : pas de dépendance, et le même
 //! comportement sur un disque local, une carte SD ou un NAS (où les notifications manquent
 //! souvent). Même principe que la surveillance des volumes ([`crate::places::Monitor`]).
-//! Voir `doc/watch.md`.
+//! Voir `doc/en/watch.md`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

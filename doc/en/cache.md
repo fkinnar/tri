@@ -1,0 +1,106 @@
+# Module `tri::cache`
+
+Persistent on-disk cache of computed images: thumbnails, standard previews, 1:1 renders.
+The principle and the choices (three levels, half_size, central location) are described in
+`CLAUDE.md`, section "Aperçus et cache". This module only **stores and retrieves**; it
+computes nothing. The work queue that fills it in the background sits on top.
+
+## On-disk layout
+
+```
+<racine>/
+└── v1/                      format version (FORMAT_VERSION)
+    ├── thumbnail/
+    │   ├── 3f/
+    │   │   └── 3f9a…e1.jpg  one entry = one quality-90 JPEG
+    │   └── …
+    ├── embedded/            previews taken from the camera JPEG (RAW only)
+    ├── standard/
+    ├── embedded-full/       embedded JPEG at its original size (1:1 of the camera JPEG)
+    ├── full/
+    └── exposure/            exposure analyses (.bin, ~14 KB: histograms, mask)
+```
+
+- **One file per entry**, with no database or index: the state of the cache *is* the
+  content of the folder. Nothing to rebuild, nothing to corrupt beyond a single file.
+- **2-character subfolders** from the hash: at most a few hundred files per folder, even
+  with tens of thousands of entries.
+- **`v1/`**: changing the format (or the key algorithm) is done by incrementing
+  `FORMAT_VERSION`. Old entries become invisible and can be deleted by clearing the
+  cache.
+
+### Default location: `default_dir()`
+
+| System | Folder |
+|---|---|
+| Linux / Unix | `$XDG_CACHE_HOME/tri` if the variable is an absolute path, otherwise `~/.cache/tri` |
+| macOS | `~/Library/Caches/tri` |
+| Windows | `%LOCALAPPDATA%\tri` |
+
+The cache is **never written next to the photos**: SD cards, read-only disks, NAS.
+These folders are the ones the systems provide for recomputable data: excluded from Time
+Machine backups on macOS, cleanable by the user.
+
+## Keys: `Key::new(source, level, params)`
+
+A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
+
+1. the format version;
+2. the **absolute path** of the source file (`std::path::absolute`): `photo.RAF` and
+   `/dossier/photo.RAF` give the same key;
+3. its **size** and **modification date** (nanoseconds);
+4. the **level** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`);
+5. the computation **parameters**, a free-form string supplied by the caller (e.g.
+   `"half=1;side=2560"`).
+
+Consequences:
+
+- **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation;
+- **settings changed** (preview size, white balance…) ⇒ same, provided the caller
+  includes them in `params`;
+- **folder moved or renamed** ⇒ the cache is no longer found (deliberate choice: checking
+  the content would mean re-reading every ~30 MB RAW);
+- the old entry is **not deleted**: it remains until clearing or eviction.
+
+Each field is prefixed with its length before being hashed: (`ab`, `c`) and (`a`, `bc`)
+cannot produce the same key.
+
+Why BLAKE3 rather than the standard library's `DefaultHasher`: the latter does not
+guarantee an identical result from one Rust version to the next, which would invalidate
+the cache with every compiler update. A unit test (`key_hash_is_stable`) pins a reference
+value to detect any accidental change.
+
+## `Cache` API
+
+| Method | Role |
+|---|---|
+| `Cache::open(root)` | Opens a cache in `root`, creating the folders if needed |
+| `Cache::open_default()` | Same in `default_dir()` |
+| `with_quality(q)` | Same cache, JPEG quality `q` (1 to 100, default `DEFAULT_JPEG_QUALITY` = 90) for entries written from now on; not part of the key, see [settings.md](settings.md#settings-and-cache) |
+| `contains(&key)` | Does the entry exist? (without decoding it) |
+| `get(&key) -> Option<Bitmap>` | Reads and decodes the entry |
+| `get_bytes(&key)` / `put_bytes(&key, &bytes)` | Binary entry of an analysis (`Level::Exposure`, `Level::Sharpness`, `.bin` file), same atomic write; `Level::is_image` tells the two kinds apart |
+| `put(&key, &bitmap)` | Writes the entry (JPEG at the cache's quality, via [`jpeg`](jpeg.md): 4:4:4 for 1:1, 4:2:0 elsewhere), overwriting the old one |
+| `remove(&key)` | Deletes an entry (no error if absent) |
+| `clear(Some(level))` / `clear(None)` | Clears one level / the whole cache |
+| `usage(level) -> Usage` | Bytes and number of entries of a level |
+| `evict(level, max_bytes) -> Usage` (wired up on 2026-10-17: `EngineSettings::trim_cache` limits each 1:1 level to `[cache] zoom_max_mb`, at interface startup in a separate thread and at the end of `tri --previews`; until then, 1:1 renders piled up without limit) | Deletes the least recently used entries down to `max_bytes`, returns what was freed |
+
+### Robustness
+
+- **Atomic write**: `put` writes to a temporary file in the same folder
+  (`<hash>.jpg.<pid>-<n>.tmp`), syncs it to disk, then renames it. A reader sees the old
+  entry or the new one, never half of one, even if the program is killed mid-write.
+  Orphaned temporaries are ignored by `usage` and `evict`.
+- **Self-repair**: an unreadable entry (truncated JPEG, damaged disk) is deleted by
+  `get`, which returns `None`: the caller recomputes it like a missing entry.
+- **Sharing**: `Cache` keeps no state in memory (just the path). It is `Clone`, usable
+  from several threads, and even several processes, on the same folder.
+- **Last use**: `get` updates the file's modification date. `evict` uses it as the
+  last-use date, which avoids having to maintain an index.
+
+## Sizes and performance
+
+JPEG quality 90: a few tens of KB for a 400 px thumbnail, around 0.5 to 1 MB for a
+2560 px preview, 10 to 15 MB for a 26 Mpx 1:1. These figures are indicative and will be
+measured once the work queue fills the cache.

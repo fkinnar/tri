@@ -8,7 +8,7 @@
 //! - une progression par niveau, et des événements envoyés à un callback.
 //!
 //! Le calcul lui-même est délégué à un [`Producer`] : [`CachedPreviews`] en vrai, un faux
-//! producteur dans les tests. Voir `doc/scheduler.md`.
+//! producteur dans les tests. Voir `doc/en/scheduler.md`.
 
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
@@ -187,7 +187,7 @@ pub struct Config {
     /// Ordre « le plus rapide d'abord » pour le travail de fond : vignettes, puis aperçus
     /// boîtier, puis rendus RAW. Les aperçus boîtier de fond attendent la fin des vignettes,
     /// les aperçus standard de fond attendent la fin des deux (l'image affichée et ses
-    /// voisines passent toujours). Mesures dans `doc/scheduler.md`.
+    /// voisines passent toujours). Mesures dans `doc/en/scheduler.md`.
     pub thumbnails_first: bool,
     /// Rendus RAW (aperçus standard des RAW) : tout le dossier en fond, ou seulement à la
     /// demande ([`Scheduler::request`]).

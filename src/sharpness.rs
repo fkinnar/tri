@@ -14,7 +14,7 @@
 //! chaque case est mesurée, et le score est celle des cases **les plus nettes** : un
 //! portrait au fond flou garde un bon score, un bougé fait tout chuter. Le score ne se
 //! juge pas dans l'absolu (ISO, objectif, accentuation du boîtier) mais **par rapport à la
-//! médiane du dossier** ([`BlurFilter`]). Voir `doc/sharpness.md`.
+//! médiane du dossier** ([`BlurFilter`]). Voir `doc/en/sharpness.md`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -391,7 +391,7 @@ pub fn judge_in_groups(
             });
             // Piles connues : les voisines d'une autre pile sont une autre scène, on ne s'y
             // compare plus ; la pile les remplace. Le dossier reste : il attrape une rafale
-            // floue de bout en bout (mesuré le 18/10/2026, voir `doc/sharpness.md`).
+            // floue de bout en bout (mesuré le 18/10/2026, voir `doc/en/sharpness.md`).
             let neighbours_count = if grouped {
                 false
             } else {

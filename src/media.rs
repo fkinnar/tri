@@ -1,6 +1,6 @@
 //! Parcours de dossier et classification des fichiers image (RAW ou « plats »).
 //!
-//! Voir `doc/media.md` pour le détail.
+//! Voir `doc/en/media.md` pour le détail.
 
 use std::cmp::Ordering;
 use std::io;

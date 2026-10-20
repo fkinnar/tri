@@ -1,5 +1,5 @@
 //! Regroupement des images semblables (rafales, séries d'une même scène), comme les piles
-//! automatiques de Capture One (décidé le 18/10/2026, voir `doc/similarity.md`).
+//! automatiques de Capture One (décidé le 18/10/2026, voir `doc/en/similarity.md`).
 //!
 //! Chaque image reçoit une **empreinte** ([`Signature`]), calculée une fois sur une petite
 //! version de l'image et gardée dans le cache d'analyse : la **composition** (empreinte

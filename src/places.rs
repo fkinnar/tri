@@ -2,7 +2,7 @@
 //! NAS), dossier personnel, racine ; et lecture des sous-dossiers d'un dossier.
 //!
 //! Rien n'est parcouru d'avance : l'interface lit un dossier quand on le déplie, ce qui
-//! reste instantané même sur un NAS. Voir `doc/places.md`.
+//! reste instantané même sur un NAS. Voir `doc/en/places.md`.
 
 use std::ffi::OsString;
 use std::fs;
@@ -311,7 +311,8 @@ fn network_mounts_linux(text: &str) -> Vec<PathBuf> {
 
 /// Montages GVFS (Nautilus, Nemo…) dans `dir` : `smb-share:server=nas,share=photo` devient
 /// le partage réseau « photo (nas) » ; `mtp:host=…` (téléphone) et `gphoto2:host=…`
-/// (appareil photo) sont des volumes.
+/// (appareil photo) sont des volumes. Linux et autres Unix seulement (testé partout).
+#[cfg_attr(not(unix), allow(dead_code))]
 fn gvfs_places(dir: &Path) -> Vec<Place> {
     fs::read_dir(dir)
         .into_iter()

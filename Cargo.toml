@@ -42,12 +42,12 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std"
 [features]
 default = ["heif", "turbojpeg"]
 # HEIC/HEIF via libheif. HEVC est breveté : désactivable pour un binaire distribué
-# (cargo build --no-default-features). Voir doc/licensing.md.
+# (cargo build --no-default-features). Voir doc/en/licensing.md.
 heif = ["dep:libheif-rs"]
 # JPEG via libjpeg-turbo 3.x, compilée depuis les sources embarquées par turbojpeg-sys
 # (CMake + NASM requis ; TURBOJPEG_SOURCE=pkg-config pour celle du système, si ≥ 3.0).
 # Décodage 1,6–2,5× et encodage 4× plus rapides.
-# Sans elle, repli sur le décodeur/encodeur pur Rust du crate image. Voir doc/jpeg.md.
+# Sans elle, repli sur le décodeur/encodeur pur Rust du crate image. Voir doc/en/jpeg.md.
 turbojpeg = ["dep:turbojpeg"]
 
 [dev-dependencies]

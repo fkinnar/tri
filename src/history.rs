@@ -1,7 +1,7 @@
 //! Historique d'annulation : chaque action qui modifie quelque chose (notes, renommage,
 //! copie / déplacement, corbeille) devient un **pas**, qu'on peut défaire et refaire.
 //!
-//! Décisions du 18/10/2026 (voir `doc/history.md`) :
+//! Décisions du 18/10/2026 (voir `doc/en/history.md`) :
 //!
 //! - historique **de session**, en mémoire : rien n'est gardé d'un lancement à l'autre ;
 //! - une action = un pas, même sur 30 images ;

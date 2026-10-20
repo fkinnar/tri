@@ -1,6 +1,6 @@
 # tri — premiers pas
 
-*[English version](manual.md)*
+*[English version](../en/manual.md)*
 
 `tri` sert à trier une séance photo : parcourir les images, les noter, garder les bonnes.
 Ce petit guide montre où sont les choses ; pour le reste, **c'est à vous de chercher** —
@@ -16,7 +16,7 @@ Compilation et installation : voir [build.md](build.md). Lancement : `tri-gui`, 
 
 ## L'écran principal
 
-![L'écran principal](manual-images/fr/grid.jpg)
+![L'écran principal](../manual-images/fr/grid.jpg)
 
 1. **Dossiers** : vos disques et cartes mémoire (une carte branchée apparaît d'elle-même).
 2. **Filtres** : type de fichier, étoiles, drapeaux, netteté, couleurs.
@@ -27,7 +27,7 @@ Compilation et installation : voir [build.md](build.md). Lancement : `tri-gui`, 
 
 ## En grand
 
-![Plein écran](manual-images/fr/view.jpg)
+![Plein écran](../manual-images/fr/view.jpg)
 
 1. Ce qui est affiché (et l'image en cours).
 2. Les mêmes boutons qu'en grille.
@@ -41,17 +41,17 @@ Au clavier : **0 à 5** pour les étoiles, **6 à 9** pour les couleurs, **Maj+P
 pour accepter / rejeter. À la souris : le bandeau du bas, ou un **clic droit** sur une
 image :
 
-![Clic droit](manual-images/fr/rating.jpg)
+![Clic droit](../manual-images/fr/rating.jpg)
 
 ## Et encore…
 
 Plusieurs images côte à côte, c'est possible :
 
-![Comparaison](manual-images/fr/compare.jpg)
+![Comparaison](../manual-images/fr/compare.jpg)
 
 Comment ? **F1** affiche tous les raccourcis, avec une recherche :
 
-![Aide](manual-images/fr/help.jpg)
+![Aide](../manual-images/fr/help.jpg)
 
 ## Vos retours
 
@@ -66,4 +66,4 @@ Captures d'écran bienvenues. Merci !
 ---
 
 <sub>Photos des captures : Wikimedia Commons, domaine public / CC0
-([crédits](manual-images/CREDITS.md)).</sub>
+([crédits](../manual-images/CREDITS.md)).</sub>

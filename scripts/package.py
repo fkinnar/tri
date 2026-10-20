@@ -7,10 +7,10 @@
   par défaut, ou `--prefix`, `--uninstall`).
 - Windows : à venir (zip avec les DLL de vcpkg).
 
-Binaires **sans HEIC** (brevets HEVC, `doc/licensing.md`), avec libjpeg-turbo. LibRaw et
+Binaires **sans HEIC** (brevets HEVC, `doc/en/licensing.md`), avec libjpeg-turbo. LibRaw et
 ses dépendances sont **livrées à part** (`.dylib` / `.so`, liaison dynamique : la LGPL
 permet de les remplacer), avec leurs licences et les notices des crates Rust
-(`cargo about`). Voir `doc/packaging.md`.
+(`cargo about`). Voir `doc/en/packaging.md`.
 
 Usage : package.py [--out DOSSIER] [--no-build] [--no-archive] [--sign IDENTITÉ]
 """
@@ -86,7 +86,7 @@ def rust_notices(dest):
 
 
 def common_files(dest):
-    for name in ["LICENSE", "README.md", "CHANGELOG.md"]:
+    for name in ["LICENSE", "README.md", "README.fr.md", "CHANGELOG.md"]:
         shutil.copy2(ROOT / name, dest / name)
 
 
@@ -219,7 +219,7 @@ def package_macos(release, out, ver, archive, identity):
     # Signature (obligatoire sur Apple Silicon après install_name_tool) : « ad hoc » par
     # défaut, sans identité Apple, Gatekeeper demande alors une confirmation au premier
     # lancement ; avec un certificat « Developer ID Application » (--sign), runtime
-    # renforcé et horodatage, prêt pour la notarisation (doc/packaging.md).
+    # renforcé et horodatage, prêt pour la notarisation (doc/en/packaging.md).
     sign = ["codesign", "--force", "--sign", identity]
     if identity != "-":
         sign += ["--options", "runtime", "--timestamp"]
@@ -413,7 +413,7 @@ def main():
     elif sys.platform.startswith("linux"):
         result = package_linux(release, args.out, ver, not args.no_archive)
     else:
-        sys.exit("Windows : pas encore (voir doc/packaging.md)")
+        sys.exit("Windows : pas encore (voir doc/en/packaging.md)")
     print(f"paquet : {result}")
 
 

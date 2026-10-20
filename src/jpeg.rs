@@ -4,7 +4,7 @@
 //! réduite (1/2, 1/4, 1/8) directement par l'IDCT. Sans elle, ou si libjpeg-turbo refuse un
 //! fichier (JPEG CMJN, par exemple) : repli sur le crate `image`. Aucune orientation n'est
 //! appliquée ici : c'est à l'appelant de le faire (EXIF ou métadonnées du RAW).
-//! Voir `doc/jpeg.md`.
+//! Voir `doc/en/jpeg.md`.
 
 use std::fmt;
 

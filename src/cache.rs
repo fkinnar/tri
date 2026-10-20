@@ -2,7 +2,7 @@
 //!
 //! Un fichier JPEG par entrée, rangé par niveau ; aucune base de données. La clé dépend du
 //! fichier source (chemin, taille, date de modification) et des paramètres de calcul : si
-//! l'un change, l'ancienne entrée n'est simplement plus trouvée. Voir `doc/cache.md`.
+//! l'un change, l'ancienne entrée n'est simplement plus trouvée. Voir `doc/en/cache.md`.
 
 use std::ffi::OsString;
 use std::fs::{self, File};

@@ -7,7 +7,7 @@
 //! fichier avec son propre type (voir [`load`]).
 //!
 //! Exemple commenté, avec toutes les valeurs par défaut : `doc/config.example.toml`.
-//! Voir `doc/settings.md`.
+//! Voir `doc/en/settings.md`.
 
 use std::ffi::OsString;
 use std::fmt;

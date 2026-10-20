@@ -8,7 +8,7 @@
 //! largeur et en hauteur), que l'interface dessine à sa résolution (un TUI ferait ce
 //! qu'il peut). Un trait ([`Overlay`]) et une liste : les grilles intégrées
 //! ([`builtin`]), écrites en Rust, et celles de l'utilisateur, un fichier TOML chacune
-//! ([`load_dir`]). Voir `doc/overlay.md`.
+//! ([`load_dir`]). Voir `doc/en/overlay.md`.
 
 use std::path::{Path, PathBuf};
 

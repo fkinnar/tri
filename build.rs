@@ -42,7 +42,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=TRI_CHECK_ONLY");
 
     // Vérification du code Rust pour une autre plateforme (`cargo check --target
-    // x86_64-pc-windows-msvc` depuis macOS ou Linux, voir doc/build.md) : ni shim C (il
+    // x86_64-pc-windows-msvc` depuis macOS ou Linux, voir doc/en/build.md) : ni shim C (il
     // faudrait le compilateur de la cible) ni LibRaw ; `cargo check` ne lie rien.
     if env::var_os("TRI_CHECK_ONLY").is_some() {
         return;

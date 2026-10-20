@@ -434,7 +434,10 @@ impl TriApp {
     /// langue, fichiers, notes, déchargement. Le moteur (aperçus, cache, calculs) garde les
     /// siens jusqu'au prochain lancement.
     fn apply_settings(&mut self, ctx: &egui::Context, new: AppSettings) {
-        if new.i18n.language != self.settings.i18n.language {
+        // Pas dans les tests : la langue est globale au processus, et les tests, en
+        // parallèle, attendent tous le français (des réglages relus d'un fichier sans
+        // `[i18n]` passaient tout le monde en langue système : anglais sur la CI).
+        if !cfg!(test) && new.i18n.language != self.settings.i18n.language {
             crate::i18n::init(new.i18n.language);
         }
         if new.gui.theme != self.gui.theme || new.gui.colors != self.gui.colors {
@@ -3421,23 +3424,17 @@ impl TriApp {
                 .map(|b| b.original)
                 .filter(|o| o.x > 0.0 && o.y > 0.0)
         };
-        let metadata = self
+        let read = self
             .meta
             .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
             .get(file)
             .and_then(|m| m.as_ref().ok())
-            .and_then(|m| m.size)
-            .map(|(w, h)| vec2(w as f32, h as f32));
+            .cloned();
+        let size = |s: Option<(u32, u32)>| s.map(|(w, h)| vec2(w as f32, h as f32));
         let native = loaded(self, level).or_else(|| match (file.kind, source) {
-            // JPEG boîtier : la taille d'un 1:1 déjà vu (même boîtier, le plus souvent),
-            // au rapport de l'image.
-            (MediaKind::Raw, Source::Embedded) => {
-                let aspect = metadata.map(|m| m.x / m.y)?;
-                self.last_zoom_size
-                    .get(&Level::EmbeddedFull)
-                    .map(|&last| view::estimate_zoom_size(last, aspect))
-            }
-            _ => metadata,
+            // JPEG boîtier : la taille du JPEG embarqué, lue dans son en-tête.
+            (MediaKind::Raw, Source::Embedded) => size(read.as_ref()?.embedded_size),
+            _ => size(read.as_ref()?.size),
         })?;
         let (mut w, mut h) = (native.x as f64, native.y as f64);
         if let Some(v) = version {
@@ -4429,12 +4426,19 @@ impl TriApp {
         }
         // Résolution de ce qu'on regarde (demandé le 21/10/2026) : celle de l'image à
         // 100 % ; une version, son cadre, réduit si son préréglage d'export le réduit.
-        let version = shown_crop.and(
+        // Pendant le recadrage, le cadre en cours et le préréglage d'export de la barre
+        // (retour du 21/10/2026 : on lisait encore la taille de l'image entière).
+        let editing = self
+            .crop
+            .as_ref()
+            .filter(|c| c.image == file.path)
+            .map(|c| c.version());
+        let version = editing.or(shown_crop.and(
             self.version_shown
                 .as_ref()
                 .and_then(|(p, i)| self.versions.get(p).and_then(|v| v.list.get(*i)))
                 .cloned(),
-        );
+        ));
         if let Some((w, h)) = self.shown_resolution(&ctx, &file, version.as_ref()) {
             info.push_str(&t!("view-info-resolution", width = w, height = h));
         }

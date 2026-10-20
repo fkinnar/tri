@@ -168,7 +168,7 @@ de fond ; les aperçus 1:1 générés à la demande.
   possible en option (`RawPreviews::Background`, à exposer dans la configuration).
   Motif : les rendus RAW ne peuvent pas être accélérés (décompression du RAF déjà
   parallélisée par LibRaw ; aperçus plus petits : −21 % seulement ; rendus en parallèle :
-  plus lent). Mesures dans `doc/scheduler.md`.
+  plus lent). Mesures dans `doc/fr/scheduler.md`.
 - **Taille de l'aperçu standard : « Auto » par défaut** = plus grand côté de l'écran principal
   (2560 px sur la machine de dev, 2560×1440), valeur fixe configurable.
 - **Source de l'aperçu standard : `half_size` si sa taille suffit**, sinon rendu complet.
@@ -206,10 +206,10 @@ Images plates (JPEG/PNG/TIFF/WebP via `image`, HEIC/HEIF via `libheif-rs` ≥ li
 JPEG (aperçus embarqués, JPEG plats, cache) via `src/jpeg.rs` : libjpeg-turbo derrière la
 feature `turbojpeg` (défaut), repli pur Rust sinon. libjpeg-turbo 3.x est compilée depuis les
 sources embarquées par `turbojpeg-sys` (CMake + NASM), liée statiquement : les LTS Linux
-n'ont que la 2.1 (décidé le 16/10/2026, voir `doc/build.md`). API libheif fixée à `v1_17`
+n'ont que la 2.1 (décidé le 16/10/2026, voir `doc/fr/build.md`). API libheif fixée à `v1_17`
 (Mint 22 / Ubuntu 24.04 : 1.17.6).
 HEIF derrière la feature Cargo `heif` (défaut), code confiné dans `src/flat/heif.rs` ;
-`--no-default-features` donne un binaire sans aucun lien HEVC (brevets, `doc/licensing.md`).
+`--no-default-features` donne un binaire sans aucun lien HEVC (brevets, `doc/fr/licensing.md`).
 Prérequis système dans `prerequisites.sh`. Points acquis :
 
 - LibRaw expose une **API C** (`libraw_*`) utilisable via FFI ; l'API C++ n'a pas d'ABI stable
@@ -246,7 +246,7 @@ Prérequis système dans `prerequisites.sh`. Points acquis :
   maintenance n'a pas été contrôlée — à vérifier avant adoption (préférence marquée pour des
   outils open-source activement maintenus plutôt qu'abandonnés).
 
-## Notation XMP (décidé le 17/10/2026 ; moteur : `src/xmp.rs`, `doc/xmp.md`)
+## Notation XMP (décidé le 17/10/2026 ; moteur : `src/xmp.rs`, `doc/fr/xmp.md`)
 
 - **Sidecars, les deux conventions** : `IMAGE.RAF.xmp` (darktable, digiKam) et `IMAGE.xmp`
   (Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire). Lire **et**
@@ -377,9 +377,9 @@ Proposition : sortir cette étape du logiciel de développement.
 
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
 - **Objectif : publication open source si le projet aboutit.** La licence n'est pas encore
-  choisie (MIT/Apache-2.0 ou GPL-3.0, comparaison dans `doc/licensing.md`). Toute nouvelle
+  choisie (MIT/Apache-2.0 ou GPL-3.0, comparaison dans `doc/fr/licensing.md`). Toute nouvelle
   dépendance doit être vérifiée aussi sous l'angle licence et brevets, et ajoutée au tableau
-  de `doc/licensing.md`. Points déjà identifiés : HEVC (HEIC iPhone) est breveté, donc un
+  de `doc/fr/licensing.md`. Points déjà identifiés : HEVC (HEIC iPhone) est breveté, donc un
   binaire distribué qui embarque un décodeur HEVC est exposé ; la libheif de Homebrew est liée
   à x265 (GPL), à ne jamais livrer avec un binaire sous licence permissive ; liaison
   dynamique uniquement pour les bibliothèques LGPL (LibRaw, libheif, libde265).
@@ -408,13 +408,18 @@ Proposition : sortir cette étape du logiciel de développement.
     (un fichier par module, API publique uniquement) ; les tests qui ont besoin d'un vrai RAW
     sont `#[ignore]` et lisent `TRI_TEST_RAW` / `TRI_TEST_HEIC` (aucune vraie photo versionnée,
     seulement de petites fixtures synthétiques dans `tests/fixtures/`) ;
-  - documentation Markdown dans `doc/` (un fichier par module + `README.md` sommaire,
-    `build.md`, `tests.md`) expliquant mods, traits, fonctions et le *pourquoi* ; commentaires
-    `///` sur tout l'API public pour `cargo doc` ;
+  - documentation Markdown **bilingue** (décidé le 21/10/2026) : `doc/fr/` et `doc/en/`,
+    mêmes noms de fichiers (un fichier par module + `README.md` sommaire, `build.md`,
+    `tests.md`), expliquant mods, traits, fonctions et le *pourquoi* ; **les deux mises à
+    jour ensemble**. `README.md` (anglais) et `README.fr.md` à la racine ; restent hors des
+    dossiers de langue : `doc/config.example.toml` (commentaires en français, lus par la
+    fenêtre de réglages), `doc/overlay.example.toml`, `doc/manual-images/`. Les chemins
+    cités dans le code pointent vers `doc/en/`. Commentaires `///` sur tout l'API public
+    pour `cargo doc` ;
   - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans warning,
     `cargo test --workspace` vert, **dans les deux configurations** (défaut et
     `--no-default-features`) ; pour l'interface, vérifier aussi le rendu par capture
-    automatique (`TRI_GUI_SCREENSHOT`, voir `doc/gui.md`).
+    automatique (`TRI_GUI_SCREENSHOT`, voir `doc/fr/gui.md`).
 
 ## Prochaine étape immédiate
 
@@ -426,7 +431,7 @@ Proposition : sortir cette étape du logiciel de développement.
 - [x] File de travail à priorités + progression + annulation : `src/preview.rs`,
       `src/scheduler.rs`, tests d'intégration (faux producteur + vrai RAW).
 - [x] Démo CLI avec progression (`tri <dossier> --previews`, `--clear-cache`,
-      `--cache-usage`) et mesures sur un vrai dossier (voir `doc/scheduler.md`).
+      `--cache-usage`) et mesures sur un vrai dossier (voir `doc/fr/scheduler.md`).
 - [x] JPEG via libjpeg-turbo (`src/jpeg.rs`, feature `turbojpeg`, défaut) : grille
       complète du dossier de test en 14–19 s au lieu de 29 s.
 - Décidé le 16/10/2026 : politique « vignettes d'abord » par défaut, **réglable** (option
@@ -457,10 +462,10 @@ Proposition : sortir cette étape du logiciel de développement.
       par l'utilisateur) : `src/settings.rs` (sections `[preview]`, `[render]`, `[cache]`,
       `[scheduler]`, emplacement par OS, `--config`), `gui/src/settings.rs` (`[gui]`,
       `[gui.grid]`, `[gui.view]`, `[gui.colors]`), exemple commenté
-      `doc/config.example.toml`, `doc/settings.md`. Taille d'aperçu et workers « auto » ou
+      `doc/config.example.toml`, `doc/fr/settings.md`. Taille d'aperçu et workers « auto » ou
       fixes. Configuration invalide : réglages par défaut + avertissement (barre d'état,
       stderr). Chaque réglage de calcul n'entre que dans la clé de cache des niveaux qu'il
-      influence. Restent non réglables (assumé, listé dans `doc/settings.md`) : priorités du
+      influence. Restent non réglables (assumé, listé dans `doc/fr/settings.md`) : priorités du
       scheduler, polices et marges du texte en surimpression.
 - [x] Grille : survol et sélection se ressemblaient trop (retour du 16/10/2026). Premier
       choix (17/10/2026) : le survol sélectionne ; abandonné le jour même, car aller vers le
@@ -533,7 +538,7 @@ Proposition : sortir cette étape du logiciel de développement.
      l'interface, `tri <dossier> --metadata`. En grille, le panneau montre aussi
      l'histogramme de l'image sélectionnée.
   4. [x] **Déchargement d'une carte** (fait le 17/10/2026, `src/offload.rs`,
-     `doc/offload.md`) : choix de l'utilisateur — défauts = son usage, tout réglable ;
+     `doc/fr/offload.md`) : choix de l'utilisateur — défauts = son usage, tout réglable ;
      dossier de séance proposé `AAAA-MM-JJ_` + champ libre, racine mémorisée d'un
      déchargement à l'autre (l'année va dans la racine ; gabarits plus tard), noms
      d'origine (renommage par gabarits plus tard), doublons jugés sur le dossier de
@@ -617,7 +622,7 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   `Maj+B` ou bouton du bandeau ; `b` n'inclut le développé que s'il existe déjà. Ensuite :
   RawTherapee / ART sur le même trait, envoi de JPEG développés.
 - [x] **Export par profils** (19/10/2026, étape 1 de l'après-développement) :
-  `src/export.rs`, `doc/export.md`, `Ctrl+E`, `tri --export` ; darktable fait formats et
+  `src/export.rs`, `doc/fr/export.md`, `Ctrl+E`, `tri --export` ; darktable fait formats et
   profils couleur (un lancement pour tout l'export), profils `[export.profiles.<id>]`
   (« Retouche » TIFF 16 bits ProPhoto, « Web » JPEG sRGB), espaces de la liste de
   darktable. **Pas de ProPhoto / espace linéaire en 8 bits** (idée de l'utilisateur :
@@ -636,7 +641,7 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   (Ctrl+E sur l'image voulue) ; **espace d'origine lu** (ICC, sinon EXIF DCF R03 / R98 :
   un JPEG boîtier peut être en Adobe RGB), converti par `moxcms` si le profil en demande
   un autre.
-- [~] **Versions (recadrages)** (19/10/2026, `src/versions.rs`, `doc/versions.md`) :
+- [~] **Versions (recadrages)** (19/10/2026, `src/versions.rs`, `doc/fr/versions.md`) :
   décisions de l'utilisateur — on recadre ce qu'on voit (par-dessus darktable ; son usage :
   pas de recadrage dans darktable), pas de redressement (travail de darktable), profil
   d'export facultatif qui pré-remplit la boîte, badge dans la grille (pas une vignette par
@@ -699,7 +704,7 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   droit, en tête du panneau, fichier `favorites` du dossier de données,
   `places::favorites`).
 - [x] **Surveillance du dossier ouvert** (fichiers ajoutés, XMP modifiés ailleurs : « un
-  vrai confort ») : **fait** le 18/10/2026 (`src/watch.rs`, `doc/watch.md`, `[watch]
+  vrai confort ») : **fait** le 18/10/2026 (`src/watch.rs`, `doc/fr/watch.md`, `[watch]
   interval_ms`) ; par scrutation, sans dépendance (même comportement sur NAS et carte).
 - [x] **Raccourcis dans la fenêtre de réglages** (section `[keys]`) : **fait** le
   18/10/2026 (pastilles par action, enregistrer la touche tapée, conflits signalés).
@@ -713,14 +718,14 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   suite. En grille on note rarement aux étoiles : le léger retard n'y gêne pas. Délai
   propre aux nombres, plus court que celui des séquences (1 s) : ~300 ms ou moins, réglable,
   à tester.
-- Puis, une fois corrections et ajouts finis : **licence** (`LICENSE`, `doc/licensing.md`)
+- Puis, une fois corrections et ajouts finis : **licence** (`LICENSE`, `doc/fr/licensing.md`)
   et **builds fournis** pour macOS, Linux et Windows (que personne ne doive compiler).
   **Avancé le 19/10/2026** : licence **GPL-3.0-or-later** (`LICENSE`), version
   **`1.0.0-alpha.1`** (alpha, dépôt privé ; la **bêta sera publique**), `README.md`,
   `CHANGELOG.md` ; binaires **sans HEIC** ; builds par **GitHub Actions**
   (`.github/workflows/ci.yml`, à la main ou sur tag, pour ménager les minutes) ; code
-  Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/build.md`). **Paquets
-  faits** le 19/10/2026 (`scripts/package.py`, `doc/packaging.md`) : `tri.app` en `.dmg`
+  Rust vérifié pour Windows depuis macOS (`TRI_CHECK_ONLY`, `doc/fr/build.md`). **Paquets
+  faits** le 19/10/2026 (`scripts/package.py`, `doc/fr/packaging.md`) : `tri.app` en `.dmg`
   (bibliothèques dans `Frameworks`, signature ad hoc ; Developer ID et notarisation pour
   la bêta publique, `--sign`), archive Linux avec `install.sh` (LibRaw livrée, rpath),
   notices `cargo about` et licences des bibliothèques. Reste : zip Windows. Icône choisie (« t » et étoile, `scripts/make-icon.py`), barre du haut
@@ -754,7 +759,7 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
    (recherche floue, validation, application à chaud de l'interface). Restent : `[keys]`
    (raccourcis) dans la fenêtre, descriptions en anglais (exemple traduit).
 3. [x] **Annuler** (« très important, il est temps », **fait** le 18/10/2026 :
-   `src/history.rs`, `doc/history.md`, `u` / `Ctrl+Z` / `Cmd+Z`, liste `Ctrl+H`) : concevoir l'historique d'abord, avec
+   `src/history.rs`, `doc/fr/history.md`, `u` / `Ctrl+Z` / `Cmd+Z`, liste `Ctrl+H`) : concevoir l'historique d'abord, avec
    l'utilisateur, puis l'appliquer aux notes, au renommage, à la corbeille et au
    déplacement. Avant les rafales : chaque nouvelle action modifiante l'alourdit.
    Décisions du 18/10/2026 : historique **de session** (en mémoire, perdu à la
@@ -824,7 +829,7 @@ explicitement par l'utilisateur comme important.
 - [x] **Sélection multiple** (clavier et souris) : noter, déplacer, supprimer plusieurs
       images d'un coup. Décidé le 17/10/2026 : **les deux, et tout faisable au clavier**
       (« c'est ma grande frustration avec les outils du marché »). **Fait** le
-      17/10/2026 : `src/selection.rs` (`doc/selection.md`), Espace, `v` (mode visuel),
+      17/10/2026 : `src/selection.rs` (`doc/fr/selection.md`), Espace, `v` (mode visuel),
       Ctrl+A / Ctrl+Maj+A, Maj+clic, Cmd/Ctrl+clic ; notes, corbeille, éditeur sur la
       sélection ; copier / déplacer vers… aussi (18/10/2026).
 - [x] **Comparaison côte à côte** (rafales), zoom et position liés ; décidé le
@@ -832,7 +837,7 @@ explicitement par l'utilisateur comme important.
       sélection (6 au plus, `[gui.compare] max`), image active notée, `Espace` élimine,
       1:1 lié (`z`), moteur `Scheduler::set_shown`.
 - [ ] **Regroupement en séries / rafales** (le `Vec<Vec<…>>` des filtres est prévu pour).
-- [x] **Annuler** : fait le 18/10/2026 (historique de session, voir `doc/history.md`).
+- [x] **Annuler** : fait le 18/10/2026 (historique de session, voir `doc/fr/history.md`).
       Corbeille réelle à vérifier à la main (les tests n'y touchent pas).
 - [ ] Filtres complexes (fenêtre modale ou panneau latéral, à discuter).
 - [ ] **`dd` et les nombres, comme vim** (idée du 18/10/2026, pas urgent) : `x` supprime
@@ -844,7 +849,7 @@ explicitement par l'utilisateur comme important.
       cache d'analyse ; sur la mosaïque RAW. Plus tard : visages / yeux. Décidé le
       17/10/2026 : overlay **en 1:1 seulement** (en grille, trop gourmand et peu lisible) ;
       **2-3 couleurs configurables**, rotation de l'une à l'autre par un raccourci.
-      **Overlay fait** le 17/10/2026 : `src/sharpness.rs` (`doc/sharpness.md`), Sobel à
+      **Overlay fait** le 17/10/2026 : `src/sharpness.rs` (`doc/fr/sharpness.md`), Sobel à
       seuil fixe, points isolés retirés, `p` / `Ctrl+P`. Restent : score par image et
       filtre (cache d'analyse, sur la mosaïque RAW), netteté en comparaison.
       **Score sans IA fait** le 17/10/2026 (demande de l'utilisateur : « déjà virer des
@@ -857,7 +862,7 @@ explicitement par l'utilisateur comme important.
       rouge / jaune) : règle dossier (< 0,5) **ou** voisines (< 0,8 × la médiane des 3
       avant / 3 après) → 14 rouges sur 15, 0 verte. Non détectable sans IA : mise au point
       sur l'arrière-plan (le collimateur était sur l'arrière-plan). Netteté au collimateur
-      testée et écartée (dépend du contenu de la zone). Détails : `doc/sharpness.md`.
+      testée et écartée (dépend du contenu de la zone). Détails : `doc/fr/sharpness.md`.
       **Faux positifs constatés** le 17/10/2026 (photos libres du manuel) : sur un
       dossier aux sujets variés, des gros plans nets sur fond très flou (papillon,
       coccinelle, oie) étaient marqués « floue » parmi des paysages très détaillés. Le
@@ -899,8 +904,8 @@ explicitement par l'utilisateur comme important.
         dès **un seul pixel** (`any(|&n| n > 0)`). Correctif : seuil réglable
         (`[gui.histogram]`, ~0,1 % des pixels), plus sensible que les badges de la grille
         (0,5 % / 5 %).
-- [~] **Manuel des testeurs** (demandé le 17/10/2026) : `doc/manuel.md` et
-      `doc/manual.md`, courts exprès (« laisser de la liberté de penser » : savoir si
+- [~] **Manuel des testeurs** (demandé le 17/10/2026) : `doc/fr/manual.md` et
+      `doc/en/manual.md`, courts exprès (« laisser de la liberté de penser » : savoir si
       l'interface est intuitive) ; captures par `scripts/manual-screenshots.sh`. Faites
       avec des photos libres (Wikimedia Commons, CC0) ; **à refaire avec de vraies
       photos de l'utilisateur** (RAW, collimateur, histogramme RAW) : relancer le script
@@ -924,7 +929,7 @@ explicitement par l'utilisateur comme important.
       RAW+JPEG suivent ; aussi en ligne de commande. Premier lot décidé le 17/10/2026 :
       **renommer, supprimer, ouvrir dans un éditeur externe (configurable dans le TOML),
       afficher dans le Finder** (« ce serait déjà super »). **Premier lot fait** le
-      17/10/2026 : `src/files.rs` (`doc/files.md`), `[files]` (paires, corbeille, éditeur),
+      17/10/2026 : `src/files.rs` (`doc/fr/files.md`), `[files]` (paires, corbeille, éditeur),
       `F2` / `Suppr` / `Maj+R` / `e`, boutons du clic droit, `tri --rename|--delete|
       --reveal|--edit`. Copier / déplacer vers… fait le 18/10/2026 (`y` / `x`,
       `tri --copy|--move`).
@@ -939,7 +944,7 @@ explicitement par l'utilisateur comme important.
 - [x] ★ **Multilingue** : identifiants de chaînes, catalogues français et anglais
       (interface *et* moteur), langue du système par défaut, réglable ; piste Fluent.
       Choix technique laissé à Claude (17/10/2026). **Fait** le 17/10/2026 : Fluent
-      (`src/i18n.rs`, `doc/i18n.md`), catalogues `locales/` et `gui/locales/`, `t!`,
+      (`src/i18n.rs`, `doc/fr/i18n.md`), catalogues `locales/` et `gui/locales/`, `t!`,
       `[i18n] language` ; interface, ligne de commande, erreurs et métadonnées traduites ;
       noms de touches lus dans toutes les langues.
 

@@ -12,7 +12,7 @@
 //!
 //! La validation (le fichier modifié est-il toujours lisible ?) revient à l'appelant, qui
 //! connaît le type complet des réglages ([`crate::settings::parse`]). Voir
-//! `doc/config_edit.md`.
+//! `doc/en/config_edit.md`.
 
 use std::fmt;
 use std::io;

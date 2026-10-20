@@ -3,7 +3,7 @@
 //! C'est ce qu'une interface (graphique, TUI) ou la ligne de commande manipule quand on
 //! « ouvre un dossier » : parcours ([`crate::media::scan`]), notes
 //! ([`crate::notes::NoteBook`]), puis filtres par type et par notes, combinés ici une fois
-//! pour toutes. Voir `doc/folder.md`.
+//! pour toutes. Voir `doc/en/folder.md`.
 
 use std::io;
 use std::path::{Path, PathBuf};

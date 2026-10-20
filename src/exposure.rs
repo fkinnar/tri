@@ -5,7 +5,7 @@
 //! à leur profondeur (12, 14, 16 bits), noir soustrait pixel par pixel, sans dématriçage :
 //! c'est la vérité sur l'exposition, quel que soit l'aperçu affiché (JPEG du boîtier ou
 //! rendu). Pour une image plate, sur ses valeurs 8 bits. C'est une donnée *dérivée*
-//! (cache d'analyse), jamais écrite dans le XMP. Voir `doc/exposure.md`.
+//! (cache d'analyse), jamais écrite dans le XMP. Voir `doc/en/exposure.md`.
 
 use std::path::Path;
 

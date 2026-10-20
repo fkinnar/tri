@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Captures d'écran du manuel des testeurs (doc/manuel.md, doc/manual.md).
+# Captures d'écran du manuel des testeurs (doc/fr/manual.md, doc/en/manual.md).
 #
 #   scripts/manual-screenshots.sh <dossier de photos> [--lang fr|en] [--out DOSSIER]
 #                                 [--volume NOM | --demo-root DOSSIER] [--font FICHIER]
@@ -116,7 +116,7 @@ EOF
 
 mkdir -p "$out/$lang"
 
-# Une capture : nom, puis les étapes de TRI_GUI_ACTIONS (voir doc/gui.md).
+# Une capture : nom, puis les étapes de TRI_GUI_ACTIONS (voir doc/en/gui.md).
 shot() {
     local name=$1 actions=$2
     echo "capture : $lang/$name"

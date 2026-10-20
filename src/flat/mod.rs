@@ -1,9 +1,9 @@
 //! Décodage des images « plates » (JPEG, PNG, TIFF, WebP, HEIF/HEIC), sans développement.
 //!
 //! Le support HEIF dépend de la feature Cargo `heif` (activée par défaut) : HEVC est couvert
-//! par des brevets, un binaire distribué doit pouvoir s'en passer (`doc/licensing.md`).
+//! par des brevets, un binaire distribué doit pouvoir s'en passer (`doc/en/licensing.md`).
 //!
-//! Voir `doc/flat.md` pour le détail.
+//! Voir `doc/en/flat.md` pour le détail.
 
 #[cfg(feature = "heif")]
 mod heif;

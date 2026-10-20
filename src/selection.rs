@@ -5,7 +5,7 @@
 //! corbeille, éditeur) s'appliquent à [`Selection::targets`] — les images marquées encore
 //! visibles, ou l'image courante s'il n'y en a pas. Les images sont repérées par leur
 //! chemin : la sélection survit à un changement de filtre ou à une relecture du dossier.
-//! Voir `doc/selection.md`.
+//! Voir `doc/en/selection.md`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

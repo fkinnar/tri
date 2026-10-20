@@ -2,7 +2,7 @@
 //!
 //! Les images circulent en groupes (`Groups`, un `Vec<Vec<MediaFile>>`) pour permettre plus
 //! tard la détection de séries ; sans regroupement, il y a un seul groupe. Voir
-//! `doc/filter.md`.
+//! `doc/en/filter.md`.
 
 use crate::media::{MediaFile, MediaKind};
 

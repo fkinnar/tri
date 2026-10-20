@@ -11,7 +11,7 @@
 //! Toutes les images d'un export passent par **un seul lancement** de darktable (son
 //! démarrage, ~6 s, n'est payé qu'une fois) ; darktable annonce chaque fichier écrit, ce
 //! qui donne la progression. Rien n'est jamais écrasé (darktable ajoute `_01`…), aucun
-//! sidecar n'est écrit. Voir `doc/export.md`.
+//! sidecar n'est écrit. Voir `doc/en/export.md`.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, BufReader, Read};

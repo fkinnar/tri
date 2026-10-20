@@ -5,7 +5,7 @@
 //! les champs de notation. Les champs sont reconnus par leur espace de noms, pas par leur
 //! préfixe (Bridge écrit `xap:` au lieu de `xmp:`), sous forme d'attribut
 //! (`xmp:Rating="3"`) comme d'élément (`<xmp:Rating>3</xmp:Rating>`). Un sidecar mal formé
-//! n'est jamais réécrit. Voir `doc/xmp.md`.
+//! n'est jamais réécrit. Voir `doc/en/xmp.md`.
 
 use std::fmt;
 use std::fs;

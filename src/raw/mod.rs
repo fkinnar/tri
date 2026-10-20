@@ -1,6 +1,6 @@
 //! Lecture des fichiers RAW via LibRaw : aperçu embarqué et développement complet.
 //!
-//! Voir `doc/raw.md` pour le détail.
+//! Voir `doc/en/raw.md` pour le détail.
 
 mod ffi;
 

@@ -5,7 +5,7 @@
 //! embarqué complète ce que LibRaw n'expose pas (correction d'exposition, mode, flash).
 //! Pour une image plate, son propre EXIF (`kamadak-exif` : JPEG, TIFF, HEIF, PNG, WebP).
 //! Le module fournit aussi les lignes à afficher ([`Metadata::rows`]), en français, pour
-//! n'importe quelle interface. Voir `doc/metadata.md`.
+//! n'importe quelle interface. Voir `doc/en/metadata.md`.
 
 use std::fs;
 use std::io::{BufReader, Cursor};
@@ -46,6 +46,9 @@ pub struct Metadata {
     pub date: Option<String>,
     /// Dimensions de l'image affichée (pixels, orientation appliquée).
     pub size: Option<(u32, u32)>,
+    /// RAW : dimensions du JPEG embarqué par le boîtier (pixels, orientation appliquée),
+    /// lues dans son en-tête : la résolution du « JPEG boîtier » à 100 %.
+    pub embedded_size: Option<(u32, u32)>,
     /// Taille du fichier (octets).
     pub file_size: u64,
     /// Collimateur de mise au point, en coordonnées relatives (0 à 1) de l'image affichée
@@ -114,10 +117,19 @@ fn read_raw(path: &Path) -> Result<Metadata, MetadataError> {
         ..Metadata::default()
     };
     // L'EXIF du JPEG embarqué complète (LibRaw fait foi pour ce qu'il connaît).
-    if let Ok(Thumbnail::Jpeg(bytes)) = raw.thumbnail()
-        && let Ok(exif) = exif::Reader::new().read_from_container(&mut Cursor::new(bytes))
-    {
-        m.fill_from(&exif);
+    if let Ok(Thumbnail::Jpeg(bytes)) = raw.thumbnail() {
+        // Sa taille : l'en-tête seulement. Il n'est pas pivoté : l'orientation du RAW.
+        m.embedded_size = image::ImageReader::new(Cursor::new(&bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .map(|(w, h)| match rotation {
+                Rotation::Cw90 | Rotation::Cw270 => (h, w),
+                _ => (w, h),
+            });
+        if let Ok(exif) = exif::Reader::new().read_from_container(&mut Cursor::new(bytes)) {
+            m.fill_from(&exif);
+        }
     }
     Ok(m)
 }
@@ -451,6 +463,7 @@ mod tests {
             flash: Some(false),
             date: Some("2026-10-16 14:32:05".into()),
             size: Some((4160, 6240)),
+            embedded_size: Some((2944, 4416)),
             file_size: 26_300_000,
             focus_point: None,
             quarter_turn: false,

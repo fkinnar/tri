@@ -10,7 +10,7 @@
 //!
 //! Fluent choisit la forme du pluriel selon la langue : en français 0 et 1 sont au
 //! singulier (« 0 image »), en anglais seul 1 l'est. Les nombres décimaux sont mis en
-//! forme avant d'être passés ([`decimal`] : virgule en français). Voir `doc/i18n.md`.
+//! forme avant d'être passés ([`decimal`] : virgule en français). Voir `doc/en/i18n.md`.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, RwLock};

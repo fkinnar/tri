@@ -11,7 +11,7 @@
 | Windows (non testé) | `vcpkg install libraw:x64-windows libheif:x64-windows`, CMake et NASM, puis `LIBRAW_DIR` (voir plus bas) |
 
 Plus Rust lui-même ([rustup](https://rustup.rs/), édition 2024). Le script
-[`prerequisites.sh`](../prerequisites.sh) rappelle ces commandes. Commande Linux vérifiée sur
+[`prerequisites.sh`](../../prerequisites.sh) rappelle ces commandes. Commande Linux vérifiée sur
 Mint 22.3 (16/10/2026). Commande macOS vérifiée le 17/10/2026 : `cmake` est bien
 nécessaire depuis que libjpeg-turbo est compilée avec le projet (sur Apple Silicon, NASM
 n'est pas requis : les optimisations SIMD ARM n'en ont pas besoin).

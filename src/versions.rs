@@ -12,7 +12,7 @@
 //!   est gardée telle quelle.
 //!
 //! La géométrie du cadre (rapports, orientation, poignées) est ici, testée sans interface :
-//! l'interface ne fait que la dessiner. Voir `doc/versions.md`.
+//! l'interface ne fait que la dessiner. Voir `doc/en/versions.md`.
 
 use std::path::{Path, PathBuf};
 

@@ -5,7 +5,7 @@
 //! compilé avec `tri`, comme décidé pour les plugins (pas de `libloading` tant qu'aucun
 //! plugin externe n'existe). Son action porte l'identifiant `plugin.<nom>.send`, dans
 //! l'espace de noms réservé aux plugins. Le premier : **AirDrop** (macOS). Voir
-//! `doc/send.md`.
+//! `doc/en/send.md`.
 
 use std::path::PathBuf;
 

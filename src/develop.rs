@@ -5,7 +5,7 @@
 //! un **programme externe** en processus séparé : `darktable-cli` produit l'image avec tout
 //! l'historique de développement du sidecar XMP. Le programme externe ne peut pas faire
 //! tomber `tri`, et sa licence reste la sienne. RawTherapee (`rawtherapee-cli`, profils
-//! `.pp3`) et ART suivraient le même modèle. Voir `doc/develop.md`.
+//! `.pp3`) et ART suivraient le même modèle. Voir `doc/en/develop.md`.
 //!
 //! Rien n'est écrit chez l'utilisateur : `darktable-cli` reçoit sa propre configuration
 //! (dans le cache de `tri`) et une bibliothèque en mémoire, le sidecar n'est que lu.

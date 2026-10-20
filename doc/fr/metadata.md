@@ -32,6 +32,10 @@ ISO 400 », « Correction : +0,7 IL », « Focale : 5,7 mm (éq. 24 × 36 : 26 m
 « Date : 16/10/2026 à 14:32:05 », « Dimensions : 4160 × 6240 (26 Mpx) ». Aides :
 `camera()` (sans répéter le fabricant), `shutter_text()`, `exposure_text()`.
 
+`Metadata::embedded_size` (21/10/2026) : pour un RAW, les dimensions du JPEG embarqué,
+lues dans son seul en-tête (orientation du RAW appliquée) ; la résolution du « JPEG
+boîtier » en plein écran.
+
 ## Ligne de commande
 
 ```

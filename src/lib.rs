@@ -18,7 +18,7 @@
 //! - [`offload`] : déchargement d'une carte vers un dossier local (copie vérifiée) ;
 //! - [`places`] : emplacements (volumes montés, dossier personnel, racine) et sous-dossiers.
 //!
-//! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/README.md`.
+//! Le moteur ne dépend d'aucune bibliothèque d'affichage. Voir `doc/en/README.md`.
 
 #![warn(missing_docs)]
 

@@ -4,7 +4,7 @@
 //! [`Action`], identifiée par un nom stable (`core.nav.next`...). La section `[keys]` du
 //! fichier de configuration associe des touches à ces noms ; les plugins auront leur propre
 //! espace (`plugin.<nom>.*`). Un raccourci peut être une séquence de touches (`g g`, comme
-//! dans vim) : voir [`Sequencer`]. Voir `doc/gui.md`.
+//! dans vim) : voir [`Sequencer`]. Voir `doc/en/gui.md`.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};

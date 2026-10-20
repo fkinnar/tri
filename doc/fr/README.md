@@ -2,20 +2,20 @@
 
 `tri` est une visionneuse RAW rapide pour le tri après une séance photo (équivalent libre de
 FastRawViewer), pour Linux, macOS et, si possible, Windows. Le contexte et les décisions
-d'architecture sont dans [`CLAUDE.md`](../CLAUDE.md) ; ce dossier documente le code tel qu'il
+d'architecture sont dans [`CLAUDE.md`](../../CLAUDE.md) ; ce dossier documente le code tel qu'il
 existe.
 
 ## Sommaire
 
 | Document | Contenu |
 |---|---|
-| [manuel.md](manuel.md) / [manual.md](manual.md) | Premiers pas pour les testeurs (captures, volontairement court) ; captures produites par `scripts/manual-screenshots.sh` |
+| [manual.md](manual.md) ([English](../en/manual.md)) | Premiers pas pour les testeurs (captures, volontairement court) ; captures produites par `scripts/manual-screenshots.sh` |
 | [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
 | [packaging.md](packaging.md) | Paquets prêts à installer (`.dmg`, `.tar.gz`), licences livrées, signature macOS |
 | [config_edit.md](config_edit.md) | Module `tri::config_edit` : liste des réglages tirée de l'exemple, modification du fichier sans rien perdre (fenêtre de réglages) |
 | [settings.md](settings.md) | Fichier de configuration (TOML) : emplacement, sections, erreurs ; module `tri::settings` |
-| [config.example.toml](config.example.toml) | Toutes les clés avec leur valeur par défaut, commentées |
+| [config.example.toml](../config.example.toml) | Toutes les clés avec leur valeur par défaut, commentées |
 | [media.md](media.md) | Module `tri::media` : parcours de dossier, RAW / images plates |
 | [filter.md](filter.md) | Module `tri::filter` : trait `Filter`, groupes, `KindFilter` |
 | [cache.md](cache.md) | Module `tri::cache` : cache persistant des vignettes et aperçus |

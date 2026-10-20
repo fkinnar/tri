@@ -1,6 +1,6 @@
 //! Recherche floue à la façon de fzf : aide, réglages, filtre de la grille par nom de
 //! fichier, recherche de dossiers. Dans le moteur pour servir aussi en ligne de commande
-//! et à un futur TUI. Voir `doc/fuzzy.md`.
+//! et à un futur TUI. Voir `doc/en/fuzzy.md`.
 
 /// Lettre sans accent, en minuscule (recherche floue).
 fn fold(c: char) -> char {

@@ -1,6 +1,6 @@
 # tri — getting started
 
-*[Version française](manuel.md)*
+*[Version française](../fr/manual.md)*
 
 `tri` is for culling a photo shoot: browse the images, rate them, keep the good ones.
 This short guide shows where things are; for the rest, **it is up to you to explore** —
@@ -16,7 +16,7 @@ Building and installing: see [build.md](build.md) (in French). To launch: `tri-g
 
 ## The main screen
 
-![Main screen](manual-images/en/grid.jpg)
+![Main screen](../manual-images/en/grid.jpg)
 
 1. **Folders**: your drives and memory cards (a card shows up by itself when plugged in).
 2. **Filters**: file type, stars, flags, sharpness, labels.
@@ -27,7 +27,7 @@ Building and installing: see [build.md](build.md) (in French). To launch: `tri-g
 
 ## Full screen
 
-![Full screen](manual-images/en/view.jpg)
+![Full screen](../manual-images/en/view.jpg)
 
 1. What is shown (and the current image).
 2. The same buttons as in the grid.
@@ -41,17 +41,17 @@ With the keyboard: **0 to 5** for stars, **6 to 9** for colour labels, **Shift+P
 **Shift+X** to pick / reject. With the mouse: the bar at the bottom, or a **right click**
 on an image:
 
-![Right click](manual-images/en/rating.jpg)
+![Right click](../manual-images/en/rating.jpg)
 
 ## And more…
 
 Several images side by side? Possible:
 
-![Comparison](manual-images/en/compare.jpg)
+![Comparison](../manual-images/en/compare.jpg)
 
 How? **F1** lists every shortcut, with a search box:
 
-![Help](manual-images/en/help.jpg)
+![Help](../manual-images/en/help.jpg)
 
 ## Your feedback
 
@@ -66,4 +66,4 @@ Screenshots welcome. Thank you!
 ---
 
 <sub>Photos in the screenshots: Wikimedia Commons, public domain / CC0
-([credits](manual-images/CREDITS.md)).</sub>
+([credits](../manual-images/CREDITS.md)).</sub>

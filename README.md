@@ -1,61 +1,62 @@
 # tri
 
-**Visionneuse RAW rapide pour trier une séance photo**, sous macOS et Linux (Windows en
-cours) : vignettes de tout un dossier en quelques secondes, plein écran en JPEG boîtier
-ou en vrai rendu RAW, notes (étoiles, couleurs, accepté / rejeté) écrites en XMP et lues
-par darktable, digiKam, Lightroom…, filtres, piles d'images semblables, netteté,
-histogramme RAW, zoom et loupe, déchargement de cartes. Entièrement pilotable au
-clavier (jeu « classique » ou « vim »), à la souris aussi.
+**A fast RAW viewer for culling a photo shoot**, on macOS and Linux (Windows in progress):
+thumbnails of a whole folder in a few seconds, full screen in the camera JPEG or a real
+RAW rendering, ratings (stars, colours, picked / rejected) written to XMP and read by
+darktable, digiKam, Lightroom…, filters, stacks of similar images, sharpness, RAW
+histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("classic" or
+"vim" key set), mouse too.
 
-> **Version alpha** (`1.0.0-alpha.2`) : à tester sur une **copie** de vos photos. Les
-> notes vont dans des fichiers `.xmp` à côté des images ; renommer, déplacer ou supprimer
-> agit sur les vrais fichiers (annulable avec `Ctrl+Z`, ou `u` en vim, pendant la
-> session).
+> **Alpha version** (`1.0.0-alpha.2`): try it on a **copy** of your photos. Ratings go
+> into `.xmp` files next to the images; renaming, moving or deleting acts on the real
+> files (undoable with `Ctrl+Z`, or `u` in vim, during the session).
 
-*English: a fast RAW viewer for culling photo shoots — see [doc/manual.md](doc/manual.md).*
+*[Version française](README.fr.md)*
 
-## Installer
+## Install
 
-**Paquets prêts à installer** (sans HEIC, voir [doc/packaging.md](doc/packaging.md)) :
+**Ready-to-install packages**, on the [Releases page](https://github.com/fkinnar/tri/releases)
+(without HEIC, see [doc/en/packaging.md](doc/en/packaging.md)):
 
-- **macOS** (`.dmg`) : glisser `tri.app` dans Applications. L'app n'est pas encore
-  signée par Apple : au premier lancement, macOS refuse ; ouvrir alors **Réglages
-  système → Confidentialité et sécurité → « Ouvrir quand même »**, ou retirer la
-  quarantaine dans un terminal : `xattr -dr com.apple.quarantine /Applications/tri.app`.
-- **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 ou plus récent) : décompresser, puis
-  `./install.sh` (dans `~/.local`, sans droits administrateur ; `--uninstall` pour
-  retirer). `tri` apparaît dans le menu des applications.
-- **Windows** : à venir.
+- **macOS** (`.dmg`): drag `tri.app` into Applications. The app is not signed by Apple
+  yet: on first launch macOS refuses it; then open **System Settings → Privacy &
+  Security → "Open Anyway"**, or remove the quarantine in a terminal:
+  `xattr -dr com.apple.quarantine /Applications/tri.app`.
+- **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 or newer): unpack, then `./install.sh`
+  (into `~/.local`, no administrator rights; `--uninstall` to remove). `tri` appears in
+  the applications menu.
+- **Windows**: coming.
 
-**Compiler depuis les sources** :
+**Build from source**:
 
-1. Rust (stable récent, édition 2024) : <https://rustup.rs>
-2. Les bibliothèques système, voir [`prerequisites.sh`](prerequisites.sh) :
-   - macOS : `brew install libraw libheif cmake pkg-config`
-   - Linux Mint 22 / Ubuntu 24.04 : `sudo apt install libraw-dev libheif-dev
+1. Rust (recent stable, 2024 edition): <https://rustup.rs>
+2. The system libraries, see [`prerequisites.sh`](prerequisites.sh):
+   - macOS: `brew install libraw libheif cmake pkg-config`
+   - Linux Mint 22 / Ubuntu 24.04: `sudo apt install libraw-dev libheif-dev
      libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential`
-3. `cargo build --release -p tri-gui`, puis `target/release/tri-gui [dossier]`.
+3. `cargo build --release -p tri-gui`, then `target/release/tri-gui [folder]`.
 
-Détails (Windows, options, HEIC) : [doc/build.md](doc/build.md).
+Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
 
-## Premiers pas
+## First steps
 
-- [Premiers pas](doc/manuel.md) (court exprès : le reste est à découvrir),
-  [first steps](doc/manual.md) en anglais.
-- `F1` ou `?` : toutes les touches, avec une recherche. `Ctrl+,` : les réglages (dont le
-  jeu de raccourcis, le thème « gris neutre », la langue).
-- Notes : `0`–`5` étoiles, `6`–`9` couleurs, `Maj+P` / `Maj+X` accepté / rejeté.
-- `Entrée` plein écran, `z` 100 %, `b` JPEG boîtier ou rendu RAW, `/` rechercher.
+- [First steps](doc/en/manual.md) (short on purpose: the rest is yours to discover),
+  [premiers pas](doc/fr/manual.md) in French.
+- `F1` or `?`: every key, with a search. `Ctrl+,`: the settings (key set, "neutral grey"
+  theme, language…).
+- Ratings: `0`–`5` stars, `6`–`9` colours, `Shift+P` / `Shift+X` picked / rejected.
+- `Enter` full screen, `z` 100 %, `b` camera JPEG or RAW rendering, `/` search.
 
 ## Documentation
 
-Tout est dans [`doc/`](doc/README.md) : un fichier par module, le pourquoi des choix,
-les réglages ([`doc/config.example.toml`](doc/config.example.toml), commenté), les
-licences et brevets ([`doc/licensing.md`](doc/licensing.md)). Historique des versions :
-[CHANGELOG.md](CHANGELOG.md).
+Everything is in [`doc/en/`](doc/en/README.md) (in French: [`doc/fr/`](doc/fr/README.md)):
+one file per module, the reasons behind the choices, the settings
+([`doc/config.example.toml`](doc/config.example.toml), commented, in French for now),
+licences and patents ([`doc/en/licensing.md`](doc/en/licensing.md)). Release history:
+[CHANGELOG.md](CHANGELOG.md) (in French).
 
 ## Licence
 
-GPL-3.0-or-later : voir [LICENSE](LICENSE). Les bibliothèques LGPL (LibRaw, libheif)
-sont liées dynamiquement ; les binaires distribués ne contiennent pas de décodeur HEVC
-(voir [doc/licensing.md](doc/licensing.md)).
+GPL-3.0-or-later: see [LICENSE](LICENSE). The LGPL libraries (LibRaw, libheif) are
+linked dynamically; the distributed binaries contain no HEVC decoder (see
+[doc/en/licensing.md](doc/en/licensing.md)).

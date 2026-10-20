@@ -1,7 +1,7 @@
 //! Calcul des images mises en cache : vignette, aperçu standard, rendu 1:1.
 //!
 //! Fonctions synchrones, appelées par les workers du [`scheduler`](crate::scheduler).
-//! Voir `doc/preview.md`.
+//! Voir `doc/en/preview.md`.
 
 use std::fmt;
 use std::io;
@@ -48,7 +48,7 @@ pub struct Settings {
     /// Règle `half_size` de l'aperçu standard : la demi-résolution est utilisée si la moitié
     /// du côté long du RAW vaut au moins `half_size_margin` fois le côté demandé. `1.0` :
     /// dès qu'elle couvre la taille demandée (PSNR 40–43 dB contre le rendu complet sur
-    /// RAF X-T4, voir `doc/preview.md`) ; plus grand : marge de netteté.
+    /// RAF X-T4, voir `doc/en/preview.md`) ; plus grand : marge de netteté.
     pub half_size_margin: f32,
     /// Aperçu boîtier refusé s'il est plus petit que cette fraction du côté demandé
     /// (certains boîtiers n'embarquent qu'une vignette de 160 px).

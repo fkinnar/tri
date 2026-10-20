@@ -6,7 +6,7 @@
 //! BLAKE3 pendant la copie puis relecture de la copie, date d'origine conservée, écriture
 //! atomique), puis éventuellement [`delete_sources`] (seulement les fichiers copiés *et*
 //! vérifiés). Sans interface : la ligne de commande s'en sert telle quelle. Voir
-//! `doc/offload.md`.
+//! `doc/en/offload.md`.
 
 use std::collections::HashSet;
 use std::fs::{self, File};
