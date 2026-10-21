@@ -32,6 +32,8 @@ pub struct Loaded {
     /// Vrai si `image` est une carte de netteté ([`Loader::want_peaking`]) : blanc, opacité =
     /// contour, à teinter au dessin.
     pub peaking: bool,
+    /// Carte de netteté : seuil avec lequel elle a été calculée (sévérité du curseur).
+    pub threshold: u16,
 }
 
 /// Carte de netteté demandée : l'image (fichier, niveau) et le réglage du calcul.
@@ -189,6 +191,7 @@ fn run(
             original,
             sensor_ratio,
             peaking: false,
+            threshold: 0,
         };
         if tx.send(loaded).is_err() {
             return; // l'interface est partie
@@ -229,5 +232,6 @@ fn peaking(cache: &Cache, settings: &Settings, max_side: usize, job: PeakingJob)
         original,
         sensor_ratio: None,
         peaking: true,
+        threshold: sharpness.threshold,
     }
 }

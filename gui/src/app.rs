@@ -50,7 +50,6 @@ enum Mode {
 enum Peaking {
     Shown,
     Computing,
-    NotAtOneToOne,
 }
 
 /// Une grande texture, avec les dimensions d'origine de l'image (la texture a pu être
@@ -192,9 +191,9 @@ pub struct TriApp {
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
-    peaking_texture: Option<((PathBuf, Level), TextureHandle)>,
+    peaking_texture: Option<((PathBuf, Level, u16), TextureHandle)>,
     /// Carte demandée au chargeur, pas encore reçue.
-    peaking_asked: Option<(PathBuf, Level)>,
+    peaking_asked: Option<(PathBuf, Level, u16)>,
     /// Images comparées côte à côte (`c`), dans l'ordre de la liste.
     compare: Vec<PathBuf>,
     /// Colonnes de la dernière disposition de la comparaison (navigation haut / bas).
@@ -1536,8 +1535,14 @@ impl TriApp {
         if t != self.blur_strictness {
             self.set_blur_strictness(t);
         }
-        if (slider.drag_stopped() || reset)
-            && let Some(data) = self.settings.data_dir()
+        if slider.drag_stopped() || reset {
+            self.remember_strictness();
+        }
+    }
+
+    /// Retient la sévérité du flou pour le dossier ouvert (oubliée au centre).
+    fn remember_strictness(&self) {
+        if let Some(data) = self.settings.data_dir()
             && !self.folder.is_none()
         {
             let keep = (self.blur_strictness != 0.0).then_some(self.blur_strictness);
@@ -2220,6 +2225,21 @@ impl TriApp {
             }
             Action::Compare => self.start_compare(),
             Action::TogglePeaking => self.peaking = !self.peaking,
+            Action::SharpnessLenient | Action::SharpnessStrict => {
+                let step = self.gui.sharpness.step;
+                let delta = if action == Action::SharpnessStrict {
+                    step
+                } else {
+                    -step
+                };
+                let t = (self.blur_strictness + delta).clamp(-1.0, 1.0);
+                // Pas en virgule flottante : 0 retombe juste sur 0 (le centre).
+                let t = if t.abs() < step / 2.0 { 0.0 } else { t };
+                self.set_blur_strictness(t);
+                self.remember_strictness();
+                let percent = (t * 100.0).round() as i64;
+                self.notice = Some((t!("sharpness-strictness", value = percent), false));
+            }
             Action::ToggleFocusPoint => self.focus_point = !self.focus_point,
             Action::OverlayNext => self.cycle_overlay(),
             Action::OverlayOrient => {
@@ -2934,6 +2954,7 @@ impl TriApp {
             });
             let key = (loaded.path.clone(), loaded.level);
             if loaded.peaking {
+                let key = (loaded.path.clone(), loaded.level, loaded.threshold);
                 if self.peaking_asked.as_ref() == Some(&key) {
                     self.peaking_asked = None;
                 }
@@ -3863,29 +3884,33 @@ impl TriApp {
         }
     }
 
-    /// Carte de netteté de `file` sur son 1:1 affiché en `rect` (`at_one_to_one` : c'est
-    /// le 1:1 qui est affiché) : dessinée si elle est chargée, demandée au chargeur sinon ;
-    /// sans objet, la demande en cours est retirée.
+    /// Carte de netteté de `file` sur l'image affichée (niveau `level`, en `rect` ; `uv` :
+    /// la partie montrée, celle d'une version), en vue ajustée comme en 1:1 (retour du
+    /// 21/10/2026 ; avant : en 1:1 seulement), au seuil du curseur de sévérité : dessinée si
+    /// elle est chargée, demandée au chargeur sinon ; sans objet, la demande en cours est
+    /// retirée.
     fn peaking_overlay(
         &mut self,
         painter: &egui::Painter,
         file: &MediaFile,
-        at_one_to_one: bool,
+        level: Option<Level>,
         rect: Option<Rect>,
+        uv: Rect,
     ) -> Peaking {
-        let wanted = (self.peaking && at_one_to_one).then(|| {
-            (
-                file.path.clone(),
-                view::zoom_level(file.kind, self.source_for(file)),
-            )
-        });
+        let sharpness = self
+            .settings
+            .sharpness
+            .with_strictness(self.blur_strictness);
+        let wanted = level
+            .filter(|&l| self.peaking && l != Level::Thumbnail)
+            .map(|l| (file.path.clone(), l, sharpness.threshold));
         let Some(key) = wanted else {
             if self.peaking_asked.take().is_some()
                 && let Some(engine) = &self.engine
             {
                 engine.loader.want_peaking(None);
             }
-            return Peaking::NotAtOneToOne;
+            return Peaking::Computing;
         };
         if let (Some((loaded, texture)), Some(rect)) = (&self.peaking_texture, rect)
             && *loaded == key
@@ -3895,7 +3920,6 @@ impl TriApp {
                 .get(self.peaking_color % colors.len().max(1))
                 .map_or(Color32::RED, |&c| Color32::from(c))
                 .gamma_multiply(self.gui.sharpness.opacity);
-            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(texture.id(), rect, uv, color);
             return Peaking::Shown;
         }
@@ -3904,7 +3928,7 @@ impl TriApp {
         {
             engine
                 .loader
-                .want_peaking(Some((file.clone(), key.1, self.settings.sharpness)));
+                .want_peaking(Some((file.clone(), key.1, sharpness)));
             self.peaking_asked = Some(key);
         }
         self.view_waiting = true;
@@ -4354,13 +4378,14 @@ impl TriApp {
             image_rect.filter(|_| shown != Some(Level::Developed) && shown_crop.is_none());
         self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
         self.loupe(&ctx, &painter, index, image_rect);
-        // Carte de netteté : en 1:1 seulement, sur le 1:1 affiché.
-        let peaking = self.peaking_overlay(
-            &painter,
-            &file,
-            shown == Some(zoom_level) && zoomed,
-            image_rect,
-        );
+        // Carte de netteté, sur l'image affichée (ajustée ou 1:1 ; une version : son cadre).
+        let peaking_uv = match shown_crop {
+            Some(c) => {
+                Rect::from_min_size(pos2(c.x as f32, c.y as f32), vec2(c.w as f32, c.h as f32))
+            }
+            None => uv,
+        };
+        let peaking = self.peaking_overlay(&painter, &file, shown, image_rect, peaking_uv);
 
         self.open_rating_dialog(&response, index);
         // Double-clic : 100 % centré sur le point cliqué, ou retour à l'ajusté.
@@ -4397,7 +4422,6 @@ impl TriApp {
             info.push_str(&match peaking {
                 Peaking::Shown => t!("view-info-peaking"),
                 Peaking::Computing => t!("view-info-peaking-computing"),
-                Peaking::NotAtOneToOne => t!("view-info-peaking-one-to-one"),
             });
         }
         match shown {
@@ -5639,6 +5663,14 @@ impl TriApp {
                     if response.clicked() {
                         clicked = Some(action);
                     }
+                }
+                // Carte de netteté affichée : son curseur de sévérité (le même que celui de
+                // la barre des filtres), précédé de la goutte (posés de droite à gauche).
+                if self.mode == Mode::View && self.peaking {
+                    ui.separator();
+                    self.blur_slider(ui);
+                    let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                    marks::blur_drop(ui.painter(), rect, Color32::from(colors.blur_drop), false);
                 }
             });
         });
@@ -8377,26 +8409,40 @@ mod tests {
     }
 
     #[test]
-    fn peaking_shows_at_one_to_one_only_and_rotates_colours() {
+    fn peaking_shows_fitted_and_at_one_to_one_follows_strictness_and_rotates_colours() {
         let (mut h, _dir) = harness_with(200, 150);
         h.run_steps(3);
         press(&mut h, Key::P, Modifiers::NONE);
         assert!(h.state().peaking);
         press(&mut h, Key::Enter, Modifiers::NONE);
-        h.run_steps(5);
-        assert!(
-            h.state().peaking_asked.is_none() && h.state().peaking_texture.is_none(),
-            "ajusté : la carte attend le 1:1"
-        );
-        press(&mut h, Key::Z, Modifiers::NONE);
+        // En vue ajustée aussi (retour du 21/10/2026), sur l'image affichée.
         run_until(&mut h, |s| s.peaking_texture.is_some());
-        let ((path, level), texture) = h.state().peaking_texture.clone().unwrap();
+        let threshold = h.state().settings.sharpness.threshold;
+        let ((path, _, t), _) = h.state().peaking_texture.clone().unwrap();
         assert!(path.ends_with("img0.jpg"));
-        assert_eq!(level, Level::Full, "le 1:1 d'une image plate");
-        assert_eq!(texture.size(), [200, 150], "pixel pour pixel");
-        // Retour à l'ajusté : plus de demande en cours.
+        assert_eq!(t, threshold, "au centre : le seuil des réglages");
         press(&mut h, Key::Z, Modifiers::NONE);
-        assert!(h.state().peaking_asked.is_none());
+        run_until(&mut h, |s| {
+            s.peaking_texture
+                .as_ref()
+                .is_some_and(|((_, l, _), _)| *l == Level::Full)
+        });
+        let (_, texture) = h.state().peaking_texture.clone().unwrap();
+        assert_eq!(
+            texture.size(),
+            [200, 150],
+            "le 1:1 d'une image plate, pixel pour pixel"
+        );
+        // Ctrl+J : plus souple, la carte est refaite à un seuil plus bas.
+        press(&mut h, Key::J, Modifiers::CTRL);
+        assert!(h.state().blur_strictness < 0.0);
+        run_until(&mut h, |s| {
+            s.peaking_texture
+                .as_ref()
+                .is_some_and(|((_, _, t), _)| *t < threshold)
+        });
+        press(&mut h, Key::K, Modifiers::CTRL);
+        assert_eq!(h.state().blur_strictness, 0.0, "retour juste au centre");
         press(&mut h, Key::Z, Modifiers::NONE);
         // Ctrl+P : couleur suivante, en boucle sur les couleurs configurées.
         let n = h.state().gui.sharpness.colors.len();

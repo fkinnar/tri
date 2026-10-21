@@ -155,10 +155,15 @@ pub enum Action {
     ToggleAutoAdvance,
     /// Comparer les images sélectionnées côte à côte.
     Compare,
-    /// Afficher / masquer la carte de netteté (1:1).
+    /// Afficher / masquer la carte de netteté.
     TogglePeaking,
     /// Carte de netteté : couleur suivante.
     PeakingColor,
+    /// Netteté plus souple (curseur de sévérité à gauche : moins de photos floues, plus de
+    /// contours marqués nets).
+    SharpnessLenient,
+    /// Netteté plus stricte (curseur de sévérité à droite).
+    SharpnessStrict,
     /// Afficher / masquer le collimateur de mise au point.
     ToggleFocusPoint,
     /// Superposition suivante (aucune, grilles, celles de l'utilisateur).
@@ -351,7 +356,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 148] = [
+    pub const ALL: [Action; 150] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -386,6 +391,8 @@ impl Action {
         Action::Compare,
         Action::TogglePeaking,
         Action::PeakingColor,
+        Action::SharpnessLenient,
+        Action::SharpnessStrict,
         Action::ToggleFocusPoint,
         Action::OverlayNext,
         Action::OverlayOrient,
@@ -540,8 +547,9 @@ impl Action {
             ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | ToggleFocusPoint
-            | OverlayNext | OverlayOrient | FocusMode | Develop => Group::View,
+            | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
+            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
+            | Develop => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -603,6 +611,8 @@ impl Action {
             Action::Compare => "core.view.compare",
             Action::TogglePeaking => "core.view.peaking",
             Action::PeakingColor => "core.view.peaking_color",
+            Action::SharpnessLenient => "core.view.sharpness_lenient",
+            Action::SharpnessStrict => "core.view.sharpness_strict",
             Action::ToggleFocusPoint => "core.view.focus_point",
             Action::OverlayNext => "core.view.overlay",
             Action::OverlayOrient => "core.view.overlay_orient",
@@ -1212,6 +1222,10 @@ const RATING: &[Binding] = {
         (&[plain(Key::W)], ToggleClipping),
         (&[plain(Key::P)], TogglePeaking),
         (&[ctrl(Key::P)], PeakingColor),
+        // Sévérité de la netteté (curseur, carte et jugement) : Ctrl+J plus souple, Ctrl+K
+        // plus strict, comme bas / haut dans vim (Ctrl + flèches : au système).
+        (&[ctrl(Key::J)], SharpnessLenient),
+        (&[ctrl(Key::K)], SharpnessStrict),
         (&[plain(Key::M)], ToggleFocusPoint),
         // Superpositions, comme Lightroom : `o` la suivante (grilles, puis celles de
         // l'utilisateur), Maj+O fait tourner la spirale (et les autres lignes).

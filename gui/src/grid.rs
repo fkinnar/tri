@@ -83,6 +83,8 @@ pub fn navigate(
         | Action::Compare
         | Action::TogglePeaking
         | Action::PeakingColor
+        | Action::SharpnessLenient
+        | Action::SharpnessStrict
         | Action::ToggleFocusPoint
         | Action::OverlayNext
         | Action::OverlayOrient

@@ -615,14 +615,18 @@ analysis = false
 analysis_lighten = 0.06
 
 [gui.sharpness]
-# Carte de netteté (focus peaking) en 1:1 : affichée au démarrage (p l'affiche ou la
-# masque). Calcul : section [sharpness].
+# Carte de netteté (focus peaking), en vue ajustée comme en 1:1 : affichée au démarrage
+# (p l'affiche ou la masque). Calcul : section [sharpness] ; son seuil suit le curseur de
+# sévérité du flou.
 visible = false
 # Couleurs proposées, dans l'ordre de la rotation (Ctrl+P) : selon l'image, l'une ressort
 # mieux que l'autre.
 colors = ["#ff2828", "#28ff50", "#28b4ff"]
 # Opacité des contours (0 à 1).
 opacity = 1.0
+# Pas de la sévérité au clavier (Ctrl+J plus souple, Ctrl+K plus strict), sur une échelle
+# de -1 (tout à gauche) à 1 (tout à droite).
+step = 0.1
 
 [gui.metadata]
 # Panneau des métadonnées, à droite : affiché au démarrage (Maj+M l'affiche ou le masque),

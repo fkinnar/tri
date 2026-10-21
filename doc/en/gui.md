@@ -90,9 +90,11 @@ system one ("cold" measurements, experiments).
   - The selection is kept if the image stays visible; otherwise it keeps its place in the
     list. Rating an image under a rating filter refilters at once: rejecting a photo with
     "without rejected" makes it disappear and selects the next one (fast culling).
-- **Sharpness** (2026-10-17, engine: `tri::sharpness`, see `sharpness.md`): at 1:1, `p`
-  highlights sharp edges (focus peaking), `Ctrl+P` changes colour (3 configurable colours,
-  `[gui.sharpness] colors`). Computed by the loader, tinted when drawn.
+- **Sharpness** (2026-10-17, engine: `tri::sharpness`, see `sharpness.md`): in full
+  screen (fitted or 1:1 since 2026-10-21), `p` highlights sharp edges (focus peaking),
+  `Ctrl+P` changes colour (3 configurable colours, `[gui.sharpness] colors`); threshold
+  tied to the strictness slider (`Ctrl+J` / `Ctrl+K`, slider in the bottom bar). Computed
+  by the loader, tinted when drawn.
 - **Blurry photos** (2026-10-17, engine: score from `tri::sharpness`, see `sharpness.md`):
   "blurry" label on the thumbnail, "Sharpness" row in the metadata panel, filters
   "without blurry" (`f b`) and "blurry only" (`f B`); judgement relative to the folder's
@@ -165,9 +167,10 @@ system one ("cold" measurements, experiments).
   rejected only; crossed-out water drop = hide blurry, drop = blurry only,
   `[gui.colors] blur_drop`; colours), "26/26" counter; the full label and shortcut of each
   button on hover.
-  File type (2026-10-21, tester feedback: "Flat" was not clear): two **icon toggles**,
-  RAW and JPG (JPEG, TIFF, PNG, HEIC…), instead of "All / RAW / Flat"; when lit, the type
-  is shown, one of the two always stays lit (`marks::file_type`). Blur strictness slider
+  File type (2026-10-21, tester feedback: "Flat" was not clear): two **toggles**, RAW and
+  JPG labels (JPEG, TIFF, PNG, HEIC…) at the size of the other icons (no page icon, user
+  feedback 2026-10-21), instead of "All / RAW / Flat"; when lit, the type is shown, one of
+  the two always stays lit (`marks::file_type`). Blur strictness slider
   shown only with a sharpness filter, like the stacks one with stacks; same width (90
   points).
 - **Side-by-side comparison** (2026-10-17, `c`, `gui/src/compare.rs` for the layout):

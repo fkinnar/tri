@@ -116,7 +116,9 @@ impl SharpnessSettings {
     /// 20/10/2026 : à droite plus strict (plus de photos jugées floues), à gauche plus
     /// souple (un portrait aux yeux seuls nets, sur fond très flou, passe). Les trois
     /// seuils du jugement sont multipliés par `strictness_span ^ strictness`, sans
-    /// dépasser 1 (plus net que la médiane n'est jamais flou).
+    /// dépasser 1 (plus net que la médiane n'est jamais flou). Le seuil de la carte de
+    /// netteté (`threshold`) suit le même facteur (retour du 21/10/2026) : plus souple, plus
+    /// de contours marqués nets ; plus strict, moins.
     pub fn with_strictness(&self, strictness: f32) -> SharpnessSettings {
         let factor = self
             .strictness_span
@@ -127,6 +129,9 @@ impl SharpnessSettings {
             blur_ratio: scaled(self.blur_ratio),
             neighbour_ratio: scaled(self.neighbour_ratio),
             group_ratio: scaled(self.group_ratio),
+            threshold: (f32::from(self.threshold) * factor)
+                .round()
+                .clamp(1.0, 510.0) as u16,
             ..*self
         }
     }
@@ -610,6 +615,11 @@ mod tests {
             "jamais au-dessus de la médiane"
         );
         assert_eq!(s.with_strictness(5.0), strict, "borné");
+        assert_eq!(
+            (lenient.threshold, strict.threshold),
+            (24, 96),
+            "la carte suit"
+        );
         // Une photo à 0,45 × le dossier : floue au centre, nette à gauche.
         let ordered: Vec<(PathBuf, Option<f32>)> = [10.0, 10.0, 4.5, 10.0, 10.0]
             .iter()

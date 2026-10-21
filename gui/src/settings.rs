@@ -741,6 +741,8 @@ pub struct SharpnessDisplay {
     pub colors: Vec<Color>,
     /// Opacité des contours (0 à 1).
     pub opacity: f32,
+    /// Pas de la sévérité au clavier (Ctrl+J / Ctrl+K), sur une échelle de -1 à 1.
+    pub step: f32,
 }
 
 impl Default for SharpnessDisplay {
@@ -753,6 +755,7 @@ impl Default for SharpnessDisplay {
                 Color([40, 180, 255]),
             ],
             opacity: 1.0,
+            step: 0.1,
         }
     }
 }

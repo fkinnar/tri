@@ -677,7 +677,9 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   calculé d'après le dossier, à mesurer sur ses séances). **À faire un jour** : fusion
   d'un dossier dans un dossier du même nom. « Plates » remplacé (retour d'un testeur) :
   interrupteurs à icône RAW et JPG dans la barre des filtres (21/10/2026). Résolution en
-  plein écran (version : cadre et préréglage d'export) ; **à faire** : vraie résolution
+  plein écran (version : cadre et préréglage d'export ; pendant le recadrage, le cadre en
+  cours) ; carte de netteté aussi en vue ajustée, **seuil lié au curseur de sévérité**,
+  curseur dans le bandeau du plein écran et `Ctrl+J` / `Ctrl+K` ; **à faire** : vraie résolution
   du développé, en lisant le recadrage darktable (module `crop`, `darktable:history`) et
   les modules qui changent la taille (redressement, perspective).
 - **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »

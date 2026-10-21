@@ -5,8 +5,9 @@ image are highlighted in a bright colour, like the *focus peaking* of cameras.
 
 ## Decisions (2026-10-17)
 
-- **At 1:1 only**, in full screen: in the grid, it would be costly and unreadable at
-  that size.
+- **In full screen only**: in the grid, it would be costly and unreadable at that size.
+  First at 1:1 only; **also in the fitted view** since 2026-10-21 (user feedback), on the
+  displayed image: large sharp areas show there, 1:1 remains for fine detail.
 - **2-3 configurable colours, cycled with a shortcut**: depending on the image, one colour
   stands out better than another (a colour close to the subject gets lost in it).
 
@@ -147,12 +148,11 @@ sharpened; noise at very high ISO looks like detail.
 ## In the interface
 
 `p` shows or hides the map (`core.view.peaking`); `Ctrl+P` switches to the next
-colour (`core.view.peaking_color`) and shows it if it was hidden. Outside 1:1, the
-info line reads "sharpness: at 1:1 (z)". The map is computed by the loading
-thread (`gui/src/loader.rs`, after the requested images), sent as a white
-texture whose opacity marks the edges, and **tinted when drawn**: changing colour
-recomputes nothing. Only one map is kept (that of the displayed image); leaving 1:1
-withdraws the pending request.
+colour (`core.view.peaking_color`) and shows it if it was hidden. The map is computed
+on the displayed image (fitted or 1:1; a version: its frame) by the loading thread
+(`gui/src/loader.rs`, after the requested images), sent as a white texture whose opacity
+marks the edges, and **tinted when drawn**: changing colour recomputes nothing. Only one
+map is kept (that of the displayed image, at its threshold).
 
 ### Severity slider (2026-10-20)
 
@@ -169,6 +169,14 @@ file `blur-strictness.tsv` in the data folder); double-click: back to the centre
 (or to the stack): enough to understand a judgement. Same principle to come for the stack
 slider (centre computed from the folder). The real remedy for this borderline case remains
 subject detection (eyes), later.
+
+**The map follows the slider** (2026-10-21, user feedback: "the lower the slider, the more
+should show as sharp"): its threshold (`threshold`) is multiplied by the same factor, 48 in
+the centre, 24 fully left, 96 fully right. An interface interpretation more than a
+mathematical one: the two measures do not share a scale. In full screen, with the map
+shown: the same slider in the bottom bar, and **`Ctrl+J` / `Ctrl+K`** (more lenient /
+stricter, `core.view.sharpness_lenient` / `_strict`, step `[gui.sharpness] step`), the
+value in the status bar; remembered for the folder like the slider.
 
 ## Tests
 

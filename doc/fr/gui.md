@@ -92,9 +92,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     la liste. Noter une image sous un filtre de notes refiltre aussitôt : rejeter une
     photo avec « sans les rejetées » la fait disparaître et sélectionne la suivante (tri
     rapide).
-- **Netteté** (17/10/2026, moteur : `tri::sharpness`, voir `sharpness.md`) : en 1:1, `p`
-  surligne les contours nets (focus peaking), `Ctrl+P` change de couleur (3 couleurs
-  réglables, `[gui.sharpness] colors`). Calculée par le chargeur, teintée au dessin.
+- **Netteté** (17/10/2026, moteur : `tri::sharpness`, voir `sharpness.md`) : en plein
+  écran (ajusté ou 1:1 depuis le 21/10/2026), `p` surligne les contours nets (focus
+  peaking), `Ctrl+P` change de couleur (3 couleurs réglables, `[gui.sharpness] colors`) ;
+  seuil lié au curseur de sévérité (`Ctrl+J` / `Ctrl+K`, curseur dans le bandeau).
+  Calculée par le chargeur, teintée au dessin.
 - **Photos floues** (17/10/2026, moteur : score de `tri::sharpness`, voir `sharpness.md`) :
   mention « floue » sur la vignette, ligne « Netteté » du panneau des métadonnées, filtres
   « sans les floues » (`f b`) et « floues seulement » (`f B`) ; jugement relatif à la médiane du dossier. Les barres de
@@ -170,9 +172,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   masquer les floues, goutte = floues seulement, `[gui.colors] blur_drop` ; couleurs),
   compteur « 26/26 » ; le libellé complet et le raccourci de chaque bouton au survol.
   Type de fichier (21/10/2026, retour d'un testeur : « Plates » n'était pas clair) : deux
-  **interrupteurs à icône**, RAW et JPG (JPEG, TIFF, PNG, HEIC…), à la place de « Tout /
-  RAW / Plates » ; allumé, le type est montré, l'un des deux reste allumé
-  (`marks::file_type`). Curseur de sévérité du flou montré seulement avec un filtre sur
+  **interrupteurs**, des étiquettes RAW et JPG (JPEG, TIFF, PNG, HEIC…) à la taille des
+  autres icônes (sans icône de page, retour du 21/10/2026), à la place de « Tout / RAW /
+  Plates » ; allumé, le type est montré, l'un des deux reste allumé (`marks::file_type`). Curseur de sévérité du flou montré seulement avec un filtre sur
   la netteté, comme celui des piles avec les piles ; même largeur (90 points).
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune

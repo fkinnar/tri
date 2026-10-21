@@ -5,8 +5,10 @@ l'image sont surlignés d'une couleur vive, comme le *focus peaking* des boîtie
 
 ## Décisions (17/10/2026)
 
-- **En 1:1 seulement**, en plein écran : en grille, ce serait gourmand et illisible à
-  cette taille.
+- **En plein écran seulement** : en grille, ce serait gourmand et illisible à cette
+  taille. D'abord en 1:1 seulement ; **aussi en vue ajustée** depuis le 21/10/2026
+  (retour de l'utilisateur), sur l'image affichée : les grandes zones nettes s'y voient,
+  le 1:1 reste pour les détails fins.
 - **2-3 couleurs configurables, rotation par un raccourci** : selon l'image, une couleur
   ressort mieux qu'une autre (une couleur proche du sujet s'y perd).
 
@@ -147,12 +149,11 @@ accentué ; le bruit à ISO très élevé ressemble à du détail.
 ## Dans l'interface
 
 `p` affiche ou masque la carte (`core.view.peaking`) ; `Ctrl+P` passe à la couleur
-suivante (`core.view.peaking_color`) et la montre si elle était masquée. Hors 1:1, la
-ligne d'information indique « netteté : en 1:1 (z) ». La carte est calculée par le fil de
+suivante (`core.view.peaking_color`) et la montre si elle était masquée. La carte est
+calculée sur l'image affichée (ajustée ou 1:1, une version : son cadre) par le fil de
 chargement (`gui/src/loader.rs`, après les images voulues), envoyée comme une texture
 blanche dont l'opacité marque les contours, et **teintée au dessin** : changer de couleur
-ne recalcule rien. Une seule carte est gardée (celle de l'image affichée) ; quitter le 1:1
-retire la demande en cours.
+ne recalcule rien. Une seule carte est gardée (celle de l'image affichée, à son seuil).
 
 ### Curseur de sévérité (20/10/2026)
 
@@ -169,6 +170,14 @@ fichier `blur-strictness.tsv` du dossier de données) ; double-clic : retour au 
 (ou à la pile) : de quoi comprendre un jugement. Même principe à venir pour le curseur
 des piles (centre calculé d'après le dossier). Le vrai remède à ce cas limite reste une
 détection du sujet (yeux), plus tard.
+
+**La carte suit le curseur** (21/10/2026, retour de l'utilisateur : « plus on baisse le
+curseur, plus on doit avoir de net ») : son seuil (`threshold`) est multiplié par le même
+facteur, 48 au centre, 24 tout à gauche, 96 tout à droite. Interprétation d'interface plus
+que mathématique : les deux mesures n'ont pas la même échelle. En plein écran, carte
+affichée : le même curseur dans le bandeau du bas, et **`Ctrl+J` / `Ctrl+K`** (plus souple
+/ plus strict, `core.view.sharpness_lenient` / `_strict`, pas `[gui.sharpness] step`),
+la valeur dans la barre d'état ; retenu pour le dossier comme le curseur.
 
 ## Tests
 

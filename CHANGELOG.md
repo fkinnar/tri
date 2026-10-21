@@ -20,7 +20,12 @@ Deuxième version de test, la première publiée avec ses paquets sur la page Re
   son préréglage d'export).
 - **Réglages** : le préréglage d'export d'un préréglage de recadrage se choisit dans une
   liste (plus de faute de frappe possible).
-- **Barre des filtres** : deux interrupteurs à icône, RAW et JPEG, à la place de « Tout /
+- **Netteté** : la carte (`p`) s'affiche aussi en vue ajustée et suit le curseur de
+  sévérité (plus souple : plus de contours nets) ; en plein écran, le curseur dans le
+  bandeau et `Ctrl+J` / `Ctrl+K`.
+- **Plein écran** : résolution juste pendant le recadrage et pour le JPEG boîtier.
+- **Documentation** bilingue (`doc/en/`, `doc/fr/`), `README.md` en anglais.
+- **Barre des filtres** : deux interrupteurs, étiquettes RAW et JPG, à la place de « Tout /
   RAW / Plates » ; curseur du flou montré seulement avec un filtre sur la netteté, de la
   largeur de celui des piles.
 - **Sous-dossiers** : case du panneau des dossiers, leurs images dans la grille aussi
