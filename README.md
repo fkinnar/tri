@@ -1,13 +1,13 @@
 # tri
 
-**A fast RAW viewer for culling a photo shoot**, on macOS and Linux (Windows in progress):
+**A fast RAW viewer for culling a photo shoot**, on macOS, Linux and Windows:
 thumbnails of a whole folder in a few seconds, full screen in the camera render or a real
 RAW rendering, ratings (stars, colours, picked / rejected) written to XMP and read by
 darktable, digiKam, Lightroom…, filters, stacks of similar images, sharpness, RAW
 histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("classic" or
 "vim" key set), mouse too.
 
-> **Alpha version** (`1.0.0-alpha.2`): try it on a **copy** of your photos. Ratings go
+> **Alpha version** (`1.0.0-alpha.3`): try it on a **copy** of your photos. Ratings go
 > into `.xmp` files next to the images; renaming, moving or deleting acts on the real
 > files (undoable with `Ctrl+Z`, or `u` in vim, during the session).
 
@@ -25,7 +25,9 @@ histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("class
 - **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 or newer): unpack, then `./install.sh`
   (into `~/.local`, no administrator rights; `--uninstall` to remove). `tri` appears in
   the applications menu.
-- **Windows**: coming.
+- **Windows** (`.msi`, 64-bit): run the installer; `tri` appears in the Start menu
+  (uninstall from Windows Settings). Not signed yet: SmartScreen warns, click **"More
+  info" → "Run anyway"**. Or the portable `.zip`: unpack, then run `tri-gui.exe`.
 
 **Build from source**:
 

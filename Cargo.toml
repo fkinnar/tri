@@ -3,7 +3,7 @@ members = ["gui"]
 
 [package]
 name = "tri"
-version = "1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 edition = "2024"
 description = "Moteur de tri : lecture des RAW (LibRaw) et images, aperçus en cache, notes XMP, filtres, analyses"
 license = "GPL-3.0-or-later"

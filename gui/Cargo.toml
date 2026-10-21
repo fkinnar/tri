@@ -1,6 +1,6 @@
 [package]
 name = "tri-gui"
-version = "1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 edition = "2024"
 description = "Interface graphique (egui) de tri, visionneuse RAW"
 license = "GPL-3.0-or-later"

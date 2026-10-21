@@ -1,6 +1,9 @@
 # Historique
 
-## À venir
+## 1.0.0-alpha.3 — 21/10/2026
+
+Troisième version de test, la première avec **Windows** (`.msi` et `.zip` portable), à
+côté des paquets macOS (`.dmg`) et Linux (`.tar.gz`), toujours sans HEIC.
 
 - **Piles** : curseur de sévérité comme celui du flou ; au centre, le seuil calculé
   d'après le dossier (coupure entre séries et changements de scène), à droite plus
@@ -15,6 +18,12 @@
   (`[gui] progress_delay_ms`).
 - « JPEG boîtier » devient « Rendu boîtier ».
 - **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
+- **Filtres** : « bien exposées » (soleil, `f w` : sans les brûlées ni les bouchées) et
+  « inverser » (◐, `f i` : ce que les filtres retirent ; « floues seulement » devient
+  « nettes » inversé, `f B` retiré).
+- **Paires RAW+JPEG** : case « avec l'autre fichier de la paire » dans les boîtes Supprimer
+  et Copier / déplacer (supprimer tous les JPEG emportait les RAW).
+- **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` reste la carte de netteté).
 - **Windows** : installateur `.msi` (menu Démarrer, désinstallation depuis les
   Paramètres) et zip portable, avec LibRaw et le runtime Visual C++ ; plus de fenêtre de
   console derrière l'interface.

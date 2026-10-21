@@ -1,13 +1,13 @@
 # tri
 
-**Visionneuse RAW rapide pour trier une séance photo**, sous macOS et Linux (Windows en
-cours) : vignettes de tout un dossier en quelques secondes, plein écran en rendu boîtier
+**Visionneuse RAW rapide pour trier une séance photo**, sous macOS, Linux et
+Windows : vignettes de tout un dossier en quelques secondes, plein écran en rendu boîtier
 ou en vrai rendu RAW, notes (étoiles, couleurs, accepté / rejeté) écrites en XMP et lues
 par darktable, digiKam, Lightroom…, filtres, piles d'images semblables, netteté,
 histogramme RAW, zoom et loupe, déchargement de cartes. Entièrement pilotable au
 clavier (jeu « classique » ou « vim »), à la souris aussi.
 
-> **Version alpha** (`1.0.0-alpha.2`) : à tester sur une **copie** de vos photos. Les
+> **Version alpha** (`1.0.0-alpha.3`) : à tester sur une **copie** de vos photos. Les
 > notes vont dans des fichiers `.xmp` à côté des images ; renommer, déplacer ou supprimer
 > agit sur les vrais fichiers (annulable avec `Ctrl+Z`, ou `u` en vim, pendant la
 > session).
@@ -26,7 +26,10 @@ clavier (jeu « classique » ou « vim »), à la souris aussi.
 - **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 ou plus récent) : décompresser, puis
   `./install.sh` (dans `~/.local`, sans droits administrateur ; `--uninstall` pour
   retirer). `tri` apparaît dans le menu des applications.
-- **Windows** : à venir.
+- **Windows** (`.msi`, 64 bits) : lancer l'installateur ; `tri` apparaît dans le menu
+  Démarrer (désinstallation depuis les Paramètres de Windows). Pas encore signé :
+  SmartScreen avertit, cliquer **« Informations complémentaires » → « Exécuter quand
+  même »**. Ou le `.zip` portable : décompresser, puis lancer `tri-gui.exe`.
 
 **Compiler depuis les sources** :
 
