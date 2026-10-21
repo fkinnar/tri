@@ -132,4 +132,6 @@ tri-<version>-windows-x64/
 - **No console window** in release (`windows_subsystem = "windows"`, `gui/src/main.rs`).
 - **Not signed**: SmartScreen warns on first launch ("More info" → "Run anyway"). Signing
   (code-signing certificate) for the public beta, like the Apple notarisation.
-- Not yet tried on a real Windows machine (first tester: 2026-10-21).
+- **Checked on 2026-10-21**: the CI `.msi` installed on a clean Windows (nothing
+  installed, no Visual C++ runtime); the application starts and shows the images.
+  Still to go through every feature.

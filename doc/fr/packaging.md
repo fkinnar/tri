@@ -137,4 +137,6 @@ tri-<version>-windows-x64/
 - **Non signé** : SmartScreen avertit au premier lancement (« Informations
   complémentaires » → « Exécuter quand même »). Signature (certificat de signature de
   code) pour la bêta publique, comme la notarisation Apple.
-- Pas encore essayé sur une vraie machine Windows (premier testeur : 21/10/2026).
+- **Vérifié le 21/10/2026** : `.msi` de la CI installé sur un Windows vierge (rien
+  d'installé, pas de runtime Visual C++) ; l'application se lance et affiche les images.
+  Reste à passer dans toutes les fonctions.
