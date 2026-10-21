@@ -20,7 +20,9 @@ Ou n'importe quel fichier avec `--config FICHIER`, pour `tri` comme pour `tri-gu
 options de la ligne de commande (`--cache`, `--side`, `--workers`…) l'emportent sur le
 fichier.
 
-**Toutes les clés, leurs valeurs par défaut et leur rôle** : [`config.example.toml`](../config.example.toml).
+**Toutes les clés, leurs valeurs par défaut et leur rôle** : [`config.example.toml`](../config.example.toml)
+(décrites en anglais : [`config.example.en.toml`](../config.example.en.toml), mêmes clés et
+valeurs ; la fenêtre de réglages montre les descriptions dans la langue de l'interface).
 Il suffit d'y copier les lignes à changer : toute clé absente garde sa valeur par défaut, et
 un fichier absent équivaut aux réglages par défaut. Deux tests (moteur et interface)
 vérifient que ce fichier d'exemple reste **exactement** égal aux valeurs du code : on ne

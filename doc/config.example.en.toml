@@ -1,0 +1,738 @@
+# tri configuration file: every default value, with comments.
+#
+# Location (read by the interface and by the command line):
+#   Linux    $XDG_CONFIG_HOME/tri/config.toml, otherwise ~/.config/tri/config.toml
+#   macOS    ~/Library/Application Support/tri/config.toml
+#   Windows  %APPDATA%\tri\config.toml
+# or elsewhere with --config FILE.
+#
+# Any missing key takes its default value: just copy the lines you want to change.
+# An unknown key (typo) is reported at startup; the default values are then used for the
+# whole file. A test checks that this file stays equal to the values in the code. See
+# doc/settings.md.
+
+[preview]
+# Long side of the grid thumbnails (pixels).
+thumbnail = 400
+# Long side of the full-screen preview (pixels), or "auto": the longest side of the main
+# screen (2560 on a 2560×1440 screen).
+standard = "auto"
+# "auto" size when the screen is unknown (command line).
+auto_fallback = 2560
+# RAW render of the standard preview at half resolution (≈ 0.35 s instead of ≈ 3.8 s on an
+# X-T4 RAF) if half the RAW's long side is at least `half_size_margin` × `standard`.
+# 1.0: as soon as it covers the size; larger: a sharpness margin.
+half_size_margin = 1.0
+# Camera render (embedded JPEG) rejected if it is smaller than this fraction of
+# `standard` (some cameras only embed a 160 px thumbnail).
+embedded_min_ratio = 0.5
+# Smallest embedded JPEG accepted for the camera render's 1:1 (pixels, long side).
+min_embedded_full = 1024
+
+[render]
+# RAW development (LibRaw). Changing a setting recomputes the affected RAW renders.
+# Camera white balance (false: "daylight").
+camera_wb = true
+# Brightness (1.0 = LibRaw default).
+bright = 1.0
+# LibRaw automatic brightness: disabled, as it "corrects" an underexposure that culling
+# is precisely meant to reveal.
+auto_bright = false
+
+[cache]
+# Cache folder. Missing: the system location (~/.cache/tri, ~/Library/Caches/tri,
+# %LOCALAPPDATA%\tri). Example:
+# dir = "/mnt/ssd/cache-tri"
+# JPEG quality of the entries (1 to 100). Entries already written are kept: clear the
+# cache (tri --clear-cache) to rewrite them.
+jpeg_quality = 90
+# Maximum size of each 1:1 level (100 % RAW, camera render 1:1), in MB: beyond it, the
+# least recently used are deleted at startup (~5 MB per 26 Mpx 1:1).
+# 0: no limit.
+zoom_max_mb = 2000
+
+[scheduler]
+# Parallel workers for thumbnails and flat images, or "auto": half the cores.
+# RAW renders always go through a single worker (LibRaw is already multithreaded).
+light_workers = "auto"
+# Thumbnails first, then camera renders, then RAW renders (false: all mixed).
+thumbnails_first = true
+# Analyse the exposure of the whole folder in the background (histograms, grid badges),
+# after thumbnails and camera renders; false: only the displayed image and its neighbours.
+exposure = true
+
+[xmp]
+# Name of a NEW sidecar: "darktable" (IMAGE.RAF.xmp, one per file) or "adobe"
+# (IMAGE.xmp, Lightroom, Capture One, Bridge; shared by the RAF and the JPG of a pair).
+# An existing sidecar is always reused, the most recent one if both exist.
+sidecar = "darktable"
+# Several colours per image (like darktable); false: only one, a new colour replaces the
+# previous one (like Lightroom).
+multiple_colors = false
+
+[places]
+# Locations offered by the folders panel. Hide Time Machine backups, recognised by their
+# content (not by their name):
+hide_backups = true
+# Locations to hide: patterns matched against the name or the path, case-insensitive,
+# with * (any sequence) and ? (one character). Example:
+# exclude = ["Backup", "/mnt/*"]
+exclude = []
+# Fixed volumes: external disks that are always connected (work, backup), without an eject
+# button to avoid accidents; same patterns as exclude. Example:
+# fixed = ["Work", "Backup"]
+fixed = []
+# Volume monitoring (ms): a disk or card that is plugged in appears by itself in the
+# folders panel; 0: no monitoring (F5 or "Refresh").
+watch_ms = 2000
+
+[develop]
+# See your developments in tri (Shift+B in full screen, then b: camera render, RAW
+# render, developed): darktable-cli redoes the image with the history of the .xmp
+# sidecar, on demand (a few seconds per image), kept in cache and redone if the .xmp
+# changes.
+# "auto": looked up in the PATH, in the usual locations, then on Linux as an AppImage
+# (~/AppImages, ~/Applications, ~/.local/bin, ~/bin, downloads, /opt) and as a
+# Flatpak (org.darktable.Darktable); a path (darktable-cli, or an AppImage);
+# "flatpak": the Flatpak one; "": never.
+# Nothing is written in your setup (own configuration, library in memory).
+darktable = "auto"
+# High quality (--hq): slightly more faithful, slightly slower.
+high_quality = false
+
+[export]
+# Export of images developed by darktable (Ctrl+E), with one preset per use. Nothing is
+# overwritten (darktable appends _01…).
+# Export preset offered by default (identifier) for a RAW render, and for an already
+# developed image (camera render, JPEG…); within the session, the last one chosen wins.
+# Unknown or not applicable: the first in the list.
+default_raw = "edit"
+default_flat = "asis"
+# Selected RAW + JPEG pair: both are exported (the RAW rendered by darktable or LibRaw,
+# the JPEG developed by the camera); the JPEG gets this suffix:
+# DSCF0001.jpg (RAW render) and DSCF0001-camera.jpg (camera JPEG).
+camera_suffix = "-camera"
+# Export report (Ctrl+Shift+E): finished exports kept from one session to the next, the
+# most recent ones (0: no limit); can be cleared from the report.
+report_max = 500
+
+[export.sharpening]
+# Output sharpening (the sharpen key of the presets), applied after downsizing, like
+# Lightroom: unsharp mask of radius radius (pixels of the written image), of strength amount
+# (1.0: the whole difference with the blurred image), above a threshold threshold (levels
+# out of 8 bits: below it, nothing, so as not to sharpen noise). With darktable, a
+# preset that sharpens goes through a temporary 16-bit TIFF (a single compression).
+screen_radius = 0.6
+screen_amount = 0.6
+screen_threshold = 2.0
+print_radius = 1.2
+print_amount = 0.9
+print_threshold = 3.0
+
+# Export presets: [export.profiles.<identifier>], as many as wanted. A missing key comes
+# from the built-in preset with the same identifier (edit, asis, web), otherwise from an
+# sRGB JPEG.
+# name: displayed name (empty: translated built-in name, otherwise the identifier);
+# format: "jpeg", "tiff" or "png"; bits: 8 (JPEG), 8 or 16 (PNG), 8, 16 or 32 (TIFF);
+# quality: JPEG quality (1 to 100);
+# color: "srgb", "adobergb", "rec709", "rec2020", "prophoto" (darktable's; the last
+#   three linear), "display-p3", the path of an .icc profile, or "" (the one of the
+#   development);
+# intent: "perceptual", "relative", "saturation", "absolute", or "" (the one of the
+#   development);
+# max_side: maximum long side in pixels, 0: full resolution;
+# suffix: appended to the file name ("-web": DSCF0001-web.jpg);
+# folder: folder of the files: "/…" absolute, "~/…" from the home folder, otherwise
+#   relative to each image's folder ("export": a subfolder next to the images,
+#   "" or ".": next to them); darktable variables allowed ($(YEAR)…).
+# passthrough: JPEG without recompression when possible (original JPEG copied as is, camera
+#   render written as is; default); an image to downsize is re-encoded; no effect on
+#   a darktable or LibRaw render, nor outside JPEG;
+# applies_to: "all" (everywhere), "raw" (render of a RAW: darktable, LibRaw) or "flat"
+#   (image already developed: camera render, JPEG, TIFF…); the export dialog only offers the
+#   presets that fit;
+# sharpen: output sharpening, "none", "screen" or "print", set
+#   in [export.sharpening]; a copy without recompression is not sharpened.
+[export.profiles.edit]
+# For an external editor: 16-bit TIFF, ProPhoto (linear), full resolution.
+name = ""
+format = "tiff"
+bits = 16
+quality = 90
+color = "prophoto"
+intent = ""
+max_side = 0
+suffix = ""
+folder = "export"
+passthrough = true
+applies_to = "all"
+sharpen = "none"
+
+[export.profiles.asis]
+# JPEG as is: an original JPEG is copied without touching anything (size, colour space:
+# an Adobe RGB JPEG stays so); a RAW comes out as a full-size JPEG, in the colour space of
+# the development.
+name = ""
+format = "jpeg"
+bits = 8
+quality = 100
+color = ""
+intent = ""
+max_side = 0
+suffix = ""
+folder = "export"
+passthrough = true
+applies_to = "flat"
+sharpen = "none"
+
+[export.profiles.web]
+# Publishing: sRGB JPEG, 2048 pixels at most.
+name = ""
+format = "jpeg"
+bits = 8
+quality = 90
+color = "srgb"
+intent = ""
+max_side = 2048
+suffix = ""
+folder = "export"
+passthrough = true
+applies_to = "all"
+sharpen = "screen"
+
+# Crop presets (versions, r in full screen): [versions.presets.<identifier>], as many as
+# wanted; chosen in the crop bar (or p), then the frame is adjusted.
+# A missing key comes from the built-in preset with the same identifier (story, post).
+# name: name of the created version (empty: translated built-in name, otherwise the
+#   identifier);
+# ratio: "free", "original", or "w:h" in the wanted orientation ("9:16": portrait);
+# profile: export preset offered (identifier), "": none.
+[versions.presets.story]
+# Story (Instagram…): 9:16, for the web.
+name = ""
+ratio = "9:16"
+profile = "web"
+
+[versions.presets.post]
+# Post: 4:5, for the web.
+name = ""
+ratio = "4:5"
+profile = "web"
+
+[watch]
+# Monitoring of the open folder (ms): images added, removed or modified, XMP ratings
+# modified by another program (darktable…) appear by themselves, once the folder has
+# been stable for this interval (a copy in progress only reloads once, at the
+# end). 0: no monitoring.
+interval_ms = 1000
+
+[exposure]
+# Histogram and exposure warnings, computed on the sensor data for a RAW.
+# Saturation threshold in EV below the sensor white (0: only at white). -0.02 (1.4 %)
+# by default: an X-T4 RAF records a saturated red or blue slightly below white towards
+# the edges of the image (the camera's vignetting correction).
+over_ev = -0.02
+# Crushed-shadow threshold, in EV below white (-10: less than 1/1024 of the range).
+under_ev = -10.0
+# Bins of the linear histogram.
+linear_bins = 1024
+# Extent of the histogram in EV below saturation, and bins per EV.
+ev_range = 16.0
+ev_bins_per_stop = 8
+# Long side of the mask of saturated / crushed zones (cells).
+mask_size = 1024
+# Share of a cell's pixels that must be crushed to mark it (0 to 1): not all of them,
+# sensor noise near black almost always lifts one.
+mask_under_share = 0.5
+
+[offload]
+# Card offload: root folder (~ accepted) of the first offload; afterwards, the root of
+# the last offload is remembered. The session folder is created in it
+# (suggested: YYYY-MM-DD_, to complete or replace; the year goes in the root).
+destination = "~/Pictures"
+# Read back each copy and compare its hash with the original.
+verify = true
+# Duplicates are judged on the destination folder (an identical copy already present
+# is skipped): the same card can be offloaded to two places. true: also skip what
+# has already been offloaded anywhere (global history).
+skip_known = false
+# Offload history file (~ accepted); empty: offload-history.tsv in the
+# data folder (Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri,
+# Windows %APPDATA%\tri).
+history = ""
+# Default choices of the offload dialog (checked or not): copy only the RAWs
+# (camera JPEGs left on the card); at the end, open the session folder,
+# eject the card, delete the copied and verified files from the card. On the command
+# line, ejection and deletion require an explicit option (--eject,
+# --delete-copied).
+raw_only = false
+open_after = true
+eject_after = true
+delete_after = false
+# With raw_only and delete_after: also delete the JPEGs left on the card (not copied).
+delete_left = false
+
+[files]
+# Renaming, deleting, copying or moving an image: the other image of its RAW+JPEG pair
+# (same name, other extension) follows. Its XMP sidecars always follow.
+pairs = true
+# Delete = move to the trash (recoverable); false: permanent deletion.
+trash = true
+# External editor: program then arguments; "{files}" is replaced by the files
+# (appended at the end otherwise). Empty: the system's default application. Examples:
+# ["darktable"], ["open", "-a", "darktable"] (macOS), ["gimp", "{files}"].
+editor = []
+# Copy / move to…: number of recent destinations offered (keys 1 to 9).
+recent = 9
+
+[sharpness]
+# Sharpness map (focus peaking, p at 1:1): a pixel is marked if the luminance gradient
+# (Sobel, 0 to 510; a sharp black / white edge gives 255) exceeds this threshold. Fixed,
+# not relative to the image: in a burst, the sharpest photo shows more edges.
+# Lower: more edges, noise included. 48: a soft photo is hardly marked any more,
+# a sharp one clearly is (32 also marked the soft ones).
+threshold = 48
+# Thickening of the marked edges (pixels on each side; 0: none): a one-pixel edge is
+# barely visible at 1:1 on a high-density screen.
+spread = 1
+# Marked neighbours (out of 8) a marked pixel must have to stay marked: an edge is
+# a line (at least 2 neighbours), high-ISO noise makes isolated dots. 0: keep
+# everything.
+min_neighbours = 2
+# Sharpness score (spotting blurry photos, filter f b): the image is reduced to this long
+# side (pixels), cut into tiles (along the long side), and the score is the mean gradient of
+# the share of the sharpest tiles (a deliberately blurred background doesn't penalise a
+# sharp subject).
+score_side = 1536
+score_tiles = 16
+score_top_share = 0.05
+# Luminance stretched between these percentiles before measuring (0.01: 1 % and 99 %): an
+# underexposed but sharp photo doesn't pass for blurry. Minimum gap (0 to 255) between them;
+# below it, the image has no detail (all white or black) and its score is zero.
+score_stretch = 0.01
+score_min_range = 8
+# Photo judged blurry below this fraction of the median score of the folder: the score is
+# not judged in absolute terms (ISO, lens, in-camera sharpening).
+blur_ratio = 0.5
+# Or below this fraction of the median of its neighbours (photos before and after in the
+# folder: same scene, same burst): catches an isolated miss in a sharp series.
+# neighbours = 0: no comparison with neighbours.
+neighbours = 3
+neighbour_ratio = 0.8
+# Known stacks of similar images ([similarity]): a photo is no longer compared with its
+# neighbours (another stack is another scene) but with the other images of its stack, if it
+# has at least group_min; judged blurry below group_ratio × their median. The folder
+# still counts (a burst blurry from start to finish). Stacks used for judging: threshold
+# group_threshold, wider than that of the displayed stacks.
+group_min = 3
+group_ratio = 0.8
+group_threshold = 0.45
+# Strictness slider of the filter bar (next to the drops): in the middle, the thresholds
+# above; far right (stricter, more blurry photos) they are multiplied by
+# strictness_span, far left (more lenient) divided by it (without exceeding 1). The
+# setting is remembered per folder.
+strictness_span = 2.0
+# Scores of the whole folder computed in the background (analysis cache).
+background = true
+
+[similarity]
+# Grouping of similar images (bursts, series of the same scene) into stacks.
+# Fingerprints of the whole folder computed in the background (analysis cache, right after
+# the thumbnails); false: no grouping.
+background = true
+# Long side of the small image the fingerprint is taken from (pixels): being small, it
+# only looks at composition and colours, not details.
+side = 64
+# Weight of composition in the distance between two images (0 to 1); the rest:
+# colours.
+shape_weight = 0.5
+# Default threshold (distance from 0 to 1): two neighbouring images closer than this go into
+# the same group. Centre of the stacks slider when it is not computed from the folder
+# (auto), and reference for the bounds of that computation.
+threshold = 0.25
+# Centre of the stacks slider computed from the folder: the cut that best separates
+# the images of the same series from scene changes.
+auto = true
+# Neighbouring images (known links) below which the centre stays threshold.
+auto_min_links = 8
+# Minimum separation between series and scene changes (0 to 1): below it, no
+# real cut, the centre stays threshold.
+auto_separation = 0.5
+# Bounds of the computed centre: between threshold / auto_range and threshold × auto_range.
+auto_range = 2.0
+# Range of the stacks slider: all the way right (stricter, small stacks), the threshold
+# is divided by this value; all the way left, multiplied. The chosen strictness is
+# remembered for each folder.
+strictness_span = 3.0
+# Capture time gap beyond which two neighbouring images are never
+# grouped (seconds; 0: no limit).
+max_gap_s = 60.0
+
+[i18n]
+# Language of the texts (interface, command line, messages): "auto" (system language;
+# English if it is not available), "fr" or "en".
+language = "auto"
+
+[data]
+# Data folder (offload history, last folder opened). Missing:
+# Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.
+# Example:
+# dir = "/chemin/vers/données"
+
+[gui]
+# "dark", "light", "system" or "neutral" (neutral grey, Lightroom-style: dark grey
+# panels, neutral grey central background, which doesn't skew the judgement of images;
+# colours: [gui.colors] neutral_*).
+theme = "dark"
+# Shortcut set: "classic" (arrows, Home / End, Delete, Ctrl+C / Ctrl+X copy /
+# move to, Ctrl+Z / Ctrl+Y), "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, dw / yw,
+# u / Ctrl+R) or "both". The rest (rating, filters, stacks, zoom…) is shared.
+profile = "classic"
+# Switch panels from the keyboard, like tmux: the leader, then h / l (or the arrows) for
+# the left / right panel, o for the next one. The panel that has the keyboard handles
+# its keys first (folders: arrows / hjkl, Enter opens; metadata: scroll,
+# y copies); the others keep their effect; Esc gives the keyboard back to the images.
+leader = "Ctrl+b"
+# Maximum delay between two keys of a sequence (ms), like vim's timeoutlen: "gg"
+# (first image, vim set) must be typed within this delay.
+key_sequence_timeout_ms = 1000
+# Key that is both a shortcut and the start of another (y copies, y w copies the stack):
+# how long to wait for the rest (ms) before acting alone.
+key_ambiguous_timeout_ms = 300
+# Initial window size (points).
+window = [1400.0, 900.0]
+# RAW renders: "on-demand" (displayed image and neighbours, in RAW mode only) or
+# "background" (the whole folder, after thumbnails and camera renders).
+raw_previews = "on-demand"
+# Maximum thumbnail loading time per displayed frame (ms): beyond it, the rest
+# waits for the next frame, so as not to freeze the interface.
+load_budget_ms = 8
+# Progress bars of the status bar: width (points), and hidden once
+# finished (false: always shown).
+progress_width = 160.0
+progress_hide_done = true
+# Delay before showing the progress bars after a filter change (ms):
+# often everything is already cached, a bar shown for an instant can't be read.
+progress_delay_ms = 400
+# Side of the icon buttons of the rating bar (auto-advance, previous /
+# next image), in points.
+bar_icon_size = 24.0
+# Filter bar (type, stars, flag, colours) shown at startup; Shift+F
+# shows or hides it.
+filter_bar = true
+# Without a folder argument, reopen the last folder opened (remembered in the data
+# folder: ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
+reopen_last = true
+# Keep from one launch to the next what is shown or hidden with a key (focus point,
+# sharpness map, zones, histogram, panels, bars, auto-advance), in
+# gui-state.toml in the data folder; the values below are then only used on the
+# first launch. false: always the values of this file.
+remember_display = true
+# Mouse rating bar (flags, stars, colours of the selected image)
+# shown at startup; Shift+N shows or hides it. Right-clicking an image opens
+# a dialog with the same controls.
+rating_bar = true
+# Top bar: application icon and name on the left, like darktable (hidden, like
+# everything else, in focus mode: F11 or Ctrl+Shift+F).
+title_bar = true
+# Size of the name in the top bar (points; the icon slightly larger), and duration of
+# the "F11 to exit" hint when entering focus mode (ms).
+title_bar_size = 26.0
+focus_mode_hint_ms = 3000
+# After a rating (keyboard or rating bar), move to the next image; Shift+A turns it on or
+# off. If the rating takes the image out of a filter, the next one is already selected:
+# no image is skipped. The other image of a RAW+JPEG pair, rated at the same time, is
+# skipped.
+auto_advance = false
+# Undo (u, Ctrl+Z): number of steps kept in the session history (Ctrl+H
+# shows it). Nothing is kept from one launch to the next.
+history = 200
+
+[gui.grid]
+# Dimensions in points.
+cell = 200.0
+gap = 8.0
+# Height reserved for the file name under the thumbnail.
+label = 18.0
+# Inner margin of the cell.
+padding = 6.0
+# Maximum length of the displayed name (characters).
+name_chars = 24
+# Maximum number of thumbnails kept in graphics memory.
+textures = 600
+# Size of the ratings (stars, colours, flag) on the thumbnails.
+marks = 12.0
+# Opacity of a rejected photo's thumbnail (0: invisible, 1: normal).
+rejected_opacity = 0.35
+# Thickness of the frame of the thumbnail hovered by the mouse.
+hover_frame = 2.0
+# Thickness of the frame of selected thumbnails (multiple selection).
+marked_frame = 3.0
+# "Blurry" label on the thumbnails of photos judged blurry (sharpness score, see
+# [sharpness]).
+blur_badge = true
+# Width of the similarity slider of the filter bar.
+stack_slider = 90.0
+# Width of the blur strictness slider of the filter bar.
+blur_slider = 90.0
+# Stacks (similar images grouped) shown at startup; false: each image
+# alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
+# computed in the background, see [similarity] background).
+stacks = false
+# Search by file name (/ or Ctrl+F in the grid): width of the field (points).
+search_width = 200.0
+
+[gui.view]
+# Time spent on an image before launching its 100 % RAW (ms): images merely
+# passed through while holding the arrows don't launch a computation of several seconds.
+full_raw_dwell_ms = 400
+# Large textures (previews, 1:1) kept in graphics memory; a 26 Mpx 1:1 takes
+# ~100 MB.
+textures = 8
+# Movement of a zoomed image per key press (Shift + arrows, Shift + hjkl), as a fraction of
+# the view.
+pan_step = 0.2
+# Size of the ratings (stars, colours, flag) in full screen.
+marks = 18.0
+# Focus point (read from the RAW: Fujifilm for now), shown at
+# startup in full screen and in comparison; m shows or hides it. Shape: "square"
+# (as in the viewfinder), "cross", "circle" or "heart". Size and thickness in points.
+focus_point = true
+focus_marker = "square"
+focus_marker_size = 28.0
+focus_marker_width = 2.0
+# Key reminder (b, z, i, o, Esc) at the top right of full screen; hidden by
+# default: it covers part of the image, and F1 opens the full help.
+key_hints = false
+# 1:1 (z or the "1:1" button) centred on the focus point when the camera recorded it
+# (that's where sharpness is judged); otherwise in the middle of the image. Double-click
+# zooms on the clicked point.
+zoom_on_focus_point = true
+# Active stacks (Ctrl+S, stack button), in full screen: left / right arrows within the
+# stack, up / down to the previous / next stack; at the end of the stack, true: start again
+# from the other end; false: stop.
+stack_wrap = false
+# Overlays (o, Shift+O for the orientation, see overlay.md): line thickness (points);
+# opacity of the built-in grids (thirds, golden ratio, diagonals), colour: [gui.colors]
+# overlay.
+overlay_line_width = 1.0
+overlay_opacity = 0.6
+
+[gui.zoom]
+# Full-screen zoom: steps of + and - (1.0 = 100 %: one image pixel per screen
+# pixel; * goes to 100 %, / back to fit, z toggles fit / 100 %). With the mouse
+# and the trackpad, continuous: pinch, or Ctrl / Cmd + wheel (scrolling moves
+# the image). Between min and max; below fit, the image is smaller than the screen.
+steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
+max = 4.0
+min = 0.1
+# Loupe, in the fitted view: while this key is held (a free key, written
+# as in [keys]: "t", "F3"…; or "shift", "ctrl", "alt"; "none": no loupe),
+# the image at 100 % (loupe_scale) under the pointer, in a square of loupe_size points,
+# after loupe_delay_ms (so as not to flicker on a short press). A key already
+# bound to an action is reported.
+loupe_key = "t"
+loupe_delay_ms = 150
+loupe_size = 320.0
+loupe_scale = 1.0
+
+[gui.dialogs]
+# Dialogs opened near the click (rating, eject, offload, rename, trash):
+# they move by dragging their background. Inner margin, space between items,
+# button padding, minimum and maximum widths, title size, in points.
+margin = 18.0
+spacing = 10.0
+button_padding = 10.0
+min_width = 340.0
+max_width = 520.0
+title_size = 17.0
+# Colour of the titles (accent, turquoise), underlined by a separator line.
+title_color = "#50bedc"
+# Side of the icon buttons (file actions, in the right-click dialog), in points.
+icon_size = 34.0
+# Minimum width of the help (F1), in points.
+help_width = 620.0
+# Keyboard scrolling of the help: per up / down arrow, in points (pages: Page Up /
+# Down, Ctrl+U / Ctrl+D).
+help_scroll_line = 40.0
+
+[gui.compare]
+# Side-by-side comparison of the selected images (c). Maximum number of images compared
+# (beyond, the first ones): each keeps a preview, and at 1:1 its 1:1 (~100 MB of graphics
+# memory for 26 Mpx).
+max = 6
+# Space between the images (points).
+gap = 4.0
+# Thickness of the frame of the active image (the one being rated).
+frame = 3.0
+
+[gui.crop]
+# Cropping (versions): r in full screen. Keyboard step (arrows or hjkl: move;
+# with Shift: right side, bottom), as a proportion of the image.
+step = 0.01
+# Veil around the frame: colour and opacity (0 to 1).
+shade = "#282828"
+shade_opacity = 0.65
+# Frame thickness, handle side, grab distance of an edge (points).
+line_width = 1.5
+handle_size = 9.0
+handle_grab = 10.0
+
+[gui.folders]
+# Folders panel, left of the grid: shown at startup (Shift+D shows or
+# hides it), initial width (points, the edge can be dragged with the mouse), indent per
+# level, hidden folders (.xxx) shown or not.
+visible = true
+width = 240.0
+indent = 14.0
+hidden = false
+# Folder search (/ or Ctrl+F in the panel): maximum levels of subfolders
+# searched, and maximum number of results.
+search_depth = 4
+search_results = 200
+# "Subfolders" checkbox of the panel (kept from one session to the next): the images of the
+# subfolders of the open folder are shown too, down to this number of levels at most.
+subfolders_depth = 3
+
+[gui.histogram]
+# Histogram (sensor data for a RAW), at the top of the metadata panel:
+# shown at startup (key i), scale "ev" (EV below saturation) or "linear"
+# (Shift+I toggles). Large histogram (Shift+E, or click the panel's histogram): share
+# of the window width.
+visible = true
+scale = "ev"
+large = 0.7
+# EV shown on the EV scale: 0 = useful range of the image (~13.9 EV for a 14-bit RAW,
+# ~11.7 for a JPEG, sRGB values converted to linear light); positive: a cap.
+ev_shown = 0.0
+# Saturated and crushed zones overlaid on the image at startup (key o), and their
+# opacity. Saturated zones coloured per channel (clip_red / clip_green / clip_blue, mixed
+# if two channels, clip_over if all three); false: clip_over for any saturation.
+clipping = false
+clipping_opacity = 0.7
+clipping_channels = true
+# Grid badges: share of saturated / crushed pixels (most affected channel, 0 to 1)
+# beyond which a thumbnail is flagged.
+badge_over = 0.005
+badge_under = 0.05
+# Saturated / crushed indicators in the corners of the histogram: lit beyond this
+# share of pixels (0.001 = 0.1 %), not for a few dead pixels.
+indicator_min = 0.001
+# Histogram curve: number of classes across its width, and smoothing (standard deviation, in
+# classes; 0: no smoothing). No vertical scale: only the shape matters.
+classes = 80
+smoothing = 1.5
+# Intensity of the curve's filled areas (0 to 1), blended additively like light
+# (red + green = yellow, all three = white).
+fill_strength = 0.55
+# Statistics of the large histogram (Shift+E): range from shadows to highlights, without
+# isolated pixels (0.01: 1 % and 99 % percentiles).
+stats_tail = 0.01
+# Large histogram: diameter of the channel dots (red, green, blue, white = all;
+# Shift+C cycles them); analysis photo (in grey, saturated / crushed zones in
+# analysis_over / analysis_under, of the chosen channel) shown on opening, right of
+# the histogram and at its height (p or the photo icon show or hide it);
+# lightening of its background relative to the dialog's (0 to 1).
+channel_dot = 11.0
+analysis = false
+analysis_lighten = 0.06
+
+[gui.sharpness]
+# Sharpness map (focus peaking), in the fitted view as at 1:1: shown at startup
+# (p shows or hides it). Computation: section [sharpness]; its threshold follows the blur
+# strictness slider.
+visible = false
+# Colours offered, in rotation order (Ctrl+P): depending on the image, one stands out
+# better than another.
+colors = ["#ff2828", "#28ff50", "#28b4ff"]
+# Opacity of the edges (0 to 1).
+opacity = 1.0
+# Keyboard strictness step (Ctrl+J more lenient, Ctrl+K stricter), on a scale
+# from -1 (far left) to 1 (far right).
+step = 0.1
+
+[gui.metadata]
+# Metadata panel, on the right: shown at startup (Shift+M shows or hides it),
+# initial width (points, the edge can be dragged with the mouse), histogram of the selected
+# image at the top of the panel (grid and full screen; panel hidden: over the image),
+# and its height.
+visible = true
+width = 280.0
+histogram = true
+histogram_height = 120.0
+
+[gui.colors]
+# Colours "#rrggbb". Selection (click or keyboard) missing: theme colour. Example:
+# selection = "#1e6f7f"
+# Progress bars of the status bar; missing: the theme's discreet grey. Example:
+# progress = "#3c3c3c"
+# Frame of the hovered thumbnail (hovering doesn't select).
+hover = "#b4b4b4"
+# Frame of selected images (multiple selection: Space, v, Ctrl+A, Shift+click…),
+# distinct from the current image (solid background) and from hovering.
+marked = "#ffaa28"
+# Focus point marker.
+focus = "#3cff6e"
+# Built-in overlay grids (thirds, golden ratio, diagonals).
+overlay = "#ffffff"
+# Drop of the sharpness filters (crossed out: hide blurry ones; alone: blurry only).
+blur_drop = "#6eaae6"
+# Active stacks: background of the images, every other group in light grey, the others in
+# dark grey (an isolated photo is a one-image group).
+stack_band = "#383838"
+stack_band_alt = "#181818"
+# Neutral grey theme (theme = "neutral", tones taken from darktable): panels, central
+# background, grid cells, input fields, stack backgrounds (every other group,
+# the others).
+neutral_panel = "#2a2a2a"
+neutral_center = "#5e5e5e"
+neutral_cell = "#767676"
+neutral_field = "#3e3e3e"
+# Image names on the cells (dark: readable on the grey of the cells).
+neutral_cell_text = "#1e1e1e"
+# Selected cell, light grey like darktable (if selection is not given).
+neutral_selection = "#b3b3b3"
+neutral_stack_band = "#848484"
+neutral_stack_band_alt = "#6a6a6a"
+# Collapsed stacks: sheets behind the cover and image-count badge.
+stack_mark = "#8c8c8c"
+# "RAW" badge of the cells (absent: the theme's accent colour).
+# badge = "#78aae6"
+warning = "#e6a03c"
+error = "#e65a5a"
+view_background = "#0c0c0c"
+# Ratings: stars (missing: the theme's accent colour), picked / rejected dots,
+# rating colours.
+# stars = "#f0c440"
+accepted = "#46aa5a"
+rejected = "#d74646"
+red = "#e14141"
+yellow = "#e6c832"
+green = "#46b450"
+blue = "#4182e1"
+purple = "#a555d2"
+# Histogram (channels). Zones and badges: saturated in all three channels, saturated in a
+# single channel (red, green, blue; two channels: colours added), crushed.
+hist_red = "#eb4646"
+hist_green = "#50c85a"
+hist_blue = "#5082f0"
+clip_over = "#ff28ff"
+clip_red = "#ff3232"
+clip_green = "#32e632"
+clip_blue = "#3278ff"
+clip_under = "#00d2ff"
+# Analysis image of the large histogram (in grey): saturated, crushed; colours that
+# stand out against grey.
+analysis_over = "#ffdc00"
+analysis_under = "#286eff"
+
+[keys]
+# Shortcuts, by action identifier (listed in the help, F1 or ?, when hovering an
+# action). The shortcuts given REPLACE those of the sets for that action; empty list:
+# none at all. A key: "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap";
+# a capital letter alone means Shift + the letter ("G", as in vim); a sequence: "g g";
+# a character without a key name: "°". A shortcut bound to two actions is reported
+# at startup (status bar). Examples:
+# "core.flag.accept" = ["Maj+P", "a"]
+# "core.nav.first" = ["Début", "g g"]
+# "core.rate.color.purple" = ["°", ",", "."]

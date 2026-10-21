@@ -9,11 +9,14 @@
   les images ; en plein écran, la grille n'est plus refiltrée avant le retour (l'image
   regardée pouvait changer).
 - **Couleurs** : étoiles, couleur choisie et interrupteurs [RAW] / [JPG] dans la couleur
-  d'accent du thème (fini le jaune et le grand carré).
+  d'accent du thème (fini le jaune et le grand carré), badge RAW des vignettes aussi ;
+  filtre « sans les floues » : un triangle au lieu de la goutte barrée.
 - **Barre d'état** : plus de barres de progression éclair pendant un réglage
   (`[gui] progress_delay_ms`).
 - « JPEG boîtier » devient « Rendu boîtier ».
 - **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
+- **Réglages** : descriptions en anglais dans la fenêtre de réglages
+  (`doc/config.example.en.toml`), selon la langue de l'interface.
 
 ## 1.0.0-alpha.2 — 21/10/2026
 

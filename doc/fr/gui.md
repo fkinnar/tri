@@ -168,7 +168,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   sélectionnait du texte). Boutons et champs restent prioritaires.
 - **Barre de filtres compacte** (retour du 17/10/2026 : elle débordait sur un écran de
   portable) : icônes dessinées (étoiles ; drapeaux : coche verte = acceptées, croix grise
-  = masquer les rejetées, croix rouge = rejetées seulement ; goutte d'eau barrée =
+  = masquer les rejetées, croix rouge = rejetées seulement ; triangle (netteté, 21/10/2026 : la goutte barrée ne se comprenait pas) =
   masquer les floues, goutte = floues seulement, `[gui.colors] blur_drop` ; couleurs),
   compteur « 26/26 » ; le libellé complet et le raccourci de chaque bouton au survol.
   Type de fichier (21/10/2026, retour d'un testeur : « Plates » n'était pas clair) : deux
@@ -845,6 +845,11 @@ photos nettes.
   refiltrage : le cache répond presque toujours avant, une barre montrée 1/10 s ne se
   lisait pas.
 - « JPEG boîtier » devient **« Rendu boîtier »**, pendant de « Rendu RAW ».
+- **Badge RAW** des vignettes à l'accent (le bleu clair se lisait mal ; sur la cellule
+  sélectionnée, dont le fond est l'accent, la couleur de son texte) ; étoiles des
+  vignettes en accent éclairci (`marks::chip_star_color`), lisibles sur leur pastille
+  sombre. Filtre « sans les floues » : un **triangle** (netteté) au lieu de la goutte
+  barrée.
 
 ## Tests
 

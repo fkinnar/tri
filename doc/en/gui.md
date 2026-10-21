@@ -164,7 +164,7 @@ system one ("cold" measurements, experiments).
   and fields keep priority.
 - **Compact filter bar** (feedback of 2026-10-17: it overflowed on a laptop screen):
   drawn icons (stars; flags: green tick = picked, grey cross = hide rejected, red cross =
-  rejected only; crossed-out water drop = hide blurry, drop = blurry only,
+  rejected only; triangle (sharpness, 2026-10-21: the crossed-out drop was unclear) = hide blurry, drop = blurry only,
   `[gui.colors] blur_drop`; colours), "26/26" counter; the full label and shortcut of each
   button on hover.
   File type (2026-10-21, tester feedback: "Flat" was not clear): two **toggles**, RAW and
@@ -822,6 +822,10 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 - **Progress bars** hidden for `[gui] progress_delay_ms` (400 ms) after a refilter: the
   cache almost always answers first, a bar shown for 1/10 s was unreadable.
 - "Camera JPEG" becomes **"Camera render"**, the counterpart of "RAW render".
+- Thumbnails' **RAW badge** in the accent colour (the light blue was hard to read; on the
+  selected cell, whose background is the accent, its text colour); thumbnails' stars in
+  a lightened accent (`marks::chip_star_color`), readable on their dark chip. "Hide
+  blurry" filter: a **triangle** (sharpness) instead of the crossed-out drop.
 
 ## Tests
 

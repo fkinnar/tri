@@ -390,7 +390,9 @@ Proposition : sortir cette étape du logiciel de développement.
   tester (fichier de configuration). Toute nouvelle valeur de ce type naît paramétrable :
   clé dans la section TOML adéquate (`src/settings.rs` pour le moteur,
   `gui/src/settings.rs` pour l'interface) **et** dans `doc/config.example.toml` (un test
-  vérifie que l'exemple reste égal aux valeurs par défaut).
+  vérifie que l'exemple reste égal aux valeurs par défaut) **et** dans son pendant
+  anglais `doc/config.example.en.toml` (mêmes clés et valeurs, commentaires traduits ;
+  un test vérifie la correspondance).
 - **Conventions de l'interface** (18/10/2026) : tout champ où l'on tape un **chemin
   existant** a la complétion par Tab (`gui/src/path_field.rs`, moteur
   `files::complete_dir`) ; dans les boîtes, la **main** apparaît sur tout ce qui se
@@ -414,8 +416,9 @@ Proposition : sortir cette étape du logiciel de développement.
     mêmes noms de fichiers (un fichier par module + `README.md` sommaire, `build.md`,
     `tests.md`), expliquant mods, traits, fonctions et le *pourquoi* ; **les deux mises à
     jour ensemble**. `README.md` (anglais) et `README.fr.md` à la racine ; restent hors des
-    dossiers de langue : `doc/config.example.toml` (commentaires en français, lus par la
-    fenêtre de réglages), `doc/overlay.example.toml`, `doc/manual-images/`. Les chemins
+    dossiers de langue : `doc/config.example.toml` et `doc/config.example.en.toml`
+    (commentaires en français et en anglais, lus par la fenêtre de réglages selon la
+    langue), `doc/overlay.example.toml`, `doc/manual-images/`. Les chemins
     cités dans le code pointent vers `doc/en/`. Commentaires `///` sur tout l'API public
     pour `cargo doc` ;
   - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans warning,
@@ -686,7 +689,7 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   `develop::developed_size` ; rien si redressement ou perspective).
 - **Point du 21/10/2026** (matin) : priorités de l'utilisateur — curseur des piles
   inversé à centre calculé (**fait**), vraie résolution du développé darktable (**faite**),
-  descriptions en anglais de `config.example.toml` ; Windows l'après-midi (compilation
+  descriptions en anglais de `config.example.toml` (**faites** : `config.example.en.toml`) ; Windows l'après-midi (compilation
   par l'utilisateur, retours de son fils). Puis **bêta 1 dans quelques jours**, et une
   **feuille de route publiée** (`ROADMAP.md`, brouillon à valider : ce qui est bloqué
   pour la V1 / bêta et ce qui part après) pour chercher contributeurs et testeurs. À y

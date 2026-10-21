@@ -20,7 +20,9 @@ architecture).
 Or any file with `--config FILE`, for `tri` as well as `tri-gui`. Command-line options
 (`--cache`, `--side`, `--workers`…) take precedence over the file.
 
-**All keys, their default values and their role**: [`config.example.toml`](../config.example.toml).
+**All keys, their default values and their role**: [`config.example.en.toml`](../config.example.en.toml)
+(the reference, described in French: [`config.example.toml`](../config.example.toml), same
+keys and values; the settings window shows the descriptions in the interface language).
 Just copy the lines to change: any missing key keeps its default value, and a missing
 file is equivalent to the default settings. Two tests (engine and interface) check that
 this example file stays **exactly** equal to the values in the code: a default value

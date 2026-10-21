@@ -691,7 +691,8 @@ neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"
 # Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
 stack_mark = "#8c8c8c"
-badge = "#78aae6"
+# Badge « RAW » des cellules (absent : couleur d'accent du thème).
+# badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"

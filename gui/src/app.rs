@@ -5748,7 +5748,7 @@ impl TriApp {
                     ui.separator();
                     self.blur_slider(ui);
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
-                    marks::blur_drop(ui.painter(), rect, Color32::from(colors.blur_drop), false);
+                    marks::blur_drop(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
             });
         });
@@ -5939,8 +5939,8 @@ impl TriApp {
                 }
             }
             ui.separator();
-            // Goutte barrée : masquer les floues ; goutte : seulement les floues.
-            for (rule, action, barred) in [
+            // Triangle (netteté) : masquer les floues ; goutte : seulement les floues.
+            for (rule, action, sharp) in [
                 (
                     tri::sharpness::BlurRule::HideBlurry,
                     Action::FilterBlurry,
@@ -5959,7 +5959,11 @@ impl TriApp {
                         .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
                 }
                 let color = Color32::from(colors.blur_drop);
-                marks::blur_drop(ui.painter(), rect, color, barred);
+                if sharp {
+                    marks::sharp_triangle(ui.painter(), rect, color);
+                } else {
+                    marks::blur_drop(ui.painter(), rect, color);
+                }
                 if response.clicked() {
                     clicked.push(action);
                 }
@@ -6354,7 +6358,13 @@ impl TriApp {
             Align2::RIGHT_BOTTOM,
             badge,
             FontId::monospace(11.0),
-            colors.badge.into(),
+            // Couleur d'accent (retour du 21/10/2026 : le bleu clair se lisait mal) ; sur
+            // une cellule sélectionnée, dont le fond est l'accent, celle de son texte.
+            match (colors.badge, selected) {
+                (_, true) => text_color,
+                (Some(c), false) => c.into(),
+                (None, false) => marks::accent_mark(ui.ctx()),
+            },
         );
         // Photo jugée floue (score de netteté sous la médiane du dossier).
         if g.blur_badge && self.is_blurry(&file.path) {

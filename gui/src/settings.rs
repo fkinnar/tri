@@ -931,8 +931,8 @@ pub struct Colors {
     pub neutral_stack_band_alt: Color,
     /// Piles repliées : feuilles derrière la couverture et pastille du nombre d'images.
     pub stack_mark: Color,
-    /// Badge « RAW » des cellules.
-    pub badge: Color,
+    /// Badge « RAW » des cellules ; absent : couleur d'accent du thème.
+    pub badge: Option<Color>,
     /// Icône d'une vignette impossible à calculer.
     pub warning: Color,
     /// Messages d'erreur.
@@ -1001,7 +1001,7 @@ impl Default for Colors {
             neutral_stack_band: Color([132, 132, 132]),
             neutral_stack_band_alt: Color([106, 106, 106]),
             stack_mark: Color([140, 140, 140]),
-            badge: Color([120, 170, 230]),
+            badge: None,
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
             view_background: Color([12, 12, 12]),

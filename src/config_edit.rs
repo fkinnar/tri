@@ -496,4 +496,39 @@ hover = \"#b4b4b4\"
         let keys = s.sections.iter().find(|s| s.name == "keys").unwrap();
         assert!(keys.groups.is_empty());
     }
+
+    /// L'exemple décrit en anglais : mêmes sections, clés et valeurs que l'exemple de
+    /// référence, chaque réglage décrit dès qu'il l'est en français.
+    #[test]
+    fn the_english_example_matches_the_french_one() {
+        let fr = Schema::parse(include_str!("../doc/config.example.toml")).unwrap();
+        let en = Schema::parse(include_str!("../doc/config.example.en.toml")).unwrap();
+        // Par section, ses groupes, et dans chacun ses clés et valeurs.
+        type Shape = Vec<(String, Vec<Vec<(String, Value)>>)>;
+        let shape = |s: &Schema| -> Shape {
+            s.sections
+                .iter()
+                .map(|sec| {
+                    let groups = sec
+                        .groups
+                        .iter()
+                        .map(|g| {
+                            g.entries
+                                .iter()
+                                .map(|e| (e.key.clone(), e.default.clone()))
+                                .collect()
+                        })
+                        .collect();
+                    (sec.name.clone(), groups)
+                })
+                .collect()
+        };
+        assert_eq!(shape(&en), shape(&fr));
+        for (f, e) in fr.sections.iter().zip(&en.sections) {
+            assert_eq!(f.doc.is_empty(), e.doc.is_empty(), "[{}]", f.name);
+            for (fg, eg) in f.groups.iter().zip(&e.groups) {
+                assert_eq!(fg.doc.is_empty(), eg.doc.is_empty(), "[{}]", f.name);
+            }
+        }
+    }
 }

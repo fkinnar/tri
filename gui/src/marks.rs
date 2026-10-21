@@ -91,8 +91,8 @@ pub fn flag_filter(
     }
 }
 
-/// Goutte d'eau (le flou) dans `rect` ; `barred` : barrée (masquer les floues).
-pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32, barred: bool) {
+/// Goutte d'eau (le flou) dans `rect`.
+pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32) {
     // Cercle en bas, pointe en haut : deux tangentes du sommet au cercle.
     let r = rect.width() * 0.28;
     let c = rect.center() + vec2(0.0, rect.height() * 0.12);
@@ -108,15 +108,21 @@ pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32, barred: bool) {
         points.push(c + vec2(t.cos(), t.sin()) * r);
     }
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
-    if barred {
-        let s = rect.width() * 0.42;
-        let o = rect.center();
-        let back = Stroke::new(rect.width() * 0.2, Color32::from_black_alpha(200));
-        let line = Stroke::new(rect.width() * 0.1, Color32::from_gray(235));
-        for stroke in [back, line] {
-            painter.line_segment([o + vec2(-s, s), o + vec2(s, -s)], stroke);
-        }
-    }
+}
+
+/// Icône « netteté » : un triangle pointe en bas, de la surface de la goutte (filtre
+/// « sans les floues », retour du 21/10/2026 : la goutte barrée ne se comprenait pas).
+pub fn sharp_triangle(painter: &Painter, rect: Rect, color: Color32) {
+    let side = rect.width() * 0.74;
+    let height = side * 3f32.sqrt() / 2.0;
+    let c = rect.center();
+    let top = c.y - height / 2.0;
+    let points = vec![
+        pos2(c.x - side / 2.0, top),
+        pos2(c.x + side / 2.0, top),
+        pos2(c.x, top + height),
+    ];
+    painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
 /// Largeur occupée par [`row`] pour ces notes, à la taille `size`.
@@ -159,7 +165,7 @@ pub fn row(
             painter,
             pos2(x + radius, y),
             radius,
-            star_color(painter.ctx(), colors),
+            chip_star_color(painter.ctx(), colors),
         );
         x += size + gap;
     }
@@ -525,6 +531,16 @@ pub fn accent_mark(ctx: &egui::Context) -> Color32 {
     } else {
         style.visuals.selection.stroke.color
     }
+}
+
+/// Couleur des étoiles sur la pastille sombre des vignettes (tous thèmes) :
+/// `[gui.colors] stars`, sinon l'accent éclairci, le bleu foncé de l'accent ne s'y
+/// lisait pas.
+pub fn chip_star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
+    colors.stars.map_or_else(
+        || accent(ctx).lerp_to_gamma(Color32::WHITE, 0.4),
+        Color32::from,
+    )
 }
 
 /// Couleur des étoiles : `[gui.colors] stars`, sinon l'accent du thème.

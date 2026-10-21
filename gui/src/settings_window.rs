@@ -24,12 +24,19 @@ use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
 
 use crate::settings::AppSettings;
 
-/// Le fichier d'exemple, embarqué : la liste des réglages.
+/// Le fichier d'exemple, embarqué : la liste des réglages, décrits en français.
 const EXAMPLE: &str = include_str!("../../doc/config.example.toml");
+/// Le même, décrit en anglais (21/10/2026) : mêmes clés et valeurs (test du moteur).
+const EXAMPLE_EN: &str = include_str!("../../doc/config.example.en.toml");
 
+/// Liste des réglages, décrits dans la langue de l'interface.
 fn schema() -> &'static Schema {
-    static SCHEMA: OnceLock<Schema> = OnceLock::new();
-    SCHEMA.get_or_init(|| Schema::parse(EXAMPLE).unwrap_or_default())
+    static FR: OnceLock<Schema> = OnceLock::new();
+    static EN: OnceLock<Schema> = OnceLock::new();
+    match tri::i18n::language() {
+        tri::i18n::Language::Fr => FR.get_or_init(|| Schema::parse(EXAMPLE).unwrap_or_default()),
+        tri::i18n::Language::En => EN.get_or_init(|| Schema::parse(EXAMPLE_EN).unwrap_or_default()),
+    }
 }
 
 /// Vrai si `section`.`key` n'est relu qu'au lancement : le moteur (aperçus, cache, calculs,
