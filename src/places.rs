@@ -224,7 +224,9 @@ fn user_dirs(os: &str, home: &Path, xdg: &str) -> Vec<Place> {
                 "macos" | "windows" => home.join(english),
                 _ => from_xdg(key).unwrap_or_else(|| home.join(english)),
             };
-            (path != home && path.is_absolute()).then(|| Place {
+            // `has_root` plutôt qu'`is_absolute` : sous Windows, « /home/… » n'a pas de
+            // lettre de lecteur ; seul un chemin relatif est écarté.
+            (path != home && path.has_root()).then(|| Place {
                 name: crate::t!(*label),
                 path,
                 kind: PlaceKind::Home,
