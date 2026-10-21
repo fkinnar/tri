@@ -241,6 +241,10 @@ demande l'accord de tous les contributeurs.
       (GPL-3.0-or-later, 19/10/2026).
 - [x] Générer le fichier des notices des crates (`cargo-about`, `licenses/rust-crates.html`
       dans les paquets, 19/10/2026).
+- [x] Windows (21/10/2026) : runtime Visual C++ livré à côté de l'exécutable (fichiers
+      redistribuables de Visual Studio, déploiement « app-local » permis par Microsoft) ;
+      installateur produit par WiX (licence MS-RL, qui ne couvre que l'outil, pas le
+      `.msi` produit).
 - [x] Décider du traitement de HEIF dans les binaires distribués (§3) : **sans HEIC**
       (décidé le 19/10/2026), builds sans la feature `heif` ; à rouvrir avec les décodeurs
       du système (ImageIO, WIC).

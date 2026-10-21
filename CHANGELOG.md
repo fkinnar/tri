@@ -15,6 +15,9 @@
   (`[gui] progress_delay_ms`).
 - « JPEG boîtier » devient « Rendu boîtier ».
 - **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
+- **Windows** : installateur `.msi` (menu Démarrer, désinstallation depuis les
+  Paramètres) et zip portable, avec LibRaw et le runtime Visual C++ ; plus de fenêtre de
+  console derrière l'interface.
 - **Réglages** : descriptions en anglais dans la fenêtre de réglages
   (`doc/config.example.en.toml`), selon la langue de l'interface.
 - **Grille** : taille des vignettes réglable (curseur en bas, `+` / `-`, `*` ou bouton

@@ -14,6 +14,10 @@
 //! sélectionnée au démarrage) et `TRI_GUI_ACTIONS=<id>,<id>...` (actions exécutées au
 //! démarrage, ex. `core.app.help`).
 
+// Windows, en release : application graphique, sans fenêtre de console derrière elle
+// (paquet .msi, 21/10/2026). En debug, la console garde les messages.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 /// Texte traduit (voir `tri::t!`), catalogues de l'interface compris : ils sont ajoutés à
 /// la première utilisation (tests unitaires compris, sans passer par `main`).
 macro_rules! t {

@@ -5,7 +5,8 @@
   bibliothèques dans `Contents/Frameworks`, signé « ad hoc », dans un `.dmg`.
 - Linux : archive `.tar.gz` (`bin/`, `lib/`, `share/`) avec `install.sh` (dans `~/.local`
   par défaut, ou `--prefix`, `--uninstall`).
-- Windows : à venir (zip avec les DLL de vcpkg).
+- Windows : installateur `.msi` (WiX 5 : `Program Files\\tri`, menu Démarrer) et zip
+  « portable », avec les DLL de LibRaw (vcpkg) et le runtime Visual C++.
 
 Binaires **sans HEIC** (brevets HEVC, `doc/en/licensing.md`), avec libjpeg-turbo. LibRaw et
 ses dépendances sont **livrées à part** (`.dylib` / `.so`, liaison dynamique : la LGPL
@@ -19,9 +20,11 @@ import os
 import platform
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -367,6 +370,184 @@ def package_linux(release, out, ver, archive):
     return stage
 
 
+# --- Windows ----------------------------------------------------------------------------
+
+# Runtime Visual C++ : présent sur beaucoup de PC, pas sur tous ; livré à côté de
+# l'exécutable (déploiement « app-local », permis par Microsoft pour ces fichiers).
+VC_RUNTIME = re.compile(r"^(msvcp140|vcruntime140|vcomp140|concrt140)(_\w+)?\.dll$", re.I)
+# Identifiant fixe du produit : les versions suivantes remplacent la précédente.
+UPGRADE_CODE = "ee6387a7-4751-488b-9066-99b3b6e6e358"
+
+
+def pe_imports(path):
+    """DLL importées par un exécutable ou une DLL Windows (table d'import du PE), lues
+    sans outil externe (`dumpbin` demande l'environnement de Visual Studio)."""
+    data = path.read_bytes()
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    sections_count = struct.unpack_from("<H", data, pe + 6)[0]
+    optional_size = struct.unpack_from("<H", data, pe + 20)[0]
+    optional = pe + 24
+    magic = struct.unpack_from("<H", data, optional)[0]
+    directories = optional + (112 if magic == 0x20B else 96)
+    import_rva = struct.unpack_from("<I", data, directories + 8)[0]
+    sections = []
+    table = optional + optional_size
+    for k in range(sections_count):
+        size, rva, _, raw = struct.unpack_from("<IIII", data, table + 40 * k + 8)
+        sections.append((rva, size, raw))
+
+    def offset(rva):
+        for start, size, raw in sections:
+            if start <= rva < start + max(size, 1):
+                return rva - start + raw
+        raise ValueError(f"{path.name} : adresse {rva:#x} hors des sections")
+
+    names, at = [], offset(import_rva) if import_rva else None
+    while at is not None:
+        name_rva = struct.unpack_from("<I", data, at + 12)[0]
+        if name_rva == 0:
+            break
+        start = offset(name_rva)
+        names.append(data[start:data.index(b"\0", start)].decode("ascii"))
+        at += 20
+    return names
+
+
+def vc_redist_dirs():
+    """Dossiers du runtime Visual C++ redistribuable de Visual Studio (vswhere)."""
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / \
+        "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        return []
+    found = output([str(vswhere), "-latest", "-products", "*", "-find",
+                    r"VC\Redist\MSVC\*\x64\Microsoft.VC*.*"]).splitlines()
+    return [Path(f) for f in found if Path(f).is_dir()]
+
+
+def windows_collect(binaries, search):
+    """DLL à livrer (nom → chemin), dépendances des dépendances comprises : celles des
+    dossiers `search` (vcpkg, runtime Visual C++) ; les DLL du système restent. Arrêt si
+    une DLL n'est trouvée nulle part."""
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+    found, todo, missing = {}, list(binaries), []
+    while todo:
+        for name in pe_imports(todo.pop()):
+            key = name.lower()
+            if key in found or key.startswith(("api-ms-", "ext-ms-")):
+                continue
+            local = next((d / name for d in search if (d / name).is_file()), None)
+            if local:
+                found[key] = local
+                todo.append(local)
+            elif not (system / name).is_file():
+                missing.append(name)
+    if missing:
+        sys.exit("DLL introuvables : " + ", ".join(sorted(set(missing))))
+    return found
+
+
+def windows_ico(dest):
+    """`tri.ico` : l'icône 256 px en PNG dans un conteneur ICO (accepté depuis Vista)."""
+    png = (ROOT / "gui" / "assets" / "icon-256.png").read_bytes()
+    header = struct.pack("<HHH", 0, 1, 1)
+    entry = struct.pack("<BBBBHHII", 0, 0, 0, 0, 1, 32, len(png), 6 + 16)
+    dest.write_bytes(header + entry + png)
+
+
+WXS = r"""<?xml version="1.0" encoding="utf-8"?>
+<!-- Installateur de tri (scripts/package.py, doc/en/packaging.md). -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="tri" Manufacturer="tri" Version="{msi_version}"
+           UpgradeCode="{upgrade_code}" Scope="perMachine">
+    <SummaryInformation Description="tri {version}" />
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of tri is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="tri.ico" SourceFile="{stage}\tri.ico" />
+    <Property Id="ARPPRODUCTICON" Value="tri.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/fkinnar/tri" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="tri" />
+    </StandardDirectory>
+    <Feature Id="Main">
+      <Files Directory="INSTALLFOLDER" Include="{stage}\**" />
+      <Component Id="StartMenu" Directory="ProgramMenuFolder">
+        <Shortcut Id="TriShortcut" Name="tri" Description="RAW viewer"
+                  Target="[INSTALLFOLDER]tri-gui.exe" WorkingDirectory="INSTALLFOLDER"
+                  Icon="tri.ico" />
+        <RegistryValue Root="HKLM" Key="Software\tri" Name="StartMenu" Type="integer"
+                       Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>
+"""
+
+
+def package_windows(release, out, ver, archive):
+    stage = out / f"tri-{ver}-windows-x64"
+    shutil.rmtree(stage, ignore_errors=True)
+    licenses = stage / "licenses"
+    licenses.mkdir(parents=True)
+    binaries = []
+    for name in BINARIES:
+        shutil.copy2(release / f"{name}.exe", stage / f"{name}.exe")
+        binaries.append(stage / f"{name}.exe")
+
+    # DLL : LibRaw et ses dépendances (vcpkg, LIBRAW_DIR\bin), runtime Visual C++.
+    libraw = os.environ.get("LIBRAW_DIR")
+    if not libraw:
+        sys.exit("LIBRAW_DIR non défini (dossier vcpkg installed\\x64-windows)")
+    vcpkg = Path(libraw)
+    search = [vcpkg / "bin"] + vc_redist_dirs()
+    dlls = windows_collect(binaries, search)
+    for key, path in sorted(dlls.items()):
+        shutil.copy2(path, stage / path.name)
+    if not any(VC_RUNTIME.match(p.name) for p in dlls.values()):
+        print("attention : runtime Visual C++ non livré (pas de dossier Redist trouvé)")
+
+    # Licences des ports vcpkg installés (share\<port>\copyright), runtime compris.
+    native = []
+    for copyright in sorted((vcpkg / "share").glob("*/copyright")):
+        port = copyright.parent.name
+        (licenses / port).mkdir(exist_ok=True)
+        shutil.copy2(copyright, licenses / port / "copyright")
+        native.append((port, f"vcpkg {port}", windows_port_version(vcpkg, port)))
+    write_native_notice(licenses, native)
+    rust_notices(licenses / "rust-crates.html")
+    common_files(stage)
+    windows_ico(stage / "tri.ico")
+    print("DLL livrées : " + ", ".join(p.name for p in dlls.values()))
+    if not archive:
+        return stage
+
+    portable = out / f"{stage.name}.zip"
+    with zipfile.ZipFile(portable, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(stage.rglob("*")):
+            z.write(f, Path(stage.name) / f.relative_to(stage))
+    # Installateur : WiX 5 (`dotnet tool install --global wix`), version MSI numérique
+    # (1.0.0 pour 1.0.0-alpha.2 : AllowSameVersionUpgrades remplace quand même).
+    wxs = out / "tri.wxs"
+    msi_version = re.match(r"\d+\.\d+\.\d+", ver).group(0)
+    wxs.write_text(WXS.format(msi_version=msi_version, version=ver, stage=stage,
+                              upgrade_code=UPGRADE_CODE), encoding="utf-8")
+    msi = out / f"{stage.name}.msi"
+    if shutil.which("wix") is None:
+        sys.exit("WiX manquant : dotnet tool install --global wix --version 5.0.2")
+    run(["wix", "build", "-arch", "x64", "-o", str(msi), str(wxs)])
+    return msi
+
+
+def windows_port_version(vcpkg, port):
+    """Version d'un port vcpkg, lue dans son `vcpkg.spdx.json`."""
+    spdx = vcpkg / "share" / port / "vcpkg.spdx.json"
+    if spdx.is_file():
+        m = re.search(r'"versionInfo"\s*:\s*"([^"]+)"', spdx.read_text(encoding="utf-8"))
+        if m:
+            return m.group(1)
+    return "?"
+
+
 # --- Commun -----------------------------------------------------------------------------
 
 
@@ -391,7 +572,7 @@ def write_native_notice(licenses, native):
                 v = upstream.group(1) if upstream else ver
                 lines.append(f"- {pkg} {v} : {url.format(version=v)}")
     lines.append("")
-    (licenses / "README.md").write_text("\n".join(lines))
+    (licenses / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():
@@ -400,7 +581,7 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="reprendre la dernière compilation de target/package")
     parser.add_argument("--no-archive", action="store_true",
-                        help="dossier seulement (pas de .dmg / .tar.gz)")
+                        help="dossier seulement (pas de .dmg / .tar.gz / .msi)")
     parser.add_argument("--sign", default="-", metavar="IDENTITÉ",
                         help="macOS : certificat de signature (défaut : ad hoc)")
     args = parser.parse_args()
@@ -412,8 +593,10 @@ def main():
         result = package_macos(release, args.out, ver, not args.no_archive, args.sign)
     elif sys.platform.startswith("linux"):
         result = package_linux(release, args.out, ver, not args.no_archive)
+    elif sys.platform == "win32":
+        result = package_windows(release, args.out, ver, not args.no_archive)
     else:
-        sys.exit("Windows : pas encore (voir doc/en/packaging.md)")
+        sys.exit(f"système non pris en charge : {sys.platform}")
     print(f"paquet : {result}")
 
 

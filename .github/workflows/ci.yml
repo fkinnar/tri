@@ -71,20 +71,24 @@ jobs:
       - name: Tests
         run: cargo test --workspace --no-fail-fast ${{ env.FEATURES }}
 
-      - name: Binaires (Windows)
-        if: runner.os == 'Windows'
-        run: cargo build --release --workspace ${{ env.FEATURES }}
-
-      # Paquets prêts à installer (doc/en/packaging.md) : .dmg macOS, .tar.gz Linux.
+      # Paquets prêts à installer (doc/en/packaging.md) : .dmg macOS, .tar.gz Linux,
+      # .msi et .zip Windows.
       - name: Outil des notices de licence
-        if: runner.os != 'Windows'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-about
 
+      - name: WiX (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet tool install --global wix --version 5.0.2
+
       - name: Paquet
         if: runner.os != 'Windows'
         run: python3 scripts/package.py
+
+      - name: Paquet (Windows)
+        if: runner.os == 'Windows'
+        run: python scripts/package.py
 
       - uses: actions/upload-artifact@v7
         with:
@@ -92,8 +96,8 @@ jobs:
           path: |
             target/dist/*.dmg
             target/dist/*.tar.gz
-            target/release/tri-gui.exe
-            target/release/tri.exe
+            target/dist/*.msi
+            target/dist/*.zip
             LICENSE
             README.md
             README.fr.md
@@ -101,7 +105,7 @@ jobs:
           if-no-files-found: warn
 
   # Sur un tag v… : une Release (préversion tant que le nom contient un « - »), avec les
-  # paquets macOS et Linux (Windows : quand le zip avec ses DLL existera) et les notes de
+  # paquets macOS, Linux et Windows (.msi, .zip portable) et les notes de
   # la version tirées de CHANGELOG.md (« ## 1.0.0-alpha.2 — … » jusqu'au titre suivant).
   release:
     name: Release
@@ -131,7 +135,7 @@ jobs:
           [ -s notes.md ] || echo "Version $version." > notes.md
           prerelease=""
           case "$version" in *-*) prerelease="--prerelease" ;; esac
-          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' \))
+          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.zip' \))
           printf 'paquet : %s\n' "${files[@]}"
           gh release create "$GITHUB_REF_NAME" $prerelease \
             --title "tri $version" --notes-file notes.md "${files[@]}"

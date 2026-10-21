@@ -11,8 +11,9 @@ python3 scripts/package.py --no-archive # folder only, no .dmg / .tar.gz
 python3 scripts/package.py --sign "Developer ID Application: …"   # macOS, signed
 ```
 
-Result in `target/dist/`: `tri-<version>-macos-<arch>.dmg` or
-`tri-<version>-linux-<arch>.tar.gz`. Prerequisites: those of the build
+Result in `target/dist/`: `tri-<version>-macos-<arch>.dmg`,
+`tri-<version>-linux-<arch>.tar.gz`, or `tri-<version>-windows-x64.msi` and `.zip`.
+Prerequisites: those of the build
 ([build.md](build.md)) and [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
 (`cargo install cargo-about --locked --features cli`).
 
@@ -104,5 +105,31 @@ tri-<version>-linux-<arch>/
 
 ## Windows
 
-Coming (planned for the week of 2026-10-19): zip with `tri-gui.exe`, `tri.exe` and the
-LibRaw DLLs from vcpkg, same licenses and notices.
+Added on 2026-10-21 (so that "a normal person" can install it): an **`.msi`
+installer** and a **portable `.zip`**, built by the CI (`windows-latest`).
+
+```
+tri-<version>-windows-x64/
+  tri-gui.exe, tri.exe
+  raw_r.dll and its vcpkg dependencies, Visual C++ runtime (msvcp140.dll, vcruntime140*.dll…)
+  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md
+```
+
+- **Installer** (WiX 5, `dotnet tool install --global wix --version 5.0.2`; the WiX
+  licence, MS-RL, only covers the tool): installs into `Program Files\tri` (per machine,
+  administrator confirmation), **Start menu** shortcut with the icon, uninstall from
+  Windows Settings. Fixed `UpgradeCode`: a new version replaces the previous one. The MSI
+  version is numeric (`1.0.0` for `1.0.0-alpha.2`); `AllowSameVersionUpgrades` still
+  replaces it.
+- **DLLs**: found by reading the import tables of the `.exe` and of each DLL (small PE
+  reader in the script, no `dumpbin`), looked up in `LIBRAW_DIR\bin` (vcpkg) and in the
+  **Visual C++ redistributable** folders of Visual Studio (`vswhere`); system DLLs
+  (`System32`, `api-ms-*`) stay out. The runtime is shipped next to the executable
+  ("app-local" deployment, allowed by Microsoft for these files): many PCs do not have
+  it. The script stops if a DLL is found nowhere.
+- **Licences**: those of the installed vcpkg ports (`share\<port>\copyright`), LibRaw
+  source address (LGPL), Rust crates notices, as on the other systems.
+- **No console window** in release (`windows_subsystem = "windows"`, `gui/src/main.rs`).
+- **Not signed**: SmartScreen warns on first launch ("More info" → "Run anyway"). Signing
+  (code-signing certificate) for the public beta, like the Apple notarisation.
+- Not yet tried on a real Windows machine (first tester: 2026-10-21).

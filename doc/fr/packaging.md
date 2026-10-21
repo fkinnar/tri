@@ -11,8 +11,9 @@ python3 scripts/package.py --no-archive # dossier seulement, sans .dmg / .tar.gz
 python3 scripts/package.py --sign "Developer ID Application: …"   # macOS, signé
 ```
 
-Résultat dans `target/dist/` : `tri-<version>-macos-<arch>.dmg` ou
-`tri-<version>-linux-<arch>.tar.gz`. Prérequis : ceux de la compilation
+Résultat dans `target/dist/` : `tri-<version>-macos-<arch>.dmg`,
+`tri-<version>-linux-<arch>.tar.gz`, ou `tri-<version>-windows-x64.msi` et `.zip`.
+Prérequis : ceux de la compilation
 ([build.md](build.md)) et [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
 (`cargo install cargo-about --locked --features cli`).
 
@@ -106,5 +107,34 @@ tri-<version>-linux-<arch>/
 
 ## Windows
 
-À venir (prévu la semaine du 19/10/2026) : zip avec `tri-gui.exe`, `tri.exe` et les DLL
-de LibRaw de vcpkg, mêmes licences et notices.
+Ajouté le 21/10/2026 (pour qu'« une personne normale » puisse l'installer) : un
+**installateur `.msi`** et un **`.zip` portable**, produits par la CI (`windows-latest`).
+
+```
+tri-<version>-windows-x64/
+  tri-gui.exe, tri.exe
+  raw_r.dll et ses dépendances vcpkg, runtime Visual C++ (msvcp140.dll, vcruntime140*.dll…)
+  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md
+```
+
+- **Installateur** (WiX 5, `dotnet tool install --global wix --version 5.0.2` ; la
+  licence de WiX, MS-RL, ne couvre que l'outil) : installation dans `Program Files\tri`
+  (pour la machine, confirmation administrateur), raccourci dans le **menu Démarrer**
+  avec l'icône, désinstallation depuis les Paramètres de Windows. `UpgradeCode` fixe :
+  une nouvelle version remplace la précédente. Version MSI numérique (`1.0.0` pour
+  `1.0.0-alpha.2`) ; `AllowSameVersionUpgrades` remplace quand même.
+- **DLL** : trouvées en lisant la table d'import des `.exe` et de chaque DLL (petit
+  lecteur PE dans le script, sans `dumpbin`), cherchées dans `LIBRAW_DIR\bin` (vcpkg) et
+  dans les dossiers du **runtime Visual C++ redistribuable** de Visual Studio
+  (`vswhere`) ; les DLL du système (`System32`, `api-ms-*`) restent dehors. Le runtime
+  est livré à côté de l'exécutable (déploiement « app-local », permis par Microsoft pour
+  ces fichiers) : beaucoup de PC ne l'ont pas. Le script s'arrête si une DLL n'est
+  trouvée nulle part.
+- **Licences** : celles des ports vcpkg installés (`share\<port>\copyright`), adresse du
+  source de LibRaw (LGPL), notices des crates Rust, comme ailleurs.
+- **Pas de fenêtre de console** en release (`windows_subsystem = "windows"`,
+  `gui/src/main.rs`).
+- **Non signé** : SmartScreen avertit au premier lancement (« Informations
+  complémentaires » → « Exécuter quand même »). Signature (certificat de signature de
+  code) pour la bêta publique, comme la notarisation Apple.
+- Pas encore essayé sur une vraie machine Windows (premier testeur : 21/10/2026).

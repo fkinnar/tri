@@ -96,12 +96,25 @@ correct as is.
 
 ### Windows
 
-No pkg-config in practice. Example with vcpkg:
+No pkg-config in practice. Prerequisites: Rust (with the Visual Studio C++ Build
+Tools that rustup asks for), Git, CMake, NASM (libjpeg-turbo SIMD), and LibRaw through
+vcpkg. In `cmd`:
 
-```powershell
-$env:LIBRAW_DIR = "C:\vcpkg\installed\x64-windows"
-cargo build --release
 ```
+winget install NASM.NASM
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+C:\vcpkg\vcpkg install libraw:x64-windows
+set PATH=%PATH%;C:\Program Files\NASM;C:\vcpkg\installed\x64-windows\bin
+set LIBRAW_DIR=C:\vcpkg\installed\x64-windows
+set LIBRAW_LIB=raw_r
+cargo run --release -p tri-gui --no-default-features --features tri/turbojpeg,tri-gui/turbojpeg
+```
+
+`LIBRAW_LIB`: the name of the library in `lib\` (`raw_r.lib` with LibRaw 0.22 from
+vcpkg, otherwise `raw`). Without HEIC (`--no-default-features`): libheif would also
+have to come from vcpkg. Plan 30 to 40 GB of disk (Build Tools, vcpkg, `target\`).
+Easier for a tester: the `.msi` built by the CI ([packaging.md](packaging.md)).
 
 The LibRaw DLL must be findable at runtime (in the `PATH` or next to the executable).
 File paths are passed to LibRaw in UTF-16 (`libraw_open_wfile`), which handles
