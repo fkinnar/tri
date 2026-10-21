@@ -103,8 +103,9 @@ photo with no score computed yet is kept.
 
 Interface: "blurry" label on the thumbnail (`[gui.grid] blur_badge`), a
 "Sharpness" line in the metadata panel (ratios to the folder and to the neighbours), filters
-"without blurry" (`f b`) and "blurry only" (`f B`, to check flagged photos
-before rejecting them: `BlurRule`), "sharpness" progress bar.
+"without blurry" (`f b`) and, inverted (`f i`, since 2026-10-21; `f B` before),
+"blurry only" to check flagged photos before rejecting them (`BlurRule`), "sharpness"
+progress bar.
 
 **Focus point** (2026-10-17): the focus point marker (read from the RAW,
 `Metadata::focus_point`, see `metadata.md`) is drawn in full screen and in comparison

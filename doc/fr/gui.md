@@ -99,7 +99,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Calculée par le chargeur, teintée au dessin.
 - **Photos floues** (17/10/2026, moteur : score de `tri::sharpness`, voir `sharpness.md`) :
   goutte (contour) sous la vignette (mot « floue » jusqu'au 21/10/2026), ligne « Netteté » du panneau des métadonnées, filtres
-  « sans les floues » (`f b`) et « floues seulement » (`f B`) ; jugement relatif à la médiane du dossier. Les barres de
+  « sans les floues » (`f b`), inversé pour les floues seulement (`f i`) ; jugement relatif à la médiane du dossier. Les barres de
   progression terminées sont masquées (`[gui] progress_hide_done`), la barre d'état reste
   courte.
 - **Collimateur** (17/10/2026) : repère du collimateur de mise au point en plein écran et
@@ -169,7 +169,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Barre de filtres compacte** (retour du 17/10/2026 : elle débordait sur un écran de
   portable) : icônes dessinées (étoiles ; drapeaux : coche verte = acceptées, croix grise
   = masquer les rejetées, croix rouge = rejetées seulement ; triangle (netteté, 21/10/2026 : la goutte barrée ne se comprenait pas) =
-  masquer les floues, goutte = floues seulement, `[gui.colors] blur_drop` ; couleurs),
+  masquer les floues, soleil = bien exposées (21/10/2026), tous deux à l'accent quand ils
+  sont allumés ; couleurs), inverseur ◐ et entonnoir tout à droite,
   compteur « 26/26 » ; le libellé complet et le raccourci de chaque bouton au survol.
   Type de fichier (21/10/2026, retour d'un testeur : « Plates » n'était pas clair) : deux
   **interrupteurs**, des étiquettes RAW et JPG (JPEG, TIFF, PNG, HEIC…) à la taille des
@@ -871,7 +872,18 @@ photos nettes.
   et `*`. Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
   la place dans le bandeau (sinon ils recouvraient les notes).
 - **Effacer les filtres** : un entonnoir barré tout à droite de la barre des filtres,
-  grisé sans filtre, le nombre d'images juste à sa gauche. Nom de l'image retiré du
+  grisé sans filtre, le nombre d'images juste à sa gauche.
+- **Filtres « bien exposées » et « inverser »** (fin d'après-midi) : soleil (`f w`) qui
+  retire les images brûlées ou bouchées au-delà des seuils des badges
+  (`tri::exposure::ClipFilter` ; parts lues dans le cache d'analyse pour tout le dossier,
+  une image pas encore analysée reste ; grille refiltrée quand les histogrammes sont
+  finis) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  exposition) retirent, type de fichier et recherche par nom restant appliqués
+  (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
+  `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
+- **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` aussi la carte de netteté, qui
+  restait affichée ; `p` l'éteint pendant le recadrage) ; egui y déplaçait le focus vers
+  la barre, rendu en fin d'image. Nom de l'image retiré du
   bandeau et, en grille, de la barre d'état (redondant, plusieurs images pouvant être
   sélectionnées).
 

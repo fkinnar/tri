@@ -147,7 +147,9 @@ cadre, Entrée.
   (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
   pour les profils d'export. Préréglages fournis : `story` (9:16, Web) et `post` (4:5,
   Web).
-- **Barre du recadrage** : liste « Préréglage » ; `p` passe au suivant.
+- **Barre du recadrage** : liste « Préréglage » ; `Tab` / `Maj+Tab` passe au suivant /
+  précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
+  affichée ; `p` l'éteint aussi pendant le recadrage).
   - Choisir un préréglage applique son rapport **exact**, son nom et son profil.
   - Le profil n'est appliqué que s'il existe et s'applique, et jamais un profil « tel
     quel ».

@@ -30,6 +30,14 @@ pub fn apply_all(filters: &[Box<dyn Filter>], groups: Groups) -> Groups {
     filters.iter().fold(groups, |g, f| f.apply(g))
 }
 
+/// Filtre inversé (21/10/2026) : les images de `base` qu'un filtre a retirées, `kept`
+/// étant ce qu'il a gardé de `base`. L'ordre et les groupes de `base` sont conservés.
+pub fn invert(base: Groups, kept: &Groups) -> Groups {
+    let kept: std::collections::HashSet<&std::path::Path> =
+        kept.iter().flatten().map(|f| f.path.as_path()).collect();
+    retain(base, |f| !kept.contains(f.path.as_path()))
+}
+
 /// Garde les images d'un groupe qui vérifient `keep`, puis retire les groupes vidés.
 /// Brique commune aux filtres qui ne regroupent pas.
 pub fn retain(groups: Groups, mut keep: impl FnMut(&MediaFile) -> bool) -> Groups {
@@ -117,6 +125,15 @@ mod tests {
     fn kind_filter_flat_only() {
         let groups = KindFilter::FlatOnly.apply(sample());
         assert_eq!(names(&groups), [vec!["a.JPG"], vec!["b.JPG"]]);
+    }
+
+    #[test]
+    fn invert_keeps_what_the_filter_removed() {
+        let kept = KindFilter::RawOnly.apply(sample());
+        let removed = invert(sample(), &kept);
+        assert_eq!(names(&removed), [vec!["a.JPG"], vec!["b.JPG"]]);
+        // Rien de retiré : rien à montrer.
+        assert!(invert(sample(), &sample()).is_empty());
     }
 
     #[test]

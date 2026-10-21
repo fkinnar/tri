@@ -28,7 +28,8 @@ action-core-filter-color-blue = Filter: blue (add / remove)
 action-core-filter-color-purple = Filter: purple (add / remove)
 action-core-filter-clear = Clear all filters
 action-core-filter-blurry = Filter: hide blurry
-action-core-filter-only_blurry = Filter: blurry only
+action-core-filter-well_exposed = Filter: well exposed (neither blown nor blocked)
+action-core-filter-invert = Filter: invert (what the filters remove)
 action-core-view-filter_bar = Show / hide the filter bar
 action-core-view-rating_bar = Show / hide the rating bar
 action-core-view-grid_info = Show / hide the thumbnail info (name, format, ratings, badges)
@@ -90,6 +91,7 @@ action-core-crop-ratio-4_3 = Crop: 4:3 (3:4)
 action-core-crop-rotate = Crop: portrait or landscape
 action-core-crop-save = Crop: save the version
 action-core-crop-preset = Crop: next preset
+action-core-crop-preset_prev = Crop: previous preset
 action-core-file-delete_stack = Delete the whole stack
 action-core-file-copy_stack = Copy the whole stack to…
 stack-actions-need-stacks = Stacks are off ({ $keys }): this action is for a whole stack
@@ -296,6 +298,8 @@ histogram-scale-tip = Scale { $current }; click or { $keys }: { $other }
 or-escape = or Esc
 grid-fit = All thumbnails on screen
 grid-size = Thumbnail size
+files-with-pairs = With the other file of the RAW+JPEG pair
+files-with-pairs-tip = Untick to act only on the chosen images (e.g. delete the JPEGs and keep the RAWs)
 rating-bar-title = Ratings
 rating-bar-applies = ratings apply to the { $n } selected images
 filter-summary-stars = { $n ->
@@ -439,8 +443,8 @@ transfer-title = { $n ->
    *[other] { $n } images to…
 }
 transfer-files = { $n ->
-    [one] { $n } file (pairs and XMP sidecars included)
-   *[other] { $n } files (pairs and XMP sidecars included)
+    [one] { $n } file (XMP sidecars included)
+   *[other] { $n } files (XMP sidecars included)
 }
 transfer-shared = { $name } is shared with an image that stays: copied
 transfer-create = the folder will be created
@@ -700,7 +704,8 @@ settings-bad-color = colour "{ $value }": expected "#rrggbb"
 progress-sharpness = sharpness
 progress-groups = grouping
 filter-bar-no-blurry = without blurry
-filter-bar-only-blurry = blurry only
+filter-bar-well-exposed = well exposed
+filter-bar-inverted = inverted
 filter-bar-count-tip = images shown / images in the folder
 badge-blurry = Judged blurry (sharpness score)
 panel-sharpness = Sharpness

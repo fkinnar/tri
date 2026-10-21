@@ -99,7 +99,8 @@ pub fn navigate(
         | Action::FilterColor(_)
         | Action::FilterClear
         | Action::FilterBlurry
-        | Action::FilterOnlyBlurry
+        | Action::FilterWellExposed
+        | Action::FilterInvert
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleGridInfo
@@ -133,6 +134,7 @@ pub fn navigate(
         | Action::CropRotate
         | Action::CropSave
         | Action::CropPreset
+        | Action::CropPresetPrev
         | Action::VersionNext
         | Action::Send(_)
         | Action::Undo

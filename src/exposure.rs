@@ -7,11 +7,13 @@
 //! rendu). Pour une image plate, sur ses valeurs 8 bits. C'est une donnée *dérivée*
 //! (cache d'analyse), jamais écrite dans le XMP. Voir `doc/en/exposure.md`.
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
 use crate::bitmap::{Bitmap, Rotation};
+use crate::filter::{Filter, Groups, retain};
 use crate::raw::{RawFile, Sensor};
 
 /// Canaux : rouge, vert, bleu.
@@ -767,9 +769,59 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// Filtre « bien exposées » (21/10/2026) : retire les images dont la part de pixels
+/// saturés dépasse `over`, ou celle des bouchés `under` (les seuils des badges de la
+/// grille). Une image pas encore analysée reste.
+pub struct ClipFilter<'a> {
+    /// Parts de pixels saturés et bouchés (0 à 1), par chemin.
+    pub fractions: &'a HashMap<PathBuf, (f64, f64)>,
+    /// Part de pixels saturés au-delà de laquelle l'image est brûlée.
+    pub over: f64,
+    /// Part de pixels bouchés au-delà de laquelle l'image est bouchée.
+    pub under: f64,
+}
+
+impl Filter for ClipFilter<'_> {
+    fn apply(&self, groups: Groups) -> Groups {
+        retain(groups, |f| {
+            self.fractions
+                .get(&f.path)
+                .is_none_or(|&(over, under)| over <= self.over && under <= self.under)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_clip_filter_keeps_well_exposed_and_unknown_images() {
+        use crate::media::{MediaFile, MediaKind};
+        let p = |n: &str| PathBuf::from(format!("/s/{n}.jpg"));
+        let fractions = HashMap::from([
+            (p("ok"), (0.001, 0.01)),
+            (p("blown"), (0.2, 0.0)),
+            (p("blocked"), (0.0, 0.3)),
+        ]);
+        let groups = vec![
+            ["ok", "blown", "blocked", "unknown"]
+                .iter()
+                .map(|n| MediaFile {
+                    path: p(n),
+                    kind: MediaKind::Flat,
+                })
+                .collect(),
+        ];
+        let kept = ClipFilter {
+            fractions: &fractions,
+            over: 0.005,
+            under: 0.05,
+        }
+        .apply(groups);
+        let names: Vec<_> = kept[0].iter().map(|f| f.path.clone()).collect();
+        assert_eq!(names, [p("ok"), p("unknown")]);
+    }
 
     fn settings() -> ExposureSettings {
         ExposureSettings {

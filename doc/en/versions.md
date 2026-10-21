@@ -140,7 +140,9 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   `ratio` (`"free"`, `"original"`, or `"l:h"` in the desired orientation) and `profile`
   (`""`: none). A missing key comes from the built-in preset with the same identifier, as
   for export presets. Built-in presets: `story` (9:16, Web) and `post` (4:5, Web).
-- **Crop bar**: "Preset" list; `p` moves to the next one.
+- **Crop bar**: "Preset" list; `Tab` / `Shift+Tab` moves to the next / previous one
+  (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
+  during cropping too).
   - Choosing a preset applies its **exact** ratio, its name and its export preset.
   - The export preset is only applied if it exists and applies, and never an "as is"
     preset.

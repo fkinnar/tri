@@ -97,7 +97,7 @@ system one ("cold" measurements, experiments).
   by the loader, tinted when drawn.
 - **Blurry photos** (2026-10-17, engine: score from `tri::sharpness`, see `sharpness.md`):
   drop (outline) under the thumbnail (the word "blurry" until 2026-10-21), "Sharpness" row in the metadata panel, filters
-  "without blurry" (`f b`) and "blurry only" (`f B`); judgement relative to the folder's
+  "without blurry" (`f b`), inverted for blurry only (`f i`); judgement relative to the folder's
   median. Finished progress bars are hidden (`[gui] progress_hide_done`), the status bar
   stays short.
 - **Focus point** (2026-10-17): marker of the autofocus point in full screen and in
@@ -164,8 +164,9 @@ system one ("cold" measurements, experiments).
   and fields keep priority.
 - **Compact filter bar** (feedback of 2026-10-17: it overflowed on a laptop screen):
   drawn icons (stars; flags: green tick = picked, grey cross = hide rejected, red cross =
-  rejected only; triangle (sharpness, 2026-10-21: the crossed-out drop was unclear) = hide blurry, drop = blurry only,
-  `[gui.colors] blur_drop`; colours), "26/26" counter; the full label and shortcut of each
+  rejected only; triangle (sharpness, 2026-10-21: the crossed-out drop was unclear) = hide blurry, sun = well
+  exposed (2026-10-21), both in the accent when on; colours), ◐ inverter and funnel at
+  the far right, "26/26" counter; the full label and shortcut of each
   button on hover.
   File type (2026-10-21, tester feedback: "Flat" was not clear): two **toggles**, RAW and
   JPG labels (JPEG, TIFF, PNG, HEIC…) at the size of the other icons (no page icon, user
@@ -846,7 +847,17 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   `*`. Size remembered between launches. Controls shown only if the rating bar has room
   (otherwise they covered the ratings).
 - **Clear filters**: a crossed-out funnel at the far right of the filter bar, greyed out
-  without a filter, the image count just to its left. Image name removed from the rating
+  without a filter, the image count just to its left.
+- **"Well exposed" and "invert" filters** (late afternoon): sun (`f w`) removing images
+  blown or blocked beyond the badge thresholds (`tri::exposure::ClipFilter`; fractions
+  read from the analysis cache for the whole folder, an image not yet analysed stays;
+  grid refiltered when the histograms are done); ◐ (`f i`) shows what the **content**
+  filters (ratings, sharpness, exposure) remove, file type and name search still
+  applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
+  are gone. Triangle and sun in the accent when on, grey otherwise.
+- **Crop**: presets on `Tab` / `Shift+Tab` (`p` was also the sharpness map, which stayed
+  on; `p` turns it off during cropping); egui moved the focus to the bar there, given
+  back at the end of the frame. Image name removed from the rating
   bar and, in the grid, from the status bar (redundant, several images can be selected).
 
 ## Tests

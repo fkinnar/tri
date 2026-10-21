@@ -10,7 +10,10 @@ only handles input and confirmation, and the command line offers the same action
   attributed to another image with the same name.
 - The other image of its **RAW+JPEG pair** (same name apart from the extension, ignoring
   case) follows it too, by default (`[files] pairs = true`), as for notes: you reject a
-  photo, not a file.
+  photo, not a file. The **Delete** and **Copy / move to…** dialogs have a "with the other
+  file of the pair" checkbox when the selection brings in other files (`adds_pairs`,
+  2026-10-21: deleting all the JPEGs of a RAW+JPEG shoot took the RAWs with them);
+  unticking it updates the list.
 - A **shared** sidecar (`IMAGE.xmp`, Adobe convention, common to the RAF and the JPG) is
   only touched if all the images using it are. Without pairs, renaming the RAF alone
   **copies** this sidecar under the new name (both images keep their notes); deleting the
@@ -23,6 +26,7 @@ that foreseeable errors happen before the first modification.
 
 | Function | Role |
 |---|---|
+| `adds_pairs(images) -> bool` | do the pairs add files (the other image not chosen)? |
 | `group(images, pairs) -> Group` | images (pairs included), sidecars of their own (`sidecars`), shared sidecars left alone (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | new paths (`moves`) and copies of shared sidecars (`copies`); refuses an empty name, one with `/` or `\`, `.` / `..` (`InvalidName`) or one already taken (`Exists`); changing only the case is allowed |
 | `rename(&Rename)` | executes; never overwrites (checked again just before each file); on an error, what was renamed is put back and the copies deleted |

@@ -28,7 +28,8 @@ action-core-filter-color-blue = Filtre : bleu (ajouter / retirer)
 action-core-filter-color-purple = Filtre : violet (ajouter / retirer)
 action-core-filter-clear = Effacer tous les filtres
 action-core-filter-blurry = Filtre : masquer les floues
-action-core-filter-only_blurry = Filtre : seulement les floues
+action-core-filter-well_exposed = Filtre : bien exposées (ni brûlées ni bouchées)
+action-core-filter-invert = Filtre : inverser (ce que les filtres retirent)
 action-core-view-filter_bar = Afficher / masquer la barre de filtres
 action-core-view-rating_bar = Afficher / masquer le bandeau de notation
 action-core-view-grid_info = Afficher / masquer les infos des vignettes (nom, format, notes, badges)
@@ -89,6 +90,7 @@ action-core-crop-ratio-4_3 = Recadrage : 4:3 (3:4)
 action-core-crop-rotate = Recadrage : portrait ou paysage
 action-core-crop-save = Recadrage : enregistrer la version
 action-core-crop-preset = Recadrage : préréglage suivant
+action-core-crop-preset_prev = Recadrage : préréglage précédent
 action-core-file-delete_stack = Supprimer toute la pile
 action-core-file-copy_stack = Copier toute la pile vers…
 stack-actions-need-stacks = Piles désactivées ({ $keys }) : cette action vaut pour toute une pile
@@ -298,6 +300,8 @@ histogram-scale-tip = Échelle { $current } ; clic ou { $keys } : { $other }
 or-escape = ou Échap
 grid-fit = Toutes les vignettes à l'écran
 grid-size = Taille des vignettes
+files-with-pairs = Avec l'autre fichier de la paire RAW+JPEG
+files-with-pairs-tip = Décocher pour n'agir que sur les images choisies (ex. supprimer les JPEG en gardant les RAW)
 rating-bar-title = Notes
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
 filter-summary-stars = { $n ->
@@ -438,8 +442,8 @@ transfer-title = { $n ->
    *[other] { $n } images vers…
 }
 transfer-files = { $n ->
-    [one] { $n } fichier (paires et sidecars XMP compris)
-   *[other] { $n } fichiers (paires et sidecars XMP compris)
+    [one] { $n } fichier (sidecars XMP compris)
+   *[other] { $n } fichiers (sidecars XMP compris)
 }
 transfer-shared = { $name } est partagé avec une image qui reste : copié
 transfer-create = le dossier sera créé
@@ -702,7 +706,8 @@ settings-bad-color = couleur « { $value } » : attendu "#rrggbb"
 progress-sharpness = netteté
 progress-groups = regroupement
 filter-bar-no-blurry = sans les floues
-filter-bar-only-blurry = floues seulement
+filter-bar-well-exposed = bien exposées
+filter-bar-inverted = inversé
 filter-bar-count-tip = images affichées / images du dossier
 badge-blurry = Jugée floue (score de netteté)
 panel-sharpness = Netteté

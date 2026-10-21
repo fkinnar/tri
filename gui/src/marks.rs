@@ -91,15 +91,6 @@ pub fn flag_filter(
     }
 }
 
-/// Goutte d'eau (le flou) dans `rect`.
-pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32) {
-    painter.add(Shape::convex_polygon(
-        drop_points(rect),
-        color,
-        Stroke::NONE,
-    ));
-}
-
 /// Contour de goutte, discret (photo jugée floue, sous la vignette ; retour du 21/10/2026 :
 /// le mot « floue » en toutes lettres).
 pub fn blur_drop_outline(painter: &Painter, rect: Rect, color: Color32) {
@@ -222,6 +213,34 @@ pub fn grid_info_icon(painter: &Painter, rect: Rect, color: Color32) {
     );
     painter.line_segment([p(0.12, 0.86), p(0.62, 0.86)], stroke);
     painter.line_segment([p(0.74, 0.86), p(0.88, 0.86)], stroke);
+}
+
+/// Icône « bien exposées » : un petit soleil (disque et huit rayons).
+pub fn sun(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center();
+    painter.circle_filled(c, s * 0.2, color);
+    let stroke = Stroke::new((s * 0.09).max(1.2), color);
+    for k in 0..8 {
+        let a = std::f32::consts::TAU * k as f32 / 8.0;
+        let d = vec2(a.cos(), a.sin());
+        painter.line_segment([c + d * s * 0.3, c + d * s * 0.44], stroke);
+    }
+}
+
+/// Icône « inverser les filtres » : un cercle à moitié plein (◐).
+pub fn invert_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let (c, r) = (rect.center(), s * 0.38);
+    painter.circle_stroke(c, r, Stroke::new((s * 0.09).max(1.2), color));
+    // Moitié gauche pleine : demi-disque en éventail depuis le centre.
+    let steps = 16;
+    let mut points = vec![c + vec2(0.0, -r)];
+    for i in 0..=steps {
+        let a = -FRAC_PI_2 - PI * i as f32 / steps as f32;
+        points.push(c + vec2(a.cos(), a.sin()) * r);
+    }
+    painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
 /// Icône « effacer les filtres » : un entonnoir barré.

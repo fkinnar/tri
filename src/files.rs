@@ -155,6 +155,16 @@ fn same_stem(image: &Path) -> Vec<PathBuf> {
     found
 }
 
+/// Vrai si les paires RAW+JPEG ajoutent des fichiers à `images` (l'autre image d'une
+/// paire n'est pas déjà choisie) : la boîte propose alors de les laisser (retour du
+/// 21/10/2026 : supprimer tous les JPEG emportait les RAW).
+pub fn adds_pairs(images: &[PathBuf]) -> bool {
+    let chosen: HashSet<&PathBuf> = images.iter().collect();
+    images
+        .iter()
+        .any(|image| same_stem(image).iter().any(|m| !chosen.contains(m)))
+}
+
 /// Fichiers touchés par une action sur `images` : les images, leurs paires si `pairs`, et
 /// les sidecars qui ne servent qu'à elles.
 pub fn group(images: &[PathBuf], pairs: bool) -> Group {
@@ -1127,6 +1137,16 @@ mod tests {
         sidecars.sort();
         assert_eq!(sidecars, ["IMG.RAF.xmp", "IMG.xmp"]);
         assert!(g.shared.is_empty());
+    }
+
+    #[test]
+    fn pairs_add_files_only_when_the_other_image_is_not_chosen() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        touch(d, &["IMG.RAF", "IMG.JPG", "SEUL.JPG"]);
+        assert!(adds_pairs(&[d.join("IMG.JPG")]));
+        assert!(!adds_pairs(&[d.join("IMG.JPG"), d.join("IMG.RAF")]));
+        assert!(!adds_pairs(&[d.join("SEUL.JPG")]));
     }
 
     #[test]

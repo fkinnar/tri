@@ -198,6 +198,13 @@ pub struct TriApp {
     /// refiltrée seulement au retour, pour ne pas retirer l'image regardée (retour du
     /// 21/10/2026).
     blur_refilter_pending: bool,
+    /// Filtre « bien exposées » (ni brûlées ni bouchées, seuils des badges).
+    well_exposed: bool,
+    /// Filtres inversés : ce qu'ils retirent (notes, netteté, exposition).
+    filter_inverted: bool,
+    /// Analyses d'exposition arrivées sous le filtre « bien exposées » : grille à
+    /// refiltrer une fois les histogrammes finis.
+    exposure_refilter_pending: bool,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -589,6 +596,9 @@ impl TriApp {
             blur_rule: None,
             blurry_applied: HashSet::new(),
             blur_refilter_pending: false,
+            well_exposed: false,
+            filter_inverted: false,
+            exposure_refilter_pending: false,
             progress_hidden_until: None,
             developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
@@ -1514,8 +1524,17 @@ impl TriApp {
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
-        let groups = self.folder.filtered(self.filter, &self.notes_rule);
-        // Photos floues : jugées par le moteur, d'après les scores connus.
+        // Type de fichier et recherche par nom (`/`) : la base, jamais inversée.
+        let base = tri::fuzzy::NameFilter {
+            query: &self.name_query,
+        }
+        .apply(self.folder.filtered(self.filter, &NotesRule::default()));
+        // Filtres sur le contenu : notes, netteté (jugée par le moteur d'après les scores
+        // connus), exposition (seuils des badges).
+        let groups = self
+            .notes_rule
+            .filter(&self.folder.notes)
+            .apply(base.clone());
         let groups = match self.blur_rule {
             Some(rule) => tri::sharpness::BlurFilter {
                 judgements: &self.judgements,
@@ -1524,11 +1543,24 @@ impl TriApp {
             .apply(groups),
             None => groups,
         };
-        // Recherche par nom (`/`) : le même trait que les autres filtres.
-        let groups = tri::fuzzy::NameFilter {
-            query: &self.name_query,
-        }
-        .apply(groups);
+        let groups = if self.well_exposed {
+            self.load_clip_summary();
+            let h = self.gui.histogram;
+            tri::exposure::ClipFilter {
+                fractions: &self.clip_summary,
+                over: h.badge_over,
+                under: h.badge_under,
+            }
+            .apply(groups)
+        } else {
+            groups
+        };
+        // Inversé : ce que les filtres sur le contenu ont retiré de la base.
+        let groups = if self.filter_inverted && self.content_filtered() {
+            tri::filter::invert(base, &groups)
+        } else {
+            groups
+        };
         self.blurry_applied = self.blurry_now();
         self.files = groups.into_iter().flatten().collect();
         self.status = vec![Status::default(); self.files.len()];
@@ -1641,6 +1673,43 @@ impl TriApp {
         self.blur_refilter_pending = false;
         if self.blur_rule.is_some() && self.blurry_now() != self.blurry_applied {
             self.refilter(Reveal::Minimal);
+        }
+    }
+
+    /// Un filtre sur le contenu est actif (notes, netteté, exposition) : ce que
+    /// l'inversion retourne.
+    fn content_filtered(&self) -> bool {
+        !self.notes_rule.is_empty() || self.blur_rule.is_some() || self.well_exposed
+    }
+
+    /// Parts saturées / bouchées de tout le dossier ouvert, lues dans le cache d'analyse
+    /// pour celles qui manquent (filtre « bien exposées » : les images masquées comptent
+    /// aussi). Une image pas encore analysée est absente, donc gardée par le filtre.
+    fn load_clip_summary(&mut self) {
+        let Some(engine) = &self.engine else { return };
+        for file in &self.folder.files {
+            if self.clip_summary.contains_key(&file.path) {
+                continue;
+            }
+            if let Some(e) = preview::exposure(&engine.cache, file, &engine.preview) {
+                self.clip_summary
+                    .insert(file.path.clone(), (e.over_fraction(), e.under_fraction()));
+            }
+        }
+    }
+
+    /// Filtre « bien exposées » : grille refiltrée une fois les analyses d'exposition
+    /// arrivées finies (pas à chacune), en grille seulement (comme la netteté).
+    fn exposure_refilter(&mut self) {
+        let p = self.progress[3];
+        if self.exposure_refilter_pending
+            && self.mode == Mode::Grid
+            && (p.total == 0 || p.done == p.total)
+        {
+            self.exposure_refilter_pending = false;
+            if self.well_exposed {
+                self.refilter(Reveal::Minimal);
+            }
         }
     }
 
@@ -1918,6 +1987,7 @@ impl TriApp {
         let mut scored = Vec::new();
         self.drain_engine(&mut scored);
         self.take_scores(scored);
+        self.exposure_refilter();
     }
 
     fn drain_engine(&mut self, scored: &mut Vec<usize>) {
@@ -1943,6 +2013,9 @@ impl TriApp {
                     }
                     if level == Level::Sharpness {
                         scored.push(index);
+                    }
+                    if level == Level::Exposure && self.well_exposed {
+                        self.exposure_refilter_pending = true;
                     }
                     if level == Level::Similarity
                         && let Some(file) = self.files.get(index)
@@ -2086,7 +2159,10 @@ impl TriApp {
                     | Action::CropRatio(_)
                     | Action::CropRotate
                     | Action::CropSave
-                    | Action::CropPreset => self.perform(ctx, action),
+                    | Action::CropPreset
+                    | Action::CropPresetPrev
+                    // La carte de netteté s'éteint aussi pendant le recadrage.
+                    | Action::TogglePeaking => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -2403,7 +2479,8 @@ impl TriApp {
                 }
             }
             Action::CropSave => self.save_crop(),
-            Action::CropPreset => self.next_preset(),
+            Action::CropPreset => self.next_preset(true),
+            Action::CropPresetPrev => self.next_preset(false),
             Action::VersionNext => {
                 if self.mode == Mode::View
                     && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
@@ -2618,16 +2695,22 @@ impl TriApp {
                 self.filter = KindFilter::All;
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
+                self.well_exposed = false;
+                self.filter_inverted = false;
                 self.apply_filter();
             }
-            Action::FilterBlurry | Action::FilterOnlyBlurry => {
-                use tri::sharpness::BlurRule;
-                let rule = match action {
-                    Action::FilterBlurry => BlurRule::HideBlurry,
-                    _ => BlurRule::OnlyBlurry,
-                };
-                // Même touche : on retire le filtre ; l'autre : on bascule.
+            // « Floues seulement » : « nettes » inversé (retour du 21/10/2026).
+            Action::FilterBlurry => {
+                let rule = tri::sharpness::BlurRule::HideBlurry;
                 self.blur_rule = (self.blur_rule != Some(rule)).then_some(rule);
+                self.apply_filter();
+            }
+            Action::FilterWellExposed => {
+                self.well_exposed = !self.well_exposed;
+                self.apply_filter();
+            }
+            Action::FilterInvert => {
+                self.filter_inverted = !self.filter_inverted;
                 self.apply_filter();
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
@@ -3718,8 +3801,8 @@ impl TriApp {
         }
     }
 
-    /// `p` pendant le recadrage : préréglage suivant.
-    fn next_preset(&mut self) {
+    /// Tab / Maj+Tab pendant le recadrage : préréglage suivant / précédent.
+    fn next_preset(&mut self, forward: bool) {
         let presets = &self.settings.versions.presets.0;
         if presets.is_empty() {
             return;
@@ -3729,7 +3812,13 @@ impl TriApp {
             .as_ref()
             .and_then(|c| c.preset.as_ref())
             .and_then(|id| presets.iter().position(|p| p.id == *id));
-        let next = current.map_or(0, |i| (i + 1) % presets.len());
+        let n = presets.len();
+        let next = match (current, forward) {
+            (None, true) => 0,
+            (None, false) => n - 1,
+            (Some(i), true) => (i + 1) % n,
+            (Some(i), false) => (i + n - 1) % n,
+        };
         self.apply_preset(next);
     }
 
@@ -5923,10 +6012,14 @@ impl TriApp {
             let names: Vec<String> = colors.any_of.iter().map(|&c| color_name(c)).collect();
             parts.push(names.join(&t!("filter-summary-or")));
         }
-        match self.blur_rule {
-            Some(tri::sharpness::BlurRule::HideBlurry) => parts.push(t!("filter-bar-no-blurry")),
-            Some(tri::sharpness::BlurRule::OnlyBlurry) => parts.push(t!("filter-bar-only-blurry")),
-            None => {}
+        if self.blur_rule.is_some() {
+            parts.push(t!("filter-bar-no-blurry"));
+        }
+        if self.well_exposed {
+            parts.push(t!("filter-bar-well-exposed"));
+        }
+        if self.filter_inverted && self.content_filtered() {
+            parts.push(t!("filter-bar-inverted"));
         }
         if !self.name_query.trim().is_empty() {
             parts.push(t!("filter-summary-name", query = self.name_query.trim()));
@@ -6037,30 +6130,24 @@ impl TriApp {
                 }
             }
             ui.separator();
-            // Triangle (netteté) : masquer les floues ; goutte : seulement les floues.
-            for (rule, action, sharp) in [
-                (
-                    tri::sharpness::BlurRule::HideBlurry,
-                    Action::FilterBlurry,
-                    true,
-                ),
-                (
-                    tri::sharpness::BlurRule::OnlyBlurry,
-                    Action::FilterOnlyBlurry,
-                    false,
-                ),
+            // Triangle (nettes) et soleil (bien exposées), à l'accent quand ils sont
+            // allumés, gris sinon, comme les étoiles (retour du 21/10/2026 ; la goutte
+            // « floues seulement » est devenue « nettes » inversé).
+            for (action, on) in [
+                (Action::FilterBlurry, self.blur_rule.is_some()),
+                (Action::FilterWellExposed, self.well_exposed),
             ] {
                 let tip = self.action_tip(action);
                 let (rect, response) = marks::clickable(ui, size, &tip);
-                if self.blur_rule == Some(rule) {
-                    ui.painter()
-                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
-                }
-                let color = Color32::from(colors.blur_drop);
-                if sharp {
+                let color = if on {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                if action == Action::FilterBlurry {
                     marks::sharp_triangle(ui.painter(), rect, color);
                 } else {
-                    marks::blur_drop(ui.painter(), rect, color);
+                    marks::sun(ui.painter(), rect, color);
                 }
                 if response.clicked() {
                     clicked.push(action);
@@ -6178,9 +6265,10 @@ impl TriApp {
                 }
             }
             ui.separator();
+            let content = self.content_filtered();
             let any = self.filter != KindFilter::All
-                || !self.notes_rule.is_empty()
-                || self.blur_rule.is_some()
+                || content
+                || self.filter_inverted
                 || !self.name_query.trim().is_empty();
             // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
             ui.add_space(self.gui.dialogs.spacing);
@@ -6212,6 +6300,21 @@ impl TriApp {
                     marks::funnel_cleared(ui.painter(), rect.shrink(size * 0.18), color);
                     if response.clicked() {
                         clicked.push(Action::FilterClear);
+                    }
+                });
+                // Inverser les filtres sur le contenu : grisé sans eux ; allumé, à
+                // l'accent.
+                let tip = self.action_tip(Action::FilterInvert);
+                ui.add_enabled_ui(content, |ui| {
+                    let (rect, response) = marks::clickable(ui, size, &tip);
+                    let color = if self.filter_inverted && content {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
+                    marks::invert_icon(ui.painter(), rect, color);
+                    if response.clicked() {
+                        clicked.push(Action::FilterInvert);
                     }
                 });
                 ui.weak(t!(
@@ -7347,6 +7450,11 @@ impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
+        // Recadrage : Tab change de préréglage ; egui, lui, y déplacerait le focus vers un
+        // champ ou un bouton de la barre (rendu en fin d'image, sauf depuis un champ).
+        let crop_tab = self.crop.is_some()
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| i.key_pressed(egui::Key::Tab));
         if self.engine.is_none() && self.error.is_none() {
             trace(|| "première image".into());
             self.start_engine(&ctx);
@@ -7515,6 +7623,13 @@ impl eframe::App for TriApp {
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
         if !self.mouse_active {
             ctx.set_cursor_icon(egui::CursorIcon::None);
+        }
+        if crop_tab {
+            ctx.memory_mut(|m| {
+                if let Some(id) = m.focused() {
+                    m.surrender_focus(id);
+                }
+            });
         }
         self.save_display();
         self.handle_screenshot(&ctx);
@@ -8920,14 +9035,15 @@ mod tests {
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 4);
-        // f Maj+B : seulement la floue.
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::B, Modifiers::SHIFT);
-        assert_eq!(h.state().files.len(), 1);
-        assert_eq!(h.state().files[0].path, c);
-        // f b depuis « floues seulement » : bascule vers « sans les floues ».
+        // f b puis f i (inverser) : seulement la floue ; f i encore : sans elle.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::B, Modifiers::NONE);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 1);
+        assert_eq!(h.state().files[0].path, c);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 3);
         // Curseur de sévérité tout à gauche : plus souple, une photo limite (0,45 × les
         // autres) n'est plus floue et revient dans la grille ; au centre, de nouveau floue.
@@ -9207,7 +9323,7 @@ mod tests {
         h.event(UiEvent::Text(format!("{}{sep}Sél", dir.path().display())));
         h.run_steps(2);
         press(&mut h, Key::Tab, Modifiers::NONE);
-        assert!(h.query_by_label_contains("fichier (paires").is_some());
+        assert!(h.query_by_label_contains("fichier (sidecars").is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(dest.join("img0.jpg").exists() && !photos.join("img0.jpg").exists());
@@ -9245,6 +9361,60 @@ mod tests {
         assert_eq!(h.state().files.len(), 2);
         assert_eq!(selected_name(&h), "img1.jpg");
         assert!(h.state().file_error.is_none());
+    }
+
+    #[test]
+    fn deleting_one_image_of_a_pair_can_leave_the_other() {
+        // Une paire (même nom, deux formats) : cochée, les deux partent ; décochée,
+        // seulement l'image choisie (supprimer les JPEG d'un dossier RAW+JPEG).
+        let (mut h, dir) = harness_files(&["a.jpg", "a.png", "b.jpg", "b.png"], 32, 24);
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        assert_eq!(selected_name(&h), "a.jpg");
+        let label = t!("files-with-pairs");
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        h.get_by_label(&label).click();
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!photos.join("a.jpg").exists());
+        assert!(photos.join("a.png").exists(), "l'autre de la paire reste");
+        // Case laissée cochée : la paire part entière.
+        h.state_mut().select(1);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "b.jpg");
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.query_by_label(&label).is_some());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!photos.join("b.jpg").exists() && !photos.join("b.png").exists());
+        // Image seule : pas de case.
+        h.state_mut().select(0);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "a.png");
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.query_by_label(&label).is_none());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+    }
+
+    #[test]
+    fn moving_one_image_of_a_pair_can_leave_the_other() {
+        let (mut h, dir) = harness_files(&["a.jpg", "a.png"], 32, 24);
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        press(&mut h, Key::X, Modifiers::CTRL);
+        h.event(UiEvent::Text(dest.display().to_string()));
+        h.run_steps(2);
+        h.get_by_label(&t!("files-with-pairs")).click();
+        h.run_steps(2);
+        assert!(
+            h.query_by_label_contains("1 fichier").is_some(),
+            "plan sans la paire"
+        );
+        h.get_by_label("Valider").click();
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        assert!(dest.join("a.jpg").exists() && !photos.join("a.jpg").exists());
+        assert!(photos.join("a.png").exists() && !dest.join("a.png").exists());
     }
 
     #[test]
@@ -10462,6 +10632,40 @@ mod tests {
         assert_eq!(h.state().selected, white);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
+        // f w : bien exposées, l'image blanche part (et les aplats à 0 sur un canal,
+        // bouchés) ; f i : seulement elles ; l'entonnoir : tout.
+        let n = h.state().files.len();
+        let hist = h.state().gui.histogram;
+        let badly: Vec<PathBuf> = h
+            .state()
+            .files
+            .iter()
+            .filter(|f| {
+                let (o, u) = h.state().clip_summary[&f.path];
+                o > hist.badge_over || u > hist.badge_under
+            })
+            .map(|f| f.path.clone())
+            .collect();
+        assert!(badly.contains(&white_path));
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::W, Modifiers::NONE);
+        assert!(h.state().well_exposed);
+        assert_eq!(h.state().files.len(), n - badly.len());
+        assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        let shown: Vec<_> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        assert_eq!(shown, badly, "inversé : les mal exposées");
+        h.get_by_label("Effacer").click();
+        h.run_steps(3);
+        assert!(!h.state().well_exposed && !h.state().filter_inverted);
+        assert_eq!(h.state().files.len(), n);
+        let white = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == white_path)
+            .unwrap();
         // Plein écran sur l'image blanche : histogramme et zones.
         h.state_mut().select(white);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -11201,8 +11405,23 @@ mod tests {
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
-        // p : premier préréglage, « Story » (9:16, Web).
+        // Tab : premier préréglage, « Story » (9:16, Web) ; Tab puis Maj+Tab y revient. Pas
+        // de champ pris par Tab (déplacement du focus d'egui).
+        press(&mut h, Key::Tab, Modifiers::NONE);
+        assert!(
+            !h.ctx.egui_wants_keyboard_input(),
+            "Tab ne va pas dans le champ du nom"
+        );
+        let first = h.state().crop.as_ref().unwrap().preset.clone();
+        press(&mut h, Key::Tab, Modifiers::NONE);
+        assert_ne!(h.state().crop.as_ref().unwrap().preset, first);
+        press(&mut h, Key::Tab, Modifiers::SHIFT);
+        assert_eq!(h.state().crop.as_ref().unwrap().preset, first);
+        // p : la carte de netteté, pas un préréglage.
+        let peaking = h.state().peaking;
         press(&mut h, Key::P, Modifiers::NONE);
+        assert_ne!(h.state().peaking, peaking);
+        assert_eq!(h.state().crop.as_ref().unwrap().preset, first);
         let crop = h.state().crop.as_ref().unwrap();
         assert_eq!(crop.ratio, tri::versions::Ratio::Fixed(9, 16));
         assert_eq!(crop.name, "Story");

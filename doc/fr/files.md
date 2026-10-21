@@ -11,7 +11,10 @@ commande offre les mêmes actions.
   attribuées plus tard à une autre image du même nom.
 - L'autre image de sa **paire RAW+JPEG** (même nom à l'extension près, sans tenir compte de
   la casse) la suit aussi, par défaut (`[files] pairs = true`), comme pour les notes : on
-  rejette une photo, pas un fichier.
+  rejette une photo, pas un fichier. Les boîtes **Supprimer** et **Copier / déplacer
+  vers…** ont une case « avec l'autre fichier de la paire » quand la sélection en
+  entraîne d'autres (`adds_pairs`, 21/10/2026 : supprimer tous les JPEG d'une séance
+  RAW+JPEG emportait les RAW) ; la décocher met à jour la liste.
 - Un sidecar **partagé** (`IMAGE.xmp`, convention Adobe, commun au RAF et au JPG) n'est
   touché que si toutes les images qui l'utilisent le sont. Sans les paires, renommer le RAF
   seul **copie** ce sidecar sous le nouveau nom (les deux images gardent leurs notes) ;
@@ -24,6 +27,7 @@ et pour que les erreurs prévisibles arrivent avant la première modification.
 
 | Fonction | Rôle |
 |---|---|
+| `adds_pairs(images) -> bool` | les paires ajoutent-elles des fichiers (l'autre image pas choisie) ? |
 | `group(images, pairs) -> Group` | images (paires comprises), sidecars à elles seules (`sidecars`), sidecars partagés laissés (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | nouveaux chemins (`moves`) et copies de sidecars partagés (`copies`) ; refuse un nom vide, avec `/` ou `\`, `.` / `..` (`InvalidName`) ou déjà pris (`Exists`) ; changer seulement la casse est permis |
 | `rename(&Rename)` | exécute ; jamais d'écrasement (revérifié juste avant chaque fichier) ; sur une erreur, ce qui a été renommé est remis en place et les copies effacées |

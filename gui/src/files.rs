@@ -20,8 +20,15 @@ pub enum FileDialog {
         /// Première image : le champ prend le focus, nom sélectionné.
         fresh: bool,
     },
-    /// Confirmer la suppression des fichiers de `group`.
-    Delete { group: Group, at: Pos2 },
+    /// Confirmer la suppression des fichiers de `group` (`images`, avec leurs paires si
+    /// `pairs` : case montrée quand `has_pairs`).
+    Delete {
+        images: Vec<PathBuf>,
+        pairs: bool,
+        has_pairs: bool,
+        group: Group,
+        at: Pos2,
+    },
     /// Copier / déplacer vers un dossier.
     Transfer(Box<Transfer>),
     /// Créer un dossier dans `parent`.
@@ -110,6 +117,10 @@ pub struct Transfer {
     /// Erreur au lancement (création du dossier…), montrée dans la boîte.
     error: Option<String>,
     job: Option<Job>,
+    /// Paires RAW+JPEG suivies (case de la boîte ; `None` : `[files] pairs`), et si la
+    /// sélection en a (case montrée), calculé à la première image.
+    pairs: Option<bool>,
+    has_pairs: Option<bool>,
 }
 
 /// Copie en cours, dans un fil à part (copies vérifiées : longues vers un autre disque).
@@ -181,6 +192,9 @@ impl FileDialog {
     /// Boîte de confirmation de la suppression de `images` (paires et sidecars compris).
     pub fn delete(images: &[PathBuf], settings: &FileSettings, at: Pos2) -> FileDialog {
         FileDialog::Delete {
+            images: images.to_vec(),
+            pairs: settings.pairs,
+            has_pairs: files::adds_pairs(images),
             group: files::plan_delete(images, settings),
             at,
         }
@@ -213,6 +227,8 @@ impl FileDialog {
             recent: None,
             error: None,
             job: None,
+            pairs: None,
+            has_pairs: None,
         }))
     }
 
@@ -320,7 +336,20 @@ impl FileDialog {
                 at,
                 fresh,
             } => rename_dialog(ctx, settings, image, name, *at, fresh),
-            FileDialog::Delete { group, at } => delete_dialog(ctx, settings, group, *at),
+            FileDialog::Delete {
+                images,
+                pairs,
+                has_pairs,
+                group,
+                at,
+            } => {
+                let before = *pairs;
+                let outcome = delete_dialog(ctx, settings, group, *at, has_pairs.then_some(pairs));
+                if *pairs != before {
+                    *group = files::plan_delete(images, &with_pairs(settings, *pairs));
+                }
+                outcome
+            }
         }
     }
 }
@@ -415,7 +444,28 @@ fn rename_dialog(
     }
 }
 
-fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at: Pos2) -> Outcome {
+/// Les réglages `settings`, paires RAW+JPEG suivies ou non selon la case de la boîte.
+fn with_pairs(settings: &FileSettings, pairs: bool) -> FileSettings {
+    FileSettings {
+        pairs,
+        ..settings.clone()
+    }
+}
+
+/// Case « avec l'autre fichier de la paire RAW+JPEG » (retour du 21/10/2026 : supprimer ou
+/// copier tous les JPEG emportait les RAW).
+fn pairs_checkbox(ui: &mut egui::Ui, pairs: &mut bool) {
+    ui.checkbox(pairs, t!("files-with-pairs"))
+        .on_hover_text(t!("files-with-pairs-tip"));
+}
+
+fn delete_dialog(
+    ctx: &egui::Context,
+    settings: &FileSettings,
+    group: &Group,
+    at: Pos2,
+    pairs: Option<&mut bool>,
+) -> Outcome {
     let (mut confirm, mut cancel) = (false, false);
     let verb = if settings.trash {
         t!("delete-to-trash")
@@ -439,6 +489,10 @@ fn delete_dialog(ctx: &egui::Context, settings: &FileSettings, group: &Group, at
             });
             for file in &group.shared {
                 ui.weak(t!("delete-kept-shared", name = file_name(file)));
+            }
+            if let Some(pairs) = pairs {
+                ui.add_space(4.0);
+                pairs_checkbox(ui, pairs);
             }
             if !settings.trash {
                 ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
@@ -592,6 +646,12 @@ impl Transfer {
         if self.job.is_some() {
             return self.progress(ctx, settings, data);
         }
+        let has_pairs = *self.has_pairs.get_or_insert_with(|| match &self.source {
+            Source::Images(images) => files::adds_pairs(images),
+            Source::Folder(_) => false,
+        });
+        let mut pairs = self.pairs.unwrap_or(settings.pairs);
+        let settings = &with_pairs(settings, pairs);
         let title = self.title();
         let dest = tri::settings::expand_home(self.input.trim());
         let plan = Plan::of(&self.source, &dest, self.mode, settings);
@@ -669,6 +729,9 @@ impl Transfer {
                         ui.colored_label(ui.visuals().error_fg_color, e.to_string());
                     }
                 }
+                if has_pairs {
+                    pairs_checkbox(ui, &mut pairs);
+                }
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().error_fg_color, e);
                 }
@@ -694,6 +757,9 @@ impl Transfer {
                     ui.weak(t!("enter-or-escape"));
                 });
             });
+        if pairs != settings.pairs {
+            self.pairs = Some(pairs);
+        }
         if let Some(i) = picked {
             self.use_recent(i);
             ctx.memory_mut(|m| m.request_focus(id));

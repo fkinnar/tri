@@ -104,8 +104,9 @@ photo sans score encore calculé est gardée.
 
 Interface : mention « floue » sur la vignette (`[gui.grid] blur_badge`), ligne
 « Netteté » dans le panneau des métadonnées (rapports au dossier et aux voisines), filtres
-« sans les floues » (`f b`) et « floues seulement » (`f B`, pour vérifier les photos
-signalées avant de les rejeter : `BlurRule`), barre de progression « netteté ».
+« sans les floues » (`f b`) et, inversé (`f i`, depuis le 21/10/2026 ; `f B` avant),
+« floues seulement » pour vérifier les photos signalées avant de les rejeter
+(`BlurRule`), barre de progression « netteté ».
 
 **Collimateur** (17/10/2026) : le repère du collimateur de mise au point (lu dans le RAW,
 `Metadata::focus_point`, voir `metadata.md`) est dessiné en plein écran et en comparaison

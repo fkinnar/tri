@@ -145,8 +145,10 @@ pub enum Action {
     FilterClear,
     /// Filtre : masquer les photos jugées floues.
     FilterBlurry,
-    /// Filtre : seulement les photos jugées floues.
-    FilterOnlyBlurry,
+    /// Filtre : seulement les photos bien exposées (ni brûlées ni bouchées).
+    FilterWellExposed,
+    /// Inverser les filtres : ce qu'ils retirent (les floues, avec « nettes »…).
+    FilterInvert,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -291,6 +293,8 @@ pub enum Action {
     CropSave,
     /// Recadrage : préréglage suivant.
     CropPreset,
+    /// Recadrage : préréglage précédent.
+    CropPresetPrev,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
@@ -358,7 +362,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 151] = [
+    pub const ALL: [Action; 153] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -384,7 +388,8 @@ impl Action {
         Action::FilterColor(Color::Purple),
         Action::FilterClear,
         Action::FilterBlurry,
-        Action::FilterOnlyBlurry,
+        Action::FilterWellExposed,
+        Action::FilterInvert,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleGridInfo,
@@ -430,6 +435,7 @@ impl Action {
         Action::CropRotate,
         Action::CropSave,
         Action::CropPreset,
+        Action::CropPresetPrev,
         Action::VersionNext,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
@@ -554,10 +560,10 @@ impl Action {
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
             | Develop => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
-            | CropPreset | VersionNext => Group::Crop,
+            | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
-            | FilterBlurry | FilterOnlyBlurry => Group::Filters,
+            | FilterBlurry | FilterWellExposed | FilterInvert => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleGridInfo | ToggleFolderPanel
             | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -607,7 +613,8 @@ impl Action {
             Action::FilterColor(Color::Purple) => "core.filter.color.purple",
             Action::FilterClear => "core.filter.clear",
             Action::FilterBlurry => "core.filter.blurry",
-            Action::FilterOnlyBlurry => "core.filter.only_blurry",
+            Action::FilterWellExposed => "core.filter.well_exposed",
+            Action::FilterInvert => "core.filter.invert",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleGridInfo => "core.view.grid_info",
@@ -648,6 +655,7 @@ impl Action {
             Action::CropRotate => "core.crop.rotate",
             Action::CropSave => "core.crop.save",
             Action::CropPreset => "core.crop.preset",
+            Action::CropPresetPrev => "core.crop.preset_prev",
             Action::VersionNext => "core.view.version_next",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
@@ -800,9 +808,8 @@ impl Action {
             | FolderDelete | FolderFavorite | FolderCopy | FolderMove => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
-            CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset => {
-                Some(Scope::Crop)
-            }
+            CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
+            | CropPresetPrev => Some(Scope::Crop),
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
                 Some(Scope::Histogram)
             }
@@ -1175,7 +1182,10 @@ const CROP: &[Binding] = {
         (&[shifted(Key::Num7)], CropRatio(6)),
         (&[plain(Key::X)], CropRotate),
         (&[plain(Key::Enter)], CropSave),
-        (&[plain(Key::P)], CropPreset),
+        // Préréglages : Tab / Maj+Tab (retour du 21/10/2026 : `p` était aussi la carte de
+        // netteté, restée affichée pendant le recadrage).
+        (&[plain(Key::Tab)], CropPreset),
+        (&[shifted(Key::Tab)], CropPresetPrev),
     ]
 };
 
@@ -1280,7 +1290,9 @@ const FILTERS: &[Binding] = {
         (&[F, plain(Key::Period)], FilterColor(C::Purple)),
         (&[F, plain(Key::Escape)], FilterClear),
         (&[F, plain(Key::B)], FilterBlurry),
-        (&[F, shifted(Key::B)], FilterOnlyBlurry),
+        // Bien exposées : `w` comme les zones d'exposition (« warnings ») ; inverser : `i`.
+        (&[F, plain(Key::W)], FilterWellExposed),
+        (&[F, plain(Key::I)], FilterInvert),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };
