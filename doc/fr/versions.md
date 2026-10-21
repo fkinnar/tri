@@ -102,8 +102,9 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - Réglages `[gui.crop]` : `step`, `shade`, `shade_opacity`, `line_width`, `handle_size`,
   `handle_grab`.
 
-- **Grille** : badge en haut à gauche des vignettes qui ont des versions (icône de
-  recadrage dessinée et leur nombre). Versions lues dans les sidecars à la demande, puis
+- **Grille** : badge dans la légende des vignettes qui ont des versions, à gauche du
+  format (icône de recadrage dessinée et leur nombre ; en haut à gauche jusqu'au
+  21/10/2026) ; un clic passe en recadrage. Versions lues dans les sidecars à la demande, puis
   gardées ; relues après une modification (enregistrement, annulation, surveillance du
   dossier).
 - La barre du recadrage ne propose que les profils d'export qui s'appliquent à l'image

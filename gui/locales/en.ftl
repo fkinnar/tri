@@ -311,8 +311,12 @@ filter-bar-raw-tip = RAW: shown (on) or hidden
 filter-bar-flat-tip = JPEG and other images (TIFF, PNG, HEIC…): shown (on) or hidden
 filter-bar-clear = Clear
 filter-bar-count = { $shown }/{ $n }
-badge-over = { $percent } % of pixels clipped (blown)
-badge-under = { $percent } % of pixels crushed
+badge-over = { $percent } % of pixels clipped (blown); click: large histogram
+badge-under = { $percent } % of pixels crushed; click: large histogram
+badge-versions = { $n ->
+    [one] 1 version (crop); click: crop
+   *[other] { $n } versions (crops); click: crop
+}
 help-title = Shortcuts
 help-search-hint = Search (e.g. "fpn", "star 3")…
 help-no-match = No matching action.

@@ -313,8 +313,12 @@ filter-bar-raw-tip = RAW : montrés (allumé) ou masqués
 filter-bar-flat-tip = JPEG et autres images (TIFF, PNG, HEIC…) : montrés (allumé) ou masqués
 filter-bar-clear = Effacer
 filter-bar-count = { $shown }/{ $n }
-badge-over = { $percent } % de pixels saturés (brûlée)
-badge-under = { $percent } % de pixels bouchés
+badge-over = { $percent } % de pixels saturés (brûlée) ; clic : grand histogramme
+badge-under = { $percent } % de pixels bouchés ; clic : grand histogramme
+badge-versions = { $n ->
+    [one] 1 version (recadrage) ; clic : recadrer
+   *[other] { $n } versions (recadrages) ; clic : recadrer
+}
 help-title = Raccourcis
 help-search-hint = Rechercher (ex. « pnd », « etoile 3 »)…
 help-no-match = Aucune action ne correspond.

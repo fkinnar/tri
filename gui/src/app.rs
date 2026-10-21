@@ -174,6 +174,9 @@ pub struct TriApp {
     grid_width: f32,
     /// « Tout à l'écran » demandé avant que la grille soit mise en page (au démarrage).
     grid_fit_pending: bool,
+    /// Clic sur un badge d'une vignette (versions, écrêtage) : l'image et l'action,
+    /// faite après la grille.
+    cell_action: Option<(usize, Action)>,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -564,6 +567,7 @@ impl TriApp {
             grid_cell: gui.grid.cell,
             grid_width: 0.0,
             grid_fit_pending: false,
+            cell_action: None,
             rating_dialog: None,
             file_dialog: None,
             crop: None,
@@ -6312,6 +6316,17 @@ impl TriApp {
         if self.grid_fit_pending {
             self.grid_fit_all();
         }
+        // Badge cliqué : l'image est choisie, puis recadrage ou grand histogramme.
+        if let Some((index, action)) = self.cell_action.take() {
+            if !self.selection.is_visual() {
+                self.selection.clear();
+            }
+            self.select(index);
+            match action {
+                Action::HistogramLarge => self.histogram_large = true,
+                _ => self.perform(&ctx, action),
+            }
+        }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
         // vidée, comme dans un gestionnaire de fichiers.
         // Seulement si le clic tombe sur la grille elle-même, pas sur une boîte ou une liste
@@ -6480,14 +6495,8 @@ impl TriApp {
         };
         // Sous la vignette, tout de la couleur du texte de la cellule (retour du
         // 21/10/2026) : le nom sans extension à gauche, le format à droite (il remplace
-        // l'extension), la goutte des photos floues juste avant.
-        ui.painter().text(
-            pos2(rect.min.x + g.padding, rect.max.y - 4.0),
-            Align2::LEFT_BOTTOM,
-            truncate(&file_stem(&file.path), g.name_chars),
-            FontId::proportional(12.0),
-            text_color,
-        );
+        // l'extension), la goutte des photos floues juste avant. Le nom est écrit en
+        // dernier, raccourci à la place laissée par les badges.
         let badge_rect = ui.painter().text(
             pos2(rect.max.x - g.padding, rect.max.y - 4.0),
             Align2::RIGHT_BOTTOM,
@@ -6499,65 +6508,112 @@ impl TriApp {
             },
         );
         let mut tips = Vec::new();
+        // De droite à gauche après le format : goutte (floue), puis versions.
+        let mut caption_left = badge_rect.min.x;
         if g.blur_badge && self.is_blurry(&file.path) {
             let side = badge_rect.height();
             let drop = Rect::from_min_size(
-                pos2(badge_rect.min.x - 4.0 - side, badge_rect.min.y),
+                pos2(caption_left - 4.0 - side, badge_rect.min.y),
                 vec2(side, side),
             );
             marks::blur_drop_outline(ui.painter(), drop, text_color);
+            caption_left = drop.min.x;
             tips.push(t!("badge-blurry"));
         }
+        // Versions (recadrages) dans la légende, sans fond (retour du 21/10/2026) : icône
+        // de recadrage et leur nombre ; un clic passe en recadrage.
+        let versions = self.versions_of(&file.path).list.len();
+        if versions > 0 {
+            let side = badge_rect.height();
+            let painter = ui.painter();
+            let galley = painter.layout_no_wrap(
+                versions.to_string(),
+                FontId::proportional(11.0),
+                text_color,
+            );
+            let number_x = caption_left - 6.0 - galley.size().x;
+            let icon = Rect::from_min_size(
+                pos2(number_x - 2.0 - side, badge_rect.min.y),
+                vec2(side, side),
+            );
+            painter.galley(
+                pos2(number_x, icon.center().y - galley.size().y / 2.0),
+                galley,
+                text_color,
+            );
+            marks::crop_icon(painter, icon.shrink(side * 0.1), text_color);
+            let area = Rect::from_min_max(icon.min, pos2(caption_left - 4.0, icon.max.y));
+            let tip = t!("badge-versions", n = versions);
+            let badge = ui.interact(
+                area.expand(2.0),
+                response.id.with("versions"),
+                Sense::click(),
+            );
+            badge.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
+            });
+            let clicked = badge
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(&tip)
+                .clicked();
+            if clicked {
+                self.cell_action = Some((index, Action::Crop));
+            }
+            caption_left = icon.min.x;
+        }
+        let name_x = rect.min.x + g.padding;
+        let mut name = truncate(&file_stem(&file.path), g.name_chars);
+        let font = FontId::proportional(12.0);
+        let room = caption_left - 6.0 - name_x;
+        while name.chars().count() > 1
+            && ui
+                .painter()
+                .layout_no_wrap(name.clone(), font.clone(), text_color)
+                .size()
+                .x
+                > room
+        {
+            let keep = name.trim_end_matches('…').chars().count().saturating_sub(1);
+            name = name.chars().take(keep).collect::<String>() + "…";
+        }
+        ui.painter().text(
+            pos2(name_x, rect.max.y - 4.0),
+            Align2::LEFT_BOTTOM,
+            name,
+            font,
+            text_color,
+        );
         // Notes sur la vignette : étoiles en bas à gauche, drapeau en bas à droite,
         // couleurs en haut à droite, chaque marque cerclée de sombre.
         let notes = self.folder.notes.notes(&file.path);
         marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
-        // Versions (recadrages) en haut à gauche : icône de recadrage et leur nombre, sur
-        // fond sombre (une vignette par version surchargerait la grille).
-        let mut top_left = image_area.min + vec2(5.0, 5.0);
-        let versions = self.versions_of(&file.path).list.len();
-        if versions > 0 {
-            let size = g.marks;
-            let painter = ui.painter();
-            let font = FontId::proportional(size * 0.9);
-            let text = versions.to_string();
-            let galley = painter.layout_no_wrap(text, font, Color32::WHITE);
-            let icon = Rect::from_min_size(top_left, vec2(size, size));
-            let back = Rect::from_min_max(
-                icon.min,
-                pos2(icon.max.x + 3.0 + galley.size().x, icon.max.y),
-            )
-            .expand(2.0);
-            painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
-            marks::crop_icon(painter, icon.shrink(size * 0.12), Color32::WHITE);
-            painter.galley(
-                pos2(icon.max.x + 3.0, icon.center().y - galley.size().y / 2.0),
-                galley,
-                Color32::WHITE,
-            );
-            top_left.x = back.max.x + 5.0;
-        }
-        // Écrêtage en haut à gauche, après les versions : brûlée, bouchée (petits
-        // histogrammes contre leur bord ; les pastilles se confondaient avec les couleurs).
+        // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
+        // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
         if let Some((over, under)) = self.clip_fractions(index, deadline) {
             let h = self.gui.histogram;
-            let side = g.marks * 1.2;
-            for (fraction, threshold, color, what, is_over) in [
-                (over, h.badge_over, colors.clip_over, "badge-over", true),
-                (
-                    under,
-                    h.badge_under,
-                    colors.clip_under,
-                    "badge-under",
-                    false,
-                ),
+            let side = g.marks * 1.3;
+            let mut at = image_area.min + vec2(4.0, 4.0);
+            for (fraction, threshold, what, is_over) in [
+                (over, h.badge_over, "badge-over", true),
+                (under, h.badge_under, "badge-under", false),
             ] {
                 if fraction > threshold {
-                    let badge = Rect::from_min_size(top_left - vec2(2.0, 2.0), vec2(side, side));
-                    marks::clip_badge(ui.painter(), badge, is_over, color.into());
-                    top_left.x += side + 4.0;
+                    let badge = Rect::from_min_size(at, vec2(side, side));
+                    marks::clip_badge(ui.painter(), badge, is_over);
+                    at.x += side + 4.0;
                     let percent = tri::i18n::decimal((fraction * 1000.0).round() / 10.0, 1);
-                    tips.push(t!(what, percent = percent));
+                    let tip = t!(what, percent = percent);
+                    let badge = ui.interact(badge, response.id.with(what), Sense::click());
+                    badge.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
+                    });
+                    let clicked = badge
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(&tip)
+                        .clicked();
+                    if clicked {
+                        self.cell_action = Some((index, Action::HistogramLarge));
+                    }
                 }
             }
         }
@@ -8147,6 +8203,32 @@ mod tests {
         h.event(UiEvent::Text("*".into()));
         h.run_steps(3);
         assert_eq!(h.state().grid_cell, fitted);
+    }
+
+    #[test]
+    fn clicking_the_versions_badge_of_a_thumbnail_starts_cropping() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let image = dir.path().join("photos").join("img1.jpg");
+        let versions = tri::versions::Versions {
+            list: vec![tri::versions::Version {
+                name: "Story".into(),
+                crop: [0.0, 0.0, 0.5, 1.0].into(),
+                ratio: tri::versions::Ratio::Free,
+                source: tri::versions::Source::Embedded,
+                profile: None,
+            }],
+            unknown: Vec::new(),
+        };
+        tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
+        h.state_mut().versions.clear();
+        h.run_steps(3);
+        h.get_by_label(&t!("badge-versions", n = 1)).click();
+        h.run_steps(3);
+        let app = h.state();
+        assert_eq!(app.files[app.selected].path, image, "l'image du badge");
+        assert_eq!(app.mode, Mode::View);
+        assert!(app.crop.is_some(), "recadrage commencé");
     }
 
     #[test]
@@ -10371,6 +10453,15 @@ mod tests {
         let (over, _) = h.state().clip_summary[&white_path];
         assert!(over > 0.99, "image blanche : {over}");
         assert!(over > h.state().gui.histogram.badge_over, "badge affiché");
+        // Clic sur le badge : l'image choisie, le grand histogramme ouvert.
+        assert!(!h.state().histogram_large);
+        let percent = tri::i18n::decimal((over * 1000.0).round() / 10.0, 1);
+        h.get_by_label(&t!("badge-over", percent = percent)).click();
+        h.run_steps(3);
+        assert!(h.state().histogram_large);
+        assert_eq!(h.state().selected, white);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().histogram_large);
         // Plein écran sur l'image blanche : histogramme et zones.
         h.state_mut().select(white);
         press(&mut h, Key::Enter, Modifiers::NONE);

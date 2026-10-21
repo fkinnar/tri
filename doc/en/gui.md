@@ -498,8 +498,8 @@ system one ("cold" measurements, experiments).
     in the shadows).
     `[gui.histogram] clipping_channels = false`: a single colour for any saturation.
     Configurable colours and opacity;
-  - **badges** in the grid: small histogram pressed against the blown / blocked edge at
-    the top left of the thumbnail (dots at the top right until 2026-10-21) above `[gui.histogram] badge_over` / `badge_under`, details on hover;
+  - **badges** in the grid: half-white half-black triangle at the top left of the
+    thumbnail (dots at the top right until 2026-10-21; click: large histogram) above `[gui.histogram] badge_over` / `badge_under`, details on hover;
     analyses read from the cache within the image's loading budget;
   - checked on a real shoot: fully blown photo (red everywhere, badge), portrait in a
     black sweater (blue zones in the folds, blue badge, -3.5 EV of headroom), portraits on
@@ -832,9 +832,11 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   `format_label`), blurry photo = **drop outline**, all in the cell's text colour; no
   more dark rectangle under the ratings: **stars bottom left, flag bottom right, colours
   top right**, each mark ringed in dark (`marks::thumbnail_notes`). **Clipping** moves to
-  the top left, after the versions badge, as a small histogram pressed against the
-  blown (right) or blocked (left) edge (`marks::clip_badge`): the magenta dot looked like
-  a purple colour label.
+  the top left: a right triangle ringed in dark, right half white (blown) or left half
+  (blocked), `marks::clip_badge` (the magenta dot looked like a purple colour label, then
+  a small histogram was unreadable); a click opens the large histogram. **Versions** move
+  into the caption, left of the drop (crop icon and count, no background); a click starts
+  cropping. Hand cursor over both; the name is shortened to the room left.
 - **Thumbnail info can be hidden** (`Shift+T`, rating bar button): name, format, ratings
   and badges disappear, the image takes the text's room; `[gui.grid] info`, remembered.
 - **Thumbnail size**: slider at the bottom next to ‹ › (logarithmic,

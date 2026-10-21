@@ -514,8 +514,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     confondait avec « bleu seul saturé » et se voyait mal sur les ombres).
     `[gui.histogram] clipping_channels = false` : une seule couleur pour toute
     saturation. Couleurs et opacité réglables ;
-  - **badges** dans la grille : petit histogramme collé au bord brûlé / bouché en haut à
-    gauche de la vignette (pastilles en haut à droite jusqu'au 21/10/2026) au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
+  - **badges** dans la grille : triangle mi-blanc mi-noir en haut à gauche de la vignette
+    (pastilles en haut à droite jusqu'au 21/10/2026), clic : grand histogramme, au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
     survol ; analyses lues dans le cache dans le budget de chargement de l'image ;
   - vérifié sur une vraie séance : photo entièrement brûlée (rouge partout, badge),
     portrait au pull noir (zones bleues dans les plis, badge bleu, -3,5 IL de marge),
@@ -855,9 +855,13 @@ photos nettes.
   photo floue = **contour de goutte**, le tout de la couleur du texte de la cellule ; plus
   de rectangle sombre sous les notes : **étoiles en bas à gauche, drapeau en bas à
   droite, couleurs en haut à droite**, chaque marque cerclée de sombre
-  (`marks::thumbnail_notes`). L'**écrêtage** passe en haut à gauche, après le badge des
-  versions, en petit histogramme collé au bord brûlé (droite) ou bouché (gauche)
-  (`marks::clip_badge`) : la pastille magenta se confondait avec un libellé violet.
+  (`marks::thumbnail_notes`). L'**écrêtage** passe en haut à gauche : triangle rectangle
+  cerclé de sombre, moitié droite blanche (brûlée) ou gauche (bouchée), `marks::clip_badge`
+  (la pastille magenta se confondait avec un libellé violet, puis un petit histogramme ne
+  se lisait pas) ; un clic ouvre le grand histogramme. Les **versions** passent dans la
+  légende, à gauche de la goutte (icône de recadrage et nombre, sans fond) ; un clic
+  passe en recadrage. Main au survol des deux ; le nom se raccourcit à la place qui
+  reste.
 - **Infos des vignettes masquables** (`Maj+T`, bouton du bandeau) : nom, format, notes et
   badges disparaissent, l'image prend la place du texte ; `[gui.grid] info`, retenu.
 - **Taille des vignettes** : curseur en bas à côté de ‹ › (logarithmique,

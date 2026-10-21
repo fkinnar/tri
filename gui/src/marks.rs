@@ -178,31 +178,35 @@ pub fn thumbnail_notes(painter: &Painter, area: Rect, notes: &Notes, size: f32, 
     }
 }
 
-/// Badge d'écrêtage d'une vignette, dans le carré `rect` : un petit histogramme qui
-/// s'entasse contre un bord, ce bord de la couleur de l'alerte (`over` : à droite, brûlée ;
-/// sinon à gauche, bouchée). Retour du 21/10/2026 : une simple pastille magenta se
-/// confondait avec un libellé de couleur.
-pub fn clip_badge(painter: &Painter, rect: Rect, over: bool, color: Color32) {
-    painter.rect_filled(rect, rect.width() * 0.2, RIM);
-    let inner = rect.shrink(rect.width() * 0.18);
-    let (w, h) = (inner.width(), inner.height());
-    let bar = w / 5.0;
-    // Barres croissantes vers le bord écrêté, la dernière (le bord) pleine hauteur et colorée.
-    let heights = [0.25, 0.4, 0.6, 0.8, 1.0];
-    for (k, height) in heights.iter().enumerate() {
-        let slot = if over { k } else { 4 - k };
-        let x = inner.min.x + slot as f32 * bar;
-        let r = Rect::from_min_max(
-            pos2(x + bar * 0.1, inner.max.y - h * height),
-            pos2(x + bar * 0.9, inner.max.y),
-        );
-        let fill = if k == 4 {
-            color
-        } else {
-            Color32::from_gray(220)
-        };
-        painter.rect_filled(r, 0.0, fill);
-    }
+/// Badge d'écrêtage d'une vignette, dans le carré `rect` : un triangle rectangle (angle
+/// droit en bas à droite) cerclé de sombre, moitié droite blanche et gauche noire pour une
+/// photo brûlée (`over`), l'inverse pour une photo bouchée. Retour du 21/10/2026 : la
+/// pastille magenta se confondait avec un libellé de couleur, puis un petit histogramme
+/// ne se lisait pas.
+pub fn clip_badge(painter: &Painter, rect: Rect, over: bool) {
+    let r = rect.shrink(rect.width() * 0.08);
+    let (a, b, c) = (r.left_bottom(), r.right_top(), r.right_bottom());
+    let rim = Stroke::new((rect.width() * 0.12).max(1.5), RIM);
+    painter.add(Shape::convex_polygon(vec![a, b, c], RIM, rim));
+    // Coupé au milieu par une verticale : à gauche, le petit triangle ; à droite, le reste.
+    let mid = r.center().x;
+    let m_top = pos2(mid, r.center().y);
+    let m_bottom = pos2(mid, r.bottom());
+    let (left, right) = if over {
+        (Color32::BLACK, Color32::WHITE)
+    } else {
+        (Color32::WHITE, Color32::BLACK)
+    };
+    painter.add(Shape::convex_polygon(
+        vec![a, m_top, m_bottom],
+        left,
+        Stroke::NONE,
+    ));
+    painter.add(Shape::convex_polygon(
+        vec![m_top, b, c, m_bottom],
+        right,
+        Stroke::NONE,
+    ));
 }
 
 /// Icône des infos des vignettes : une vignette (cadre) et la ligne de texte dessous.

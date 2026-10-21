@@ -101,8 +101,9 @@ The interface only draws; all the computation is here.
 - `[gui.crop]` settings: `step`, `shade`, `shade_opacity`, `line_width`, `handle_size`,
   `handle_grab`.
 
-- **Grid**: badge at the top left of thumbnails that have versions (drawn crop icon and
-  their number). Versions read from the sidecars on demand, then kept; read again after a
+- **Grid**: badge in the caption of thumbnails that have versions, left of the format
+  (drawn crop icon and their number; at the top left until 2026-10-21); a click starts
+  cropping. Versions read from the sidecars on demand, then kept; read again after a
   modification (save, undo, folder watching).
 - The crop bar only offers the export presets that apply to the cropped image
   (`applies_to`), and **never an "as is" preset**, whatever the image. A crop changes the
