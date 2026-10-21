@@ -142,6 +142,8 @@ pub struct TriApp {
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Recherche d'une mise à jour (sur demande) : en cours, ou son résultat affiché.
+    update: Option<UpdateCheck>,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -559,6 +561,7 @@ impl TriApp {
             offloaded: None,
             eject_failed: None,
             eject_dialog: None,
+            update: None,
             ejecting: None,
             notice: None,
             settings: settings.engine(),
@@ -1375,6 +1378,85 @@ impl TriApp {
 
     /// Confirmation d'éjection (modale), puis éjection dans un fil à part : l'outil du
     /// système prend une à quelques secondes.
+    /// Lance la recherche d'une mise à jour dans un fil à part (requête de quelques
+    /// secondes au plus) ; le résultat s'affiche dans une boîte.
+    fn check_update(&mut self, ctx: &egui::Context) {
+        self.help = false;
+        let settings = self.settings.update.clone();
+        let repaint = ctx.clone();
+        let handle = std::thread::spawn(move || {
+            let result =
+                tri::update::check(env!("CARGO_PKG_VERSION"), &settings).map_err(|e| e.to_string());
+            repaint.request_repaint();
+            result
+        });
+        self.update = Some(UpdateCheck::Running(handle));
+    }
+
+    /// Boîte de la recherche d'une mise à jour : en cours, dernière version, ou version
+    /// plus récente avec ses notes et le lien vers sa page.
+    fn update_dialog(&mut self, ctx: &egui::Context) {
+        if let Some(UpdateCheck::Running(handle)) = &self.update
+            && handle.is_finished()
+            && let Some(UpdateCheck::Running(handle)) = self.update.take()
+        {
+            let result = handle.join().unwrap_or_else(|_| Err("?".to_string()));
+            self.update = Some(UpdateCheck::Done(result));
+        }
+        let Some(state) = &self.update else { return };
+        let current = env!("CARGO_PKG_VERSION");
+        let mut close = false;
+        let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+        let modal = modal_at("update_dialog", at)
+            .title(t!("update-title"))
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                match state {
+                    UpdateCheck::Running(_) => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(t!("update-checking"));
+                        });
+                    }
+                    UpdateCheck::Done(Ok(None)) => {
+                        ui.label(t!("update-latest", version = current));
+                    }
+                    UpdateCheck::Done(Ok(Some(release))) => {
+                        ui.label(
+                            egui::RichText::new(t!(
+                                "update-available",
+                                version = release.version.as_str(),
+                                current = current
+                            ))
+                            .strong(),
+                        );
+                        if !release.notes.trim().is_empty() {
+                            ui.add_space(4.0);
+                            ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                                ui.weak(release.notes.trim());
+                            });
+                        }
+                        ui.add_space(6.0);
+                        if ui.button(t!("update-open-page")).clicked() {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(&release.url));
+                            close = true;
+                        }
+                    }
+                    UpdateCheck::Done(Err(e)) => {
+                        ui.colored_label(ui.visuals().error_fg_color, e);
+                    }
+                }
+                ui.add_space(6.0);
+                close |= ui.button(t!("close")).clicked();
+            });
+        if matches!(self.update, Some(UpdateCheck::Running(_))) {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        if close || modal.should_close() {
+            self.update = None;
+        }
+    }
+
     fn eject_dialog(&mut self, ctx: &egui::Context) {
         let Some((path, at)) = self.eject_dialog.clone() else {
             return;
@@ -2141,6 +2223,13 @@ impl TriApp {
                 }
                 continue;
             }
+            // Recherche d'une mise à jour : seule la fermeture.
+            if self.update.is_some() {
+                if action == Action::Back {
+                    self.update = None;
+                }
+                continue;
+            }
             // Confirmation d'éjection : seule la fermeture.
             if self.eject_dialog.is_some() {
                 if action == Action::Back {
@@ -2242,6 +2331,7 @@ impl TriApp {
             }
             Action::Help => self.help = !self.help,
             Action::Settings => self.open_settings(),
+            Action::CheckUpdate => self.check_update(ctx),
             Action::Undo => {
                 let result = self.history.undo(self.settings.xmp.sidecar);
                 self.after_history(result.map(|a| vec![a]).map_err(Some));
@@ -6312,7 +6402,11 @@ impl TriApp {
                     } else {
                         ui.style().interact(&response).fg_stroke.color
                     };
-                    marks::invert_icon(ui.painter(), rect, color);
+                    // À la taille des pastilles de couleur (retour du 21/10/2026 : plus
+                    // grande, elle attirait l'œil).
+                    let dot = self.gui.grid.marks + 4.0;
+                    let icon = Rect::from_center_size(rect.center(), vec2(dot, dot));
+                    marks::invert_icon(ui.painter(), icon, color);
                     if response.clicked() {
                         clicked.push(Action::FilterInvert);
                     }
@@ -7309,6 +7403,7 @@ impl TriApp {
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
+        let mut check_update = false;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : flèches haut / bas, pages, et
@@ -7338,6 +7433,17 @@ impl TriApp {
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
+                // Version, et la recherche d'une mise à jour (sur demande seulement).
+                ui.horizontal(|ui| {
+                    ui.weak(format!("tri {}", env!("CARGO_PKG_VERSION")));
+                    if ui
+                        .small_button(Action::CheckUpdate.label())
+                        .on_hover_text(t!("update-tip"))
+                        .clicked()
+                    {
+                        check_update = true;
+                    }
+                });
                 // Recherche floue à la fzf : on tape dès l'ouverture.
                 let search = ui.add(
                     egui::TextEdit::singleline(&mut query)
@@ -7397,6 +7503,9 @@ impl TriApp {
             });
         self.help_search = Some(query);
         self.help = open;
+        if check_update {
+            self.check_update(ctx);
+        }
     }
 
     /// Capture automatique (développement) : une fois toutes les vignettes calculées et
@@ -7618,6 +7727,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
+        self.update_dialog(&ctx);
         self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
@@ -7893,6 +8003,14 @@ fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
     } else {
         1
     }
+}
+
+/// Recherche d'une mise à jour ([`TriApp::check_update`]).
+enum UpdateCheck {
+    /// Requête en cours, dans un fil à part.
+    Running(std::thread::JoinHandle<Result<Option<tri::update::Release>, String>>),
+    /// Résultat : version plus récente (ou aucune), ou message d'erreur.
+    Done(Result<Option<tri::update::Release>, String>),
 }
 
 /// Ce qu'on glisse vers un dossier du panneau des dossiers (demandé le 20/10/2026) ; le
@@ -8344,6 +8462,58 @@ mod tests {
         assert_eq!(app.files[app.selected].path, image, "l'image du badge");
         assert_eq!(app.mode, Mode::View);
         assert!(app.crop.is_some(), "recadrage commencé");
+    }
+
+    #[test]
+    fn checking_for_updates_shows_the_newer_release() {
+        // Liste des versions servie par un fichier local (curl lit file://) : pas de réseau
+        // dans les tests.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let list = dir.path().join("releases.json");
+        std::fs::write(
+            &list,
+            r#"[{"tag_name": "v99.0.0", "html_url": "https://example.org/r", "body": "Nouveautés", "draft": false}]"#,
+        )
+        .unwrap();
+        let url = format!("file://{}", list.display().to_string().replace('\\', "/"));
+        let url = if url.starts_with("file:///") {
+            url
+        } else {
+            url.replacen("file://", "file:///", 1)
+        };
+        h.state_mut().settings.update.url = url;
+        press(&mut h, Key::F1, Modifiers::NONE);
+        // L'aide se met en page sur plusieurs images (elle grandit, centrée) : cliquer
+        // une fois sa place prise.
+        h.run_steps(30);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, &Action::CheckUpdate.label())
+            .click();
+        h.run_steps(2);
+        assert!(h.state().update.is_some(), "recherche lancée");
+        assert!(!h.state().help, "l'aide laisse la place à la boîte");
+        run_until(&mut h, |app| {
+            matches!(app.update, Some(UpdateCheck::Done(_)))
+        });
+        h.run_steps(2);
+        let current = env!("CARGO_PKG_VERSION");
+        let text = t!("update-available", version = "99.0.0", current = current);
+        assert!(h.query_by_label(&text).is_some(), "{text}");
+        assert!(h.query_by_label("Nouveautés").is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().update.is_none());
+        // Plus de version récente : le message « dernière version ».
+        std::fs::write(&list, "[]").unwrap();
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::CheckUpdate);
+        run_until(&mut h, |app| {
+            matches!(app.update, Some(UpdateCheck::Done(_)))
+        });
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("update-latest", version = current))
+                .is_some()
+        );
     }
 
     #[test]

@@ -47,12 +47,20 @@ marche à suivre est dans le README.
 | Recadrage vers les logiciels de développement | Écrire le cadre d'une version dans le sidecar, au format de Lightroom (`crs:Crop…`), darktable, Capture One |
 | Déchargement | Gabarits de noms de dossier et de fichiers, cartes de plusieurs jours |
 | Réglages de visualisation | Exposition, noir et blanc, contraste, uniformisation d'exposition (non destructifs) |
-| Après-développement | Profils de sortie, envoi (AirDrop, autres), rendus RawTherapee / ART |
+| Après-développement | Profils de sortie, envoi (AirDrop, autres) |
 | Filtres complexes | Fenêtre ou panneau dédié |
 | Vim plus complet | Nombres devant les actions (`5j`, `3x`) |
 | Netteté par IA | Visages, yeux nets sur un portrait |
 | Jeu d'icônes | Icônes dessinées (SVG) à la place des formes simples |
-| Architecture cible | LibRaw en bibliothèque dynamique, interface en terminal (TUI), plugins externes |
+| Architecture cible | LibRaw en bibliothèque dynamique, interface en terminal (TUI) |
+| Autres logiciels de développement | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`) : rendu et export comme avec darktable |
+| Style darktable | Appliquer un style darktable à une image (`darktable-cli --style`) |
+| Plugins externes | Un programme à part, dans n'importe quel langage (Python pour l'IA…), qui échange du JSON avec `tri` : analyses, filtres, envois |
+| HEIC par le système | Décodeurs de macOS (ImageIO) et de Windows (extension HEVC) : rien de breveté livré avec `tri` |
+| Mise à jour automatique | Télécharger et installer la nouvelle version (après la signature) |
+| Autres paquets | AppImage ou Flatpak (Flathub), winget / Microsoft Store, Homebrew : plus de systèmes, plus visible |
+| Déchargement des vidéos | Aujourd'hui ignorées sur la carte |
+| Analyses d'image | Histogramme de luminance des images plates, HEIC 10 bits, exposition calculée pendant le rendu RAW |
 
 ## Comment aider
 

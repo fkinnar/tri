@@ -37,6 +37,7 @@ exists.
 | [fuzzy.md](fuzzy.md) | Module `tri::fuzzy`: fuzzy search (filter by name, folders, help) |
 | [overlay.md](overlay.md) | Module `tri::overlay`: overlays (grids, text, logo, format), plugins written in Rust or TOML files |
 | [send.md](send.md) | Module `tri::send`: send plugins (AirDrop) |
+| [update.md](update.md) | Module `tri::update`: checking for a new version, on demand |
 | [watch.md](watch.md) | Module `tri::watch`: watching the open folder (images added, XMP modified elsewhere) |
 | [places.md](places.md) | Module `tri::places`: places (volumes, home folder, root) and tree |
 | [metadata.md](metadata.md) | Module `tri::metadata`: capture metadata (LibRaw, EXIF), lines to display |

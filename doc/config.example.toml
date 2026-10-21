@@ -216,6 +216,12 @@ name = ""
 ratio = "4:5"
 profile = "web"
 
+[update]
+# Rechercher une mise à jour (aide, tri --check-update), sur demande seulement : liste des
+# versions publiées (API des Releases GitHub, lue par curl) et délai maximal (secondes).
+url = "https://api.github.com/repos/fkinnar/tri/releases"
+timeout_s = 10
+
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
 # modifiées par un autre logiciel (darktable…) apparaissent d'elles-mêmes, une fois le

@@ -137,6 +137,7 @@ cli-usage =
       tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
       tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
       tri --cache-usage [--cache DOSSIER]
+      tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
       tri <dossier> --metadata [--raw|--flat] [--depth N]
@@ -251,3 +252,11 @@ export-libraw-bits = préréglage d'export « { $profile } » : le TIFF 32 bits 
 preset-bad-ratio = préréglage « { $preset } » : rapport inconnu « { $value } » (free, original, ou l:h comme 9:16)
 export-bad-icc = profil couleur de l'image illisible : conversion impossible (« JPEG tel quel » la garde telle quelle)
 export-version-empty = darktable n'a rien rendu pour cette version
+
+# Recherche d'une mise à jour (src/update.rs)
+update-no-curl = curl introuvable ({ $error }) : il fait la requête
+update-request-failed = recherche impossible : { $error }
+update-bad-answer = réponse illisible : { $error }
+cli-update-available = Nouvelle version : { $version }
+   { $url }
+cli-update-latest = Vous avez la dernière version ({ $version }).

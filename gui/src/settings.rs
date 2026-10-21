@@ -56,6 +56,8 @@ pub struct AppSettings {
     pub similarity: tri::similarity::SimilaritySettings,
     /// `[i18n]` (moteur) : langue des textes.
     pub i18n: tri::i18n::I18nSettings,
+    /// `[update]` (moteur) : recherche d'une nouvelle version.
+    pub update: tri::update::UpdateSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -84,6 +86,7 @@ impl AppSettings {
             sharpness: self.sharpness,
             similarity: self.similarity,
             i18n: self.i18n,
+            update: self.update.clone(),
         }
     }
 

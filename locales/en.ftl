@@ -136,6 +136,7 @@ cli-usage =
       tri <folder> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache FOLDER]
       tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache FOLDER]
       tri --cache-usage [--cache FOLDER]
+      tri --check-update
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
@@ -250,3 +251,11 @@ export-libraw-bits = export preset “{ $profile }”: 32-bit TIFF needs darktab
 preset-bad-ratio = preset “{ $preset }”: unknown ratio “{ $value }” (free, original, or w:h such as 9:16)
 export-bad-icc = unreadable image color profile: no conversion possible (“JPEG as is” keeps it as it is)
 export-version-empty = darktable rendered nothing for this version
+
+# Recherche d'une mise à jour (src/update.rs)
+update-no-curl = curl not found ({ $error }): it makes the request
+update-request-failed = check failed: { $error }
+update-bad-answer = unreadable answer: { $error }
+cli-update-available = New version: { $version }
+   { $url }
+cli-update-latest = You have the latest version ({ $version }).

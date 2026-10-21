@@ -200,6 +200,7 @@ pub fn navigate(
         | Action::Back
         | Action::Help
         | Action::Settings
+        | Action::CheckUpdate
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)

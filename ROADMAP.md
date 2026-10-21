@@ -46,12 +46,20 @@ README.
 | Crop to development software | Write a version's crop into the sidecar, in the format of Lightroom (`crs:Crop…`), darktable, Capture One |
 | Offload | Folder and file name templates, multi-day cards |
 | Viewing adjustments | Exposure, black and white, contrast, exposure matching (non-destructive) |
-| Post-development | Output profiles, sending (AirDrop, others), RawTherapee / ART renders |
+| Post-development | Output profiles, sending (AirDrop, others) |
 | Complex filters | Dedicated window or panel |
 | Fuller vim | Counts before actions (`5j`, `3x`) |
 | AI sharpness | Faces, sharp eyes on a portrait |
 | Icon set | Drawn icons (SVG) instead of simple shapes |
-| Target architecture | LibRaw as a dynamic library, terminal interface (TUI), external plugins |
+| Target architecture | LibRaw as a dynamic library, terminal interface (TUI) |
+| Other development software | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`): render and export as with darktable |
+| darktable style | Apply a darktable style to an image (`darktable-cli --style`) |
+| External plugins | A separate program, in any language (Python for AI…), exchanging JSON with `tri`: analyses, filters, sending |
+| HEIC through the system | macOS (ImageIO) and Windows (HEVC extension) decoders: nothing patented shipped with `tri` |
+| Automatic update | Download and install the new version (after signing) |
+| Other packages | AppImage or Flatpak (Flathub), winget / Microsoft Store, Homebrew: more systems, more visible |
+| Video offload | Ignored on the card today |
+| Image analysis | Luminance histogram of flat images, 10-bit HEIC, exposure computed during the RAW render |
 
 ## How to help
 

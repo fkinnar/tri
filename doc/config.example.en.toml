@@ -219,6 +219,12 @@ name = ""
 ratio = "4:5"
 profile = "web"
 
+[update]
+# Check for updates (help, tri --check-update), on demand only: list of published
+# versions (GitHub Releases API, read with curl) and maximum delay (seconds).
+url = "https://api.github.com/repos/fkinnar/tri/releases"
+timeout_s = 10
+
 [watch]
 # Monitoring of the open folder (ms): images added, removed or modified, XMP ratings
 # modified by another program (darktable…) appear by themselves, once the folder has

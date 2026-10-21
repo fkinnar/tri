@@ -231,8 +231,9 @@ pub fn sun(painter: &Painter, rect: Rect, color: Color32) {
 /// Icône « inverser les filtres » : un cercle à moitié plein (◐).
 pub fn invert_icon(painter: &Painter, rect: Rect, color: Color32) {
     let s = rect.width().min(rect.height());
-    let (c, r) = (rect.center(), s * 0.38);
-    painter.circle_stroke(c, r, Stroke::new((s * 0.09).max(1.2), color));
+    // Rayon d'une pastille de couleur de la barre des filtres, contour compris.
+    let (c, r) = (rect.center(), s * 0.31);
+    painter.circle_stroke(c, r, Stroke::new(1.2, color));
     // Moitié gauche pleine : demi-disque en éventail depuis le centre.
     let steps = 16;
     let mut points = vec![c + vec2(0.0, -r)];

@@ -119,6 +119,8 @@ pub struct EngineSettings {
     pub similarity: crate::similarity::SimilaritySettings,
     /// Langue des textes.
     pub i18n: crate::i18n::I18nSettings,
+    /// Recherche d'une nouvelle version (sur demande).
+    pub update: crate::update::UpdateSettings,
     /// Dossier des données.
     pub data: DataSection,
 }

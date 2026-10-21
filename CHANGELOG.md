@@ -2,6 +2,10 @@
 
 ## À venir
 
+- **Rechercher une mise à jour** : bouton en haut de l'aide (F1) et `tri --check-update`,
+  sur demande seulement (page Releases, lue par `curl`) ; la boîte donne les notes de la
+  nouvelle version et ouvre sa page.
+- **Filtres** : icône « inverser » à la taille des pastilles de couleur.
 - **Notes à la souris** : recliquer l'étoile posée remet à zéro, comme le filtre des
   étoiles ; le bouton « ⊘ » est retiré (au clavier, la touche 0 ; `1` deux fois reste
   à 1).

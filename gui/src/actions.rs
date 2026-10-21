@@ -350,6 +350,8 @@ pub enum Action {
     Help,
     /// Fenêtre de réglages.
     Settings,
+    /// Rechercher une nouvelle version (sur demande, page Releases).
+    CheckUpdate,
     /// Noter : 0 à 5 étoiles.
     Stars(u8),
     /// Ajouter ou retirer une couleur.
@@ -362,7 +364,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 153] = [
+    pub const ALL: [Action; 154] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -501,6 +503,7 @@ impl Action {
         Action::Back,
         Action::Help,
         Action::Settings,
+        Action::CheckUpdate,
         Action::Quit,
         Action::Stars(0),
         Action::Stars(1),
@@ -576,7 +579,7 @@ impl Action {
             | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
             | MetaSelectDown | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | Settings | Quit => Group::App,
+            Help | Settings | CheckUpdate | Quit => Group::App,
         }
     }
 
@@ -726,6 +729,7 @@ impl Action {
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::Settings => "core.app.settings",
+            Action::CheckUpdate => "core.app.check_update",
             Action::Quit => "core.app.quit",
             Action::Stars(0) => "core.rate.star.0",
             Action::Stars(1) => "core.rate.star.1",
@@ -2131,9 +2135,11 @@ mod tests {
             // Les actions des plugins n'ont pas de touche par défaut (à régler dans
             // `[keys]` ou la fenêtre de réglages).
             let plugin = |a: &Action| a.id().starts_with("plugin.");
+            // Rare, par un bouton de l'aide : pas de touche par défaut non plus.
+            let rare = [Action::CheckUpdate];
             for a in Action::ALL
                 .into_iter()
-                .filter(|a| !by_leader.contains(a) && !plugin(a))
+                .filter(|a| !by_leader.contains(a) && !plugin(a) && !rare.contains(a))
             {
                 assert!(
                     b.iter().any(|(_, x)| *x == a),

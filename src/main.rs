@@ -10,6 +10,8 @@
 //!       vide le cache (un niveau, ou tout) ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau ;
+//!   tri --check-update
+//!       recherche une version plus récente sur la page Releases (sur demande) ;
 //!   tri <dossier> --exposure [--raw|--flat] [--depth N]
 //!       exposition de chaque image (données du capteur pour un RAW) : marge avant
 //!       saturation, pixels saturés et bouchés, voir `tri::exposure` ;
@@ -101,6 +103,7 @@ struct Args {
     previews: bool,
     clear: Option<Option<Level>>,
     usage: bool,
+    check_update: bool,
     side: Option<u32>,
     thumb: Option<u32>,
     workers: Option<usize>,
@@ -153,6 +156,7 @@ fn parse() -> AnyResult<Args> {
             "--mixed" => args.mixed = true,
             "--cache" => args.cache = Some(value()?.into()),
             "--cache-usage" => args.usage = true,
+            "--check-update" => args.check_update = true,
             "--convert-xmp" => {
                 args.convert = Some(match value()?.as_str() {
                     "darktable" => Convention::Darktable,
@@ -1001,6 +1005,21 @@ fn run() -> AnyResult<()> {
     }
     if args.usage {
         return print_usage(&settings.open_cache()?);
+    }
+    if args.check_update {
+        let current = env!("CARGO_PKG_VERSION");
+        match tri::update::check(current, &settings.update)? {
+            Some(release) => println!(
+                "{}",
+                t!(
+                    "cli-update-available",
+                    version = release.version,
+                    url = release.url
+                )
+            ),
+            None => println!("{}", t!("cli-update-latest", version = current)),
+        }
+        return Ok(());
     }
 
     if let Some(card) = &args.offload {
