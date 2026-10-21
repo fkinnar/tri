@@ -449,9 +449,16 @@ auto_advance = false
 history = 200
 
 [gui.grid]
-# Dimensions in points.
+# Dimensions in points. cell: thumbnail size at first launch and on a double-click on the
+# size slider (bottom of the grid; + / - on the keyboard, * to fit everything on screen);
+# the chosen size is then remembered. cell_min / cell_max: bounds of the slider.
 cell = 200.0
+cell_min = 60.0
+cell_max = 600.0
 gap = 8.0
+# Info on the thumbnails (name, format, ratings, badges) at startup; Shift+T or the
+# button at the bottom hides it to give all the room to the image (choice then remembered).
+info = true
 # Height reserved for the file name under the thumbnail.
 label = 18.0
 # Inner margin of the cell.
@@ -468,13 +475,15 @@ rejected_opacity = 0.35
 hover_frame = 2.0
 # Thickness of the frame of selected thumbnails (multiple selection).
 marked_frame = 3.0
-# "Blurry" label on the thumbnails of photos judged blurry (sharpness score, see
+# Drop under the thumbnails of photos judged blurry (sharpness score, see
 # [sharpness]).
 blur_badge = true
 # Width of the similarity slider of the filter bar.
 stack_slider = 90.0
 # Width of the blur strictness slider of the filter bar.
 blur_slider = 90.0
+# Width of the thumbnail size slider at the bottom of the grid.
+size_slider = 90.0
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).

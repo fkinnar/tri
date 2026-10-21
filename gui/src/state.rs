@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 const FILE: &str = "gui-state.toml";
 
 /// État d'affichage ; `None` : pas encore mémorisé (valeur de la configuration).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DisplayState {
     /// Collimateur de mise au point (`m`).
@@ -36,6 +36,10 @@ pub struct DisplayState {
     pub rating_bar: Option<bool>,
     /// Avance automatique après une note (`Maj+A`).
     pub auto_advance: Option<bool>,
+    /// Infos sur les vignettes de la grille (`Maj+T`).
+    pub grid_info: Option<bool>,
+    /// Taille des vignettes de la grille (curseur, `+` / `-`, `*`).
+    pub grid_cell: Option<f32>,
 }
 
 /// État lu dans le dossier de données `data` ; vide si absent ou illisible (on repart des

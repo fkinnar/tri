@@ -93,6 +93,22 @@ pub fn flag_filter(
 
 /// Goutte d'eau (le flou) dans `rect`.
 pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32) {
+    painter.add(Shape::convex_polygon(
+        drop_points(rect),
+        color,
+        Stroke::NONE,
+    ));
+}
+
+/// Contour de goutte, discret (photo jugée floue, sous la vignette ; retour du 21/10/2026 :
+/// le mot « floue » en toutes lettres).
+pub fn blur_drop_outline(painter: &Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() * 0.09).max(1.0), color);
+    painter.add(Shape::closed_line(drop_points(rect), stroke));
+}
+
+/// Pourtour d'une goutte dans `rect`.
+fn drop_points(rect: Rect) -> Vec<Pos2> {
     // Cercle en bas, pointe en haut : deux tangentes du sommet au cercle.
     let r = rect.width() * 0.28;
     let c = rect.center() + vec2(0.0, rect.height() * 0.12);
@@ -107,7 +123,7 @@ pub fn blur_drop(painter: &Painter, rect: Rect, color: Color32) {
         let t = -FRAC_PI_2 + a + (2.0 * PI - 2.0 * a) * i as f32 / steps as f32;
         points.push(c + vec2(t.cos(), t.sin()) * r);
     }
-    painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
+    points
 }
 
 /// Icône « netteté » : un triangle pointe en bas, de la surface de la goutte (filtre
@@ -123,6 +139,118 @@ pub fn sharp_triangle(painter: &Painter, rect: Rect, color: Color32) {
         pos2(c.x, top + height),
     ];
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
+}
+
+/// Fond sombre des marques posées sur une vignette : lisibles sur une photo claire comme
+/// sombre.
+const RIM: Color32 = Color32::from_black_alpha(170);
+
+/// Notes posées sur une vignette de la grille, dans `area` (retour du 21/10/2026 : plus de
+/// rectangle sombre, chaque marque cerclée de sombre comme les pastilles) : étoiles en bas
+/// à gauche, drapeau en bas à droite, couleurs en haut à droite. `size` : taille d'une
+/// marque.
+pub fn thumbnail_notes(painter: &Painter, area: Rect, notes: &Notes, size: f32, colors: &Colors) {
+    let radius = size / 2.0;
+    let gap = size * 0.25;
+    let inset = radius + 3.0;
+    let star_fill = chip_star_color(painter.ctx(), colors);
+    let rim = (radius * 0.18).max(1.2);
+    for k in 0..notes.stars {
+        let c = pos2(
+            area.min.x + inset + k as f32 * (size + gap),
+            area.max.y - inset,
+        );
+        star(painter, c, radius + rim * 1.6, RIM);
+        star(painter, c, radius, star_fill);
+    }
+    if notes.flag != Flag::None {
+        let c = pos2(area.max.x - inset, area.max.y - inset);
+        painter.circle_filled(c, radius + rim, RIM);
+        flag(painter, c, radius, notes.flag, colors);
+    }
+    for (k, &color) in notes.colors.iter().enumerate() {
+        let c = pos2(
+            area.max.x - inset - k as f32 * (size + gap),
+            area.min.y + inset,
+        );
+        painter.circle_filled(c, radius * 0.8 + rim, RIM);
+        painter.circle_filled(c, radius * 0.8, color_of(colors, color));
+    }
+}
+
+/// Badge d'écrêtage d'une vignette, dans le carré `rect` : un petit histogramme qui
+/// s'entasse contre un bord, ce bord de la couleur de l'alerte (`over` : à droite, brûlée ;
+/// sinon à gauche, bouchée). Retour du 21/10/2026 : une simple pastille magenta se
+/// confondait avec un libellé de couleur.
+pub fn clip_badge(painter: &Painter, rect: Rect, over: bool, color: Color32) {
+    painter.rect_filled(rect, rect.width() * 0.2, RIM);
+    let inner = rect.shrink(rect.width() * 0.18);
+    let (w, h) = (inner.width(), inner.height());
+    let bar = w / 5.0;
+    // Barres croissantes vers le bord écrêté, la dernière (le bord) pleine hauteur et colorée.
+    let heights = [0.25, 0.4, 0.6, 0.8, 1.0];
+    for (k, height) in heights.iter().enumerate() {
+        let slot = if over { k } else { 4 - k };
+        let x = inner.min.x + slot as f32 * bar;
+        let r = Rect::from_min_max(
+            pos2(x + bar * 0.1, inner.max.y - h * height),
+            pos2(x + bar * 0.9, inner.max.y),
+        );
+        let fill = if k == 4 {
+            color
+        } else {
+            Color32::from_gray(220)
+        };
+        painter.rect_filled(r, 0.0, fill);
+    }
+}
+
+/// Icône des infos des vignettes : une vignette (cadre) et la ligne de texte dessous.
+pub fn grid_info_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.1).max(1.2), color);
+    painter.rect_stroke(
+        Rect::from_min_max(p(0.12, 0.08), p(0.88, 0.62)),
+        2.0,
+        stroke,
+        egui::StrokeKind::Middle,
+    );
+    painter.line_segment([p(0.12, 0.86), p(0.62, 0.86)], stroke);
+    painter.line_segment([p(0.74, 0.86), p(0.88, 0.86)], stroke);
+}
+
+/// Icône « effacer les filtres » : un entonnoir barré.
+pub fn funnel_cleared(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.1).max(1.2), color);
+    painter.add(Shape::closed_line(
+        vec![
+            p(0.1, 0.12),
+            p(0.9, 0.12),
+            p(0.58, 0.5),
+            p(0.58, 0.88),
+            p(0.42, 0.78),
+            p(0.42, 0.5),
+        ],
+        stroke,
+    ));
+    painter.line_segment([p(0.08, 0.92), p(0.92, 0.08)], stroke);
+}
+
+/// Icône « tout à l'écran » de la grille : neuf petites vignettes.
+pub fn grid_fit_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let cell = s * 0.26;
+    let step = s * 0.37;
+    let origin = rect.center() - vec2(step + cell / 2.0, step + cell / 2.0);
+    for i in 0..3 {
+        for j in 0..3 {
+            let min = origin + vec2(i as f32 * step, j as f32 * step);
+            painter.rect_filled(Rect::from_min_size(min, vec2(cell, cell)), 1.0, color);
+        }
+    }
 }
 
 /// Largeur occupée par [`row`] pour ces notes, à la taille `size`.

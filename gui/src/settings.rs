@@ -377,10 +377,16 @@ impl From<Theme> for egui::ThemePreference {
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct GridSettings {
-    /// Côté d'une cellule.
+    /// Côté d'une cellule au premier lancement et au double-clic sur le curseur de taille
+    /// (la taille choisie est ensuite retenue, `state.rs`).
     pub cell: f32,
+    /// Bornes du curseur de taille des vignettes.
+    pub cell_min: f32,
+    pub cell_max: f32,
     /// Espace entre les cellules.
     pub gap: f32,
+    /// Infos sur les vignettes (nom, format, notes, badges) au démarrage (Maj+T).
+    pub info: bool,
     /// Hauteur réservée au nom du fichier sous la vignette.
     pub label: f32,
     /// Marge intérieure de la cellule.
@@ -397,12 +403,14 @@ pub struct GridSettings {
     pub hover_frame: f32,
     /// Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
     pub marked_frame: f32,
-    /// Mention « floue » sur les vignettes des photos jugées floues (score de netteté).
+    /// Goutte sous les vignettes des photos jugées floues (score de netteté).
     pub blur_badge: bool,
     /// Largeur du curseur de similarité de la barre des filtres (points).
     pub stack_slider: f32,
     /// Largeur du curseur de sévérité du flou de la barre des filtres (points).
     pub blur_slider: f32,
+    /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
+    pub size_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -415,7 +423,10 @@ impl Default for GridSettings {
     fn default() -> Self {
         Self {
             cell: 200.0,
+            cell_min: 60.0,
+            cell_max: 600.0,
             gap: 8.0,
+            info: true,
             label: 18.0,
             padding: 6.0,
             name_chars: 24,
@@ -427,6 +438,7 @@ impl Default for GridSettings {
             blur_badge: true,
             stack_slider: 90.0,
             blur_slider: 90.0,
+            size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
         }

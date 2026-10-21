@@ -96,7 +96,7 @@ system one ("cold" measurements, experiments).
   tied to the strictness slider (`Ctrl+J` / `Ctrl+K`, slider in the bottom bar). Computed
   by the loader, tinted when drawn.
 - **Blurry photos** (2026-10-17, engine: score from `tri::sharpness`, see `sharpness.md`):
-  "blurry" label on the thumbnail, "Sharpness" row in the metadata panel, filters
+  drop (outline) under the thumbnail (the word "blurry" until 2026-10-21), "Sharpness" row in the metadata panel, filters
   "without blurry" (`f b`) and "blurry only" (`f B`); judgement relative to the folder's
   median. Finished progress bars are hidden (`[gui] progress_hide_done`), the status bar
   stays short.
@@ -498,8 +498,8 @@ system one ("cold" measurements, experiments).
     in the shadows).
     `[gui.histogram] clipping_channels = false`: a single colour for any saturation.
     Configurable colours and opacity;
-  - **badges** in the grid: red (blown) / blue (blocked) dot at the top right of the
-    thumbnail above `[gui.histogram] badge_over` / `badge_under`, details on hover;
+  - **badges** in the grid: small histogram pressed against the blown / blocked edge at
+    the top left of the thumbnail (dots at the top right until 2026-10-21) above `[gui.histogram] badge_over` / `badge_under`, details on hover;
     analyses read from the cache within the image's loading budget;
   - checked on a real shoot: fully blown photo (red everywhere, badge), portrait in a
     black sweater (blue zones in the folds, blue badge, -3.5 EV of headroom), portraits on
@@ -825,7 +825,27 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 - Thumbnails' **RAW badge** in the accent colour (the light blue was hard to read; on the
   selected cell, whose background is the accent, its text colour); thumbnails' stars in
   a lightened accent (`marks::chip_star_color`), readable on their dark chip. "Hide
-  blurry" filter: a **triangle** (sharpness) instead of the crossed-out drop.
+  blurry" filter: a **triangle** (sharpness) instead of the crossed-out drop; likewise
+  next to the sharpness map slider in full screen.
+- **Thumbnails, afternoon** (few spelled-out words): under the thumbnail, the name
+  **without extension** and the **format** on the right (RAW, JPEG, TIFF, PNG, HEIF…:
+  `format_label`), blurry photo = **drop outline**, all in the cell's text colour; no
+  more dark rectangle under the ratings: **stars bottom left, flag bottom right, colours
+  top right**, each mark ringed in dark (`marks::thumbnail_notes`). **Clipping** moves to
+  the top left, after the versions badge, as a small histogram pressed against the
+  blown (right) or blocked (left) edge (`marks::clip_badge`): the magenta dot looked like
+  a purple colour label.
+- **Thumbnail info can be hidden** (`Shift+T`, rating bar button): name, format, ratings
+  and badges disappear, the image takes the text's room; `[gui.grid] info`, remembered.
+- **Thumbnail size**: slider at the bottom next to ‹ › (logarithmic,
+  `[gui.grid] cell_min` / `cell_max`, double-click: `cell`), "all on screen" button
+  (`grid::fit_all`: the largest size that shows the whole filtered folder); on the
+  keyboard, like Lightroom, `+` / `-` (a quarter more or less, `grid::step_cell`) and
+  `*`. Size remembered between launches. Controls shown only if the rating bar has room
+  (otherwise they covered the ratings).
+- **Clear filters**: a crossed-out funnel at the far right of the filter bar, greyed out
+  without a filter, the image count just to its left. Image name removed from the rating
+  bar and, in the grid, from the status bar (redundant, several images can be selected).
 
 ## Tests
 

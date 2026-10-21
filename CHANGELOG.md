@@ -17,6 +17,12 @@
 - **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
 - **Réglages** : descriptions en anglais dans la fenêtre de réglages
   (`doc/config.example.en.toml`), selon la langue de l'interface.
+- **Grille** : taille des vignettes réglable (curseur en bas, `+` / `-`, `*` ou bouton
+  « tout à l'écran »), infos des vignettes masquables (`Maj+T`) ; nom sans extension et
+  format (RAW, JPEG, TIFF…) écrit à droite ; photo floue : contour de goutte ; notes sans
+  rectangle sombre (étoiles en bas à gauche, drapeau en bas à droite, couleurs en haut à
+  droite) ; écrêtage en petit histogramme en haut à gauche ; effacer les filtres :
+  entonnoir barré tout à droite de la barre des filtres.
 
 ## 1.0.0-alpha.2 — 21/10/2026
 

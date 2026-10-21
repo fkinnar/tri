@@ -42,6 +42,30 @@ impl Layout {
     }
 }
 
+/// Plus grand côté de cellule, entre `min` et `max`, qui montre les `n` images à la fois
+/// dans `width` × `height` (bouton « tout à l'écran », `*`) ; `min` si même la plus petite
+/// taille déborde (au point près : la grille se mesure en points entiers).
+pub fn fit_all(n: usize, width: f32, height: f32, gap: f32, min: f32, max: f32) -> f32 {
+    let max = max.max(min);
+    let mut cell = max.floor();
+    while cell > min {
+        let layout = Layout::fit(width, cell, gap);
+        let rows = layout.rows(n.max(1)) as f32;
+        if rows * cell + (rows - 1.0) * gap <= height {
+            return cell;
+        }
+        cell -= 1.0;
+    }
+    min
+}
+
+/// Taille de cellule suivante au clavier (`+` / `-` en grille) : un quart de plus ou de
+/// moins, dans les bornes.
+pub fn step_cell(cell: f32, larger: bool, min: f32, max: f32) -> f32 {
+    let next = if larger { cell * 1.25 } else { cell / 1.25 };
+    next.clamp(min, max.max(min))
+}
+
 /// Nouvelle sélection après `action`, dans une grille de `n` images. `page_rows` : lignes
 /// sautées par page. Les actions non liées à la navigation laissent la sélection en place.
 pub fn navigate(
@@ -78,6 +102,7 @@ pub fn navigate(
         | Action::FilterOnlyBlurry
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
+        | Action::ToggleGridInfo
         | Action::ToggleAutoAdvance
         | Action::SelectToggle
         | Action::Compare
@@ -202,6 +227,27 @@ mod tests {
     /// 4 colonnes.
     fn layout() -> Layout {
         Layout::fit(4.0 * 100.0 + 3.0 * 10.0, 100.0, 10.0)
+    }
+
+    #[test]
+    fn fit_all_finds_the_largest_cell_that_shows_everything() {
+        // 6 images dans 430 × 210 : 4 colonnes de 100 ne tiennent qu'en 2 lignes de 100
+        // (210 ≥ 2 × 100 + 10).
+        assert_eq!(fit_all(6, 430.0, 210.0, 10.0, 50.0, 300.0), 100.0);
+        // Une seule image : la plus grande taille qui tient en hauteur.
+        assert_eq!(fit_all(1, 1000.0, 250.0, 10.0, 50.0, 300.0), 250.0);
+        // Trop d'images : la taille minimale.
+        assert_eq!(fit_all(10_000, 430.0, 210.0, 10.0, 50.0, 300.0), 50.0);
+        // Bornée par le maximum.
+        assert_eq!(fit_all(1, 2000.0, 2000.0, 10.0, 50.0, 300.0), 300.0);
+    }
+
+    #[test]
+    fn cell_steps_stay_within_bounds() {
+        assert_eq!(step_cell(200.0, true, 60.0, 600.0), 250.0);
+        assert_eq!(step_cell(250.0, false, 60.0, 600.0), 200.0);
+        assert_eq!(step_cell(560.0, true, 60.0, 600.0), 600.0);
+        assert_eq!(step_cell(70.0, false, 60.0, 600.0), 60.0);
     }
 
     #[test]

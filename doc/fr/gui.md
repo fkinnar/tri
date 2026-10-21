@@ -98,7 +98,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   seuil lié au curseur de sévérité (`Ctrl+J` / `Ctrl+K`, curseur dans le bandeau).
   Calculée par le chargeur, teintée au dessin.
 - **Photos floues** (17/10/2026, moteur : score de `tri::sharpness`, voir `sharpness.md`) :
-  mention « floue » sur la vignette, ligne « Netteté » du panneau des métadonnées, filtres
+  goutte (contour) sous la vignette (mot « floue » jusqu'au 21/10/2026), ligne « Netteté » du panneau des métadonnées, filtres
   « sans les floues » (`f b`) et « floues seulement » (`f B`) ; jugement relatif à la médiane du dossier. Les barres de
   progression terminées sont masquées (`[gui] progress_hide_done`), la barre d'état reste
   courte.
@@ -514,8 +514,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     confondait avec « bleu seul saturé » et se voyait mal sur les ombres).
     `[gui.histogram] clipping_channels = false` : une seule couleur pour toute
     saturation. Couleurs et opacité réglables ;
-  - **badges** dans la grille : pastille rouge (brûlée) / bleue (bouchée) en haut à droite
-    de la vignette au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
+  - **badges** dans la grille : petit histogramme collé au bord brûlé / bouché en haut à
+    gauche de la vignette (pastilles en haut à droite jusqu'au 21/10/2026) au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
     survol ; analyses lues dans le cache dans le budget de chargement de l'image ;
   - vérifié sur une vraie séance : photo entièrement brûlée (rouge partout, badge),
     portrait au pull noir (zones bleues dans les plis, badge bleu, -3,5 IL de marge),
@@ -849,7 +849,27 @@ photos nettes.
   sélectionnée, dont le fond est l'accent, la couleur de son texte) ; étoiles des
   vignettes en accent éclairci (`marks::chip_star_color`), lisibles sur leur pastille
   sombre. Filtre « sans les floues » : un **triangle** (netteté) au lieu de la goutte
-  barrée.
+  barrée ; de même à côté du curseur de la carte de netteté en plein écran.
+- **Vignettes, après-midi** (peu de mots en toutes lettres) : sous la vignette, le nom
+  **sans extension** et le **format** à droite (RAW, JPEG, TIFF, PNG, HEIF… : `format_label`),
+  photo floue = **contour de goutte**, le tout de la couleur du texte de la cellule ; plus
+  de rectangle sombre sous les notes : **étoiles en bas à gauche, drapeau en bas à
+  droite, couleurs en haut à droite**, chaque marque cerclée de sombre
+  (`marks::thumbnail_notes`). L'**écrêtage** passe en haut à gauche, après le badge des
+  versions, en petit histogramme collé au bord brûlé (droite) ou bouché (gauche)
+  (`marks::clip_badge`) : la pastille magenta se confondait avec un libellé violet.
+- **Infos des vignettes masquables** (`Maj+T`, bouton du bandeau) : nom, format, notes et
+  badges disparaissent, l'image prend la place du texte ; `[gui.grid] info`, retenu.
+- **Taille des vignettes** : curseur en bas à côté de ‹ › (logarithmique,
+  `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
+  (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
+  clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
+  et `*`. Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
+  la place dans le bandeau (sinon ils recouvraient les notes).
+- **Effacer les filtres** : un entonnoir barré tout à droite de la barre des filtres,
+  grisé sans filtre, le nombre d'images juste à sa gauche. Nom de l'image retiré du
+  bandeau et, en grille, de la barre d'état (redondant, plusieurs images pouvant être
+  sélectionnées).
 
 ## Tests
 

@@ -151,6 +151,8 @@ pub enum Action {
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
     ToggleRatingBar,
+    /// Afficher / masquer les infos des vignettes (nom, format, notes, badges).
+    ToggleGridInfo,
     /// Avance automatique à l'image suivante après une note : oui / non.
     ToggleAutoAdvance,
     /// Comparer les images sélectionnées côte à côte.
@@ -356,7 +358,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 150] = [
+    pub const ALL: [Action; 151] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -385,6 +387,7 @@ impl Action {
         Action::FilterOnlyBlurry,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
+        Action::ToggleGridInfo,
         Action::ToggleAutoAdvance,
         Action::SelectToggle,
         Action::SelectVisual,
@@ -555,8 +558,8 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterOnlyBlurry => Group::Filters,
-            ToggleFilterBar | ToggleRatingBar | ToggleFolderPanel | ToggleMetadata
-            | RefreshFolders => Group::Panels,
+            ToggleFilterBar | ToggleRatingBar | ToggleGridInfo | ToggleFolderPanel
+            | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
             | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
@@ -607,6 +610,7 @@ impl Action {
             Action::FilterOnlyBlurry => "core.filter.only_blurry",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
+            Action::ToggleGridInfo => "core.view.grid_info",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
             Action::Compare => "core.view.compare",
             Action::TogglePeaking => "core.view.peaking",
@@ -1211,6 +1215,8 @@ const RATING: &[Binding] = {
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
         (&[shifted(Key::A)], ToggleAutoAdvance),
         (&[shifted(Key::N)], ToggleRatingBar),
+        // Infos des vignettes (« texte ») : nom, format, notes, badges.
+        (&[shifted(Key::T)], ToggleGridInfo),
         (&[shifted(Key::D)], ToggleFolderPanel),
         (&[plain(Key::F5)], RefreshFolders),
         (&[plain(Key::I)], ToggleHistogram),

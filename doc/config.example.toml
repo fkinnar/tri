@@ -445,9 +445,16 @@ auto_advance = false
 history = 200
 
 [gui.grid]
-# Dimensions en points.
+# Dimensions en points. cell : taille des vignettes au premier lancement et au double-clic
+# sur le curseur de taille (bas de la grille ; + / - au clavier, * pour tout voir à
+# l'écran) ; la taille choisie est ensuite retenue. cell_min / cell_max : bornes du curseur.
 cell = 200.0
+cell_min = 60.0
+cell_max = 600.0
 gap = 8.0
+# Infos sur les vignettes (nom, format, notes, badges) au démarrage ; Maj+T ou le bouton
+# du bas les masquent pour laisser toute la place à l'image (choix ensuite retenu).
+info = true
 # Hauteur réservée au nom du fichier sous la vignette.
 label = 18.0
 # Marge intérieure de la cellule.
@@ -464,13 +471,15 @@ rejected_opacity = 0.35
 hover_frame = 2.0
 # Épaisseur du cadre des vignettes sélectionnées (sélection multiple).
 marked_frame = 3.0
-# Mention « floue » sur les vignettes des photos jugées floues (score de netteté, voir
+# Goutte sous les vignettes des photos jugées floues (score de netteté, voir
 # [sharpness]).
 blur_badge = true
 # Largeur du curseur de similarité de la barre des filtres.
 stack_slider = 90.0
 # Largeur du curseur de sévérité du flou de la barre des filtres.
 blur_slider = 90.0
+# Largeur du curseur de taille des vignettes, en bas de la grille.
+size_slider = 90.0
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).

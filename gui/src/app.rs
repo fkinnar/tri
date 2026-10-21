@@ -166,6 +166,14 @@ pub struct TriApp {
     rating_bar: bool,
     /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
     auto_advance: bool,
+    /// Infos sur les vignettes (nom, format, notes, badges), `Maj+T`.
+    grid_info: bool,
+    /// Taille des vignettes (curseur du bas, `+` / `-`, `*`).
+    grid_cell: f32,
+    /// Largeur de la grille à la dernière image (« tout à l'écran »).
+    grid_width: f32,
+    /// « Tout à l'écran » demandé avant que la grille soit mise en page (au démarrage).
+    grid_fit_pending: bool,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -552,6 +560,10 @@ impl TriApp {
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
             auto_advance: gui.auto_advance,
+            grid_info: gui.grid.info,
+            grid_cell: gui.grid.cell,
+            grid_width: 0.0,
+            grid_fit_pending: false,
             rating_dialog: None,
             file_dialog: None,
             crop: None,
@@ -709,6 +721,8 @@ impl TriApp {
             filter_bar: Some(self.filter_bar),
             rating_bar: Some(self.rating_bar),
             auto_advance: Some(self.auto_advance),
+            grid_info: Some(self.grid_info),
+            grid_cell: Some(self.grid_cell),
         }
     }
 
@@ -729,11 +743,16 @@ impl TriApp {
             (&mut self.filter_bar, s.filter_bar),
             (&mut self.rating_bar, s.rating_bar),
             (&mut self.auto_advance, s.auto_advance),
+            (&mut self.grid_info, s.grid_info),
         ];
         for (field, saved) in pairs {
             if let Some(value) = saved {
                 *field = value;
             }
+        }
+        if let Some(cell) = s.grid_cell {
+            let g = self.gui.grid;
+            self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
         }
         self.display_saved = self.display();
     }
@@ -1544,6 +1563,31 @@ impl TriApp {
         }
         if slider.drag_stopped() || slider.double_clicked_slider(ui) {
             self.remember_strictness();
+        }
+    }
+
+    /// Curseur de taille des vignettes (barre du bas, en grille) ; double-clic : taille
+    /// de la configuration.
+    fn grid_size_slider(&mut self, ui: &mut Ui) {
+        let g = self.gui.grid;
+        ui.spacing_mut().slider_width = g.size_slider;
+        let mut cell = self.grid_cell;
+        let keys = [Action::ZoomOut, Action::ZoomIn]
+            .map(|a| self.keymap.keys_for(a).join(" / "))
+            .join(" ; ");
+        let slider = ui
+            .add(
+                egui::Slider::new(&mut cell, g.cell_min..=g.cell_max.max(g.cell_min))
+                    .logarithmic(true)
+                    .show_value(false),
+            )
+            .on_hover_text(format!("{} ({keys})", t!("grid-size")));
+        if slider.double_clicked_slider(ui) {
+            cell = g.cell;
+        }
+        if cell != self.grid_cell {
+            self.grid_cell = cell;
+            self.reveal = Some(Reveal::Minimal);
         }
     }
 
@@ -2385,6 +2429,19 @@ impl TriApp {
             {
                 self.start_search()
             }
+            // En grille, comme dans Lightroom : + / - changent la taille des vignettes, *
+            // les met toutes à l'écran.
+            Action::ZoomIn | Action::ZoomOut if self.mode == Mode::Grid => {
+                let g = self.gui.grid;
+                self.grid_cell = grid::step_cell(
+                    self.grid_cell,
+                    action == Action::ZoomIn,
+                    g.cell_min,
+                    g.cell_max,
+                );
+                self.reveal = Some(Reveal::Minimal);
+            }
+            Action::Zoom100 if self.mode == Mode::Grid => self.grid_fit_all(),
             // Paliers (+, -), 100 % (*), ajusté (/) : comme Lightroom.
             Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::Zoom100
                 if matches!(self.mode, Mode::View | Mode::Compare) =>
@@ -2571,6 +2628,7 @@ impl TriApp {
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
+            Action::ToggleGridInfo => self.grid_info = !self.grid_info,
             Action::RefreshFolders => self.tree.refresh(),
             Action::ToggleHistogram => self.histogram = !self.histogram,
             Action::HistogramScale => self.histogram_scale = self.histogram_scale.toggled(),
@@ -4822,7 +4880,11 @@ impl TriApp {
                     job.cancel();
                 }
             }
-            if let Some(file) = self.files.get(self.selected) {
+            // Nom de l'image en plein écran seulement : en grille, il est sous la vignette
+            // (retour du 21/10/2026 : sans intérêt, plusieurs images pouvant être choisies).
+            if self.mode != Mode::Grid
+                && let Some(file) = self.files.get(self.selected)
+            {
                 ui.separator();
                 ui.label(file_name(&file.path));
             }
@@ -5661,7 +5723,6 @@ impl TriApp {
             return;
         };
         let notes = self.folder.notes.notes(&file.path).clone();
-        let name = file_name(&file.path);
         let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
@@ -5685,7 +5746,6 @@ impl TriApp {
         ui.horizontal(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size);
-            ui.weak(name);
 
             // En comparaison, seule l'image active est notée.
             if marked > 1 && self.mode != Mode::Compare {
@@ -5742,6 +5802,38 @@ impl TriApp {
                         clicked = Some(action);
                     }
                 }
+                // Grille : infos des vignettes, tout à l'écran et taille des vignettes, à
+                // côté de ‹ › (demandé le 21/10/2026). Seulement s'il reste la place : sur
+                // une fenêtre étroite, ils recouvriraient les notes (le clavier reste).
+                let spacing = ui.spacing().item_spacing.x;
+                let buttons = 2.0 * (icon + spacing) + 2.0 * spacing;
+                let room = ui.available_width() - self.gui.dialogs.spacing;
+                if self.mode == Mode::Grid && room >= buttons {
+                    ui.separator();
+                    let tip = self.action_tip(Action::ToggleGridInfo);
+                    let (rect, response) =
+                        marks::icon_button(ui, icon, &Action::ToggleGridInfo.label(), &tip);
+                    if self.grid_info {
+                        ui.painter()
+                            .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+                    }
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::grid_info_icon(ui.painter(), rect.shrink(icon * 0.2), color);
+                    if response.clicked() {
+                        clicked = Some(Action::ToggleGridInfo);
+                    }
+                    let keys = self.keymap.keys_for(Action::Zoom100).join(" / ");
+                    let tip = format!("{} ({keys})", t!("grid-fit"));
+                    let (rect, response) = marks::icon_button(ui, icon, &t!("grid-fit"), &tip);
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::grid_fit_icon(ui.painter(), rect.shrink(icon * 0.25), color);
+                    if response.clicked() {
+                        self.grid_fit_all();
+                    }
+                    if room >= buttons + self.gui.grid.size_slider + spacing {
+                        self.grid_size_slider(ui);
+                    }
+                }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
                 // la barre des filtres), précédé du triangle de netteté (posés de droite à
                 // gauche).
@@ -5789,7 +5881,8 @@ impl TriApp {
                 | Action::NavDown
                 | Action::StackMode
                 | Action::Develop
-                | Action::ToggleZoom),
+                | Action::ToggleZoom
+                | Action::ToggleGridInfo),
             ) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
@@ -6085,19 +6178,6 @@ impl TriApp {
                 || !self.notes_rule.is_empty()
                 || self.blur_rule.is_some()
                 || !self.name_query.trim().is_empty();
-            if ui
-                .add_enabled(any, egui::Button::new(t!("filter-bar-clear")))
-                .on_hover_text(self.action_tip(Action::FilterClear))
-                .clicked()
-            {
-                clicked.push(Action::FilterClear);
-            }
-            ui.weak(t!(
-                "filter-bar-count",
-                shown = self.files.len(),
-                n = self.folder.files.len()
-            ))
-            .on_hover_text(t!("filter-bar-count-tip"));
             // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
             ui.add_space(self.gui.dialogs.spacing);
             let hint = t!("search-grid-hint", keys = self.search_keys());
@@ -6117,6 +6197,26 @@ impl TriApp {
             if field.has_focus() {
                 self.search_focused = Some(grid_search_id());
             }
+            // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
+            // grisé sans filtre), et juste à sa gauche le nombre d'images.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let tip = self.action_tip(Action::FilterClear);
+                ui.add_enabled_ui(any, |ui| {
+                    let (rect, response) =
+                        marks::icon_button(ui, size, &t!("filter-bar-clear"), &tip);
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::funnel_cleared(ui.painter(), rect.shrink(size * 0.18), color);
+                    if response.clicked() {
+                        clicked.push(Action::FilterClear);
+                    }
+                });
+                ui.weak(t!(
+                    "filter-bar-count",
+                    shown = self.files.len(),
+                    n = self.folder.files.len()
+                ))
+                .on_hover_text(t!("filter-bar-count-tip"));
+            });
         });
         if refilter {
             self.refilter(Reveal::Minimal);
@@ -6127,6 +6227,30 @@ impl TriApp {
         }
     }
 
+    /// Vignettes à la plus grande taille qui les montre toutes à l'écran (bouton du bas,
+    /// `*` en grille), dans les bornes du curseur.
+    fn grid_fit_all(&mut self) {
+        let g = self.gui.grid;
+        let n = if self.stacks.shown.is_empty() {
+            self.files.len()
+        } else {
+            self.stacks.shown.len()
+        };
+        self.grid_fit_pending = self.grid_width <= 0.0 || self.view_height <= 0.0;
+        if self.grid_fit_pending {
+            return;
+        }
+        self.grid_cell = grid::fit_all(
+            n,
+            self.grid_width,
+            self.view_height,
+            g.gap,
+            g.cell_min,
+            g.cell_max,
+        );
+        self.reveal = Some(Reveal::Top);
+    }
+
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         #[cfg(test)]
@@ -6134,7 +6258,9 @@ impl TriApp {
         self.hovered = None;
         self.over_cell = false;
         let g = self.gui.grid;
-        self.layout = Layout::fit(ui.available_width(), g.cell, g.gap);
+        let cell = self.grid_cell;
+        self.grid_width = ui.available_width();
+        self.layout = Layout::fit(ui.available_width(), cell, g.gap);
         if self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
             self.regroup();
         }
@@ -6169,7 +6295,7 @@ impl TriApp {
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
         let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
-        let output = area.show_rows(ui, g.cell, rows, |ui, visible| {
+        let output = area.show_rows(ui, cell, rows, |ui, visible| {
             for row in visible {
                 ui.horizontal(|ui| {
                     ui.add_space((margin - g.gap).max(0.0));
@@ -6183,6 +6309,9 @@ impl TriApp {
         });
         self.scroll_offset = output.state.clamped_offset().y;
         self.view_height = output.inner_rect.height();
+        if self.grid_fit_pending {
+            self.grid_fit_all();
+        }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
         // vidée, comme dans un gestionnaire de fichiers.
         // Seulement si le clic tombe sur la grille elle-même, pas sur une boîte ou une liste
@@ -6205,8 +6334,8 @@ impl TriApp {
 
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
         let (g, colors) = (self.gui.grid, self.gui.colors);
-        let (rect, response) =
-            ui.allocate_exact_size(vec2(g.cell, g.cell), Sense::click_and_drag());
+        let cell = self.grid_cell;
+        let (rect, response) = ui.allocate_exact_size(vec2(cell, cell), Sense::click_and_drag());
         if response.contains_pointer() {
             self.over_cell = true;
         }
@@ -6307,9 +6436,12 @@ impl TriApp {
             painter.rect_filled(back, 6.0, accent);
             painter.galley(at, label, Color32::BLACK);
         }
+        // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
+        let info = self.grid_info;
+        let bottom = if info { g.label + 4.0 } else { g.padding };
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
-            pos2(rect.max.x - g.padding, rect.max.y - g.label - 4.0),
+            pos2(rect.max.x - g.padding, rect.max.y - bottom),
         );
         let file = self.files[index].clone();
         match (
@@ -6336,6 +6468,9 @@ impl TriApp {
             (None, _) => {} // en attente : cellule vide
         }
 
+        if !info {
+            return;
+        }
         let text_color = if selected {
             self.gui
                 .theme
@@ -6343,54 +6478,43 @@ impl TriApp {
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
-        let badge = match file.kind {
-            MediaKind::Raw => "RAW",
-            MediaKind::Flat => "",
-        };
+        // Sous la vignette, tout de la couleur du texte de la cellule (retour du
+        // 21/10/2026) : le nom sans extension à gauche, le format à droite (il remplace
+        // l'extension), la goutte des photos floues juste avant.
         ui.painter().text(
             pos2(rect.min.x + g.padding, rect.max.y - 4.0),
             Align2::LEFT_BOTTOM,
-            truncate(&file_name(&file.path), g.name_chars),
+            truncate(&file_stem(&file.path), g.name_chars),
             FontId::proportional(12.0),
             text_color,
         );
         let badge_rect = ui.painter().text(
             pos2(rect.max.x - g.padding, rect.max.y - 4.0),
             Align2::RIGHT_BOTTOM,
-            badge,
+            format_label(&file.path, file.kind),
             FontId::monospace(11.0),
-            // Couleur d'accent (retour du 21/10/2026 : le bleu clair se lisait mal) ; sur
-            // une cellule sélectionnée, dont le fond est l'accent, celle de son texte.
             match (colors.badge, selected) {
-                (_, true) => text_color,
                 (Some(c), false) => c.into(),
-                (None, false) => marks::accent_mark(ui.ctx()),
+                _ => text_color,
             },
         );
-        // Photo jugée floue (score de netteté sous la médiane du dossier).
+        let mut tips = Vec::new();
         if g.blur_badge && self.is_blurry(&file.path) {
-            ui.painter().text(
-                pos2(badge_rect.min.x - 6.0, rect.max.y - 4.0),
-                Align2::RIGHT_BOTTOM,
-                t!("badge-blurry"),
-                FontId::proportional(11.0),
-                colors.warning.into(),
+            let side = badge_rect.height();
+            let drop = Rect::from_min_size(
+                pos2(badge_rect.min.x - 4.0 - side, badge_rect.min.y),
+                vec2(side, side),
             );
+            marks::blur_drop_outline(ui.painter(), drop, text_color);
+            tips.push(t!("badge-blurry"));
         }
-        // Notes en bas de la vignette, sur un fond sombre pour rester lisibles.
+        // Notes sur la vignette : étoiles en bas à gauche, drapeau en bas à droite,
+        // couleurs en haut à droite, chaque marque cerclée de sombre.
         let notes = self.folder.notes.notes(&file.path);
-        if *notes != tri::xmp::Notes::EMPTY {
-            let size = g.marks;
-            let left_center = pos2(image_area.min.x + 3.0, image_area.max.y - 3.0 - size / 2.0);
-            let width = marks::row_width(notes, size);
-            let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
-                .expand(2.0);
-            let painter = ui.painter();
-            painter.rect_filled(back, 3.0, Color32::from_black_alpha(160));
-            marks::row(painter, left_center, notes, size, &colors);
-        }
+        marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
         // Versions (recadrages) en haut à gauche : icône de recadrage et leur nombre, sur
         // fond sombre (une vignette par version surchargerait la grille).
+        let mut top_left = image_area.min + vec2(5.0, 5.0);
         let versions = self.versions_of(&file.path).list.len();
         if versions > 0 {
             let size = g.marks;
@@ -6398,7 +6522,7 @@ impl TriApp {
             let font = FontId::proportional(size * 0.9);
             let text = versions.to_string();
             let galley = painter.layout_no_wrap(text, font, Color32::WHITE);
-            let icon = Rect::from_min_size(image_area.min + vec2(5.0, 5.0), vec2(size, size));
+            let icon = Rect::from_min_size(top_left, vec2(size, size));
             let back = Rect::from_min_max(
                 icon.min,
                 pos2(icon.max.x + 3.0 + galley.size().x, icon.max.y),
@@ -6411,32 +6535,34 @@ impl TriApp {
                 galley,
                 Color32::WHITE,
             );
+            top_left.x = back.max.x + 5.0;
         }
-        // Badges d'exposition en haut à droite : brûlée (rouge), bouchée (bleu).
+        // Écrêtage en haut à gauche, après les versions : brûlée, bouchée (petits
+        // histogrammes contre leur bord ; les pastilles se confondaient avec les couleurs).
         if let Some((over, under)) = self.clip_fractions(index, deadline) {
             let h = self.gui.histogram;
-            let radius = g.marks * 0.4;
-            let mut center = pos2(
-                image_area.max.x - radius - 2.0,
-                image_area.min.y + radius + 2.0,
-            );
-            let mut tips = Vec::new();
-            for (fraction, threshold, color, what) in [
-                (over, h.badge_over, colors.clip_over, "badge-over"),
-                (under, h.badge_under, colors.clip_under, "badge-under"),
+            let side = g.marks * 1.2;
+            for (fraction, threshold, color, what, is_over) in [
+                (over, h.badge_over, colors.clip_over, "badge-over", true),
+                (
+                    under,
+                    h.badge_under,
+                    colors.clip_under,
+                    "badge-under",
+                    false,
+                ),
             ] {
                 if fraction > threshold {
-                    let painter = ui.painter();
-                    painter.circle_filled(center, radius + 1.5, Color32::from_black_alpha(160));
-                    painter.circle_filled(center, radius, color);
-                    center.x -= radius * 2.0 + 4.0;
+                    let badge = Rect::from_min_size(top_left - vec2(2.0, 2.0), vec2(side, side));
+                    marks::clip_badge(ui.painter(), badge, is_over, color.into());
+                    top_left.x += side + 4.0;
                     let percent = tri::i18n::decimal((fraction * 1000.0).round() / 10.0, 1);
                     tips.push(t!(what, percent = percent));
                 }
             }
-            if !tips.is_empty() {
-                response.on_hover_text(tips.join("\n"));
-            }
+        }
+        if !tips.is_empty() {
+            response.on_hover_text(tips.join("\n"));
         }
     }
 
@@ -7497,6 +7623,30 @@ fn visuals_text(ui: &Ui, strong: bool) -> Color32 {
     }
 }
 
+/// Nom du fichier sans son extension (grille : le format est écrit à droite).
+fn file_stem(path: &Path) -> String {
+    path.file_stem()
+        .map_or_else(|| file_name(path), |n| n.to_string_lossy().into_owned())
+}
+
+/// Format écrit sous une vignette : « RAW » pour tous les RAW, sinon le nom usuel du
+/// format d'après l'extension (JPEG, TIFF, HEIF, PNG…).
+fn format_label(path: &Path, kind: MediaKind) -> String {
+    if kind == MediaKind::Raw {
+        return "RAW".into();
+    }
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_uppercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "JPG" | "JPE" => "JPEG".into(),
+        "TIF" => "TIFF".into(),
+        "HEIC" => "HEIF".into(),
+        _ => ext,
+    }
+}
+
 fn file_name(path: &Path) -> String {
     path.file_name().map_or_else(
         || path.display().to_string(),
@@ -7957,6 +8107,56 @@ mod tests {
     fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
         h.key_press_modifiers(modifiers, key);
         h.run_steps(3);
+    }
+
+    #[test]
+    fn thumbnail_info_and_size_from_the_keyboard_and_the_bottom_bar() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        // Fenêtre étroite (1000 points) et panneaux ouverts : pas la place pour les
+        // contrôles de la grille, qui recouvriraient les notes du bandeau.
+        assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_none());
+        press(&mut h, Key::D, Modifiers::SHIFT);
+        press(&mut h, Key::M, Modifiers::SHIFT);
+        assert_eq!(
+            h.query_all_by_role(egui::accesskit::Role::Slider).count(),
+            1
+        );
+        let default = h.state().gui.grid.cell;
+        assert!(h.state().grid_info);
+        // Maj+T masque les infos des vignettes, le bouton du bas les remet.
+        press(&mut h, Key::T, Modifiers::SHIFT);
+        assert!(!h.state().grid_info);
+        h.get_by_label(&Action::ToggleGridInfo.label()).click();
+        h.run_steps(3);
+        assert!(h.state().grid_info);
+        // + / - : un palier de plus, de moins (comme le zoom en plein écran).
+        h.event(UiEvent::Text("+".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().grid_cell, default * 1.25);
+        h.event(UiEvent::Text("-".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().grid_cell, default);
+        // * (ou le bouton) : 3 images, toutes à l'écran, donc plus grandes.
+        h.get_by_label("Toutes les vignettes à l'écran").click();
+        h.run_steps(3);
+        let fitted = h.state().grid_cell;
+        assert!(fitted > default, "{fitted}");
+        h.event(UiEvent::Text("-".into()));
+        h.run_steps(3);
+        h.event(UiEvent::Text("*".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().grid_cell, fitted);
+    }
+
+    #[test]
+    fn the_thumbnail_caption_names_the_format_instead_of_the_extension() {
+        assert_eq!(file_stem(Path::new("/a/DSCF0001.RAF")), "DSCF0001");
+        assert_eq!(format_label(Path::new("a.RAF"), MediaKind::Raw), "RAW");
+        assert_eq!(format_label(Path::new("a.jpg"), MediaKind::Flat), "JPEG");
+        assert_eq!(format_label(Path::new("a.tif"), MediaKind::Flat), "TIFF");
+        assert_eq!(format_label(Path::new("a.heic"), MediaKind::Flat), "HEIF");
+        assert_eq!(format_label(Path::new("a.png"), MediaKind::Flat), "PNG");
     }
 
     #[test]
@@ -8693,11 +8893,13 @@ mod tests {
         h.run_steps(2);
         // Deux vrais clics de souris au quart gauche (le curseur d'egui ne voit que le
         // glisser ; un clic seul y amène la valeur, loin du centre).
+        // Celui de la barre des filtres, en haut (celui de la taille des vignettes est en
+        // bas).
         let rect = h
             .query_all_by_role(egui::accesskit::Role::Slider)
-            .next()
-            .expect("curseur du flou")
-            .rect();
+            .map(|n| n.rect())
+            .min_by(|a, b| a.top().total_cmp(&b.top()))
+            .expect("curseur du flou");
         let at = pos2(rect.left() + rect.width() * 0.25, rect.center().y);
         let click = |h: &mut Harness<'_, TriApp>| {
             for pressed in [true, false] {
