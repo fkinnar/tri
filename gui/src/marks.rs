@@ -155,7 +155,12 @@ pub fn row(
         x += size + gap;
     }
     for _ in 0..notes.stars {
-        star(painter, pos2(x + radius, y), radius, colors.stars.into());
+        star(
+            painter,
+            pos2(x + radius, y),
+            radius,
+            star_color(painter.ctx(), colors),
+        );
         x += size + gap;
     }
     if notes.stars > 0 && !notes.colors.is_empty() {
@@ -408,7 +413,12 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, c
         }
         _ => {
             // Petite étoile à gauche, flèche à droite.
-            star(painter, p(0.26, 0.5), w * 0.32, colors.stars.into());
+            star(
+                painter,
+                p(0.26, 0.5),
+                w * 0.32,
+                star_color(painter.ctx(), colors),
+            );
             painter.line_segment([p(0.58, 0.5), p(1.0, 0.5)], stroke);
             painter.add(Shape::line(
                 vec![p(0.78, 0.26), p(1.0, 0.5), p(0.78, 0.74)],
@@ -498,6 +508,28 @@ pub fn floppy(painter: &Painter, rect: Rect, color: Color32) {
         stroke,
         egui::StrokeKind::Inside,
     );
+}
+
+/// Couleur d'accent du thème (fond de sélection d'egui) : ce qui est allumé, choisi.
+pub fn accent(ctx: &egui::Context) -> Color32 {
+    ctx.global_style().visuals.selection.bg_fill
+}
+
+/// Accent pour un trait ou une petite forme sur le fond (étoiles, anneau d'une couleur
+/// choisie) : en thème clair, le fond de sélection est trop pâle sur du blanc, on prend
+/// sa variante foncée (le texte de la sélection d'egui).
+pub fn accent_mark(ctx: &egui::Context) -> Color32 {
+    let style = ctx.global_style();
+    if style.visuals.dark_mode {
+        style.visuals.selection.bg_fill
+    } else {
+        style.visuals.selection.stroke.color
+    }
+}
+
+/// Couleur des étoiles : `[gui.colors] stars`, sinon l'accent du thème.
+pub fn star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
+    colors.stars.map_or_else(|| accent_mark(ctx), Color32::from)
 }
 
 /// Étiquette de type de fichier dans `rect` : un rectangle arrondi plein où `label`
@@ -739,7 +771,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         let action = Action::Stars(n);
         let (rect, hit) = cell(ui, &action.label());
         let fill = if n <= notes.stars {
-            Color32::from(colors.stars)
+            star_color(ui.ctx(), colors)
         } else {
             weak
         };
@@ -757,7 +789,11 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         let painter = ui.painter();
         if active {
             painter.circle_filled(rect.center(), size * 0.4, fill);
-            painter.circle_stroke(rect.center(), size * 0.48, Stroke::new(2.0, strong));
+            painter.circle_stroke(
+                rect.center(),
+                size * 0.48,
+                Stroke::new(2.0, accent_mark(ui.ctx())),
+            );
         } else {
             painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(0.4));
         }

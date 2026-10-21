@@ -190,11 +190,16 @@ fn appimage(home: Option<&Path>) -> Option<PathBuf> {
 /// historique non vide (`darktable:history_end` > 0). Un sidecar écrit par `tri` seul
 /// (notes) ou par un autre logiciel n'en a pas.
 pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
-    let mut name = image.file_name()?.to_os_string();
-    name.push(".xmp");
-    let sidecar = image.with_file_name(name);
+    let sidecar = darktable_sidecar_path(image)?;
     let text = std::fs::read_to_string(&sidecar).ok()?;
     (history_end(&text)? > 0).then_some(sidecar)
+}
+
+/// Chemin du sidecar darktable de `image` (`IMAGE.RAF.xmp`), qu'il existe ou non.
+pub fn darktable_sidecar_path(image: &Path) -> Option<PathBuf> {
+    let mut name = image.file_name()?.to_os_string();
+    name.push(".xmp");
+    Some(image.with_file_name(name))
 }
 
 /// Valeur de `darktable:history_end`, en attribut ou en élément.
@@ -204,6 +209,107 @@ fn history_end(xmp: &str) -> Option<u32> {
     let rest = xmp[at..].trim_start_matches(['=', '"', '>', ' ']);
     let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
     digits.parse().ok()
+}
+
+/// Modules darktable qui changent la taille de l'image autrement qu'un recadrage simple
+/// (redressement et perspective, ancien recadrage, pixels pivotés ou mis à l'échelle de
+/// certains capteurs) : avec l'un d'eux actif, la taille du développé reste inconnue.
+const RESIZING: [&str; 4] = ["ashift", "clipping", "rotatepixels", "scalepixels"];
+
+/// Taille du développé darktable décrit par le sidecar `xmp` (son contenu), pour une
+/// image de `size` pixels (orientation EXIF appliquée), à pleine résolution : le cadre du
+/// module `crop` (le dernier de l'historique actif, avant `history_end`), dans
+/// l'orientation du module `flip`. `None` si un module de [`RESIZING`] est actif ou si un
+/// paramètre est illisible : rien plutôt qu'une taille fausse (demandé le 20/10/2026).
+pub fn developed_size(xmp: &str, size: (u32, u32)) -> Option<(u32, u32)> {
+    let end = history_end(xmp)?;
+    // Dernier état de chaque module (instance principale), dans l'ordre de l'historique.
+    let mut last: std::collections::HashMap<String, (u32, bool, String)> =
+        std::collections::HashMap::new();
+    let mut reader = quick_xml::Reader::from_str(xmp);
+    loop {
+        let event = reader.read_event().ok()?;
+        let element = match &event {
+            quick_xml::events::Event::Start(e) | quick_xml::events::Event::Empty(e) => e,
+            quick_xml::events::Event::Eof => break,
+            _ => continue,
+        };
+        if element.name().as_ref() != "rdf:li" {
+            continue;
+        }
+        let mut entry: (Option<u32>, Option<String>, bool, String, u32) =
+            (None, None, false, String::new(), 0);
+        for attr in element.attributes().flatten() {
+            let value = attr
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .ok()?
+                .into_owned();
+            match attr.key.as_ref() {
+                "darktable:num" => entry.0 = value.parse().ok(),
+                "darktable:operation" => entry.1 = Some(value),
+                "darktable:enabled" => entry.2 = value == "1",
+                "darktable:params" => entry.3 = value,
+                "darktable:multi_priority" => entry.4 = value.parse().unwrap_or(0),
+                _ => {}
+            }
+        }
+        let (Some(num), Some(operation)) = (entry.0, entry.1) else {
+            continue;
+        };
+        if num >= end || entry.4 != 0 {
+            continue;
+        }
+        if last.get(&operation).is_none_or(|(n, ..)| *n <= num) {
+            last.insert(operation, (num, entry.2, entry.3));
+        }
+    }
+    let active = |op: &str| last.get(op).filter(|(_, on, _)| *on).map(|(.., p)| p);
+    if RESIZING.iter().any(|op| active(op).is_some()) {
+        return None;
+    }
+    // `flip` : -1 (ou absent, ou éteint) = orientation EXIF ; sinon une orientation de
+    // darktable, échange largeur / hauteur si le bit 4 est mis, sur le capteur (paysage).
+    let (w, h) = match active("flip").map(|p| floats(p, 1).map(|v| v[0].to_bits() as i32)) {
+        Some(Some(o)) if o >= 0 => {
+            let (long, short) = (size.0.max(size.1), size.0.min(size.1));
+            if o & 4 != 0 {
+                (short, long)
+            } else {
+                (long, short)
+            }
+        }
+        Some(None) => return None,
+        _ => size,
+    };
+    // `crop` : bords gauche, haut, droit, bas en fractions de l'image.
+    let Some(params) = active("crop") else {
+        return Some((w, h));
+    };
+    let v = floats(params, 4)?;
+    let (cw, ch) = (v[2] - v[0], v[3] - v[1]);
+    if !(cw > 0.0 && cw <= 1.0 && ch > 0.0 && ch <= 1.0) {
+        return None;
+    }
+    Some((
+        (w as f32 * cw).round() as u32,
+        (h as f32 * ch).round() as u32,
+    ))
+}
+
+/// Les `n` premiers nombres 32 bits (petit-boutiste) des paramètres d'un module, écrits en
+/// hexadécimal par darktable. Paramètres compressés (`gz…`, gros modules) : `None`.
+fn floats(params: &str, n: usize) -> Option<Vec<f32>> {
+    let bytes = params.as_bytes();
+    if bytes.len() < n * 8 || params.starts_with("gz") {
+        return None;
+    }
+    (0..n)
+        .map(|i| {
+            let hex = std::str::from_utf8(&bytes[i * 8..i * 8 + 8]).ok()?;
+            let word = u32::from_str_radix(hex, 16).ok()?;
+            Some(f32::from_bits(word.swap_bytes()))
+        })
+        .collect()
 }
 
 /// Empreinte d'un sidecar (taille, date) : dans la clé de cache, pour qu'un développement
@@ -341,6 +447,63 @@ fn render_darktable(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Sidecar darktable minimal : `history_end`, puis les entrées `(num, opération,
+    /// active, paramètres)`.
+    fn sidecar(end: u32, entries: &[(u32, &str, bool, &str)]) -> String {
+        let items: String = entries
+            .iter()
+            .map(|(num, op, on, params)| {
+                format!(
+                    r#"<rdf:li darktable:num="{num}" darktable:operation="{op}" darktable:enabled="{}" darktable:params="{params}" darktable:multi_priority="0"/>"#,
+                    u8::from(*on)
+                )
+            })
+            .collect();
+        format!(
+            r#"<rdf:Description darktable:history_end="{end}"><darktable:history><rdf:Seq>{items}</rdf:Seq></darktable:history></rdf:Description>"#
+        )
+    }
+
+    #[test]
+    fn the_developed_size_follows_the_darktable_crop() {
+        // Paramètres relevés dans de vrais sidecars de l'utilisateur (darktable 5, crop v3).
+        let tight = "8bd7213f08dd8b3e0000803fea56243f0000000000000000";
+        let wide = "9d75823dbfa34b3d4af07f3fe8f77f3f0200000003000000";
+        let auto = "ffffffff";
+        let size = (6240, 4160);
+        let xmp = sidecar(5, &[(0, "flip", true, auto), (1, "crop", true, tight)]);
+        assert_eq!(developed_size(&xmp, size), Some((2295, 1534)));
+        // Le dernier recadrage de l'historique actif ; ceux après history_end ne comptent pas.
+        let xmp = sidecar(
+            3,
+            &[
+                (1, "crop", true, tight),
+                (2, "crop", true, wide),
+                (3, "crop", true, tight),
+            ],
+        );
+        assert_eq!(developed_size(&xmp, size), Some((5841, 3953)));
+        // Recadrage éteint, ou pas de recadrage : l'image entière.
+        let xmp = sidecar(3, &[(1, "crop", true, tight), (2, "crop", false, tight)]);
+        assert_eq!(developed_size(&xmp, size), Some(size));
+        assert_eq!(
+            developed_size(&sidecar(1, &[(0, "exposure", true, "00")]), size),
+            Some(size)
+        );
+        // Rotation choisie dans darktable (ici 90° : bit 4) : portrait.
+        let xmp = sidecar(
+            5,
+            &[(0, "flip", true, "06000000"), (1, "crop", true, tight)],
+        );
+        assert_eq!(developed_size(&xmp, size), Some((1530, 2301)));
+        // Redressement, perspective : taille inconnue plutôt que fausse.
+        let xmp = sidecar(5, &[(0, "ashift", true, "00"), (1, "crop", true, tight)]);
+        assert_eq!(developed_size(&xmp, size), None);
+        // Paramètres compressés ou illisibles : inconnue aussi.
+        let xmp = sidecar(5, &[(1, "crop", true, "gz12eJxj")]);
+        assert_eq!(developed_size(&xmp, size), None);
+    }
 
     #[test]
     fn only_sidecars_with_a_history_count() {

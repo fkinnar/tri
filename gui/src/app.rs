@@ -177,6 +177,16 @@ pub struct TriApp {
     blur_rule: Option<tri::sharpness::BlurRule>,
     /// Photos jugées floues au dernier filtrage (refiltrer seulement si ça change).
     blurry_applied: HashSet<PathBuf>,
+    /// Tailles des développés darktable (empreinte du sidecar, taille), voir
+    /// [`Self::developed_size`].
+    developed_sizes: HashMap<PathBuf, (String, Option<(u32, u32)>)>,
+    /// Barres de progression masquées jusqu'à cet instant (après un refiltrage :
+    /// `[gui] progress_delay_ms`).
+    progress_hidden_until: Option<Instant>,
+    /// Jugement de netteté changé hors de la grille (curseur en plein écran) : grille
+    /// refiltrée seulement au retour, pour ne pas retirer l'image regardée (retour du
+    /// 21/10/2026).
+    blur_refilter_pending: bool,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -337,8 +347,13 @@ pub struct TriApp {
     expanded: HashSet<PathBuf>,
     /// Regroupement en piles actif.
     stacking: bool,
-    /// Seuil de regroupement du dossier ouvert, et écart de temps maximal (secondes).
-    group_threshold: f32,
+    /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
+    /// réglée au curseur de la barre des filtres, retenue par dossier.
+    group_strictness: f32,
+    /// Centre du curseur des piles : seuil calculé d'après le dossier
+    /// (`similarity::suggested_threshold`), au dernier regroupement.
+    group_centre: f32,
+    /// Écart de temps maximal entre deux images d'une pile (secondes).
     /// Sévérité du jugement de netteté (-1 souple à 1 strict, 0 : les seuils des
     /// réglages), réglée au curseur de la barre des filtres, retenue par dossier.
     blur_strictness: f32,
@@ -557,6 +572,9 @@ impl TriApp {
             judgements: HashMap::new(),
             blur_rule: None,
             blurry_applied: HashSet::new(),
+            blur_refilter_pending: false,
+            progress_hidden_until: None,
+            developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
             peaking_color: 0,
             focus_point: gui.view.focus_point,
@@ -631,7 +649,8 @@ impl TriApp {
             expanded: HashSet::new(),
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
-            group_threshold: settings.similarity.threshold,
+            group_strictness: 0.0,
+            group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             subfolders,
             group_gap: settings.similarity.max_gap_s,
@@ -748,11 +767,11 @@ impl TriApp {
                 if let Some(data) = self.settings.data_dir() {
                     let _ = tri::folder::remember(&data, &folder.dir);
                 }
-                self.group_threshold = self
+                self.group_strictness = self
                     .settings
                     .data_dir()
-                    .and_then(|d| tri::similarity::folder_threshold(&d, &folder.dir))
-                    .unwrap_or(self.settings.similarity.threshold);
+                    .and_then(|d| tri::similarity::folder_strictness(&d, &folder.dir))
+                    .unwrap_or(0.0);
                 self.blur_strictness = self
                     .settings
                     .data_dir()
@@ -1492,6 +1511,8 @@ impl TriApp {
         self.status = vec![Status::default(); self.files.len()];
         self.requested.clear();
         self.progress = [Progress::default(); 6];
+        let delay = Duration::from_millis(self.gui.progress_delay_ms);
+        self.progress_hidden_until = Some(Instant::now() + delay);
         // Garder la même image sélectionnée si elle reste visible.
         if let Some(path) = selected_path
             && let Some(index) = self.files.iter().position(|f| f.path == path)
@@ -1512,31 +1533,33 @@ impl TriApp {
     /// en direct (badges, filtre), retenu pour le dossier au lâcher, double-clic : retour
     /// au centre (repère).
     fn blur_slider(&mut self, ui: &mut Ui) {
-        ui.spacing_mut().slider_width = self.gui.grid.blur_slider;
-        let mut t = self.blur_strictness;
-        let slider = ui
-            .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
-            .on_hover_text(t!("blur-slider-tip"));
-        // Repère du centre : la valeur des réglages.
-        let rail = slider.rect.shrink2(vec2(slider.rect.height() / 2.0, 0.0));
-        let x = rail.center().x;
-        let tick = ui.visuals().weak_text_color();
-        ui.painter().line_segment(
-            [
-                egui::pos2(x, rail.top() + 1.0),
-                egui::pos2(x, rail.top() + rail.height() * 0.25),
-            ],
-            egui::Stroke::new(1.0, tick),
+        let (slider, t) = strictness_slider(
+            ui,
+            self.gui.grid.blur_slider,
+            self.blur_strictness,
+            t!("blur-slider-tip"),
         );
-        let reset = slider.double_clicked();
-        if reset {
-            t = 0.0;
-        }
         if t != self.blur_strictness {
             self.set_blur_strictness(t);
         }
-        if slider.drag_stopped() || reset {
+        if slider.drag_stopped() || slider.double_clicked() {
             self.remember_strictness();
+        }
+    }
+
+    /// Seuil de regroupement en vigueur : le centre du dossier à la sévérité choisie.
+    fn group_threshold(&self) -> f32 {
+        let span = self.settings.similarity.strictness_span;
+        tri::similarity::with_strictness(self.group_centre, self.group_strictness, span)
+    }
+
+    /// Retient la sévérité des piles pour le dossier ouvert (oubliée au centre).
+    fn remember_group_strictness(&self) {
+        if let Some(data) = self.settings.data_dir()
+            && !self.folder.is_none()
+        {
+            let keep = (self.group_strictness != 0.0).then_some(self.group_strictness);
+            let _ = tri::similarity::remember_strictness(&data, &self.folder.dir, keep);
         }
     }
 
@@ -1551,10 +1574,23 @@ impl TriApp {
     }
 
     /// Nouvelle sévérité du flou : jugement refait (instantané, les scores sont connus),
-    /// et la grille refiltrée si un filtre sur le flou est actif.
+    /// et la grille refiltrée si un filtre sur le flou est actif ; hors de la grille,
+    /// seulement au retour ([`Self::blur_refilter`]).
     fn set_blur_strictness(&mut self, strictness: f32) {
         self.blur_strictness = strictness;
         self.rejudge();
+        self.blur_refilter_pending = true;
+        self.blur_refilter();
+    }
+
+    /// Refiltre la grille si le jugement de netteté a changé depuis le dernier filtrage,
+    /// un filtre sur le flou actif ; en grille seulement (plein écran : l'image regardée
+    /// ne disparaît pas sous le pointeur).
+    fn blur_refilter(&mut self) {
+        if !self.blur_refilter_pending || self.mode != Mode::Grid {
+            return;
+        }
+        self.blur_refilter_pending = false;
         if self.blur_rule.is_some() && self.blurry_now() != self.blurry_applied {
             self.refilter(Reveal::Minimal);
         }
@@ -1581,6 +1617,13 @@ impl TriApp {
         };
         let sharpness = s.sharpness.with_strictness(self.blur_strictness);
         self.judgements = tri::sharpness::judge_in_groups(&ordered, &groups, &sharpness);
+        // Curseur à fond à gauche : aucune photo floue, toutes visibles (retour du
+        // 21/10/2026 : même au plus souple, il en manquait, c'était déroutant).
+        if self.blur_strictness <= -1.0 {
+            for j in self.judgements.values_mut() {
+                j.blurry = false;
+            }
+        }
         self.stacks_dirty = true;
     }
 
@@ -1595,7 +1638,8 @@ impl TriApp {
             .map(|f| self.signatures.get(&f.path))
             .collect();
         let links = tri::similarity::distances(&signatures, s.shape_weight);
-        let ranges = tri::similarity::group(&links, self.group_threshold, self.group_gap);
+        self.group_centre = tri::similarity::suggested_threshold(&links, s);
+        let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
         let files = &self.files;
         let notes = &self.folder.notes;
         let scores = &self.scores;
@@ -1811,13 +1855,13 @@ impl TriApp {
         if changed {
             self.rejudge();
         }
+        // Nouveaux scores : grille refiltrée une fois tous connus (pas à chaque score).
+        if changed {
+            self.blur_refilter_pending = true;
+        }
         let p = self.progress[4];
-        if self.blur_rule.is_some()
-            && p.total > 0
-            && p.done == p.total
-            && self.blurry_now() != self.blurry_applied
-        {
-            self.refilter(Reveal::Minimal);
+        if p.total == 0 || p.done == p.total {
+            self.blur_refilter();
         }
     }
 
@@ -2233,8 +2277,15 @@ impl TriApp {
                     -step
                 };
                 let t = (self.blur_strictness + delta).clamp(-1.0, 1.0);
-                // Pas en virgule flottante : 0 retombe juste sur 0 (le centre).
-                let t = if t.abs() < step / 2.0 { 0.0 } else { t };
+                // Pas en virgule flottante : 0 et les bouts retombent juste dessus (le
+                // centre ; à fond à gauche, toutes les photos visibles).
+                let t = if t.abs() < step / 2.0 {
+                    0.0
+                } else if t.abs() > 1.0 - step / 2.0 {
+                    t.signum()
+                } else {
+                    t
+                };
                 self.set_blur_strictness(t);
                 self.remember_strictness();
                 let percent = (t * 100.0).round() as i64;
@@ -3432,12 +3483,6 @@ impl TriApp {
         version: Option<&tri::versions::Version>,
     ) -> Option<(u32, u32)> {
         let source = self.source_for(file);
-        // Développé : darktable rend à la taille de l'aperçu, recadrage de darktable
-        // compris ; sa vraie résolution demande de lire ce recadrage dans le sidecar (à
-        // faire). Rien plutôt qu'une taille fausse.
-        if source == Source::Developed {
-            return None;
-        }
         let level = view::zoom_level(file.kind, source);
         let loaded = |app: &mut Self, level| {
             app.big
@@ -3452,11 +3497,18 @@ impl TriApp {
             .and_then(|m| m.as_ref().ok())
             .cloned();
         let size = |s: Option<(u32, u32)>| s.map(|(w, h)| vec2(w as f32, h as f32));
-        let native = loaded(self, level).or_else(|| match (file.kind, source) {
-            // JPEG boîtier : la taille du JPEG embarqué, lue dans son en-tête.
-            (MediaKind::Raw, Source::Embedded) => size(read.as_ref()?.embedded_size),
-            _ => size(read.as_ref()?.size),
-        })?;
+        let native = if source == Source::Developed {
+            // Développé : darktable rend à la taille de l'aperçu ; sa vraie résolution,
+            // celle de l'image entière recadrée dans darktable, se lit dans le sidecar.
+            let full = read.as_ref()?.size?;
+            size(self.developed_size(&file.path, full))?
+        } else {
+            loaded(self, level).or_else(|| match (file.kind, source) {
+                // Rendu boîtier : la taille du JPEG embarqué, lue dans son en-tête.
+                (MediaKind::Raw, Source::Embedded) => size(read.as_ref()?.embedded_size),
+                _ => size(read.as_ref()?.size),
+            })?
+        };
         let (mut w, mut h) = (native.x as f64, native.y as f64);
         if let Some(v) = version {
             w *= v.crop.w;
@@ -3474,6 +3526,24 @@ impl TriApp {
             }
         }
         Some((w.round() as u32, h.round() as u32))
+    }
+
+    /// Taille du développé darktable de `path` (image de `full` pixels) : recadrage lu
+    /// dans le sidecar (`develop::developed_size`), relu seulement s'il a changé.
+    fn developed_size(&mut self, path: &Path, full: (u32, u32)) -> Option<(u32, u32)> {
+        let sidecar = tri::develop::darktable_sidecar_path(path)?;
+        let stamp = tri::develop::stamp(&sidecar);
+        if let Some((known, size)) = self.developed_sizes.get(path)
+            && *known == stamp
+        {
+            return *size;
+        }
+        let size = std::fs::read_to_string(&sidecar)
+            .ok()
+            .and_then(|xmp| tri::develop::developed_size(&xmp, full));
+        self.developed_sizes
+            .insert(path.to_path_buf(), (stamp, size));
+        size
     }
 
     /// Version montrée en plein écran (image et version), s'il y en a une.
@@ -4699,7 +4769,15 @@ impl TriApp {
                 (t!("progress-groups"), self.progress[5]),
             ] {
                 // Rien à calculer en fond pour ce niveau, ou déjà fini.
-                if p.total == 0 || (self.gui.progress_hide_done && p.done >= p.total) {
+                // Juste après un refiltrage : le cache répond souvent avant le délai.
+                let waiting = self.progress_hidden_until.is_some_and(|t| {
+                    let now = Instant::now();
+                    if now < t {
+                        ui.ctx().request_repaint_after(t - now);
+                    }
+                    now < t
+                });
+                if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
                     continue;
                 }
                 // Gris discret, pas la couleur d'accent : une information de fond, qui ne
@@ -5793,18 +5871,14 @@ impl TriApp {
                 let response = response
                     .on_hover_text(tip)
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
-                if on {
-                    ui.painter()
-                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
-                } else if response.hovered() {
+                if response.hovered() {
                     let fill = ui.visuals().widgets.hovered.weak_bg_fill;
                     ui.painter().rect_filled(rect.expand(2.0), 4.0, fill);
                 }
+                // Allumé : le rectangle seul prend l'accent (retour du 21/10/2026 : pas de
+                // grand carré autour), texte de la sélection d'egui, lisible dessus.
                 let (color, back) = if on {
-                    (
-                        ui.visuals().strong_text_color(),
-                        ui.visuals().selection.bg_fill,
-                    )
+                    (marks::accent(ui.ctx()), ui.visuals().selection.stroke.color)
                 } else {
                     (ui.visuals().weak_text_color(), ui.visuals().panel_fill)
                 };
@@ -5841,7 +5915,7 @@ impl TriApp {
                 let tip = Action::FilterStars(if n == current { 0 } else { n }).label();
                 let (rect, response) = marks::clickable(ui, size, &tip);
                 let color = if n <= current {
-                    Color32::from(colors.stars)
+                    marks::star_color(ui.ctx(), &colors)
                 } else {
                     ui.visuals().weak_text_color()
                 };
@@ -5909,7 +5983,7 @@ impl TriApp {
                     painter.circle_stroke(
                         rect.center(),
                         size * 0.48,
-                        egui::Stroke::new(2.0, ui.visuals().strong_text_color()),
+                        egui::Stroke::new(2.0, marks::accent_mark(ui.ctx())),
                     );
                 }
                 if response.clicked() {
@@ -5950,16 +6024,19 @@ impl TriApp {
                 clicked.push(Action::GroupingWindow);
             }
             if self.stacking {
-                ui.spacing_mut().slider_width = self.gui.grid.stack_slider;
-                let mut t = self.group_threshold;
-                let slider = ui
-                    .add(egui::Slider::new(&mut t, 0.0..=1.0).show_value(false))
-                    .on_hover_text(t!(
+                // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
+                // calculé d'après le dossier, à droite plus strict (petites piles).
+                let (slider, t) = strictness_slider(
+                    ui,
+                    self.gui.grid.stack_slider,
+                    self.group_strictness,
+                    t!(
                         "stack-slider-tip",
                         keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
-                    ));
-                if t != self.group_threshold {
-                    self.group_threshold = t;
+                    ),
+                );
+                if t != self.group_strictness {
+                    self.group_strictness = t;
                     self.stacks_dirty = true;
                 }
                 // Piles dépliées pendant le réglage seulement si Maj est tenue (retour du
@@ -5970,13 +6047,8 @@ impl TriApp {
                     self.grouping_preview = adjusting;
                     self.stacks_dirty = true;
                 }
-                if slider.drag_stopped()
-                    && let Some(data) = self.settings.data_dir()
-                    && !self.folder.is_none()
-                {
-                    let default = self.settings.similarity.threshold;
-                    let keep = (self.group_threshold != default).then_some(self.group_threshold);
-                    let _ = tri::similarity::remember_threshold(&data, &self.folder.dir, keep);
+                if slider.drag_stopped() || slider.double_clicked() {
+                    self.remember_group_strictness();
                 }
                 // Tout déplier / tout replier (Maj+S), à côté du curseur.
                 let (rect, all) = marks::icon_button(
@@ -6820,11 +6892,16 @@ impl TriApp {
         if !self.group_dialog {
             return;
         }
-        let default = self.settings.similarity.threshold;
         let at = ctx.content_rect().center() - vec2(200.0, 160.0);
+        let default_gap = self.settings.similarity.max_gap_s;
         let (mut close, mut reset) = (false, false);
-        let (mut threshold, mut gap, mut stacking) =
-            (self.group_threshold, self.group_gap, self.stacking);
+        let (mut strictness, mut gap, mut stacking) =
+            (self.group_strictness, self.group_gap, self.stacking);
+        let threshold = t!(
+            "groups-threshold-value",
+            threshold = format!("{:.2}", self.group_threshold()),
+            centre = format!("{:.2}", self.group_centre)
+        );
         let summary = t!(
             "groups-summary",
             images = self.files.len(),
@@ -6843,15 +6920,32 @@ impl TriApp {
                 }
                 ui.add_space(4.0);
                 ui.label(t!("groups-threshold"));
-                ui.add(egui::Slider::new(&mut threshold, 0.0..=1.0).step_by(0.01));
+                // Double-clic : valeur par défaut, sur tous les curseurs (retour du
+                // 21/10/2026, comme Lightroom).
+                if ui
+                    .add(
+                        egui::Slider::new(&mut strictness, -1.0..=1.0)
+                            .step_by(0.05)
+                            .show_value(false),
+                    )
+                    .double_clicked()
+                {
+                    strictness = 0.0;
+                }
+                ui.weak(threshold);
                 ui.weak(t!("groups-threshold-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-gap"));
-                ui.add(
-                    egui::Slider::new(&mut gap, 0.0..=600.0)
-                        .step_by(5.0)
-                        .suffix(" s"),
-                );
+                if ui
+                    .add(
+                        egui::Slider::new(&mut gap, 0.0..=600.0)
+                            .step_by(5.0)
+                            .suffix(" s"),
+                    )
+                    .double_clicked()
+                {
+                    gap = default_gap;
+                }
                 ui.weak(t!("groups-gap-tip"));
                 ui.add_space(6.0);
                 ui.label(summary);
@@ -6865,32 +6959,24 @@ impl TriApp {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     reset = ui
-                        .add_enabled(
-                            threshold != default,
-                            egui::Button::new(t!("groups-default")),
-                        )
+                        .add_enabled(strictness != 0.0, egui::Button::new(t!("groups-default")))
                         .clicked();
                     close = ui.button(t!("close")).clicked();
                     ui.weak(t!("or-escape"));
                 });
             });
         if reset {
-            threshold = default;
+            strictness = 0.0;
         }
-        if (threshold, gap, stacking) != (self.group_threshold, self.group_gap, self.stacking) {
-            self.group_threshold = threshold;
+        if (strictness, gap, stacking) != (self.group_strictness, self.group_gap, self.stacking) {
+            self.group_strictness = strictness;
             self.group_gap = gap;
             self.stacking = stacking;
             self.stacks_dirty = true;
         }
         if close || modal.should_close() {
             self.group_dialog = false;
-            if let Some(data) = self.settings.data_dir()
-                && !self.folder.is_none()
-            {
-                let keep = (self.group_threshold != default).then_some(self.group_threshold);
-                let _ = tri::similarity::remember_threshold(&data, &self.folder.dir, keep);
-            }
+            self.remember_group_strictness();
         }
     }
 
@@ -7424,6 +7510,30 @@ enum StatusClick {
     DismissOffloaded,
     /// Réessayer une éjection refusée.
     RetryEject,
+}
+
+/// Curseur de sévérité (-1 à 1, centre 0) de largeur `width`, avec un repère au
+/// centre ; un double-clic y revient. Rend la réponse du curseur et la nouvelle valeur. Flou et
+/// piles (même logique, idée de l'utilisateur du 20/10/2026) : à droite plus strict.
+fn strictness_slider(ui: &mut Ui, width: f32, value: f32, tip: String) -> (egui::Response, f32) {
+    ui.spacing_mut().slider_width = width;
+    let mut t = value;
+    let slider = ui
+        .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
+        .on_hover_text(tip);
+    let rail = slider.rect.shrink2(vec2(slider.rect.height() / 2.0, 0.0));
+    let x = rail.center().x;
+    ui.painter().line_segment(
+        [
+            egui::pos2(x, rail.top() + 1.0),
+            egui::pos2(x, rail.top() + rail.height() * 0.25),
+        ],
+        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+    );
+    if slider.double_clicked() {
+        t = 0.0;
+    }
+    (slider, t)
 }
 
 /// Niveaux parcourus à l'ouverture d'un dossier : 1 (le dossier seul), ou avec ses
@@ -8524,6 +8634,24 @@ mod tests {
         h.state_mut().set_blur_strictness(0.0);
         assert!(h.state().is_blurry(&c));
         assert_eq!(h.state().files.len(), 3);
+        // Tout à gauche, même une photo très floue est gardée : toutes visibles (retour
+        // du 21/10/2026) ; juste avant le bout, elle reste floue.
+        h.state_mut().scores.insert(c.clone(), 0.5);
+        h.state_mut().set_blur_strictness(-0.9);
+        assert!(h.state().is_blurry(&c));
+        h.state_mut().set_blur_strictness(-1.0);
+        assert!(!h.state().is_blurry(&c));
+        assert_eq!(h.state().files.len(), 4);
+        h.state_mut().set_blur_strictness(0.0);
+        // En plein écran, le curseur ne refiltre pas la grille (l'image regardée ne doit
+        // pas disparaître) : au retour seulement.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        h.state_mut().set_blur_strictness(-1.0);
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 3, "pas pendant le plein écran");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        run_until(&mut h, |app| app.files.len() == 4);
     }
 
     #[test]
@@ -9814,10 +9942,11 @@ mod tests {
         press(&mut h, Key::S, Modifiers::CTRL);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
-        // Ctrl+G : la fenêtre ; seuil à 0 : plus de piles.
+        // Ctrl+G : la fenêtre ; seuil nul : plus de piles.
         press(&mut h, Key::G, Modifiers::CTRL);
         assert!(h.state().group_dialog);
-        h.state_mut().group_threshold = 0.0;
+        h.state_mut().settings.similarity.auto = false;
+        h.state_mut().settings.similarity.threshold = 0.0;
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
         assert_eq!(
@@ -10464,7 +10593,7 @@ mod tests {
         assert_eq!(
             h.state().source,
             Source::Embedded,
-            "JPEG boîtier par défaut"
+            "rendu boîtier par défaut"
         );
         press(&mut h, Key::B, Modifiers::NONE);
         assert_eq!(h.state().source, Source::Raw);

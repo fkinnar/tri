@@ -59,6 +59,21 @@ even from one session to the next), by the heavy worker (darktable occupies the 
 machine), never the whole folder in the background. Measured on 2026-10-19 (X-T4 RAF,
 Apple Silicon Mac): 8 to 10 s per image, of which ~6 s is darktable's startup.
 
+## Size of the developed image (2026-10-21)
+
+`developed_size(xmp, size)`: the size of the image darktable would produce at full
+resolution, for the resolution shown in full screen. Read from the sidecar's history
+(`darktable:history`, entries before `darktable:history_end`, last state of each module,
+main instance):
+
+- **`crop`**: its parameters are four little-endian 32-bit floats in hexadecimal, left,
+  top, right and bottom edges as fractions of the image (checked on real sidecars of the
+  user, darktable 5, crop v3);
+- **`flip`**: `-1` (`ffffffff`) follows the EXIF orientation; another value is a
+  darktable orientation, width and height swapped if bit 4 is set;
+- **`ashift`**, **`clipping`**, **`rotatepixels`**, **`scalepixels`** active: unknown
+  size (`None`), rather than a wrong one; likewise for compressed parameters (`gz…`).
+
 ## In the interface
 
 While waiting for the render, the RAW render (or the camera JPEG) with "darktable

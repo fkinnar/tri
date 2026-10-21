@@ -1,7 +1,7 @@
 # tri
 
 **A fast RAW viewer for culling a photo shoot**, on macOS and Linux (Windows in progress):
-thumbnails of a whole folder in a few seconds, full screen in the camera JPEG or a real
+thumbnails of a whole folder in a few seconds, full screen in the camera render or a real
 RAW rendering, ratings (stars, colours, picked / rejected) written to XMP and read by
 darktable, digiKam, Lightroom…, filters, stacks of similar images, sharpness, RAW
 histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("classic" or
@@ -45,7 +45,7 @@ Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
 - `F1` or `?`: every key, with a search. `Ctrl+,`: the settings (key set, "neutral grey"
   theme, language…).
 - Ratings: `0`–`5` stars, `6`–`9` colours, `Shift+P` / `Shift+X` picked / rejected.
-- `Enter` full screen, `z` 100 %, `b` camera JPEG or RAW rendering, `/` search.
+- `Enter` full screen, `z` 100 %, `b` camera render or RAW rendering, `/` search.
 
 ## Documentation
 

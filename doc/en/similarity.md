@@ -36,11 +36,27 @@ Computation: ~50 ms per RAF (LibRaw opening and shrunk embedded JPEG), light wor
 Remaining (decided: later): manual corrections (merge, split), non-contiguous groups
 (same subject at two different times).
 
-## Per-folder threshold
+## Centre computed from the folder, strictness slider (2026-10-21)
 
-`folder_threshold` / `remember_threshold`: the threshold chosen in the grouping window,
-remembered for each folder (`group-thresholds.tsv` in the data folder); when reset to the
-default, it is forgotten.
+The user's idea: same logic as the blur slider. The stack slider goes from -1 to 1; **in
+the middle**, the threshold computed from the folder; **to the right stricter** (lower
+threshold, smaller stacks: bursts only), **to the left more lenient** (larger stacks);
+double-click: back to the middle.
+
+- `suggested_threshold`: the **Otsu** cut over the distances between neighbours (the one
+  that best separates small distances, same series, from large ones, scene changes).
+  Links already broken by the time gap do not count. Falls back to `threshold` if
+  `auto = false`, with fewer than `auto_min_links` links, or if the separation (share of
+  the variance explained by the cut) stays below `auto_separation`; clamped between
+  `threshold / auto_range` and `threshold × auto_range`. Measured on three real shoots
+  (2026-10-17): 0.21, 0.16 and 0.15 (separation 0.66 to 0.77), against a fixed 0.25.
+- `with_strictness(centre, s, strictness_span)`: `centre × span^(-s)` (×3 to ÷3 by
+  default).
+- `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
+  folder (`group-strictness.tsv` in the data folder); in the middle, it is forgotten. The
+  former per-folder thresholds (`group-thresholds.tsv`) are no longer read.
+- `tri <folder> --groups` groups at the computed centre (`--threshold X` to force a
+  threshold).
 
 ## Chosen covers
 

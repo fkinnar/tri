@@ -141,6 +141,10 @@ pub struct GuiSettings {
     pub progress_width: f32,
     /// Masquer les barres de progression terminées (la barre d'état reste courte).
     pub progress_hide_done: bool,
+    /// Délai avant d'afficher les barres de progression après un refiltrage (ms) : le
+    /// cache répond souvent tout de suite, une barre montrée 1/10 s n'est pas lisible
+    /// (retour du 21/10/2026).
+    pub progress_delay_ms: u64,
     /// Côté des boutons à icône du bandeau de notation (avance automatique, image
     /// précédente / suivante), en points.
     pub bar_icon_size: f32,
@@ -205,6 +209,7 @@ impl Default for GuiSettings {
             load_budget_ms: 8,
             progress_width: 160.0,
             progress_hide_done: true,
+            progress_delay_ms: 400,
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
@@ -934,8 +939,9 @@ pub struct Colors {
     pub error: Color,
     /// Fond du plein écran.
     pub view_background: Color,
-    /// Étoiles.
-    pub stars: Color,
+    /// Étoiles ; absent : couleur d'accent du thème, comme le reste de l'interface
+    /// (retour du 21/10/2026, à la place du jaune).
+    pub stars: Option<Color>,
     /// Pastille « acceptée ».
     pub accepted: Color,
     /// Pastille « rejetée ».
@@ -999,7 +1005,7 @@ impl Default for Colors {
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
             view_background: Color([12, 12, 12]),
-            stars: Color([240, 196, 64]),
+            stars: None,
             accepted: Color([70, 170, 90]),
             rejected: Color([215, 70, 70]),
             red: Color([225, 65, 65]),

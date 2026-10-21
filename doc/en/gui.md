@@ -14,7 +14,7 @@ and [config.example.toml](../config.example.toml). An invalid configuration is r
 red in the status bar (details on hover), and the default settings are used.
 
 Always use **`--release`** for real use: in a debug build, the Rust code is not
-optimized, and the 1:1 of the camera JPEG goes from 0.4 s to 2 s (rotation, conversion for
+optimized, and the 1:1 of the camera render goes from 0.4 s to 2 s (rotation, conversion for
 the GPU), the 100 % RAW from 4.5 to 7 s. `--cache` uses another cache folder than the
 system one ("cold" measurements, experiments).
 
@@ -30,7 +30,7 @@ system one ("cold" measurements, experiments).
 - **Status bar**: progress in **discreet grey** (`[gui.colors] progress`, the theme's grey
   by default) rather than in the accent colour, which drew the eye to background
   information (feedback of 2026-10-17); folder, number of images (including RAW), filter,
-  progress of thumbnails, of "Camera JPEG" previews (hidden if there is no RAW) and of
+  progress of thumbnails, of "Camera render" previews (hidden if there is no RAW) and of
   standard previews, name of the selected image.
 - **Selection** with the keyboard or the mouse; the scheduler is notified (`set_focus`), so
   the preview of the selected image and of its neighbours moves to the head of the queue.
@@ -110,7 +110,7 @@ system one ("cold" measurements, experiments).
   configuration only gives the first-launch value (`[gui] remember_display = false`:
   always that value). Written only when the state changes (temporary file then rename),
   never during an automatic screenshot nor in tests (temporary data folder).
-- **Key hints** at the top right of the full screen view ("b : Camera JPEG / RAW,
+- **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
 - **1:1 from the grid** (2026-10-17): `z` (or the bar's "1:1" button) opens the selected
@@ -194,15 +194,16 @@ system one ("cold" measurements, experiments).
   selected images. Orange frame (`[gui.colors] marked`).
 - **Developed in darktable** (2026-10-19, see `develop.md`): `Shift+B` or the aperture
   button starts the render (a few seconds, kept in cache); only afterwards does `b` go
-  from the camera JPEG to the RAW render then to the developed image; focus point and
+  from the camera render to the RAW render then to the developed image; focus point and
   zones hidden on the developed image.
   **Resolution** in the info line (2026-10-21, `TriApp::shown_resolution`): that of the
   image at 100 % in the displayed source (loaded 1:1, otherwise metadata dimensions;
-  camera JPEG: `Metadata::embedded_size`, read from the embedded JPEG's header); for a
+  camera render: `Metadata::embedded_size`, read from the embedded JPEG's header); for a
   version, its frame, reduced to the long side of its export preset; **while cropping**,
-  the current frame and the export preset of the crop bar (live). Nothing for the developed image: darktable renders at the preview size,
-  its crop included; the real size will require reading that crop from the sidecar (to
-  do).
+  the current frame and the export preset of the crop bar (live). Developed image (2026-10-21): darktable renders at the preview size;
+  the real size, the whole image cropped in darktable, is read from the sidecar
+  (`develop::developed_size`, read again when it changes); nothing with a straightening
+  or a perspective correction (unknown size rather than a wrong one).
   The "developed" choice persists from one image to the next, but an image **without a
   development** is shown in the previous source (camera or RAW), with its 1:1;
   "not developed yet (Shift+B)" says so (`TriApp::source_for`, feedback of 2026-10-20:
@@ -346,7 +347,10 @@ system one ("cold" measurements, experiments).
   bottom; **similarity slider** in the filter bar (stack icon: `Ctrl+G`): while
   adjusting, stacks stay collapsed, you see the resulting stacks (feedback of
   2026-10-20); **Shift** held while adjusting expands them, every other one on a lighter
-  background (`stack_band`); threshold remembered for the folder on release. **Stack
+  background (`stack_band`); threshold remembered for the folder on release.
+  Since 2026-10-21, a **strictness slider** like the blur one: centre computed from the
+  folder, to the right stricter (smaller stacks), double-click: back to the middle (see
+  `similarity.md`); likewise in the `Ctrl+G` window. **Stack
   mode** in full screen (`Ctrl+S`, bar button, inspired by Capture One's culling mode):
   ← / → browse the stack, hidden images included (at the end: stop, or back to the other
   end with `[gui.view] stack_wrap`), ↑ / ↓ go to the cover of the previous / next stack
@@ -471,7 +475,7 @@ system one ("cold" measurements, experiments).
   selected image (in full screen, it is on the image); its indicators wrap when the panel
   is narrow.
 - **Histogram and exposure warnings** (2026-10-17), computed by the engine on the
-  **sensor data** for a RAW, even when the camera JPEG is on screen (see
+  **sensor data** for a RAW, even when the camera render is on screen (see
   [exposure.md](exposure.md)); the drawing is in `histogram.rs`:
   - **histogram** at the top of the metadata panel, in the grid as in full screen
     (`i` shows or hides it); panel hidden: no histogram (request of 2026-10-17: the
@@ -522,7 +526,7 @@ system one ("cold" measurements, experiments).
 
 ## Full screen
 
-Designed for culling: in a fast pass, the **camera JPEG** serves as the base (available
+Designed for culling: in a fast pass, the **camera render** serves as the base (available
 within a few seconds for the whole folder) while the RAW renders are computed behind;
 then the sharpness of the candidates is checked **at 100 %**.
 
@@ -539,7 +543,7 @@ then the sharpness of the candidates is checked **at 100 %**.
   (`RawPreviews::Background`, default of the engine and of the command-line demo).
 - **What is displayed is always written** at the top left: position, name, "Camera
   JPEG", "RAW render", "RAW render · 100 %", "Thumbnail (preview being computed)", and
-  "computing 100 %" when applicable. The camera JPEG reflects the camera's settings
+  "computing 100 %" when applicable. The camera render reflects the camera's settings
   (contrast, film simulation); LibRaw's RAW render is more neutral, hence duller: this is
   expected.
 - **1:1**: `z` (centred), or double-click (the clicked point stays under the cursor).
@@ -565,7 +569,7 @@ then the sharpness of the candidates is checked **at 100 %**.
     as in Lightroom. As a last resort, the thumbnail (loaded in 1–2 ms) fills in while
     waiting.
   - RAW mode: the source stays RAW from one image to the next. If no RAW render is ready
-    yet for the new image, the camera JPEG is shown meanwhile, with the note "RAW render
+    yet for the new image, the camera render is shown meanwhile, with the note "RAW render
     in progress" (without it, users thought RAW mode was disabled: feedback of
     2026-10-16). Requests are sent **in priority order** (displayed image fitted, its 1:1,
     then the neighbours): sent in another order, a 100 % (~4.5 s, not interruptible) got
@@ -800,6 +804,24 @@ user's is touched), chains the captures (grid, full screen, right click, compari
 help), numbers the areas and converts to JPEG in `doc/manual-images/<langue>/`. The
 sharpness judgement is disabled there: on a folder of varied subjects (close-ups on a
 blurry background among landscapes), it wrongly flagged sharp photos.
+
+## Touch-ups of 2026-10-21
+
+- **Accent colour** (the theme's selection colour) for what is switched on: stars
+  (filter bar, rating bar, thumbnails; `[gui.colors] stars` for another colour), ring of
+  the chosen colour, [RAW] / [JPG] toggles (the rectangle only, no big square around it).
+  In the light theme, stars and rings use the dark variant of the accent
+  (`marks::accent_mark`): the pale blue was unreadable on white.
+- **Double-click on a slider: default value**, everywhere (like Lightroom): blur and
+  stacks back to the middle, stack time gap to `[similarity] max_gap_s`. Any new slider
+  must do the same.
+- **Blur slider**: all the way left, no photo is blurry (all visible; even at the most
+  lenient some were missing); in full screen it no longer refilters the grid (the image
+  being viewed left the filter and the image changed): refiltered on returning to the
+  grid.
+- **Progress bars** hidden for `[gui] progress_delay_ms` (400 ms) after a refilter: the
+  cache almost always answers first, a bar shown for 1/10 s was unreadable.
+- "Camera JPEG" becomes **"Camera render"**, the counterpart of "RAW render".
 
 ## Tests
 

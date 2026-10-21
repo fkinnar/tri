@@ -59,6 +59,22 @@ rotation de `b`, même d'une séance à l'autre), par le worker lourd (darktable
 machine), jamais tout le dossier en fond. Mesuré le 19/10/2026 (RAF X-T4, Mac Apple
 Silicon) : 8 à 10 s par image, dont ~6 s de démarrage de darktable.
 
+## Taille du développé (21/10/2026)
+
+`developed_size(xmp, taille)` : la taille de l'image que darktable produirait à pleine
+résolution, pour la résolution affichée en plein écran. Lue dans l'historique du
+sidecar (`darktable:history`, entrées avant `darktable:history_end`, dernier état de
+chaque module, instance principale) :
+
+- **`crop`** : ses paramètres sont quatre flottants 32 bits petit-boutistes en
+  hexadécimal, bords gauche, haut, droit et bas en fractions de l'image (vérifié sur de
+  vrais sidecars de l'utilisateur, darktable 5, crop v3) ;
+- **`flip`** : `-1` (`ffffffff`) suit l'orientation EXIF ; une autre valeur est une
+  orientation de darktable, largeur et hauteur échangées si le bit 4 est mis ;
+- **`ashift`**, **`clipping`**, **`rotatepixels`**, **`scalepixels`** actifs : taille
+  inconnue (`None`), plutôt qu'une taille fausse ; de même pour des paramètres
+  compressés (`gz…`).
+
 ## Dans l'interface
 
 En attendant le rendu, le rendu RAW (ou le boîtier) avec « développement darktable en

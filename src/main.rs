@@ -651,7 +651,8 @@ fn sharpness(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyR
 }
 
 /// Regroupement des images semblables : distance et écart de temps entre voisines, puis
-/// les groupes au seuil `threshold` (sinon celui de la configuration), pour le calibrer
+/// les groupes au seuil `threshold` (sinon le centre calculé d'après le dossier,
+/// `similarity::suggested_threshold`), pour le calibrer
 /// (voir `tri::similarity`).
 fn similarity_groups(
     settings: &EngineSettings,
@@ -689,7 +690,7 @@ fn similarity_groups(
         };
         println!("{}	{}	{d}	{gap}", name(i), name(i + 1));
     }
-    let threshold = threshold.unwrap_or(s.threshold);
+    let threshold = threshold.unwrap_or_else(|| tri::similarity::suggested_threshold(&links, s));
     let groups = tri::similarity::group(&links, threshold, s.max_gap_s);
     for g in &groups {
         let names: Vec<String> = g.clone().map(name).collect();

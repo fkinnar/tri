@@ -1,5 +1,20 @@
 # Historique
 
+## À venir
+
+- **Piles** : curseur de sévérité comme celui du flou ; au centre, le seuil calculé
+  d'après le dossier (coupure entre séries et changements de scène), à droite plus
+  strict (petites piles) ; retenu par dossier. `tri --groups` regroupe au centre calculé.
+- **Curseurs** : double-clic = valeur par défaut, partout. Flou : à fond à gauche, toutes
+  les images ; en plein écran, la grille n'est plus refiltrée avant le retour (l'image
+  regardée pouvait changer).
+- **Couleurs** : étoiles, couleur choisie et interrupteurs [RAW] / [JPG] dans la couleur
+  d'accent du thème (fini le jaune et le grand carré).
+- **Barre d'état** : plus de barres de progression éclair pendant un réglage
+  (`[gui] progress_delay_ms`).
+- « JPEG boîtier » devient « Rendu boîtier ».
+- **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
+
 ## 1.0.0-alpha.2 — 21/10/2026
 
 Deuxième version de test, la première publiée avec ses paquets sur la page Releases

@@ -107,7 +107,7 @@ action-core-stack-mode = Piles (grille ; plein écran : flèches gauche / droite
 action-core-stack-choose = Choisir comme couverture de la pile (sa préférée)
 stack-chosen = { $name } : couverture de sa pile
 stack-position = pile : { $n } / { $total }
-stack-slider-tip = Ressemblance : vers la droite, des piles plus grandes ; Maj pendant le réglage : piles dépliées ({ $keys } : réglages fins)
+stack-slider-tip = Sévérité des piles : au centre, la valeur calculée d'après le dossier ; vers la droite plus strict (petites piles), vers la gauche plus souple ; double-clic : retour au centre ; Maj pendant le réglage : piles dépliées ({ $keys } : réglages fins)
 blur-slider-tip = Sévérité du flou : vers la droite plus strict (plus de photos floues), vers la gauche plus souple ; au centre, les réglages. Double-clic : retour au centre
 sharpness-strictness = Sévérité de la netteté : { $value } % (0 : les réglages)
 stack-icon-tip = Clic droit : réglages fins ({ $keys })
@@ -158,7 +158,7 @@ action-core-view-zoom_fit = Zoom : ajusté (en grille et dans les dossiers, / re
 action-core-view-zoom_100 = Zoom : 100 %
 view-info-zoom = { " · " }{ $percent } %
 view-loupe-loading = 100 % en cours…
-action-core-view-source = Basculer JPEG boîtier / rendu RAW
+action-core-view-source = Basculer rendu boîtier / rendu RAW
 action-core-view-pan_left = Image zoomée : aller à gauche
 action-core-view-pan_right = Image zoomée : aller à droite
 action-core-view-pan_up = Image zoomée : aller en haut
@@ -262,7 +262,7 @@ view-info-preview-computing = { " " }· aperçu en cours de calcul
 view-info-raw-pending = { " " }· rendu RAW en cours
 view-info-full-computing = { " " }· calcul du 100 % en cours
 view-info-one-to-one-loading = { " " }· chargement du 1:1
-view-hint-raw = b : JPEG boîtier / RAW   z : 1:1   i : histogramme   w : zones   Échap : grille
+view-hint-raw = b : rendu boîtier / RAW   z : 1:1   i : histogramme   w : zones   Échap : grille
 view-hint-flat = z : 1:1   i : histogramme   w : zones   Échap : grille
 status-no-folder = aucun dossier
 status-images = { $n ->
@@ -275,7 +275,7 @@ status-selected = { $n ->
 }
 status-visual-mode = { " " }· mode visuel
 progress-thumbnails = vignettes
-progress-embedded = JPEG boîtier
+progress-embedded = rendu boîtier
 progress-previews = aperçus
 progress-histograms = histogrammes
 status-key-problems = { $n ->
@@ -352,8 +352,8 @@ export-contents-libraw = { $n ->
    *[other] { $n } RAW, rendu de base (LibRaw)
 }
 export-contents-embedded = { $n ->
-    [one] le JPEG boîtier de 1 RAW
-   *[other] le JPEG boîtier de { $n } RAW
+    [one] le rendu boîtier de 1 RAW
+   *[other] le rendu boîtier de { $n } RAW
 }
 export-contents-flat = { $n ->
     [one] 1 image déjà développée
@@ -370,7 +370,7 @@ export-create = sera créé
 export-goes-to = Destination : { $dest }
 export-no-darktable = darktable absent : rendu de base par LibRaw.
 export-passthrough = Sans recompression
-export-passthrough-tip = JPEG d'origine copié tel quel, JPEG boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
+export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-button = Exporter
 export-profile-edit = Retouche
 export-profile-asis = JPEG tel quel
@@ -450,13 +450,14 @@ drag-move-ctrl = déplacer (Ctrl : copier)
 drag-copy = copier
 groups-title = Regroupement des images semblables
 groups-enabled = Regrouper en piles
-groups-threshold = Écart toléré entre deux images voisines
-groups-threshold-tip = Plus haut : des piles plus grandes ; plus bas : seulement les rafales.
+groups-threshold = Sévérité (au centre : calculée d'après le dossier)
+groups-threshold-tip = Vers la droite : seulement les rafales ; vers la gauche : des piles plus grandes.
+groups-threshold-value = Seuil : { $threshold } (centre du dossier : { $centre })
 groups-gap = Écart de temps maximal
 groups-gap-tip = Deux images prises à plus d'intervalle ne sont jamais groupées (0 : sans limite).
 groups-summary = { $images } images : { $stacks } piles, { $groups } groupes en tout
 groups-computing = empreintes : { $done } / { $total }
-groups-default = Seuil par défaut
+groups-default = Retour au centre
 history-title = Historique des modifications
 history-start = État au lancement
 history-empty = Aucune modification pendant cette session.
@@ -593,10 +594,10 @@ folders-favorite-error = Favoris non enregistrés : { $error }
 ## Ce qui est affiché
 
 shown-thumbnail = Vignette (aperçu en cours de calcul)
-shown-embedded = JPEG boîtier
+shown-embedded = Rendu boîtier
 shown-raw = Rendu RAW
 shown-raw-full = Rendu RAW · 100 %
-shown-embedded-full = JPEG boîtier · 1:1
+shown-embedded-full = Rendu boîtier · 1:1
 shown-image-full = Image · 100 %
 shown-exposure = Analyse d'exposition
 shown-developed = Développé dans darktable

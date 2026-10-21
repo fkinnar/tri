@@ -158,7 +158,7 @@ cli-previews-start = { $n } images ({ $raws } RAW), thumbnails { $thumbnail } px
     [thumbnails] thumbnails first
    *[mixed] mixed
 }
-cli-previews-progress = thumbnails { $thumbnails }   camera JPEG { $embedded }   histograms { $histograms }   previews { $previews } { $percent } %   { $seconds } s
+cli-previews-progress = thumbnails { $thumbnails }   camera render { $embedded }   histograms { $histograms }   previews { $previews } { $percent } %   { $seconds } s
 cli-thumbnails-done = thumbnails done in { $time }
 cli-embedded-done = camera previews done in { $time } (the whole folder can be browsed)
 cli-all-done = done in { $time } ({ $ms } ms per image on average)
@@ -201,7 +201,7 @@ cli-dry-run = (--dry-run: nothing was changed)
 cli-export-unknown-profile = unknown export preset: { $profile } (presets: { $known })
 cli-export-plan = export “{ $profile }” ({ $summary }) to { $dest }:
 cli-export-libraw = darktable missing (or --libraw): basic LibRaw rendering
-cli-export-as-is-raw = the “{ $profile }” preset only applies to already developed images (applies_to): a RAW has no color space, its rendering needs one (another preset, or --embedded for its camera JPEG)
+cli-export-as-is-raw = the “{ $profile }” preset only applies to already developed images (applies_to): a RAW has no color space, its rendering needs one (another preset, or --embedded for its camera render)
 cli-export-raw-only = the “{ $profile }” preset only applies to rendering a RAW (applies_to)
 cli-export-passthrough = of which { $n } without recompression
 cli-export-done = { $n ->

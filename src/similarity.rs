@@ -32,8 +32,25 @@ pub struct SimilaritySettings {
     /// Poids de la composition dans la distance (0 à 1) ; le reste : les couleurs.
     pub shape_weight: f32,
     /// Seuil par défaut (distance de 0 à 1) : deux images voisines plus proches sont dans
-    /// le même groupe. Ajustable par dossier dans la fenêtre de regroupement.
+    /// le même groupe. Centre du curseur de sévérité quand il n'est pas calculé d'après le
+    /// dossier (`auto`), et repère des bornes de ce calcul.
     pub threshold: f32,
+    /// Centre du curseur calculé d'après le dossier (idée de l'utilisateur, 20/10/2026) :
+    /// la coupure qui sépare le mieux les petites distances (même série) des grandes
+    /// (changement de scène), voir [`suggested_threshold`].
+    pub auto: bool,
+    /// Liens connus (images voisines) en deçà desquels le centre reste `threshold`.
+    pub auto_min_links: usize,
+    /// Séparation minimale des deux familles de distances (0 à 1, part de la variance
+    /// expliquée par la coupure) : en deçà, pas de vraie coupure, le centre reste
+    /// `threshold`.
+    pub auto_separation: f32,
+    /// Bornes du centre calculé : entre `threshold / auto_range` et
+    /// `threshold × auto_range`.
+    pub auto_range: f32,
+    /// Étendue du curseur de sévérité : à fond à droite (plus strict, petites piles), le
+    /// seuil est divisé par `strictness_span` ; à fond à gauche, multiplié.
+    pub strictness_span: f32,
     /// Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
     /// dans le même groupe (secondes ; 0 : sans limite).
     pub max_gap_s: f32,
@@ -46,6 +63,11 @@ impl Default for SimilaritySettings {
             side: 64,
             shape_weight: 0.5,
             threshold: 0.25,
+            auto: true,
+            auto_min_links: 8,
+            auto_separation: 0.5,
+            auto_range: 2.0,
+            strictness_span: 3.0,
             max_gap_s: 60.0,
         }
     }
@@ -257,21 +279,77 @@ pub fn group(
     groups
 }
 
-/// Fichier des seuils par dossier, dans le dossier de données.
-const THRESHOLDS: &str = "group-thresholds.tsv";
-
-/// Seuil retenu pour le dossier `dir` (fenêtre de regroupement), s'il y en a un.
-pub fn folder_threshold(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
-    crate::folder::folder_value(data, THRESHOLDS, dir)
+/// Centre du curseur de sévérité pour les liens `links` d'un dossier : la coupure
+/// d'Otsu entre petites distances (même série) et grandes (changement de scène). Mesuré
+/// le 21/10/2026 sur trois vraies séances : 0,15 à 0,21 (seuil fixe : 0,25). Seuls
+/// comptent les liens que l'écart de temps ne coupe pas déjà. `settings.threshold` si
+/// le calcul est désactivé, s'il y a trop peu de liens ou pas de vraie coupure ; borné
+/// autour de lui (`auto_range`).
+pub fn suggested_threshold(links: &[Option<Link>], settings: &SimilaritySettings) -> f32 {
+    let fallback = settings.threshold;
+    if !settings.auto {
+        return fallback;
+    }
+    let gap = settings.max_gap_s;
+    let mut d: Vec<f32> = links
+        .iter()
+        .flatten()
+        .filter(|l| gap <= 0.0 || l.gap_s.is_none_or(|g| g <= gap))
+        .map(|l| l.distance)
+        .collect();
+    if d.len() < settings.auto_min_links.max(2) {
+        return fallback;
+    }
+    d.sort_by(f32::total_cmp);
+    let n = d.len() as f32;
+    let total: f32 = d.iter().sum();
+    let mean = total / n;
+    let variance = d.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / n;
+    // Distances toutes pareilles (aux arrondis près) : pas de coupure.
+    if variance <= 1e-8 {
+        return fallback;
+    }
+    // Variance entre les deux familles, maximale à la meilleure coupure.
+    let mut best = (0.0f32, fallback);
+    let mut below = 0.0;
+    for i in 1..d.len() {
+        below += d[i - 1];
+        let (w0, w1) = (i as f32 / n, 1.0 - i as f32 / n);
+        let (m0, m1) = (below / i as f32, (total - below) / (n - i as f32));
+        let between = w0 * w1 * (m0 - m1).powi(2);
+        if between > best.0 {
+            best = (between, (d[i - 1] + d[i]) / 2.0);
+        }
+    }
+    if best.0 / variance < settings.auto_separation {
+        return fallback;
+    }
+    let range = settings.auto_range.max(1.0);
+    best.1.clamp(fallback / range, fallback * range)
 }
 
-/// Retient `threshold` pour le dossier `dir` ; `None` : l'oublie (seuil par défaut).
-pub fn remember_threshold(
+/// Seuil à la sévérité `strictness` (-1 à 1, curseur des piles ; 0 : `centre`) : à
+/// droite plus strict (seuil plus bas, petites piles), comme le curseur du flou.
+pub fn with_strictness(centre: f32, strictness: f32, span: f32) -> f32 {
+    centre * span.max(1.0).powf(-strictness.clamp(-1.0, 1.0))
+}
+
+/// Fichier des sévérités par dossier, dans le dossier de données (remplace les seuils
+/// par dossier du 18/10/2026 : le centre se calcule d'après le dossier).
+const STRICTNESS: &str = "group-strictness.tsv";
+
+/// Sévérité retenue pour le dossier `dir` (curseur des piles), s'il y en a une.
+pub fn folder_strictness(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    crate::folder::folder_value(data, STRICTNESS, dir)
+}
+
+/// Retient `strictness` pour le dossier `dir` ; `None` : l'oublie (centre).
+pub fn remember_strictness(
     data: &std::path::Path,
     dir: &std::path::Path,
-    threshold: Option<f32>,
+    strictness: Option<f32>,
 ) -> std::io::Result<()> {
-    crate::folder::remember_folder_value(data, THRESHOLDS, dir, threshold)
+    crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
 }
 
 /// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.
@@ -386,22 +464,68 @@ mod tests {
     }
 
     #[test]
-    fn thresholds_are_remembered_per_folder() {
+    fn strictness_is_remembered_per_folder() {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path();
         let (a, b) = (
             std::path::Path::new("/photos/a"),
             std::path::Path::new("/photos/b"),
         );
-        assert_eq!(folder_threshold(data, a), None);
-        remember_threshold(data, a, Some(0.3)).unwrap();
-        remember_threshold(data, b, Some(0.1)).unwrap();
-        remember_threshold(data, a, Some(0.35)).unwrap();
-        assert_eq!(folder_threshold(data, a), Some(0.35));
-        assert_eq!(folder_threshold(data, b), Some(0.1));
-        remember_threshold(data, a, None).unwrap();
-        assert_eq!(folder_threshold(data, a), None, "oublié : seuil par défaut");
-        assert_eq!(folder_threshold(data, b), Some(0.1));
+        assert_eq!(folder_strictness(data, a), None);
+        remember_strictness(data, a, Some(0.3)).unwrap();
+        remember_strictness(data, b, Some(-0.5)).unwrap();
+        remember_strictness(data, a, Some(0.4)).unwrap();
+        assert_eq!(folder_strictness(data, a), Some(0.4));
+        assert_eq!(folder_strictness(data, b), Some(-0.5));
+        remember_strictness(data, a, None).unwrap();
+        assert_eq!(folder_strictness(data, a), None, "oubliée : au centre");
+        assert_eq!(folder_strictness(data, b), Some(-0.5));
+    }
+
+    #[test]
+    fn the_centre_is_the_cut_between_series_and_scene_changes() {
+        let link = |distance: f32, gap: f32| {
+            Some(Link {
+                distance,
+                gap_s: Some(gap),
+            })
+        };
+        let s = SimilaritySettings::default();
+        // Séries serrées (0,02–0,05) et changements de scène (0,30–0,40) : coupure entre.
+        let mut links: Vec<Option<Link>> = [0.02, 0.03, 0.05, 0.04, 0.02, 0.03, 0.04, 0.05]
+            .iter()
+            .map(|&d| link(d, 1.0))
+            .collect();
+        links.extend([0.30, 0.35, 0.40].iter().map(|&d| link(d, 5.0)));
+        let centre = suggested_threshold(&links, &s);
+        assert!((0.05..0.30).contains(&centre), "{centre}");
+        // Changements de scène hors du délai : déjà coupés, ils ne comptent pas.
+        let mut far = links.clone();
+        far.push(link(0.9, 600.0));
+        assert_eq!(suggested_threshold(&far, &s), centre);
+        // Borné autour du réglage.
+        let tight: Vec<Option<Link>> = (0..12)
+            .map(|i| link(if i % 2 == 0 { 0.001 } else { 0.002 }, 1.0))
+            .collect();
+        assert_eq!(suggested_threshold(&tight, &s), s.threshold / s.auto_range);
+        // Trop peu de liens, ou calcul désactivé : le réglage.
+        assert_eq!(suggested_threshold(&links[..3], &s), s.threshold);
+        let off = SimilaritySettings { auto: false, ..s };
+        assert_eq!(suggested_threshold(&links, &off), s.threshold);
+        // Distances toutes pareilles : pas de coupure.
+        let flat: Vec<Option<Link>> = (0..10).map(|_| link(0.2, 1.0)).collect();
+        assert_eq!(suggested_threshold(&flat, &s), s.threshold);
+    }
+
+    #[test]
+    fn strictness_lowers_the_threshold_to_the_right() {
+        assert_eq!(with_strictness(0.2, 0.0, 3.0), 0.2);
+        assert!((with_strictness(0.2, 1.0, 3.0) - 0.2 / 3.0).abs() < 1e-6);
+        assert!((with_strictness(0.2, -1.0, 3.0) - 0.6).abs() < 1e-6);
+        assert_eq!(
+            with_strictness(0.2, 5.0, 3.0),
+            with_strictness(0.2, 1.0, 3.0)
+        );
     }
 
     #[test]

@@ -394,7 +394,9 @@ Proposition : sortir cette étape du logiciel de développement.
 - **Conventions de l'interface** (18/10/2026) : tout champ où l'on tape un **chemin
   existant** a la complétion par Tab (`gui/src/path_field.rs`, moteur
   `files::complete_dir`) ; dans les boîtes, la **main** apparaît sur tout ce qui se
-  clique (`interact_cursor` dans le cadre commun `Dialog`) ; les noms techniques
+  clique (`interact_cursor` dans le cadre commun `Dialog`) ; **double-clic sur un
+  curseur = valeur par défaut** (21/10/2026, comme Lightroom ; toute nouvelle glissière
+  aussi) ; les noms techniques
   (sections, identifiants) sont accompagnés d'un **libellé lisible et traduit**
   (« Couleurs [gui.colors] »).
 - Scripts/outils paramétrables plutôt que multipliés (un script avec options plutôt que N
@@ -679,9 +681,19 @@ Après les groupes (en cours), dans l'ordre à décider au fil de l'eau :
   interrupteurs à icône RAW et JPG dans la barre des filtres (21/10/2026). Résolution en
   plein écran (version : cadre et préréglage d'export ; pendant le recadrage, le cadre en
   cours) ; carte de netteté aussi en vue ajustée, **seuil lié au curseur de sévérité**,
-  curseur dans le bandeau du plein écran et `Ctrl+J` / `Ctrl+K` ; **à faire** : vraie résolution
-  du développé, en lisant le recadrage darktable (module `crop`, `darktable:history`) et
-  les modules qui changent la taille (redressement, perspective).
+  curseur dans le bandeau du plein écran et `Ctrl+J` / `Ctrl+K` ; vraie résolution
+  du développé **faite** le 21/10/2026 (module `crop` lu dans `darktable:history`,
+  `develop::developed_size` ; rien si redressement ou perspective).
+- **Point du 21/10/2026** (matin) : priorités de l'utilisateur — curseur des piles
+  inversé à centre calculé (**fait**), vraie résolution du développé darktable (**faite**),
+  descriptions en anglais de `config.example.toml` ; Windows l'après-midi (compilation
+  par l'utilisateur, retours de son fils). Puis **bêta 1 dans quelques jours**, et une
+  **feuille de route publiée** (`ROADMAP.md`, brouillon à valider : ce qui est bloqué
+  pour la V1 / bêta et ce qui part après) pour chercher contributeurs et testeurs. À y
+  mettre : fusion de dossiers, mots-clés, le retour du testeur « Maj+clic / Ctrl+clic
+  ne sélectionnent pas dans la grille » (à vérifier), et **écrire le recadrage d'une
+  version dans le sidecar** au format des logiciels de développement (darktable,
+  Lightroom `crs:Crop*`, Capture One…) pour le retrouver en les ouvrant.
 - **Vocabulaire** (20/10/2026) : « préréglage d'export » et « préréglage de recadrage »
   dans l'interface (« profil » réservé aux profils couleur) ; noms du code et clés TOML
   (`[export.profiles]`) inchangés. Fenêtre de réglages : une entrée par famille, liste

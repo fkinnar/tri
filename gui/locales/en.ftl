@@ -108,7 +108,7 @@ action-core-stack-mode = Stacks (grid; full screen: left / right arrows inside t
 action-core-stack-choose = Make it the stack cover (its pick)
 stack-chosen = { $name }: cover of its stack
 stack-position = stack: { $n } / { $total }
-stack-slider-tip = Similarity: to the right, larger stacks; hold Shift while adjusting to expand the stacks ({ $keys }: fine settings)
+stack-slider-tip = Stack strictness: in the middle, the value computed from the folder; to the right stricter (smaller stacks), to the left more lenient; double-click: back to the middle; hold Shift while adjusting to expand the stacks ({ $keys }: fine settings)
 blur-slider-tip = Blur strictness: to the right stricter (more blurry photos), to the left more lenient; in the middle, the settings. Double click: back to the middle
 sharpness-strictness = Sharpness strictness: { $value } % (0: the settings)
 stack-icon-tip = Right click: fine settings ({ $keys })
@@ -159,7 +159,7 @@ action-core-view-zoom_fit = Zoom: fit (in the grid and the folders, / searches)
 action-core-view-zoom_100 = Zoom: 100 %
 view-info-zoom = { " · " }{ $percent } %
 view-loupe-loading = loading 100 %…
-action-core-view-source = Switch camera JPEG / RAW render
+action-core-view-source = Switch camera render / RAW render
 action-core-view-pan_left = Zoomed image: move left
 action-core-view-pan_right = Zoomed image: move right
 action-core-view-pan_up = Zoomed image: move up
@@ -263,7 +263,7 @@ view-info-preview-computing = { " " }· preview being computed
 view-info-raw-pending = { " " }· RAW render in progress
 view-info-full-computing = { " " }· computing 100 %
 view-info-one-to-one-loading = { " " }· loading 1:1
-view-hint-raw = b: camera JPEG / RAW   z: 1:1   i: histogram   w: zones   Esc: grid
+view-hint-raw = b: camera render / RAW   z: 1:1   i: histogram   w: zones   Esc: grid
 view-hint-flat = z: 1:1   i: histogram   w: zones   Esc: grid
 status-no-folder = no folder
 status-images = { $n ->
@@ -273,7 +273,7 @@ status-images = { $n ->
 status-selected = { $n } selected
 status-visual-mode = { " " }· visual mode
 progress-thumbnails = thumbnails
-progress-embedded = camera JPEG
+progress-embedded = camera render
 progress-previews = previews
 progress-histograms = histograms
 status-key-problems = { $n ->
@@ -350,8 +350,8 @@ export-contents-libraw = { $n ->
    *[other] { $n } RAW, basic rendering (LibRaw)
 }
 export-contents-embedded = { $n ->
-    [one] the camera JPEG of 1 RAW
-   *[other] the camera JPEG of { $n } RAW
+    [one] the camera render of 1 RAW
+   *[other] the camera render of { $n } RAW
 }
 export-contents-flat = { $n ->
     [one] 1 already developed image
@@ -368,7 +368,7 @@ export-create = will be created
 export-goes-to = Destination: { $dest }
 export-no-darktable = darktable missing: basic LibRaw rendering.
 export-passthrough = Without recompression
-export-passthrough-tip = Original JPEG copied as is, camera JPEG written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
+export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-button = Export
 export-profile-edit = Editing
 export-profile-asis = JPEG as is
@@ -451,13 +451,14 @@ drag-move-ctrl = move (Ctrl: copy)
 drag-copy = copy
 groups-title = Grouping of similar images
 groups-enabled = Group into stacks
-groups-threshold = Difference allowed between neighbouring images
-groups-threshold-tip = Higher: larger stacks; lower: only bursts.
+groups-threshold = Strictness (middle: computed from the folder)
+groups-threshold-tip = To the right: only bursts; to the left: larger stacks.
+groups-threshold-value = Threshold: { $threshold } (folder centre: { $centre })
 groups-gap = Maximum time gap
 groups-gap-tip = Two images taken further apart are never grouped (0: no limit).
 groups-summary = { $images } images: { $stacks } stacks, { $groups } groups in all
 groups-computing = signatures: { $done } / { $total }
-groups-default = Default threshold
+groups-default = Back to the middle
 history-title = History of changes
 history-start = State at launch
 history-empty = No changes in this session.
@@ -594,10 +595,10 @@ folders-favorite-error = Favourites not saved: { $error }
 ## What is shown
 
 shown-thumbnail = Thumbnail (preview being computed)
-shown-embedded = Camera JPEG
+shown-embedded = Camera render
 shown-raw = RAW render
 shown-raw-full = RAW render · 100 %
-shown-embedded-full = Camera JPEG · 1:1
+shown-embedded-full = Camera render · 1:1
 shown-image-full = Image · 100 %
 shown-exposure = Exposure analysis
 shown-developed = Developed in darktable

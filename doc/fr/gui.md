@@ -14,7 +14,7 @@ et [config.example.toml](../config.example.toml). Une configuration invalide est
 rouge dans la barre d'état (détail au survol), et les réglages par défaut sont utilisés.
 
 Toujours en **`--release`** pour s'en servir : en build de débogage, le code Rust n'est pas
-optimisé, et le 1:1 du JPEG boîtier passe de 0,4 s à 2 s (rotation, conversion pour le GPU),
+optimisé, et le 1:1 du rendu boîtier passe de 0,4 s à 2 s (rotation, conversion pour le GPU),
 le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celui du système
 (mesures « à froid », essais).
 
@@ -30,7 +30,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Barre d'état** : progression en **gris discret** (`[gui.colors] progress`, gris du
   thème par défaut) plutôt qu'en couleur d'accent, qui attirait le regard sur une
   information de fond (retour du 17/10/2026) ; dossier, nombre d'images (dont RAW), filtre, progression des vignettes,
-  des aperçus « JPEG boîtier » (masquée s'il n'y a aucun RAW) et des aperçus standard, nom
+  des aperçus « rendu boîtier » (masquée s'il n'y a aucun RAW) et des aperçus standard, nom
   de l'image sélectionnée.
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
@@ -113,7 +113,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`[gui] remember_display = false` : toujours elle). Écrit seulement quand l'état change
   (fichier temporaire puis renommage), jamais pendant une capture automatique ni dans les
   tests (dossier de données temporaire).
-- **Aide-mémoire des touches** en haut à droite du plein écran (« b : JPEG boîtier / RAW,
+- **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
 - **1:1 depuis la grille** (17/10/2026) : `z` (ou le bouton « 1:1 » du bandeau) ouvre
@@ -197,15 +197,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   aux images sélectionnées visibles. Cadre orange (`[gui.colors] marked`).
 - **Développé dans darktable** (19/10/2026, voir `develop.md`) : `Maj+B` ou le bouton
   diaphragme lance le rendu (quelques secondes, gardé en cache) ; ensuite seulement, `b`
-  passe du JPEG boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
+  passe du rendu boîtier au rendu RAW puis au développé ; collimateur et zones masqués sur le développé.
   **Résolution** dans la ligne d'information (21/10/2026, `TriApp::shown_resolution`) :
   celle de l'image à 100 % dans la source affichée (1:1 chargé, sinon dimensions des
-  métadonnées ; JPEG boîtier : `Metadata::embedded_size`, lue dans l'en-tête du JPEG
+  métadonnées ; rendu boîtier : `Metadata::embedded_size`, lue dans l'en-tête du JPEG
   embarqué) ; pour une version, son cadre, réduit au côté long de son préréglage
   d'export ; **pendant le recadrage**, le cadre en cours et le préréglage d'export de la
-  barre (en direct). Rien pour le développé : darktable rend à la
-  taille de l'aperçu, son recadrage compris ; la vraie taille demandera de lire ce
-  recadrage dans le sidecar (à faire).
+  barre (en direct). Développé (21/10/2026) : darktable rend à la
+  taille de l'aperçu ; la vraie taille, l'image entière recadrée dans darktable, se lit
+  dans le sidecar (`develop::developed_size`, relue quand il change) ; rien avec un
+  redressement ou une perspective (taille inconnue plutôt que fausse).
   Le choix « développé » reste d'une image à l'autre, mais une image **sans
   développement** se montre dans la source d'avant (boîtier ou RAW), avec son 1:1 ;
   « pas encore développé (Maj+B) » le dit (`TriApp::source_for`, retour du 20/10/2026 :
@@ -358,7 +359,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   bas ; **curseur de similarité** dans la barre des filtres (icône de
   pile : `Ctrl+G`) : pendant le réglage, les piles restent repliées, on voit les piles
   obtenues (retour du 20/10/2026) ; **Maj** tenue pendant le réglage les déplie, une sur
-  deux sur un fond plus clair (`stack_band`) ; seuil retenu pour le dossier au lâcher. **Mode pile** en
+  deux sur un fond plus clair (`stack_band`) ; seuil retenu pour le dossier au lâcher.
+  Depuis le 21/10/2026, **curseur de sévérité** comme celui du flou : centre calculé
+  d'après le dossier, à droite plus strict (petites piles), double-clic : retour au
+  centre (voir `similarity.md`) ; de même dans la fenêtre `Ctrl+G`. **Mode pile** en
   plein écran (`Ctrl+S`, bouton du bandeau, inspiré du mode tri de Capture One) : ← / →
   parcourent la pile, images cachées comprises (au bout : arrêt, ou retour à l'autre bout
   avec `[gui.view] stack_wrap`), ↑ / ↓ passent à la couverture de la pile d'avant /
@@ -488,7 +492,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   montre aussi l'**histogramme** de l'image sélectionnée (en plein écran, il est sur
   l'image) ; ses indicateurs passent à la ligne quand le panneau est étroit.
 - **Histogramme et alertes d'exposition** (17/10/2026), calculés par le moteur sur les
-  **données du capteur** pour un RAW, même quand le JPEG boîtier est à l'écran (voir
+  **données du capteur** pour un RAW, même quand le rendu boîtier est à l'écran (voir
   [exposure.md](exposure.md)) ; le dessin est dans `histogram.rs` :
   - **histogramme** en haut du panneau des métadonnées, en grille comme en plein écran
     (`i` l'affiche ou le masque) ; panneau masqué : pas d'histogramme (demande du
@@ -558,7 +562,7 @@ puis on vérifie la netteté des candidates **à 100 %**.
   (`RawPreviews::Background`, défaut du moteur et de la démo en ligne de commande).
 - **Ce qui est affiché est toujours écrit** en haut à gauche : position, nom, « JPEG
   boîtier », « Rendu RAW », « Rendu RAW · 100 % », « Vignette (aperçu en cours de calcul) »,
-  et « calcul du 100 % en cours » le cas échéant. Le JPEG boîtier reflète les réglages du
+  et « calcul du 100 % en cours » le cas échéant. Le rendu boîtier reflète les réglages du
   boîtier (contraste, simulation de film) ; le rendu RAW de LibRaw est plus neutre, donc
   plus terne : c'est attendu.
 - **1:1** : `z` (centré), ou double-clic (le point cliqué reste sous le curseur). Glisser
@@ -582,7 +586,7 @@ puis on vérifie la netteté des candidates **à 100 %**.
     instant puis net, comme dans Lightroom. En dernier recours, la vignette (chargée en
     1–2 ms) tient lieu d'attente.
   - Mode RAW : la source reste RAW d'une image à l'autre. Si aucun rendu RAW n'est encore
-    prêt pour la nouvelle image, le JPEG boîtier est affiché en attendant, avec la mention
+    prêt pour la nouvelle image, le rendu boîtier est affiché en attendant, avec la mention
     « rendu RAW en cours » (sans elle, on croyait le mode RAW désactivé : retour du
     16/10/2026). Les demandes partent **dans l'ordre des priorités** (image affichée
     ajustée, son 1:1, puis les voisines) : envoyées dans un autre ordre, un 100 % (~4,5 s,
@@ -823,6 +827,24 @@ de données (rien de l'utilisateur n'est touché), enchaîne les captures (grill
 `doc/manual-images/<langue>/`. Le jugement de netteté y est désactivé : sur un dossier de
 sujets variés (gros plans sur fond flou parmi des paysages), il marquait à tort des
 photos nettes.
+
+## Retouches du 21/10/2026
+
+- **Couleur d'accent** (celle de la sélection du thème) pour ce qui est allumé : étoiles
+  (barre des filtres, bandeau, vignettes ; `[gui.colors] stars` pour une autre couleur),
+  anneau de la couleur choisie, interrupteurs [RAW] / [JPG] (le rectangle seul, plus de
+  grand carré autour). En thème clair, étoiles et anneaux prennent la variante foncée
+  de l'accent (`marks::accent_mark`) : le bleu pâle ne se lisait pas sur le blanc.
+- **Double-clic sur un curseur : valeur par défaut**, partout (comme Lightroom) : flou et
+  piles au centre, écart de temps des piles à `[similarity] max_gap_s`. Toute nouvelle
+  glissière doit faire de même.
+- **Curseur du flou** : à fond à gauche, aucune photo floue (toutes visibles, même au
+  plus souple il en manquait) ; en plein écran, il ne refiltre plus la grille (l'image
+  regardée sortait du filtre et l'image changeait) : refiltrage au retour à la grille.
+- **Barres de progression** masquées `[gui] progress_delay_ms` (400 ms) après un
+  refiltrage : le cache répond presque toujours avant, une barre montrée 1/10 s ne se
+  lisait pas.
+- « JPEG boîtier » devient **« Rendu boîtier »**, pendant de « Rendu RAW ».
 
 ## Tests
 

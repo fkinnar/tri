@@ -343,8 +343,23 @@ side = 64
 # couleurs.
 shape_weight = 0.5
 # Seuil par défaut (distance de 0 à 1) : deux images voisines plus proches vont dans le
-# même groupe. Ajustable pour chaque dossier dans la fenêtre de regroupement.
+# même groupe. Centre du curseur des piles quand il n'est pas calculé d'après le dossier
+# (auto), et repère des bornes de ce calcul.
 threshold = 0.25
+# Centre du curseur des piles calculé d'après le dossier : la coupure qui sépare le mieux
+# les images d'une même série des changements de scène.
+auto = true
+# Images voisines (liens connus) en deçà desquelles le centre reste threshold.
+auto_min_links = 8
+# Séparation minimale entre séries et changements de scène (0 à 1) : en deçà, pas de
+# vraie coupure, le centre reste threshold.
+auto_separation = 0.5
+# Bornes du centre calculé : entre threshold / auto_range et threshold × auto_range.
+auto_range = 2.0
+# Étendue du curseur des piles : à fond à droite (plus strict, petites piles), le seuil
+# est divisé par cette valeur ; à fond à gauche, multiplié. La sévérité choisie est
+# retenue pour chaque dossier.
+strictness_span = 3.0
 # Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
 # groupées (secondes ; 0 : sans limite).
 max_gap_s = 60.0
@@ -392,6 +407,9 @@ load_budget_ms = 8
 # terminées (false : toujours affichées).
 progress_width = 160.0
 progress_hide_done = true
+# Délai avant d'afficher les barres de progression après un changement de filtre (ms) :
+# souvent tout est déjà en cache, une barre montrée un instant ne se lit pas.
+progress_delay_ms = 400
 # Côté des boutons à icône du bandeau de notation (avance automatique, image précédente /
 # suivante), en points.
 bar_icon_size = 24.0
@@ -677,8 +695,9 @@ badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
-# Notes : étoiles, pastilles accepté / rejeté, couleurs de notation.
-stars = "#f0c440"
+# Notes : étoiles (absent : couleur d'accent du thème), pastilles accepté / rejeté,
+# couleurs de notation.
+# stars = "#f0c440"
 accepted = "#46aa5a"
 rejected = "#d74646"
 red = "#e14141"

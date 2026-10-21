@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn labels_say_what_is_shown() {
-        assert_eq!(label(MediaKind::Raw, Level::Embedded), "JPEG boîtier");
+        assert_eq!(label(MediaKind::Raw, Level::Embedded), "Rendu boîtier");
         assert_eq!(label(MediaKind::Raw, Level::Standard), "Rendu RAW");
         assert_eq!(label(MediaKind::Flat, Level::Standard), "Image");
         assert!(label(MediaKind::Raw, Level::Full).contains("100 %"));

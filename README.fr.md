@@ -1,7 +1,7 @@
 # tri
 
 **Visionneuse RAW rapide pour trier une séance photo**, sous macOS et Linux (Windows en
-cours) : vignettes de tout un dossier en quelques secondes, plein écran en JPEG boîtier
+cours) : vignettes de tout un dossier en quelques secondes, plein écran en rendu boîtier
 ou en vrai rendu RAW, notes (étoiles, couleurs, accepté / rejeté) écrites en XMP et lues
 par darktable, digiKam, Lightroom…, filtres, piles d'images semblables, netteté,
 histogramme RAW, zoom et loupe, déchargement de cartes. Entièrement pilotable au
@@ -46,7 +46,7 @@ Détails (Windows, options, HEIC) : [doc/fr/build.md](doc/fr/build.md).
 - `F1` ou `?` : toutes les touches, avec une recherche. `Ctrl+,` : les réglages (dont le
   jeu de raccourcis, le thème « gris neutre », la langue).
 - Notes : `0`–`5` étoiles, `6`–`9` couleurs, `Maj+P` / `Maj+X` accepté / rejeté.
-- `Entrée` plein écran, `z` 100 %, `b` JPEG boîtier ou rendu RAW, `/` rechercher.
+- `Entrée` plein écran, `z` 100 %, `b` rendu boîtier ou rendu RAW, `/` rechercher.
 
 ## Documentation
 

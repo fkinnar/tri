@@ -37,11 +37,28 @@ Calcul : ~50 ms par RAF (ouverture LibRaw et JPEG embarqué réduit), workers l�
 Restent (décidé : plus tard) : corrections à la main (fusionner, couper), groupes non
 contigus (même sujet à deux moments).
 
-## Seuil par dossier
+## Centre calculé d'après le dossier, curseur de sévérité (21/10/2026)
 
-`folder_threshold` / `remember_threshold` : le seuil choisi dans la fenêtre de
-regroupement, retenu pour chaque dossier (`group-thresholds.tsv` du dossier de données) ;
-remis au défaut, il est oublié.
+Idée de l'utilisateur : même logique que le curseur du flou. Le curseur des piles va de
+-1 à 1 ; **au centre**, le seuil calculé d'après le dossier ; **à droite plus strict**
+(seuil plus bas, petites piles : seulement les rafales), **à gauche plus souple** (piles
+plus grandes) ; double-clic : retour au centre.
+
+- `suggested_threshold` : la coupure d'**Otsu** sur les distances entre voisines (celle
+  qui sépare le mieux les petites distances, même série, des grandes, changement de
+  scène). Les liens déjà coupés par l'écart de temps ne comptent pas. Repli sur
+  `threshold` si `auto = false`, s'il y a moins de `auto_min_links` liens, ou si la
+  séparation (part de la variance expliquée par la coupure) reste sous
+  `auto_separation` ; borné entre `threshold / auto_range` et `threshold × auto_range`.
+  Mesuré sur trois vraies séances (17/10/2026) : 0,21, 0,16 et 0,15 (séparation 0,66 à
+  0,77), contre 0,25 fixe.
+- `with_strictness(centre, s, strictness_span)` : `centre × span^(-s)` (×3 à ÷3 par
+  défaut).
+- `folder_strictness` / `remember_strictness` : la sévérité choisie, retenue pour chaque
+  dossier (`group-strictness.tsv` du dossier de données) ; au centre, elle est oubliée.
+  Les seuils par dossier d'avant (`group-thresholds.tsv`) ne sont plus lus.
+- `tri <dossier> --groups` regroupe au centre calculé (`--threshold X` pour imposer un
+  seuil).
 
 ## Couvertures choisies
 

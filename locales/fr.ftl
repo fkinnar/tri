@@ -159,7 +159,7 @@ cli-previews-start = { $n } images ({ $raws } RAW), vignettes { $thumbnail } px,
     [thumbnails] vignettes d'abord
    *[mixed] mélangé
 }
-cli-previews-progress = vignettes { $thumbnails }   JPEG boîtier { $embedded }   histogrammes { $histograms }   aperçus { $previews } { $percent } %   { $seconds } s
+cli-previews-progress = vignettes { $thumbnails }   rendu boîtier { $embedded }   histogrammes { $histograms }   aperçus { $previews } { $percent } %   { $seconds } s
 cli-thumbnails-done = vignettes terminées en { $time }
 cli-embedded-done = aperçus boîtier terminés en { $time } (tout le dossier consultable)
 cli-all-done = terminé en { $time } ({ $ms } ms par image en moyenne)
@@ -202,7 +202,7 @@ cli-dry-run = (--dry-run : rien n'a été modifié)
 cli-export-unknown-profile = préréglage d'export inconnu : { $profile } (préréglages : { $known })
 cli-export-plan = export « { $profile } » ({ $summary }) vers { $dest } :
 cli-export-libraw = darktable absent (ou --libraw) : rendu de base par LibRaw
-cli-export-as-is-raw = le préréglage « { $profile } » ne s'applique qu'aux images déjà développées (applies_to) : un RAW n'a pas d'espace couleur, son rendu doit en recevoir un (autre préréglage, ou --embedded pour son JPEG boîtier)
+cli-export-as-is-raw = le préréglage « { $profile } » ne s'applique qu'aux images déjà développées (applies_to) : un RAW n'a pas d'espace couleur, son rendu doit en recevoir un (autre préréglage, ou --embedded pour son rendu boîtier)
 cli-export-raw-only = le préréglage « { $profile } » ne s'applique qu'au rendu d'un RAW (applies_to)
 cli-export-passthrough = dont { $n } sans recompression
 cli-export-done = { $n ->
