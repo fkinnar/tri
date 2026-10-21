@@ -5743,12 +5743,13 @@ impl TriApp {
                     }
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
-                // la barre des filtres), précédé de la goutte (posés de droite à gauche).
+                // la barre des filtres), précédé du triangle de netteté (posés de droite à
+                // gauche).
                 if self.mode == Mode::View && self.peaking {
                     ui.separator();
                     self.blur_slider(ui);
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
-                    marks::blur_drop(ui.painter(), rect, Color32::from(colors.blur_drop));
+                    marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
             });
         });
