@@ -1542,7 +1542,7 @@ impl TriApp {
         if t != self.blur_strictness {
             self.set_blur_strictness(t);
         }
-        if slider.drag_stopped() || slider.double_clicked() {
+        if slider.drag_stopped() || slider.double_clicked_slider(ui) {
             self.remember_strictness();
         }
     }
@@ -6051,7 +6051,7 @@ impl TriApp {
                     self.grouping_preview = adjusting;
                     self.stacks_dirty = true;
                 }
-                if slider.drag_stopped() || slider.double_clicked() {
+                if slider.drag_stopped() || slider.double_clicked_slider(ui) {
                     self.remember_group_strictness();
                 }
                 // Tout déplier / tout replier (Maj+S), à côté du curseur.
@@ -6938,7 +6938,7 @@ impl TriApp {
                             .step_by(0.05)
                             .show_value(false),
                     )
-                    .double_clicked()
+                    .double_clicked_slider(ui)
                 {
                     strictness = 0.0;
                 }
@@ -6952,7 +6952,7 @@ impl TriApp {
                             .step_by(5.0)
                             .suffix(" s"),
                     )
-                    .double_clicked()
+                    .double_clicked_slider(ui)
                 {
                     gap = default_gap;
                 }
@@ -7522,6 +7522,23 @@ enum StatusClick {
     RetryEject,
 }
 
+/// Double-clic sur un curseur (valeur par défaut, comme Lightroom) : le curseur d'egui ne
+/// détecte que le glisser (`Sense::drag`), jamais de double-clic ; on le lit donc
+/// dans les entrées, pointeur sur le curseur.
+trait SliderDoubleClick {
+    fn double_clicked_slider(&self, ui: &Ui) -> bool;
+}
+
+impl SliderDoubleClick for egui::Response {
+    fn double_clicked_slider(&self, ui: &Ui) -> bool {
+        self.hovered()
+            && ui.input(|i| {
+                i.pointer
+                    .button_double_clicked(egui::PointerButton::Primary)
+            })
+    }
+}
+
 /// Curseur de sévérité (-1 à 1, centre 0) de largeur `width`, avec un repère au
 /// centre ; un double-clic y revient. Rend la réponse du curseur et la nouvelle valeur. Flou et
 /// piles (même logique, idée de l'utilisateur du 20/10/2026) : à droite plus strict.
@@ -7540,7 +7557,7 @@ fn strictness_slider(ui: &mut Ui, width: f32, value: f32, tip: String) -> (egui:
         ],
         egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
     );
-    if slider.double_clicked() {
+    if slider.double_clicked_slider(ui) {
         t = 0.0;
     }
     (slider, t)
@@ -8662,6 +8679,49 @@ mod tests {
         assert_eq!(h.state().files.len(), 3, "pas pendant le plein écran");
         press(&mut h, Key::Escape, Modifiers::NONE);
         run_until(&mut h, |app| app.files.len() == 4);
+    }
+
+    #[test]
+    fn double_clicking_a_slider_resets_it() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        // Curseur du flou, montré avec un filtre sur la netteté.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::B, Modifiers::NONE);
+        h.state_mut().blur_strictness = 0.7;
+        h.run_steps(2);
+        // Deux vrais clics de souris au quart gauche (le curseur d'egui ne voit que le
+        // glisser ; un clic seul y amène la valeur, loin du centre).
+        let rect = h
+            .query_all_by_role(egui::accesskit::Role::Slider)
+            .next()
+            .expect("curseur du flou")
+            .rect();
+        let at = pos2(rect.left() + rect.width() * 0.25, rect.center().y);
+        let click = |h: &mut Harness<'_, TriApp>| {
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                h.run_steps(1);
+            }
+        };
+        // Le banc d'essai avance de 0,5 s par image : délai du double-clic élargi.
+        h.ctx
+            .options_mut(|o| o.input_options.max_double_click_delay = 5.0);
+        h.input_mut().events.push(egui::Event::PointerMoved(at));
+        h.run_steps(1);
+        click(&mut h);
+        assert!(
+            h.state().blur_strictness < -0.2,
+            "un clic : la valeur sous le pointeur"
+        );
+        click(&mut h);
+        h.run_steps(1);
+        assert_eq!(h.state().blur_strictness, 0.0, "double-clic : le centre");
     }
 
     #[test]
