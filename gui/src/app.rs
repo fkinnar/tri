@@ -10560,6 +10560,11 @@ mod tests {
         assert_eq!(h.state().export_log, log);
         // Clic recommencé si le bouton a bougé (barre d'état : calculs de fond qui finissent).
         run_until(&mut h, |app| app.progress.iter().all(|p| p.done >= p.total));
+        assert_eq!(
+            h.state().notice.as_ref().map(|n| &n.0),
+            h.state().export_notice.as_ref(),
+            "bilan de l'export remplacé dans la barre d'état"
+        );
         for _ in 0..5 {
             h.get_by_label("Rapport d'export").click();
             h.run_steps(2);

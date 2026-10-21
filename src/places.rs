@@ -1297,6 +1297,10 @@ mod tests {
                 PathBuf::from("/home/fab/srv")
             ]
         );
+        // GVFS : Linux seulement ; « : » est interdit dans un nom de dossier sous Windows.
+        if cfg!(windows) {
+            return;
+        }
         let gvfs = tempfile::tempdir().unwrap();
         for d in [
             "smb-share:server=nas.local,share=photo",
