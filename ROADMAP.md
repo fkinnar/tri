@@ -1,0 +1,64 @@
+# tri roadmap
+
+*[Version française](ROADMAP.fr.md)*
+
+> **Frozen on 2026-10-21.** The beta 1 list no longer grows: any new idea goes to "after
+> V1", except bugs. Feedback goes through the repository's *issues*.
+
+## Already there (alpha 3)
+
+Grid and full screen (camera render, RAW render, 1:1, continuous zoom, loupe), XMP
+ratings compatible with darktable / Lightroom / digiKam, filters (ratings, sharpness,
+exposure, invert, name search), stacks of similar photos, sharpness (score, map),
+histogram and exposure zones, comparison, multiple selection, files and folders (rename,
+trash, copy / move, drag and drop, RAW+JPEG pairs optional), undo, card offload, export
+presets, cropped versions, darktable development, overlays, settings in the interface,
+classic and vim shortcuts, French and English. Packages for macOS (`.dmg`), Linux
+(`.tar.gz`) and Windows (`.msi`, `.zip`).
+
+## Beta 1 (public)
+
+| Topic | Details |
+|---|---|
+| Windows testers' feedback | Tries on real machines (paths, drives, eject, trash, AZERTY keyboard, high-density screens), bugs found |
+| Mouse selection | Shift+click / Ctrl+click in the grid (tester feedback, to be checked on Windows) |
+| Testers' manual | Screenshots redone with real photos (RAW, focus point, histogram) |
+| Check for updates | On demand (help, `tri --check-update`): a new version on the Releases page? No notification nor automatic install |
+
+The beta is **not signed**: macOS and Windows warn on first launch, the steps are in the
+README.
+
+## V1
+
+| Topic | Details |
+|---|---|
+| Signing | macOS: Developer ID and notarisation; Windows: SignPath Foundation (free for open source). No more warning on first launch |
+| Other brands' RAWs | Tests with Canon, Nikon, Sony, OM, Panasonic, DNG (raw.pixls.us); focus point for each |
+| Ratings in other software | Check digiKam, RawTherapee, ART; Lightroom and Capture One (testers) |
+| Sharpness in comparison | Sharpness map in side-by-side comparison |
+
+## After V1
+
+| Topic | Details |
+|---|---|
+| Keywords | Hierarchical, compatible with other software; interface to be mocked up first |
+| Folder merge | Move a folder into a folder of the same name |
+| Crop to development software | Write a version's crop into the sidecar, in the format of Lightroom (`crs:Crop…`), darktable, Capture One |
+| Offload | Folder and file name templates, multi-day cards |
+| Viewing adjustments | Exposure, black and white, contrast, exposure matching (non-destructive) |
+| Post-development | Output profiles, sending (AirDrop, others), RawTherapee / ART renders |
+| Complex filters | Dedicated window or panel |
+| Fuller vim | Counts before actions (`5j`, `3x`) |
+| AI sharpness | Faces, sharp eyes on a portrait |
+| Icon set | Drawn icons (SVG) instead of simple shapes |
+| Target architecture | LibRaw as a dynamic library, terminal interface (TUI), external plugins |
+
+## How to help
+
+- **Test**: especially on Windows, and with camera brands other than Fujifilm. Packages
+  on the [Releases page](https://github.com/fkinnar/tri/releases), on a **copy** of your
+  photos.
+- **Report**: through the repository's [*issues*](https://github.com/fkinnar/tri/issues)
+  (system, camera, what was expected and what happened).
+- **Contribute**: building in [doc/en/build.md](doc/en/build.md), architecture and
+  modules in [doc/en/](doc/en/README.md). Rust, egui, LibRaw.

@@ -1,5 +1,11 @@
 # Historique
 
+## À venir
+
+- **Notes à la souris** : recliquer l'étoile posée remet à zéro, comme le filtre des
+  étoiles ; le bouton « ⊘ » est retiré (au clavier, la touche 0 ; `1` deux fois reste
+  à 1).
+
 ## 1.0.0-alpha.3 — 21/10/2026
 
 Troisième version de test, la première avec **Windows** (`.msi` et `.zip` portable), à

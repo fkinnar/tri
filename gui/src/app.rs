@@ -8606,6 +8606,17 @@ mod tests {
     fn the_rating_bar_rates_with_the_mouse() {
         let (mut h, dir) = harness();
         let image = dir.path().join("photos").join("img0.jpg");
+        // Recliquer l'étoile posée : zéro, comme le filtre des étoiles (plus de contrôle
+        // « ⊘ ») ; au clavier, 1 deux fois reste à 1 (la touche 0 remet à zéro).
+        h.get_by_label("1 étoile").click();
+        h.run_steps(3);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 1);
+        h.get_by_label("1 étoile").click();
+        h.run_steps(3);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 0);
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        run_until(&mut h, |_| tri::xmp::read(&image).unwrap().stars == 1);
         h.get_by_label("3 étoiles").click();
         h.run_steps(3);
         h.get_by_label("Rejeter").click();
@@ -8616,19 +8627,16 @@ mod tests {
         assert_eq!(on_disk.stars, 3);
         assert_eq!(on_disk.flag, Flag::Rejected);
         assert_eq!(on_disk.colors, [Color::Green]);
-        // Recliquer la note posée ne l'efface pas (un double clic involontaire effaçait
-        // une note) : des contrôles à part le font, comme les touches 0 et Maj+U.
-        h.get_by_label("3 étoiles").click();
-        h.run_steps(3);
+        // Le drapeau, lui, ne s'efface pas en le recliquant : un contrôle à part, comme
+        // Maj+U ; les étoiles recliquées, si.
         h.get_by_label("Rejeter").click();
         h.run_steps(3);
-        let on_disk = tri::xmp::read(&image).unwrap();
         assert_eq!(
-            (on_disk.stars, on_disk.flag),
-            (3, Flag::Rejected),
+            tri::xmp::read(&image).unwrap().flag,
+            Flag::Rejected,
             "inchangé"
         );
-        h.get_by_label("Retirer les étoiles").click();
+        h.get_by_label("3 étoiles").click();
         h.run_steps(3);
         h.get_by_label("Ni acceptée ni rejetée").click();
         h.run_steps(3);

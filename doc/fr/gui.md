@@ -466,12 +466,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - **réaction au survol** (même retour) : sur les étoiles, pastilles et drapeaux
     cliquables (bandeau, boîte, barre de filtres), pointeur en main et fond surligné
     (`marks::clickable`) ;
-  - chaque clic déclenche la même action que le clavier. **Recliquer une note posée ne
-    l'efface pas** (retour du 17/10/2026 : recliquer « 2 étoiles » remettait à zéro, un
-    vrai danger en tri rapide ; Lightroom et Capture One ont un contrôle à part) : un
-    contrôle « ⊘ » (« Retirer les étoiles », comme la touche 0) et un cercle vide
-    (« Ni acceptée ni rejetée », comme Maj+U). Seules les couleurs s'ajoutent ou se
-    retirent au clic, comme au clavier ;
+  - chaque clic déclenche la même action que le clavier. **Drapeau** : le recliquer ne
+    l'efface pas (retour du 17/10/2026 : un vrai danger en tri rapide), un cercle vide
+    à part (« Ni acceptée ni rejetée », comme Maj+U). **Étoiles** : depuis le 21/10/2026,
+    **recliquer l'étoile posée remet à zéro**, comme le filtre des étoiles (à la souris,
+    pas de double clic involontaire à craindre) ; le contrôle « ⊘ » (retirer les
+    étoiles) est retiré. Au clavier, seule la touche 0 remet à zéro (`1` deux fois reste
+    à 1). Les couleurs s'ajoutent ou se retirent au clic, comme au clavier ;
   - contrôles nommés pour l'accessibilité (`WidgetInfo`), ce qui permet aussi aux tests
     d'interface de cliquer « 3 étoiles ».
 - **Déchargement d'une carte** (17/10/2026) : icône « décharger » sur chaque volume non

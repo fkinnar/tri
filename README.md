@@ -53,9 +53,10 @@ Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
 
 Everything is in [`doc/en/`](doc/en/README.md) (in French: [`doc/fr/`](doc/fr/README.md)):
 one file per module, the reasons behind the choices, the settings
-([`doc/config.example.toml`](doc/config.example.toml), commented, in French for now),
-licences and patents ([`doc/en/licensing.md`](doc/en/licensing.md)). Release history:
-[CHANGELOG.md](CHANGELOG.md) (in French).
+([`doc/config.example.en.toml`](doc/config.example.en.toml), commented), licences and
+patents ([`doc/en/licensing.md`](doc/en/licensing.md)). Release history:
+[CHANGELOG.md](CHANGELOG.md) (in French). What comes next, and how to help:
+[ROADMAP.md](ROADMAP.md).
 
 ## Licence
 

@@ -877,8 +877,8 @@ pub fn eject(painter: &Painter, rect: Rect, color: Color32) {
 
 /// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
 /// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
-/// la même que celle du clavier : recliquer la note active la retire (drapeau, étoiles),
-/// une couleur s'ajoute ou se retire.
+/// la même que celle du clavier, sauf l'étoile posée, qui recliquée remet à zéro (le
+/// drapeau recliqué reste) ; une couleur s'ajoute ou se retire.
 pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Option<Action> {
     let weak = ui.visuals().weak_text_color();
     let strong = ui.visuals().strong_text_color();
@@ -925,18 +925,17 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         clicked = Some(action);
     }
     ui.add_space(size * 0.5);
-    // Étoiles : un contrôle « 0 » à part, comme la touche 0 (Lightroom, Capture One) ;
-    // recliquer l'étoile posée ne remet plus à zéro (même retour).
-    let action = Action::Stars(0);
-    let (rect, hit) = cell(ui, &action.label());
-    let color = if notes.stars == 0 { strong } else { weak };
-    none_sign(ui.painter(), rect, color);
-    if hit {
-        clicked = Some(action);
-    }
+    // Étoiles : recliquer l'étoile posée remet à zéro, comme le filtre des étoiles
+    // (retour du 21/10/2026 : à la souris, pas de double clic involontaire à craindre ;
+    // le contrôle « ⊘ » est retiré). Au clavier, la touche 0 seule remet à zéro.
     for n in 1..=5u8 {
         let action = Action::Stars(n);
         let (rect, hit) = cell(ui, &action.label());
+        let action = if n == notes.stars {
+            Action::Stars(0)
+        } else {
+            action
+        };
         let fill = if n <= notes.stars {
             star_color(ui.ctx(), colors)
         } else {
@@ -969,16 +968,6 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         }
     }
     clicked
-}
-
-/// Signe « aucun » (cercle barré) dans `rect`.
-fn none_sign(painter: &Painter, rect: Rect, color: Color32) {
-    let c = rect.center();
-    let r = rect.width() * 0.32;
-    let stroke = Stroke::new(1.5, color);
-    painter.circle_stroke(c, r, stroke);
-    let d = r * std::f32::consts::FRAC_1_SQRT_2;
-    painter.line_segment([c + vec2(-d, d), c + vec2(d, -d)], stroke);
 }
 
 /// Icône « disque externe » dans `rect` : boîtier arrondi et voyant.

@@ -449,12 +449,13 @@ system one ("cold" measurements, experiments).
     long (feedback of 2026-10-17, same for the eject confirmation, opened near the icon);
   - **reaction on hover** (same feedback): on the clickable stars, dots and flags (bar,
     dialog, filter bar), hand pointer and highlighted background (`marks::clickable`);
-  - each click triggers the same action as the keyboard. **Clicking a set rating again
-    does not clear it** (feedback of 2026-10-17: clicking "2 stars" again reset to zero, a
-    real danger in fast culling; Lightroom and Capture One have a separate control): a
-    "⊘" control ("Remove stars", like the 0 key) and an empty circle ("Neither picked nor
-    rejected", like Shift+U). Only colours are added or removed on click, as with the
-    keyboard;
+  - each click triggers the same action as the keyboard. **Flag**: clicking it again does
+    not clear it (feedback of 2026-10-17: a real danger in fast culling), a separate empty
+    circle does ("Neither picked nor rejected", like Shift+U). **Stars**: since
+    2026-10-21, **clicking the set star again resets to zero**, like the star filter (no
+    accidental double click to fear with the mouse); the "⊘" control (remove stars) is
+    gone. On the keyboard, only the 0 key resets to zero (`1` twice stays at 1). Colours
+    are added or removed on click, as with the keyboard;
   - controls named for accessibility (`WidgetInfo`), which also lets the interface tests
     click "3 stars".
 - **Card offload** (2026-10-17): "offload" icon on each non-fixed volume of the folders
