@@ -10700,7 +10700,7 @@ mod tests {
         }
         h.run_steps(3);
         assert_eq!(h.state().focus, Scope::Images, "clic sur une image");
-        run_until(&mut h, |app| !app.meta_rows.is_empty());
+        wait_for_label(&mut h, "Nom");
         h.get_by_label("Nom").click();
         h.run_steps(3);
         assert_eq!(
@@ -11651,11 +11651,8 @@ mod tests {
         assert!(!h.state().clipping);
         press(&mut h, Key::W, Modifiers::NONE);
         assert!(h.state().clipping, "w : zones");
-        h.run_steps(2);
-        assert!(
-            h.state().mask_textures.contains(&white_path),
-            "masque en texture"
-        );
+        // Masque calculé en fond : deux images ne suffisaient pas toujours (CI Windows).
+        run_until(&mut h, |app| app.mask_textures.contains(&white_path));
         // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
         // vert, bleu, tous ; Échap ferme.
         press(&mut h, Key::C, Modifiers::SHIFT);
