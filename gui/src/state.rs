@@ -36,6 +36,8 @@ pub struct DisplayState {
     pub rating_bar: Option<bool>,
     /// Infos et notes sur l'image en mode concentration (`Ctrl+I`).
     pub image_info: Option<bool>,
+    /// Ordre des images (`f s`, `f r`).
+    pub sort: Option<tri::sort::Order>,
     /// Fond de la grille et du plein écran (`Ctrl+L`) ; absent : celui du thème.
     pub background: Option<crate::settings::Color>,
     /// Avance automatique après une note (`Maj+A`).

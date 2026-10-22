@@ -674,6 +674,31 @@ pub fn floppy(painter: &Painter, rect: Rect, color: Color32) {
     );
 }
 
+/// Sens de l'ordre : flèche vers le bas (décroissant) ou vers le haut (croissant), avec
+/// trois traits de longueur croissante à côté (comme les icônes de tri habituelles).
+pub fn sort_arrow(painter: &Painter, rect: Rect, descending: bool, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let rect = Rect::from_center_size(rect.center(), vec2(s, s));
+    let stroke = Stroke::new((s * 0.1).max(1.2), color);
+    let x = rect.left() + s * 0.25;
+    let (top, bottom) = (rect.top() + s * 0.12, rect.bottom() - s * 0.12);
+    painter.line_segment([pos2(x, top), pos2(x, bottom)], stroke);
+    let (tip, back) = if descending {
+        (bottom, bottom - s * 0.22)
+    } else {
+        (top, top + s * 0.22)
+    };
+    painter.line_segment([pos2(x, tip), pos2(x - s * 0.18, back)], stroke);
+    painter.line_segment([pos2(x, tip), pos2(x + s * 0.18, back)], stroke);
+    // Traits : du plus court au plus long dans le sens de l'ordre.
+    for i in 0..3 {
+        let y = rect.top() + s * (0.25 + 0.25 * i as f32);
+        let len = s * 0.18 * (if descending { 3 - i } else { i + 1 }) as f32;
+        let left = rect.left() + s * 0.5;
+        painter.line_segment([pos2(left, y), pos2(left + len, y)], stroke);
+    }
+}
+
 /// Copier : deux feuilles décalées, celle de devant pleine du fond (`back`).
 pub fn copy_icon(painter: &Painter, rect: Rect, color: Color32, back: Color32) {
     let s = rect.width().min(rect.height());

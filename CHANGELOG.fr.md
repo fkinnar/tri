@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Ordre** : par nom, date de prise de vue ou de modification, croissant ou décroissant
+  (liste et flèche dans la barre des filtres, `f s` / `f r`, retenu) ; les paires RAW+JPEG
+  restent ensemble.
 - **Favoris** : un favori peut être nommé (`n` ou clic droit ; chemin au survol), et se
   déplie sans déplier le même dossier dans l'arborescence, et inversement.
 - **Plein écran** : numéro, source et taille dans la barre d'état au lieu de sur l'image ;

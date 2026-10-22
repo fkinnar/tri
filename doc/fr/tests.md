@@ -213,6 +213,15 @@ la plus récente, source mal formée signalée.
   « branché » puis retiré dans un dossier temporaire, signalé une seule fois, intervalle nul
   sans fil ; volumes fixés non éjectables (casse ignorée, seuls les volumes s'éjectent,
   `Row::ejectable`, `Tree::can_eject`) ; périphérique d'un point de montage lu dans `/proc/mounts` (espaces).
+- Favoris nommés (nom nettoyé, gardé à l'ajout ou au retrait d'un autre, suit un
+  renommage, vide : retiré, ancien fichier lu) ; dépliage d'un favori indépendant du même
+  dossier dans l'arborescence, dans les deux sens.
+
+### `sort` (unitaires `src/sort.rs`, intégration `tests/sort.rs`)
+
+- Par nom croissant et décroissant (paires RAW+JPEG gardées, RAW d'abord) ; par date de
+  prise de vue (deux boîtiers, date inconnue à la fin dans les deux sens) ; par date de
+  modification lue sur le disque ; clé suivante.
 
 ### `exposure` (unitaires `src/exposure.rs`, intégration `tests/exposure.rs`)
 

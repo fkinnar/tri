@@ -436,6 +436,11 @@ filter_bar = true
 # Without a folder argument, reopen the last folder opened (remembered in the data
 # folder: ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Order of the images: "name" (the camera's order), "captured" (shooting date, several
+# cameras in a session) or "modified" (modification date), and the direction; f s and
+# f r change them, the choice is remembered (a RAW+JPEG pair stays together).
+sort = "name"
+sort_descending = false
 # Keep from one launch to the next what is shown or hidden with a key (focus point,
 # sharpness map, zones, histogram, panels, bars, auto-advance), in
 # gui-state.toml in the data folder; the values below are then only used on the

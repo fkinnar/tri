@@ -25,6 +25,7 @@ exists.
 | [exposure.md](exposure.md) | Module `tri::exposure`: histograms on the sensor data, clipped / blocked, mask |
 | [i18n.md](i18n.md) | Module `tri::i18n`: languages (Fluent), `.ftl` catalogs, plurals, `t!` |
 | [similarity.md](similarity.md) | Module `tri::similarity`: fingerprints, distances, grouping into stacks (bursts, series) |
+| [sort.md](sort.md) | Module `tri::sort`: order of the images (name, shooting date, modification date) |
 | [history.md](history.md) | Module `tri::history`: undo, redo, history list (session) |
 | [files.md](files.md) | Module `tri::files`: rename, trash, reveal, external editor (pairs and sidecars follow) |
 | [sharpness.md](sharpness.md) | Module `tri::sharpness`: sharpness map (focus peaking) at 1:1 |

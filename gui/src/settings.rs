@@ -155,6 +155,11 @@ pub struct GuiSettings {
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
     pub reopen_last: bool,
+    /// Ordre des images au premier lancement (`f s` le change, retenu ensuite) : par nom,
+    /// date de prise de vue ou de modification.
+    pub sort: tri::sort::SortKey,
+    /// Ordre décroissant (`f r`).
+    pub sort_descending: bool,
     /// Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
     /// carte de netteté, zones, histogramme, panneaux, barres, avance automatique) ; les
     /// valeurs de la configuration ne servent qu'au premier lancement.
@@ -216,6 +221,8 @@ impl Default for GuiSettings {
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
+            sort: tri::sort::SortKey::Name,
+            sort_descending: false,
             remember_display: true,
             rating_bar: true,
             title_bar: true,

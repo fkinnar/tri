@@ -51,6 +51,7 @@ pub mod send;
 pub mod settings;
 pub mod sharpness;
 pub mod similarity;
+pub mod sort;
 pub mod update;
 pub mod versions;
 pub mod watch;

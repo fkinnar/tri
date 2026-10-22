@@ -159,6 +159,10 @@ pub enum Action {
     FilterWellExposed,
     /// Inverser les filtres : ce qu'ils retirent (les floues, avec « nettes »…).
     FilterInvert,
+    /// Ordre suivant : nom, date de prise de vue, date de modification.
+    SortNext,
+    /// Inverser le sens de l'ordre.
+    SortReverse,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -383,7 +387,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 158] = [
+    pub const ALL: [Action; 160] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -411,6 +415,8 @@ impl Action {
         Action::FilterBlurry,
         Action::FilterWellExposed,
         Action::FilterInvert,
+        Action::SortNext,
+        Action::SortReverse,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleImageInfo,
@@ -589,7 +595,9 @@ impl Action {
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
-            | FilterBlurry | FilterWellExposed | FilterInvert => Group::Filters,
+            | FilterBlurry | FilterWellExposed | FilterInvert | SortNext | SortReverse => {
+                Group::Filters
+            }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -641,6 +649,8 @@ impl Action {
             Action::FilterBlurry => "core.filter.blurry",
             Action::FilterWellExposed => "core.filter.well_exposed",
             Action::FilterInvert => "core.filter.invert",
+            Action::SortNext => "core.filter.sort",
+            Action::SortReverse => "core.filter.sort_reverse",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleImageInfo => "core.view.image_info",
@@ -1331,6 +1341,9 @@ const FILTERS: &[Binding] = {
         // Bien exposées : `w` comme les zones d'exposition (« warnings ») ; inverser : `i`.
         (&[F, plain(Key::W)], FilterWellExposed),
         (&[F, plain(Key::I)], FilterInvert),
+        // Ordre (« sort ») : suivant, et sens (« reverse »).
+        (&[F, plain(Key::S)], SortNext),
+        (&[F, plain(Key::R)], SortReverse),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };

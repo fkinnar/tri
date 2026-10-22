@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Order**: by name, shooting date or modification date, ascending or descending (list
+  and arrow in the filter bar, `f s` / `f r`, remembered); RAW+JPEG pairs stay together.
 - **Favourites**: a favourite can be named (`n` or right click; path on hover), and
   unfolds without unfolding the same folder in the tree, and vice versa.
 - **Full screen**: number, source and size in the status bar instead of on the image;

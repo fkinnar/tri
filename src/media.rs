@@ -100,7 +100,8 @@ pub fn is_hidden_dir(entry: &walkdir::DirEntry) -> bool {
     entry.file_type().is_dir() && entry.file_name().to_string_lossy().starts_with('.')
 }
 
-fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
+/// Ordre des noms : chemin sans extension, puis le RAW avant l'image plate de même nom.
+pub fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
     a.path
         .with_extension("")
         .cmp(&b.path.with_extension(""))

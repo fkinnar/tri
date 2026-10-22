@@ -432,6 +432,11 @@ filter_bar = true
 # Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
 # données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Ordre des images : "name" (nom, l'ordre du boîtier), "captured" (date de prise de vue,
+# plusieurs boîtiers dans une séance) ou "modified" (date de modification), et le sens ;
+# f s et f r les changent, le choix est retenu (une paire RAW+JPEG reste ensemble).
+sort = "name"
+sort_descending = false
 # Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
 # carte de netteté, zones, histogramme, panneaux, barres, avance automatique), dans
 # gui-state.toml du dossier de données ; les valeurs ci-dessous ne servent alors qu'au

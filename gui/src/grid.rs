@@ -101,6 +101,8 @@ pub fn navigate(
         | Action::FilterBlurry
         | Action::FilterWellExposed
         | Action::FilterInvert
+        | Action::SortNext
+        | Action::SortReverse
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleImageInfo

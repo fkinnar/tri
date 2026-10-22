@@ -214,6 +214,11 @@ pub struct TriApp {
     well_exposed: bool,
     /// Filtres inversés : ce qu'ils retirent (notes, netteté, exposition).
     filter_inverted: bool,
+    /// Ordre des images (`f s`, `f r`, liste de la barre des filtres).
+    order: tri::sort::Order,
+    /// Tri par date de prise de vue : des dates sont arrivées depuis le dernier tri
+    /// (empreintes de similarité) ; la grille sera triée à nouveau une fois toutes là.
+    sort_pending: bool,
     /// Analyses d'exposition arrivées sous le filtre « bien exposées » : grille à
     /// refiltrer une fois les histogrammes finis.
     exposure_refilter_pending: bool,
@@ -625,6 +630,11 @@ impl TriApp {
             blur_refilter_pending: false,
             well_exposed: false,
             filter_inverted: false,
+            order: tri::sort::Order {
+                key: gui.sort,
+                descending: gui.sort_descending,
+            },
+            sort_pending: false,
             exposure_refilter_pending: false,
             progress_hidden_until: None,
             developed_sizes: HashMap::new(),
@@ -765,6 +775,7 @@ impl TriApp {
             rating_bar: Some(self.rating_bar),
             image_info: Some(self.image_info),
             background: self.background,
+            sort: Some(self.order),
             auto_advance: Some(self.auto_advance),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
@@ -797,6 +808,9 @@ impl TriApp {
             }
         }
         self.background = s.background;
+        if let Some(order) = s.sort {
+            self.order = order;
+        }
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
@@ -844,6 +858,7 @@ impl TriApp {
                     .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
                     .unwrap_or(0.0);
                 self.folder = folder;
+                self.apply_sort();
                 self.error = None;
             }
             Err(e) => {
@@ -1846,6 +1861,47 @@ impl TriApp {
         }
     }
 
+    /// Trie les images du dossier selon `order` (dates de prise de vue : celles des
+    /// empreintes de similarité, déjà lues en fond pour les piles ; inconnues : à la fin).
+    fn apply_sort(&mut self) {
+        let signatures = &self.signatures;
+        tri::sort::sort(&mut self.folder.files, self.order, |p| {
+            signatures.get(p).and_then(|s| s.time)
+        });
+    }
+
+    /// Change l'ordre : la grille suit, la même image reste sélectionnée.
+    fn set_order(&mut self, order: tri::sort::Order) {
+        self.order = order;
+        self.sort_pending = false;
+        self.apply_sort();
+        self.refilter(Reveal::Minimal);
+        self.notice = Some((
+            t!(
+                "sort-notice",
+                key = sort_name(order.key),
+                direction = if order.descending {
+                    t!("sort-descending")
+                } else {
+                    t!("sort-ascending")
+                }
+            ),
+            false,
+        ));
+    }
+
+    /// Tri par date de prise de vue : la grille triée à nouveau une fois les dates
+    /// arrivées (toutes, pas à chacune), en grille seulement (comme les filtres sur
+    /// l'analyse).
+    fn sort_refilter(&mut self) {
+        let p = self.progress[5];
+        if self.sort_pending && self.mode == Mode::Grid && (p.total == 0 || p.done == p.total) {
+            self.sort_pending = false;
+            self.apply_sort();
+            self.refilter(Reveal::Minimal);
+        }
+    }
+
     /// Filtre « bien exposées » : grille refiltrée une fois les analyses d'exposition
     /// arrivées finies (pas à chacune), en grille seulement (comme la netteté).
     fn exposure_refilter(&mut self) {
@@ -2136,6 +2192,7 @@ impl TriApp {
         self.drain_engine(&mut scored);
         self.take_scores(scored);
         self.exposure_refilter();
+        self.sort_refilter();
     }
 
     fn drain_engine(&mut self, scored: &mut Vec<usize>) {
@@ -2176,7 +2233,12 @@ impl TriApp {
                         && let Some(file) = self.files.get(index)
                         && let Some(sig) = preview::signature(&engine.cache, file, &engine.preview)
                     {
-                        self.signatures.insert(file.path.clone(), sig);
+                        // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
+                        // refiltrer fait ré-annoncer celles déjà en cache).
+                        let new = self.signatures.insert(file.path.clone(), sig).is_none();
+                        if new && self.order.key == tri::sort::SortKey::Captured {
+                            self.sort_pending = true;
+                        }
                         self.stacks_dirty = true;
                         signed = true;
                     }
@@ -2881,6 +2943,14 @@ impl TriApp {
                 self.filter_inverted = !self.filter_inverted;
                 self.apply_filter();
             }
+            Action::SortNext => self.set_order(tri::sort::Order {
+                key: self.order.key.next(),
+                ..self.order
+            }),
+            Action::SortReverse => self.set_order(tri::sort::Order {
+                descending: !self.order.descending,
+                ..self.order
+            }),
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
             Action::ToggleImageInfo => self.image_info = !self.image_info,
@@ -5914,7 +5984,10 @@ impl TriApp {
             self.folder_depth(),
             self.settings.xmp.sidecar,
         ) {
-            Ok(folder) => self.folder = folder,
+            Ok(folder) => {
+                self.folder = folder;
+                self.apply_sort();
+            }
             Err(e) => {
                 self.file_error = Some(format!("{} : {e}", self.folder.dir.display()));
                 return;
@@ -6281,6 +6354,7 @@ impl TriApp {
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let mut refilter = false;
+        let mut sort_choice: Option<tri::sort::SortKey> = None;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -6573,10 +6647,40 @@ impl TriApp {
                     n = self.folder.files.len()
                 ))
                 .on_hover_text(t!("filter-bar-count-tip"));
+                // Ordre : sens, puis la clé (posés de droite à gauche).
+                ui.separator();
+                let (rect, response) =
+                    marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+                let color = ui.style().interact(&response).fg_stroke.color;
+                marks::sort_arrow(
+                    ui.painter(),
+                    rect.shrink(size * 0.1),
+                    self.order.descending,
+                    color,
+                );
+                if response.clicked() {
+                    clicked.push(Action::SortReverse);
+                }
+                let mut key = self.order.key;
+                egui::ComboBox::from_id_salt("sort")
+                    .selected_text(sort_name(key))
+                    .show_ui(ui, |ui| {
+                        for k in tri::sort::SortKey::ALL {
+                            ui.selectable_value(&mut key, k, sort_name(k));
+                        }
+                    })
+                    .response
+                    .on_hover_text(self.action_tip(Action::SortNext));
+                if key != self.order.key {
+                    sort_choice = Some(key);
+                }
             });
         });
         if refilter {
             self.refilter(Reveal::Minimal);
+        }
+        if let Some(key) = sort_choice {
+            self.set_order(tri::sort::Order { key, ..self.order });
         }
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -8648,6 +8752,15 @@ fn next_background(
     options[(at + 1) % options.len()]
 }
 
+/// Nom traduit d'une clé de tri.
+fn sort_name(key: tri::sort::SortKey) -> String {
+    match key {
+        tri::sort::SortKey::Name => t!("sort-name"),
+        tri::sort::SortKey::Captured => t!("sort-captured"),
+        tri::sort::SortKey::Modified => t!("sort-modified"),
+    }
+}
+
 /// Une ligne de l'aide : titre de thème, ou action et ses raccourcis.
 enum HelpLine {
     /// Titre d'un thème.
@@ -10367,6 +10480,52 @@ mod tests {
             press(&mut h, Key::F1, Modifiers::NONE);
             assert!(!h.state().help, "F1 doit refermer l'aide");
         }
+    }
+
+    #[test]
+    fn f_s_and_f_r_change_the_order_and_keep_the_selection() {
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        // img2 la plus ancienne, puis img0, puis img1.
+        let now = std::time::SystemTime::now();
+        for (name, hours) in [("img2.jpg", 3), ("img0.jpg", 2), ("img1.jpg", 1)] {
+            std::fs::File::options()
+                .write(true)
+                .open(photos.join(name))
+                .unwrap()
+                .set_modified(now - Duration::from_secs(hours * 3600))
+                .unwrap();
+        }
+        let order = |h: &Harness<'_, TriApp>| -> Vec<String> {
+            h.state().files.iter().map(|f| file_name(&f.path)).collect()
+        };
+        assert_eq!(order(&h), ["img0.jpg", "img1.jpg", "img2.jpg"]);
+        h.state_mut().select(1);
+        // f r : décroissant, img1 toujours sélectionnée.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert_eq!(order(&h), ["img2.jpg", "img1.jpg", "img0.jpg"]);
+        assert_eq!(
+            file_name(&h.state().files[h.state().selected].path),
+            "img1.jpg"
+        );
+        // f s deux fois : date de modification (décroissant : la plus récente d'abord).
+        for _ in 0..2 {
+            press(&mut h, Key::F, Modifiers::NONE);
+            press(&mut h, Key::S, Modifiers::NONE);
+        }
+        assert_eq!(h.state().order.key, tri::sort::SortKey::Modified);
+        assert_eq!(order(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
+        assert_eq!(
+            file_name(&h.state().files[h.state().selected].path),
+            "img1.jpg"
+        );
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert_eq!(order(&h), ["img2.jpg", "img0.jpg", "img1.jpg"]);
+        // Retenu d'un lancement à l'autre.
+        assert_eq!(h.state().display().sort, Some(h.state().order));
     }
 
     #[test]

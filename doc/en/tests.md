@@ -210,6 +210,15 @@ recent, malformed source reported.
   volume "plugged in" then removed in a temporary folder, reported only once, zero
   interval without a thread; fixed volumes not ejectable (case ignored, only volumes can
   be ejected, `Row::ejectable`, `Tree::can_eject`); device of a mount point read from `/proc/mounts` (spaces).
+- Named favourites (name cleaned, kept when another one is added or removed, follows a
+  rename, empty: removed, old file read); a favourite unfolds independently of the same
+  folder in the tree, both ways.
+
+### `sort` (unit `src/sort.rs`, integration `tests/sort.rs`)
+
+- By name ascending and descending (RAW+JPEG pairs kept, RAW first); by shooting date
+  (two cameras, unknown date last in both directions); by modification date read on the
+  disk; next key.
 
 ### `exposure` (unit `src/exposure.rs`, integration `tests/exposure.rs`)
 

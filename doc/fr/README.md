@@ -25,6 +25,7 @@ existe.
 | [exposure.md](exposure.md) | Module `tri::exposure` : histogrammes sur les données du capteur, saturés / bouchés, masque |
 | [i18n.md](i18n.md) | Module `tri::i18n` : langues (Fluent), catalogues `.ftl`, pluriels, `t!` |
 | [similarity.md](similarity.md) | Module `tri::similarity` : empreintes, distances, regroupement en piles (rafales, séries) |
+| [sort.md](sort.md) | Module `tri::sort` : ordre des images (nom, date de prise de vue, de modification) |
 | [history.md](history.md) | Module `tri::history` : annuler, rétablir, liste de l'historique (session) |
 | [files.md](files.md) | Module `tri::files` : renommer, corbeille, afficher, éditeur externe (paires et sidecars suivent) |
 | [sharpness.md](sharpness.md) | Module `tri::sharpness` : carte de netteté (focus peaking) en 1:1 |
