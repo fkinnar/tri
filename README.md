@@ -7,7 +7,7 @@ darktable, digiKam, Lightroom…, filters, stacks of similar images, sharpness, 
 histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("classic" or
 "vim" key set), mouse too.
 
-> **Alpha version** (`1.0.0-alpha.5`): try it on a **copy** of your photos. Ratings go
+> **Alpha version** (`1.0.0-alpha.6`): try it on a **copy** of your photos. Ratings go
 > into `.xmp` files next to the images; renaming, moving or deleting acts on the real
 > files (undoable with `Ctrl+Z`, or `u` in vim, during the session).
 
