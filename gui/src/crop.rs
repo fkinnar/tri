@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect as ScreenRect, Response, Stroke, Ui};
-use tri::versions::{Handle, Ratio, Rect, Source, Version};
+use tri::versions::{Handle, Ratio, Rect, Source, Version, Versions};
 
 use crate::settings::CropSettings;
 
@@ -36,6 +36,8 @@ pub struct Crop {
     pub fresh: bool,
     /// Préréglage appliqué (identifiant).
     pub preset: Option<String>,
+    /// Les autres versions de l'image : un nom déjà pris est refusé (issue n° 14).
+    others: Versions,
 }
 
 /// Ce que la barre du recadrage demande.
@@ -63,7 +65,8 @@ impl Crop {
     /// Nouvelle version de `image` vue en `source` : cadre « original » sur toute l'image.
     /// `aspect` : rapport largeur / hauteur de l'image, s'il est déjà connu (sinon au
     /// premier dessin) ; connu, les touches tapées avant le premier dessin tombent juste.
-    pub fn new(image: PathBuf, source: Source, aspect: Option<f64>) -> Crop {
+    /// `others` : les versions qu'elle a déjà.
+    pub fn new(image: PathBuf, source: Source, aspect: Option<f64>, others: Versions) -> Crop {
         let ratio = Ratio::Original { flipped: false };
         Crop {
             image,
@@ -71,18 +74,19 @@ impl Crop {
             ratio,
             aspect,
             editing: None,
-            name: ratio_name(ratio),
+            name: others.new_name(&ratio_name(ratio)),
             name_edited: false,
             profile: None,
             source,
             drag: None,
             fresh: true,
             preset: None,
+            others,
         }
     }
 
-    /// Reprendre la version `index` (`version`).
-    pub fn edit(image: PathBuf, index: usize, version: &Version) -> Crop {
+    /// Reprendre la version `index` (`version`) ; `others` : les autres versions de l'image.
+    pub fn edit(image: PathBuf, index: usize, version: &Version, others: Versions) -> Crop {
         Crop {
             image,
             rect: version.crop,
@@ -96,7 +100,18 @@ impl Crop {
             drag: None,
             fresh: true,
             preset: None,
+            others,
         }
+    }
+
+    /// Le nom tapé est déjà celui d'une autre version de l'image.
+    pub fn name_taken(&self) -> bool {
+        self.others.name_taken(&self.name)
+    }
+
+    /// Nom enregistrable : non vide, pas déjà pris.
+    pub fn name_ok(&self) -> bool {
+        !self.name.trim().is_empty() && !self.name_taken()
     }
 
     /// Applique un préréglage : son rapport exact (orientation comprise), son nom et son
@@ -106,7 +121,7 @@ impl Crop {
         if let Some(aspect) = self.aspect {
             self.rect = Rect::fit(ratio, aspect);
         }
-        self.name = name;
+        self.name = self.others.new_name(&name);
         self.name_edited = true;
         self.profile = profile;
         self.preset = Some(id.to_string());
@@ -148,7 +163,7 @@ impl Crop {
             };
         }
         if !self.name_edited {
-            self.name = ratio_name(ratio);
+            self.name = self.others.new_name(&ratio_name(ratio));
         }
     }
 
@@ -159,7 +174,7 @@ impl Crop {
             self.rect = self.rect.with_ratio(self.ratio, aspect);
         }
         if !self.name_edited {
-            self.name = ratio_name(self.ratio);
+            self.name = self.others.new_name(&ratio_name(self.ratio));
         }
     }
 
@@ -330,7 +345,7 @@ impl Crop {
             if ui.button(t!("cancel")).clicked() {
                 action = Some(BarAction::Cancel);
             }
-            let ok = !self.name.trim().is_empty();
+            let ok = self.name_ok();
             if ui
                 .add_enabled(ok, egui::Button::new(t!("crop-save")))
                 .clicked()
@@ -417,7 +432,15 @@ impl Crop {
         let name_width = 140.0;
         keep_together(ui, &t!("crop-name"), name_width);
         ui.label(t!("crop-name"));
-        let field = ui.add(egui::TextEdit::singleline(&mut self.name).desired_width(name_width));
+        let taken = self.name_taken();
+        let mut edit = egui::TextEdit::singleline(&mut self.name).desired_width(name_width);
+        if taken {
+            edit = edit.text_color(ui.visuals().error_fg_color);
+        }
+        let mut field = ui.add(edit);
+        if taken {
+            field = field.on_hover_text(t!("crop-name-taken"));
+        }
         if field.changed() {
             self.name_edited = true;
         }

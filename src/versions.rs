@@ -550,17 +550,35 @@ impl Versions {
             .collect()
     }
 
+    /// `name` est déjà le nom d'une version, sans tenir compte de la casse ni des espaces
+    /// autour (« story » et « Story » se confondraient dans une liste ; issue n° 14).
+    pub fn name_taken(&self, name: &str) -> bool {
+        let name = name.trim().to_lowercase();
+        self.list
+            .iter()
+            .any(|v| v.name.trim().to_lowercase() == name)
+    }
+
     /// Nom proposé pour une nouvelle version de rapport `ratio` : son libellé (« 4:5 »,
     /// « Libre »…), suivi d'un numéro s'il est déjà pris.
     pub fn new_name(&self, base: &str) -> String {
-        let taken = |n: &str| self.list.iter().any(|v| v.name == n);
-        if !taken(base) {
+        let base = base.trim();
+        if !self.name_taken(base) {
             return base.to_string();
         }
         (2..)
             .map(|n| format!("{base} ({n})"))
-            .find(|n| !taken(n))
+            .find(|n| !self.name_taken(n))
             .expect("un nom libre")
+    }
+
+    /// Les autres versions que la n° `index` (pour juger d'un nom pendant qu'on la modifie).
+    pub fn without(&self, index: Option<usize>) -> Versions {
+        let mut others = self.clone();
+        if let Some(i) = index.filter(|&i| i < others.list.len()) {
+            others.list.remove(i);
+        }
+        others
     }
 }
 
@@ -720,5 +738,11 @@ mod tests {
         assert_eq!(read(&image).unwrap().list.len(), 1);
         assert_eq!(versions.new_name("Story"), "Story (2)");
         assert_eq!(versions.new_name("4:5"), "4:5");
+        // Issue n° 14 : casse et espaces ne font pas un autre nom ; la version modifiée
+        // garde le sien.
+        assert!(versions.name_taken(" story "));
+        assert_eq!(versions.new_name("STORY"), "STORY (2)");
+        assert!(!versions.without(Some(0)).name_taken("Story"));
+        assert!(versions.without(None).name_taken("Story"));
     }
 }
