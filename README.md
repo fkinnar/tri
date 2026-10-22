@@ -56,7 +56,7 @@ Everything is in [`doc/en/`](doc/en/README.md) (in French: [`doc/fr/`](doc/fr/RE
 one file per module, the reasons behind the choices, the settings
 ([`doc/config.example.en.toml`](doc/config.example.en.toml), commented), licences and
 patents ([`doc/en/licensing.md`](doc/en/licensing.md)). Release history:
-[CHANGELOG.md](CHANGELOG.md) (in French). What comes next, and how to help:
+[CHANGELOG.md](CHANGELOG.md). What comes next, and how to help:
 [ROADMAP.md](ROADMAP.md).
 
 ## Licence

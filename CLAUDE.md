@@ -418,7 +418,9 @@ Proposition : sortir cette étape du logiciel de développement.
     jour ensemble**. `README.md` (anglais) et `README.fr.md` à la racine ; restent hors des
     dossiers de langue : `doc/config.example.toml` et `doc/config.example.en.toml`
     (commentaires en français et en anglais, lus par la fenêtre de réglages selon la
-    langue), `doc/overlay.example.toml`, `doc/manual-images/`. Les chemins
+    langue), `doc/overlay.example.toml`, `doc/manual-images/`. Historique des versions aussi en deux
+    langues (22/10/2026) : `CHANGELOG.md` (anglais) et `CHANGELOG.fr.md`, mis à jour
+    ensemble ; la Release porte les deux, l'interface montre celle de sa langue. Les chemins
     cités dans le code pointent vers `doc/en/`. Commentaires `///` sur tout l'API public
     pour `cargo doc` ;
   - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans

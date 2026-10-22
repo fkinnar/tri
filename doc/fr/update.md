@@ -17,7 +17,7 @@ récente sans aller sur GitHub.
   puis en bêta) : `1.0.0-alpha.3` < `1.0.0-beta.1` < `1.0.0`. Brouillons écartés, tags
   illisibles ignorés.
 - **Réponse** : « Vous avez la dernière version », ou la version plus récente avec ses
-  notes (celles de la page Releases, tirées du `CHANGELOG.md`) et un bouton qui ouvre sa
+  notes (celles de la page Releases, tirées de `CHANGELOG.md` et `CHANGELOG.fr.md`, montrées dans la langue de l'interface : `Release::notes_in`, la partie française après la marque `<!-- tri:fr -->` écrite par la CI ; notes plus anciennes telles quelles) et un bouton qui ouvre sa
   page dans le navigateur. **Pas d'installation automatique** (après la V1 : signature,
   droits, remplacement de l'application en cours).
 - **Builds de nuit et personnels** (22/10/2026, pour les têtes en l'air) : un binaire

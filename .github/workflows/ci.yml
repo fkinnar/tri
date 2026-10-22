@@ -3,7 +3,7 @@
 # chaque version (tag v…), et chaque nuit si `main` a changé (22/10/2026 : build de nuit,
 # publié sur la Release « nightly », remplacée à chaque fois), pas à chaque envoi. Sur un tag, les
 # paquets sont publiés sur la page Releases (21/10/2026), avec la section de la version
-# dans CHANGELOG.md. Voir doc/en/build.md, doc/en/packaging.md.
+# dans CHANGELOG.md (anglais) et CHANGELOG.fr.md. Voir doc/en/build.md, doc/en/packaging.md.
 #
 # Binaires sans HEIC (décidé le 19/10/2026, brevets HEVC, doc/en/licensing.md) : sans la
 # feature `heif`, avec libjpeg-turbo.
@@ -131,11 +131,14 @@ jobs:
             README.md
             README.fr.md
             CHANGELOG.md
+            CHANGELOG.fr.md
           if-no-files-found: warn
 
   # Sur un tag v… : une Release (préversion tant que le nom contient un « - »), avec les
   # paquets macOS, Linux et Windows (.msi, .zip portable) et les notes de
-  # la version tirées de CHANGELOG.md (« ## 1.0.0-alpha.2 — … » jusqu'au titre suivant).
+  # la version tirées de CHANGELOG.md (« ## 1.0.0-alpha.2 — … » jusqu'au titre suivant),
+  # puis celles de CHANGELOG.fr.md, repliées, après la marque <!-- tri:fr --> que lit
+  # l'interface pour montrer les notes dans sa langue (update::FRENCH_NOTES).
   release:
     name: Release
     needs: build
@@ -157,11 +160,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          awk -v v="$version" '
-            /^## / { if (found) exit; if (index($0, "## " v " ") == 1) { found = 1; next } }
-            found { print }
-          ' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "Version $version." > notes.md
+          section() {
+            awk -v v="$version" '
+              /^## / { if (found) exit; if (index($0, "## " v " ") == 1) { found = 1; next } }
+              found { print }
+            ' "$1"
+          }
+          section CHANGELOG.md > en.md
+          section CHANGELOG.fr.md > fr.md
+          [ -s en.md ] || echo "Version $version." > en.md
+          {
+            cat en.md
+            if [ -s fr.md ]; then
+              printf '\n<!-- tri:fr -->\n<details><summary>Français</summary>\n\n'
+              cat fr.md
+              printf '\n</details>\n'
+            fi
+          } > notes.md
           prerelease=""
           case "$version" in *-*) prerelease="--prerelease" ;; esac
           mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.zip' \))

@@ -1,140 +1,141 @@
-# Historique
+# Changelog
 
-## À venir
+*[Version française](CHANGELOG.fr.md)*
 
-- **Recadrage** : une poignée approchée par l'intérieur se prend dès que le curseur
-  change (elle déplaçait le cadre entier ; issue n° 1).
+## Unreleased
 
-## 1.0.0-alpha.4 — 22/10/2026
+- **Release notes in the interface language**: the "Update" dialog shows the notes in
+  English or French; changelog in English (`CHANGELOG.md`) and French
+  (`CHANGELOG.fr.md`), both in the Release.
+- **Crop**: a handle approached from inside is grabbed as soon as the cursor changes (it
+  moved the whole frame; issue #1).
 
-Quatrième version de test, avant la bêta 1.
+## 1.0.0-alpha.4 — 2026-10-22
 
-- **Rechercher une mise à jour** : bouton en haut de l'aide (F1) et `tri --check-update`,
-  sur demande seulement (page Releases, lue par `curl`) ; la boîte donne les notes de la
-  nouvelle version et ouvre sa page. Un build de nuit ou personnel le dit, et compte les
-  commits de `main` qui lui manquent (« git pull, puis recompiler ») ; numéro de version
-  avec le commit dans l'aide.
-- **Recherche dans l'aide et les réglages** : thèmes et sections restent visibles
-  (sections trouvées en tête, avec leur nombre de résultats), le titre d'une section la
-  trouve en entière, mots-clés cachés (« vim » trouve le jeu de raccourcis), et les mots
-  trouvés tels quels écartent les correspondances à lettres éparpillées.
-- **Builds de nuit** : la CI construit et teste chaque nuit où `main` a changé, paquets
-  sur la Release « nightly ».
-- **Filtres** : icône « inverser » à la taille des pastilles de couleur.
-- **Notes à la souris** : recliquer l'étoile posée remet à zéro, comme le filtre des
-  étoiles ; le bouton « ⊘ » est retiré (au clavier, la touche 0 ; `1` deux fois reste
-  à 1).
+Fourth test version, before beta 1.
 
-## 1.0.0-alpha.3 — 21/10/2026
+- **Check for updates**: button at the top of the help (F1) and `tri --check-update`, on
+  demand only (Releases page, read through `curl`); the dialog gives the new version's
+  notes and opens its page. A nightly or personal build says so, and counts the commits
+  of `main` it lacks ("git pull, then rebuild"); version number with the commit in the
+  help.
+- **Search in the help and the settings**: topics and sections stay visible (sections
+  found first, with their number of results), a section's title finds it whole, hidden
+  keywords ("vim" finds the shortcut set), and words found as typed set aside matches
+  with scattered letters.
+- **Nightly builds**: the CI builds and tests every night `main` changed, packages on the
+  "nightly" Release.
+- **Filters**: "invert" icon the size of the colour dots.
+- **Mouse ratings**: clicking the set star again clears it, like the stars filter; the
+  "⊘" button is gone (on the keyboard, the 0 key; `1` twice stays at 1).
 
-Troisième version de test, la première avec **Windows** (`.msi` et `.zip` portable), à
-côté des paquets macOS (`.dmg`) et Linux (`.tar.gz`), toujours sans HEIC.
+## 1.0.0-alpha.3 — 2026-10-21
 
-- **Piles** : curseur de sévérité comme celui du flou ; au centre, le seuil calculé
-  d'après le dossier (coupure entre séries et changements de scène), à droite plus
-  strict (petites piles) ; retenu par dossier. `tri --groups` regroupe au centre calculé.
-- **Curseurs** : double-clic = valeur par défaut, partout. Flou : à fond à gauche, toutes
-  les images ; en plein écran, la grille n'est plus refiltrée avant le retour (l'image
-  regardée pouvait changer).
-- **Couleurs** : étoiles, couleur choisie et interrupteurs [RAW] / [JPG] dans la couleur
-  d'accent du thème (fini le jaune et le grand carré), badge RAW des vignettes aussi ;
-  filtre « sans les floues » : un triangle au lieu de la goutte barrée.
-- **Barre d'état** : plus de barres de progression éclair pendant un réglage
+Third test version, the first with **Windows** (`.msi` and portable `.zip`), next to the
+macOS (`.dmg`) and Linux (`.tar.gz`) packages, still without HEIC.
+
+- **Stacks**: severity slider like the blur one; in the centre, the threshold computed
+  from the folder (cut between series and scene changes), to the right stricter (small
+  stacks); remembered per folder. `tri --groups` groups at the computed centre.
+- **Sliders**: double-click = default value, everywhere. Blur: all the way left, all
+  images; in full screen, the grid is no longer refiltered before going back (the image
+  being looked at could change).
+- **Colours**: stars, chosen colour and [RAW] / [JPG] switches in the theme's accent
+  colour (no more yellow and big square), thumbnails' RAW badge too; "without blurred"
+  filter: a triangle instead of the crossed-out drop.
+- **Status bar**: no more flashing progress bars while adjusting a setting
   (`[gui] progress_delay_ms`).
-- « JPEG boîtier » devient « Rendu boîtier ».
-- **Plein écran** : résolution du développé darktable, son recadrage lu dans le sidecar.
-- **Filtres** : « bien exposées » (soleil, `f w` : sans les brûlées ni les bouchées) et
-  « inverser » (◐, `f i` : ce que les filtres retirent ; « floues seulement » devient
-  « nettes » inversé, `f B` retiré).
-- **Paires RAW+JPEG** : case « avec l'autre fichier de la paire » dans les boîtes Supprimer
-  et Copier / déplacer (supprimer tous les JPEG emportait les RAW).
-- **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` reste la carte de netteté).
-- **Windows** : installateur `.msi` (menu Démarrer, désinstallation depuis les
-  Paramètres) et zip portable, avec LibRaw et le runtime Visual C++ ; plus de fenêtre de
-  console derrière l'interface.
-- **Réglages** : descriptions en anglais dans la fenêtre de réglages
-  (`doc/config.example.en.toml`), selon la langue de l'interface.
-- **Grille** : taille des vignettes réglable (curseur en bas, `+` / `-`, `*` ou bouton
-  « tout à l'écran »), infos des vignettes masquables (`Maj+T`) ; nom sans extension et
-  format (RAW, JPEG, TIFF…) écrit à droite ; photo floue : contour de goutte ; notes sans
-  rectangle sombre (étoiles en bas à gauche, drapeau en bas à droite, couleurs en haut à
-  droite) ; écrêtage en triangle mi-blanc mi-noir en haut à gauche (clic : grand histogramme),
-  versions dans la légende (clic : recadrer) ; effacer les filtres :
-  entonnoir barré tout à droite de la barre des filtres.
+- "Camera JPEG" becomes "Camera render".
+- **Full screen**: resolution of the darktable development, its crop read from the
+  sidecar.
+- **Filters**: "well exposed" (sun, `f w`: without blown or blocked ones) and "invert"
+  (◐, `f i`: what the filters remove; "blurred only" becomes inverted "sharp", `f B`
+  removed).
+- **RAW+JPEG pairs**: "with the other file of the pair" checkbox in the Delete and Copy /
+  move dialogs (deleting all the JPEGs took the RAWs along).
+- **Crop**: presets on `Tab` / `Shift+Tab` (`p` stays the sharpness map).
+- **Windows**: `.msi` installer (Start menu, uninstall from Settings) and portable zip,
+  with LibRaw and the Visual C++ runtime; no more console window behind the interface.
+- **Settings**: English descriptions in the settings window
+  (`doc/config.example.en.toml`), following the interface language.
+- **Grid**: adjustable thumbnail size (slider at the bottom, `+` / `-`, `*` or "fit all"
+  button), hideable thumbnail info (`Shift+T`); name without extension and format (RAW,
+  JPEG, TIFF…) on the right; blurred photo: drop outline; ratings without a dark
+  rectangle (stars bottom left, flag bottom right, colours top right); clipping as a
+  half-white half-black triangle top left (click: large histogram), versions in the
+  caption (click: crop); clear the filters: crossed-out funnel at the far right of the
+  filter bar.
 
-## 1.0.0-alpha.2 — 21/10/2026
+## 1.0.0-alpha.2 — 2026-10-21
 
-Deuxième version de test, la première publiée avec ses paquets sur la page Releases
-(dépôt public). Paquets macOS (`.dmg`) et Linux (`.tar.gz`), sans HEIC ; Windows à venir.
+Second test version, the first published with its packages on the Releases page (public
+repository). macOS (`.dmg`) and Linux (`.tar.gz`) packages, without HEIC; Windows to
+come.
 
-- **Dossiers** : copier ou déplacer un dossier entier (`Ctrl+C` ou `y` / `Ctrl+X` dans
-  le panneau des dossiers, clic droit, annulable) ; `y` copiait les images
-  sélectionnées au lieu du dossier. **Glisser-déposer** d'un dossier ou d'images de la
-  grille sur un dossier, toujours confirmé (Option sur macOS, Ctrl ailleurs : copier).
-  Panneau rangé en sections titrées : disques amovibles, réseau (partages montés, GVFS
-  sous Linux), dossiers personnels (Bureau, Documents, Téléchargements, Images, comme le
-  Finder), favoris, puis le système. Le clic droit « Ajouter aux favoris » ouvrait la boîte de
-  suppression : corrigé.
-- **Flou** : curseur de sévérité dans la barre des filtres (au centre les réglages, à
-  droite plus strict, à gauche plus souple), en direct, retenu par dossier ; le panneau
-  des métadonnées donne aussi le rapport à la pile.
-- **Plein écran** : résolution de ce qu'on regarde (une version : son cadre, réduit par
-  son préréglage d'export).
-- **Réglages** : le préréglage d'export d'un préréglage de recadrage se choisit dans une
-  liste (plus de faute de frappe possible).
-- **Netteté** : la carte (`p`) s'affiche aussi en vue ajustée et suit le curseur de
-  sévérité (plus souple : plus de contours nets) ; en plein écran, le curseur dans le
-  bandeau et `Ctrl+J` / `Ctrl+K`.
-- **Plein écran** : résolution juste pendant le recadrage et pour le JPEG boîtier.
-- **Documentation** bilingue (`doc/en/`, `doc/fr/`), `README.md` en anglais.
-- **Barre des filtres** : deux interrupteurs, étiquettes RAW et JPG, à la place de « Tout /
-  RAW / Plates » ; curseur du flou montré seulement avec un filtre sur la netteté, de la
-  largeur de celui des piles.
-- **Sous-dossiers** : case du panneau des dossiers, leurs images dans la grille aussi
-  (3 niveaux par défaut), choix gardé.
-- **Copier / déplacer vers…** : titre sans verbe et bouton « Valider » ; destinations
-  récentes sans doublons.
-- **Plein écran** : après un développement darktable (Maj+B), les autres images ne
-  zoomaient plus (« pas encore développé ») ; une image sans développement se montre
-  maintenant dans la source d'avant, avec son 1:1.
-- **Piles** : le curseur de similarité ne déplie plus les piles pendant le réglage (on
-  voit les piles obtenues) ; Maj tenue pour les voir dépliées.
-- **Rapport d'export** (`Ctrl+Maj+E`, ou le bouton à côté du bilan d'un export) : les
-  exports terminés, gardés d'une session à l'autre, avec un lien vers chaque dossier de
-  destination ; effaçable.
-- **Vocabulaire** : « préréglage d'export », comme « préréglage de recadrage »
-  (« profil » reste aux profils couleur).
-- **Réglages** : une seule entrée pour les préréglages d'export et une pour ceux de
-  recadrage, avec une liste, « Nouveau… » et « Supprimer ».
-- **Recadrage** : « Enregistrer comme préréglage » devient une petite disquette à côté
-  de la liste des préréglages ; Enregistrer et Annuler à droite.
-- **Boîte d'export** : les flèches ne changent le préréglage que sur sa liste ; Tab passe
-  au dossier.
+- **Folders**: copy or move a whole folder (`Ctrl+C` or `y` / `Ctrl+X` in the folders
+  panel, right click, undoable); `y` copied the selected images instead of the folder.
+  **Drag and drop** of a folder or of grid images onto a folder, always confirmed
+  (Option on macOS, Ctrl elsewhere: copy). Panel in titled sections: removable drives,
+  network (mounted shares, GVFS on Linux), personal folders (Desktop, Documents,
+  Downloads, Pictures, like the Finder), favourites, then the system. The "Add to
+  favourites" right click opened the delete dialog: fixed.
+- **Blur**: severity slider in the filter bar (settings in the centre, stricter to the
+  right, more lenient to the left), live, remembered per folder; the metadata panel also
+  gives the ratio to the stack.
+- **Full screen**: resolution of what is shown (a version: its frame, reduced by its
+  export preset).
+- **Settings**: a crop preset's export preset is chosen from a list (no more typos).
+- **Sharpness**: the map (`p`) also shows in the fitted view and follows the severity
+  slider (more lenient: more sharp edges); in full screen, the slider in the strip and
+  `Ctrl+J` / `Ctrl+K`.
+- **Full screen**: right resolution while cropping and for the camera JPEG.
+- **Documentation** in two languages (`doc/en/`, `doc/fr/`), `README.md` in English.
+- **Filter bar**: two switches, labelled RAW and JPG, instead of "All / RAW / Flat"; blur
+  slider shown only with a sharpness filter, as wide as the stacks one.
+- **Subfolders**: checkbox in the folders panel, their images in the grid too (3 levels
+  by default), choice kept.
+- **Copy / move to…**: title without a verb and a "Confirm" button; recent destinations
+  without duplicates.
+- **Full screen**: after a darktable development (Shift+B), the other images no longer
+  zoomed ("not developed yet"); an image without development now shows in the previous
+  source, with its 1:1.
+- **Stacks**: the similarity slider no longer unfolds the stacks while adjusting (the
+  resulting stacks are visible); hold Shift to see them unfolded.
+- **Export report** (`Ctrl+Shift+E`, or the button next to an export's summary): the
+  finished exports, kept from one session to the next, with a link to each destination
+  folder; can be cleared.
+- **Vocabulary**: "export preset", like "crop preset" ("profile" stays for colour
+  profiles).
+- **Settings**: a single entry for export presets and one for crop presets, with a list,
+  "New…" and "Delete".
+- **Crop**: "Save as preset" becomes a small floppy disk next to the presets list; Save
+  and Cancel on the right.
+- **Export dialog**: the arrows only change the preset on its list; Tab moves on to the
+  folder.
 
-## 1.0.0-alpha.1 — 19/10/2026
+## 1.0.0-alpha.1 — 2026-10-19
 
-Première version de test (dépôt privé ; la bêta sera publique). Paquets prêts à
-installer pour macOS (`.dmg`) et Linux (`.tar.gz`), sans HEIC ; Windows à venir.
+First test version (private repository; the beta will be public). Ready-to-install
+packages for macOS (`.dmg`) and Linux (`.tar.gz`), without HEIC; Windows to come.
 
-- **Dossiers** : panneau des dossiers (volumes, favoris, recherche `/`), surveillance du
-  dossier ouvert, déchargement de cartes (copie vérifiée, doublons, éjection).
-- **Grille** : vignettes en tâche de fond avec cache persistant, filtres (type, étoiles,
-  couleurs, drapeau, netteté, nom), sélection multiple, piles d'images semblables
-  (seuil réglable en direct), comparaison côte à côte.
-- **Plein écran** : JPEG boîtier ou vrai rendu RAW (LibRaw), zoom continu jusqu'à 400 %,
-  loupe, repère du collimateur (Fujifilm), carte de netteté, zones saturées / bouchées,
-  superpositions (grilles, spirale d'or, texte, logo, format 4:5…).
-- **Notes** : étoiles, couleurs, accepté / rejeté, en XMP (conventions darktable et
-  Adobe, rien d'autre n'est touché), annulables.
-- **Analyses** : histogramme RAW en IL, score de netteté jugé dans le dossier et dans la
-  pile, regroupement par similarité.
-- **Fichiers** : renommer, corbeille, copier / déplacer vers…, éditeur externe, AirDrop
-  (macOS).
-- **Développé dans darktable** : `Maj+B` (ou le bouton sous l'image) fait
-  le rendu darktable-cli, en cache, rien d'écrit chez vous ; `b` le montre ensuite.
-- **Export** : `Ctrl+E`, JPEG / TIFF / PNG par profils d'export (« Retouche » TIFF 16 bits
-  ProPhoto, « Web » JPEG sRGB), développés par darktable (installé, en AppImage ou en
-  Flatpak) ; sans darktable, rendu de base par LibRaw ; pas de ProPhoto en 8 bits.
-- **Interface** : tout au clavier (jeux « classique » et « vim », raccourcis réglables),
-  fenêtre de réglages, aide avec recherche, français et anglais, thèmes sombre, clair et
-  gris neutre ; icône, barre du haut, mode concentration (F11).
+- **Folders**: folders panel (volumes, favourites, `/` search), watching of the open
+  folder, card offload (verified copy, duplicates, eject).
+- **Grid**: thumbnails in the background with a persistent cache, filters (type, stars,
+  colours, flag, sharpness, name), multiple selection, stacks of similar images (live
+  adjustable threshold), side-by-side comparison.
+- **Full screen**: camera JPEG or real RAW render (LibRaw), continuous zoom up to 400 %,
+  loupe, focus point (Fujifilm), sharpness map, blown / blocked zones, overlays (grids,
+  golden spiral, text, logo, 4:5 format…).
+- **Ratings**: stars, colours, accepted / rejected, in XMP (darktable and Adobe
+  conventions, nothing else touched), undoable.
+- **Analyses**: RAW histogram in EV, sharpness score judged within the folder and the
+  stack, grouping by similarity.
+- **Files**: rename, trash, copy / move to…, external editor, AirDrop (macOS).
+- **Developed in darktable**: `Shift+B` (or the button under the image) runs the
+  darktable-cli render, cached, nothing written on your side; `b` then shows it.
+- **Export**: `Ctrl+E`, JPEG / TIFF / PNG by export profiles ("Retouch" 16-bit ProPhoto
+  TIFF, "Web" sRGB JPEG), developed by darktable (installed, AppImage or Flatpak);
+  without darktable, a basic render by LibRaw; no ProPhoto in 8 bits.
+- **Interface**: everything from the keyboard ("classic" and "vim" sets, adjustable
+  shortcuts), settings window, help with search, French and English, dark, light and
+  neutral grey themes; icon, top bar, focus mode (F11).

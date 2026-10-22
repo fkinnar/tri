@@ -17,7 +17,7 @@ going to GitHub.
   then beta): `1.0.0-alpha.3` < `1.0.0-beta.1` < `1.0.0`. Drafts left out, unreadable
   tags ignored.
 - **Answer**: "You have the latest version", or the newer version with its notes (those
-  of the Releases page, taken from `CHANGELOG.md`) and a button opening its page in the
+  of the Releases page, taken from `CHANGELOG.md` and `CHANGELOG.fr.md`, shown in the interface language: `Release::notes_in`, the French part after the `<!-- tri:fr -->` mark written by the CI; older notes as they are) and a button opening its page in the
   browser. **No automatic install** (after V1: signing, rights, replacing the running
   application).
 - **Nightly and personal builds** (2026-10-22, for the forgetful): a binary that is not

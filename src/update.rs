@@ -11,6 +11,8 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+use crate::i18n::Language;
+
 /// Section `[update]` du fichier de configuration.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -43,6 +45,32 @@ pub struct Release {
     pub url: String,
     /// Notes de la version (Markdown).
     pub notes: String,
+}
+
+/// Marque, dans les notes d'une Release, le début de la partie française (22/10/2026) :
+/// la CI écrit l'anglais (`CHANGELOG.md`), puis cette marque (invisible sur GitHub) et le
+/// français (`CHANGELOG.fr.md`) replié dans un `<details>`.
+pub const FRENCH_NOTES: &str = "<!-- tri:fr -->";
+
+impl Release {
+    /// Notes dans la langue voulue : la partie française après [`FRENCH_NOTES`], sinon
+    /// l'anglaise avant. Notes sans marque (versions plus anciennes) : telles quelles.
+    pub fn notes_in(&self, language: Language) -> &str {
+        let Some((english, french)) = self.notes.split_once(FRENCH_NOTES) else {
+            return self.notes.trim();
+        };
+        match language {
+            Language::En => english.trim(),
+            Language::Fr => {
+                let french = french.trim();
+                let french = french
+                    .strip_prefix("<details>")
+                    .map(|rest| rest.split_once("</summary>").map_or(rest, |(_, r)| r))
+                    .unwrap_or(french);
+                french.trim().trim_end_matches("</details>").trim()
+            }
+        }
+    }
 }
 
 /// Ce binaire, tel que compilé (`build.rs`).
@@ -339,6 +367,25 @@ pub fn check(build: &Build, settings: &UpdateSettings) -> Result<Status, UpdateE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_notes_follow_the_language() {
+        let release = |notes: &str| Release {
+            version: "1.0.0".into(),
+            url: String::new(),
+            notes: notes.into(),
+        };
+        let both = release(
+            "- **Crop**: fixed\n\n<!-- tri:fr -->\n<details><summary>Français</summary>\n\n- **Recadrage** : corrigé\n\n</details>\n",
+        );
+        assert_eq!(both.notes_in(Language::En), "- **Crop**: fixed");
+        assert_eq!(both.notes_in(Language::Fr), "- **Recadrage** : corrigé");
+        let old = release("\n- **Notes** : seulement en français\n");
+        assert_eq!(
+            old.notes_in(Language::En),
+            "- **Notes** : seulement en français"
+        );
+    }
 
     fn v(text: &str) -> Version {
         Version::parse(text).unwrap()

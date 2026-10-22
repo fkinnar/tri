@@ -89,7 +89,8 @@ def rust_notices(dest):
 
 
 def common_files(dest):
-    for name in ["LICENSE", "README.md", "README.fr.md", "CHANGELOG.md"]:
+    for name in ["LICENSE", "README.md", "README.fr.md", "CHANGELOG.md",
+                 "CHANGELOG.fr.md"]:
         shutil.copy2(ROOT / name, dest / name)
 
 

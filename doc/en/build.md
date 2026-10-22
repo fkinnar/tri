@@ -185,7 +185,7 @@ running (paths, drive letters, ejection, trash).
 
 `.github/workflows/ci.yml`: on all three systems, dependencies (apt, Homebrew, vcpkg
 for LibRaw on Windows), `cargo fmt --check`, clippy (`-D warnings`), tests, release
-binaries, uploaded as artifacts with `LICENSE`, `README.md`, `CHANGELOG.md`. Without HEIC
+binaries, uploaded as artifacts with `LICENSE`, `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`. Without HEIC
 (`heif` feature removed: HEVC patents, see `licensing.md`), with libjpeg-turbo.
 
 Run by hand (Actions tab, or `gh workflow run ci.yml`) or on each version

@@ -42,7 +42,7 @@ et le disent dans l'aide ([update.md](update.md)). Pour la bêta (prévu) : une 
   **code source de LibRaw** (obligation de la LGPL pour une bibliothèque livrée).
 - **Notices des crates Rust** : `licenses/rust-crates.html`, produit par `cargo about`
   (licences acceptées dans `about.toml`, modèle `scripts/about.hbs`).
-- `LICENSE` (GPL-3.0-or-later), `README.md`, `CHANGELOG.md`.
+- `LICENSE` (GPL-3.0-or-later), `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`.
 
 ## macOS : `tri.app` dans un `.dmg`
 
@@ -87,7 +87,7 @@ tri-<version>-linux-<arch>/
   bin/tri-gui, bin/tri
   lib/          LibRaw et dépendances (libraw, liblcms2, libjpeg, libgomp)
   share/applications/tri.desktop, share/icons/hicolor/256x256/apps/tri.png
-  licenses/, install.sh, LICENSE, README.md, CHANGELOG.md
+  licenses/, install.sh, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - Les binaires cherchent leurs bibliothèques dans `../lib` (`$ORIGIN/../lib`, posé à la
@@ -125,7 +125,7 @@ Ajouté le 21/10/2026 (pour qu'« une personne normale » puisse l'installer) : 
 tri-<version>-windows-x64/
   tri-gui.exe, tri.exe
   raw_r.dll et ses dépendances vcpkg, runtime Visual C++ (msvcp140.dll, vcruntime140*.dll…)
-  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md
+  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - **Installateur** (WiX 5, `dotnet tool install --global wix --version 5.0.2` ; la

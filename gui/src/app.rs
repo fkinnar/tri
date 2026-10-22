@@ -1440,10 +1440,11 @@ impl TriApp {
                             ))
                             .strong(),
                         );
-                        if !release.notes.trim().is_empty() {
+                        let notes = release.notes_in(tri::i18n::language());
+                        if !notes.is_empty() {
                             ui.add_space(4.0);
                             ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-                                ui.weak(release.notes.trim());
+                                ui.weak(notes);
                             });
                         }
                         ui.add_space(6.0);

@@ -185,7 +185,7 @@ l'exécution (chemins, lettres de lecteur, éjection, corbeille).
 
 `.github/workflows/ci.yml` : sur les trois systèmes, dépendances (apt, Homebrew, vcpkg
 pour LibRaw sous Windows), `cargo fmt --check`, clippy (`-D warnings`), tests, binaires
-en release, déposés en artefacts avec `LICENSE`, `README.md`, `CHANGELOG.md`. Sans HEIC
+en release, déposés en artefacts avec `LICENSE`, `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`. Sans HEIC
 (feature `heif` retirée : brevets HEVC, voir `licensing.md`), avec libjpeg-turbo.
 
 Lancé à la main (onglet Actions, ou `gh workflow run ci.yml`) ou à chaque version

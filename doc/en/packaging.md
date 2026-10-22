@@ -42,7 +42,7 @@ candidates and a nightly build branch.
   source code** (an LGPL obligation for a shipped library).
 - **Rust crate notices**: `licenses/rust-crates.html`, produced by `cargo about`
   (accepted licenses in `about.toml`, template `scripts/about.hbs`).
-- `LICENSE` (GPL-3.0-or-later), `README.md`, `CHANGELOG.md`.
+- `LICENSE` (GPL-3.0-or-later), `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`.
 
 ## macOS: `tri.app` in a `.dmg`
 
@@ -86,7 +86,7 @@ tri-<version>-linux-<arch>/
   bin/tri-gui, bin/tri
   lib/          LibRaw and dependencies (libraw, liblcms2, libjpeg, libgomp)
   share/applications/tri.desktop, share/icons/hicolor/256x256/apps/tri.png
-  licenses/, install.sh, LICENSE, README.md, CHANGELOG.md
+  licenses/, install.sh, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - The binaries look for their libraries in `../lib` (`$ORIGIN/../lib`, set at build
@@ -123,7 +123,7 @@ installer** and a **portable `.zip`**, built by the CI (`windows-latest`).
 tri-<version>-windows-x64/
   tri-gui.exe, tri.exe
   raw_r.dll and its vcpkg dependencies, Visual C++ runtime (msvcp140.dll, vcruntime140*.dll…)
-  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md
+  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - **Installer** (WiX 5, `dotnet tool install --global wix --version 5.0.2`; the WiX

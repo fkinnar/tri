@@ -58,7 +58,7 @@ Tout est dans [`doc/fr/`](doc/fr/README.md) (en anglais : [`doc/en/`](doc/en/REA
 un fichier par module, le pourquoi des choix, les réglages
 ([`doc/config.example.toml`](doc/config.example.toml), commenté), les licences et brevets
 ([`doc/fr/licensing.md`](doc/fr/licensing.md)). Historique des versions :
-[CHANGELOG.md](CHANGELOG.md). La suite, et comment aider :
+[CHANGELOG.fr.md](CHANGELOG.fr.md). La suite, et comment aider :
 [ROADMAP.fr.md](ROADMAP.fr.md).
 
 ## Licence
