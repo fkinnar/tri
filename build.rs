@@ -35,7 +35,43 @@ fn probe_dir(dir: PathBuf) -> LibRaw {
     }
 }
 
+/// Ce que `tri::update::Build` dit du binaire (22/10/2026) : le commit compilé (s'il
+/// vient d'un dépôt git) et sa provenance, `TRI_BUILD_CHANNEL` posée par la CI
+/// (`release` sur un tag, `nightly` pour le build de nuit ; absente : build personnel).
+/// Un build qui n'est pas une version publiée sait ainsi le dire, et combien de commits
+/// `main` a de plus.
+fn build_info() {
+    println!("cargo:rerun-if-env-changed=TRI_BUILD_CHANNEL");
+    if let Ok(channel) = env::var("TRI_BUILD_CHANNEL")
+        && !channel.is_empty()
+    {
+        println!("cargo:rustc-env=TRI_CHANNEL={channel}");
+    }
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    let Some(commit) = git(&["rev-parse", "HEAD"]) else {
+        return; // archive des sources, pas de git : commit inconnu
+    };
+    println!("cargo:rustc-env=TRI_COMMIT={commit}");
+    // Tout déplacement de HEAD (commit, pull, checkout) écrit dans logs/HEAD.
+    for path in ["HEAD", "logs/HEAD"] {
+        if let Some(file) = git(&["rev-parse", "--git-path", path])
+            && std::path::Path::new(&file).exists()
+        {
+            println!("cargo:rerun-if-changed={file}");
+        }
+    }
+}
+
 fn main() {
+    build_info();
     println!("cargo:rerun-if-env-changed=LIBRAW_DIR");
     println!("cargo:rerun-if-env-changed=LIBRAW_LIB");
     println!("cargo:rerun-if-changed=csrc/libraw_shim.c");

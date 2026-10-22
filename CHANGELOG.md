@@ -4,7 +4,11 @@
 
 - **Rechercher une mise à jour** : bouton en haut de l'aide (F1) et `tri --check-update`,
   sur demande seulement (page Releases, lue par `curl`) ; la boîte donne les notes de la
-  nouvelle version et ouvre sa page.
+  nouvelle version et ouvre sa page. Un build de nuit ou personnel le dit, et compte les
+  commits de `main` qui lui manquent (« git pull, puis recompiler ») ; numéro de version
+  avec le commit dans l'aide.
+- **Builds de nuit** : la CI construit et teste chaque nuit où `main` a changé, paquets
+  sur la Release « nightly ».
 - **Filtres** : icône « inverser » à la taille des pastilles de couleur.
 - **Notes à la souris** : recliquer l'étoile posée remet à zéro, comme le filtre des
   étoiles ; le bouton « ⊘ » est retiré (au clavier, la touche 0 ; `1` deux fois reste

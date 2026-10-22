@@ -22,6 +22,7 @@ use tri::places::{Monitor, Place, PlaceKind, PlaceSettings, Tree};
 use tri::preview;
 use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
 use tri::settings::EngineSettings;
+use tri::update::Status as UpdateStatus;
 use tri::xmp::{Color, Flag};
 
 use crate::actions::{Action, FlagFilter, Group, Keymap, Sequencer};
@@ -144,6 +145,8 @@ pub struct TriApp {
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Recherche d'une mise à jour (sur demande) : en cours, ou son résultat affiché.
     update: Option<UpdateCheck>,
+    /// Ce binaire : version distribuée ou build personnel (et son commit).
+    build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
@@ -562,6 +565,7 @@ impl TriApp {
             eject_failed: None,
             eject_dialog: None,
             update: None,
+            build: tri::update::Build::current(),
             ejecting: None,
             notice: None,
             settings: settings.engine(),
@@ -1383,10 +1387,10 @@ impl TriApp {
     fn check_update(&mut self, ctx: &egui::Context) {
         self.help = false;
         let settings = self.settings.update.clone();
+        let build = self.build.clone();
         let repaint = ctx.clone();
         let handle = std::thread::spawn(move || {
-            let result =
-                tri::update::check(env!("CARGO_PKG_VERSION"), &settings).map_err(|e| e.to_string());
+            let result = tri::update::check(&build, &settings).map_err(|e| e.to_string());
             repaint.request_repaint();
             result
         });
@@ -1404,7 +1408,8 @@ impl TriApp {
             self.update = Some(UpdateCheck::Done(result));
         }
         let Some(state) = &self.update else { return };
-        let current = env!("CARGO_PKG_VERSION");
+        let current = self.build.version.as_str();
+        let build = &self.build;
         let mut close = false;
         let at = ctx.content_rect().center() - vec2(160.0, 80.0);
         let modal = modal_at("update_dialog", at)
@@ -1418,10 +1423,15 @@ impl TriApp {
                             ui.label(t!("update-checking"));
                         });
                     }
-                    UpdateCheck::Done(Ok(None)) => {
+                    UpdateCheck::Done(Ok(UpdateStatus::Latest)) => {
                         ui.label(t!("update-latest", version = current));
                     }
-                    UpdateCheck::Done(Ok(Some(release))) => {
+                    UpdateCheck::Done(Ok(UpdateStatus::Build { behind })) => {
+                        let [first, second] = tri::update::build_text(build, *behind);
+                        ui.label(egui::RichText::new(first).strong());
+                        ui.label(second);
+                    }
+                    UpdateCheck::Done(Ok(UpdateStatus::Newer(release))) => {
                         ui.label(
                             egui::RichText::new(t!(
                                 "update-available",
@@ -3605,7 +3615,7 @@ impl TriApp {
         let painter = ui.painter();
         painter.image(letters.id(), rect, uv, ui.visuals().strong_text_color());
         painter.image(star.id(), rect, uv, Color32::WHITE);
-        response.on_hover_text(format!("tri {}", env!("CARGO_PKG_VERSION")));
+        response.on_hover_text(format!("tri {}", self.build.label()));
     }
 
     /// Mode concentration : l'indication pour en sortir, en haut au centre, un moment.
@@ -7435,7 +7445,7 @@ impl TriApp {
             .show(ctx, |ui| {
                 // Version, et la recherche d'une mise à jour (sur demande seulement).
                 ui.horizontal(|ui| {
-                    ui.weak(format!("tri {}", env!("CARGO_PKG_VERSION")));
+                    ui.weak(format!("tri {}", self.build.label()));
                     if ui
                         .small_button(Action::CheckUpdate.label())
                         .on_hover_text(t!("update-tip"))
@@ -8008,9 +8018,10 @@ fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
 /// Recherche d'une mise à jour ([`TriApp::check_update`]).
 enum UpdateCheck {
     /// Requête en cours, dans un fil à part.
-    Running(std::thread::JoinHandle<Result<Option<tri::update::Release>, String>>),
-    /// Résultat : version plus récente (ou aucune), ou message d'erreur.
-    Done(Result<Option<tri::update::Release>, String>),
+    Running(std::thread::JoinHandle<Result<UpdateStatus, String>>),
+    /// Résultat : dernière version, version plus récente, état d'un build personnel, ou
+    /// message d'erreur.
+    Done(Result<UpdateStatus, String>),
 }
 
 /// Ce qu'on glisse vers un dossier du panneau des dossiers (demandé le 20/10/2026) ; le
@@ -8483,6 +8494,7 @@ mod tests {
             url.replacen("file://", "file:///", 1)
         };
         h.state_mut().settings.update.url = url;
+        h.state_mut().build.channel = tri::update::Channel::Release;
         press(&mut h, Key::F1, Modifiers::NONE);
         // L'aide se met en page sur plusieurs images (elle grandit, centrée) : cliquer
         // une fois sa place prise.
@@ -8514,6 +8526,40 @@ mod tests {
             h.query_by_label(&t!("update-latest", version = current))
                 .is_some()
         );
+    }
+
+    #[test]
+    fn a_personal_build_says_so_and_counts_the_commits_to_pull() {
+        // Build personnel : pas de version publiée proposée, mais les commits de main à
+        // récupérer (réponse de l'API « compare » servie par un fichier local).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        std::fs::write(dir.path().join("c0ffee"), r#"{"ahead_by": 2}"#).unwrap();
+        let url = format!(
+            "file://{}",
+            dir.path().display().to_string().replace('\\', "/")
+        );
+        let url = if url.starts_with("file:///") {
+            url
+        } else {
+            url.replacen("file://", "file:///", 1)
+        };
+        h.state_mut().settings.update.compare_url = format!("{url}/{{commit}}");
+        h.state_mut().build = tri::update::Build {
+            version: "1.0.0".into(),
+            commit: Some("c0ffee".into()),
+            channel: tri::update::Channel::Personal,
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::CheckUpdate);
+        run_until(&mut h, |app| {
+            matches!(app.update, Some(UpdateCheck::Done(_)))
+        });
+        h.run_steps(2);
+        let build = h.state().build.clone();
+        for line in tri::update::build_text(&build, Some(2)) {
+            assert!(h.query_by_label(&line).is_some(), "{line}");
+        }
     }
 
     #[test]

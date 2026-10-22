@@ -259,3 +259,15 @@ update-bad-answer = unreadable answer: { $error }
 cli-update-available = New version: { $version }
    { $url }
 cli-update-latest = You have the latest version ({ $version }).
+update-build = Personal build ({ $commit }): not a released version.
+update-nightly = Nightly build ({ $commit }): not a released version.
+update-nightly-behind = { $count ->
+    [one] The main branch has 1 more commit: it will be in the next nightly build.
+   *[other] The main branch has { $count } more commits: they will be in the next nightly build.
+}
+update-build-current = Up to date with the main branch.
+update-build-behind = { $count ->
+    [one] The main branch has 1 more commit: git pull, then rebuild.
+   *[other] The main branch has { $count } more commits: git pull, then rebuild.
+}
+update-build-unknown = Cannot compare with the main branch (unknown commit, or not pushed yet).

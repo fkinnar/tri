@@ -1,5 +1,6 @@
 //! Recherche d'une nouvelle version (21/10/2026), **sur demande seulement** : aucune
-//! requête au démarrage, aucune notification. La liste des versions publiées est lue sur
+//! requête au démarrage, aucune notification. Un build personnel (compilé depuis les
+//! sources) le dit, et compte plutôt les commits de `main` à récupérer (22/10/2026). La liste des versions publiées est lue sur
 //! l'API publique des Releases GitHub (sans compte), par `curl` (présent sur macOS, Linux
 //! et Windows 10+) : pas de pile TLS à embarquer ni de dépendance de plus. Voir
 //! `doc/en/update.md`.
@@ -16,6 +17,9 @@ use serde::Deserialize;
 pub struct UpdateSettings {
     /// Adresse de la liste des versions (API des Releases GitHub).
     pub url: String,
+    /// Comparaison d'un build personnel avec la branche publiée (API GitHub « compare »),
+    /// `{commit}` remplacé par le commit compilé.
+    pub compare_url: String,
     /// Délai maximal de la requête (secondes).
     pub timeout_s: u64,
 }
@@ -24,6 +28,7 @@ impl Default for UpdateSettings {
     fn default() -> Self {
         UpdateSettings {
             url: "https://api.github.com/repos/fkinnar/tri/releases".into(),
+            compare_url: "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main".into(),
             timeout_s: 10,
         }
     }
@@ -38,6 +43,102 @@ pub struct Release {
     pub url: String,
     /// Notes de la version (Markdown).
     pub notes: String,
+}
+
+/// Ce binaire, tel que compilé (`build.rs`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Build {
+    /// Numéro de version (`Cargo.toml`).
+    pub version: String,
+    /// Commit compilé, si les sources venaient d'un dépôt git.
+    pub commit: Option<String>,
+    /// Provenance : version publiée, build de nuit ou build personnel.
+    pub channel: Channel,
+}
+
+/// Provenance d'un binaire (`TRI_BUILD_CHANNEL` à la compilation, voir `build.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Channel {
+    /// Version publiée (paquet de la page Releases, compilé par la CI sur un tag).
+    Release,
+    /// Build de nuit (CI, chaque nuit où `main` a changé ; release « nightly »).
+    Nightly,
+    /// Compilé depuis les sources.
+    Personal,
+}
+
+impl Channel {
+    /// Depuis la valeur de `TRI_BUILD_CHANNEL` (absente ou inconnue : build personnel).
+    pub fn parse(text: Option<&str>) -> Channel {
+        match text {
+            Some("release") => Channel::Release,
+            Some("nightly") => Channel::Nightly,
+            _ => Channel::Personal,
+        }
+    }
+}
+
+impl Build {
+    /// Le binaire en cours.
+    pub fn current() -> Build {
+        Build {
+            version: env!("CARGO_PKG_VERSION").into(),
+            commit: option_env!("TRI_COMMIT").map(str::to_string),
+            channel: Channel::parse(option_env!("TRI_CHANNEL")),
+        }
+    }
+
+    /// Commit abrégé (7 caractères, comme git).
+    pub fn short_commit(&self) -> Option<&str> {
+        self.commit.as_deref().map(|c| &c[..c.len().min(7)])
+    }
+
+    /// « 1.0.0-beta.1 » ; « 1.0.0-beta.1 nightly 1a2b3c4 » pour un build de nuit,
+    /// « 1.0.0-beta.1 (1a2b3c4) » pour un build personnel.
+    pub fn label(&self) -> String {
+        let commit = self.short_commit().unwrap_or("?");
+        match self.channel {
+            Channel::Release => self.version.clone(),
+            Channel::Nightly => format!("{} nightly {commit}", self.version),
+            Channel::Personal => format!("{} ({commit})", self.version),
+        }
+    }
+}
+
+/// Réponse de la recherche.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Status {
+    /// Version distribuée, la dernière publiée.
+    Latest,
+    /// Version distribuée, une plus récente est publiée.
+    Newer(Release),
+    /// Build de nuit ou personnel : nombre de commits de `main` absents de ce build
+    /// (0 = à jour), `None` si on ne peut pas savoir (commit inconnu, ou absent de
+    /// GitHub : commits locaux pas encore poussés).
+    Build {
+        /// Commits de `main` absents de ce build.
+        behind: Option<u64>,
+    },
+}
+
+/// Ce que dit la recherche pour un build de nuit ou personnel : sa provenance, puis les
+/// commits de `main` à récupérer (prochain build de nuit, ou `git pull`), à jour, ou
+/// inconnu.
+pub fn build_text(build: &Build, behind: Option<u64>) -> [String; 2] {
+    let commit = build.short_commit().unwrap_or("?");
+    let nightly = build.channel == Channel::Nightly;
+    let first = if nightly {
+        crate::t!("update-nightly", commit = commit)
+    } else {
+        crate::t!("update-build", commit = commit)
+    };
+    let second = match behind {
+        Some(0) => crate::t!("update-build-current"),
+        Some(n) if nightly => crate::t!("update-nightly-behind", count = n),
+        Some(n) => crate::t!("update-build-behind", count = n),
+        None => crate::t!("update-build-unknown"),
+    };
+    [first, second]
 }
 
 /// Erreur de la recherche.
@@ -155,13 +256,24 @@ pub fn newer<'a>(current: &str, releases: &'a [Release]) -> Option<&'a Release> 
         .map(|(_, r)| r)
 }
 
-/// Lit la liste des versions publiées (`curl`, délai `settings.timeout_s`).
-pub fn fetch(settings: &UpdateSettings) -> Result<Vec<Release>, UpdateError> {
+/// Commits de la branche publiée absents du build, depuis la réponse de l'API
+/// « compare » (`base...main`, base = le commit du build : `ahead_by`).
+pub fn parse_compare(json: &str) -> Result<u64, UpdateError> {
+    #[derive(Deserialize)]
+    struct Compare {
+        ahead_by: u64,
+    }
+    serde_json::from_str::<Compare>(json)
+        .map(|c| c.ahead_by)
+        .map_err(|e| UpdateError::Format(e.to_string()))
+}
+
+/// Requête GET par `curl` : code HTTP (0 pour un `file://`) et corps.
+fn get(url: &str, settings: &UpdateSettings) -> Result<(u32, String), UpdateError> {
     let mut command = Command::new("curl");
     command.args([
         "--silent",
         "--show-error",
-        "--fail",
         "--location",
         "--max-time",
         &settings.timeout_s.to_string(),
@@ -169,7 +281,9 @@ pub fn fetch(settings: &UpdateSettings) -> Result<Vec<Release>, UpdateError> {
         "Accept: application/vnd.github+json",
         "--user-agent",
         concat!("tri/", env!("CARGO_PKG_VERSION")),
-        &settings.url,
+        "--write-out",
+        "\n%{http_code}",
+        url,
     ]);
     // Windows : pas de fenêtre de console le temps de la requête (interface graphique).
     #[cfg(windows)]
@@ -182,14 +296,44 @@ pub fn fetch(settings: &UpdateSettings) -> Result<Vec<Release>, UpdateError> {
         let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(UpdateError::Request(message));
     }
-    parse_releases(&String::from_utf8_lossy(&output.stdout))
+    let text = String::from_utf8_lossy(&output.stdout);
+    let (body, code) = text.rsplit_once('\n').unwrap_or(("", &text));
+    Ok((code.trim().parse().unwrap_or(0), body.to_string()))
 }
 
-/// Recherche une version plus récente que `current` : `None` si `current` est la
-/// dernière.
-pub fn check(current: &str, settings: &UpdateSettings) -> Result<Option<Release>, UpdateError> {
+/// Erreur pour un code HTTP d'échec.
+fn http_error(code: u32) -> UpdateError {
+    UpdateError::Request(format!("HTTP {code}"))
+}
+
+/// Lit la liste des versions publiées (`curl`, délai `settings.timeout_s`).
+pub fn fetch(settings: &UpdateSettings) -> Result<Vec<Release>, UpdateError> {
+    match get(&settings.url, settings)? {
+        (code, _) if code >= 400 => Err(http_error(code)),
+        (_, body) => parse_releases(&body),
+    }
+}
+
+/// Recherche une mise à jour de `build` : version publiée plus récente, ou, pour un
+/// build personnel, commits de `main` à récupérer (`git pull`).
+pub fn check(build: &Build, settings: &UpdateSettings) -> Result<Status, UpdateError> {
+    if build.channel != Channel::Release {
+        let Some(commit) = &build.commit else {
+            return Ok(Status::Build { behind: None });
+        };
+        let url = settings.compare_url.replace("{commit}", commit);
+        return match get(&url, settings)? {
+            // Commit absent de GitHub (pas encore poussé, ou d'un autre dépôt).
+            (404 | 422, _) => Ok(Status::Build { behind: None }),
+            (code, _) if code >= 400 => Err(http_error(code)),
+            (_, body) => parse_compare(&body).map(|n| Status::Build { behind: Some(n) }),
+        };
+    }
     let releases = fetch(settings)?;
-    Ok(newer(current, &releases).cloned())
+    Ok(match newer(&build.version, &releases) {
+        Some(release) => Status::Newer(release.clone()),
+        None => Status::Latest,
+    })
 }
 
 #[cfg(test)]
@@ -247,5 +391,65 @@ mod tests {
             "finale après les préversions"
         );
         assert!(parse_releases("{oops").is_err());
+    }
+
+    #[test]
+    fn a_personal_build_counts_the_commits_to_pull() {
+        let dir = tempfile::tempdir().unwrap();
+        let compare = dir.path().join("compare.json");
+        std::fs::write(
+            &compare,
+            r#"{"status": "behind", "ahead_by": 3, "behind_by": 0}"#,
+        )
+        .unwrap();
+        let url = format!(
+            "file://{}",
+            compare.display().to_string().replace('\\', "/")
+        );
+        let url = if url.starts_with("file:///") {
+            url
+        } else {
+            url.replacen("file://", "file:///", 1)
+        };
+        let settings = UpdateSettings {
+            url: "file:///nowhere".into(),
+            compare_url: url.replace("compare.json", "{commit}"),
+            timeout_s: 5,
+        };
+        // Le fichier porte le nom du « commit » : l'adresse est bien construite.
+        std::fs::rename(&compare, dir.path().join("abc1234def")).unwrap();
+        let mut build = Build {
+            version: "1.0.0-alpha.3".into(),
+            commit: Some("abc1234def".into()),
+            channel: Channel::Personal,
+        };
+        assert_eq!(build.label(), "1.0.0-alpha.3 (abc1234)");
+        assert_eq!(
+            check(&build, &settings).unwrap(),
+            Status::Build { behind: Some(3) }
+        );
+        build.channel = Channel::Nightly;
+        assert_eq!(build.label(), "1.0.0-alpha.3 nightly abc1234");
+        assert_eq!(
+            check(&build, &settings).unwrap(),
+            Status::Build { behind: Some(3) },
+            "un build de nuit se compare aussi à main"
+        );
+        build.commit = None;
+        assert_eq!(
+            check(&build, &settings).unwrap(),
+            Status::Build { behind: None },
+            "sans commit, pas de requête"
+        );
+        build.channel = Channel::Release;
+        assert_eq!(build.label(), "1.0.0-alpha.3");
+        assert!(
+            check(&build, &settings).is_err(),
+            "liste des versions introuvable"
+        );
+        assert!(parse_compare("{}").is_err());
+        assert_eq!(Channel::parse(Some("nightly")), Channel::Nightly);
+        assert_eq!(Channel::parse(Some("release")), Channel::Release);
+        assert_eq!(Channel::parse(None), Channel::Personal);
     }
 }

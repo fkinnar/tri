@@ -20,16 +20,29 @@ going to GitHub.
   of the Releases page, taken from `CHANGELOG.md`) and a button opening its page in the
   browser. **No automatic install** (after V1: signing, rights, replacing the running
   application).
+- **Nightly and personal builds** (2026-10-22, for the forgetful): a binary that is not
+  a released version says so, and counts the commits the `main` branch has that it lacks
+  (GitHub "compare" API, `[update] compare_url`): "git pull, then rebuild" for a personal
+  build, "in the next nightly build" for a nightly one; "up to date", or "cannot compare"
+  when its commit is not on GitHub (local commits not pushed yet). The provenance is
+  baked in at compile time by `build.rs`: the commit (`git rev-parse HEAD`, rebuilt when
+  `HEAD` moves) and `TRI_BUILD_CHANNEL`, set by the CI (`release` on a tag, `nightly` for
+  the nightly build, see [packaging.md](packaging.md)); without it, a personal build. The
+  version number in the help and on the logo carries it: `1.0.0-alpha.3 (e51c81b)`,
+  `1.0.0-alpha.3 nightly e51c81b`.
 
 ## API
 
 | Item | Role |
 |---|---|
-| `UpdateSettings` | `[update]` section: `url`, `timeout_s` |
+| `UpdateSettings` | `[update]` section: `url`, `compare_url`, `timeout_s` |
+| `Build::current()` | this binary: version, commit, `Channel` (release, nightly, personal); `label()` |
 | `Version::parse` | "1.0.0-alpha.3" (leading "v" accepted), SemVer order |
 | `parse_releases(json)` | published versions from the API answer (drafts left out) |
 | `newer(current, releases)` | the newest of the versions newer than `current` |
-| `fetch(settings)` / `check(current, settings)` | request with `curl`, then comparison |
+| `parse_compare(json)` | commits of `main` missing from the build (`ahead_by` of `commit...main`) |
+| `fetch(settings)` / `check(build, settings)` | request with `curl`, then `Status`: `Latest`, `Newer(release)`, `Build { behind }` |
+| `build_text(build, behind)` | the two lines shown for a nightly or personal build |
 
 In the interface, the request runs in a separate thread (`TriApp::check_update`); the
 dialog (`update_dialog`) shows "checking", then the result; Escape closes it.
@@ -38,5 +51,7 @@ dialog (`update_dialog`) shows "checking", then the result; Escape closes it.
 
 Unit: SemVer order (numeric and textual pre-release identifiers, final version after its
 pre-releases, unreadable numbers), reading an answer (draft left out, non-numeric tag
-ignored, offered version). Interface: list served from a local file (`file://`, read by
-`curl`, no network): newer version with its notes, then "latest version".
+ignored, offered version), personal and nightly builds (commits to pull from a local
+"compare" answer, no request without a commit, label). Interface: list served from a
+local file (`file://`, read by `curl`, no network): newer version with its notes, then
+"latest version"; a personal build with commits to pull.

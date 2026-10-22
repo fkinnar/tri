@@ -20,16 +20,30 @@ récente sans aller sur GitHub.
   notes (celles de la page Releases, tirées du `CHANGELOG.md`) et un bouton qui ouvre sa
   page dans le navigateur. **Pas d'installation automatique** (après la V1 : signature,
   droits, remplacement de l'application en cours).
+- **Builds de nuit et personnels** (22/10/2026, pour les têtes en l'air) : un binaire
+  qui n'est pas une version publiée le dit, et compte les commits de la branche `main`
+  qui lui manquent (API « compare » de GitHub, `[update] compare_url`) : « git pull, puis
+  recompiler » pour un build personnel, « dans le prochain build de nuit » pour un build
+  de nuit ; « à jour », ou « impossible de comparer » si son commit n'est pas sur GitHub
+  (commits locaux pas encore poussés). La provenance est gravée à la compilation par
+  `build.rs` : le commit (`git rev-parse HEAD`, recompilé quand `HEAD` bouge) et
+  `TRI_BUILD_CHANNEL`, posée par la CI (`release` sur un tag, `nightly` pour le build de
+  nuit, voir [packaging.md](packaging.md)) ; sans elle, build personnel. Le numéro de
+  version de l'aide et du logo la porte : `1.0.0-alpha.3 (e51c81b)`,
+  `1.0.0-alpha.3 nightly e51c81b`.
 
 ## API
 
 | Élément | Rôle |
 |---|---|
-| `UpdateSettings` | section `[update]` : `url`, `timeout_s` |
+| `UpdateSettings` | section `[update]` : `url`, `compare_url`, `timeout_s` |
+| `Build::current()` | ce binaire : version, commit, `Channel` (publiée, de nuit, personnel) ; `label()` |
 | `Version::parse` | « 1.0.0-alpha.3 » (« v » en tête accepté), ordre SemVer |
 | `parse_releases(json)` | versions publiées depuis la réponse de l'API (brouillons écartés) |
 | `newer(current, releases)` | la plus récente des versions plus récentes que `current` |
-| `fetch(settings)` / `check(current, settings)` | requête par `curl`, puis comparaison |
+| `parse_compare(json)` | commits de `main` absents du build (`ahead_by` de `commit...main`) |
+| `fetch(settings)` / `check(build, settings)` | requête par `curl`, puis `Status` : `Latest`, `Newer(release)`, `Build { behind }` |
+| `build_text(build, behind)` | les deux lignes affichées pour un build de nuit ou personnel |
 
 Dans l'interface, la requête tourne dans un fil à part (`TriApp::check_update`) ;
 la boîte (`update_dialog`) montre « recherche en cours », puis le résultat ; Échap ferme.
@@ -38,6 +52,8 @@ la boîte (`update_dialog`) montre « recherche en cours », puis le résultat ;
 
 Unitaires : ordre SemVer (préversions numériques et textuelles, version finale après ses
 préversions, numéros illisibles), lecture d'une réponse (brouillon écarté, tag non
-numérique ignoré, version proposée). Interface : liste servie par un fichier local
-(`file://`, lu par `curl`, aucun réseau) : version plus récente avec ses notes, puis
-« dernière version ».
+numérique ignoré, version proposée), builds personnels et de nuit (commits à récupérer
+depuis une réponse « compare » locale, pas de requête sans commit, libellé). Interface :
+liste servie par un fichier local (`file://`, lu par `curl`, aucun réseau) : version
+plus récente avec ses notes, puis « dernière version » ; build personnel avec des
+commits à récupérer.

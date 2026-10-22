@@ -17,6 +17,17 @@ Prerequisites: those of the build
 ([build.md](build.md)) and [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)
 (`cargo install cargo-about --locked --features cli`).
 
+## Nightly builds
+
+Decided on 2026-10-22: while in alpha, the CI (`.github/workflows/ci.yml`) also runs
+**every night** (2:00 UTC) when `main` has changed since the last one (the `nightly` tag
+is compared with the current commit): tests on the three systems, packages, then the
+**`nightly` Release** (pre-release) replaced with the day's packages and the last commits
+as notes. Its tag is not a version number: the update check ignores it. These binaries
+carry `TRI_BUILD_CHANNEL=nightly` (`release` on a `v…` tag) and say so in the help
+([update.md](update.md)). For the beta (planned): a `candidate` branch for release
+candidates and a nightly build branch.
+
 ## What is shipped, and why
 
 - **Without HEIC** (`--no-default-features`, with libjpeg-turbo): HEVC patents, see

@@ -62,6 +62,7 @@ use tri::media::{MediaKind, scan};
 use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
 use tri::settings::{self, Auto, EngineSettings};
 use tri::t;
+use tri::update::Status;
 use tri::xmp::{self, Convention};
 
 /// Mode d'emploi, dans la langue choisie.
@@ -1007,9 +1008,9 @@ fn run() -> AnyResult<()> {
         return print_usage(&settings.open_cache()?);
     }
     if args.check_update {
-        let current = env!("CARGO_PKG_VERSION");
-        match tri::update::check(current, &settings.update)? {
-            Some(release) => println!(
+        let build = tri::update::Build::current();
+        match tri::update::check(&build, &settings.update)? {
+            Status::Newer(release) => println!(
                 "{}",
                 t!(
                     "cli-update-available",
@@ -1017,7 +1018,12 @@ fn run() -> AnyResult<()> {
                     url = release.url
                 )
             ),
-            None => println!("{}", t!("cli-update-latest", version = current)),
+            Status::Latest => println!("{}", t!("cli-update-latest", version = build.version)),
+            Status::Build { behind } => {
+                for line in tri::update::build_text(&build, behind) {
+                    println!("{line}");
+                }
+            }
         }
         return Ok(());
     }

@@ -1,6 +1,7 @@
 # Compilation, vérifications et tests sur macOS, Linux et Windows, puis paquets en
-# artefacts (.dmg, .tar.gz ; Windows : binaires seuls pour l'instant). Lancé à la main
-# (onglet Actions) ou à chaque version (tag v…), pas à chaque envoi. Sur un tag, les
+# artefacts (.dmg, .tar.gz ; Windows : .msi, .zip). Lancé à la main (onglet Actions), à
+# chaque version (tag v…), et chaque nuit si `main` a changé (22/10/2026 : build de nuit,
+# publié sur la Release « nightly », remplacée à chaque fois), pas à chaque envoi. Sur un tag, les
 # paquets sont publiés sur la page Releases (21/10/2026), avec la section de la version
 # dans CHANGELOG.md. Voir doc/en/build.md, doc/en/packaging.md.
 #
@@ -12,14 +13,42 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "0 2 * * *" # 2 h UTC
+
 
 env:
   CARGO_TERM_COLOR: always
   FEATURES: --no-default-features --features tri/turbojpeg,tri-gui/turbojpeg
+  # Provenance gravée dans le binaire (build.rs, tri::update::Build) : version publiée
+  # sur un tag, build de nuit la nuit, sinon build « personnel ».
+  TRI_BUILD_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || github.event_name == 'schedule' && 'nightly' || '' }}
 
 jobs:
+  # La nuit : rien à faire si `main` n'a pas bougé depuis le dernier build de nuit (tag
+  # « nightly » sur le même commit).
+  changes:
+    name: Changements
+    runs-on: ubuntu-24.04
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build=true
+          if [ "${{ github.event_name }}" = schedule ]; then
+            last=$(gh api "repos/${{ github.repository }}/commits/nightly" --jq .sha 2>/dev/null || true)
+            [ "$last" = "${{ github.sha }}" ] && build=false
+          fi
+          echo "dernier build de nuit : ${last:-aucun} ; à construire : $build"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -139,3 +168,40 @@ jobs:
           printf 'paquet : %s\n' "${files[@]}"
           gh release create "$GITHUB_REF_NAME" $prerelease \
             --title "tri $version" --notes-file notes.md "${files[@]}"
+
+  # La nuit : la Release « nightly » (préversion) remplacée par les paquets du jour. Son
+  # tag n'est pas un numéro de version : la recherche de mise à jour l'ignore.
+  nightly:
+    name: Build de nuit
+    needs: build
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 20 # pour la liste des derniers commits
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tri-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publier
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --cleanup-tag --yes || true
+          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.zip' \))
+          printf 'paquet : %s\n' "${files[@]}"
+          short="${GITHUB_SHA::7}"
+          {
+            echo "Build de nuit du $(date -u +%d/%m/%Y), commit $short : pas une version publiée,"
+            echo "pour les testeurs. Nightly build of $(date -u +%Y-%m-%d), commit $short: not a release."
+            echo
+            git log -15 --format='- %s' "$GITHUB_SHA"
+          } > notes.md
+          gh release create nightly --prerelease --target "$GITHUB_SHA" \
+            --title "tri nightly $short" --notes-file notes.md "${files[@]}"

@@ -223,6 +223,9 @@ profile = "web"
 # Check for updates (help, tri --check-update), on demand only: list of published
 # versions (GitHub Releases API, read with curl) and maximum delay (seconds).
 url = "https://api.github.com/repos/fkinnar/tri/releases"
+# Nightly or personal build: commits of main it lacks (GitHub "compare" API, {commit} =
+# the compiled commit).
+compare_url = "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main"
 timeout_s = 10
 
 [watch]

@@ -17,7 +17,8 @@ clavier (jeu « classique » ou « vim »), à la souris aussi.
 ## Installer
 
 **Paquets prêts à installer**, sur la [page Releases](https://github.com/fkinnar/tri/releases)
-(sans HEIC, voir [doc/fr/packaging.md](doc/fr/packaging.md)) :
+(sans HEIC, voir [doc/fr/packaging.md](doc/fr/packaging.md)). Entre deux versions, la
+préversion **`nightly`** porte les paquets du `main` de la nuit :
 
 - **macOS** (`.dmg`) : glisser `tri.app` dans Applications. L'app n'est pas encore
   signée par Apple : au premier lancement, macOS refuse ; ouvrir alors **Réglages

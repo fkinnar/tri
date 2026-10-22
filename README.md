@@ -16,7 +16,8 @@ histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("class
 ## Install
 
 **Ready-to-install packages**, on the [Releases page](https://github.com/fkinnar/tri/releases)
-(without HEIC, see [doc/en/packaging.md](doc/en/packaging.md)):
+(without HEIC, see [doc/en/packaging.md](doc/en/packaging.md)). Between versions, the
+**`nightly`** pre-release holds the packages of the last night's `main`:
 
 - **macOS** (`.dmg`): drag `tri.app` into Applications. The app is not signed by Apple
   yet: on first launch macOS refuses it; then open **System Settings → Privacy &

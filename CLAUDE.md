@@ -421,10 +421,14 @@ Proposition : sortir cette étape du logiciel de développement.
     langue), `doc/overlay.example.toml`, `doc/manual-images/`. Les chemins
     cités dans le code pointent vers `doc/en/`. Commentaires `///` sur tout l'API public
     pour `cargo doc` ;
-  - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans warning,
-    `cargo test --workspace` vert, **dans les deux configurations** (défaut et
-    `--no-default-features`) ; pour l'interface, vérifier aussi le rendu par capture
-    automatique (`TRI_GUI_SCREENSHOT`, voir `doc/fr/gui.md`).
+  - avant chaque commit : `cargo fmt`, `cargo clippy --workspace --all-targets` sans
+    warning, et **les tests autour du code modifié** (tests du module, son fichier de
+    `tests/`, tests de l'interface concernés) ; pour l'interface, vérifier aussi le rendu
+    par capture automatique (`TRI_GUI_SCREENSHOT`, voir `doc/fr/gui.md`).
+    **Tous les 4-5 commits** (décidé le 22/10/2026 : les ajustements prenaient trop de
+    temps), et toujours avant une version : `cargo test --workspace` complet, **dans les
+    deux configurations** (défaut et `--no-default-features`). Les builds de nuit de la
+    CI (`.github/workflows/ci.yml`) testent aussi les trois systèmes.
 
 ## Prochaine étape immédiate
 
