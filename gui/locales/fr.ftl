@@ -725,6 +725,7 @@ filter-bar-well-exposed = bien exposées
 filter-bar-inverted = inversé
 filter-bar-count-tip = images affichées / images du dossier
 badge-blurry = Jugée floue (score de netteté)
+badge-blurry-view = Jugée floue (score de netteté) ; clic : carte de netteté
 panel-sharpness = Netteté
 panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
 panel-sharpness-value-stack = { $score } (× { $folder } le dossier, × { $stack } la pile)

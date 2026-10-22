@@ -440,7 +440,9 @@ system one ("cold" measurements, experiments).
     flags, stars and colours of the selected image, clickable, faded when not set;
     `Shift+N` shows or hides it (`[gui] rating_bar`); on the right, the "auto-advance"
     button (see below). In full screen, the ratings are drawn on the image only without
-    it (hidden, or focus mode; issue #8: they showed twice);
+    it (hidden, or focus mode; issue #8: they showed twice). In full screen too, after the
+    ratings: the grid's badges, blown / blocked (click: large histogram) and blurry
+    (click: sharpness map; issue #9);
   - **right click** on a thumbnail or in full screen: **modal dialog** with the same
     controls, for the clicked (selected) image. A simple menu was not enough (feedback of
     2026-10-17): the mouse leaving the menu selected other thumbnails, while the rating

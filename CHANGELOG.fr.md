@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Plein écran** : badges brûlée, bouchée et floue dans le bandeau, comme dans la
+  grille (clic : grand histogramme, carte de netteté ; issue n° 9).
 - **Plein écran** : notes plus affichées deux fois ; sur l'image seulement quand le
   bandeau de notation est masqué (issue n° 8).
 - **Filtre « bien exposées »** : la grille ne défilait plus (refiltrée sans fin, chaque

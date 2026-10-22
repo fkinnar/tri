@@ -456,7 +456,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     estompés quand ils ne sont pas posés ; `Maj+N` l'affiche ou le masque
     (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous). En
     plein écran, les notes ne sont dessinées sur l'image que sans lui (masqué, ou mode
-    concentration ; issue n° 8 : elles apparaissaient deux fois) ;
+    concentration ; issue n° 8 : elles apparaissaient deux fois). En plein écran aussi,
+    après les notes : les badges de la grille, brûlée / bouchée (clic : grand
+    histogramme) et floue (clic : carte de netteté ; issue n° 9) ;
   - **clic droit** sur une vignette ou en plein écran : **boîte modale** avec les mêmes
     contrôles, pour l'image cliquée (sélectionnée). Un simple menu ne suffisait pas
     (retour du 17/10/2026) : la souris qui sortait du menu sélectionnait d'autres

@@ -5951,6 +5951,15 @@ impl TriApp {
             .filter(|(p, _)| *p == path)
             .map(|(_, i)| *i);
         let mut version_action: Option<VersionAction> = None;
+        // Plein écran : écrêtage et flou de l'image, comme sur les vignettes (issue n° 9).
+        let (clip, blurry) = if self.mode == Mode::View {
+            let index = self.selected;
+            let deadline = Instant::now() + Duration::from_millis(5);
+            (self.clip_fractions(index, deadline), self.is_blurry(&path))
+        } else {
+            (None, false)
+        };
+        let histogram = self.gui.histogram;
         ui.horizontal(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size);
@@ -5986,6 +5995,39 @@ impl TriApp {
                             }
                         }
                     });
+            }
+            // Brûlée, bouchée (clic : grand histogramme), floue (clic : carte de netteté).
+            let mut badges: Vec<(String, Option<bool>, Action)> = Vec::new();
+            if let Some((over, under)) = clip {
+                for (fraction, threshold, what, is_over) in [
+                    (over, histogram.badge_over, "badge-over", true),
+                    (under, histogram.badge_under, "badge-under", false),
+                ] {
+                    if fraction > threshold {
+                        let percent = tri::i18n::decimal((fraction * 1000.0).round() / 10.0, 1);
+                        let tip = t!(what, percent = percent);
+                        badges.push((tip, Some(is_over), Action::HistogramLarge));
+                    }
+                }
+            }
+            if blurry {
+                badges.push((t!("badge-blurry-view"), None, Action::TogglePeaking));
+            }
+            if !badges.is_empty() {
+                ui.separator();
+            }
+            for (tip, over, action) in badges {
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                match over {
+                    Some(is_over) => marks::clip_badge(ui.painter(), rect, is_over),
+                    None => {
+                        let color = ui.visuals().text_color();
+                        marks::blur_drop_outline(ui.painter(), rect, color);
+                    }
+                }
+                if response.clicked() {
+                    clicked = Some(action);
+                }
             }
 
             // En comparaison, seule l'image active est notée.
@@ -6096,7 +6138,9 @@ impl TriApp {
                 | Action::StackMode
                 | Action::Develop
                 | Action::ToggleZoom
-                | Action::ToggleGridInfo),
+                | Action::ToggleGridInfo
+                | Action::HistogramLarge
+                | Action::TogglePeaking),
             ) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
@@ -10935,7 +10979,8 @@ mod tests {
         // Clic sur le badge : l'image choisie, le grand histogramme ouvert.
         assert!(!h.state().histogram_large);
         let percent = tri::i18n::decimal((over * 1000.0).round() / 10.0, 1);
-        h.get_by_label(&t!("badge-over", percent = percent)).click();
+        h.get_by_label(&t!("badge-over", percent = percent.clone()))
+            .click();
         h.run_steps(3);
         assert!(h.state().histogram_large);
         assert_eq!(h.state().selected, white);
@@ -10987,6 +11032,17 @@ mod tests {
         h.state_mut().select(white);
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| app.exposures.contains(&white_path));
+        // Badge de l'écrêtage dans le bandeau aussi (issue n° 9) : grand histogramme.
+        h.run_steps(2);
+        assert!(!h.state().histogram_large);
+        h.get_by_label(&t!("badge-over", percent = percent)).click();
+        h.run_steps(3);
+        assert!(
+            h.state().histogram_large,
+            "clic sur le badge du plein écran"
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().histogram, "histogramme affiché par défaut");
         press(&mut h, Key::I, Modifiers::NONE);
         assert!(!h.state().histogram, "i le masque");

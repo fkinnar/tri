@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Full screen**: blown, blocked and blurry badges in the rating bar, as in the grid
+  (click: large histogram, sharpness map; issue #9).
 - **Full screen**: ratings no longer shown twice; on the image only when the rating bar
   is hidden (issue #8).
 - **"Well exposed" filter**: the grid could no longer be scrolled (refiltered endlessly,
