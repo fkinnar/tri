@@ -291,7 +291,7 @@ system one ("cold" measurements, experiments).
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
   the search), settings and their comments on the right, fuzzy search like the help
   (name, section, description). Field by type: checkbox, number to drag or type, colour
-  (picker), text or TOML list (written on confirmation). Key present in the file in bold,
+  (picker), text or TOML list (written on confirmation). Key present in the file in bold (said in the window and on hover, issue #6),
   "default" button to remove it. Each change is validated (whole file reread) then
   written (when the mouse is released); a rejected value reverts with the error message.
   Applied immediately: interface (`[gui.*]`), shortcuts, language, `[files]`, `[xmp]`,

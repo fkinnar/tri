@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Réglages** : une clé réglée dans votre fichier de configuration est en gras,
+  maintenant dit dans la fenêtre et au survol (issue n° 6).
 - **Notes de version dans la langue de l'interface** : la boîte « Mise à jour » montre
   les notes en français ou en anglais ; historique en anglais (`CHANGELOG.md`) et en
   français (`CHANGELOG.fr.md`), les deux dans la Release.

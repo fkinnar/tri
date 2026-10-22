@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Settings**: a key set in your configuration file is in bold, now said in the
+  window and on hover (issue #6).
 - **Release notes in the interface language**: the "Update" dialog shows the notes in
   English or French; changelog in English (`CHANGELOG.md`) and French
   (`CHANGELOG.fr.md`), both in the Release.

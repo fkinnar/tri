@@ -624,6 +624,7 @@ impl SettingsWindow {
                         "settings-file",
                         path = self.file.path.display().to_string()
                     ));
+                    ui.weak(t!("settings-bold"));
                     if let Some(e) = &self.save_error {
                         ui.colored_label(ui.visuals().error_fg_color, e);
                     }
@@ -1197,8 +1198,16 @@ impl SettingsWindow {
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     ui.set_min_width(220.0);
+                    // En gras : présent dans le fichier (issue n° 6 : on le prenait pour
+                    // une erreur d'affichage), dit au survol.
+                    let hover = format!("{section}.{}", entry.key);
+                    let hover = if in_file {
+                        format!("{hover}\n{}", t!("settings-in-file"))
+                    } else {
+                        hover
+                    };
                     ui.add(egui::Label::new(name).truncate())
-                        .on_hover_text(format!("{section}.{}", entry.key));
+                        .on_hover_text(hover);
                 },
             );
             match &current {

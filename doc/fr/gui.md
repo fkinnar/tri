@@ -299,7 +299,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme
   l'aide (nom, section, description). Champ selon le type : case à cocher, nombre à
   glisser ou taper, couleur (sélecteur), texte ou liste TOML (écrits à la validation).
-  Clé présente dans le fichier en gras, bouton « défaut » pour la retirer. Chaque
+  Clé présente dans le fichier en gras (dit dans la fenêtre et au survol, issue n° 6), bouton « défaut » pour la retirer. Chaque
   changement est validé (fichier entier relu) puis écrit (quand la souris est lâchée) ;
   une valeur refusée revient en arrière avec le message d'erreur. Appliqués tout de
   suite : interface (`[gui.*]`), raccourcis, langue, `[files]`, `[xmp]`, `[offload]` ;
