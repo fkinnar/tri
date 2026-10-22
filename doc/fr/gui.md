@@ -533,7 +533,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   compréhensible et ses touches, **rangée par thème** (Navigation, Affichage, Notation,
   Filtres, Panneaux, Application : `Action::group`) ; l'identifiant technique n'apparaît
   qu'au survol. L'aide est **modale** : tant qu'elle est ouverte, seules Échap, l'aide et
-  Quitter agissent.
+  Quitter agissent. **Préparée d'avance** (issue n° 11, 22/10/2026 : ~75 ms par image,
+  le fondu d'ouverture saccadait) : lignes (`HelpLines`) et largeurs des colonnes
+  calculées dès les premières images, refaites seulement quand la recherche, les
+  raccourcis ou la langue changent ; seules les lignes visibles sont dessinées
+  (`ScrollArea::show_rows`). Environ 0,3 ms par image.
 - **Recherche dans l'aide, à la fzf** : le champ en tête a le focus dès l'ouverture, on
   tape directement. Chaque mot de la requête doit se retrouver lettre par lettre, dans
   l'ordre, éventuellement avec des trous, dans le libellé, les touches ou l'identifiant

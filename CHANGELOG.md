@@ -5,7 +5,8 @@
 ## Unreleased
 
 - **Help**: opens at its final size at once (it grew over several frames the first
-  time), and the keys column no longer overflows the window (issue #11).
+  time), and the keys column no longer overflows the window (issue #11). Smooth opening:
+  prepared at startup, only the visible lines drawn (75 ms per frame down to 0.3 ms).
 - **Full screen**: blown, blocked and blurry badges in the rating bar, as in the grid
   (click: large histogram, sharpness map; issue #9).
 - **Full screen**: ratings no longer shown twice; on the image only when the rating bar

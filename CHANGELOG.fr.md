@@ -6,7 +6,8 @@
 
 - **Aide** : s'ouvre tout de suite à sa taille (elle grandissait sur plusieurs images
   la première fois), et la colonne des touches ne déborde plus de la fenêtre
-  (issue n° 11).
+  (issue n° 11). Ouverture fluide : préparée au démarrage, seules les lignes visibles
+  dessinées (75 ms par image ramenées à 0,3 ms).
 - **Plein écran** : badges brûlée, bouchée et floue dans le bandeau, comme dans la
   grille (clic : grand histogramme, carte de netteté ; issue n° 9).
 - **Plein écran** : notes plus affichées deux fois ; sur l'image seulement quand le

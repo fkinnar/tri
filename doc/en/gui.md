@@ -515,7 +515,11 @@ system one ("cold" measurements, experiments).
 - **Help** (`F1` or `?`, closed by Esc or `F1`): each action with an understandable label
   and its keys, **arranged by theme** (Navigation, Display, Rating, Filters, Panels,
   Application: `Action::group`); the technical identifier only appears on hover. The help
-  is **modal**: while it is open, only Esc, help and Quit act.
+  is **modal**: while it is open, only Esc, help and Quit act. **Prepared beforehand**
+  (issue #11, 2026-10-22: ~75 ms per frame, the opening fade stuttered): lines
+  (`HelpLines`) and column widths computed during the first frames, redone only when the
+  search, the shortcuts or the language change; only the visible lines are drawn
+  (`ScrollArea::show_rows`). About 0.3 ms per frame.
 - **Search in the help, fzf style**: the field at the top has focus as soon as it opens,
   you type directly. Each word of the query must be found letter by letter, in order,
   possibly with gaps, in the label, the keys or the identifier ("pnd" → *panneau des

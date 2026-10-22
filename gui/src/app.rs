@@ -413,6 +413,12 @@ pub struct TriApp {
     /// Recherche dans l'aide (`None` : aide fermée, le champ prendra le focus à
     /// l'ouverture).
     help_search: Option<String>,
+    /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
+    /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
+    help_lines: Option<HelpLines>,
+    /// Largeurs des colonnes de l'aide (libellés, touches), mesurées au démarrage, ce qui
+    /// prépare aussi les caractères des polices ; refaites quand les raccourcis changent.
+    help_widths: Option<(f32, f32)>,
     /// Actions à exécuter à la première image (`TRI_GUI_ACTIONS`, développement).
     startup_actions: std::collections::VecDeque<Step>,
     /// Pause en cours dans le script de démarrage.
@@ -482,6 +488,9 @@ impl TriApp {
         }
         let (keymap, warnings) = new.keymap();
         self.keymap = keymap;
+        // Raccourcis ou langue changés : l'aide se prépare à nouveau.
+        self.help_lines = None;
+        self.help_widths = None;
         self.key_warnings = warnings;
         self.sequencer = new.gui.sequencer();
         // Textures colorées d'après les réglages : recalculées.
@@ -702,6 +711,8 @@ impl TriApp {
             meta_anchor: None,
             scroll_to_cursor: false,
             help_search: None,
+            help_lines: None,
+            help_widths: None,
             visible_waiting: 0,
             startup_actions: startup_actions().into(),
             script_wait: None,
@@ -7482,6 +7493,32 @@ impl TriApp {
         }
     }
 
+    /// Largeurs des libellés et des raccourcis de l'aide (les plus longs), mesurées une
+    /// fois : dès la première image (`update`), ce qui prépare aussi dans la texture des
+    /// polices les caractères de l'aide, sinon dessinés à sa première ouverture.
+    fn help_widths(&mut self, ctx: &egui::Context) -> (f32, f32) {
+        if let Some(widths) = self.help_widths {
+            return widths;
+        }
+        let style = ctx.global_style();
+        let body = egui::TextStyle::Body.resolve(&style);
+        let mono = egui::TextStyle::Monospace.resolve(&style);
+        let rows = help_rows(&self.keymap, "");
+        let widths = ctx.fonts_mut(|fonts| {
+            let mut width = |text: String, font: egui::FontId| {
+                fonts.layout_no_wrap(text, font, Color32::WHITE).size().x
+            };
+            rows.iter().fold((0.0f32, 0.0f32), |(l, k), (a, keys)| {
+                (
+                    l.max(width(a.label(), body.clone())),
+                    k.max(width(keys.clone(), mono.clone())),
+                )
+            })
+        });
+        self.help_widths = Some(widths);
+        widths
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -7512,23 +7549,12 @@ impl TriApp {
         // Largeur fixée d'avance d'après les libellés (issue n° 11) : calculée d'après la
         // fenêtre de l'image précédente, la colonne poussait la fenêtre un peu plus à chaque
         // image, qui s'ouvrait en grandissant pendant plusieurs images.
-        let rows = help_rows(&self.keymap, &query);
+        let (label_width, keys_width) = self.help_widths(ctx);
+        if self.help_lines.as_ref().is_none_or(|l| l.query != query) {
+            self.help_lines = Some(HelpLines::new(&self.keymap, &query));
+        }
+        let lines = self.help_lines.take().unwrap_or_default();
         let style = ctx.global_style();
-        let body = egui::TextStyle::Body.resolve(&style);
-        let mono = egui::TextStyle::Monospace.resolve(&style);
-        let (label_width, keys_width) = ctx.fonts_mut(|fonts| {
-            let mut width = |text: String, font: egui::FontId| {
-                fonts.layout_no_wrap(text, font, Color32::WHITE).size().x
-            };
-            help_rows(&self.keymap, "")
-                .iter()
-                .fold((0.0f32, 0.0f32), |(l, k), (a, keys)| {
-                    (
-                        l.max(width(a.label(), body.clone())),
-                        k.max(width(keys.clone(), mono.clone())),
-                    )
-                })
-        });
         let gap = 32.0;
         let width = (label_width + keys_width + gap)
             .max(self.gui.dialogs.help_width)
@@ -7597,45 +7623,64 @@ impl TriApp {
                 // jusqu'à lui (retour du 18/10/2026 : la boîte élargie gardait une zone de
                 // texte étroite).
                 // Toute sa hauteur dès la première image quand la liste défile (issue n° 11).
+                if lines.lines.is_empty() {
+                    ui.weak(t!("help-no-match"));
+                }
+                // Seulement les lignes visibles (une vingtaine sur ~180), toutes de même
+                // hauteur, titres de thème compris ; bandes une ligne sur deux.
+                let row_height = ui.spacing().interact_size.y;
+                let spacing = ui.spacing().item_spacing;
                 let _output = ScrollArea::vertical()
+                    .id_salt("help_rows")
                     .max_height(max_height)
                     .min_scrolled_height(max_height)
                     .auto_shrink([false, true])
-                    .show(ui, |ui| {
+                    .show_rows(ui, row_height, lines.lines.len(), |ui, range| {
                         if scroll != 0.0 {
                             ui.scroll_with_delta(vec2(0.0, -scroll));
                         }
-                        if rows.is_empty() {
-                            ui.weak(t!("help-no-match"));
-                        }
-                        egui::Grid::new("help").striped(true).show(ui, |ui| {
-                            let mut group = None;
-                            for (action, keys) in &rows {
-                                // Rangées par thème, avec un titre (recherche comprise).
-                                if group != Some(action.group()) {
-                                    group = Some(action.group());
-                                    ui.label(egui::RichText::new(action.group().label()).strong());
-                                    ui.end_row();
-                                }
-                                // Identifiant technique au survol seulement (utile pour la
-                                // section `[keys]` de la configuration).
-                                // Première colonne à sa largeur, en une seule cellule
-                                // (`min_col_width` vaudrait pour les deux : celle des
-                                // touches débordait).
-                                let height = ui.spacing().interact_size.y;
-                                ui.allocate_ui_with_layout(
-                                    vec2(label_column, height),
-                                    egui::Layout::left_to_right(egui::Align::Center),
-                                    |ui| {
-                                        ui.set_min_width(label_column);
-                                        ui.label(action.label()).on_hover_text(action.id());
-                                    },
+                        let full = ui.available_width();
+                        for i in range {
+                            let row = Rect::from_min_size(ui.cursor().min, vec2(full, row_height));
+                            if i % 2 == 1 {
+                                ui.painter().rect_filled(
+                                    row.expand2(vec2(0.0, spacing.y / 2.0)),
+                                    0.0,
+                                    ui.visuals().faint_bg_color,
                                 );
-                                // Chasse fixe : « l » et « I » restent distincts.
-                                ui.label(egui::RichText::new(keys).monospace().strong());
-                                ui.end_row();
                             }
-                        });
+                            ui.allocate_ui_with_layout(
+                                vec2(full, row_height),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.set_min_size(vec2(full, row_height));
+                                    match &lines.lines[i] {
+                                        // Rangées par thème, avec un titre (recherche comprise).
+                                        HelpLine::Group(name) => {
+                                            ui.label(egui::RichText::new(name).strong());
+                                        }
+                                        HelpLine::Action { label, id, keys } => {
+                                            // Identifiant technique au survol seulement (utile
+                                            // pour la section `[keys]` de la configuration).
+                                            ui.allocate_ui_with_layout(
+                                                vec2(label_column, row_height),
+                                                egui::Layout::left_to_right(egui::Align::Center),
+                                                |ui| {
+                                                    ui.set_min_width(label_column);
+                                                    ui.label(label.as_str()).on_hover_text(*id);
+                                                },
+                                            );
+                                            // Chasse fixe : « l » et « I » restent distincts.
+                                            ui.label(
+                                                egui::RichText::new(keys.as_str())
+                                                    .monospace()
+                                                    .strong(),
+                                            );
+                                        }
+                                    }
+                                },
+                            );
+                        }
                     });
                 #[cfg(test)]
                 {
@@ -7644,6 +7689,7 @@ impl TriApp {
                 ui.add_space(6.0);
                 ui.weak(t!("help-close-hint"));
             });
+        self.help_lines = Some(lines);
         self.help_search = Some(query);
         self.help = open;
         if check_update {
@@ -7864,6 +7910,12 @@ impl eframe::App for TriApp {
             self.help_window(&ctx);
         } else {
             self.help_search = None;
+            // Préparée d'avance (lignes, largeurs, caractères des polices), sans attendre
+            // F1 : l'ouverture n'a plus rien à calculer.
+            self.help_widths(&ctx);
+            if self.help_lines.is_none() {
+                self.help_lines = Some(HelpLines::new(&self.keymap, ""));
+            }
         }
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
@@ -8407,6 +8459,49 @@ fn truncate(s: &str, max: usize) -> String {
 /// Identifiant du champ de recherche de l'aide.
 fn help_search_id() -> egui::Id {
     egui::Id::unique("help_search")
+}
+
+/// Une ligne de l'aide : titre de thème, ou action et ses raccourcis.
+enum HelpLine {
+    /// Titre d'un thème.
+    Group(String),
+    /// Action : libellé, identifiant (au survol), raccourcis.
+    Action {
+        label: String,
+        id: &'static str,
+        keys: String,
+    },
+}
+
+/// Lignes de l'aide pour une recherche, préparées une fois (issue n° 11).
+#[derive(Default)]
+struct HelpLines {
+    /// Recherche pour laquelle elles ont été préparées.
+    query: String,
+    /// Titres de thème et actions, dans l'ordre d'affichage.
+    lines: Vec<HelpLine>,
+}
+
+impl HelpLines {
+    fn new(keymap: &Keymap, query: &str) -> HelpLines {
+        let mut lines = Vec::new();
+        let mut group = None;
+        for (action, keys) in help_rows(keymap, query) {
+            if group != Some(action.group()) {
+                group = Some(action.group());
+                lines.push(HelpLine::Group(action.group().label()));
+            }
+            lines.push(HelpLine::Action {
+                label: action.label(),
+                id: action.id(),
+                keys,
+            });
+        }
+        HelpLines {
+            query: query.to_string(),
+            lines,
+        }
+    }
 }
 
 /// Lignes de l'aide : (action, raccourcis), rangées par thème. Sans recherche, toutes les
@@ -10095,7 +10190,19 @@ mod tests {
         assert!(h.query_by_label("Ligne du dessous").is_some());
         // Rangée par thème sans recherche.
         assert!(h.query_by_label("Navigation").is_some());
-        assert!(h.query_by_label("Notation").is_some());
+        // Plus bas, hors de la vue (seules les lignes visibles sont dessinées) : dans la
+        // liste préparée.
+        let groups: Vec<&str> = h
+            .state()
+            .help_lines
+            .iter()
+            .flat_map(|l| &l.lines)
+            .filter_map(|l| match l {
+                HelpLine::Group(name) => Some(name.as_str()),
+                HelpLine::Action { .. } => None,
+            })
+            .collect();
+        assert!(groups.contains(&"Notation"), "{groups:?}");
         for c in "wqx".chars() {
             h.event(UiEvent::Text(c.to_string()));
             h.run_steps(1);
