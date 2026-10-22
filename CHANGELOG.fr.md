@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Filtre « bien exposées »** : la grille ne défilait plus (refiltrée sans fin, chaque
+  fois ramenée à la sélection ; issue n° 10).
 - **Plein écran** : les versions d'une image dans une liste sur la ligne des notes ;
   l'image ne change plus de taille d'une photo à l'autre (issue n° 5).
 - **Boîte « Mise à jour »** : notes de version mises en forme (gras, listes, code) au

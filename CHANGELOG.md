@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **"Well exposed" filter**: the grid could no longer be scrolled (refiltered endlessly,
+  each time brought back to the selection; issue #10).
 - **Full screen**: an image's versions in a list on the ratings line; the image no longer
   changes size from one photo to the next (issue #5).
 - **Update dialog**: release notes formatted (bold, lists, code) instead of raw Markdown

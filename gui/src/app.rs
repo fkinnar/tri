@@ -2107,7 +2107,14 @@ impl TriApp {
                     if level == Level::Sharpness {
                         scored.push(index);
                     }
-                    if level == Level::Exposure && self.well_exposed {
+                    // Seulement une analyse nouvelle (issue n° 10) : refiltrer relance le
+                    // moteur sur la liste, qui ré-annonce celles déjà en cache ; les compter
+                    // refiltrait sans fin, et chaque fois la grille revenait à la sélection.
+                    if level == Level::Exposure
+                        && self.well_exposed
+                        && let Some(f) = self.files.get(index)
+                        && !self.clip_summary.contains_key(&f.path)
+                    {
                         self.exposure_refilter_pending = true;
                     }
                     if level == Level::Similarity
@@ -10950,6 +10957,14 @@ mod tests {
         press(&mut h, Key::W, Modifiers::NONE);
         assert!(h.state().well_exposed);
         assert_eq!(h.state().files.len(), n - badly.len());
+        // Plus de refiltrage ensuite (issue n° 10 : refiltrée sans fin, la grille revenait
+        // sans cesse à la sélection et ne défilait plus).
+        let generation = h.state().engine.as_ref().unwrap().generation;
+        for _ in 0..30 {
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(h.state().engine.as_ref().unwrap().generation, generation);
         assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::I, Modifiers::NONE);
