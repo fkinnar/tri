@@ -13,4 +13,8 @@ serve:
   as the other filters (combinable with stars, colours…); applies to the name only, not
   the folder;
 - **folder search** (`places::DirSearch`, see `places.md`);
-- the help and the settings window (the interface re-exports it as `actions::fuzzy_score`).
+- the help and the settings window, through **`find(query, fields)`** (2026-10-22): each
+  word within one of an entry's fields (label, identifier, description, keywords…), and
+  `Match { exact, score }`, `exact` when each word appears in one piece; **`relevant`**
+  keeps only the exact ones if there are any, so that scattered letters do not drown the
+  right result.

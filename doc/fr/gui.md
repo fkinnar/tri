@@ -534,9 +534,21 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'ordre, éventuellement avec des trous, dans le libellé, les touches ou l'identifiant
   (« pnd » → *panneau des dossiers*, « etoile 3 », « maj+e », « core.nav »), sans tenir
   compte des accents ni de la casse ; les mots peuvent être dans le désordre. Résultats
-  triés par pertinence (`actions::fuzzy_score` : lettres consécutives et débuts de mots
-  comptent plus, les trous pénalisent ; à égalité, le libellé le plus court). Pendant la
-  saisie, `?` s'écrit dans le champ : on ferme par Échap ou `F1`.
+  triés par pertinence (`tri::fuzzy` : lettres consécutives et débuts de mots comptent
+  plus, les trous pénalisent ; à égalité, le libellé le plus court). Pendant la saisie,
+  `?` s'écrit dans le champ : on ferme par Échap ou `F1`.
+- **Recherche, aide et réglages** (revue le 22/10/2026 : on ne sait souvent qu'« à peu
+  près » ce qu'on cherche) : les **thèmes** de l'aide et les **sections** des réglages
+  restent visibles pendant la recherche (dans les réglages, la liste de gauche met en
+  tête les sections trouvées, avec leur nombre de résultats, les autres grisées ; un clic
+  amène les résultats de la section en vue) ; le **titre** d'une section ou d'un thème
+  la trouve en entier ; des **mots-clés invisibles** par réglage, section ou action
+  (`kw-<id>` dans `gui/locales/*.ftl`, `actions::keywords` ; « vim » trouve le jeu de
+  raccourcis, « collimateur » le repère d'autofocus ; un test vérifie que chacun désigne
+  quelque chose qui existe) ; et quand un mot tapé apparaît **tel quel** quelque part,
+  les correspondances à lettres éparpillées sont écartées (`tri::fuzzy::find` et
+  `relevant`) : « vim » ne noie plus le bon réglage dans tous ceux où traînent un v, un i
+  et un m.
 - **Saisie dans un champ** (recherche de l'aide, nom de dossier du déchargement) : les
   touches sont du texte ; seules celles qui ne tapent rien (Échap, F1 à F12 :
   `Trigger::types_no_text`) restent des raccourcis.
@@ -808,7 +820,8 @@ moitié transparente.
   laisser le moteur travailler), `shot` (capture immédiate, sans attendre que tout soit
   prêt : pour voir un état intermédiaire), `rating_dialog` (boîte du clic droit pour
   l'image sélectionnée), `settings:<section>` (fenêtre de réglages ouverte sur une
-  section : `settings:keys`). Une étape inconnue est signalée et ignorée.
+  section : `settings:keys`), `search:<texte>` (tapé dans la recherche de la fenêtre de
+  réglages ou de l'aide ouverte : `search:vim`). Une étape inconnue est signalée et ignorée.
   Exemple : `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
 - **Journal des plantages** (`gui/src/crash.rs`, 19/10/2026) : toute erreur Rust est
   consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de

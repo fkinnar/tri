@@ -6867,6 +6867,13 @@ impl TriApp {
                         window.show_section(&section);
                     }
                 }
+                Step::Search(text) => {
+                    if let Some(window) = &mut self.settings_window {
+                        window.search(&text);
+                    } else if self.help {
+                        self.help_search = Some(text);
+                    }
+                }
             }
         }
     }
@@ -7487,8 +7494,8 @@ impl TriApp {
                             .show(ui, |ui| {
                                 let mut group = None;
                                 for (action, keys) in &rows {
-                                    // Sans recherche : rangées par thème, avec un titre.
-                                    if query.trim().is_empty() && group != Some(action.group()) {
+                                    // Rangées par thème, avec un titre (recherche comprise).
+                                    if group != Some(action.group()) {
                                         group = Some(action.group());
                                         ui.label(
                                             egui::RichText::new(action.group().label()).strong(),
@@ -7773,6 +7780,8 @@ enum Step {
     RatingDialog,
     /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
     Settings(String),
+    /// Taper dans la recherche de la boîte ouverte, réglages ou aide (`search:vim`).
+    Search(String),
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -7796,6 +7805,9 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id == "rating_dialog" => Some(Step::RatingDialog),
                 None if id.starts_with("settings:") => {
                     Some(Step::Settings(id["settings:".len()..].to_string()))
+                }
+                None if id.starts_with("search:") => {
+                    Some(Step::Search(id["search:".len()..].to_string()))
                 }
                 None => Action::from_id(id).map(Step::Do),
             };
@@ -8268,31 +8280,60 @@ fn help_search_id() -> egui::Id {
     egui::Id::unique("help_search")
 }
 
-/// Lignes de l'aide : (action, raccourcis). Sans recherche, toutes les actions rangées par
-/// thème ; avec une recherche, celles qui y correspondent (nom, raccourci ou identifiant),
-/// les meilleures d'abord.
+/// Lignes de l'aide : (action, raccourcis), rangées par thème. Sans recherche, toutes les
+/// actions ; avec une recherche, celles qui y correspondent (nom, raccourci, identifiant,
+/// thème, mots-clés cachés), les exactes seulement s'il y en a (`tri::fuzzy::relevant`),
+/// le thème le mieux trouvé d'abord et, dans un thème, la meilleure d'abord (22/10/2026 :
+/// les thèmes restent visibles pendant la recherche).
 fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
-    let mut rows: Vec<(Action, String, i32)> = Action::ALL
+    let found: Vec<((Action, String), tri::fuzzy::Match)> = Action::ALL
         .iter()
         .filter(|a| a.available())
         .filter_map(|&action| {
             let keys = keymap.keys_for(action).join(" / ");
-            let label = action.label();
-            let score = [label.as_str(), keys.as_str(), action.id()]
-                .iter()
-                .filter_map(|text| crate::actions::fuzzy_score(query, text))
-                .max()?;
-            Some((action, keys, score))
+            let fields = [
+                action.label(),
+                keys.clone(),
+                action.id().to_string(),
+                action.group().label(),
+                crate::actions::keywords(action.id()),
+            ];
+            let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
+            let found = tri::fuzzy::find(query, &fields)?;
+            Some(((action, keys), found))
         })
         .collect();
+    let mut rows = tri::fuzzy::relevant(found);
+    let rank = |a: Action| Group::ALL.iter().position(|g| *g == a.group());
     if query.trim().is_empty() {
-        let rank = |a: Action| Group::ALL.iter().position(|g| *g == a.group());
-        rows.sort_by_key(|(a, _, _)| rank(*a)); // stable : ordre d'origine dans un thème
+        rows.sort_by_key(|((a, _), _)| rank(*a)); // stable : ordre d'origine dans un thème
     } else {
-        // À score égal, le nom le plus court (le plus proche de la requête) d'abord.
-        rows.sort_by_key(|(a, _, score)| (std::cmp::Reverse(*score), a.label().len()));
+        // Thèmes par meilleure correspondance ; dans un thème, la meilleure, et à égalité
+        // le nom le plus court (le plus proche de la requête), d'abord.
+        let best = |g: Group| {
+            rows.iter()
+                .filter(|((a, _), _)| a.group() == g)
+                .map(|(_, m)| *m)
+                .max()
+        };
+        let order: Vec<(Group, Option<tri::fuzzy::Match>)> =
+            Group::ALL.iter().map(|&g| (g, best(g))).collect();
+        let group_best = |a: Action| {
+            order
+                .iter()
+                .find(|(g, _)| *g == a.group())
+                .and_then(|o| o.1)
+        };
+        rows.sort_by_key(|((a, _), m)| {
+            (
+                std::cmp::Reverse(group_best(*a)),
+                rank(*a),
+                std::cmp::Reverse(*m),
+                a.label().len(),
+            )
+        });
     }
-    rows.into_iter().map(|(a, k, _)| (a, k)).collect()
+    rows.into_iter().map(|(row, _)| row).collect()
 }
 
 /// Nom affiché d'un préréglage de recadrage : le sien, sinon le nom traduit des
@@ -11933,5 +11974,31 @@ mod tests {
         assert_eq!(by_id[0].0, Action::NavNext);
         let stars = help_rows(&keymap, "etoile 3");
         assert_eq!(stars[0].0, Action::Stars(3));
+        // Rangées par thème pendant la recherche aussi : chaque thème d'un seul tenant.
+        let found = help_rows(&keymap, "zoom");
+        let mut seen: Vec<Group> = Vec::new();
+        for (a, _) in &found {
+            if seen.last() != Some(&a.group()) {
+                assert!(!seen.contains(&a.group()), "{:?} coupé en deux", a.group());
+                seen.push(a.group());
+            }
+        }
+        // Mots-clés cachés : « vim » trouve le mode visuel, et seulement des actions qui
+        // le contiennent tel quel (plus de lettres éparpillées).
+        crate::i18n::ensure();
+        let vim = help_rows(&keymap, "vim");
+        assert!(
+            vim.iter().any(|(a, _)| *a == Action::SelectVisual),
+            "{vim:?}"
+        );
+        assert!(vim.len() < 10, "{vim:?}");
+        // Le titre d'un thème trouve tout le thème.
+        let group = Action::Stars(3).group();
+        let by_group = help_rows(&keymap, &group.label());
+        let count = Action::ALL
+            .iter()
+            .filter(|a| a.available() && a.group() == group)
+            .count();
+        assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
     }
 }

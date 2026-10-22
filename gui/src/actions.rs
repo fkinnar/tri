@@ -59,9 +59,19 @@ impl Group {
     }
 }
 
-/// Recherche floue à la fzf : dans le moteur ([`tri::fuzzy`]), pour l'aide, les réglages,
-/// les filtres de la grille et la recherche de dossiers.
-pub use tri::fuzzy::score as fuzzy_score;
+/// Mots-clés de recherche, invisibles, d'un réglage (`gui.profile`), d'une section
+/// (`gui.zoom`) ou d'une action (`core.view.zoom`) : message `kw-<id>` des catalogues
+/// (points et soulignés en tirets), vide s'il n'y en a pas. Ils aident la recherche de
+/// l'aide et des réglages quand on ne sait qu'« à peu près » ce qu'on cherche (« vim »
+/// trouve le jeu de raccourcis ; 22/10/2026).
+pub fn keywords(id: &str) -> String {
+    let key = format!("kw-{}", id.replace(['.', '_'], "-"));
+    if tri::i18n::has(tri::i18n::language(), &key) {
+        tri::i18n::translate(&key, None)
+    } else {
+        String::new()
+    }
+}
 
 /// Direction (recadrage au clavier).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -2479,7 +2489,7 @@ mod tests {
 
     #[test]
     fn fuzzy_search_like_fzf() {
-        let s = |q: &str, t: &str| fuzzy_score(q, t);
+        let s = |q: &str, t: &str| tri::fuzzy::score(q, t);
         assert!(s("pnd", "Afficher / masquer le panneau des dossiers").is_some());
         assert!(
             s("dossiers panneau", "le panneau des dossiers").is_some(),

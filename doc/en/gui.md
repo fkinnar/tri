@@ -516,9 +516,20 @@ system one ("cold" measurements, experiments).
   you type directly. Each word of the query must be found letter by letter, in order,
   possibly with gaps, in the label, the keys or the identifier ("pnd" → *panneau des
   dossiers*, "etoile 3", "maj+e", "core.nav"), ignoring accents and case; words may be in
-  any order. Results sorted by relevance (`actions::fuzzy_score`: consecutive letters and
-  word starts count more, gaps are penalized; on a tie, the shortest label). While
-  typing, `?` is written into the field: close with Esc or `F1`.
+  any order. Results sorted by relevance (`tri::fuzzy`: consecutive letters and word
+  starts count more, gaps are penalized; on a tie, the shortest label). While typing, `?`
+  is written into the field: close with Esc or `F1`.
+- **Search, help and settings** (reworked on 2026-10-22: you often know only roughly
+  what you are looking for): the help's **topics** and the settings' **sections** stay
+  visible while searching (in the settings, the left list puts the sections found first,
+  with their number of results, the others greyed out; a click brings the section's
+  results into view); a section's or topic's **title** finds all of it; **hidden
+  keywords** per setting, section or action (`kw-<id>` in `gui/locales/*.ftl`,
+  `actions::keywords`; "vim" finds the shortcut set, "focus point" the autofocus marker;
+  a test checks that each names something that exists); and when a typed word appears
+  **as is** somewhere, matches with scattered letters are dropped (`tri::fuzzy::find` and
+  `relevant`): "vim" no longer drowns the right setting among all those where a v, an i
+  and an m happen to be.
 - **Typing in a field** (help search, offload folder name): keys are text; only those
   that type nothing (Esc, F1 to F12: `Trigger::types_no_text`) remain shortcuts.
 - Standard preview size **"Auto"**: largest side of the screen, in physical pixels.
@@ -785,7 +796,9 @@ during a window's opening fade showed it half transparent.
   identifier (`core.nav.next`, `core.app.help`…), `wait:<ms>` (pause, to let the engine
   work), `shot` (immediate capture, without waiting for everything to be ready: to see an
   intermediate state), `rating_dialog` (right-click dialog for the selected image),
-  `settings:<section>` (settings window opened on a section: `settings:keys`). An unknown
+  `settings:<section>` (settings window opened on a section: `settings:keys`),
+  `search:<text>` (typed in the search of the open settings window or help:
+  `search:vim`). An unknown
   step is reported and ignored.
   Example: `core.view.open,core.view.zoom,wait:1500,core.nav.next,wait:30,shot`.
 - **Crash log** (`gui/src/crash.rs`, 2026-10-19): any Rust error is recorded (message,

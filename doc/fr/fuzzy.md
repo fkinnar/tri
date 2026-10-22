@@ -14,4 +14,8 @@ servir aussi :
   trait `Filter` que les autres filtres (combinable avec étoiles, couleurs…) ; porte sur le
   nom seul, pas le dossier ;
 - la **recherche de dossiers** (`places::DirSearch`, voir `places.md`) ;
-- l'aide et la fenêtre de réglages (l'interface le réexporte en `actions::fuzzy_score`).
+- l'aide et la fenêtre de réglages, par **`find(requête, champs)`** (22/10/2026) :
+  chaque mot dans un des champs d'une entrée (libellé, identifiant, description,
+  mots-clés…), et `Match { exact, score }`, `exact` quand chaque mot y apparaît d'un seul
+  tenant ; **`relevant`** ne garde que les exactes s'il y en a, pour que des lettres
+  éparpillées ne noient pas le bon résultat.

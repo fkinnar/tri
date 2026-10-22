@@ -275,12 +275,32 @@ pub struct SettingsWindow {
     /// Entrer dans la partie droite au clavier (→, Entrée ou Tab depuis la recherche) :
     /// le premier réglage montré prend le focus.
     focus_first: bool,
+    /// Pendant une recherche : section de la liste dont les résultats sont à amener en
+    /// vue (clic sur la section).
+    scroll_to: Option<usize>,
     /// Défilement de la liste des sections (tests).
     #[cfg(test)]
     sections_offset: f32,
     /// Nom d'un nouveau profil ou préréglage, en cours de saisie (`Some` après
     /// « Nouveau… »).
     new_name: Option<String>,
+}
+
+/// Ce qu'une recherche trouve dans une section.
+#[derive(Default)]
+struct Found {
+    /// Réglages trouvés (clés).
+    keys: Vec<String>,
+    /// Actions trouvées (section `[keys]`).
+    actions: Vec<Action>,
+    /// Meilleure correspondance de la section.
+    best: Option<tri::fuzzy::Match>,
+}
+
+/// Un résultat de recherche : un réglage ou une action.
+enum Hit {
+    Key(String),
+    Action(Action),
 }
 
 /// Ce que la fenêtre demande à l'application.
@@ -306,6 +326,7 @@ impl SettingsWindow {
             recording: None,
             section_moved: false,
             focus_first: false,
+            scroll_to: None,
             #[cfg(test)]
             sections_offset: 0.0,
             new_name: None,
@@ -320,6 +341,11 @@ impl SettingsWindow {
             dirty: false,
             save_error: None,
         })
+    }
+
+    /// Recherche `text` (script de capture : `search:vim`).
+    pub fn search(&mut self, text: &str) {
+        self.query = text.to_string();
     }
 
     /// Affiche la section `name` (`keys`, `gui.zoom`), si elle existe.
@@ -554,7 +580,7 @@ impl SettingsWindow {
                     ui.set_min_size(size);
                     if self.query.trim().is_empty() {
                         ui.horizontal_top(|ui| {
-                            self.section_list(ui, schema, size.y);
+                            self.section_list(ui, schema, size.y, None);
                             ui.separator();
                             let mut entries = ScrollArea::vertical();
                             if self.section_moved {
@@ -574,11 +600,20 @@ impl SettingsWindow {
                             self.section_moved = false;
                         });
                     } else {
-                        ScrollArea::vertical()
-                            .id_salt("settings_found")
-                            .max_height(size.y)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| ui.vertical(|ui| changed = self.found(ui, schema)));
+                        // Les sections restent à gauche (22/10/2026), avec le nombre de
+                        // résultats de chacune.
+                        let hits = self.hits(schema);
+                        ui.horizontal_top(|ui| {
+                            self.section_list(ui, schema, size.y, Some(&hits));
+                            ui.separator();
+                            ScrollArea::vertical()
+                                .id_salt("settings_found")
+                                .max_height(size.y)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.vertical(|ui| changed = self.found(ui, schema, &hits))
+                                });
+                        });
                     }
                 });
                 ui.add_space(6.0);
@@ -617,17 +652,71 @@ impl SettingsWindow {
         }
     }
 
-    fn section_list(&mut self, ui: &mut Ui, schema: &Schema, height: f32) {
+    /// Liste des sections, à gauche ; pendant une recherche (`hits`), le nombre de
+    /// résultats de chacune, les autres grisées, et un clic amène ses résultats en vue.
+    fn section_list(
+        &mut self,
+        ui: &mut Ui,
+        schema: &Schema,
+        height: f32,
+        hits: Option<&[(usize, Found)]>,
+    ) {
         let _output = ScrollArea::vertical()
             .id_salt("settings_sections")
             .max_height(height)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     let at = listed_of(schema, self.section);
-                    for i in listed(schema) {
+                    let mut order = listed(schema);
+                    // Recherche : les sections trouvées en tête, dans l'ordre des résultats,
+                    // puis les autres, grisées, après un espace (un trait prendrait toute la
+                    // largeur, la liste avec).
+                    let mut first_other = None;
+                    if let Some(hits) = hits {
+                        let mut found: Vec<usize> = Vec::new();
+                        for (s, _) in hits {
+                            let l = listed_of(schema, *s);
+                            if !found.contains(&l) {
+                                found.push(l);
+                            }
+                        }
+                        order.retain(|i| !found.contains(i));
+                        first_other = order.first().copied().filter(|_| !found.is_empty());
+                        found.append(&mut order);
+                        order = found;
+                    }
+                    for i in order {
+                        if first_other == Some(i) {
+                            ui.add_space(14.0);
+                        }
                         let name = &schema.sections[i].name;
                         // Une famille : son nom (« Profils d'export [export.profiles] »).
                         let name = family(name).map_or(name.as_str(), |(f, _)| f.0);
+                        if let Some(hits) = hits {
+                            let count: usize = hits
+                                .iter()
+                                .filter(|(s, _)| listed_of(schema, *s) == i)
+                                .map(|(_, f)| f.keys.len() + f.actions.len())
+                                .sum();
+                            let mut job = section_title(ui, name, false);
+                            if count > 0 {
+                                RichText::new(format!("  {count}"))
+                                    .color(ui.visuals().selection.stroke.color)
+                                    .strong()
+                                    .append_to(
+                                        &mut job,
+                                        ui.style(),
+                                        egui::FontSelection::Default,
+                                        egui::Align::Center,
+                                    );
+                            }
+                            let label =
+                                ui.add_enabled(count > 0, egui::Button::selectable(false, job));
+                            if label.clicked() {
+                                self.scroll_to = Some(i);
+                            }
+                            continue;
+                        }
                         let label = ui.selectable_label(at == i, section_title(ui, name, false));
                         if at == i && self.section_moved {
                             label.scroll_to_me(None);
@@ -783,44 +872,102 @@ impl SettingsWindow {
         changed
     }
 
-    /// Résultats d'une recherche : par section, les clés trouvées.
-    fn found(&mut self, ui: &mut Ui, schema: &Schema) -> Option<AppSettings> {
-        let query = self.query.trim().to_string();
-        let mut changed = None;
-        let mut any = false;
-        for section in &schema.sections {
+    /// Ce que trouve la recherche : par section (indice dans le schéma), les réglages ou
+    /// les actions trouvés, sections rangées de la mieux trouvée à la moins bien. Champs
+    /// cherchés : libellé et nom de la section (trouver une section la montre en entier),
+    /// clé, description, mots-clés cachés (`actions::keywords`) ; les exactes seulement
+    /// s'il y en a (22/10/2026).
+    fn hits(&self, schema: &Schema) -> Vec<(usize, Found)> {
+        let query = self.query.trim();
+        let mut found: Vec<((usize, Hit), tri::fuzzy::Match)> = Vec::new();
+        for (i, section) in schema.sections.iter().enumerate() {
+            let label = section_label(&section.name);
+            let section_kw = crate::actions::keywords(&section.name);
             if section.name == "keys" {
-                if self.matching_actions(Some(&query)).next().is_some() {
-                    any = true;
-                    ui.label(section_title(ui, &section.name, true));
-                    if let Some(s) = self.keys_entries(ui, Some(&query)) {
-                        changed = Some(s);
+                for action in self.matching_actions(None) {
+                    let keys = self.keymap.keys_for(action).join(" ");
+                    let fields = [
+                        label.as_str(),
+                        "keys",
+                        &section_kw,
+                        &action.label(),
+                        action.id(),
+                        &keys,
+                        &action.group().label(),
+                        &crate::actions::keywords(action.id()),
+                    ];
+                    if let Some(m) = tri::fuzzy::find(query, &fields) {
+                        found.push(((i, Hit::Action(action)), m));
                     }
-                    ui.add_space(8.0);
                 }
                 continue;
             }
-            let keys: Vec<&str> = section
-                .groups
-                .iter()
-                .flat_map(|g| g.entries.iter().map(move |e| (g, e)))
-                .filter(|(g, e)| {
-                    let text = format!("{}.{} {}", section.name, e.key, g.doc);
-                    crate::actions::fuzzy_score(&query, &text).is_some()
-                })
-                .map(|(_, e)| e.key.as_str())
-                .collect();
-            if keys.is_empty() {
-                continue;
+            for group in &section.groups {
+                for entry in &group.entries {
+                    let id = format!("{}.{}", section.name, entry.key);
+                    let fields = [
+                        label.as_str(),
+                        &id,
+                        &section_kw,
+                        &group.doc,
+                        &crate::actions::keywords(&id),
+                    ];
+                    if let Some(m) = tri::fuzzy::find(query, &fields) {
+                        found.push(((i, Hit::Key(entry.key.clone())), m));
+                    }
+                }
             }
-            any = true;
-            ui.label(section_title(ui, &section.name, true));
-            if let Some(s) = self.section_entries(ui, section, Some(&keys)) {
-                changed = Some(s);
+        }
+        let found = tri::fuzzy::relevant(found);
+        let mut sections: Vec<(usize, Found)> = Vec::new();
+        for ((i, hit), m) in found {
+            let at = match sections.iter().position(|(s, _)| *s == i) {
+                Some(at) => at,
+                None => {
+                    sections.push((i, Found::default()));
+                    sections.len() - 1
+                }
+            };
+            let entry = &mut sections[at].1;
+            entry.best = entry.best.max(Some(m));
+            match hit {
+                Hit::Key(k) => entry.keys.push(k),
+                Hit::Action(a) => entry.actions.push(a),
+            }
+        }
+        // Stable : à égalité, l'ordre du fichier.
+        sections.sort_by_key(|(_, f)| std::cmp::Reverse(f.best));
+        sections
+    }
+
+    /// Résultats d'une recherche : par section, les réglages trouvés, sous le titre de
+    /// leur section ; `scroll_to` : section à amener en vue (clic dans la liste).
+    fn found(
+        &mut self,
+        ui: &mut Ui,
+        schema: &Schema,
+        hits: &[(usize, Found)],
+    ) -> Option<AppSettings> {
+        let mut changed = None;
+        for (i, found) in hits {
+            let section = &schema.sections[*i];
+            let title = ui.label(section_title(ui, &section.name, true));
+            if self.scroll_to == Some(listed_of(schema, *i)) {
+                title.scroll_to_me(Some(egui::Align::TOP));
+                self.scroll_to = None;
+            }
+            let result = if section.name == "keys" {
+                self.keys_entries(ui, Some(&found.actions))
+            } else {
+                let keys: Vec<&str> = found.keys.iter().map(String::as_str).collect();
+                self.section_entries(ui, section, Some(&keys))
+            };
+            if result.is_some() {
+                changed = result;
             }
             ui.add_space(8.0);
         }
-        if !any {
+        if hits.is_empty() {
             ui.weak(t!("help-no-match"));
         }
         changed
@@ -888,32 +1035,30 @@ impl SettingsWindow {
         self.commit("keys", action.id(), Some(Value::Strings(specs)))
     }
 
-    /// Actions du volet des raccourcis, dans l'ordre de l'aide ; `query` : celles qui
-    /// correspondent (libellé, identifiant, raccourcis).
-    fn matching_actions<'a>(&'a self, query: Option<&'a str>) -> impl Iterator<Item = Action> + 'a {
+    /// Actions du volet des raccourcis, dans l'ordre de l'aide ; `only` : celles-là
+    /// seulement (recherche).
+    fn matching_actions<'a>(
+        &'a self,
+        only: Option<&'a [Action]>,
+    ) -> impl Iterator<Item = Action> + 'a {
         Group::ALL.into_iter().flat_map(move |group| {
             Action::ALL.into_iter().filter(move |a| {
-                a.group() == group
-                    && a.available()
-                    && query.is_none_or(|q| {
-                        let keys = self.keymap.keys_for(*a).join(" ");
-                        let text = format!("{} {} {keys}", a.label(), a.id());
-                        crate::actions::fuzzy_score(q, &text).is_some()
-                    })
+                a.group() == group && a.available() && only.is_none_or(|o| o.contains(a))
             })
         })
     }
 
-    /// Volet des raccourcis : problèmes en tête, puis une ligne par action, par thème.
-    fn keys_entries(&mut self, ui: &mut Ui, query: Option<&str>) -> Option<AppSettings> {
-        if query.is_none() {
+    /// Volet des raccourcis : problèmes en tête, puis une ligne par action, par thème ;
+    /// `only` : les actions trouvées par une recherche.
+    fn keys_entries(&mut self, ui: &mut Ui, only: Option<&[Action]>) -> Option<AppSettings> {
+        if only.is_none() {
             ui.weak(t!("settings-keys-doc"));
             ui.add_space(4.0);
             for warning in &self.key_warnings {
                 ui.colored_label(ui.visuals().error_fg_color, warning);
             }
         }
-        let actions: Vec<Action> = self.matching_actions(query).collect();
+        let actions: Vec<Action> = self.matching_actions(only).collect();
         let mut changed = None;
         let mut group = None;
         for action in actions {
@@ -1239,6 +1384,73 @@ mod tests {
             }
         }
         assert!(is_folder_key("destination") && is_folder_key("dir") && !is_folder_key("history"));
+    }
+
+    #[test]
+    fn every_search_keyword_names_a_setting_a_section_or_an_action() {
+        crate::i18n::ensure();
+        let mut known: Vec<String> = Action::ALL.iter().map(|a| a.id().to_string()).collect();
+        for section in &schema().sections {
+            known.push(section.name.clone());
+            for group in &section.groups {
+                for entry in &group.entries {
+                    known.push(format!("{}.{}", section.name, entry.key));
+                }
+            }
+        }
+        let known: Vec<String> = known
+            .iter()
+            .map(|id| format!("kw-{}", id.replace(['.', '_'], "-")))
+            .collect();
+        for source in [
+            include_str!("../locales/fr.ftl"),
+            include_str!("../locales/en.ftl"),
+        ] {
+            for id in tri::i18n::ids(source)
+                .iter()
+                .filter(|i| i.starts_with("kw-"))
+            {
+                assert!(known.contains(id), "{id} ne désigne rien");
+            }
+        }
+        assert!(crate::actions::keywords("gui.profile").contains("vim"));
+        assert!(crate::actions::keywords("gui.nothing").is_empty());
+    }
+
+    #[test]
+    fn search_keeps_sections_and_finds_titles_and_keywords() {
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let mut window = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        let schema = window.schema();
+        let name = |hits: &[(usize, Found)], at: usize| schema.sections[hits[at].0].name.clone();
+        // « vim » : le jeu de raccourcis en tête, peu de résultats (exacts seulement).
+        window.query = "vim".into();
+        let hits = window.hits(&schema);
+        assert_eq!(name(&hits, 0), "gui");
+        assert!(
+            hits[0].1.keys.contains(&"profile".to_string()),
+            "{:?}",
+            hits[0].1.keys
+        );
+        let total: usize = hits
+            .iter()
+            .map(|(_, f)| f.keys.len() + f.actions.len())
+            .sum();
+        assert!(total < 15, "{total}");
+        // Le titre d'une section la trouve en entier.
+        window.query = section_label("gui.zoom");
+        let hits = window.hits(&schema);
+        let zoom = hits
+            .iter()
+            .find(|(i, _)| schema.sections[*i].name == "gui.zoom")
+            .unwrap();
+        let all = schema.sections[zoom.0]
+            .groups
+            .iter()
+            .map(|g| g.entries.len())
+            .sum::<usize>();
+        assert_eq!(zoom.1.keys.len(), all);
     }
 
     #[test]

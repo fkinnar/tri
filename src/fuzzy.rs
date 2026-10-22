@@ -60,6 +60,47 @@ fn word_score(word: &[char], text: &[char]) -> Option<i32> {
         .max()
 }
 
+/// Correspondance d'une requête dans une entrée (réglage, action de l'aide), pour ranger
+/// les résultats : une correspondance **exacte** (chaque mot tapé apparaît tel quel,
+/// « vim » dans « … vim nvim … ») passe avant les lettres éparpillées (« v…i…m »), puis
+/// le score.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Match {
+    /// Chaque mot de la requête apparaît d'un seul tenant (sans accents ni casse).
+    pub exact: bool,
+    /// Score de [`score`].
+    pub score: i32,
+}
+
+/// Correspondance de `query` dans les champs d'une entrée (libellé, identifiant,
+/// description, mots-clés…) : chaque mot dans un même champ, les mots pouvant se trouver
+/// dans des champs différents. Requête vide : `Some` (score 0).
+pub fn find(query: &str, fields: &[&str]) -> Option<Match> {
+    let fields: Vec<Vec<char>> = fields
+        .iter()
+        .map(|f| f.chars().map(fold).collect())
+        .collect();
+    let (mut score, mut exact) = (0, true);
+    for word in query.split_whitespace() {
+        let word: Vec<char> = word.chars().map(fold).collect();
+        score += fields.iter().filter_map(|f| word_score(&word, f)).max()?;
+        exact &= fields
+            .iter()
+            .any(|f| f.windows(word.len()).any(|w| w == word.as_slice()));
+    }
+    Some(Match { exact, score })
+}
+
+/// Garde les meilleures correspondances : s'il y en a d'exactes, celles-là seulement
+/// (retour du 22/10/2026 : « vim » trouvait le bon réglage, perdu parmi tous ceux où
+/// traînent un v, un i et un m).
+pub fn relevant<T>(mut found: Vec<(T, Match)>) -> Vec<(T, Match)> {
+    if found.iter().any(|(_, m)| m.exact) {
+        found.retain(|(_, m)| m.exact);
+    }
+    found
+}
+
 /// Filtre de la grille par nom de fichier (recherche `/`), sur le trait commun des
 /// filtres : les images dont le nom correspond à `query`. Requête vide : tout.
 pub struct NameFilter<'a> {
@@ -123,5 +164,34 @@ mod tests {
         assert_eq!(score("", "n'importe quoi"), Some(0));
         // Lettres consécutives et débuts de mots d'abord.
         assert!(score("dscf", "DSCF0305.RAF") > score("dscf", "d_s_c_f.jpg"));
+    }
+
+    #[test]
+    fn exact_words_hide_scattered_letters() {
+        let profile = find(
+            "vim",
+            &["Jeu de raccourcis", "gui.profile", "vim nvim hjkl"],
+        )
+        .unwrap();
+        let scattered = find("vim", &["Vignettes : taille minimale", "gui.grid.cell_min"]).unwrap();
+        assert!(profile.exact && !scattered.exact);
+        assert!(profile > scattered);
+        // Mots répartis sur plusieurs champs, accents ignorés.
+        assert!(
+            find("theme ecran", &["Thème", "Plein écran"])
+                .unwrap()
+                .exact
+        );
+        assert_eq!(find("xyz", &["abc"]), None);
+        assert_eq!(
+            find("wqx", &["w", "q", "x"]),
+            None,
+            "un mot ne s'étale pas sur plusieurs champs"
+        );
+        let kept = relevant(vec![("a", scattered), ("b", profile)]);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].0, "b");
+        let none_exact = relevant(vec![("a", scattered)]);
+        assert_eq!(none_exact.len(), 1, "sans exacte : les éparpillées restent");
     }
 }

@@ -7,6 +7,10 @@
   nouvelle version et ouvre sa page. Un build de nuit ou personnel le dit, et compte les
   commits de `main` qui lui manquent (« git pull, puis recompiler ») ; numéro de version
   avec le commit dans l'aide.
+- **Recherche dans l'aide et les réglages** : thèmes et sections restent visibles
+  (sections trouvées en tête, avec leur nombre de résultats), le titre d'une section la
+  trouve en entière, mots-clés cachés (« vim » trouve le jeu de raccourcis), et les mots
+  trouvés tels quels écartent les correspondances à lettres éparpillées.
 - **Builds de nuit** : la CI construit et teste chaque nuit où `main` a changé, paquets
   sur la Release « nightly ».
 - **Filtres** : icône « inverser » à la taille des pastilles de couleur.
