@@ -361,7 +361,8 @@ system one ("cold" measurements, experiments).
   folder; choosing it again forgets it).
 - **Panels from the keyboard, tmux style** (2026-10-18, `actions::Scope`): the leader
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
-  the left / right panel, `o` to the next one (folders, images, metadata; a hidden panel
+  the left / right panel, `o` to the next one (leader then `b`: report a problem,
+  2026-10-22) (folders, images, metadata; a hidden panel
   is shown, folders only exist in the grid). The active panel has an accent outline, the
   status bar says so. **Its keys go first, the others keep their effect** (user's
   choice: `3` still rates the current image); Esc gives the keyboard back to the images.

@@ -201,6 +201,7 @@ pub fn navigate(
         | Action::Help
         | Action::Settings
         | Action::CheckUpdate
+        | Action::ReportIssue
         | Action::Quit
         | Action::Stars(_)
         | Action::Color(_)

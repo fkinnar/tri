@@ -227,6 +227,9 @@ url = "https://api.github.com/repos/fkinnar/tri/releases"
 # the compiled commit).
 compare_url = "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main"
 timeout_s = 10
+# "Report a problem" button in the help: GitHub form, prefilled with the version and the
+# system.
+issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 
 [watch]
 # Monitoring of the open folder (ms): images added, removed or modified, XMP ratings
@@ -400,7 +403,8 @@ profile = "classic"
 # Switch panels from the keyboard, like tmux: the leader, then h / l (or the arrows) for
 # the left / right panel, o for the next one. The panel that has the keyboard handles
 # its keys first (folders: arrows / hjkl, Enter opens; metadata: scroll,
-# y copies); the others keep their effect; Esc gives the keyboard back to the images.
+# y copies); the others keep their effect; Esc gives the keyboard back to the images. The
+# leader then b: report a problem (prefilled GitHub form).
 leader = "Ctrl+b"
 # Maximum delay between two keys of a sequence (ms), like vim's timeoutlen: "gg"
 # (first image, vim set) must be typed within this delay.

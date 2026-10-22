@@ -373,7 +373,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   données ; la rechoisir l'oublie).
 - **Panneaux au clavier, façon tmux** (18/10/2026, `actions::Scope`) : le leader
   (`[gui] leader`, `Ctrl+B` par défaut) puis `h` / `l` (ou ← / →) donne le clavier au
-  panneau de gauche / de droite, `o` au suivant (dossiers, images, métadonnées ; un
+  panneau de gauche / de droite, `o` au suivant (leader puis `b` : signaler un problème,
+  22/10/2026) (dossiers, images, métadonnées ; un
   panneau masqué s'affiche, les dossiers n'existent qu'en grille). Le panneau actif a un
   liseré d'accent, la barre d'état le dit. **Ses touches passent d'abord, les autres
   gardent leur effet** (choix de l'utilisateur : `3` note toujours l'image courante) ;

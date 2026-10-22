@@ -362,6 +362,8 @@ pub enum Action {
     Settings,
     /// Rechercher une nouvelle version (sur demande, page Releases).
     CheckUpdate,
+    /// Signaler un problème : formulaire de GitHub prérempli (issue n° 7), leader puis `b`.
+    ReportIssue,
     /// Noter : 0 à 5 étoiles.
     Stars(u8),
     /// Ajouter ou retirer une couleur.
@@ -374,7 +376,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 154] = [
+    pub const ALL: [Action; 155] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -514,6 +516,7 @@ impl Action {
         Action::Help,
         Action::Settings,
         Action::CheckUpdate,
+        Action::ReportIssue,
         Action::Quit,
         Action::Stars(0),
         Action::Stars(1),
@@ -589,7 +592,7 @@ impl Action {
             | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
             | MetaSelectDown | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | Settings | CheckUpdate | Quit => Group::App,
+            Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
     }
 
@@ -740,6 +743,7 @@ impl Action {
             Action::Help => "core.app.help",
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",
+            Action::ReportIssue => "core.app.report_issue",
             Action::Quit => "core.app.quit",
             Action::Stars(0) => "core.rate.star.0",
             Action::Stars(1) => "core.rate.star.1",
@@ -1538,7 +1542,8 @@ impl Keymap {
     }
 
     /// Ajoute les raccourcis de changement de panneau, après le leader `leader` (« Ctrl+b »
-    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant.
+    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant ; et
+    /// `b` pour signaler un problème (« bug », demandé le 22/10/2026).
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
         for (key, action) in [
@@ -1547,6 +1552,7 @@ impl Keymap {
             (Key::L, Action::FocusRight),
             (Key::ArrowRight, Action::FocusRight),
             (Key::O, Action::FocusNext),
+            (Key::B, Action::ReportIssue),
         ] {
             self.bindings.push((vec![lead, plain(key)], action));
         }
@@ -2121,6 +2127,11 @@ mod tests {
         let lead = Chord::from_event(Key::B, Modifiers::CTRL).unwrap();
         assert_eq!(seq.feed_one(&km, lead, now), None, "en attente");
         assert_eq!(seq.feed_one(&km, key(Key::H), now), Some(Action::FocusLeft));
+        assert_eq!(seq.feed_one(&km, lead, now), None);
+        assert_eq!(
+            seq.feed_one(&km, key(Key::B), now),
+            Some(Action::ReportIssue)
+        );
         assert!(Keymap::default().with_leader("Ctrl+").is_err());
     }
 
@@ -2141,7 +2152,12 @@ mod tests {
         for profile in [Profile::Classic, Profile::Vim] {
             let b: Vec<&Binding> = profile.bindings().collect();
             // Changement de panneau : lié après le leader (`Keymap::with_leader`).
-            let by_leader = [Action::FocusLeft, Action::FocusRight, Action::FocusNext];
+            let by_leader = [
+                Action::FocusLeft,
+                Action::FocusRight,
+                Action::FocusNext,
+                Action::ReportIssue,
+            ];
             // Les actions des plugins n'ont pas de touche par défaut (à régler dans
             // `[keys]` ou la fenêtre de réglages).
             let plugin = |a: &Action| a.id().starts_with("plugin.");

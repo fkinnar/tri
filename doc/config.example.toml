@@ -224,6 +224,9 @@ url = "https://api.github.com/repos/fkinnar/tri/releases"
 # GitHub, {commit} = le commit compilé).
 compare_url = "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main"
 timeout_s = 10
+# Bouton « Signaler un problème » de l'aide : formulaire de GitHub, prérempli avec la
+# version et le système.
+issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP
@@ -396,7 +399,8 @@ profile = "classic"
 # Changer de panneau au clavier, comme tmux : le leader, puis h / l (ou les flèches) pour
 # le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
 # ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
-# y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images.
+# y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images. Le leader
+# puis b : signaler un problème (formulaire de GitHub prérempli).
 leader = "Ctrl+b"
 # Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
 # (première image, profil vim) doit être tapé dans ce délai.

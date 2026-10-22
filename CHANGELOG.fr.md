@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Aide** : version plus visible et copiable (avec le système), et un bouton
+  « Signaler un problème » qui ouvre le formulaire de GitHub prérempli (issue n° 7), aussi
+  `Ctrl+B b` (le leader, puis b).
 - **Réglages** : une clé réglée dans votre fichier de configuration est en gras,
   maintenant dit dans la fenêtre et au survol (issue n° 6).
 - **Notes de version dans la langue de l'interface** : la boîte « Mise à jour » montre

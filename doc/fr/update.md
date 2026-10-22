@@ -44,9 +44,13 @@ récente sans aller sur GitHub.
 | `parse_compare(json)` | commits de `main` absents du build (`ahead_by` de `commit...main`) |
 | `fetch(settings)` / `check(build, settings)` | requête par `curl`, puis `Status` : `Latest`, `Newer(release)`, `Build { behind }` |
 | `build_text(build, behind)` | les deux lignes affichées pour un build de nuit ou personnel |
+| `Release::notes_in(langue)` | notes de la version dans la langue de l'interface |
+| `report_line(build)` / `issue_url(build, settings)` | version et système en une ligne (copiés depuis l'aide) ; formulaire de signalement prérempli (`[update] issue_url`, champs `version`, `system`, `system-details` du modèle `bug.yml`) |
 
 Dans l'interface, la requête tourne dans un fil à part (`TriApp::check_update`) ;
 la boîte (`update_dialog`) montre « recherche en cours », puis le résultat ; Échap ferme.
+En haut de l'aide aussi (issue n° 7) : la version en évidence, une icône qui la copie
+avec le système, et « Signaler un problème », qui ouvre le formulaire de GitHub prérempli.
 
 ## Tests
 

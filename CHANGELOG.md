@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Help**: version more visible and copyable (with the system), and a "Report a
+  problem" button opening the GitHub form prefilled with them (issue #7), also `Ctrl+B b`
+  (leader, then b).
 - **Settings**: a key set in your configuration file is in bold, now said in the
   window and on hover (issue #6).
 - **Release notes in the interface language**: the "Update" dialog shows the notes in

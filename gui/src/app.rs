@@ -2343,6 +2343,10 @@ impl TriApp {
             Action::Help => self.help = !self.help,
             Action::Settings => self.open_settings(),
             Action::CheckUpdate => self.check_update(ctx),
+            Action::ReportIssue => {
+                let url = tri::update::issue_url(&self.build, &self.settings.update);
+                ctx.open_url(egui::OpenUrl::new_tab(url));
+            }
             Action::Undo => {
                 let result = self.history.undo(self.settings.xmp.sidecar);
                 self.after_history(result.map(|a| vec![a]).map_err(Some));
@@ -7422,6 +7426,7 @@ impl TriApp {
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
         let mut check_update = false;
+        let mut report = false;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
         // Défilement au clavier (retour du 18/10/2026) : flèches haut / bas, pages, et
@@ -7451,9 +7456,19 @@ impl TriApp {
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                // Version, et la recherche d'une mise à jour (sur demande seulement).
+                // Version (en évidence et copiable, issue n° 7 : on la recopie dans un
+                // signalement), recherche d'une mise à jour (sur demande seulement) et
+                // formulaire de signalement prérempli.
                 ui.horizontal(|ui| {
-                    ui.weak(format!("tri {}", self.build.label()));
+                    ui.label(egui::RichText::new(format!("tri {}", self.build.label())).strong());
+                    let (rect, copy) = crate::marks::clickable(ui, 14.0, &t!("help-copy-version"));
+                    let back = ui.visuals().panel_fill;
+                    crate::marks::copy_icon(ui.painter(), rect, ui.visuals().text_color(), back);
+                    if copy.clicked() {
+                        ctx.copy_text(tri::update::report_line(&self.build));
+                        self.notice = Some((t!("help-version-copied"), false));
+                    }
+                    ui.add_space(8.0);
                     if ui
                         .small_button(Action::CheckUpdate.label())
                         .on_hover_text(t!("update-tip"))
@@ -7461,7 +7476,16 @@ impl TriApp {
                     {
                         check_update = true;
                     }
+                    let keys = self.keymap.keys_for(Action::ReportIssue).join(", ");
+                    if ui
+                        .small_button(t!("help-report"))
+                        .on_hover_text(format!("{}\n{keys}", t!("help-report-tip")))
+                        .clicked()
+                    {
+                        report = true;
+                    }
                 });
+                ui.add_space(6.0);
                 // Recherche floue à la fzf : on tape dès l'ouverture.
                 let search = ui.add(
                     egui::TextEdit::singleline(&mut query)
@@ -7523,6 +7547,9 @@ impl TriApp {
         self.help = open;
         if check_update {
             self.check_update(ctx);
+        }
+        if report {
+            self.perform(ctx, Action::ReportIssue);
         }
     }
 

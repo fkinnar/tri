@@ -668,6 +668,19 @@ pub fn floppy(painter: &Painter, rect: Rect, color: Color32) {
     );
 }
 
+/// Copier : deux feuilles décalées, celle de devant pleine du fond (`back`).
+pub fn copy_icon(painter: &Painter, rect: Rect, color: Color32, back: Color32) {
+    let s = rect.width().min(rect.height());
+    let rect = Rect::from_center_size(rect.center(), vec2(s, s));
+    let stroke = Stroke::new((s * 0.1).max(1.2), color);
+    let sheet = vec2(s * 0.62, s * 0.72);
+    let behind = Rect::from_min_size(rect.min, sheet);
+    let front = Rect::from_min_size(rect.max - sheet, sheet);
+    painter.rect_stroke(behind, s * 0.08, stroke, egui::StrokeKind::Inside);
+    painter.rect_filled(front, s * 0.08, back);
+    painter.rect_stroke(front, s * 0.08, stroke, egui::StrokeKind::Inside);
+}
+
 /// Couleur d'accent du thème (fond de sélection d'egui) : ce qui est allumé, choisi.
 pub fn accent(ctx: &egui::Context) -> Color32 {
     ctx.global_style().visuals.selection.bg_fill

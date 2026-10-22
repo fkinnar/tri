@@ -43,9 +43,13 @@ going to GitHub.
 | `parse_compare(json)` | commits of `main` missing from the build (`ahead_by` of `commit...main`) |
 | `fetch(settings)` / `check(build, settings)` | request with `curl`, then `Status`: `Latest`, `Newer(release)`, `Build { behind }` |
 | `build_text(build, behind)` | the two lines shown for a nightly or personal build |
+| `Release::notes_in(language)` | the version's notes in the interface language |
+| `report_line(build)` / `issue_url(build, settings)` | version and system on one line (copied from the help); prefilled report form (`[update] issue_url`, fields `version`, `system`, `system-details` of the `bug.yml` template) |
 
 In the interface, the request runs in a separate thread (`TriApp::check_update`); the
-dialog (`update_dialog`) shows "checking", then the result; Escape closes it.
+dialog (`update_dialog`) shows "checking", then the result; Escape closes it. Also at
+the top of the help (issue #7): the version, prominent, an icon copying it with the
+system, and "Report a problem", which opens the GitHub form prefilled.
 
 ## Tests
 

@@ -24,6 +24,9 @@ pub struct UpdateSettings {
     pub compare_url: String,
     /// Délai maximal de la requête (secondes).
     pub timeout_s: u64,
+    /// Formulaire de signalement d'un problème (issue n° 7) : version et système y sont
+    /// ajoutés en paramètres, qui préremplissent les champs du même nom.
+    pub issue_url: String,
 }
 
 impl Default for UpdateSettings {
@@ -32,6 +35,7 @@ impl Default for UpdateSettings {
             url: "https://api.github.com/repos/fkinnar/tri/releases".into(),
             compare_url: "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main".into(),
             timeout_s: 10,
+            issue_url: "https://github.com/fkinnar/tri/issues/new?template=bug.yml".into(),
         }
     }
 }
@@ -71,6 +75,58 @@ impl Release {
             }
         }
     }
+}
+
+/// Nom du système, tel que le propose le formulaire de signalement (`macOS`, `Linux`,
+/// `Windows`), sinon celui de Rust.
+pub fn system_name() -> &'static str {
+    match std::env::consts::OS {
+        "macos" => "macOS",
+        "linux" => "Linux",
+        "windows" => "Windows",
+        other => other,
+    }
+}
+
+/// Version et système en une ligne, à coller dans un signalement :
+/// `tri 1.0.0-alpha.4 (abc1234), macOS aarch64`.
+pub fn report_line(build: &Build) -> String {
+    format!(
+        "tri {}, {} {}",
+        build.label(),
+        system_name(),
+        std::env::consts::ARCH
+    )
+}
+
+/// Adresse du formulaire de signalement, préremplie : version (avec le commit d'un build
+/// de nuit ou personnel), système et architecture.
+pub fn issue_url(build: &Build, settings: &UpdateSettings) -> String {
+    let separator = if settings.issue_url.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    format!(
+        "{}{separator}version={}&system={}&system-details={}",
+        settings.issue_url,
+        encode(&build.label()),
+        encode(system_name()),
+        encode(std::env::consts::ARCH)
+    )
+}
+
+/// Encodage d'un paramètre d'adresse (RFC 3986 : seuls lettres, chiffres et `-._~`
+/// restent tels quels).
+fn encode(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 /// Ce binaire, tel que compilé (`build.rs`).
@@ -369,6 +425,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_issue_form_is_prefilled_with_version_and_system() {
+        let build = Build {
+            version: "1.0.0-alpha.4".into(),
+            commit: Some("abc1234def".into()),
+            channel: Channel::Personal,
+        };
+        let url = issue_url(&build, &UpdateSettings::default());
+        assert!(url.starts_with("https://github.com/fkinnar/tri/issues/new?template=bug.yml&"));
+        assert!(
+            url.contains("&version=1.0.0-alpha.4%20%28abc1234%29&"),
+            "{url}"
+        );
+        assert!(url.contains(&format!("&system={}&", system_name())));
+        assert!(report_line(&build).starts_with("tri 1.0.0-alpha.4 (abc1234), "));
+        let settings = UpdateSettings {
+            issue_url: "https://example.org/new".into(),
+            ..UpdateSettings::default()
+        };
+        assert!(issue_url(&build, &settings).starts_with("https://example.org/new?version="));
+    }
+
+    #[test]
     fn release_notes_follow_the_language() {
         let release = |notes: &str| Release {
             version: "1.0.0".into(),
@@ -462,6 +540,7 @@ mod tests {
             url: "file:///nowhere".into(),
             compare_url: url.replace("compare.json", "{commit}"),
             timeout_s: 5,
+            ..UpdateSettings::default()
         };
         // Le fichier porte le nom du « commit » : l'adresse est bien construite.
         std::fs::rename(&compare, dir.path().join("abc1234def")).unwrap();
