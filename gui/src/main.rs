@@ -38,6 +38,7 @@ mod grid;
 mod histogram;
 mod i18n;
 mod loader;
+mod markdown;
 mod marks;
 mod meta;
 mod offload;

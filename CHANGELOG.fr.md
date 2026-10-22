@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Boîte « Mise à jour »** : notes de version mises en forme (gras, listes, code) au
+  lieu du Markdown brut (issue n° 3).
 - **Aide** : version plus visible et copiable (avec le système), et un bouton
   « Signaler un problème » qui ouvre le formulaire de GitHub prérempli (issue n° 7), aussi
   `Ctrl+B b` (le leader, puis b).

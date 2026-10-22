@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Update dialog**: release notes formatted (bold, lists, code) instead of raw Markdown
+  (issue #3).
 - **Help**: version more visible and copyable (with the system), and a "Report a
   problem" button opening the GitHub form prefilled with them (issue #7), also `Ctrl+B b`
   (leader, then b).

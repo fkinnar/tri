@@ -44,7 +44,7 @@ récente sans aller sur GitHub.
 | `parse_compare(json)` | commits de `main` absents du build (`ahead_by` de `commit...main`) |
 | `fetch(settings)` / `check(build, settings)` | requête par `curl`, puis `Status` : `Latest`, `Newer(release)`, `Build { behind }` |
 | `build_text(build, behind)` | les deux lignes affichées pour un build de nuit ou personnel |
-| `Release::notes_in(langue)` | notes de la version dans la langue de l'interface |
+| `Release::notes_in(langue)` | notes de la version dans la langue de l'interface, mises en forme par `gui/src/markdown.rs` (titres, listes, gras, code ; issue n° 3) |
 | `report_line(build)` / `issue_url(build, settings)` | version et système en une ligne (copiés depuis l'aide) ; formulaire de signalement prérempli (`[update] issue_url`, champs `version`, `system`, `system-details` du modèle `bug.yml`) |
 
 Dans l'interface, la requête tourne dans un fil à part (`TriApp::check_update`) ;

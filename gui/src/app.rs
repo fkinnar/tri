@@ -1444,7 +1444,7 @@ impl TriApp {
                         if !notes.is_empty() {
                             ui.add_space(4.0);
                             ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
-                                ui.weak(notes);
+                                crate::markdown::show(ui, notes);
                             });
                         }
                         ui.add_space(6.0);
