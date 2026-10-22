@@ -464,6 +464,24 @@ pub struct VersionSettings {
     pub presets: Presets,
 }
 
+/// Deux noms de version, de préréglage ou de profil se confondent : même texte, casse et
+/// espaces autour mis à part (issues n° 14 et 17).
+pub fn same_name(a: &str, b: &str) -> bool {
+    a.trim().to_lowercase() == b.trim().to_lowercase()
+}
+
+/// `base`, ou s'il est pris (`taken`), `base (2)`, `base (3)`…
+pub fn free_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    let base = base.trim();
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..)
+        .map(|n| format!("{base} ({n})"))
+        .find(|n| !taken(n))
+        .expect("un nom libre")
+}
+
 /// Identifiant libre pour un nouveau préréglage ou profil nommé `name` : minuscules,
 /// lettres et chiffres (accents retirés), tirets ; suivi d'un numéro s'il est déjà pris.
 pub fn new_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
@@ -553,23 +571,13 @@ impl Versions {
     /// `name` est déjà le nom d'une version, sans tenir compte de la casse ni des espaces
     /// autour (« story » et « Story » se confondraient dans une liste ; issue n° 14).
     pub fn name_taken(&self, name: &str) -> bool {
-        let name = name.trim().to_lowercase();
-        self.list
-            .iter()
-            .any(|v| v.name.trim().to_lowercase() == name)
+        self.list.iter().any(|v| same_name(&v.name, name))
     }
 
     /// Nom proposé pour une nouvelle version de rapport `ratio` : son libellé (« 4:5 »,
     /// « Libre »…), suivi d'un numéro s'il est déjà pris.
     pub fn new_name(&self, base: &str) -> String {
-        let base = base.trim();
-        if !self.name_taken(base) {
-            return base.to_string();
-        }
-        (2..)
-            .map(|n| format!("{base} ({n})"))
-            .find(|n| !self.name_taken(n))
-            .expect("un nom libre")
+        free_name(base, |n| self.name_taken(n))
     }
 
     /// Les autres versions que la n° `index` (pour juger d'un nom pendant qu'on la modifie).

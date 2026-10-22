@@ -84,6 +84,12 @@ fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), 
     })
 }
 
+/// Le nom d'un profil ou préréglage : montré dans la liste de l'en-tête et changé par
+/// « Renommer… », pas parmi les réglages (issue n° 18).
+fn renamed_in_header(section: &str, key: &str) -> bool {
+    key == "name" && family(section).is_some()
+}
+
 /// Profils et préréglages fournis par `tri` : modifiables, pas supprimables.
 fn builtin(section: &str) -> bool {
     match family(section) {
@@ -282,9 +288,18 @@ pub struct SettingsWindow {
     /// Défilement de la liste des sections (tests).
     #[cfg(test)]
     sections_offset: f32,
-    /// Nom d'un nouveau profil ou préréglage, en cours de saisie (`Some` après
-    /// « Nouveau… »).
-    new_name: Option<String>,
+    /// Nom d'un profil ou préréglage en cours de saisie (« Nouveau… » ou « Renommer… »).
+    naming: Option<Naming>,
+    naming_focus: bool,
+}
+
+/// Nom en cours de saisie dans l'en-tête d'une famille.
+enum Naming {
+    /// Nouveau membre, copie de celui montré.
+    New(String),
+    /// Nouveau nom de celui montré (issue n° 18 : plus de champ « name » modifiable parmi
+    /// les réglages, validé d'un Entrée sans contrôle).
+    Rename(String),
 }
 
 /// Ce qu'une recherche trouve dans une section.
@@ -330,7 +345,8 @@ impl SettingsWindow {
             scroll_to: None,
             #[cfg(test)]
             sections_offset: 0.0,
-            new_name: None,
+            naming: None,
+            naming_focus: false,
             sequence_timeout: settings.gui.key_sequence_timeout(),
             file,
             section: 0,
@@ -420,8 +436,24 @@ impl SettingsWindow {
         }
         let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
         self.dirty = true;
-        self.new_name = None;
+        self.naming = None;
         self.show_section(&target);
+        Some(settings)
+    }
+
+    /// Renomme un profil ou préréglage (son nom affiché ; l'identifiant, qui est la clé du
+    /// fichier, ne change pas).
+    fn rename_section(&mut self, section: &str, name: &str) -> Option<AppSettings> {
+        family(section)?;
+        if let Err(e) = self
+            .file
+            .set(section, "name", &Value::Str(name.trim().to_string()))
+        {
+            self.errors.insert((section.to_string(), "name".into()), e);
+            return None;
+        }
+        let settings = tri::settings::parse::<AppSettings>(&self.file.text()).ok()?;
+        self.dirty = true;
         Some(settings)
     }
 
@@ -540,7 +572,7 @@ impl SettingsWindow {
                 self.section = listed[(pos + 1).min(listed.len() - 1)];
             }
             if up || down {
-                self.new_name = None;
+                self.naming = None;
             }
             self.section_moved |= up || down;
         }
@@ -726,7 +758,7 @@ impl SettingsWindow {
                         if label.clicked() && at != i {
                             self.section = i;
                             self.section_moved = true;
-                            self.new_name = None;
+                            self.naming = None;
                         }
                     }
                 });
@@ -776,7 +808,12 @@ impl SettingsWindow {
                     }
                 });
             if ui.button(t!("settings-member-new")).clicked() {
-                self.new_name = Some(String::new());
+                self.naming = Some(Naming::New(String::new()));
+                self.naming_focus = true;
+            }
+            if ui.button(t!("settings-member-rename")).clicked() {
+                self.naming = Some(Naming::Rename(member_name(&self.file, section)));
+                self.naming_focus = true;
             }
             let own = !builtin(section);
             delete = ui
@@ -787,36 +824,67 @@ impl SettingsWindow {
         if let Some(i) = pick {
             self.section = i;
             self.section_moved = true;
-            self.new_name = None;
+            self.naming = None;
         }
-        // « Nouveau… » : nom du nouveau, copie de celui montré.
-        let mut create = false;
-        if let Some(mut name) = self.new_name.take() {
+        // « Nouveau… » (copie de celui montré) ou « Renommer… » : un nom, ni vide ni déjà
+        // pris dans la famille (issue n° 17), casse et espaces mis à part.
+        let mut confirm = false;
+        if let Some(mut naming) = self.naming.take() {
+            let renaming = matches!(naming, Naming::Rename(_));
+            let (Naming::New(name) | Naming::Rename(name)) = &mut naming;
+            let taken = members
+                .iter()
+                .filter(|(_, m)| !(renaming && m == section))
+                .any(|(_, m)| tri::versions::same_name(&member_name(&self.file, m), name));
+            let ok = !name.trim().is_empty() && !taken;
             let mut keep = true;
             ui.horizontal(|ui| {
                 ui.label(t!("settings-member-name"));
-                let field = ui.add(egui::TextEdit::singleline(&mut name).desired_width(160.0));
-                if name.is_empty() && !field.has_focus() && !field.lost_focus() {
+                let mut edit = egui::TextEdit::singleline(name).desired_width(160.0);
+                if taken {
+                    edit = edit.text_color(ui.visuals().error_fg_color);
+                }
+                let field = ui.add(edit);
+                // Le champ vient d'apparaître : il prend le clavier.
+                if std::mem::take(&mut self.naming_focus) {
                     field.request_focus();
                 }
-                let ok = !name.trim().is_empty();
-                create = ui
-                    .add_enabled(ok, egui::Button::new(t!("settings-member-create")))
-                    .on_hover_text(t!("settings-member-create-tip"))
+                let (label, tip) = if renaming {
+                    (
+                        t!("settings-member-rename-ok"),
+                        t!("settings-member-rename-tip"),
+                    )
+                } else {
+                    (
+                        t!("settings-member-create"),
+                        t!("settings-member-create-tip"),
+                    )
+                };
+                confirm = ui
+                    .add_enabled(ok, egui::Button::new(label))
+                    .on_hover_text(tip)
                     .clicked()
                     || (ok && field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
                 keep = !ui.button(t!("cancel")).clicked();
+                if taken {
+                    ui.colored_label(ui.visuals().error_fg_color, t!("settings-member-taken"));
+                }
             });
             if keep {
-                self.new_name = Some(name);
+                self.naming = Some(naming);
             }
         }
         ui.add_space(6.0);
-        if create
-            && let Some(name) = self.new_name.clone()
-            && let Some(s) = self.create_from(section, &name)
-        {
-            return Some(s);
+        if confirm {
+            match self.naming.take() {
+                Some(Naming::New(name)) => {
+                    if let Some(s) = self.create_from(section, &name) {
+                        return Some(s);
+                    }
+                }
+                Some(Naming::Rename(name)) => return self.rename_section(section, &name),
+                None => {}
+            }
         }
         if delete {
             return self.delete_section(section);
@@ -857,6 +925,7 @@ impl SettingsWindow {
                 .entries
                 .iter()
                 .filter(|e| only.is_none_or(|keys| keys.contains(&e.key.as_str())))
+                .filter(|e| !renamed_in_header(&section.name, &e.key))
                 .collect();
             if entries.is_empty() {
                 continue;
@@ -906,6 +975,9 @@ impl SettingsWindow {
             }
             for group in &section.groups {
                 for entry in &group.entries {
+                    if renamed_in_header(&section.name, &entry.key) {
+                        continue;
+                    }
                     let id = format!("{}.{}", section.name, entry.key);
                     let fields = [
                         label.as_str(),
@@ -1712,6 +1784,68 @@ mod tests {
             .unwrap();
         assert_eq!(reel.ratio, tri::versions::Ratio::Fixed(9, 16));
         assert!(w.delete_section("versions.presets.story").is_none());
+    }
+
+    #[test]
+    fn members_are_renamed_from_the_header_without_duplicate_names() {
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.create_from("export.profiles.web", "Tirage").unwrap();
+        w.show_section("export.profiles.tirage");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        // Issue n° 18 : le nom n'est plus un réglage modifiable, mais « Renommer… ».
+        assert!(h.query_by_label("max_side").is_some());
+        assert!(h.query_by_label("name").is_none());
+        h.get_by_label("Renommer…").click();
+        h.run_steps(2);
+        let naming = match &h.state().naming {
+            Some(Naming::Rename(n)) => format!("R {n}"),
+            Some(Naming::New(n)) => format!("N {n}"),
+            None => "-".into(),
+        };
+        assert_eq!(naming, "R Tirage");
+        // Issue n° 17 : un nom déjà pris dans la famille (casse mise à part) est refusé.
+        h.state_mut().naming = Some(Naming::Rename(" web".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label("Ce nom est déjà pris").is_some());
+        h.get_by_label("Renommer").click();
+        h.run_steps(2);
+        assert_eq!(
+            member_name(&h.state().file, "export.profiles.tirage"),
+            "Tirage"
+        );
+        h.state_mut().naming = Some(Naming::New("TIRAGE".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label("Ce nom est déjà pris").is_some());
+        // Son propre nom, ou un nom libre : accepté.
+        h.state_mut().naming = Some(Naming::Rename("Tirage A3".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label("Ce nom est déjà pris").is_none());
+        h.get_by_label("Renommer").click();
+        h.run_steps(2);
+        assert!(h.state().naming.is_none());
+        assert_eq!(
+            member_name(&h.state().file, "export.profiles.tirage"),
+            "Tirage A3"
+        );
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("name = \"Tirage A3\""),
+            "écrit"
+        );
     }
 
     #[test]

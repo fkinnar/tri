@@ -168,8 +168,8 @@ cadre, Entrée.
   (`config_edit`). L'identifiant est tiré du nom (`versions::new_id` : minuscules,
   accents retirés, numéro s'il est pris). Appliqué à chaud.
 - Fenêtre de réglages : une seule entrée « Préréglages de recadrage », liste déroulante
-  des préréglages, « Nouveau… » (copie de celui affiché), « Supprimer » (ceux de
-  l'utilisateur) ; liste déroulante des rapports pour `ratio` (comme les profils
+  des préréglages, « Nouveau… » (copie de celui affiché), « Renommer… », « Supprimer »
+  (ceux de l'utilisateur), noms uniques (voir `export.md`) ; liste déroulante des rapports pour `ratio` (comme les profils
   d'export, voir `export.md`).
 
 Au passage (19/10/2026) : les profils d'export, les préréglages et darktable modifiés

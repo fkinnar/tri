@@ -7,6 +7,9 @@
 - **Versions** : plus deux versions d'une image du même nom (casse comprise) ; le nom
   proposé est numéroté, un nom déjà pris passe en rouge et ne s'enregistre pas
   (issue n° 14).
+- **Réglages** : les préréglages d'export et de recadrage se renomment par un bouton
+  « Renommer… » au lieu d'un champ du nom modifiable, et deux préréglages ne peuvent plus
+  porter le même nom (issues n° 17 et 18).
 
 ## 1.0.0-alpha.5 — 22/10/2026
 

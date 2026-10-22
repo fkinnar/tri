@@ -304,6 +304,13 @@ entrée par profil encombrait la liste) ; à droite, l'explication commune, puis
   ses valeurs sont écrites, pour que le nouveau profil ne dépende pas des valeurs par
   défaut d'un autre. Identifiant tiré du nom (`versions::new_id`). Ensuite, il se règle
   comme les autres (listes déroulantes, refus des incohérences) ;
+- **« Renommer… »** (issue n° 18, 22/10/2026) : le nom n'est plus un réglage modifiable
+  parmi les autres (il se validait d'un Entrée, sans contrôle) ; il est dans la liste
+  déroulante, et se change par ce bouton (`Naming::Rename` ; l'identifiant ne change
+  pas). **Pas deux noms pareils** dans une famille (issue n° 17), casse et espaces mis
+  à part (`versions::same_name`) : le nom passe en rouge, « Ce nom est déjà pris », et
+  Créer / Renommer restent grisés. « Enregistrer comme préréglage » depuis le recadrage
+  numérote un nom pris (« Story (2) », `versions::free_name`) ;
 - **« Supprimer »**, pour les profils de l'utilisateur seulement (grisé sur un profil
   fourni : ils se modifient mais ne se suppriment pas).
 - En interne, chaque profil reste une section (`SettingsWindow::schema` : sections de
