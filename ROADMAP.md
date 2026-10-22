@@ -47,6 +47,7 @@ README.
 | Viewing adjustments | Exposure, black and white, contrast, exposure matching (non-destructive) |
 | Post-development | Output profiles, sending (AirDrop, others) |
 | Complex filters | Dedicated window or panel |
+| EXIF filters | Camera, lens, focal length, aperture, shutter speed, ISO…: at least what the metadata panel shows (issue #4) |
 | Fuller vim | Counts before actions (`5j`, `3x`) |
 | AI sharpness | Faces, sharp eyes on a portrait |
 | Icon set | Drawn icons (SVG) instead of simple shapes |

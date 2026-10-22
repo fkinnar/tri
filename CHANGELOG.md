@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Full screen**: an image's versions in a list on the ratings line; the image no longer
+  changes size from one photo to the next (issue #5).
 - **Update dialog**: release notes formatted (bold, lists, code) instead of raw Markdown
   (issue #3).
 - **Help**: version more visible and copyable (with the system), and a "Report a

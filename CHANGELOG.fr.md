@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Plein écran** : les versions d'une image dans une liste sur la ligne des notes ;
+  l'image ne change plus de taille d'une photo à l'autre (issue n° 5).
 - **Boîte « Mise à jour »** : notes de version mises en forme (gras, listes, code) au
   lieu du Markdown brut (issue n° 3).
 - **Aide** : version plus visible et copiable (avec le système), et un bouton

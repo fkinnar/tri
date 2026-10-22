@@ -86,9 +86,11 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   - Entrée pour enregistrer, Échap pour abandonner.
 
   Le pas du clavier : `[gui.crop] step`. Tout est réglable dans `[keys]`.
-- **Versions** d'une image en plein écran : une ligne à elles sous les notes (au bout de
-  la ligne des notes, les icônes de droite les recouvraient sur un écran étroit) :
-  - « Original » puis une pastille par version ;
+- **Versions** d'une image en plein écran : une liste « Versions : Original ▾ » sur la
+  ligne des notes (issue n° 5, 22/10/2026 : sur une ligne à elles, elles apparaissaient
+  selon l'image et changeaient sa taille ; des pastilles au bout de la ligne étaient
+  recouvertes par les icônes de droite sur un écran étroit) :
+  - « Original » puis une entrée par version ;
   - pour la version montrée : Modifier (rouvre son cadre, sur l'image où elle a été faite)
     et Supprimer (annulable).
   - `n` fait défiler l'original puis chaque version.

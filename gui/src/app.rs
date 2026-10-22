@@ -5945,6 +5945,39 @@ impl TriApp {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size);
 
+            // Versions : une liste sur la ligne des notes (issue n° 5 : sur une ligne à
+            // elles, elles apparaissaient selon l'image et changeaient sa taille).
+            if !versions.is_empty() {
+                ui.separator();
+                let current = shown
+                    .and_then(|i| versions.get(i).cloned())
+                    .unwrap_or_else(|| t!("versions-original"));
+                egui::ComboBox::from_id_salt("versions")
+                    .selected_text(t!("versions-current", name = current))
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(shown.is_none(), t!("versions-original"))
+                            .clicked()
+                        {
+                            version_action = Some(VersionAction::Show(None));
+                        }
+                        for (i, name) in versions.iter().enumerate() {
+                            if ui.selectable_label(shown == Some(i), name).clicked() {
+                                version_action = Some(VersionAction::Show(Some(i)));
+                            }
+                        }
+                        if let Some(i) = shown {
+                            ui.separator();
+                            if ui.button(t!("versions-edit")).clicked() {
+                                version_action = Some(VersionAction::Edit(i));
+                            }
+                            if ui.button(t!("versions-delete")).clicked() {
+                                version_action = Some(VersionAction::Delete(i));
+                            }
+                        }
+                    });
+            }
+
             // En comparaison, seule l'image active est notée.
             if marked > 1 && self.mode != Mode::Compare {
                 ui.colored_label(
@@ -6043,33 +6076,6 @@ impl TriApp {
                 }
             });
         });
-        // Versions : une ligne à elles (au bout de la ligne des notes, les icônes de
-        // droite les recouvraient sur un écran étroit).
-        if !versions.is_empty() {
-            ui.horizontal(|ui| {
-                ui.label(t!("versions-title"));
-                if ui
-                    .selectable_label(shown.is_none(), t!("versions-original"))
-                    .clicked()
-                {
-                    version_action = Some(VersionAction::Show(None));
-                }
-                for (i, name) in versions.iter().enumerate() {
-                    if ui.selectable_label(shown == Some(i), name).clicked() {
-                        version_action = Some(VersionAction::Show(Some(i)));
-                    }
-                }
-                if let Some(i) = shown {
-                    ui.separator();
-                    if ui.small_button(t!("versions-edit")).clicked() {
-                        version_action = Some(VersionAction::Edit(i));
-                    }
-                    if ui.small_button(t!("versions-delete")).clicked() {
-                        version_action = Some(VersionAction::Delete(i));
-                    }
-                }
-            });
-        }
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
             Some(
@@ -11635,12 +11641,16 @@ mod tests {
         assert_eq!(saved.list[0].name, "3:2");
         assert_eq!(saved.list[0].ratio, tri::versions::Ratio::Fixed(3, 2));
         assert!(dir.path().join("photos/img0.jpg.xmp").is_file());
-        // Montrée tout de suite, pastille dans le bandeau.
+        // Montrée tout de suite, dans la liste des versions du bandeau (issue n° 5).
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
+        h.run_steps(2);
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
         h.get_by_label("Original").click();
         h.run_steps(2);
         assert_eq!(h.state().version_shown, None);
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
         h.get_by_label("3:2").click();
         h.run_steps(2);
         assert_eq!(
@@ -11666,7 +11676,9 @@ mod tests {
         assert_eq!(h.state().version_shown, None);
         press(&mut h, Key::N, Modifiers::NONE);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
-        // Supprimer (annulable), puis Ctrl+Z la remet.
+        // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
         h.get_by_label("Supprimer").click();
         h.run_steps(2);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());

@@ -48,6 +48,7 @@ marche à suivre est dans le README.
 | Réglages de visualisation | Exposition, noir et blanc, contraste, uniformisation d'exposition (non destructifs) |
 | Après-développement | Profils de sortie, envoi (AirDrop, autres) |
 | Filtres complexes | Fenêtre ou panneau dédié |
+| Filtres sur les EXIF | Appareil, objectif, focale, ouverture, vitesse, ISO… : au moins ce que montre le panneau des métadonnées (issue n° 4) |
 | Vim plus complet | Nombres devant les actions (`5j`, `3x`) |
 | Netteté par IA | Visages, yeux nets sur un portrait |
 | Jeu d'icônes | Icônes dessinées (SVG) à la place des formes simples |

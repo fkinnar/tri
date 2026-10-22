@@ -86,9 +86,11 @@ The interface only draws; all the computation is here.
   - Enter to save, Esc to abandon.
 
   The keyboard step: `[gui.crop] step`. Everything is configurable in `[keys]`.
-- **Versions** of an image in full screen: a line of their own under the notes (at the end
-  of the notes line, the icons on the right covered them on a narrow screen):
-  - "Original" then one chip per version;
+- **Versions** of an image in full screen: a "Versions: Original ▾" list on the notes
+  line (issue #5, 2026-10-22: on a line of their own, they came and went with the image
+  and changed its size; chips at the end of the line were covered by the icons on the
+  right on a narrow screen):
+  - "Original" then one entry per version;
   - for the version shown: Edit (reopens its frame, on the image it was made on) and
     Delete (undoable).
   - `n` cycles through the original then each version.
