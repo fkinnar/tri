@@ -78,6 +78,11 @@ The interface only draws; all the computation is here.
 - **Bar** under the image: ratios (free, original, 1:1, 5:4, 3:2, 16:9, 4:3), the button
   lit in the chosen orientation (4:5); Portrait / Landscape; name (it follows the ratio as
   long as it has not been typed); optional export preset; Save / Cancel.
+- **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
+  is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
+  already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is
+  greyed out (Enter too: message). A reopened version keeps its own name
+  (`Versions::without`).
 - **Keyboard**, "crop" context (`Scope::Crop`, takes precedence while the frame is shown):
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);

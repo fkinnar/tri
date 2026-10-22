@@ -3968,7 +3968,13 @@ impl TriApp {
         });
         self.zoom = None;
         self.version_shown = None;
-        self.crop = Some(crate::crop::Crop::edit(path.to_path_buf(), index, &version));
+        let others = self.versions_of(path).without(Some(index));
+        self.crop = Some(crate::crop::Crop::edit(
+            path.to_path_buf(),
+            index,
+            &version,
+            others,
+        ));
         self.request_zoom();
     }
 
@@ -4019,7 +4025,8 @@ impl TriApp {
             Source::Developed => tri::versions::Source::Developed,
         };
         let aspect = self.image_aspect(&path);
-        self.crop = Some(crate::crop::Crop::new(path, source, aspect));
+        let others = self.versions_of(&path).clone();
+        self.crop = Some(crate::crop::Crop::new(path, source, aspect, others));
         self.request_zoom();
     }
 
@@ -4111,6 +4118,14 @@ impl TriApp {
         if !self.crop.as_ref().is_some_and(crate::crop::Crop::ready) {
             return;
         }
+        // Nom vide ou déjà pris (issue n° 14) : le bouton est grisé, le clavier aussi.
+        if let Some(crop) = self.crop.as_ref().filter(|c| !c.name_ok()) {
+            if crop.name_taken() {
+                let name = crop.name.trim().to_string();
+                self.notice = Some((t!("crop-name-taken-notice", name = name), true));
+            }
+            return;
+        }
         let Some(crop) = self.crop.take() else {
             return;
         };
@@ -4119,13 +4134,15 @@ impl TriApp {
         let result = tri::versions::read(&image).and_then(|mut versions| {
             let before = versions.items();
             let mut version = crop.version();
-            let change = match crop.editing.filter(|&i| i < versions.list.len()) {
+            let editing = crop.editing.filter(|&i| i < versions.list.len());
+            // Lu juste avant d'écrire : un nom pris entre-temps est numéroté.
+            version.name = versions.without(editing).new_name(&version.name);
+            let change = match editing {
                 Some(i) => {
                     versions.list[i] = version.clone();
                     tri::history::VersionChange::Changed(version.name.clone())
                 }
                 None => {
-                    version.name = versions.new_name(&version.name);
                     versions.list.push(version.clone());
                     tri::history::VersionChange::Created(version.name.clone())
                 }
@@ -12418,6 +12435,34 @@ mod tests {
         let saved = tri::versions::read(&image).unwrap();
         assert_eq!(saved.list[0].name, "Story");
         assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
+        // Issue n° 14 : pas deux versions du même nom. Le préréglage propose « Story (2) » ;
+        // un nom tapé déjà pris (casse comprise) n'est pas enregistré, le recadrage reste.
+        press(&mut h, Key::R, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        press(&mut h, Key::Tab, Modifiers::NONE);
+        assert_eq!(h.state().crop.as_ref().unwrap().name, "Story (2)");
+        h.state_mut().crop.as_mut().unwrap().name = "story ".into();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().crop.is_some(), "refusée, recadrage gardé");
+        assert!(h.state().notice.as_ref().is_some_and(|(_, error)| *error));
+        assert_eq!(tri::versions::read(&image).unwrap().list.len(), 1);
+        h.state_mut().crop.as_mut().unwrap().name = "Story bis".into();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().crop.is_none());
+        let names: Vec<String> = tri::versions::read(&image)
+            .unwrap()
+            .list
+            .into_iter()
+            .map(|v| v.name)
+            .collect();
+        assert_eq!(names, ["Story", "Story bis"]);
+        // Reprendre une version : elle garde son nom, mais pas celui de l'autre.
+        h.state_mut().edit_version(&image, 1);
+        assert!(h.state().crop.as_ref().unwrap().name_ok());
+        h.state_mut().crop.as_mut().unwrap().name = "Story".into();
+        assert!(h.state().crop.as_ref().unwrap().name_taken());
     }
 
     #[test]

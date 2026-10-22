@@ -2,6 +2,12 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Versions** : plus deux versions d'une image du même nom (casse comprise) ; le nom
+  proposé est numéroté, un nom déjà pris passe en rouge et ne s'enregistre pas
+  (issue n° 14).
+
 ## 1.0.0-alpha.5 — 22/10/2026
 
 Cinquième version de test : les issues des testeurs, ordre des images, favoris nommés.

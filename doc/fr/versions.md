@@ -77,6 +77,11 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Barre** sous l'image : rapports (libre, original, 1:1, 5:4, 3:2, 16:9, 4:3), le
   bouton allumé dans l'orientation choisie (4:5) ; Portrait / Paysage ; nom (il suit le
   rapport tant qu'on ne l'a pas tapé) ; profil d'export facultatif ; Enregistrer / Annuler.
+- **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
+  préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
+  nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en
+  rouge et Enregistrer est grisé (Entrée aussi : message). Une version reprise garde son
+  nom (`Versions::without`).
 - **Clavier**, contexte « recadrage » (`Scope::Crop`, prioritaire tant que le cadre est
   affiché) :
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
