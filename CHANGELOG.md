@@ -8,8 +8,8 @@
   in focus mode, on the image, hidden by `Ctrl+I`.
 - **Background colour**: `Ctrl+L` turns the grid and full-screen background through the
   theme's, dark grey, black and white (`[gui.colors] backgrounds`), without duplicates.
-- **Panels**: file name as a metadata row; clicking a folder gives the panel the
-  keyboard, like the metadata; thinner outline (`[gui.dialogs] focus_frame_width`).
+- **Panels**: file name as a metadata row; a click in a panel gives it the keyboard, a
+  click on the images gives it back to them; thinner outline (`[gui.dialogs] focus_frame_width`).
 - **Ratings**: the tooltips of the stars, colours and flags give their shortcuts.
 - **Help**: opens at its final size at once (it grew over several frames the first
   time), and the keys column no longer overflows the window (issue #11). Smooth opening:

@@ -373,8 +373,9 @@ system one ("cold" measurements, experiments).
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22) (folders, images, metadata; a hidden panel
   is shown, folders only exist in the grid). The active panel has an accent outline (`[gui.dialogs] focus_frame_width`, 1 point), the
-  status bar says so; a click on a folder or a metadata row also gives the panel the
-  keyboard. **Its keys go first, the others keep their effect** (user's
+  status bar says so; a click in a panel gives it the keyboard, a click in the images
+  area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
+  do not count). **Its keys go first, the others keep their effect** (user's
   choice: `3` still rates the current image); Esc gives the keyboard back to the images.
   Folders: ↑ ↓ / `j` `k`, → / `l` expands (already expanded: enters), ← / `h` collapses
   (already collapsed: goes up), Home / `gg`, End / `G`, Enter opens and gives the keyboard

@@ -8,8 +8,8 @@
   en mode concentration, sur l'image, masqués par `Ctrl+I`.
 - **Couleur de fond** : `Ctrl+L` fait tourner le fond de la grille et du plein écran entre
   celui du thème, gris foncé, noir et blanc (`[gui.colors] backgrounds`), sans doublon.
-- **Panneaux** : nom du fichier en ligne des métadonnées ; un clic sur un dossier donne
-  le clavier au panneau, comme pour les métadonnées ; liseré plus fin
+- **Panneaux** : nom du fichier en ligne des métadonnées ; un clic dans un panneau lui
+  donne le clavier, un clic sur les images le leur rend ; liseré plus fin
   (`[gui.dialogs] focus_frame_width`).
 - **Notes** : les bulles des étoiles, couleurs et drapeaux donnent leurs raccourcis.
 - **Aide** : s'ouvre tout de suite à sa taille (elle grandissait sur plusieurs images

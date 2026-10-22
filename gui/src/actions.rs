@@ -2020,7 +2020,7 @@ mod tests {
             "Cmd+Q reste au système"
         );
         assert_eq!(km.action(Key::Q, Modifiers::MAC_CMD), None);
-        assert_eq!(km.action(Key::L, Modifiers::CTRL), None, "Ctrl+L : libre");
+        assert_eq!(km.action(Key::O, Modifiers::CTRL), None, "Ctrl+O : libre");
         assert_eq!(km.action(Key::L, Modifiers::ALT), None);
         assert_eq!(Chord::from_event(Key::ArrowLeft, Modifiers::ALT), None);
         // Cmd+Z : annuler sur macOS (exception), rien ailleurs.

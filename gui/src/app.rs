@@ -7550,6 +7550,41 @@ impl TriApp {
         widths
     }
 
+    /// Clavier au panneau cliqué (retours du 22/10/2026 : selon l'endroit, un clic
+    /// changeait le panneau actif ou non) : un clic dans le panneau des dossiers ou des
+    /// métadonnées lui donne le clavier, un clic dans la zone des images le leur rend. Les
+    /// clics sur une boîte ouverte par-dessus ne comptent pas.
+    fn click_focus(
+        &mut self,
+        ctx: &egui::Context,
+        folders: Option<Rect>,
+        metadata: Option<Rect>,
+        center: Rect,
+    ) {
+        use crate::actions::Scope;
+        let Some(pos) = ctx.input(|i| {
+            i.pointer
+                .primary_pressed()
+                .then(|| i.pointer.interact_pos())
+                .flatten()
+        }) else {
+            return;
+        };
+        if ctx
+            .layer_id_at(pos)
+            .is_some_and(|layer| layer.order != egui::Order::Background)
+        {
+            return;
+        }
+        if folders.is_some_and(|r| r.contains(pos)) {
+            self.focus = Scope::Folders;
+        } else if metadata.is_some_and(|r| r.contains(pos)) {
+            self.focus = Scope::Metadata;
+        } else if center.contains(pos) && matches!(self.focus, Scope::Folders | Scope::Metadata) {
+            self.focus = Scope::Images;
+        }
+    }
+
     /// Fond du plein écran, de la comparaison et de la loupe : celui choisi (`Ctrl+L`),
     /// sinon celui du thème.
     fn view_background(&self) -> Color32 {
@@ -7868,9 +7903,12 @@ impl eframe::App for TriApp {
             }
             None => {}
         }
+        // Rectangles des panneaux latéraux : un clic dedans leur donne le clavier.
+        let mut metadata_rect = None;
+        let mut folders_rect = None;
         if self.metadata_panel && !self.focus_mode && self.error.is_none() && !self.folder.is_none()
         {
-            egui::Panel::right("metadata")
+            let panel = egui::Panel::right("metadata")
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
                 .show(ui, |ui| {
@@ -7885,12 +7923,14 @@ impl eframe::App for TriApp {
                         );
                     }
                 });
+            metadata_rect = Some(panel.response.rect);
         }
         if self.folder_panel && !self.focus_mode && self.mode == Mode::Grid {
-            egui::Panel::left("folders")
+            let panel = egui::Panel::left("folders")
                 .resizable(true)
                 .default_size(self.gui.folders.width)
                 .show(ui, |ui| self.folder_panel(ui));
+            folders_rect = Some(panel.response.rect);
         }
         // Recadrage : sa barre, à la place du bandeau de notation.
         if let Some(crop) = &self.crop {
@@ -7948,7 +7988,7 @@ impl eframe::App for TriApp {
         {
             central = central.frame(egui::Frame::central_panel(ui.style()).fill(fill));
         }
-        central.show(ui, |ui| {
+        let center = central.show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
             } else if self.files.is_empty() {
@@ -7967,6 +8007,7 @@ impl eframe::App for TriApp {
                 self.grid(ui);
             }
         });
+        self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -10414,6 +10455,38 @@ mod tests {
             h.state().tree.cursor_path(),
             Some(dir.path().join("séance-2"))
         );
+        // Un clic sur une image rend le clavier aux images ; sur une ligne des métadonnées,
+        // il le donne à leur panneau ; sur un dossier, de nouveau aux dossiers.
+        run_until(&mut h, |app| app.cell_rects.iter().any(|(i, _)| *i == 0));
+        let cell = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 0)
+            .unwrap()
+            .1;
+        h.hover_at(cell.center());
+        for pressed in [true, false] {
+            h.event(UiEvent::PointerButton {
+                pos: cell.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        h.run_steps(3);
+        assert_eq!(h.state().focus, Scope::Images, "clic sur une image");
+        run_until(&mut h, |app| !app.meta_rows.is_empty());
+        h.get_by_label("Nom").click();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().focus,
+            Scope::Metadata,
+            "clic dans les métadonnées"
+        );
+        h.get_by_label("séance-1").click();
+        h.run_steps(3);
+        assert_eq!(h.state().focus, Scope::Folders, "clic sur un dossier");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         // Ctrl+B puis l : les métadonnées.
@@ -11124,7 +11197,11 @@ mod tests {
         h.event(UiEvent::Text("*".into()));
         h.run_steps(3);
         assert_eq!(h.state().zoom_scale, 1.0);
-        assert!(h.query_by_label_contains("100 %").is_some(), "affiché");
+        // Dans la barre d'état (et le bouton 1:1).
+        assert!(
+            h.query_all_by_label_contains("100 %").next().is_some(),
+            "affiché"
+        );
         h.event(UiEvent::Text("-".into()));
         h.run_steps(3);
         assert!(h.state().zoom_scale < 1.0 || h.state().zoom.is_none());

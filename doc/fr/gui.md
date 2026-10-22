@@ -386,7 +386,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   22/10/2026) (dossiers, images, métadonnées ; un
   panneau masqué s'affiche, les dossiers n'existent qu'en grille). Le panneau actif a un
   liseré d'accent (`[gui.dialogs] focus_frame_width`, 1 point), la barre d'état le dit ;
-  un clic sur un dossier ou une ligne des métadonnées donne aussi le clavier au panneau. **Ses touches passent d'abord, les autres
+  un clic dans un panneau lui donne le clavier, un clic dans la zone des images le leur
+  rend (`TriApp::click_focus`, 22/10/2026 ; les boîtes ouvertes par-dessus ne comptent
+  pas). **Ses touches passent d'abord, les autres
   gardent leur effet** (choix de l'utilisateur : `3` note toujours l'image courante) ;
   Échap rend le clavier aux images. Dossiers : ↑ ↓ / `j` `k`, → / `l` déplie (déjà
   déplié : entre), ← / `h` replie (déjà replié : remonte), Début / `gg`, Fin / `G`,
