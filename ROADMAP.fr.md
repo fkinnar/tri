@@ -5,7 +5,7 @@
 > **Figée le 21/10/2026.** La liste de la bêta 1 ne s'allonge plus : toute idée nouvelle
 > va dans « après la V1 », sauf les bugs. Les retours se font par les *issues* du dépôt.
 
-## Déjà là (alpha 4)
+## Déjà là (alpha 5)
 
 Grille et plein écran (rendu boîtier, rendu RAW, 1:1, zoom continu, loupe), notation XMP
 compatible darktable / Lightroom / digiKam, filtres (notes, netteté, exposition,
@@ -14,7 +14,8 @@ histogramme et zones d'exposition, comparaison, sélection multiple, fichiers et
 (renommer, corbeille, copier / déplacer, glisser-déposer, paires RAW+JPEG au choix),
 annulation, déchargement de carte, export par préréglages, versions recadrées, développé
 darktable, superpositions, réglages dans l'interface, raccourcis classiques et vim,
-sélection à la souris (Maj+clic, Ctrl+clic), recherche de mise à jour, français et
+sélection à la souris (Maj+clic, Ctrl+clic), recherche de mise à jour et signalement
+de problème, tri par nom ou date, favoris nommés, français et
 anglais. Paquets macOS (`.dmg`), Linux (`.tar.gz`) et Windows (`.msi`, `.zip`), et
 builds de nuit (Release « nightly »).
 

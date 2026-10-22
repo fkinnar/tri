@@ -5,7 +5,7 @@
 > **Frozen on 2026-10-21.** The beta 1 list no longer grows: any new idea goes to "after
 > V1", except bugs. Feedback goes through the repository's *issues*.
 
-## Already there (alpha 4)
+## Already there (alpha 5)
 
 Grid and full screen (camera render, RAW render, 1:1, continuous zoom, loupe), XMP
 ratings compatible with darktable / Lightroom / digiKam, filters (ratings, sharpness,
@@ -13,7 +13,8 @@ exposure, invert, name search), stacks of similar photos, sharpness (score, map)
 histogram and exposure zones, comparison, multiple selection, files and folders (rename,
 trash, copy / move, drag and drop, RAW+JPEG pairs optional), undo, card offload, export
 presets, cropped versions, darktable development, overlays, settings in the interface,
-classic and vim shortcuts, mouse selection (Shift+click, Ctrl+click), update check,
+classic and vim shortcuts, mouse selection (Shift+click, Ctrl+click), update check and
+issue report, sort by name or date, named favourites,
 French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`) and Windows (`.msi`,
 `.zip`), and nightly builds ("nightly" Release).
 

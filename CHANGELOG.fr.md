@@ -2,7 +2,9 @@
 
 *[English version](CHANGELOG.md)*
 
-## À venir
+## 1.0.0-alpha.5 — 22/10/2026
+
+Cinquième version de test : les issues des testeurs, ordre des images, favoris nommés.
 
 - **Ordre** : par nom, date de prise de vue ou de modification, croissant ou décroissant
   (liste et flèche dans la barre des filtres, `f s` / `f r`, retenu) ; les paires RAW+JPEG

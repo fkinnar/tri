@@ -2,7 +2,9 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-## Unreleased
+## 1.0.0-alpha.5 — 2026-10-22
+
+Fifth test version: the testers' issues, image order, named favourites.
 
 - **Order**: by name, shooting date or modification date, ascending or descending (list
   and arrow in the filter bar, `f s` / `f r`, remembered); RAW+JPEG pairs stay together.
