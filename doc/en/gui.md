@@ -230,6 +230,15 @@ system one ("cold" measurements, experiments).
   desktop): system full screen, all bars and panels hidden (not closed: they come back
   as they were), a hint on how to leave it for a few seconds at the top
   (`focus_mode_hint_ms`). Esc does not leave it: it is used to go back to the grid.
+- **Full screen, nothing on the image** (2026-10-22): number, source, size and waits
+  ("RAW render in progress") in the status bar, after the name; ratings in the rating
+  bar. In focus mode, without bars, they are drawn on the image; `Ctrl+I`
+  (`core.view.image_info`, `[gui.view] image_info`) hides or shows them, remembered.
+- **Background colour** (`Ctrl+L`, `core.view.background`, 2026-10-22, like Lightroom's
+  "lights"): grid and full screen (comparison and loupe included), in turn the theme's
+  background then `[gui.colors] backgrounds` (dark grey, black, white), without
+  duplicates (a colour equal to the theme's background or already seen is skipped:
+  `next_background`); remembered from one session to the next.
 - **Neutral grey theme** (`[gui] theme = "neutral"`, 2026-10-19, Lightroom style):
   dark grey panels, neutral grey central background in the grid as in full screen (a
   black background makes images look brighter and more contrasted), slightly lighter
@@ -363,8 +372,9 @@ system one ("cold" measurements, experiments).
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22) (folders, images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has an accent outline, the
-  status bar says so. **Its keys go first, the others keep their effect** (user's
+  is shown, folders only exist in the grid). The active panel has an accent outline (`[gui.dialogs] focus_frame_width`, 1 point), the
+  status bar says so; a click on a folder or a metadata row also gives the panel the
+  keyboard. **Its keys go first, the others keep their effect** (user's
   choice: `3` still rates the current image); Esc gives the keyboard back to the images.
   Folders: ↑ ↓ / `j` `k`, → / `l` expands (already expanded: enters), ← / `h` collapses
   (already collapsed: goes up), Home / `gg`, End / `G`, Enter opens and gives the keyboard
@@ -474,7 +484,8 @@ system one ("cold" measurements, experiments).
   [offload.md](offload.md). The work is in the engine ([offload.md](offload.md)), the
   dialog (`offload.rs`) only displays.
 - **Metadata panel** (2026-10-17), on the right, in the grid and in full screen
-  (`Shift+M`, `[gui.metadata]`): engine rows (`Metadata::rows`, see
+  (`Shift+M`, `[gui.metadata]`): file name as the first row (2026-10-22, rather than a
+  title), then the engine rows (`Metadata::rows`, see
   [metadata.md](metadata.md)) for the selected image, values wrapped rather than widening
   the panel (lens names). Reading in a separate thread (`meta.rs`, `MetaLoader`): a few ms
   locally, but a NAS must not freeze the interface; results kept in memory, forgotten

@@ -163,6 +163,11 @@ pub enum Action {
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
     ToggleRatingBar,
+    /// Mode concentration : afficher / masquer les infos et notes dessinées sur l'image.
+    ToggleImageInfo,
+    /// Couleur de fond suivante (grille, plein écran) : thème, puis `[gui.colors]
+    /// backgrounds`.
+    BackgroundNext,
     /// Afficher / masquer les infos des vignettes (nom, format, notes, badges).
     ToggleGridInfo,
     /// Avance automatique à l'image suivante après une note : oui / non.
@@ -376,7 +381,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 155] = [
+    pub const ALL: [Action; 157] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -406,6 +411,8 @@ impl Action {
         Action::FilterInvert,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
+        Action::ToggleImageInfo,
+        Action::BackgroundNext,
         Action::ToggleGridInfo,
         Action::ToggleAutoAdvance,
         Action::SelectToggle,
@@ -580,8 +587,8 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
             | FilterBlurry | FilterWellExposed | FilterInvert => Group::Filters,
-            ToggleFilterBar | ToggleRatingBar | ToggleGridInfo | ToggleFolderPanel
-            | ToggleMetadata | RefreshFolders => Group::Panels,
+            ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
+            | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
             | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
@@ -633,6 +640,8 @@ impl Action {
             Action::FilterInvert => "core.filter.invert",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
+            Action::ToggleImageInfo => "core.view.image_info",
+            Action::BackgroundNext => "core.view.background",
             Action::ToggleGridInfo => "core.view.grid_info",
             Action::ToggleAutoAdvance => "core.rate.auto_advance",
             Action::Compare => "core.view.compare",
@@ -1243,6 +1252,9 @@ const RATING: &[Binding] = {
         (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
         (&[shifted(Key::A)], ToggleAutoAdvance),
         (&[shifted(Key::N)], ToggleRatingBar),
+        (&[ctrl(Key::I)], ToggleImageInfo),
+        // « L » comme les lumières de Lightroom.
+        (&[ctrl(Key::L)], BackgroundNext),
         // Infos des vignettes (« texte ») : nom, format, notes, badges.
         (&[shifted(Key::T)], ToggleGridInfo),
         (&[shifted(Key::D)], ToggleFolderPanel),

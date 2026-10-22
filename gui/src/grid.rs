@@ -103,6 +103,8 @@ pub fn navigate(
         | Action::FilterInvert
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
+        | Action::ToggleImageInfo
+        | Action::BackgroundNext
         | Action::ToggleGridInfo
         | Action::ToggleAutoAdvance
         | Action::SelectToggle

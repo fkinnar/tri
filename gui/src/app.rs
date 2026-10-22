@@ -169,6 +169,13 @@ pub struct TriApp {
     filter_bar: bool,
     /// Bandeau de notation affiché.
     rating_bar: bool,
+    /// Mode concentration : infos et notes dessinées sur l'image (`Ctrl+I`).
+    image_info: bool,
+    /// Fond choisi pour la grille et le plein écran (`Ctrl+L`) ; `None` : celui du thème.
+    background: Option<crate::settings::Color>,
+    /// Infos de l'image en plein écran (numéro, source, taille, attentes), écrites par la
+    /// vue et montrées dans la barre d'état (demandé le 22/10/2026 : plus rien sur l'image).
+    view_info: String,
     /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
     auto_advance: bool,
     /// Infos sur les vignettes (nom, format, notes, badges), `Maj+T`.
@@ -585,6 +592,9 @@ impl TriApp {
             notes_rule: NotesRule::default(),
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
+            image_info: gui.view.image_info,
+            background: None,
+            view_info: String::new(),
             auto_advance: gui.auto_advance,
             grid_info: gui.grid.info,
             grid_cell: gui.grid.cell,
@@ -752,6 +762,8 @@ impl TriApp {
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
             rating_bar: Some(self.rating_bar),
+            image_info: Some(self.image_info),
+            background: self.background,
             auto_advance: Some(self.auto_advance),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
@@ -774,6 +786,7 @@ impl TriApp {
             (&mut self.metadata_panel, s.metadata_panel),
             (&mut self.filter_bar, s.filter_bar),
             (&mut self.rating_bar, s.rating_bar),
+            (&mut self.image_info, s.image_info),
             (&mut self.auto_advance, s.auto_advance),
             (&mut self.grid_info, s.grid_info),
         ];
@@ -782,6 +795,7 @@ impl TriApp {
                 *field = value;
             }
         }
+        self.background = s.background;
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
@@ -863,8 +877,6 @@ impl TriApp {
             ui.weak(t!("panel-no-image"));
             return;
         };
-        ui.strong(file_name(&file.path));
-        ui.add_space(4.0);
         // Histogramme en haut du panneau, en grille comme en plein écran (retour du
         // 17/10/2026) ; panneau masqué : en plein écran, il est sur l'image.
         let settings = self.gui.metadata;
@@ -936,7 +948,10 @@ impl TriApp {
             }
             Some(Ok(m)) => {
                 let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
-                let mut rows = m.rows();
+                // Nom : une ligne comme les autres, en tête (demandé le 22/10/2026 : un
+                // titre blanc au-dessus de l'histogramme répétait la barre d'état).
+                let mut rows = vec![(t!("panel-name"), file_name(&file.path))];
+                rows.extend(m.rows());
                 // Netteté : une ligne comme les autres (pointable, copiable).
                 if let Some(j) = self.judgements.get(&file.path) {
                     let ratio = |r: Option<f32>| {
@@ -1113,6 +1128,7 @@ impl TriApp {
     fn folder_panel(&mut self, ui: &mut Ui) {
         let f = self.gui.folders;
         let mut toggle = None;
+        let mut pointed: Option<PathBuf> = None;
         let mut open = None;
         let mut eject = None;
         let mut offload = None;
@@ -1193,6 +1209,7 @@ impl TriApp {
                     marks::disclosure(ui.painter(), rect, row.expanded, ui.visuals().text_color());
                     if response.clicked() {
                         toggle = Some(row.path.clone());
+                        pointed = Some(row.path.clone());
                     }
                     let current = row.path == self.folder.dir;
                     let label = ui.selectable_label(current, &row.name);
@@ -1222,8 +1239,11 @@ impl TriApp {
                     {
                         dropped = Some(((*d).clone(), row.path.clone()));
                     }
-                    if label.clicked() && !current {
-                        open = Some(row.path.clone());
+                    if label.clicked() {
+                        pointed = Some(row.path.clone());
+                        if !current {
+                            open = Some(row.path.clone());
+                        }
                     }
                     if label.double_clicked() {
                         toggle = Some(row.path.clone());
@@ -1324,10 +1344,16 @@ impl TriApp {
             }
         });
         if focused {
-            panel_focus_frame(ui, accent);
+            panel_focus_frame(ui, accent, self.gui.dialogs.focus_frame_width);
         }
         if let Some(path) = toggle {
             self.tree.toggle(&path);
+        }
+        // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
+        // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
+        if let Some(path) = pointed {
+            self.tree.point_at(&path);
+            self.focus = crate::actions::Scope::Folders;
         }
         // Menu du clic droit : le dossier visé devient la ligne pointée, puis la même
         // action qu'au clavier.
@@ -2838,6 +2864,12 @@ impl TriApp {
             }
             Action::ToggleFilterBar => self.filter_bar = !self.filter_bar,
             Action::ToggleRatingBar => self.rating_bar = !self.rating_bar,
+            Action::ToggleImageInfo => self.image_info = !self.image_info,
+            Action::BackgroundNext => {
+                let theme = self.theme_background(&ctx.global_style().visuals);
+                self.background =
+                    next_background(self.background, theme, &self.gui.colors.backgrounds);
+            }
             Action::ToggleGridInfo => self.grid_info = !self.grid_info,
             Action::RefreshFolders => self.tree.refresh(),
             Action::ToggleHistogram => self.histogram = !self.histogram,
@@ -4315,7 +4347,7 @@ impl TriApp {
             let id = ui.scope_id().with(("compare", &file.path));
             let response = ui.interact(rect, id, Sense::click_and_drag());
             let painter = ui.painter_at(rect);
-            painter.rect_filled(rect, 0.0, self.gui.theme.view_background(&self.gui.colors));
+            painter.rect_filled(rect, 0.0, self.view_background());
             let source = self.source_for(&file);
             let zoom_level = view::zoom_level(file.kind, source);
             let desired = view::pick(file.kind, source, zoomed, |l| self.ready(index, l));
@@ -4542,11 +4574,7 @@ impl TriApp {
         let whole = Rect::from_min_size(pos - vec2(point.x * size.x, point.y * size.y), size);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         let clipped = painter.with_clip_rect(square);
-        clipped.rect_filled(
-            square,
-            0.0,
-            self.gui.theme.view_background(&self.gui.colors),
-        );
+        clipped.rect_filled(square, 0.0, self.view_background());
         clipped.image(texture, whole, uv, Color32::WHITE);
         painter.rect_stroke(
             square,
@@ -4591,11 +4619,7 @@ impl TriApp {
         let (view_rect, response) =
             ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         let painter = ui.painter_at(view_rect);
-        painter.rect_filled(
-            view_rect,
-            0.0,
-            self.gui.theme.view_background(&self.gui.colors),
-        );
+        painter.rect_filled(view_rect, 0.0, self.view_background());
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
 
         // Texture à afficher, et dimensions d'origine (pixels) de l'image qu'elle représente.
@@ -4748,13 +4772,11 @@ impl TriApp {
             self.request_zoom();
         }
 
-        // Ce qui est affiché, toujours visible.
-        let mut info = format!(
-            "{} / {} · {}",
-            index + 1,
-            self.files.len(),
-            file_name(&file.path)
-        );
+        // Ce qui est affiché : dans la barre d'état, après le nom (demandé le 22/10/2026 :
+        // le nom y était déjà, plus rien sur l'image) ; sur l'image seulement en mode
+        // concentration, où la barre d'état est masquée (Ctrl+I les masque).
+        let position = format!("{} / {}", index + 1, self.files.len());
+        let mut info = String::new();
         if self.selection.contains(&file.path) {
             info.push_str(&t!("view-info-selected"));
         }
@@ -4840,18 +4862,21 @@ impl TriApp {
                 _ => t!("view-info-one-to-one-loading"),
             });
         }
-        overlay(
-            &painter,
-            view_rect.left_top() + vec2(10.0, 10.0),
-            Align2::LEFT_TOP,
-            &info,
-        );
+        if self.focus_mode && self.image_info {
+            overlay(
+                &painter,
+                view_rect.left_top() + vec2(10.0, 10.0),
+                Align2::LEFT_TOP,
+                &format!("{position} · {}{info}", file_name(&file.path)),
+            );
+        }
+        self.view_info = format!("{position}{info}");
         // Notes sur l'image seulement sans le bandeau du bas, qui les montre déjà (issue
         // n° 8) : bandeau masqué (Maj+N) ou mode concentration.
         let notes = self.folder.notes.notes(&file.path);
         let size = self.gui.view.marks;
         let bar_shown = self.rating_bar && !self.focus_mode;
-        if *notes != tri::xmp::Notes::EMPTY && !bar_shown {
+        if *notes != tri::xmp::Notes::EMPTY && !bar_shown && self.image_info {
             let width = marks::row_width(notes, size);
             let left_center = view_rect.left_bottom() + vec2(15.0, -15.0 - size / 2.0);
             let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
@@ -4905,7 +4930,7 @@ impl TriApp {
             return Some(t.clone());
         }
         let e = self.exposure_of(index)?;
-        let c = self.gui.colors;
+        let c = self.gui.colors.clone();
         let zones = histogram::ZoneColors {
             channels: [c.clip_red.into(), c.clip_green.into(), c.clip_blue.into()],
             all: c.clip_over.into(),
@@ -5106,6 +5131,10 @@ impl TriApp {
             {
                 ui.separator();
                 ui.label(file_name(&file.path));
+                // Plein écran : numéro, source, taille, attentes (écrits par la vue).
+                if self.mode == Mode::View && !self.view_info.is_empty() {
+                    ui.weak(&self.view_info);
+                }
             }
             // Mode pile : où l'on est dans la pile.
             if self.mode == Mode::View
@@ -5881,7 +5910,7 @@ impl TriApp {
             return;
         };
         let notes = self.folder.notes.notes(&path).clone();
-        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 8.0);
+        let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
         let mut clicked = None;
         let mut file_action = None;
         let mut close = false;
@@ -5944,7 +5973,7 @@ impl TriApp {
             return;
         };
         let notes = self.folder.notes.notes(&file.path).clone();
-        let (colors, size) = (self.gui.colors, self.gui.grid.marks + 4.0);
+        let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 4.0);
         let marked = self.selection.visible(&self.files);
         let mut clicked = None;
         // Versions de l'image (plein écran) : pastilles, puis modifier / supprimer.
@@ -6213,7 +6242,7 @@ impl TriApp {
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let mut refilter = false;
-        let colors = self.gui.colors;
+        let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
         // de portable, la barre débordait).
@@ -6633,7 +6662,7 @@ impl TriApp {
     }
 
     fn cell(&mut self, ui: &mut Ui, ctx: &egui::Context, index: usize, deadline: Instant) {
-        let (g, colors) = (self.gui.grid, self.gui.colors);
+        let (g, colors) = (self.gui.grid, self.gui.colors.clone());
         let cell = self.grid_cell;
         let (rect, response) = ui.allocate_exact_size(vec2(cell, cell), Sense::click_and_drag());
         if response.contains_pointer() {
@@ -7521,6 +7550,27 @@ impl TriApp {
         widths
     }
 
+    /// Fond du plein écran, de la comparaison et de la loupe : celui choisi (`Ctrl+L`),
+    /// sinon celui du thème.
+    fn view_background(&self) -> Color32 {
+        self.background.map_or(
+            self.gui.theme.view_background(&self.gui.colors),
+            Color32::from,
+        )
+    }
+
+    /// Fond du thème pour ce qu'on regarde : grille, ou plein écran et comparaison.
+    fn theme_background(&self, visuals: &egui::Visuals) -> Color32 {
+        match self.mode {
+            Mode::Grid => self
+                .gui
+                .theme
+                .center(&self.gui.colors)
+                .unwrap_or(visuals.panel_fill),
+            _ => self.gui.theme.view_background(&self.gui.colors),
+        }
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -7828,7 +7878,11 @@ impl eframe::App for TriApp {
                         .auto_shrink(false)
                         .show(ui, |ui| self.metadata_panel(ui));
                     if self.focus == crate::actions::Scope::Metadata {
-                        panel_focus_frame(ui, Color32::from(self.gui.dialogs.title_color));
+                        panel_focus_frame(
+                            ui,
+                            Color32::from(self.gui.dialogs.title_color),
+                            self.gui.dialogs.focus_frame_width,
+                        );
                     }
                 });
         }
@@ -7884,9 +7938,14 @@ impl eframe::App for TriApp {
         if self.filter_bar && !self.focus_mode && self.mode == Mode::Grid && self.error.is_none() {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
-        // Fond central : gris neutre avec ce thème (grille et plein écran).
+        // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
+        // plein écran).
         let mut central = egui::CentralPanel::default();
-        if let Some(fill) = self.gui.theme.center(&self.gui.colors) {
+        if let Some(fill) = self
+            .background
+            .map(Color32::from)
+            .or(self.gui.theme.center(&self.gui.colors))
+        {
             central = central.frame(egui::Frame::central_panel(ui.style()).fill(fill));
         }
         central.show(ui, |ui| {
@@ -8283,20 +8342,22 @@ fn drag_preview(ctx: &egui::Context) {
         });
 }
 
-/// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
-/// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
-/// 17/10/2026). Gardée dans la fenêtre, **déplaçable** en glissant son fond, aérée
-/// (`[gui.dialogs]`) ; derrière, le fond est grisé et bloqué comme pour toute modale.
-/// Liseré de la couleur d'accent autour d'un panneau qui a le clavier.
-fn panel_focus_frame(ui: &Ui, color: Color32) {
+/// Liseré de la couleur d'accent autour d'un panneau qui a le clavier, épais de `width`
+/// (`[gui.dialogs] focus_frame_width`, 1 point : 2 paraissaient lourds, retour du
+/// 22/10/2026).
+fn panel_focus_frame(ui: &Ui, color: Color32, width: f32) {
     ui.painter().rect_stroke(
         ui.clip_rect().shrink(1.0),
         0.0,
-        egui::Stroke::new(2.0, color),
+        egui::Stroke::new(width, color),
         egui::StrokeKind::Inside,
     );
 }
 
+/// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
+/// fenêtre : sur un grand écran, le trajet jusqu'au centre est long (retour du
+/// 17/10/2026). Gardée dans la fenêtre, **déplaçable** en glissant son fond, aérée
+/// (`[gui.dialogs]`) ; derrière, le fond est grisé et bloqué comme pour toute modale.
 pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
     // Une position par ouverture : la boîte rouverte ailleurs repart de son nouveau clic.
     let id = egui::Id::unique(id).with((at.x as i32, at.y as i32));
@@ -8461,6 +8522,24 @@ fn truncate(s: &str, max: usize) -> String {
 /// Identifiant du champ de recherche de l'aide.
 fn help_search_id() -> egui::Id {
     egui::Id::unique("help_search")
+}
+
+/// Fond suivant (`Ctrl+L`) : celui du thème (`None`), puis ceux de `list`, en sautant une
+/// couleur égale au fond du thème `theme` ou déjà vue (demandé le 22/10/2026 : pas deux
+/// fois la même) ; après le dernier, retour au thème.
+fn next_background(
+    current: Option<crate::settings::Color>,
+    theme: Color32,
+    list: &[crate::settings::Color],
+) -> Option<crate::settings::Color> {
+    let mut options = vec![None];
+    for &color in list {
+        if Color32::from(color) != theme && !options.contains(&Some(color)) {
+            options.push(Some(color));
+        }
+    }
+    let at = options.iter().position(|o| *o == current).unwrap_or(0);
+    options[(at + 1) % options.len()]
 }
 
 /// Une ligne de l'aide : titre de thème, ou action et ses raccourcis.
@@ -10185,6 +10264,35 @@ mod tests {
     }
 
     #[test]
+    fn backgrounds_rotate_without_repeating_the_theme() {
+        use crate::settings::Color as C;
+        let theme = Color32::from_rgb(12, 12, 12);
+        let list = [
+            C([48, 48, 48]),
+            C([12, 12, 12]),
+            C([0, 0, 0]),
+            C([48, 48, 48]),
+        ];
+        let mut seen = vec![None];
+        let mut current = None;
+        for _ in 0..3 {
+            current = next_background(current, theme, &list);
+            seen.push(current);
+        }
+        // Le gris du thème et le doublon sautés : thème, gris foncé, noir, puis le thème.
+        assert_eq!(
+            seen,
+            [None, Some(C([48, 48, 48])), Some(C([0, 0, 0])), None]
+        );
+        // Un fond choisi qui n'est plus proposé repart du début.
+        assert_eq!(
+            next_background(Some(C([1, 2, 3])), theme, &list),
+            Some(C([48, 48, 48]))
+        );
+        assert_eq!(next_background(None, theme, &[]), None);
+    }
+
+    #[test]
     fn help_search_filters_and_typing_is_not_a_shortcut() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -10295,6 +10403,18 @@ mod tests {
         );
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().folder.dir, dir.path().join("séance-1"));
+        assert_eq!(h.state().focus, Scope::Images);
+        // Un clic sur un dossier : ouvert, pointé, et le clavier au panneau, comme un clic
+        // dans les métadonnées (retour du 22/10/2026).
+        h.get_by_label("séance-2").click();
+        h.run_steps(3);
+        assert_eq!(h.state().folder.dir, dir.path().join("séance-2"));
+        assert_eq!(h.state().focus, Scope::Folders);
+        assert_eq!(
+            h.state().tree.cursor_path(),
+            Some(dir.path().join("séance-2"))
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         // Ctrl+B puis l : les métadonnées.
         press(&mut h, Key::B, Modifiers::CTRL);

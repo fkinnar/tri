@@ -233,6 +233,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   le bureau) : plein écran du système, toutes les barres et tous les panneaux masqués
   (pas fermés : ils reviennent tels quels), indication pour en sortir quelques secondes
   en haut (`focus_mode_hint_ms`). Échap n'en sort pas : il sert à revenir à la grille.
+- **Plein écran, rien sur l'image** (22/10/2026) : numéro, source, taille et attentes
+  (« rendu RAW en cours ») dans la barre d'état, après le nom ; notes dans le bandeau.
+  En mode concentration, sans barres, ils sont dessinés sur l'image ; `Ctrl+I`
+  (`core.view.image_info`, `[gui.view] image_info`) les masque ou les affiche, retenu.
+- **Couleur de fond** (`Ctrl+L`, `core.view.background`, 22/10/2026, comme les
+  « lumières » de Lightroom) : grille et plein écran (comparaison et loupe comprises),
+  tour à tour le fond du thème puis `[gui.colors] backgrounds` (gris foncé, noir, blanc),
+  sans doublon (une couleur égale au fond du thème ou déjà vue est sautée :
+  `next_background`) ; retenue d'une session à l'autre.
 - **Thème gris neutre** (`[gui] theme = "neutral"`, 19/10/2026, façon Lightroom) :
   panneaux gris foncé, fond central gris neutre en grille comme en plein écran (un fond
   noir fait paraître les images plus claires et plus contrastées), cellules un peu plus
@@ -376,7 +385,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   panneau de gauche / de droite, `o` au suivant (leader puis `b` : signaler un problème,
   22/10/2026) (dossiers, images, métadonnées ; un
   panneau masqué s'affiche, les dossiers n'existent qu'en grille). Le panneau actif a un
-  liseré d'accent, la barre d'état le dit. **Ses touches passent d'abord, les autres
+  liseré d'accent (`[gui.dialogs] focus_frame_width`, 1 point), la barre d'état le dit ;
+  un clic sur un dossier ou une ligne des métadonnées donne aussi le clavier au panneau. **Ses touches passent d'abord, les autres
   gardent leur effet** (choix de l'utilisateur : `3` note toujours l'image courante) ;
   Échap rend le clavier aux images. Dossiers : ↑ ↓ / `j` `k`, → / `l` déplie (déjà
   déplié : entre), ← / `h` replie (déjà replié : remonte), Début / `gg`, Fin / `G`,
@@ -491,7 +501,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   qu'ouverte d'office. Voir [offload.md](offload.md). Le travail est dans
   le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
-  (`Maj+M`, `[gui.metadata]`) : lignes du moteur (`Metadata::rows`, voir
+  (`Maj+M`, `[gui.metadata]`) : nom du fichier en première ligne (22/10/2026, plutôt
+  qu'un titre), puis les lignes du moteur (`Metadata::rows`, voir
   [metadata.md](metadata.md)) pour l'image sélectionnée, valeurs à la ligne plutôt que
   d'élargir le panneau (noms d'objectif). Lecture dans un fil à part (`meta.rs`,
   `MetaLoader`) : quelques ms en local, mais un NAS ne doit pas figer l'interface ;

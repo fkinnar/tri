@@ -34,6 +34,10 @@ pub struct DisplayState {
     pub filter_bar: Option<bool>,
     /// Bandeau de notation (`Maj+N`).
     pub rating_bar: Option<bool>,
+    /// Infos et notes sur l'image en mode concentration (`Ctrl+I`).
+    pub image_info: Option<bool>,
+    /// Fond de la grille et du plein écran (`Ctrl+L`) ; absent : celui du thème.
+    pub background: Option<crate::settings::Color>,
     /// Avance automatique après une note (`Maj+A`).
     pub auto_advance: Option<bool>,
     /// Infos sur les vignettes de la grille (`Maj+T`).

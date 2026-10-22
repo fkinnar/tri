@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use eframe::egui::{self, Color32};
-use serde::Deserialize;
 use serde::de::{self, Deserializer};
+use serde::{Deserialize, Serialize};
 use tri::scheduler::RawPreviews;
 use tri::settings::{
     CacheSection, EngineSettings, PreviewSection, RenderSection, SchedulerSection, XmpSection,
@@ -467,6 +467,8 @@ pub struct DialogSettings {
     pub title_size: f32,
     /// Couleur des titres (accent).
     pub title_color: Color,
+    /// Épaisseur du liseré, de cette couleur, autour du panneau qui a le clavier (points).
+    pub focus_frame_width: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
     /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
@@ -485,6 +487,7 @@ impl Default for DialogSettings {
             max_width: 520.0,
             title_size: 17.0,
             title_color: Color([80, 190, 220]),
+            focus_frame_width: 1.0,
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,
@@ -660,6 +663,9 @@ pub struct ViewSettings {
     pub focus_marker_width: f32,
     /// Aide-mémoire des touches en haut à droite du plein écran (F1 ouvre l'aide).
     pub key_hints: bool,
+    /// Mode concentration : infos et notes dessinées sur l'image (ailleurs, la barre d'état
+    /// et le bandeau les montrent) ; `Ctrl+I` les masque.
+    pub image_info: bool,
     /// 1:1 au clavier ou au bouton centré sur le collimateur quand il est connu (sinon au
     /// milieu de l'image).
     pub zoom_on_focus_point: bool,
@@ -684,6 +690,7 @@ impl Default for ViewSettings {
             focus_marker_size: 28.0,
             focus_marker_width: 2.0,
             key_hints: false,
+            image_info: true,
             zoom_on_focus_point: true,
             stack_wrap: false,
             overlay_line_width: 1.0,
@@ -903,7 +910,7 @@ impl Default for HistogramSettings {
 }
 
 /// Section `[gui.colors]` : couleurs `"#rrggbb"`. Sélection absente : couleur du thème.
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Colors {
     /// Fond de la cellule sélectionnée (au clic ou au clavier).
@@ -954,6 +961,9 @@ pub struct Colors {
     pub error: Color,
     /// Fond du plein écran.
     pub view_background: Color,
+    /// Fonds proposés tour à tour (`Ctrl+L`) pour la grille et le plein écran, après celui
+    /// du thème ; une couleur égale à celle du thème ou déjà vue est sautée.
+    pub backgrounds: Vec<Color>,
     /// Étoiles ; absent : couleur d'accent du thème, comme le reste de l'interface
     /// (retour du 21/10/2026, à la place du jaune).
     pub stars: Option<Color>,
@@ -1020,6 +1030,11 @@ impl Default for Colors {
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
             view_background: Color([12, 12, 12]),
+            backgrounds: vec![
+                Color([48, 48, 48]),
+                Color([0, 0, 0]),
+                Color([255, 255, 255]),
+            ],
             stars: None,
             accepted: Color([70, 170, 90]),
             rejected: Color([215, 70, 70]),
@@ -1062,6 +1077,13 @@ impl std::str::FromStr for Color {
             .ok_or_else(|| t!("settings-bad-color", value = s))?;
         let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).expect("hexadécimal vérifié");
         Ok(Color([byte(0), byte(2), byte(4)]))
+    }
+}
+
+impl Serialize for Color {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let [r, g, b] = self.0;
+        serializer.serialize_str(&format!("#{r:02x}{g:02x}{b:02x}"))
     }
 }
 

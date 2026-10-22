@@ -522,6 +522,9 @@ focus_marker_width = 2.0
 # Aide-mémoire des touches (b, z, i, o, Échap) en haut à droite du plein écran ; masqué par
 # défaut : il mord sur l'image, et F1 ouvre l'aide complète.
 key_hints = false
+# Mode concentration (F11) : infos (numéro, source, taille) et notes dessinées sur l'image,
+# puisque la barre d'état et le bandeau sont masqués ; Ctrl+I les masque ou les affiche.
+image_info = true
 # 1:1 (z ou bouton « 1:1 ») centré sur le collimateur quand le boîtier l'a enregistré
 # (c'est là qu'on juge la netteté) ; sinon au milieu de l'image. Le double-clic, lui,
 # zoome sur le point cliqué.
@@ -565,6 +568,8 @@ max_width = 520.0
 title_size = 17.0
 # Couleur des titres (accent, turquoise), soulignés d'une ligne de séparation.
 title_color = "#50bedc"
+# Épaisseur du liseré de cette couleur autour du panneau qui a le clavier (points).
+focus_frame_width = 1.0
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.
@@ -718,6 +723,9 @@ stack_mark = "#8c8c8c"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
+# Fonds proposés tour à tour par Ctrl+L (grille et plein écran), après celui du thème ;
+# une couleur égale à celle du thème ou déjà dans la liste est sautée.
+backgrounds = ["#303030", "#000000", "#ffffff"]
 # Notes : étoiles (absent : couleur d'accent du thème), pastilles accepté / rejeté,
 # couleurs de notation.
 # stars = "#f0c440"

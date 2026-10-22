@@ -526,6 +526,9 @@ focus_marker_width = 2.0
 # Key reminder (b, z, i, o, Esc) at the top right of full screen; hidden by
 # default: it covers part of the image, and F1 opens the full help.
 key_hints = false
+# Focus mode (F11): info (number, source, size) and ratings drawn on the image, since
+# the status bar and the rating bar are hidden; Ctrl+I hides or shows them.
+image_info = true
 # 1:1 (z or the "1:1" button) centred on the focus point when the camera recorded it
 # (that's where sharpness is judged); otherwise in the middle of the image. Double-click
 # zooms on the clicked point.
@@ -570,6 +573,8 @@ max_width = 520.0
 title_size = 17.0
 # Colour of the titles (accent, turquoise), underlined by a separator line.
 title_color = "#50bedc"
+# Width of the outline in this colour around the panel that has the keyboard (points).
+focus_frame_width = 1.0
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
 # Minimum width of the help (F1), in points.
@@ -723,6 +728,9 @@ stack_mark = "#8c8c8c"
 warning = "#e6a03c"
 error = "#e65a5a"
 view_background = "#0c0c0c"
+# Backgrounds offered in turn by Ctrl+L (grid and full screen), after the theme's; a
+# colour equal to the theme's or already in the list is skipped.
+backgrounds = ["#303030", "#000000", "#ffffff"]
 # Ratings: stars (missing: the theme's accent colour), picked / rejected dots,
 # rating colours.
 # stars = "#f0c440"
