@@ -10731,10 +10731,16 @@ mod tests {
             Scope::Metadata,
             "clic dans les métadonnées"
         );
-        h.get_by_label("séance-1").click();
-        // Le panneau des métadonnées se remplit en fond : sous la charge des autres tests,
-        // quelques images de plus peuvent être nécessaires.
-        run_until(&mut h, |app| app.focus == Scope::Folders);
+        // Le panneau des métadonnées se remplit en fond et peut décaler la mise en page :
+        // sous la charge (CI Windows), le clic tombait parfois à côté. Recliqué tant que le
+        // clavier n'est pas passé aux dossiers.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().focus != Scope::Folders {
+            assert!(Instant::now() < deadline, "clic sur un dossier jamais reçu");
+            h.get_by_label("séance-1").click();
+            h.run_steps(3);
+            std::thread::sleep(Duration::from_millis(10));
+        }
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         // Ctrl+B puis l : les métadonnées.
@@ -11550,6 +11556,8 @@ mod tests {
 
     /// Fait tourner l'interface jusqu'à ce que `done` soit vrai (le moteur travaille dans
     /// d'autres threads), au plus 20 s.
+    // Ligne de l'appel dans le message d'échec : savoir ce qui n'est jamais arrivé.
+    #[track_caller]
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
         // Large : les machines d'intégration continue sont plus lentes (20 s ne suffisaient
         // pas au zoom sur une image de 4000 × 3000) ; rapide quand tout va bien.
@@ -11563,6 +11571,7 @@ mod tests {
 
     /// Attend qu'un élément de libellé `label` soit affiché (une fenêtre egui peut demander
     /// une image de plus pour apparaître, plus sur une machine d'intégration continue lente).
+    #[track_caller]
     fn wait_for_label(h: &mut Harness<'_, TriApp>, label: &str) {
         let deadline = Instant::now() + Duration::from_secs(60);
         while h.query_by_label(label).is_none() {
