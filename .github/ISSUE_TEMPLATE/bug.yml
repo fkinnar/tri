@@ -16,14 +16,13 @@ body:
         En haut de l'aide (F1), ou au survol du logo, par ex. `1.0.0-alpha.4` ou `1.0.0-alpha.4 (34170c4)`.
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: system
     attributes:
       label: System / Système
-      options:
-        - macOS
-        - Linux
-        - Windows
+      description: |
+        macOS, Linux or Windows (filled in by the help's "Report a problem" button).
+        macOS, Linux ou Windows (rempli par le bouton « Signaler un problème » de l'aide).
     validations:
       required: true
   - type: input
