@@ -10,6 +10,8 @@
 - **Réglages** : les préréglages d'export et de recadrage se renomment par un bouton
   « Renommer… » au lieu d'un champ du nom modifiable, et deux préréglages ne peuvent plus
   porter le même nom (issues n° 17 et 18).
+- **Réglages** : le défilement d'une recherche (« export ») redevient fluide : les
+  catalogues de traduction étaient relus pour chaque réglage à chaque image (issue n° 16).
 
 ## 1.0.0-alpha.5 — 22/10/2026
 

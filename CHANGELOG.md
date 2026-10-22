@@ -8,6 +8,8 @@
   proposed name is numbered, a taken name turns red and cannot be saved (issue #14).
 - **Settings**: export and crop presets are renamed with a "Rename…" button instead of
   an editable name field, and two presets cannot share a name (issues #17, #18).
+- **Settings**: scrolling a search ("export") is smooth again: the translation
+  catalogues were re-read for every setting on every frame (issue #16).
 
 ## 1.0.0-alpha.5 — 2026-10-22
 
