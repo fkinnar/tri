@@ -10700,7 +10700,7 @@ mod tests {
         }
         h.run_steps(3);
         assert_eq!(h.state().focus, Scope::Images, "clic sur une image");
-        run_until(&mut h, |app| !app.meta_rows.is_empty());
+        wait_for_label(&mut h, "Nom");
         h.get_by_label("Nom").click();
         h.run_steps(3);
         assert_eq!(
