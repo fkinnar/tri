@@ -1,0 +1,25 @@
+name: Idea / Idée
+description: A feature or an improvement / Une fonction ou une amélioration
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The beta 1 list is frozen: new ideas go "after V1" (see ROADMAP.md). They are welcome all the same!
+        La liste de la bêta 1 est figée : les idées nouvelles vont « après la V1 » (voir ROADMAP.fr.md). Elles sont les bienvenues quand même !
+  - type: textarea
+    id: need
+    attributes:
+      label: What you want to do / Ce que vous voulez faire
+      description: |
+        The need, in your own workflow, rather than the solution.
+        Le besoin, dans votre façon de travailler, plutôt que la solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How you see it / Comment vous le voyez
+      description: |
+        Keys, mouse, what another program does (Lightroom, Capture One, darktable…). Optional.
+        Touches, souris, ce que fait un autre logiciel (Lightroom, Capture One, darktable…). Facultatif.

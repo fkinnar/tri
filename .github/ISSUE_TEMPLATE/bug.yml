@@ -1,0 +1,67 @@
+name: Bug / Bogue
+description: Something does not work as expected / Quelque chose ne marche pas comme prévu
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing tri! English or French, as you prefer.
+        Merci de tester tri ! En français ou en anglais, comme vous préférez.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: |
+        At the top of the help (F1), or by hovering the logo, e.g. `1.0.0-alpha.4` or `1.0.0-alpha.4 (34170c4)`.
+        En haut de l'aide (F1), ou au survol du logo, par ex. `1.0.0-alpha.4` ou `1.0.0-alpha.4 (34170c4)`.
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System / Système
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+  - type: input
+    id: system-details
+    attributes:
+      label: System details / Précisions sur le système
+      description: |
+        Version, distribution, keyboard layout, camera brand if it matters… (optional)
+        Version, distribution, clavier, marque de l'appareil photo si ça compte… (facultatif)
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did / Ce que vous avez fait
+      description: |
+        Step by step, with the keys or clicks.
+        Pas à pas, avec les touches ou les clics.
+      placeholder: |
+        1. Open a folder / Ouvrir un dossier
+        2. Press r / Appuyer sur r
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened / Ce qui s'est passé
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected / Ce que vous attendiez
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshot, message, anything else / Capture, message, autre
+      description: |
+        Drag images or a video here. After a crash, attach `crash.log` from tri's data folder: `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).
+        Glissez ici des images ou une vidéo. Après un plantage, joignez `crash.log` du dossier de données de tri : `~/Library/Application Support/tri` (macOS), `~/.local/share/tri` (Linux), `%APPDATA%\tri` (Windows).
