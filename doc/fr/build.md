@@ -188,8 +188,19 @@ pour LibRaw sous Windows), `cargo fmt --check`, clippy (`-D warnings`), tests, b
 en release, déposés en artefacts avec `LICENSE`, `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`. Sans HEIC
 (feature `heif` retirée : brevets HEVC, voir `licensing.md`), avec libjpeg-turbo.
 
-Lancé à la main (onglet Actions, ou `gh workflow run ci.yml`) ou à chaque version
-(`git tag v1.0.0-alpha.1 && git push --tags`), pas à chaque envoi : dépôt privé, minutes
-gratuites limitées. Restent à faire pour des versions prêtes à installer : application
-macOS (`.app` avec LibRaw et libomp dedans, noms d'installation réécrits), archive Linux
-(ou AppImage), zip Windows avec les DLL de vcpkg, et les notices des dépendances.
+Lancé à la main (onglet Actions, ou `gh workflow run ci.yml`), à chaque version
+(`git tag v1.0.0-alpha.5 && git push origin v1.0.0-alpha.5` : Release avec les paquets,
+[packaging.md](packaging.md)), chaque nuit si `main` a changé (Release « nightly »), et
+sur chaque pull request vers `main`. Sur une pull request, pas de paquets (vérifications et
+tests seulement, plus rapide), et un nouvel envoi annule la vérification précédente de la
+même pull request.
+
+### Branches et pull requests (22/10/2026, à partir de 1.0.0-alpha.5)
+
+Plus d'envoi direct sur `main` : elle reste publiable. Une branche par sujet,
+`fix/<issue ou sujet>` pour une correction, `feat/<sujet>` pour un ajout (ou de la
+documentation), envoyée, puis une pull request vers `main` (« Fixes #n » dans sa
+description ferme l'issue à la fusion). `main` est protégée : fusion par pull request
+seulement, une fois les trois systèmes passés (tâches `ubuntu-24.04`, `macos-14`,
+`windows-2022`). Avant l'envoi, comme d'habitude : `cargo fmt`, clippy et les tests
+autour du code modifié.
