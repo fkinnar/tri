@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- **Ratings**: the tooltips of the stars, colours and flags give their shortcuts.
 - **Help**: opens at its final size at once (it grew over several frames the first
   time), and the keys column no longer overflows the window (issue #11). Smooth opening:
   prepared at startup, only the visible lines drawn (75 ms per frame down to 0.3 ms).

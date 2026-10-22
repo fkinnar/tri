@@ -5889,7 +5889,9 @@ impl TriApp {
             .title(file_name(&path))
             .show(ctx, |ui| {
                 ui.add_space(6.0);
-                ui.horizontal(|ui| clicked = marks::controls(ui, &notes, &colors, size));
+                ui.horizontal(|ui| {
+                    clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a))
+                });
                 ui.add_space(6.0);
                 ui.separator();
                 // Actions sur le fichier.
@@ -5973,7 +5975,7 @@ impl TriApp {
         let histogram = self.gui.histogram;
         ui.horizontal(|ui| {
             ui.label(t!("rating-bar-title"));
-            clicked = marks::controls(ui, &notes, &colors, size);
+            clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a));
 
             // Versions : une liste sur la ligne des notes (issue n° 5 : sur une ligne à
             // elles, elles apparaissaient selon l'image et changeaient sa taille).

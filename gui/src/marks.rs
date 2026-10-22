@@ -339,9 +339,15 @@ pub fn row(
 /// qu'on voie que c'est cliquable. Le fond est peint avant le symbole, que l'appelant
 /// dessine ensuite dans le rectangle renvoyé.
 pub fn clickable(ui: &mut Ui, size: f32, tip: &str) -> (Rect, Response) {
+    clickable_named(ui, size, tip, tip)
+}
+
+/// [`clickable`] dont le nom accessible (`label`) diffère de la bulle (`tip`, avec les
+/// raccourcis par exemple).
+pub fn clickable_named(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Response) {
     let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::click());
     // Nom lisible pour l'accessibilité (et les tests d'interface).
-    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, tip));
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
     let response = response
         .on_hover_text(tip)
         .on_hover_cursor(CursorIcon::PointingHand);
@@ -892,13 +898,20 @@ pub fn eject(painter: &Painter, rect: Rect, color: Color32) {
 /// Contrôles de notation cliquables (bandeau de notation, menu du clic droit) : drapeaux,
 /// étoiles, couleurs, actifs en couleur, les autres estompés. Renvoie l'action cliquée,
 /// la même que celle du clavier, sauf l'étoile posée, qui recliquée remet à zéro (le
-/// drapeau recliqué reste) ; une couleur s'ajoute ou se retire.
-pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Option<Action> {
+/// drapeau recliqué reste) ; une couleur s'ajoute ou se retire. Bulle de chaque contrôle :
+/// `tip` (libellé et raccourcis, demandé le 22/10/2026).
+pub fn controls(
+    ui: &mut Ui,
+    notes: &Notes,
+    colors: &Colors,
+    size: f32,
+    tip: &dyn Fn(Action) -> String,
+) -> Option<Action> {
     let weak = ui.visuals().weak_text_color();
     let strong = ui.visuals().strong_text_color();
     let mut clicked = None;
-    let cell = |ui: &mut Ui, tip: &str| {
-        let (rect, response) = clickable(ui, size, tip);
+    let cell = |ui: &mut Ui, action: Action| {
+        let (rect, response) = clickable_named(ui, size, &action.label(), &tip(action));
         (rect, response.clicked())
     };
     // Drapeau : trois contrôles, comme les touches Maj+P / Maj+X / Maj+U. Recliquer le
@@ -909,7 +922,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         (Flag::Rejected, colors.rejected),
     ] {
         let action = Action::Flag(flag);
-        let (rect, hit) = cell(ui, &action.label());
+        let (rect, hit) = cell(ui, action);
         let fill = if notes.flag == flag {
             Color32::from(color)
         } else {
@@ -927,7 +940,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
         }
     }
     let action = Action::Flag(Flag::None);
-    let (rect, hit) = cell(ui, &action.label());
+    let (rect, hit) = cell(ui, action);
     let ring = if notes.flag == Flag::None {
         strong
     } else {
@@ -944,7 +957,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     // le contrôle « ⊘ » est retiré). Au clavier, la touche 0 seule remet à zéro.
     for n in 1..=5u8 {
         let action = Action::Stars(n);
-        let (rect, hit) = cell(ui, &action.label());
+        let (rect, hit) = cell(ui, action);
         let action = if n == notes.stars {
             Action::Stars(0)
         } else {
@@ -963,7 +976,7 @@ pub fn controls(ui: &mut Ui, notes: &Notes, colors: &Colors, size: f32) -> Optio
     ui.add_space(size * 0.5);
     for color in Color::ALL {
         let action = Action::Color(color);
-        let (rect, hit) = cell(ui, &action.label());
+        let (rect, hit) = cell(ui, action);
         let active = notes.has_color(color);
         let fill = color_of(colors, color);
         let painter = ui.painter();

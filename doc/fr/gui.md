@@ -453,7 +453,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pas tout faire au clavier) :
   - **bandeau de notation** en bas (au-dessus de la barre d'état), dans la grille et en
     plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
-    estompés quand ils ne sont pas posés ; `Maj+N` l'affiche ou le masque
+    estompés quand ils ne sont pas posés, leurs raccourcis dans la bulle (22/10/2026) ; `Maj+N` l'affiche ou le masque
     (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous). En
     plein écran, les notes ne sont dessinées sur l'image que sans lui (masqué, ou mode
     concentration ; issue n° 8 : elles apparaissaient deux fois). En plein écran aussi,

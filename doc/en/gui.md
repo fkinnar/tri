@@ -437,7 +437,8 @@ system one ("cold" measurements, experiments).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
   everything with the keyboard):
   - **rating bar** at the bottom (above the status bar), in the grid and in full screen:
-    flags, stars and colours of the selected image, clickable, faded when not set;
+    flags, stars and colours of the selected image, clickable, faded when not set, their
+    shortcuts in the tooltip (2026-10-22);
     `Shift+N` shows or hides it (`[gui] rating_bar`); on the right, the "auto-advance"
     button (see below). In full screen, the ratings are drawn on the image only without
     it (hidden, or focus mode; issue #8: they showed twice). In full screen too, after the

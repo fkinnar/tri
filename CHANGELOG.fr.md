@@ -4,6 +4,7 @@
 
 ## À venir
 
+- **Notes** : les bulles des étoiles, couleurs et drapeaux donnent leurs raccourcis.
 - **Aide** : s'ouvre tout de suite à sa taille (elle grandissait sur plusieurs images
   la première fois), et la colonne des touches ne déborde plus de la fenêtre
   (issue n° 11). Ouverture fluide : préparée au démarrage, seules les lignes visibles
