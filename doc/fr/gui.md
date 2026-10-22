@@ -404,7 +404,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (18/10/2026) : `m` (« mark », comme les marque-pages de nvim-tree) ajoute le dossier
   pointé aux favoris ou l'en retire ; ils sont en tête du panneau, avant les volumes,
   marqués d'une étoile (le dossier aussi, là où il paraît dans l'arborescence), et
-  suivent un renommage fait dans `tri`. À la souris :
+  suivent un renommage fait dans `tri`. `n` (ou le clic droit) **nomme** le favori pointé
+  (22/10/2026) : ce nom dans la section des favoris, le chemin au survol ; un favori se
+  déplie sans toucher au même dossier dans l'arborescence. À la souris :
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
   supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
   éjecter), raccourci au survol.

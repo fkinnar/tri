@@ -548,6 +548,7 @@ impl TriApp {
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
+            tree.set_favorite_names(tri::places::favorite_names(data));
         }
         if !folder.is_none() {
             tree.reveal(&folder.dir);
@@ -1127,8 +1128,8 @@ impl TriApp {
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
         let f = self.gui.folders;
-        let mut toggle = None;
-        let mut pointed: Option<PathBuf> = None;
+        let mut toggle: Option<usize> = None;
+        let mut pointed: Option<usize> = None;
         let mut open = None;
         let mut eject = None;
         let mut offload = None;
@@ -1208,8 +1209,8 @@ impl TriApp {
                     let (rect, response) = marks::clickable(ui, size, &tip);
                     marks::disclosure(ui.painter(), rect, row.expanded, ui.visuals().text_color());
                     if response.clicked() {
-                        toggle = Some(row.path.clone());
-                        pointed = Some(row.path.clone());
+                        toggle = Some(i);
+                        pointed = Some(i);
                     }
                     let current = row.path == self.folder.dir;
                     let label = ui.selectable_label(current, &row.name);
@@ -1240,14 +1241,21 @@ impl TriApp {
                         dropped = Some(((*d).clone(), row.path.clone()));
                     }
                     if label.clicked() {
-                        pointed = Some(row.path.clone());
+                        pointed = Some(i);
                         if !current {
                             open = Some(row.path.clone());
                         }
                     }
                     if label.double_clicked() {
-                        toggle = Some(row.path.clone());
+                        toggle = Some(i);
                     }
+                    // Favori nommé ou non : son chemin au survol (plusieurs « Sources »).
+                    let label = if row.section == tri::places::Section::Favorites && row.depth == 0
+                    {
+                        label.on_hover_text(crate::files::tilde(&row.path))
+                    } else {
+                        label
+                    };
                     // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
                     // survol.
                     let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
@@ -1275,6 +1283,13 @@ impl TriApp {
                             t!("folder-menu-favorite-add")
                         };
                         entry(ui, Action::FolderFavorite, favorite);
+                        if row.favorite {
+                            entry(
+                                ui,
+                                Action::FolderFavoriteName,
+                                t!("folder-menu-favorite-name"),
+                            );
+                        }
                         ui.separator();
                         if removable {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
@@ -1346,13 +1361,15 @@ impl TriApp {
         if focused {
             panel_focus_frame(ui, accent, self.gui.dialogs.focus_frame_width);
         }
-        if let Some(path) = toggle {
-            self.tree.toggle(&path);
+        // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
+        // l'arborescence se déplient chacun de leur côté.
+        if let Some(i) = toggle {
+            self.tree.toggle_row(i);
         }
         // Clic sur un dossier : il devient la ligne pointée et le panneau prend le clavier,
         // comme un clic dans les métadonnées (retour du 22/10/2026 : pas cohérent).
-        if let Some(path) = pointed {
-            self.tree.point_at(&path);
+        if let Some(i) = pointed {
+            self.tree.set_cursor(i);
             self.focus = crate::actions::Scope::Folders;
         }
         // Menu du clic droit : le dossier visé devient la ligne pointée, puis la même
@@ -1367,6 +1384,7 @@ impl TriApp {
                 // « Ajouter aux favoris » ouvrait la boîte de suppression (cas par défaut
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
+                Action::FolderFavoriteName => self.name_favorite(&ctx),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
                 }
@@ -2450,6 +2468,7 @@ impl TriApp {
                 self.folder_edit_action(ctx, action)
             }
             Action::FolderFavorite => self.toggle_favorite(),
+            Action::FolderFavoriteName => self.name_favorite(ctx),
             Action::FolderCopy | Action::FolderMove => {
                 if let Some(i) = self.tree.cursor() {
                     let path = self.tree.rows()[i].path.clone();
@@ -5725,6 +5744,26 @@ impl TriApp {
                 }
                 self.after_folder_change(renamed, point);
             }
+            crate::files::Outcome::FavoriteNamed { path, name } => {
+                self.file_dialog = None;
+                let Some(data) = self.data_dir.clone() else {
+                    return;
+                };
+                match tri::places::name_favorite(&data, &path, &name) {
+                    Ok(names) => {
+                        self.tree.set_favorite_names(names);
+                        let shown = self
+                            .tree
+                            .favorite_name(&path)
+                            .map_or_else(|| folder_name(&path), str::to_string);
+                        self.notice = Some((t!("favorite-named", name = shown), false));
+                    }
+                    Err(e) => {
+                        let error = e.to_string();
+                        self.notice = Some((t!("folders-favorite-error", error = error), true));
+                    }
+                }
+            }
             crate::files::Outcome::Failed(e) => {
                 self.file_dialog = None;
                 self.file_error = Some(e);
@@ -7109,6 +7148,28 @@ impl TriApp {
     }
 
     /// Ajoute le dossier pointé dans le panneau des dossiers aux favoris, ou l'en retire.
+    /// Boîte « Nom du favori » pour le dossier pointé (s'il est favori), nom actuel
+    /// proposé.
+    fn name_favorite(&mut self, ctx: &egui::Context) {
+        let Some(i) = self.tree.cursor() else { return };
+        let row = self.tree.rows()[i].clone();
+        if !row.favorite {
+            self.notice = Some((t!("favorite-not-favorite", name = row.name), true));
+            return;
+        }
+        let name = self
+            .tree
+            .favorite_name(&row.path)
+            .unwrap_or_default()
+            .to_string();
+        self.file_dialog = Some(crate::files::FileDialog::NameFavorite {
+            path: row.path,
+            name,
+            at: ctx.content_rect().center() - vec2(160.0, 120.0),
+            fresh: true,
+        });
+    }
+
     fn toggle_favorite(&mut self) {
         let Some(i) = self.tree.cursor() else { return };
         let Some(data) = self.data_dir.clone() else {
@@ -7143,7 +7204,11 @@ impl TriApp {
         // Les favoris suivent un dossier renommé (ou un dossier qui les contient).
         if let (Some((from, to)), Some(data)) = (&renamed, &self.data_dir) {
             match tri::places::rename_favorites(data, from, to) {
-                Ok(list) => self.tree.set_favorites(list),
+                Ok(list) => {
+                    self.tree.set_favorites(list);
+                    self.tree
+                        .set_favorite_names(tri::places::favorite_names(data));
+                }
                 Err(e) => {
                     let error = e.to_string();
                     self.notice = Some((t!("folders-favorite-error", error = error), true));
@@ -10485,8 +10550,9 @@ mod tests {
             "clic dans les métadonnées"
         );
         h.get_by_label("séance-1").click();
-        h.run_steps(3);
-        assert_eq!(h.state().focus, Scope::Folders, "clic sur un dossier");
+        // Le panneau des métadonnées se remplit en fond : sous la charge des autres tests,
+        // quelques images de plus peuvent être nécessaires.
+        run_until(&mut h, |app| app.focus == Scope::Folders);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         // Ctrl+B puis l : les métadonnées.
@@ -10810,6 +10876,30 @@ mod tests {
         let rows = h.state().tree.rows();
         let f = favorite(&rows).expect("favori listé");
         assert_eq!(rows[f].path, renamed);
+        // n sur la ligne du favori : nommé (22/10/2026), dans sa section seulement.
+        h.state_mut().tree.set_cursor(f);
+        press(&mut h, Key::N, Modifiers::NONE);
+        h.event(UiEvent::Text("Mon favori".into()));
+        h.run_steps(2);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(
+            tri::places::favorite_names(&data)[&renamed],
+            "Mon favori",
+            "écrit"
+        );
+        let rows = h.state().tree.rows();
+        let f = favorite(&rows).expect("favori listé");
+        assert_eq!(rows[f].name, "Mon favori");
+        assert!(
+            rows.iter()
+                .any(|r| r.path == renamed && r.name == "séance du jour"),
+            "le vrai dossier garde son nom"
+        );
+        // Déplier le favori ne déplie pas le vrai dossier.
+        h.state_mut().tree.set_cursor(f);
+        press(&mut h, Key::L, Modifiers::NONE);
+        assert!(h.state().tree.rows()[f].expanded);
+        assert!(!h.state().tree.is_expanded(&renamed));
         // m sur la ligne du favori : retiré.
         h.state_mut().tree.set_cursor(f);
         press(&mut h, Key::M, Modifiers::NONE);

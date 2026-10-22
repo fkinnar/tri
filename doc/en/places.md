@@ -133,6 +133,16 @@ addition:
 - `set_favorite(data, dir, on)`: adds (at the end) or removes, returns the list;
 - `rename_favorites(data, from, to)`: after a rename, favorites that are `from` or inside
   it follow;
+- **A favourite's name** (2026-10-22: several "Sources" folders in different places): on
+  its line of the file, after a tab (a file without names is still read as is);
+  `name_favorite(data, dir, name)` (empty: the folder's name comes back),
+  `favorite_names(data)`, kept when another favourite is added or removed and when the
+  folder is renamed; `Tree::set_favorite_names` shows it in the favourites section only
+  (elsewhere, the folder keeps its name);
+- **Separate unfolding** (2026-10-22): in the favourites section, a folder unfolds
+  independently of the same folder in the tree (the unfolded state is keyed by
+  (favourites or not, folder); folders already read stay shared); an interface unfolds a
+  row by its rank, `Tree::toggle_row`;
 - `Tree::set_favorites(list)`: depth-0 rows of kind `PlaceKind::Favorite`; folder
   existence is checked there, and on each `set_places` / `refresh`, not on each draw
   (slow NAS); `Row::favorite` also marks the folder wherever it appears in the tree.

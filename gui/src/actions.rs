@@ -261,6 +261,8 @@ pub enum Action {
     FolderDelete,
     /// Panneau des dossiers : ajouter le dossier pointé aux favoris, ou l'en retirer.
     FolderFavorite,
+    /// Panneau des dossiers : nommer le favori pointé (vide : nom du dossier).
+    FolderFavoriteName,
     /// Panneau des dossiers : copier le dossier pointé vers… (une boîte confirme).
     FolderCopy,
     /// Panneau des dossiers : déplacer le dossier pointé vers… (une boîte confirme).
@@ -381,7 +383,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 157] = [
+    pub const ALL: [Action; 158] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -487,6 +489,7 @@ impl Action {
         Action::FolderRename,
         Action::FolderDelete,
         Action::FolderFavorite,
+        Action::FolderFavoriteName,
         Action::FolderCopy,
         Action::FolderMove,
         Action::MetaUp,
@@ -596,8 +599,8 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
-            | MetaSelectDown | MetaCopyAll => Group::Panels,
+            | FolderFavoriteName | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
+            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
@@ -710,6 +713,7 @@ impl Action {
             Action::FolderRename => "core.folders.rename",
             Action::FolderDelete => "core.folders.delete",
             Action::FolderFavorite => "core.folders.favorite",
+            Action::FolderFavoriteName => "core.folders.favorite_name",
             Action::FolderCopy => "core.folders.copy",
             Action::FolderMove => "core.folders.move",
             Action::MetaUp => "core.metadata.up",
@@ -832,7 +836,9 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderCopy | FolderMove => Some(Scope::Folders),
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderCopy | FolderMove => {
+                Some(Scope::Folders)
+            }
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
@@ -1108,6 +1114,8 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::Backspace)], FolderDelete),
         // Favori : `m` (« mark »), comme les marque-pages de nvim-tree.
         (&[plain(Key::M)], FolderFavorite),
+        // Nommer le favori : `n`.
+        (&[plain(Key::N)], FolderFavoriteName),
         // Copier / déplacer le dossier vers… : comme pour les images (`Ctrl+C` / `y`,
         // `Ctrl+X`), la boîte permet de passer de l'un à l'autre.
         (&[ctrl(Key::X)], FolderMove),

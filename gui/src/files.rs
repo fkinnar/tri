@@ -45,6 +45,13 @@ pub enum FileDialog {
         at: Pos2,
         fresh: bool,
     },
+    /// Nommer le favori `path` (vide : le nom du dossier).
+    NameFavorite {
+        path: PathBuf,
+        name: String,
+        at: Pos2,
+        fresh: bool,
+    },
     /// Exporter (profil, dossier) : voir [`crate::export`].
     Export(Box<crate::export::ExportDialog>),
     /// Confirmer la suppression du dossier `path` ; (fichiers, sous-dossiers) dedans.
@@ -151,6 +158,8 @@ pub enum Outcome {
         point: Option<PathBuf>,
         renamed: Option<(PathBuf, PathBuf)>,
     },
+    /// Nom donné au favori `path` (vide : retiré).
+    FavoriteNamed { path: PathBuf, name: String },
     /// Échec (message pour la barre d'état) ; la boîte est fermée.
     Failed(String),
     /// Export demandé (lancé en fond par l'application).
@@ -329,6 +338,32 @@ impl FileDialog {
             }
             FileDialog::DeleteFolder { path, contents, at } => {
                 delete_folder_dialog(ctx, settings, path, *contents, *at)
+            }
+            FileDialog::NameFavorite {
+                path,
+                name,
+                at,
+                fresh,
+            } => {
+                let title = t!("favorite-name-title", name = file_name(path));
+                // Tout nom convient ; vide : le nom du dossier revient.
+                match name_dialog(
+                    ctx,
+                    "name_favorite",
+                    title,
+                    name,
+                    *at,
+                    fresh,
+                    &t!("favorite-name-button"),
+                    |_| None,
+                ) {
+                    Some(true) => Outcome::FavoriteNamed {
+                        path: path.clone(),
+                        name: name.trim().to_string(),
+                    },
+                    Some(false) => Outcome::Cancelled,
+                    None => Outcome::Open,
+                }
             }
             FileDialog::Rename {
                 image,

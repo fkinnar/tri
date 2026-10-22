@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Favourites**: a favourite can be named (`n` or right click; path on hover), and
+  unfolds without unfolding the same folder in the tree, and vice versa.
 - **Full screen**: number, source and size in the status bar instead of on the image;
   in focus mode, on the image, hidden by `Ctrl+I`.
 - **Background colour**: `Ctrl+L` turns the grid and full-screen background through the

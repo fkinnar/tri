@@ -24,6 +24,8 @@ builds de nuit (Release « nightly »).
 |---|---|
 | Retours des testeurs Windows | Essais sur de vraies machines (chemins, lecteurs, éjection, corbeille, clavier AZERTY, écrans à haute densité), bugs trouvés |
 | Manuel des testeurs | Captures refaites avec de vraies photos (RAW, collimateur, histogramme) |
+| Gros dossiers sur disque lent | Lecture du dossier en fond, progression visible (la fenêtre se figeait le temps de lister des milliers de fichiers et leurs sidecars sur un disque dur externe) |
+| Tri par note, couleur | À concevoir avec les piles et le jugement de netteté, qui s'appuient sur l'ordre de prise de vue |
 
 La bêta n'est **pas signée** : macOS et Windows avertissent au premier lancement, la
 marche à suivre est dans le README.

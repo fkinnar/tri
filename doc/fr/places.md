@@ -135,6 +135,16 @@ chemin par ligne, dans l'ordre d'ajout :
 - `set_favorite(data, dir, on)` : ajoute (à la fin) ou retire, renvoie la liste ;
 - `rename_favorites(data, from, to)` : après un renommage, les favoris qui sont `from` ou
   dedans suivent ;
+- **Nom d'un favori** (22/10/2026 : plusieurs dossiers « Sources » à des endroits
+  différents) : sur sa ligne du fichier, après une tabulation (un fichier sans nom reste
+  lu tel quel) ; `name_favorite(data, dir, nom)` (vide : le nom du dossier revient),
+  `favorite_names(data)`, gardé quand on ajoute ou retire un autre favori et quand le
+  dossier est renommé ; `Tree::set_favorite_names` l'affiche dans la section des
+  favoris seulement (ailleurs, le dossier garde son nom) ;
+- **Dépliage à part** (22/10/2026) : dans la section des favoris, un dossier se déplie
+  indépendamment du même dossier dans l'arborescence (l'état déplié est rangé par
+  (favoris ou non, dossier) ; les sous-dossiers lus restent partagés) ; une interface
+  déplie une ligne par son rang, `Tree::toggle_row` ;
 - `Tree::set_favorites(liste)` : lignes de profondeur 0 de nature
   `PlaceKind::Favorite` ; l'existence des dossiers est vérifiée là, et à chaque
   `set_places` / `refresh`, pas à chaque dessin (NAS lent) ; `Row::favorite` marque

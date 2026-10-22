@@ -390,7 +390,9 @@ system one ("cold" measurements, experiments).
   renaming. **Favourites** (2026-10-18): `m` ("mark", like nvim-tree's bookmarks) adds the
   pointed folder to the favourites or removes it; they are at the top of the panel,
   before the volumes, marked with a star (the folder too, where it appears in the tree),
-  and follow a renaming done in `tri`. With the mouse:
+  and follow a renaming done in `tri`. `n` (or the right click) **names** the pointed
+  favourite (2026-10-22): that name in the favourites section, the path on hover; a
+  favourite unfolds without touching the same folder in the tree. With the mouse:
   **right click** on a folder, menu of the same actions (new folder, rename, delete,
   favourite; offload a card here, or on a removable drive: offload, eject), shortcut on
   hover.

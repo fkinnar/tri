@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Favoris** : un favori peut être nommé (`n` ou clic droit ; chemin au survol), et se
+  déplie sans déplier le même dossier dans l'arborescence, et inversement.
 - **Plein écran** : numéro, source et taille dans la barre d'état au lieu de sur l'image ;
   en mode concentration, sur l'image, masqués par `Ctrl+I`.
 - **Couleur de fond** : `Ctrl+L` fait tourner le fond de la grille et du plein écran entre
