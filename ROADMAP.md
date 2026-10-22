@@ -56,6 +56,7 @@ README.
 | External plugins | A separate program, in any language (Python for AI…), exchanging JSON with `tri`: analyses, filters, sending. **Example provided: step-by-step rating**, two shortcuts for everything: rating +1 / −1, next / previous colour (configurable order), rejected → neutral → accepted, and the stars / colour filter one notch up / down; nothing moves at the end of the sequence |
 | HEIC through the system | macOS (ImageIO) and Windows (HEVC extension) decoders: nothing patented shipped with `tri` |
 | Automatic update | Download and install the new version (after signing) |
+| Formatted release notes | The "Update" dialog shows the Release notes as raw Markdown (`**`, lists): format them |
 | Other packages | AppImage or Flatpak (Flathub), winget / Microsoft Store, Homebrew: more systems, more visible |
 | Video offload | Ignored on the card today |
 | Image analysis | Luminance histogram of flat images, 10-bit HEIC, exposure computed during the RAW render |

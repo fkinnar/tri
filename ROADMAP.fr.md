@@ -57,6 +57,7 @@ marche à suivre est dans le README.
 | Plugins externes | Un programme à part, dans n'importe quel langage (Python pour l'IA…), qui échange du JSON avec `tri` : analyses, filtres, envois. **Exemple fourni : notation en pas à pas**, deux raccourcis pour tout : note +1 / −1, couleur suivante / précédente (ordre réglable), rejeté → neutre → accepté, et le filtre étoiles / couleur au cran suivant / précédent ; rien ne bouge au bout de la séquence |
 | HEIC par le système | Décodeurs de macOS (ImageIO) et de Windows (extension HEVC) : rien de breveté livré avec `tri` |
 | Mise à jour automatique | Télécharger et installer la nouvelle version (après la signature) |
+| Notes de version mises en forme | La boîte « Mise à jour » affiche les notes de la Release en Markdown brut (`**`, listes) : les mettre en forme |
 | Autres paquets | AppImage ou Flatpak (Flathub), winget / Microsoft Store, Homebrew : plus de systèmes, plus visible |
 | Déchargement des vidéos | Aujourd'hui ignorées sur la carte |
 | Analyses d'image | Histogramme de luminance des images plates, HEIC 10 bits, exposition calculée pendant le rendu RAW |
