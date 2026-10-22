@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Full screen**: ratings no longer shown twice; on the image only when the rating bar
+  is hidden (issue #8).
 - **"Well exposed" filter**: the grid could no longer be scrolled (refiltered endlessly,
   each time brought back to the selection; issue #10).
 - **Full screen**: an image's versions in a list on the ratings line; the image no longer

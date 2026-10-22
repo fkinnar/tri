@@ -4835,9 +4835,12 @@ impl TriApp {
             Align2::LEFT_TOP,
             &info,
         );
+        // Notes sur l'image seulement sans le bandeau du bas, qui les montre déjà (issue
+        // n° 8) : bandeau masqué (Maj+N) ou mode concentration.
         let notes = self.folder.notes.notes(&file.path);
         let size = self.gui.view.marks;
-        if *notes != tri::xmp::Notes::EMPTY {
+        let bar_shown = self.rating_bar && !self.focus_mode;
+        if *notes != tri::xmp::Notes::EMPTY && !bar_shown {
             let width = marks::row_width(notes, size);
             let left_center = view_rect.left_bottom() + vec2(15.0, -15.0 - size / 2.0);
             let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))

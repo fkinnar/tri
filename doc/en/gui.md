@@ -439,7 +439,8 @@ system one ("cold" measurements, experiments).
   - **rating bar** at the bottom (above the status bar), in the grid and in full screen:
     flags, stars and colours of the selected image, clickable, faded when not set;
     `Shift+N` shows or hides it (`[gui] rating_bar`); on the right, the "auto-advance"
-    button (see below);
+    button (see below). In full screen, the ratings are drawn on the image only without
+    it (hidden, or focus mode; issue #8: they showed twice);
   - **right click** on a thumbnail or in full screen: **modal dialog** with the same
     controls, for the clicked (selected) image. A simple menu was not enough (feedback of
     2026-10-17): the mouse leaving the menu selected other thumbnails, while the rating

@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Plein écran** : notes plus affichées deux fois ; sur l'image seulement quand le
+  bandeau de notation est masqué (issue n° 8).
 - **Filtre « bien exposées »** : la grille ne défilait plus (refiltrée sans fin, chaque
   fois ramenée à la sélection ; issue n° 10).
 - **Plein écran** : les versions d'une image dans une liste sur la ligne des notes ;
