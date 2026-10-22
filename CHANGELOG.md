@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Help**: opens at its final size at once (it grew over several frames the first
+  time), and the keys column no longer overflows the window (issue #11).
 - **Full screen**: blown, blocked and blurry badges in the rating bar, as in the grid
   (click: large histogram, sharpness map; issue #9).
 - **Full screen**: ratings no longer shown twice; on the image only when the rating bar

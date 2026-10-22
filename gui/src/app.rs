@@ -7509,13 +7509,48 @@ impl TriApp {
             }
             delta
         });
+        // Largeur fixée d'avance d'après les libellés (issue n° 11) : calculée d'après la
+        // fenêtre de l'image précédente, la colonne poussait la fenêtre un peu plus à chaque
+        // image, qui s'ouvrait en grandissant pendant plusieurs images.
+        let rows = help_rows(&self.keymap, &query);
+        let style = ctx.global_style();
+        let body = egui::TextStyle::Body.resolve(&style);
+        let mono = egui::TextStyle::Monospace.resolve(&style);
+        let (label_width, keys_width) = ctx.fonts_mut(|fonts| {
+            let mut width = |text: String, font: egui::FontId| {
+                fonts.layout_no_wrap(text, font, Color32::WHITE).size().x
+            };
+            help_rows(&self.keymap, "")
+                .iter()
+                .fold((0.0f32, 0.0f32), |(l, k), (a, keys)| {
+                    (
+                        l.max(width(a.label(), body.clone())),
+                        k.max(width(keys.clone(), mono.clone())),
+                    )
+                })
+        });
+        let gap = 32.0;
+        let width = (label_width + keys_width + gap)
+            .max(self.gui.dialogs.help_width)
+            .min(ctx.content_rect().width() * 0.9);
+        // Colonne des libellés : le reste, moins l'espace entre colonnes et l'ascenseur.
+        let label_column = (width
+            - keys_width
+            - 2.0 * style.spacing.item_spacing.x
+            - style.spacing.scroll.bar_width
+            - style.spacing.scroll.bar_outer_margin)
+            .max(width / 2.0);
         egui::Window::new(t!("help-title"))
             .open(&mut open)
-            .min_width(self.gui.dialogs.help_width)
+            .min_width(width)
+            .max_width(width)
             .collapsible(false)
             .resizable(false)
             .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
+                // Le contenu à cette largeur : la zone défilante (qui ne rétrécit pas) prenait
+                // sinon toute la place disponible, au-delà de la barre de titre.
+                ui.set_width(width);
                 // Version (en évidence et copiable, issue n° 7 : on la recopie dans un
                 // signalement), recherche d'une mise à jour (sur demande seulement) et
                 // formulaire de signalement prérempli.
@@ -7557,13 +7592,14 @@ impl TriApp {
                     search.request_focus();
                 }
                 ui.add_space(4.0);
-                let rows = help_rows(&self.keymap, &query);
                 // Défilante : la liste des actions dépasse la hauteur d'un petit écran.
                 // Toute la largeur de la boîte : l'ascenseur au bord, les bandes du tableau
                 // jusqu'à lui (retour du 18/10/2026 : la boîte élargie gardait une zone de
                 // texte étroite).
+                // Toute sa hauteur dès la première image quand la liste défile (issue n° 11).
                 let _output = ScrollArea::vertical()
                     .max_height(max_height)
+                    .min_scrolled_height(max_height)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
                         if scroll != 0.0 {
@@ -7572,29 +7608,34 @@ impl TriApp {
                         if rows.is_empty() {
                             ui.weak(t!("help-no-match"));
                         }
-                        let column = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                        egui::Grid::new("help")
-                            .striped(true)
-                            .min_col_width(column)
-                            .show(ui, |ui| {
-                                let mut group = None;
-                                for (action, keys) in &rows {
-                                    // Rangées par thème, avec un titre (recherche comprise).
-                                    if group != Some(action.group()) {
-                                        group = Some(action.group());
-                                        ui.label(
-                                            egui::RichText::new(action.group().label()).strong(),
-                                        );
-                                        ui.end_row();
-                                    }
-                                    // Identifiant technique au survol seulement (utile pour la
-                                    // section `[keys]` de la configuration).
-                                    ui.label(action.label()).on_hover_text(action.id());
-                                    // Chasse fixe : « l » et « I » restent distincts.
-                                    ui.label(egui::RichText::new(keys).monospace().strong());
+                        egui::Grid::new("help").striped(true).show(ui, |ui| {
+                            let mut group = None;
+                            for (action, keys) in &rows {
+                                // Rangées par thème, avec un titre (recherche comprise).
+                                if group != Some(action.group()) {
+                                    group = Some(action.group());
+                                    ui.label(egui::RichText::new(action.group().label()).strong());
                                     ui.end_row();
                                 }
-                            });
+                                // Identifiant technique au survol seulement (utile pour la
+                                // section `[keys]` de la configuration).
+                                // Première colonne à sa largeur, en une seule cellule
+                                // (`min_col_width` vaudrait pour les deux : celle des
+                                // touches débordait).
+                                let height = ui.spacing().interact_size.y;
+                                ui.allocate_ui_with_layout(
+                                    vec2(label_column, height),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        ui.set_min_width(label_column);
+                                        ui.label(action.label()).on_hover_text(action.id());
+                                    },
+                                );
+                                // Chasse fixe : « l » et « I » restent distincts.
+                                ui.label(egui::RichText::new(keys).monospace().strong());
+                                ui.end_row();
+                            }
+                        });
                     });
                 #[cfg(test)]
                 {
