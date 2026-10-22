@@ -172,10 +172,15 @@ pub fn translate(id: &str, args: Option<&FluentArgs>) -> String {
 /// Comme [`translate`], dans la langue `language` (lire un nom de touche écrit dans
 /// n'importe quelle langue, par exemple).
 pub fn translate_in(language: Language, id: &str, args: Option<&FluentArgs>) -> String {
+    with_translator(language, |t| format_in(&t.bundles, id, args))
+}
+
+/// `f` sur les catalogues de `language`, lus une fois puis gardés.
+fn with_translator<R>(language: Language, f: impl FnOnce(&Translator) -> R) -> R {
     {
         let all = TRANSLATORS.read().unwrap_or_else(|e| e.into_inner());
         if let Some(t) = all.as_ref().and_then(|m| m.get(&language)) {
-            return format_in(&t.bundles, id, args);
+            return f(t);
         }
     }
     let mut all = TRANSLATORS.write().unwrap_or_else(|e| e.into_inner());
@@ -183,7 +188,7 @@ pub fn translate_in(language: Language, id: &str, args: Option<&FluentArgs>) -> 
         .get_or_insert_with(HashMap::new)
         .entry(language)
         .or_insert_with(|| translator(language));
-    format_in(&t.bundles, id, args)
+    f(t)
 }
 
 fn format_in(
@@ -202,9 +207,12 @@ fn format_in(
     id.to_string()
 }
 
-/// Vrai si `id` existe dans le catalogue de `language` (tests de complétude).
+/// Vrai si `id` existe dans le catalogue de `language` (sans le repli en français).
+/// Catalogues gardés comme pour [`translate`] : la recherche des réglages l'appelle pour
+/// chaque réglage et chaque action (issue n° 16 : le catalogue relu à chaque appel
+/// coûtait 120 ms par image).
 pub fn has(language: Language, id: &str) -> bool {
-    bundle(language).has_message(id)
+    with_translator(language, |t| t.bundles[0].has_message(id))
 }
 
 /// Identifiants définis dans le texte `.ftl` `source` (messages, pas les termes `-x`).
