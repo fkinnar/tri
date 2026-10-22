@@ -1,5 +1,10 @@
 # Historique
 
+## À venir
+
+- **Recadrage** : une poignée approchée par l'intérieur se prend dès que le curseur
+  change (elle déplaçait le cadre entier ; issue n° 1).
+
 ## 1.0.0-alpha.4 — 22/10/2026
 
 Quatrième version de test, avant la bêta 1.

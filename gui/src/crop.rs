@@ -220,33 +220,14 @@ impl Crop {
         }
         let frame = self.screen_rect(image);
         let grab = settings.handle_grab;
-        // Poignée sous le pointeur.
-        let hit = |pos: Pos2| -> Option<Handle> {
-            let near = |a: f32, b: f32| (a - b).abs() <= grab;
-            let (l, r, t, b) = (frame.left(), frame.right(), frame.top(), frame.bottom());
-            let inside_x = pos.x > l - grab && pos.x < r + grab;
-            let inside_y = pos.y > t - grab && pos.y < b + grab;
-            let handle = match (
-                near(pos.x, l) && inside_y,
-                near(pos.x, r) && inside_y,
-                near(pos.y, t) && inside_x,
-                near(pos.y, b) && inside_x,
-            ) {
-                (true, _, true, _) => Handle::TopLeft,
-                (_, true, true, _) => Handle::TopRight,
-                (true, _, _, true) => Handle::BottomLeft,
-                (_, true, _, true) => Handle::BottomRight,
-                (true, _, _, _) => Handle::Left,
-                (_, true, _, _) => Handle::Right,
-                (_, _, true, _) => Handle::Top,
-                (_, _, _, true) => Handle::Bottom,
-                _ if frame.contains(pos) => Handle::Move,
-                _ => return None,
-            };
-            Some(handle)
-        };
+        let hit = |pos: Pos2| hit(frame, grab, pos);
+        // Jugé au point d'appui : egui ne déclare le glisser qu'après quelques pixels,
+        // assez pour sortir de la bande d'une poignée prise par l'intérieur (issue n° 1).
         if response.drag_started()
-            && let Some(pos) = response.interact_pointer_pos()
+            && let Some(pos) = response
+                .ctx
+                .input(|i| i.pointer.press_origin())
+                .or_else(|| response.interact_pointer_pos())
             && let Some(handle) = hit(pos)
         {
             self.drag = Some((handle, self.rect, pos));
@@ -475,6 +456,33 @@ fn keep_together(ui: &mut Ui, label: &str, width: f32) {
 }
 
 /// Pointeur d'une poignée.
+/// Poignée sous le pointeur `pos`, pour un cadre à l'écran `frame` et une bande de prise
+/// de `grab` pixels de part et d'autre de chaque bord ; `Move` à l'intérieur.
+fn hit(frame: ScreenRect, grab: f32, pos: Pos2) -> Option<Handle> {
+    let near = |a: f32, b: f32| (a - b).abs() <= grab;
+    let (l, r, t, b) = (frame.left(), frame.right(), frame.top(), frame.bottom());
+    let inside_x = pos.x > l - grab && pos.x < r + grab;
+    let inside_y = pos.y > t - grab && pos.y < b + grab;
+    let handle = match (
+        near(pos.x, l) && inside_y,
+        near(pos.x, r) && inside_y,
+        near(pos.y, t) && inside_x,
+        near(pos.y, b) && inside_x,
+    ) {
+        (true, _, true, _) => Handle::TopLeft,
+        (_, true, true, _) => Handle::TopRight,
+        (true, _, _, true) => Handle::BottomLeft,
+        (_, true, _, true) => Handle::BottomRight,
+        (true, _, _, _) => Handle::Left,
+        (_, true, _, _) => Handle::Right,
+        (_, _, true, _) => Handle::Top,
+        (_, _, _, true) => Handle::Bottom,
+        _ if frame.contains(pos) => Handle::Move,
+        _ => return None,
+    };
+    Some(handle)
+}
+
 fn cursor(handle: Handle) -> CursorIcon {
     match handle {
         Handle::Move => CursorIcon::Grab,
@@ -482,5 +490,24 @@ fn cursor(handle: Handle) -> CursorIcon {
         Handle::Top | Handle::Bottom => CursorIcon::ResizeVertical,
         Handle::TopLeft | Handle::BottomRight => CursorIcon::ResizeNwSe,
         Handle::TopRight | Handle::BottomLeft => CursorIcon::ResizeNeSw,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn handles_are_grabbed_on_both_sides_of_the_edge() {
+        let frame = ScreenRect::from_min_max(egui::pos2(100.0, 100.0), egui::pos2(300.0, 200.0));
+        let at = |x, y| hit(frame, 10.0, egui::pos2(x, y));
+        // Bord gauche, par l'extérieur et par l'intérieur (issue n° 1 : la prise se juge
+        // au point d'appui, à l'intérieur de la bande).
+        assert_eq!(at(92.0, 150.0), Some(Handle::Left));
+        assert_eq!(at(108.0, 150.0), Some(Handle::Left));
+        assert_eq!(at(115.0, 150.0), Some(Handle::Move));
+        assert_eq!(at(295.0, 195.0), Some(Handle::BottomRight));
+        assert_eq!(at(200.0, 105.0), Some(Handle::Top));
+        assert_eq!(at(80.0, 150.0), None);
     }
 }
