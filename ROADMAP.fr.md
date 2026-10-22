@@ -72,4 +72,5 @@ marche à suivre est dans le README.
 - **Signaler** : par les [*issues*](https://github.com/fkinnar/tri/issues) du dépôt
   (système, appareil, ce qui était attendu et ce qui s'est passé).
 - **Contribuer** : compilation dans [doc/fr/build.md](doc/fr/build.md), architecture et
-  modules dans [doc/fr/](doc/fr/README.md). Rust, egui, LibRaw.
+  modules dans [doc/fr/](doc/fr/README.md). Rust, egui, LibRaw. Une branche `fix/…` ou
+  `feat/…` et une pull request vers `main`, vérifiée par la CI sur les trois systèmes.

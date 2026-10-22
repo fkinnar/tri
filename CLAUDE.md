@@ -374,6 +374,11 @@ Proposition : sortir cette étape du logiciel de développement.
 
 - **Messages de commit en anglais** (demandé le 21/10/2026 : « soyons universels »),
   comme le `README.md` et la doc `doc/en/` ; la conversation reste en français.
+- **Branches et pull requests** (décidé le 22/10/2026, à partir de 1.0.0-alpha.5) : plus
+  d'envoi direct sur `main` (protégée, fusion par PR une fois la CI des trois systèmes
+  passée) ; une branche par sujet, `fix/<issue ou sujet>` ou `feat/<sujet>`, « Fixes #n »
+  dans la PR. Une version : PR de la montée de version, puis tag sur `main` fusionnée.
+  Détails : `doc/fr/build.md`.
 
 - Outils open-source, self-hosted, sans abonnement, sans verrouillage propriétaire.
 - **Objectif : publication open source si le projet aboutit.** La licence n'est pas encore

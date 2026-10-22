@@ -1,7 +1,9 @@
 # Compilation, vérifications et tests sur macOS, Linux et Windows, puis paquets en
 # artefacts (.dmg, .tar.gz ; Windows : .msi, .zip). Lancé à la main (onglet Actions), à
 # chaque version (tag v…), et chaque nuit si `main` a changé (22/10/2026 : build de nuit,
-# publié sur la Release « nightly », remplacée à chaque fois), pas à chaque envoi. Sur un tag, les
+# publié sur la Release « nightly », remplacée à chaque fois), et sur chaque pull request vers
+# `main` (22/10/2026 : plus d'envoi direct sur `main`, branches fix/… et feat/… ; la PR ne
+# fusionne que si les trois systèmes passent ; sans les paquets, pour aller vite). Sur un tag, les
 # paquets sont publiés sur la page Releases (21/10/2026), avec la section de la version
 # dans CHANGELOG.md (anglais) et CHANGELOG.fr.md. Voir doc/en/build.md, doc/en/packaging.md.
 #
@@ -13,9 +15,15 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "0 2 * * *" # 2 h UTC
 
+# Un nouvel envoi sur une PR annule la vérification précédente de la même PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -103,23 +111,25 @@ jobs:
       # Paquets prêts à installer (doc/en/packaging.md) : .dmg macOS, .tar.gz Linux,
       # .msi et .zip Windows.
       - name: Outil des notices de licence
+        if: github.event_name != 'pull_request'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-about
 
       - name: WiX (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         run: dotnet tool install --global wix --version 5.0.2
 
       - name: Paquet
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && github.event_name != 'pull_request'
         run: python3 scripts/package.py
 
       - name: Paquet (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         run: python scripts/package.py
 
       - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
         with:
           name: tri-${{ matrix.os }}
           path: |

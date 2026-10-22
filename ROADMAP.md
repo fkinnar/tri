@@ -71,4 +71,5 @@ README.
 - **Report**: through the repository's [*issues*](https://github.com/fkinnar/tri/issues)
   (system, camera, what was expected and what happened).
 - **Contribute**: building in [doc/en/build.md](doc/en/build.md), architecture and
-  modules in [doc/en/](doc/en/README.md). Rust, egui, LibRaw.
+  modules in [doc/en/](doc/en/README.md). Rust, egui, LibRaw. A `fix/…` or `feat/…`
+  branch and a pull request to `main`, checked by the CI on the three systems.

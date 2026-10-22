@@ -188,8 +188,17 @@ for LibRaw on Windows), `cargo fmt --check`, clippy (`-D warnings`), tests, rele
 binaries, uploaded as artifacts with `LICENSE`, `README.md`, `CHANGELOG.md`, `CHANGELOG.fr.md`. Without HEIC
 (`heif` feature removed: HEVC patents, see `licensing.md`), with libjpeg-turbo.
 
-Run by hand (Actions tab, or `gh workflow run ci.yml`) or on each version
-(`git tag v1.0.0-alpha.1 && git push --tags`), not on every push: private repository, limited
-free minutes. Still to do for ready-to-install releases: macOS
-application (`.app` with LibRaw and libomp inside, install names rewritten), Linux archive
-(or AppImage), Windows zip with the vcpkg DLLs, and the dependency notices.
+Run by hand (Actions tab, or `gh workflow run ci.yml`), on each version
+(`git tag v1.0.0-alpha.5 && git push origin v1.0.0-alpha.5`: Release with the packages,
+[packaging.md](packaging.md)), each night if `main` changed ("nightly" Release), and on
+each pull request to `main`. On a pull request the packages are skipped (checks and tests
+only, faster), and a new push cancels the previous run of the same pull request.
+
+### Branches and pull requests (2026-10-22, from 1.0.0-alpha.5 on)
+
+No direct push to `main`: it stays releasable. One branch per topic, `fix/<issue or
+topic>` for a fix, `feat/<topic>` for a feature (or documentation), pushed, then a pull
+request to `main` ("Fixes #n" in its description closes the issue on merge). `main` is
+protected: merging through a pull request only, once the three systems (`ubuntu-24.04`,
+`macos-14`, `windows-2022` jobs) pass. Before pushing, as usual: `cargo fmt`, clippy
+and the tests around the changed code.
