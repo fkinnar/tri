@@ -5,26 +5,25 @@
 > **Figée le 21/10/2026.** La liste de la bêta 1 ne s'allonge plus : toute idée nouvelle
 > va dans « après la V1 », sauf les bugs. Les retours se font par les *issues* du dépôt.
 
-## Déjà là (alpha 3)
+## Déjà là (alpha 4)
 
 Grille et plein écran (rendu boîtier, rendu RAW, 1:1, zoom continu, loupe), notation XMP
 compatible darktable / Lightroom / digiKam, filtres (notes, netteté, exposition,
 inversion, recherche par nom), piles de photos semblables, netteté (score, carte),
 histogramme et zones d'exposition, comparaison, sélection multiple, fichiers et dossiers
 (renommer, corbeille, copier / déplacer, glisser-déposer, paires RAW+JPEG au choix),
-annulation, déchargement de carte, export par préréglages, versions recadrées,
-développé darktable, superpositions, réglages dans l'interface, raccourcis classiques et
-vim, français et anglais. Paquets macOS (`.dmg`), Linux (`.tar.gz`) et Windows (`.msi`,
-`.zip`).
+annulation, déchargement de carte, export par préréglages, versions recadrées, développé
+darktable, superpositions, réglages dans l'interface, raccourcis classiques et vim,
+sélection à la souris (Maj+clic, Ctrl+clic), recherche de mise à jour, français et
+anglais. Paquets macOS (`.dmg`), Linux (`.tar.gz`) et Windows (`.msi`, `.zip`), et
+builds de nuit (Release « nightly »).
 
 ## Bêta 1 (publique)
 
 | Sujet | Détail |
 |---|---|
 | Retours des testeurs Windows | Essais sur de vraies machines (chemins, lecteurs, éjection, corbeille, clavier AZERTY, écrans à haute densité), bugs trouvés |
-| Sélection à la souris | Maj+clic / Ctrl+clic dans la grille (retour d'un testeur, à vérifier sous Windows) |
 | Manuel des testeurs | Captures refaites avec de vraies photos (RAW, collimateur, histogramme) |
-| Rechercher une mise à jour | Sur demande (aide, `tri --check-update`) : nouvelle version sur la page Releases ? Ni notification ni installation automatique |
 
 La bêta n'est **pas signée** : macOS et Windows avertissent au premier lancement, la
 marche à suivre est dans le README.
@@ -55,7 +54,7 @@ marche à suivre est dans le README.
 | Architecture cible | LibRaw en bibliothèque dynamique, interface en terminal (TUI) |
 | Autres logiciels de développement | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`) : rendu et export comme avec darktable |
 | Style darktable | Appliquer un style darktable à une image (`darktable-cli --style`) |
-| Plugins externes | Un programme à part, dans n'importe quel langage (Python pour l'IA…), qui échange du JSON avec `tri` : analyses, filtres, envois |
+| Plugins externes | Un programme à part, dans n'importe quel langage (Python pour l'IA…), qui échange du JSON avec `tri` : analyses, filtres, envois. **Exemple fourni : notation en pas à pas**, deux raccourcis pour tout : note +1 / −1, couleur suivante / précédente (ordre réglable), rejeté → neutre → accepté, et le filtre étoiles / couleur au cran suivant / précédent ; rien ne bouge au bout de la séquence |
 | HEIC par le système | Décodeurs de macOS (ImageIO) et de Windows (extension HEVC) : rien de breveté livré avec `tri` |
 | Mise à jour automatique | Télécharger et installer la nouvelle version (après la signature) |
 | Autres paquets | AppImage ou Flatpak (Flathub), winget / Microsoft Store, Homebrew : plus de systèmes, plus visible |

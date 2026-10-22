@@ -5,7 +5,7 @@
 > **Frozen on 2026-10-21.** The beta 1 list no longer grows: any new idea goes to "after
 > V1", except bugs. Feedback goes through the repository's *issues*.
 
-## Already there (alpha 3)
+## Already there (alpha 4)
 
 Grid and full screen (camera render, RAW render, 1:1, continuous zoom, loupe), XMP
 ratings compatible with darktable / Lightroom / digiKam, filters (ratings, sharpness,
@@ -13,17 +13,16 @@ exposure, invert, name search), stacks of similar photos, sharpness (score, map)
 histogram and exposure zones, comparison, multiple selection, files and folders (rename,
 trash, copy / move, drag and drop, RAW+JPEG pairs optional), undo, card offload, export
 presets, cropped versions, darktable development, overlays, settings in the interface,
-classic and vim shortcuts, French and English. Packages for macOS (`.dmg`), Linux
-(`.tar.gz`) and Windows (`.msi`, `.zip`).
+classic and vim shortcuts, mouse selection (Shift+click, Ctrl+click), update check,
+French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`) and Windows (`.msi`,
+`.zip`), and nightly builds ("nightly" Release).
 
 ## Beta 1 (public)
 
 | Topic | Details |
 |---|---|
 | Windows testers' feedback | Tries on real machines (paths, drives, eject, trash, AZERTY keyboard, high-density screens), bugs found |
-| Mouse selection | Shift+click / Ctrl+click in the grid (tester feedback, to be checked on Windows) |
 | Testers' manual | Screenshots redone with real photos (RAW, focus point, histogram) |
-| Check for updates | On demand (help, `tri --check-update`): a new version on the Releases page? No notification nor automatic install |
 
 The beta is **not signed**: macOS and Windows warn on first launch, the steps are in the
 README.
@@ -54,7 +53,7 @@ README.
 | Target architecture | LibRaw as a dynamic library, terminal interface (TUI) |
 | Other development software | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`): render and export as with darktable |
 | darktable style | Apply a darktable style to an image (`darktable-cli --style`) |
-| External plugins | A separate program, in any language (Python for AI…), exchanging JSON with `tri`: analyses, filters, sending |
+| External plugins | A separate program, in any language (Python for AI…), exchanging JSON with `tri`: analyses, filters, sending. **Example provided: step-by-step rating**, two shortcuts for everything: rating +1 / −1, next / previous colour (configurable order), rejected → neutral → accepted, and the stars / colour filter one notch up / down; nothing moves at the end of the sequence |
 | HEIC through the system | macOS (ImageIO) and Windows (HEVC extension) decoders: nothing patented shipped with `tri` |
 | Automatic update | Download and install the new version (after signing) |
 | Other packages | AppImage or Flatpak (Flathub), winget / Microsoft Store, Homebrew: more systems, more visible |

@@ -1,6 +1,8 @@
 # Historique
 
-## À venir
+## 1.0.0-alpha.4 — 22/10/2026
+
+Quatrième version de test, avant la bêta 1.
 
 - **Rechercher une mise à jour** : bouton en haut de l'aide (F1) et `tri --check-update`,
   sur demande seulement (page Releases, lue par `curl`) ; la boîte donne les notes de la

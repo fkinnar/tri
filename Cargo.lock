@@ -3594,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "tri"
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.4"
 dependencies = [
  "blake3",
  "cc",
@@ -3623,7 +3623,7 @@ dependencies = [
 
 [[package]]
 name = "tri-gui"
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.4"
 dependencies = [
  "eframe",
  "egui_kittest",

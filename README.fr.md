@@ -7,7 +7,7 @@ par darktable, digiKam, Lightroom…, filtres, piles d'images semblables, nettet
 histogramme RAW, zoom et loupe, déchargement de cartes. Entièrement pilotable au
 clavier (jeu « classique » ou « vim »), à la souris aussi.
 
-> **Version alpha** (`1.0.0-alpha.3`) : à tester sur une **copie** de vos photos. Les
+> **Version alpha** (`1.0.0-alpha.4`) : à tester sur une **copie** de vos photos. Les
 > notes vont dans des fichiers `.xmp` à côté des images ; renommer, déplacer ou supprimer
 > agit sur les vrais fichiers (annulable avec `Ctrl+Z`, ou `u` en vim, pendant la
 > session).
