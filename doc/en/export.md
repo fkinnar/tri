@@ -301,6 +301,13 @@ one entry per profile cluttered the list); on the right, the shared explanation,
   **All** its values are written, so that the new profile does not depend on another
   one's default values. Identifier derived from the name (`versions::new_id`). After
   that, it is set up like the others (drop-down lists, inconsistencies rejected);
+- **"Rename…"** (issue #18, 2026-10-22): the name is no longer an editable setting among
+  the others (it was confirmed by Enter, unchecked); it is in the drop-down list and
+  changed by this button (`Naming::Rename`; the identifier does not change). **No two
+  identical names** in a family (issue #17), case and spaces aside
+  (`versions::same_name`): the name turns red, "This name is already taken", and
+  Create / Rename stay greyed out. "Save as crop preset" from the crop numbers a taken
+  name ("Story (2)", `versions::free_name`);
 - **"Delete"**, for the user's profiles only (greyed out on a built-in profile: they can
   be modified but not deleted).
 - Internally, each profile remains a section (`SettingsWindow::schema`: sections of the

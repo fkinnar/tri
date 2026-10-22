@@ -160,7 +160,8 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   comments (`config_edit`). The identifier is derived from the name (`versions::new_id`:
   lowercase, accents removed, a number if it is taken). Applied live.
 - Settings window: a single "Crop presets" entry, drop-down list of the presets, "New…"
-  (copy of the one shown), "Delete" (the user's own); drop-down list of the ratios for
+  (copy of the one shown), "Rename…", "Delete" (the user's own), unique names (see
+  `export.md`); drop-down list of the ratios for
   `ratio` (like export presets, see `export.md`).
 
 Along the way (2026-10-19): export presets, crop presets and darktable settings modified

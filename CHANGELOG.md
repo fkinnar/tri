@@ -6,6 +6,8 @@
 
 - **Versions**: no two versions of an image with the same name (case aside); the
   proposed name is numbered, a taken name turns red and cannot be saved (issue #14).
+- **Settings**: export and crop presets are renamed with a "Rename…" button instead of
+  an editable name field, and two presets cannot share a name (issues #17, #18).
 
 ## 1.0.0-alpha.5 — 2026-10-22
 

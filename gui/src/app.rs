@@ -4088,6 +4088,12 @@ impl TriApp {
             return;
         };
         let presets = &self.settings.versions.presets.0;
+        // Pas deux préréglages du même nom (issue n° 17) : « Story (2) ».
+        let name = tri::versions::free_name(&name, |n| {
+            presets
+                .iter()
+                .any(|p| tri::versions::same_name(&preset_name(p), n))
+        });
         let id = tri::versions::new_id(&name, |id| presets.iter().any(|p| p.id == id));
         let section = format!("versions.presets.{id}");
         let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
@@ -12421,6 +12427,10 @@ mod tests {
         h.run_steps(2);
         let text = std::fs::read_to_string(&config).unwrap();
         assert!(text.contains("[versions.presets.story-2]"), "{text}");
+        assert!(
+            text.contains("name = \"Story (2)\""),
+            "nom pas en double : {text}"
+        );
         assert!(text.contains("ratio = \"9:16\""), "{text}");
         assert_eq!(
             h.state().settings.versions.presets.0.len(),
