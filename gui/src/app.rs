@@ -11651,11 +11651,8 @@ mod tests {
         assert!(!h.state().clipping);
         press(&mut h, Key::W, Modifiers::NONE);
         assert!(h.state().clipping, "w : zones");
-        h.run_steps(2);
-        assert!(
-            h.state().mask_textures.contains(&white_path),
-            "masque en texture"
-        );
+        // Masque calculé en fond : deux images ne suffisaient pas toujours (CI Windows).
+        run_until(&mut h, |app| app.mask_textures.contains(&white_path));
         // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
         // vert, bleu, tous ; Échap ferme.
         press(&mut h, Key::C, Modifiers::SHIFT);
