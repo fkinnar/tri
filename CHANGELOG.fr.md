@@ -2,7 +2,9 @@
 
 *[English version](CHANGELOG.md)*
 
-## À venir
+## 1.0.0-alpha.6 — 22/10/2026
+
+Sixième version de test : noms des versions et des préréglages, recherche des réglages plus rapide.
 
 - **Versions** : plus deux versions d'une image du même nom (casse comprise) ; le nom
   proposé est numéroté, un nom déjà pris passe en rouge et ne s'enregistre pas

@@ -5,7 +5,7 @@
 > **Frozen on 2026-10-21.** The beta 1 list no longer grows: any new idea goes to "after
 > V1", except bugs. Feedback goes through the repository's *issues*.
 
-## Already there (alpha 5)
+## Already there (alpha 6)
 
 Grid and full screen (camera render, RAW render, 1:1, continuous zoom, loupe), XMP
 ratings compatible with darktable / Lightroom / digiKam, filters (ratings, sharpness,

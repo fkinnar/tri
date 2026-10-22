@@ -5,7 +5,7 @@
 > **Figée le 21/10/2026.** La liste de la bêta 1 ne s'allonge plus : toute idée nouvelle
 > va dans « après la V1 », sauf les bugs. Les retours se font par les *issues* du dépôt.
 
-## Déjà là (alpha 5)
+## Déjà là (alpha 6)
 
 Grille et plein écran (rendu boîtier, rendu RAW, 1:1, zoom continu, loupe), notation XMP
 compatible darktable / Lightroom / digiKam, filtres (notes, netteté, exposition,
