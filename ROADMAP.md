@@ -32,7 +32,7 @@ README.
 ## V1
 
 | Topic | Details |
-|---|---|
+| --- | --- |
 | Signing | macOS: Developer ID and notarisation; Windows: SignPath Foundation (free for open source). No more warning on first launch |
 | Other brands' RAWs | Tests with Canon, Nikon, Sony, OM, Panasonic, DNG (raw.pixls.us); focus point for each |
 | Ratings in other software | Check digiKam, RawTherapee, ART; Lightroom and Capture One (testers) |
@@ -41,13 +41,12 @@ README.
 ## After V1
 
 | Topic | Details |
-|---|---|
+| --- | --- |
 | Keywords | Hierarchical, compatible with other software; interface to be mocked up first |
 | Folder merge | Move a folder into a folder of the same name |
 | Crop to development software | Write a version's crop into the sidecar, in the format of Lightroom (`crs:Crop…`), darktable, Capture One |
 | Offload | Folder and file name templates, multi-day cards |
 | Viewing adjustments | Exposure, black and white, contrast, exposure matching (non-destructive) |
-| Post-development | Output profiles, sending (AirDrop, others) |
 | Complex filters | Dedicated window or panel |
 | EXIF filters | Camera, lens, focal length, aperture, shutter speed, ISO…: at least what the metadata panel shows (issue #4) |
 | Fuller vim | Counts before actions (`5j`, `3x`) |

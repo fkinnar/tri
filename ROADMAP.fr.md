@@ -21,7 +21,7 @@ builds de nuit (Release « nightly »).
 ## Bêta 1 (publique)
 
 | Sujet | Détail |
-|---|---|
+| --- | --- |
 | Retours des testeurs Windows | Essais sur de vraies machines (chemins, lecteurs, éjection, corbeille, clavier AZERTY, écrans à haute densité), bugs trouvés |
 | Manuel des testeurs | Captures refaites avec de vraies photos (RAW, collimateur, histogramme) |
 | Gros dossiers sur disque lent | Lecture du dossier en fond, progression visible (la fenêtre se figeait le temps de lister des milliers de fichiers et leurs sidecars sur un disque dur externe) |
@@ -33,7 +33,7 @@ marche à suivre est dans le README.
 ## V1
 
 | Sujet | Détail |
-|---|---|
+| --- | --- |
 | Signature | macOS : Developer ID et notarisation ; Windows : SignPath Foundation (gratuit pour l'open source). Plus d'avertissement au premier lancement |
 | RAW des autres marques | Essais Canon, Nikon, Sony, OM, Panasonic, DNG (raw.pixls.us) ; collimateur pour chacune |
 | Notes dans les autres logiciels | Vérifier digiKam, RawTherapee, ART ; Lightroom et Capture One (testeurs) |
@@ -42,13 +42,12 @@ marche à suivre est dans le README.
 ## Après la V1
 
 | Sujet | Détail |
-|---|---|
+| --- | --- |
 | Mots-clés | Hiérarchiques, compatibles avec les autres logiciels ; interface à maquetter d'abord |
 | Fusion de dossiers | Déplacer un dossier dans un dossier du même nom |
 | Recadrage vers les logiciels de développement | Écrire le cadre d'une version dans le sidecar, au format de Lightroom (`crs:Crop…`), darktable, Capture One |
 | Déchargement | Gabarits de noms de dossier et de fichiers, cartes de plusieurs jours |
 | Réglages de visualisation | Exposition, noir et blanc, contraste, uniformisation d'exposition (non destructifs) |
-| Après-développement | Profils de sortie, envoi (AirDrop, autres) |
 | Filtres complexes | Fenêtre ou panneau dédié |
 | Filtres sur les EXIF | Appareil, objectif, focale, ouverture, vitesse, ISO… : au moins ce que montre le panneau des métadonnées (issue n° 4) |
 | Vim plus complet | Nombres devant les actions (`5j`, `3x`) |
