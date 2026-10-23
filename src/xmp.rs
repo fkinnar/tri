@@ -683,7 +683,10 @@ fn scan(xml: &str) -> Result<Raw> {
                 scopes.push(e)?;
                 depth += 1;
                 let qname = name_of(e);
-                if is_rdf(&scopes, &qname, "Description") {
+                // Seulement un rdf:Description de premier niveau : un autre peut être niché
+                // dans une propriété (Iptc4xmpCore:CreatorContactInfo de Lightroom), et le
+                // prendre pour le principal perdait les champs qui le suivent.
+                if is_rdf(&scopes, &qname, "Description") && description.is_none() {
                     found = true;
                     collect_attributes(e, &scopes, &mut raw)?;
                     if matches!(event, Event::Start(_)) {
@@ -899,7 +902,9 @@ pub fn apply(xml: &str, notes: &Notes) -> Result<String> {
                 if let Some(p) = pending.take() {
                     write(&mut writer, p)?;
                 }
-                if is_rdf(&scopes, &qname, "Description") {
+                // Premier niveau seulement (un rdf:Description niché dans une propriété
+                // reste tel quel, voir `scan`).
+                if is_rdf(&scopes, &qname, "Description") && inside_description.is_none() {
                     let first = !done_first;
                     done_first = true;
                     let rebuilt = rebuild_description(e, &scopes, first.then_some(&targets[..]))?;
@@ -1250,7 +1255,7 @@ pub fn read_list(xml: &str, field: ListField) -> Result<Vec<String>> {
                 depth += 1;
                 let qname = name_of(e);
                 let empty = matches!(event, Event::Empty(_));
-                if is_rdf(&scopes, &qname, "Description") && !empty {
+                if is_rdf(&scopes, &qname, "Description") && !empty && description.is_none() {
                     description = Some(depth);
                 } else if description == Some(depth - 1)
                     && scopes
@@ -1376,7 +1381,9 @@ pub fn apply_list(xml: &str, field: ListField, items: &[String]) -> Result<Strin
                 if let Some(p) = pending.take() {
                     write(&mut writer, p)?;
                 }
-                if is_rdf(&scopes, &qname, "Description") {
+                // Premier niveau seulement : un rdf:Description niché dans une propriété
+                // prenait la place du principal, et la liste n'était jamais écrite.
+                if is_rdf(&scopes, &qname, "Description") && inside_description.is_none() {
                     let is_first = !done_first;
                     done_first = true;
                     if is_first {
@@ -1462,6 +1469,14 @@ pub fn write_list(
     }
     let base = original.as_deref().unwrap_or(NEW_PACKET);
     let updated = apply_list(base, field, items)?;
+    // Relu avant d'écrire : une liste qui ne se relit pas est une erreur, jamais un succès
+    // silencieux (un sidecar inattendu laissait la liste de côté sans rien dire).
+    if read_list(&updated, field)? != items {
+        return Err(XmpError::Malformed(format!(
+            "{} : liste non écrite",
+            path.display()
+        )));
+    }
     if original.as_deref() == Some(updated.as_str()) {
         return Ok(path);
     }
@@ -1550,6 +1565,44 @@ mod tests {
         // Paquet neuf (rdf:Description vide) : liste ajoutée aussi.
         let fresh = apply_list(NEW_PACKET, VERSIONS, &items).unwrap();
         assert_eq!(read_list(&fresh, VERSIONS).unwrap(), items);
+    }
+
+    /// Sidecar façon Lightroom : un rdf:Description niché dans une propriété (coordonnées
+    /// du photographe), et un champ à nous après lui (retour du 23/10/2026 : une version
+    /// « enregistrée » n'était jamais écrite dans ces sidecars).
+    const NESTED: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:Iptc4xmpCore="http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/">
+   <xmp:Rating>1</xmp:Rating>
+   <Iptc4xmpCore:CreatorContactInfo>
+    <rdf:Description>
+     <Iptc4xmpCore:CiAdrCity>Ville</Iptc4xmpCore:CiAdrCity>
+    </rdf:Description>
+   </Iptc4xmpCore:CreatorContactInfo>
+   <xmp:Label>Red</xmp:Label>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+    #[test]
+    fn a_description_nested_in_a_property_is_not_the_main_one() {
+        // Lecture : le champ après le bloc niché est vu.
+        let read = parse(NESTED).unwrap();
+        assert_eq!((read.stars, read.colors.clone()), (1, vec![Color::Red]));
+        // Notes : l'élément remplacé, pas doublé ; le bloc niché intact.
+        let rated = apply(NESTED, &notes(4, Flag::None, &[])).unwrap();
+        let back = parse(&rated).unwrap();
+        assert_eq!((back.stars, back.colors), (4, vec![]), "{rated}");
+        assert!(!rated.contains("xmp:Label"), "{rated}");
+        assert!(rated.contains("<Iptc4xmpCore:CiAdrCity>Ville</Iptc4xmpCore:CiAdrCity>"));
+        // Liste (versions) : écrite dans le bloc principal, relue.
+        let items = vec![r#"{"name":"Story"}"#.to_string()];
+        let with = apply_list(NESTED, VERSIONS, &items).unwrap();
+        assert_eq!(read_list(&with, VERSIONS).unwrap(), items, "{with}");
+        assert_eq!(apply_list(&with, VERSIONS, &[]).unwrap(), NESTED);
     }
 
     #[test]

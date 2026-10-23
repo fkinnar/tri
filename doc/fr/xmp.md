@@ -20,7 +20,13 @@ par événement** (`quick-xml`) et réécrit **à l'identique**, sauf nos champs
 - si rien ne change, le fichier n'est pas réécrit du tout ; sinon, écriture atomique
   (fichier temporaire puis renommage) ;
 - un sidecar **mal formé** (XML invalide, ou sans `rdf:Description`) n'est jamais réécrit :
-  `XmpError::Malformed` / `NoDescription`.
+  `XmpError::Malformed` / `NoDescription` ;
+- seul un `rdf:Description` **de premier niveau** porte nos champs : un autre peut être
+  niché dans une propriété (`Iptc4xmpCore:CreatorContactInfo` de Lightroom, coordonnées
+  du photographe) et reste tel quel (issue n° 27, 23/10/2026 : pris pour le principal, il
+  faisait perdre les champs placés après lui, et une version « enregistrée » n'était
+  jamais écrite) ; une liste (`write_list`) qui ne se relit pas est une erreur, jamais un
+  succès silencieux.
 
 ## Les champs
 

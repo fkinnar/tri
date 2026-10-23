@@ -8,6 +8,9 @@
   search (export presets were all shown one after the other; issue #24).
 - **Versions**: "Original" is reserved for the uncropped image in the versions list; a
   version at the image's ratio is first named "Crop".
+- **XMP**: sidecars with a nested `rdf:Description` (Lightroom, photographer's contact
+  details): crop versions are written again (they were reported as saved but not
+  written), and a rating field after the nested block is read and replaced (issue #27).
 
 ## 1.0.0-alpha.6 — 2026-10-22
 
