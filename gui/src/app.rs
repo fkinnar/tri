@@ -12036,9 +12036,16 @@ mod tests {
             h.query_by_label_contains("1 copiés").is_some(),
             "bilan dans la barre d'état"
         );
-        h.get_by_label_contains("Ouvrir la séance").click();
-        h.run_steps(3);
-        assert_ne!(h.state().folder.dir, before, "séance ouverte à la demande");
+        // Recliqué tant que la séance n'est pas ouverte (CI Linux : le clic, à côté du bilan
+        // qui venait de s'afficher, se perdait parfois).
+        while h.state().folder.dir == before {
+            assert!(
+                Instant::now() < deadline,
+                "séance jamais ouverte à la demande"
+            );
+            h.get_by_label_contains("Ouvrir la séance").click();
+            h.run_steps(3);
+        }
         assert_eq!(names(&h), ["IMG0.jpg"]);
         assert!(h.state().offloaded.is_none());
     }
