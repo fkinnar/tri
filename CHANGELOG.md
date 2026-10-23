@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Versions**: "Original" is reserved for the uncropped image in the versions list; a
+  version at the image's ratio is first named "Crop".
+
 ## 1.0.0-alpha.6 — 2026-10-22
 
 Sixth test version: names of versions and presets, faster settings search.

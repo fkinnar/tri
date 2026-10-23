@@ -81,7 +81,9 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en
   rouge et Enregistrer est grisé (Entrée aussi : message). Une version reprise garde son
-  nom (`Versions::without`).
+  nom (`Versions::without`). « Original » est **réservé** à l'image non recadrée de la
+  liste des versions (retour du 23/10/2026 : deux « Original » indiscernables) : une
+  version au rapport de l'image s'appelle d'abord « Recadrage ».
 - **Clavier**, contexte « recadrage » (`Scope::Crop`, prioritaire tant que le cadre est
   affiché) :
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
