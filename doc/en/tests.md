@@ -44,6 +44,22 @@ parallel made them about 50× slower (302 s instead of 5.7 s).
 The whole workspace: `cargo test --workspace` (and `--no-default-features`). The
 interface tests are described in [gui.md](gui.md#tests).
 
+### Coverage
+
+Measured with [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) (a
+development tool, not a dependency):
+
+```sh
+rustup component add llvm-tools-preview && cargo install cargo-llvm-cov
+cargo llvm-cov --workspace --summary-only    # table per file
+cargo llvm-cov --workspace --html            # line by line (target/llvm-cov/html)
+```
+
+On 2026-10-23: 87 % of the lines without the ignored tests. Deliberately left out: what
+needs a real RAW or darktable (`#[ignore]` tests), the system actions (trash, file
+manager, ejection, AirDrop: a test never touches them), I/O error branches and the `main`
+functions.
+
 ## What is covered
 
 ### `media` (unit, `src/media.rs`)
@@ -154,7 +170,8 @@ to 500 times) after each fix: a test that passes one time in ten proves nothing.
   changed value modifies only it; full update keeping history, keywords and unknown
   fields; rejection that remembers and restores the stars; several colors (darktable
   only); `xap:` prefix and element form; values written by other software (Lightroom,
-  digiKam, "3.0"); empty `rdf:Description`; malformed XML rejected; new packet; sidecar
+  digiKam, "3.0"); empty or self-closing `rdf:Description` (list of versions); malformed
+  XML rejected; new packet; sidecar
   names for both conventions.
 
 ### `xmp` (integration, `tests/xmp.rs`)
@@ -284,3 +301,15 @@ render, preview then render on the same handle, real effect of the white balance
 `size()` consistent with the render, embedded preview rotated by `orientation()` in the
 same direction as the render, cancellation (flag already raised, then raised from
 another thread during a full render).
+
+### Command line (integration, `tests/cli.rs`)
+
+The real `tri` binary, on temporary folders, with its own configuration (cache, data,
+English) and a temporary home folder: nothing of the user's is read or written. Unknown
+or malformed options (usage, error code); listing by kind and depth; `--previews` then
+`--clear-cache` (one level, one folder alone, with `--depth`, the whole cache) checked
+with `--cache-usage`; `--convert-xmp` (and `--dry-run`); `--rename`, `--copy`, `--move`
+(images and a whole folder), `--delete --permanent`; `--offload` (dry run, copy, second
+pass, `--delete-copied`); `--metadata`, `--exposure`, `--sharpness`, `--groups`; `--export
+asis` (identical copy). Not tested: `--reveal`, `--edit`, `--eject` (the system),
+`--check-update` (the network), the trash.

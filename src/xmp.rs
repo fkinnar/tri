@@ -1614,6 +1614,29 @@ mod tests {
         assert_eq!(apply_list(&with, VERSIONS, &[]).unwrap(), NESTED);
     }
 
+    /// Bloc principal auto-fermant, notes en attributs (forme d'ExifTool).
+    const SELF_CLOSING: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+   xmp:Rating="2"/>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+    #[test]
+    fn a_list_opens_a_self_closing_description() {
+        let items = vec![r#"{"name":"Story"}"#.to_string()];
+        let with = apply_list(SELF_CLOSING, VERSIONS, &items).unwrap();
+        assert_eq!(read_list(&with, VERSIONS).unwrap(), items, "{with}");
+        assert_eq!(parse(&with).unwrap().stars, 2, "notes gardées : {with}");
+        // Rien à écrire : le bloc reste tel quel.
+        assert_eq!(
+            apply_list(SELF_CLOSING, VERSIONS, &[]).unwrap(),
+            SELF_CLOSING
+        );
+    }
+
     #[test]
     fn reads_the_darktable_sidecar() {
         assert_eq!(parse(DARKTABLE).unwrap(), Notes::default());
