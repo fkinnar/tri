@@ -11091,6 +11091,14 @@ mod tests {
                 .0
                 .contains("dossier relu")
         );
+        // Une copie peut être vue en deux fois (Windows : fichier encore en cours
+        // d'écriture au premier passage, à 20 ms) : laisser passer une éventuelle
+        // seconde relecture, pour qu'elle ne se mêle pas au sidecar ci-dessous.
+        for _ in 0..15 {
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        h.state_mut().notice = None;
         // Notes posées par un autre logiciel (darktable) : relues.
         let img0 = photos.join("img0.jpg");
         let three = tri::xmp::Notes {
@@ -11108,7 +11116,8 @@ mod tests {
                 .notice
                 .as_ref()
                 .is_some_and(|n| n.0.contains("modifiées ailleurs"))),
-            "avis des notes modifiées ailleurs"
+            "avis des notes modifiées ailleurs, vu : {:?}",
+            h.state().notice
         );
     }
 
