@@ -61,6 +61,16 @@ pub fn ratio_name(ratio: Ratio) -> String {
     }
 }
 
+/// Nom proposé d'une version de rapport `ratio` : celui du rapport, sauf « Original »,
+/// qui désigne l'image non recadrée dans la liste des versions (retour du 23/10/2026 : deux
+/// « Original » indiscernables) ; « Recadrage » à la place.
+fn default_name(ratio: Ratio) -> String {
+    match ratio {
+        Ratio::Original { .. } => t!("crop-name-original-ratio"),
+        _ => ratio_name(ratio),
+    }
+}
+
 impl Crop {
     /// Nouvelle version de `image` vue en `source` : cadre « original » sur toute l'image.
     /// `aspect` : rapport largeur / hauteur de l'image, s'il est déjà connu (sinon au
@@ -68,13 +78,13 @@ impl Crop {
     /// `others` : les versions qu'elle a déjà.
     pub fn new(image: PathBuf, source: Source, aspect: Option<f64>, others: Versions) -> Crop {
         let ratio = Ratio::Original { flipped: false };
-        Crop {
+        let mut crop = Crop {
             image,
             rect: Rect::FULL,
             ratio,
             aspect,
             editing: None,
-            name: others.new_name(&ratio_name(ratio)),
+            name: String::new(),
             name_edited: false,
             profile: None,
             source,
@@ -82,7 +92,9 @@ impl Crop {
             fresh: true,
             preset: None,
             others,
-        }
+        };
+        crop.name = crop.free_name(&default_name(ratio));
+        crop
     }
 
     /// Reprendre la version `index` (`version`) ; `others` : les autres versions de l'image.
@@ -106,7 +118,17 @@ impl Crop {
 
     /// Le nom tapé est déjà celui d'une autre version de l'image.
     pub fn name_taken(&self) -> bool {
-        self.others.name_taken(&self.name)
+        self.taken(&self.name)
+    }
+
+    /// `name` est pris : par une autre version, ou c'est celui de l'image non recadrée.
+    fn taken(&self, name: &str) -> bool {
+        self.others.name_taken(name) || tri::versions::same_name(name, &t!("versions-original"))
+    }
+
+    /// `base`, numéroté s'il est pris.
+    fn free_name(&self, base: &str) -> String {
+        tri::versions::free_name(base, |n| self.taken(n))
     }
 
     /// Nom enregistrable : non vide, pas déjà pris.
@@ -121,7 +143,7 @@ impl Crop {
         if let Some(aspect) = self.aspect {
             self.rect = Rect::fit(ratio, aspect);
         }
-        self.name = self.others.new_name(&name);
+        self.name = self.free_name(&name);
         self.name_edited = true;
         self.profile = profile;
         self.preset = Some(id.to_string());
@@ -163,7 +185,7 @@ impl Crop {
             };
         }
         if !self.name_edited {
-            self.name = self.others.new_name(&ratio_name(ratio));
+            self.name = self.free_name(&default_name(ratio));
         }
     }
 
@@ -174,7 +196,7 @@ impl Crop {
             self.rect = self.rect.with_ratio(self.ratio, aspect);
         }
         if !self.name_edited {
-            self.name = self.others.new_name(&ratio_name(self.ratio));
+            self.name = self.free_name(&default_name(self.ratio));
         }
     }
 

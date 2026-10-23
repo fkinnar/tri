@@ -2,6 +2,11 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Versions** : « Original » est réservé à l'image non recadrée de la liste des
+  versions ; une version au rapport de l'image s'appelle d'abord « Recadrage ».
+
 ## 1.0.0-alpha.6 — 22/10/2026
 
 Sixième version de test : noms des versions et des préréglages, recherche des réglages plus rapide.

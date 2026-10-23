@@ -12315,6 +12315,12 @@ mod tests {
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
+        // Rapport de l'image : « Recadrage », pas « Original », réservé à l'image non
+        // recadrée dans la liste des versions (retour du 23/10/2026).
+        assert_eq!(h.state().crop.as_ref().unwrap().name, "Recadrage");
+        h.state_mut().crop.as_mut().unwrap().name = "original".into();
+        assert!(h.state().crop.as_ref().unwrap().name_taken());
+        h.state_mut().crop.as_mut().unwrap().name = "Recadrage".into();
         // 5 : 3:2 ; flèches : le cadre bouge, l'image reste la même.
         press(&mut h, Key::Num5, Modifiers::NONE);
         let before = h.state().crop.as_ref().unwrap().rect;
