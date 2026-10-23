@@ -105,13 +105,17 @@ fn arg(p: &Path) -> &std::ffi::OsStr {
     p.as_os_str()
 }
 
-/// Entrées du cache (tous niveaux), d'après `--cache-usage`.
-fn cache_entries(env: &Env) -> usize {
-    let out = ok(env.run(["--cache-usage"]));
-    stdout(&out)
-        .lines()
+/// Somme des entrées d'un tableau d'occupation du cache (`--cache-usage`, fin de
+/// `--previews`).
+fn entries_in(text: &str) -> usize {
+    text.lines()
         .filter_map(|l| l.split_whitespace().nth(1)?.parse::<usize>().ok())
         .sum()
+}
+
+/// Entrées du cache (tous niveaux), d'après `--cache-usage`.
+fn cache_entries(env: &Env) -> usize {
+    entries_in(&stdout(&ok(env.run(["--cache-usage"]))))
 }
 
 #[test]
@@ -175,6 +179,9 @@ fn previews_fill_the_cache_and_a_folder_is_cleared_alone() {
     assert!(out.contains("1 images (0 RAW)"), "{out}");
     let after_one = cache_entries(&env);
     assert!(after_one > 0, "aperçus en cache");
+    // Le bilan final vient après les analyses de fond (netteté, empreintes) : il
+    // compte tout ce qui est en cache.
+    assert_eq!(entries_in(&out), after_one, "{out}");
     ok(env.run([arg(&two), "--previews".as_ref(), "--mixed".as_ref()]));
     let both = cache_entries(&env);
     assert_eq!(both, 2 * after_one, "autant d'entrées par image");
