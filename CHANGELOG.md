@@ -2,7 +2,9 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-## Unreleased
+## 1.0.0-alpha.7 — 2026-10-23
+
+Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.
 
 - **Cache of one folder**: `tri <folder> --clear-cache [level] [--depth N]` clears only
   the cache of that folder's images (and of its subfolders down to `--depth`), so they are
