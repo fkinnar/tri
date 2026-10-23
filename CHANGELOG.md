@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Settings**: during a search, a click on a section in the list opens it as without
+  search (export presets were all shown one after the other; issue #24).
+
 ## 1.0.0-alpha.6 — 2026-10-22
 
 Sixth test version: names of versions and presets, faster settings search.

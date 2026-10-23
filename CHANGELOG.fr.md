@@ -2,6 +2,12 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Réglages** : pendant une recherche, un clic sur une section de la liste l'ouvre
+  comme sans recherche (les préréglages d'export s'affichaient tous à la suite ;
+  issue n° 24).
+
 ## 1.0.0-alpha.6 — 22/10/2026
 
 Sixième version de test : noms des versions et des préréglages, recherche des réglages plus rapide.
