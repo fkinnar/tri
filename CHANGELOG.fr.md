@@ -2,7 +2,9 @@
 
 *[English version](CHANGELOG.md)*
 
-## À venir
+## 1.0.0-alpha.7 — 23/10/2026
+
+Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.
 
 - **Cache d'un dossier** : `tri <dossier> --clear-cache [niveau] [--depth N]` vide
   seulement le cache des images de ce dossier (et de ses sous-dossiers jusqu'à
