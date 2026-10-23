@@ -3,6 +3,11 @@
 //! Un fichier JPEG par entrée, rangé par niveau ; aucune base de données. La clé dépend du
 //! fichier source (chemin, taille, date de modification) et des paramètres de calcul : si
 //! l'un change, l'ancienne entrée n'est simplement plus trouvée. Voir `doc/en/cache.md`.
+//!
+//! Entrées rangées par dossier d'origine (23/10/2026) : `<niveau>/<dossier>/<clé>`, où
+//! `<dossier>` est un hash du dossier de la photo. Vider le cache d'un dossier
+//! ([`Cache::clear_folder`]) n'a donc besoin ni des réglages ni de la taille de l'écran
+//! qui entrent dans les clés.
 
 use std::ffi::OsString;
 use std::fs::{self, File};
@@ -15,7 +20,15 @@ use crate::bitmap::Bitmap;
 use crate::jpeg::{self, Chroma};
 
 /// Version du format du cache. L'incrémenter rend toutes les anciennes entrées invisibles.
-const FORMAT_VERSION: &str = "v1";
+/// v2 (23/10/2026) : entrées rangées par dossier d'origine.
+const FORMAT_VERSION: &str = "v2";
+
+/// Formats précédents, supprimés en fond à l'ouverture (invisibles, ils ne feraient
+/// qu'occuper le disque).
+const OLD_FORMATS: [&str; 1] = ["v1"];
+
+/// Longueur (caractères hexadécimaux) du nom du dossier d'une entrée.
+const FOLDER_ID_LEN: usize = 16;
 
 /// Qualité JPEG des entrées par défaut (voir [`Cache::with_quality`]).
 pub const DEFAULT_JPEG_QUALITY: u8 = 90;
@@ -85,6 +98,8 @@ impl Level {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
     level: Level,
+    /// Dossier d'origine (voir [`folder_id`]).
+    folder: String,
     hash: String,
 }
 
@@ -134,6 +149,7 @@ impl Key {
         field(params.as_bytes());
         Key {
             level,
+            folder: folder_id(Path::new(path).parent().unwrap_or(Path::new(""))),
             hash: h.finalize().to_hex().to_string(),
         }
     }
@@ -161,6 +177,19 @@ impl Cache {
         };
         for level in Level::ALL {
             fs::create_dir_all(cache.level_dir(level))?;
+        }
+        let old: Vec<PathBuf> = OLD_FORMATS
+            .iter()
+            .map(|v| cache.root.join(v))
+            .filter(|dir| dir.is_dir())
+            .collect();
+        if !old.is_empty() {
+            // Peut prendre quelques secondes pour un gros cache : sans bloquer.
+            std::thread::spawn(move || {
+                for dir in old {
+                    let _ = fs::remove_dir_all(dir);
+                }
+            });
         }
         Ok(cache)
     }
@@ -198,8 +227,9 @@ impl Cache {
     }
 
     fn entry_path(&self, key: &Key) -> PathBuf {
-        // Sous-dossier sur 2 caractères : évite des dizaines de milliers de fichiers par dossier.
-        self.level_dir(key.level).join(&key.hash[..2]).join(format!(
+        // Un sous-dossier par dossier d'origine : vidage par dossier, et pas des dizaines
+        // de milliers de fichiers dans un même dossier.
+        self.level_dir(key.level).join(&key.folder).join(format!(
             "{}.{}",
             key.hash,
             if key.level.is_image() { "jpg" } else { "bin" }
@@ -299,6 +329,38 @@ impl Cache {
         Ok(())
     }
 
+    /// Supprime les entrées des images du dossier `folder` (pas de ses sous-dossiers), à
+    /// un niveau ou à tous si `level` vaut `None`, quels que soient les réglages avec
+    /// lesquels elles ont été calculées. Renvoie l'espace libéré.
+    pub fn clear_folder(&self, folder: &Path, level: Option<Level>) -> io::Result<Usage> {
+        let id = folder_id(&std::path::absolute(folder)?);
+        let levels = level.map_or(Level::ALL.to_vec(), |l| vec![l]);
+        let mut freed = Usage::default();
+        for level in levels {
+            let dir = self.level_dir(level).join(&id);
+            let entries = match fs::read_dir(&dir) {
+                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                result => result?,
+            };
+            for file in entries {
+                let file = file?;
+                if file
+                    .path()
+                    .extension()
+                    .is_some_and(|e| e == "jpg" || e == "bin")
+                {
+                    freed.bytes += file.metadata()?.len();
+                    freed.entries += 1;
+                }
+            }
+            match fs::remove_dir_all(&dir) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
+        }
+        Ok(freed)
+    }
+
     /// Taille totale (octets) et nombre d'entrées d'un niveau.
     pub fn usage(&self, level: Level) -> io::Result<Usage> {
         let entries = self.entries(level)?;
@@ -368,6 +430,14 @@ struct Entry {
     path: PathBuf,
     bytes: u64,
     used: SystemTime,
+}
+
+/// Nom du sous-dossier des entrées des images du dossier `folder` (chemin absolu) : début
+/// d'un hash de son chemin.
+fn folder_id(folder: &Path) -> String {
+    let mut h = blake3::Hasher::new();
+    h.update(folder.as_os_str().as_encoded_bytes());
+    h.finalize().to_hex()[..FOLDER_ID_LEN].to_string()
 }
 
 /// Nom de fichier temporaire unique (processus + compteur), dans le même dossier que `path`
@@ -485,7 +555,15 @@ mod tests {
         assert_eq!(&k.hash[..16], STABLE_PREFIX);
     }
 
-    const STABLE_PREFIX: &str = "c5d0bcb0b20d2d6e";
+    const STABLE_PREFIX: &str = "7745d33317e78532";
+
+    #[test]
+    fn entries_of_one_folder_share_a_directory() {
+        let key = |p: &str| Key::from_parts(p.as_ref(), 1, 1, Level::Full, "p");
+        assert_eq!(key("/a/x.RAF").folder, key("/a/y.JPG").folder);
+        assert_ne!(key("/a/x.RAF").folder, key("/b/x.RAF").folder);
+        assert_eq!(key("/a/x.RAF").folder.len(), FOLDER_ID_LEN);
+    }
 
     #[test]
     fn temp_paths_are_unique_and_beside_target() {

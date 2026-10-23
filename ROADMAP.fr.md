@@ -27,6 +27,7 @@ builds de nuit (Release « nightly »).
 | Manuel des testeurs | Captures refaites avec de vraies photos (RAW, collimateur, histogramme) |
 | Gros dossiers sur disque lent | Lecture du dossier en fond, progression visible (la fenêtre se figeait le temps de lister des milliers de fichiers et leurs sidecars sur un disque dur externe) |
 | Tri par note, couleur | À concevoir avec les piles et le jugement de netteté, qui s'appuient sur l'ordre de prise de vue |
+| Vider le cache depuis l'interface | Tout, un niveau, ou le dossier ouvert (aujourd'hui : `tri <dossier> --clear-cache`), avec la place occupée |
 
 La bêta n'est **pas signée** : macOS et Windows avertissent au premier lancement, la
 marche à suivre est dans le README.

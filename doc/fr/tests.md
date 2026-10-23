@@ -88,7 +88,8 @@ l'interface sont décrits dans [gui.md](gui.md#tests).
   variables absentes ;
 - clé : dépend de chaque champ, déterministe, champs non ambigus, **valeur figée**
   (`key_hash_is_stable`, à ne modifier qu'avec `FORMAT_VERSION`) ;
-- fichiers temporaires uniques, dans le dossier de la cible.
+- fichiers temporaires uniques, dans le dossier de la cible ;
+- les entrées d'un même dossier de photos partagent un sous-dossier.
 
 ### `cache` (intégration, `tests/cache.rs`)
 
@@ -97,6 +98,8 @@ l'interface sont décrits dans [gui.md](gui.md#tests).
 - clé dépendant du niveau et des paramètres, identique en chemin relatif et absolu ;
 - source absente → erreur ;
 - niveaux isolés, vidage d'un niveau ou de tout, cache utilisable après vidage ;
+- vidage d'un dossier : ses entrées quels que soient leurs paramètres, un niveau ou tous,
+  pas ses sous-dossiers ; anciens formats supprimés en fond ;
 - `usage` ignore les temporaires ; `evict` supprime le moins récemment utilisé (lecture =
   usage) ;
 - entrée corrompue supprimée par `get` ;

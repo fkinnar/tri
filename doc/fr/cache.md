@@ -9,9 +9,9 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
 
 ```
 <racine>/
-└── v1/                      version du format (FORMAT_VERSION)
+└── v2/                      version du format (FORMAT_VERSION)
     ├── thumbnail/
-    │   ├── 3f/
+    │   ├── 8c41…07/         un dossier de photos (début du hash de son chemin)
     │   │   └── 3f9a…e1.jpg  une entrée = un JPEG qualité 90
     │   └── …
     ├── embedded/            aperçus tirés du JPEG du boîtier (RAW seulement)
@@ -23,11 +23,15 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
 
 - **Un fichier par entrée**, sans base de données ni index : l'état du cache *est* le contenu
   du dossier. Rien à reconstruire, rien à corrompre au-delà d'un fichier.
-- **Sous-dossiers sur 2 caractères** du hash : au plus quelques centaines de fichiers par
-  dossier, même avec des dizaines de milliers d'entrées.
-- **`v1/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
-  `FORMAT_VERSION`. Les anciennes entrées deviennent invisibles et peuvent être supprimées en
-  vidant le cache.
+- **Un sous-dossier par dossier de photos** (23/10/2026, format `v2`) : son nom est le
+  début (16 caractères) du hash du chemin du dossier des photos. Vider le cache d'un
+  dossier (`clear_folder`, `tri <dossier> --clear-cache`) supprime ce sous-dossier dans
+  chaque niveau, sans devoir recalculer les clés : elles dépendent des réglages, et la
+  taille de l'aperçu standard de l'écran, que la ligne de commande ne connaît pas.
+  Avant, les sous-dossiers étaient les 2 premiers caractères du hash de l'entrée.
+- **`v2/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
+  `FORMAT_VERSION`. Les anciennes entrées deviennent invisibles ; les formats précédents
+  listés dans `OLD_FORMATS` (`v1/`) sont supprimés en fond à l'ouverture du cache.
 
 ### Emplacement par défaut : `default_dir()`
 
@@ -83,6 +87,7 @@ valeur de référence pour détecter tout changement accidentel.
 | `put(&key, &bitmap)` | Écrit l'entrée (JPEG à la qualité du cache, via [`jpeg`](jpeg.md) : 4:4:4 pour le 1:1, 4:2:0 ailleurs), en écrasant l'ancienne |
 | `remove(&key)` | Supprime une entrée (sans erreur si absente) |
 | `clear(Some(level))` / `clear(None)` | Vide un niveau / tout le cache |
+| `clear_folder(dossier, niveau)` | Vide les entrées des images de `dossier` (pas de ses sous-dossiers), un niveau ou tous, quels que soient les réglages avec lesquels elles ont été calculées ; renvoie ce qui a été libéré |
 | `usage(level) -> Usage` | Octets et nombre d'entrées d'un niveau |
 | `evict(level, max_bytes) -> Usage` (branché le 17/10/2026 : `EngineSettings::trim_cache` limite chaque niveau 1:1 à `[cache] zoom_max_mb`, au démarrage de l'interface dans un fil à part et à la fin de `tri --previews` ; jusque-là, les 1:1 s'accumulaient sans limite) | Supprime les entrées les moins récemment utilisées jusqu'à `max_bytes`, renvoie ce qui a été libéré |
 

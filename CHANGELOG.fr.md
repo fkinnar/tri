@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Cache d'un dossier** : `tri <dossier> --clear-cache [niveau] [--depth N]` vide
+  seulement le cache des images de ce dossier (et de ses sous-dossiers jusqu'à
+  `--depth`), pour les faire recalculer ; tous les niveaux acceptés (`embedded-full`,
+  `developed` aussi). Le cache est désormais rangé par dossier de photos : le cache
+  existant est recalculé une fois, l'ancien supprimé en fond.
 - **Réglages** : pendant une recherche, un clic sur une section de la liste l'ouvre
   comme sans recherche (les préréglages d'export s'affichaient tous à la suite ;
   issue n° 24).

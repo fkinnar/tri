@@ -88,7 +88,8 @@ interface tests are described in [gui.md](gui.md#tests).
   missing variables;
 - key: depends on each field, deterministic, unambiguous fields, **frozen value**
   (`key_hash_is_stable`, to be changed only together with `FORMAT_VERSION`);
-- unique temporary files, in the target's folder.
+- unique temporary files, in the target's folder;
+- entries of one folder of photos share a subfolder.
 
 ### `cache` (integration, `tests/cache.rs`)
 
@@ -97,6 +98,8 @@ interface tests are described in [gui.md](gui.md#tests).
 - key depending on level and parameters, identical for relative and absolute paths;
 - missing source → error;
 - isolated levels, clearing one level or everything, cache usable after clearing;
+- clearing one folder: its entries whatever their parameters, one level or all, not its
+  subfolders; previous formats deleted in the background;
 - `usage` ignores temporaries; `evict` removes the least recently used (read = use);
 - corrupted entry removed by `get`;
 - 4 threads writing and reading the same key: never a partial entry;

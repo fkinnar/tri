@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Cache of one folder**: `tri <folder> --clear-cache [level] [--depth N]` clears only
+  the cache of that folder's images (and of its subfolders down to `--depth`), so they are
+  computed again; all levels accepted (`embedded-full`, `developed` too). The cache is now
+  organised by folder of photos: the existing cache is computed again once, the old one
+  is deleted in the background.
 - **Settings**: during a search, a click on a section in the list opens it as without
   search (export presets were all shown one after the other; issue #24).
 - **Versions**: "Original" is reserved for the uncropped image in the versions list; a

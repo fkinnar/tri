@@ -178,6 +178,54 @@ fn levels_are_isolated_and_clearable() {
 }
 
 #[test]
+fn a_folder_is_cleared_whatever_the_settings() {
+    let s = setup();
+    let other_dir = s.source.parent().unwrap().join("autre");
+    fs::create_dir(&other_dir).unwrap();
+    let other = other_dir.join("DSCF0002.RAF");
+    fs::write(&other, b"autre RAW").unwrap();
+    // Deux réglages différents (ex. deux tailles d'écran) : les deux entrées partent.
+    let here = [
+        Key::new(&s.source, Level::Standard, "side=2560").unwrap(),
+        Key::new(&s.source, Level::Standard, "side=3840").unwrap(),
+        Key::new(&s.source, Level::Thumbnail, "test").unwrap(),
+    ];
+    let elsewhere = key(&other, Level::Standard);
+    for k in here.iter().chain([&elsewhere]) {
+        s.cache.put(k, &gradient()).unwrap();
+    }
+    let folder = s.source.parent().unwrap();
+    let freed = s.cache.clear_folder(folder, Some(Level::Standard)).unwrap();
+    assert_eq!(freed.entries, 2);
+    assert!(freed.bytes > 0);
+    assert!(!s.cache.contains(&here[0]) && !s.cache.contains(&here[1]));
+    assert!(s.cache.contains(&here[2]), "autre niveau gardé");
+    assert!(s.cache.contains(&elsewhere), "sous-dossier gardé");
+    assert_eq!(s.cache.clear_folder(folder, None).unwrap().entries, 1);
+    assert!(!s.cache.contains(&here[2]));
+    assert!(s.cache.contains(&elsewhere));
+    // Rien à vider : pas d'erreur.
+    assert_eq!(
+        s.cache.clear_folder(folder, None).unwrap(),
+        Usage::default()
+    );
+}
+
+#[test]
+fn old_formats_are_removed_in_the_background() {
+    let dir = tempfile::tempdir().unwrap();
+    let old = dir.path().join("v1").join("full").join("ab");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("x.jpg"), b"ancien").unwrap();
+    let _cache = Cache::open(dir.path()).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while dir.path().join("v1").exists() {
+        assert!(std::time::Instant::now() < deadline, "ancien format resté");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
 fn usage_counts_entries_and_ignores_temp_files() {
     let s = setup();
     assert_eq!(s.cache.usage(Level::Full).unwrap(), Usage::default());
