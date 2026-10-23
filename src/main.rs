@@ -366,7 +366,9 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
         Progress::default(),
         Progress::default(),
     );
-    let analyses = if config.exposure { n } else { 0 };
+    // Analyses en fond aussi : la commande ne se termine qu'une fois tout en cache.
+    let (mut sharpnesses, mut similarities) = (Progress::default(), Progress::default());
+    let analyses = |on: bool| if on { n } else { 0 };
     let (mut thumbs_done_at, mut embedded_done_at) = (None, None);
     let mut failures = Vec::new();
     loop {
@@ -377,7 +379,10 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
                 Level::Thumbnail => thumbs = progress,
                 Level::Embedded => embedded = progress,
                 Level::Exposure => exposures = progress,
-                _ => standards = progress,
+                Level::Sharpness => sharpnesses = progress,
+                Level::Similarity => similarities = progress,
+                Level::Standard => standards = progress,
+                _ => {}
             },
             Ok(Event::Failed {
                 path, level, error, ..
@@ -410,7 +415,9 @@ fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> Any
         if finished(thumbs, n)
             && finished(embedded, raws)
             && finished(standards, n)
-            && finished(exposures, analyses)
+            && finished(exposures, analyses(config.exposure))
+            && finished(sharpnesses, analyses(config.sharpness))
+            && finished(similarities, analyses(config.similarity))
         {
             break;
         }

@@ -44,6 +44,22 @@ les rendait environ 50× plus lents (302 s au lieu de 5,7 s).
 Tout le workspace : `cargo test --workspace` (et `--no-default-features`). Les tests de
 l'interface sont décrits dans [gui.md](gui.md#tests).
 
+### Couverture
+
+Mesurée avec [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) (outil de
+développement, pas une dépendance) :
+
+```sh
+rustup component add llvm-tools-preview && cargo install cargo-llvm-cov
+cargo llvm-cov --workspace --summary-only    # tableau par fichier
+cargo llvm-cov --workspace --html            # détail ligne par ligne (target/llvm-cov/html)
+```
+
+Le 23/10/2026 : 87 % des lignes sans les tests ignorés. Restent volontairement hors
+tests : ce qui demande un vrai RAW ou darktable (tests `#[ignore]`), les actions du système
+(corbeille, gestionnaire de fichiers, éjection, AirDrop : on n'y touche pas depuis un test),
+les branches d'erreur d'entrée-sortie et les fonctions `main`.
+
 ## Ce qui est couvert
 
 ### `media` (unitaires, `src/media.rs`)
@@ -156,7 +172,8 @@ prouve rien.
   seule valeur changée ne modifie qu'elle ; mise à jour complète en gardant historique,
   mots-clés et champs inconnus ; rejet qui mémorise et restaure les étoiles ; plusieurs
   couleurs (darktable seul) ; préfixe `xap:` et forme élément ; valeurs écrites par
-  d'autres logiciels (Lightroom, digiKam, « 3.0 ») ; `rdf:Description` vide ; XML mal formé
+  d'autres logiciels (Lightroom, digiKam, « 3.0 ») ; `rdf:Description` vide ou
+  auto-fermant (liste des versions) ; XML mal formé
   refusé ; nouveau paquet ; noms de sidecar des deux conventions.
 
 ### `xmp` (intégration, `tests/xmp.rs`)
@@ -288,3 +305,15 @@ shim C), `half_size` divise les dimensions par deux, rendu dans un autre thread,
 cohérent avec le rendu, aperçu embarqué pivoté par `orientation()` dans le même sens que le
 rendu, annulation (drapeau déjà levé, puis levé depuis un autre thread pendant un rendu
 complet).
+
+### Ligne de commande (intégration, `tests/cli.rs`)
+
+Le vrai binaire `tri`, sur des dossiers temporaires, avec sa propre configuration (cache,
+données, anglais) et un dossier personnel temporaire : rien n'est lu ni écrit chez
+l'utilisateur. Options inconnues ou mal formées (mode d'emploi, code d'erreur) ; liste par
+type et profondeur ; `--previews` puis `--clear-cache` (un niveau, un dossier seul, avec
+`--depth`, tout le cache) vérifiés par `--cache-usage` ; `--convert-xmp` (et `--dry-run`) ;
+`--rename`, `--copy`, `--move` (images et dossier entier), `--delete --permanent` ;
+`--offload` (simulation, copie, second passage, `--delete-copied`) ; `--metadata`,
+`--exposure`, `--sharpness`, `--groups` ; `--export asis` (copie à l'identique). Hors tests :
+`--reveal`, `--edit`, `--eject` (le système), `--check-update` (le réseau), la corbeille.

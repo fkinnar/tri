@@ -22,6 +22,8 @@
 - **XMP**: sidecars with a nested `rdf:Description` (Lightroom, photographer's contact
   details): crop versions are written again (they were reported as saved but not
   written), and a rating field after the nested block is read and replaced (issue #27).
+- **`tri <folder> --previews`**: waits for the background analyses (sharpness,
+  similarity) before ending; some were not cached, and the final cache table missed them.
 
 ## 1.0.0-alpha.6 — 2026-10-22
 

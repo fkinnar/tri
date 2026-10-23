@@ -24,6 +24,9 @@
   photographe) : les versions de recadrage s'écrivent de nouveau (annoncées enregistrées,
   elles ne l'étaient pas), et une note placée après le bloc niché est lue et remplacée
   (issue n° 27).
+- **`tri <dossier> --previews`** : attend la fin des analyses de fond (netteté,
+  empreintes) avant de se terminer ; certaines n'étaient pas mises en cache, et le
+  tableau final du cache les oubliait.
 
 ## 1.0.0-alpha.6 — 22/10/2026
 

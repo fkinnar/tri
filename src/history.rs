@@ -912,6 +912,26 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_rename_is_redone_unless_the_folder_is_gone() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut history = History::new(10);
+        let made = files::create_dir(dir.path(), "Nouveau").unwrap();
+        let renamed = files::rename_dir(&made, "Séance").unwrap();
+        history.push(Step::RenameDir(made.clone(), renamed.clone()));
+        history.undo(Convention::Darktable).unwrap();
+        history.redo(Convention::Darktable).unwrap();
+        assert!(renamed.is_dir() && !made.exists());
+        history.undo(Convention::Darktable).unwrap();
+        // Supprimé ailleurs entre-temps : rien à renommer, refus.
+        std::fs::remove_dir(&made).unwrap();
+        assert!(matches!(
+            history.redo(Convention::Darktable),
+            Err(HistoryError::Missing(_))
+        ));
+        assert!(!renamed.exists());
+    }
+
+    #[test]
     fn the_history_is_capped() {
         let mut history = History::new(2);
         for _ in 0..3 {
