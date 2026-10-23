@@ -565,7 +565,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   près » ce qu'on cherche) : les **thèmes** de l'aide et les **sections** des réglages
   restent visibles pendant la recherche (dans les réglages, la liste de gauche met en
   tête les sections trouvées, avec leur nombre de résultats, les autres grisées ; un clic
-  amène les résultats de la section en vue) ; le **titre** d'une section ou d'un thème
+  quitte la recherche et ouvre la section comme sans recherche, pour une famille le
+  membre le mieux trouvé — issue n° 24, 23/10/2026 : il amenait seulement ses résultats
+  en vue, et une famille montrait tous ses membres l'un après l'autre) ; le **titre** d'une section ou d'un thème
   la trouve en entier ; des **mots-clés invisibles** par réglage, section ou action
   (`kw-<id>` dans `gui/locales/*.ftl`, `actions::keywords` ; « vim » trouve le jeu de
   raccourcis, « collimateur » le repère d'autofocus ; un test vérifie que chacun désigne

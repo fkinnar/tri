@@ -545,8 +545,10 @@ system one ("cold" measurements, experiments).
 - **Search, help and settings** (reworked on 2026-10-22: you often know only roughly
   what you are looking for): the help's **topics** and the settings' **sections** stay
   visible while searching (in the settings, the left list puts the sections found first,
-  with their number of results, the others greyed out; a click brings the section's
-  results into view); a section's or topic's **title** finds all of it; **hidden
+  with their number of results, the others greyed out; a click leaves the search and
+  opens the section as without search, for a family its best-found member — issue #24,
+  2026-10-23: it only brought its results into view, and a family showed all its members
+  one after the other); a section's or topic's **title** finds all of it; **hidden
   keywords** per setting, section or action (`kw-<id>` in `gui/locales/*.ftl`,
   `actions::keywords`; "vim" finds the shortcut set, "focus point" the autofocus marker;
   a test checks that each names something that exists); and when a typed word appears

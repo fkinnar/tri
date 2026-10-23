@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Réglages** : pendant une recherche, un clic sur une section de la liste l'ouvre
+  comme sans recherche (les préréglages d'export s'affichaient tous à la suite ;
+  issue n° 24).
 - **Versions** : « Original » est réservé à l'image non recadrée de la liste des
   versions ; une version au rapport de l'image s'appelle d'abord « Recadrage ».
 
