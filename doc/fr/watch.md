@@ -40,4 +40,7 @@ compte.
   sur les notes et les couvertures des piles sont alors revus.
 
 La surveillance repart à chaque dossier ouvert, ou si l'intervalle change dans les
-réglages.
+réglages. Son état de départ est relevé avec les notes, en fond (`folder::Loading`), puis
+donné à `FolderWatch::start_from` : relevé au démarrage de la surveillance
+(`start_depth`), c'était un accès disque par fichier dans le fil de l'interface
+(issue n° 15).

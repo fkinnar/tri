@@ -6,6 +6,12 @@
 
 - **Versions** : « Original » est réservé à l'image non recadrée de la liste des
   versions ; une version au rapport de l'image s'appelle d'abord « Recadrage ».
+- **Gros dossiers sur un disque lent ou un NAS** : la grille s'affiche aussitôt, les notes
+  se lisent en fond avec leur progression dans la barre d'état (2 820 images sur un disque
+  dur externe : 15 s de fenêtre vide auparavant) ; poser une note ne relit plus tous les
+  sidecars du dossier ; les résultats du moteur ne figent plus les premières images
+  (issues n° 15 et 29).
+- **Ordre** : l'ordre retenu est aussi appliqué au lancement (issue n° 30).
 
 ## 1.0.0-alpha.6 — 22/10/2026
 

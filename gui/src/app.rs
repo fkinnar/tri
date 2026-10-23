@@ -135,6 +135,13 @@ pub struct TriApp {
     /// Surveillance du dossier ouvert (fichiers ajoutés, XMP modifiés ailleurs), avec son
     /// intervalle (ms) : relancée si le dossier ou l'intervalle change.
     watch: Option<(tri::watch::FolderWatch, Receiver<tri::watch::Changes>, u64)>,
+    /// Lecture en fond des notes du dossier ouvert (issue n° 15 : sur un disque lent, la
+    /// fenêtre restait vide le temps de les lire) ; la grille s'affiche sans attendre.
+    loading: Option<tri::folder::Loading>,
+    /// État du dossier relevé par cette lecture, pour démarrer sa surveillance.
+    watch_snapshot: Option<tri::watch::Snapshot>,
+    /// Événements du moteur laissés pour l'image suivante (budget dépassé).
+    engine_backlog: bool,
     /// Boîte de déchargement d'une carte (éventuellement en arrière-plan).
     offload: Option<OffloadDialog>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
@@ -533,7 +540,7 @@ impl TriApp {
         let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
         let depth = folder_depth(subfolders, &gui);
         let (folder, error) = match &dir {
-            Some(dir) => match Folder::open(dir, depth, settings.xmp.sidecar) {
+            Some(dir) => match Folder::scan(dir, depth, settings.xmp.sidecar) {
                 Ok(folder) => {
                     if let Some(data) = &data {
                         let _ = tri::folder::remember(data, &folder.dir);
@@ -544,12 +551,7 @@ impl TriApp {
             },
             None => (Folder::default(), None),
         };
-        trace(|| {
-            format!(
-                "dossier lu : {} images, notes comprises",
-                folder.notes.len()
-            )
-        });
+        trace(|| format!("dossier lu : {} images, notes en fond", folder.files.len()));
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
@@ -582,6 +584,9 @@ impl TriApp {
             places: settings.places.clone(),
             volumes: None,
             watch: None,
+            loading: None,
+            watch_snapshot: None,
+            engine_backlog: false,
             offload: None,
             offloaded: None,
             eject_failed: None,
@@ -758,8 +763,52 @@ impl TriApp {
             gui,
         };
         app.restore_display();
+        app.start_loading();
+        // L'ordre retenu, aussi au lancement (il ne l'était qu'en changeant de dossier).
+        app.apply_sort();
         app.apply_filter();
         app
+    }
+
+    /// Lance la lecture en fond des notes du dossier ouvert (et de l'état de sa
+    /// surveillance, si elle n'est pas déjà en route).
+    fn start_loading(&mut self) {
+        self.loading = None;
+        self.watch_snapshot = None;
+        if self.folder.is_none() || !self.folder.notes.is_pending() {
+            return;
+        }
+        let watching = self.settings.watch.interval_ms > 0
+            && !self
+                .watch
+                .as_ref()
+                .is_some_and(|(w, _, _)| w.dir() == self.folder.dir);
+        self.loading = Some(tri::folder::Loading::start(
+            &self.folder,
+            self.folder_depth(),
+            watching,
+        ));
+    }
+
+    /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
+    /// piles revus.
+    fn poll_loading(&mut self, ctx: &egui::Context) {
+        let Some(loading) = &self.loading else {
+            return;
+        };
+        let Some(loaded) = loading.try_take() else {
+            // Progression dans la barre d'état.
+            ctx.request_repaint_after(Duration::from_millis(100));
+            return;
+        };
+        self.loading = None;
+        self.folder.notes.adopt(loaded.notes);
+        self.watch_snapshot = loaded.snapshot;
+        trace(|| format!("notes lues : {}", self.folder.notes.len()));
+        if !self.notes_rule.is_empty() {
+            self.refilter(Reveal::Minimal);
+        }
+        self.stacks_dirty = true;
     }
 
     /// État d'affichage courant (`state.rs`).
@@ -840,7 +889,7 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
-        match Folder::open(dir, self.folder_depth(), self.settings.xmp.sidecar) {
+        match Folder::scan(dir, self.folder_depth(), self.settings.xmp.sidecar) {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
@@ -858,6 +907,7 @@ impl TriApp {
                     .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
                     .unwrap_or(0.0);
                 self.folder = folder;
+                self.start_loading();
                 self.apply_sort();
                 self.error = None;
             }
@@ -870,6 +920,7 @@ impl TriApp {
         self.expanded.clear();
         self.selection.clear();
         self.scores.clear();
+        self.signatures.clear();
         self.judgements.clear();
         self.blurry_applied.clear();
         self.selected = 0;
@@ -1088,17 +1139,32 @@ impl TriApp {
             w.dir() == self.folder.dir && w.depth() == depth && *ms == interval
         });
         if !current {
+            // L'état du dossier vient de la lecture en fond : on l'attend.
+            if self.loading.is_some() {
+                return;
+            }
             let (tx, rx) = mpsc::channel();
             let repaint = ctx.clone();
-            let watch = tri::watch::FolderWatch::start_depth(
-                &self.folder.dir,
-                depth,
-                Duration::from_millis(interval),
-                move |changes| {
-                    let _ = tx.send(changes);
-                    repaint.request_repaint();
-                },
-            );
+            let on_change = move |changes| {
+                let _ = tx.send(changes);
+                repaint.request_repaint();
+            };
+            let interval_d = Duration::from_millis(interval);
+            let watch = match self.watch_snapshot.take() {
+                Some(known) => tri::watch::FolderWatch::start_from(
+                    &self.folder.dir,
+                    depth,
+                    interval_d,
+                    known,
+                    on_change,
+                ),
+                None => tri::watch::FolderWatch::start_depth(
+                    &self.folder.dir,
+                    depth,
+                    interval_d,
+                    on_change,
+                ),
+            };
             self.watch = Some((watch, rx, interval));
         }
         let Some((_, rx, _)) = &self.watch else {
@@ -1112,6 +1178,11 @@ impl TriApp {
         }
         if !images.is_empty() {
             trace(|| format!("dossier modifié ailleurs : {} images", images.len()));
+            // Analyses à reprendre du moteur (gardées sinon : ré-annonces ignorées).
+            for image in &images {
+                self.signatures.remove(image);
+                self.scores.remove(image);
+            }
             let selected = self.files.get(self.selected).map(|f| f.path.clone());
             self.reload_folder(selected);
             self.notice = Some((t!("watch-reloaded", count = images.len()), false));
@@ -2166,7 +2237,10 @@ impl TriApp {
         let Some(engine) = &self.engine else { return };
         let mut changed = false;
         for index in ready {
+            // Déjà connu : une ré-annonce du moteur (après chaque refiltrage), rien à relire
+            // (une lecture du cache, et un accès au fichier source, par image).
             if let Some(file) = self.files.get(index)
+                && !self.scores.contains_key(&file.path)
                 && let Some(score) = preview::sharpness(&engine.cache, file, &engine.preview)
             {
                 self.scores.insert(file.path.clone(), score.value);
@@ -2200,7 +2274,18 @@ impl TriApp {
         let generation = engine.generation;
         // Empreinte arrivée : les piles du jugement de netteté changent.
         let mut signed = false;
-        while let Ok(event) = engine.events.try_recv() {
+        // Pas plus que le budget d'une image : sur un dossier déjà calculé, des milliers
+        // d'analyses arrivent d'un coup (issue n° 15) ; la suite à l'image suivante.
+        let deadline = Instant::now() + self.gui.load_budget();
+        self.engine_backlog = false;
+        loop {
+            if Instant::now() >= deadline {
+                self.engine_backlog = true;
+                break;
+            }
+            let Ok(event) = engine.events.try_recv() else {
+                break;
+            };
             match event {
                 Event::Ready {
                     generation: g,
@@ -2231,6 +2316,7 @@ impl TriApp {
                     }
                     if level == Level::Similarity
                         && let Some(file) = self.files.get(index)
+                        && !self.signatures.contains_key(&file.path)
                         && let Some(sig) = preview::signature(&engine.cache, file, &engine.preview)
                     {
                         // Une date nouvelle seulement (comme pour l'exposition, issue n° 10 :
@@ -5174,7 +5260,12 @@ impl TriApp {
                 ui.colored_label(Color32::from(self.gui.colors.marked), text);
             }
             ui.separator();
+            let notes = self.loading.as_ref().map_or(Progress::default(), |l| {
+                let (done, total) = l.progress();
+                Progress { done, total }
+            });
             for (name, p) in [
+                (t!("progress-notes"), notes),
                 (t!("progress-thumbnails"), self.progress[0]),
                 (t!("progress-embedded"), self.progress[1]),
                 (t!("progress-previews"), self.progress[2]),
@@ -6002,13 +6093,16 @@ impl TriApp {
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
-        match Folder::open(
+        match Folder::scan(
             &self.folder.dir,
             self.folder_depth(),
             self.settings.xmp.sidecar,
         ) {
-            Ok(folder) => {
+            Ok(mut folder) => {
+                // Les notes connues en attendant la relecture en fond.
+                folder.notes.seed(&self.folder.notes);
                 self.folder = folder;
+                self.start_loading();
                 self.apply_sort();
             }
             Err(e) => {
@@ -8052,6 +8146,10 @@ impl eframe::App for TriApp {
             self.regroup();
         }
         self.watch_volumes(&ctx);
+        self.poll_loading(&ctx);
+        if self.engine_backlog {
+            ctx.request_repaint();
+        }
         self.watch_folder(&ctx);
         self.poll_eject();
         self.run_script(&ctx);
@@ -8986,9 +9084,12 @@ mod tests {
         // Pas de piles : les images de test, des aplats de couleurs proches, seraient
         // groupées (le test des piles les active).
         settings.similarity.background = false;
-        let harness = Harness::builder()
+        let mut harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
+        // Notes lues en fond (issue n° 15) : les tests partent, comme l'utilisateur après
+        // un instant, d'un dossier dont les notes sont connues.
+        run_until(&mut harness, |app| app.loading.is_none());
         (harness, dir)
     }
 

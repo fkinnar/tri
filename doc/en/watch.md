@@ -39,3 +39,6 @@ account.
   and the stack covers are then updated.
 
 Watching restarts with each folder opened, or if the interval changes in the settings.
+Its starting state is taken with the ratings, in the background (`folder::Loading`), then
+given to `FolderWatch::start_from`: taken when the watch started (`start_depth`), it was
+one disk access per file in the interface thread (issue #15).

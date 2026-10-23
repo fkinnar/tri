@@ -137,8 +137,9 @@ pub struct GuiSettings {
     /// Rendus RAW : à la demande (image affichée et voisines, en mode RAW) ou tout le
     /// dossier en fond.
     pub raw_previews: RawPreviews,
-    /// Temps maximal passé à charger des vignettes par image affichée (ms) : au-delà, on
-    /// reprend à l'image suivante pour ne pas figer l'interface.
+    /// Temps maximal passé à charger des vignettes, et à intégrer les résultats du moteur,
+    /// par image affichée (ms) : au-delà, on reprend à l'image suivante pour ne pas figer
+    /// l'interface.
     pub load_budget_ms: u64,
     /// Largeur des barres de progression de la barre d'état (points).
     pub progress_width: f32,

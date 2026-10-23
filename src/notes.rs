@@ -5,8 +5,9 @@
 //! instantané, seule une modification touche le disque. Le format des sidecars est l'affaire
 //! du module [`crate::xmp`]. Voir `doc/en/notes.md`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::filter::{Filter, Groups, retain};
 use crate::media::MediaFile;
@@ -33,6 +34,45 @@ pub struct NoteBook {
     /// Images de chaque dossier, pour retrouver celles qui partagent un sidecar (convention
     /// Adobe : `IMG.xmp` pour `IMG.RAF` et `IMG.JPG`).
     by_dir: HashMap<PathBuf, Vec<PathBuf>>,
+    /// Pendant une lecture en fond ([`NoteBook::pending`]) : les images lues ou écrites
+    /// depuis, plus fraîches que ce que rapportera la lecture ([`NoteBook::adopt`]).
+    touched: Option<HashSet<PathBuf>>,
+}
+
+/// Notes de `images` (toutes dans `dir`), lues avec une seule liste du dossier ; un
+/// sidecar n'est ouvert que s'il existe. `done` compte les images lues.
+fn read_entries(
+    dir: &Path,
+    images: &[PathBuf],
+    convention: Convention,
+    done: Option<&AtomicUsize>,
+) -> Vec<(PathBuf, Entry)> {
+    let index = SidecarIndex::new(dir);
+    images
+        .iter()
+        .map(|image| {
+            let existing = index.existing_sidecar(image);
+            let (notes, error) = match &existing {
+                None => (Notes::default(), None),
+                Some(sidecar) => match xmp::read_sidecar(sidecar) {
+                    Ok(notes) => (notes, None),
+                    Err(e) => (Notes::default(), Some(e.to_string())),
+                },
+            };
+            if let Some(done) = done {
+                done.fetch_add(1, Ordering::Relaxed);
+            }
+            let sidecar = existing.unwrap_or_else(|| convention.sidecar(image));
+            (
+                image.clone(),
+                Entry {
+                    notes,
+                    sidecar,
+                    error,
+                },
+            )
+        })
+        .collect()
 }
 
 fn dir_of(image: &Path) -> PathBuf {
@@ -47,20 +87,9 @@ impl NoteBook {
         images: impl IntoIterator<Item = &'a Path>,
         convention: Convention,
     ) -> NoteBook {
-        let mut book = NoteBook {
-            convention,
-            ..NoteBook::default()
-        };
-        for image in images {
-            book.by_dir
-                .entry(dir_of(image))
-                .or_default()
-                .push(image.to_path_buf());
-        }
-        let dirs: Vec<PathBuf> = book.by_dir.keys().cloned().collect();
-        for dir in dirs {
-            book.reload_dir(&dir);
-        }
+        let mut book = NoteBook::pending(images, convention);
+        book.touched = None;
+        book.reload();
         book
     }
 
@@ -69,25 +98,109 @@ impl NoteBook {
         NoteBook::load(files.iter().map(|f| f.path.as_path()), convention)
     }
 
+    /// [`NoteBook::load`], en comptant les images lues dans `done` (lecture en fond avec
+    /// progression, voir [`crate::folder::Loading`]).
+    pub fn load_counting(
+        files: &[MediaFile],
+        convention: Convention,
+        done: &AtomicUsize,
+    ) -> NoteBook {
+        let mut book = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
+        book.touched = None;
+        for (dir, images) in &book.by_dir {
+            let entries = read_entries(dir, images, convention, Some(done));
+            book.entries.extend(entries);
+        }
+        book
+    }
+
+    /// Carnet de `images` dont les notes ne sont pas encore lues (elles le sont en fond,
+    /// puis reprises par [`NoteBook::adopt`]) : notes vides en attendant ; une image notée
+    /// entre-temps est lue seule, à la demande.
+    pub fn pending<'a>(
+        images: impl IntoIterator<Item = &'a Path>,
+        convention: Convention,
+    ) -> NoteBook {
+        let mut book = NoteBook {
+            convention,
+            touched: Some(HashSet::new()),
+            ..NoteBook::default()
+        };
+        for image in images {
+            book.by_dir
+                .entry(dir_of(image))
+                .or_default()
+                .push(image.to_path_buf());
+        }
+        book
+    }
+
+    /// Convention des sidecars créés par une écriture.
+    pub fn convention(&self) -> Convention {
+        self.convention
+    }
+
+    /// Vrai si des notes sont attendues d'une lecture en fond ([`NoteBook::pending`]).
+    pub fn is_pending(&self) -> bool {
+        self.touched.is_some()
+    }
+
+    /// Reprend les notes lues en fond : celles des images lues ou écrites depuis le
+    /// début de la lecture sont gardées, plus fraîches.
+    pub fn adopt(&mut self, loaded: NoteBook) {
+        let touched = self.touched.take().unwrap_or_default();
+        for (image, entry) in loaded.entries {
+            if !touched.contains(&image) {
+                self.entries.insert(image, entry);
+            }
+        }
+    }
+
+    /// Notes en attente d'une lecture en fond : celles d'un carnet `known` (le même dossier
+    /// lu avant) en attendant, sans les marquer comme plus fraîches.
+    pub fn seed(&mut self, known: &NoteBook) {
+        for images in self.by_dir.values() {
+            for image in images {
+                if let Some(entry) = known.entries.get(image) {
+                    self.entries.insert(image.clone(), entry.clone());
+                }
+            }
+        }
+    }
+
+    /// Relit les notes de `images` seules (une liste du dossier par dossier).
+    fn reload_images(&mut self, images: &[PathBuf]) {
+        let mut by_dir: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+        for image in images {
+            by_dir.entry(dir_of(image)).or_default().push(image.clone());
+        }
+        for (dir, images) in by_dir {
+            for (image, entry) in read_entries(&dir, &images, self.convention, None) {
+                if let Some(touched) = &mut self.touched {
+                    touched.insert(image.clone());
+                }
+                self.entries.insert(image, entry);
+            }
+        }
+    }
+
     /// Relit le dossier `dir` (sidecars créés, supprimés, ou modifiés par un autre
     /// logiciel).
     fn reload_dir(&mut self, dir: &Path) {
-        let index = SidecarIndex::new(dir);
-        for image in self.by_dir.get(dir).into_iter().flatten() {
-            let sidecar = index.sidecar_path(image, self.convention);
-            let (notes, error) = match xmp::read_sidecar(&sidecar) {
-                Ok(notes) => (notes, None),
-                Err(e) => (Notes::default(), Some(e.to_string())),
-            };
-            self.entries.insert(
-                image.clone(),
-                Entry {
-                    notes,
-                    sidecar,
-                    error,
-                },
-            );
+        let images = self.by_dir.get(dir).cloned().unwrap_or_default();
+        self.reload_images(&images);
+    }
+
+    /// Ajoute `image` (inconnue) et lit ses notes, avec celles de sa paire.
+    fn add(&mut self, image: &Path) {
+        let dir = dir_of(image);
+        let images = self.by_dir.entry(dir).or_default();
+        if !images.iter().any(|p| p == image) {
+            images.push(image.to_path_buf());
         }
+        let mut targets = vec![image.to_path_buf()];
+        targets.extend(self.siblings(image));
+        self.reload_images(&targets);
     }
 
     /// Relit tout depuis le disque.
@@ -135,6 +248,9 @@ impl NoteBook {
                 let old = self.entries.get(&image);
                 if old.is_none_or(|e| e.notes != notes || e.error != error) {
                     changed.push(image.clone());
+                }
+                if let Some(touched) = &mut self.touched {
+                    touched.insert(image.clone());
                 }
                 self.entries.insert(
                     image,
@@ -192,13 +308,8 @@ impl NoteBook {
     /// Écrit `notes` pour `image` seule, sans toucher à sa paire (annulation : chaque
     /// image de la paire retrouve ses propres notes d'avant). Relit ensuite le dossier.
     pub fn write_only(&mut self, image: &Path, notes: &Notes) -> Result<(), XmpError> {
-        let dir = dir_of(image);
         if !self.entries.contains_key(image) {
-            self.by_dir
-                .entry(dir.clone())
-                .or_default()
-                .push(image.to_path_buf());
-            self.reload_dir(&dir);
+            self.add(image);
         }
         let entry = &self.entries[image];
         if let Some(error) = &entry.error {
@@ -213,7 +324,11 @@ impl NoteBook {
                 message: e.to_string(),
             })?;
         }
-        self.reload_dir(&dir);
+        // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
+        // tout le dossier coûtait cher sur un disque lent ou un NAS (issue n° 15).
+        let mut targets = vec![image.to_path_buf()];
+        targets.extend(self.siblings(image));
+        self.reload_images(&targets);
         Ok(())
     }
 
@@ -232,13 +347,8 @@ impl NoteBook {
         image: &Path,
         edit: impl FnOnce(&mut Notes),
     ) -> Result<Vec<PathBuf>, XmpError> {
-        let dir = dir_of(image);
         if !self.entries.contains_key(image) {
-            self.by_dir
-                .entry(dir.clone())
-                .or_default()
-                .push(image.to_path_buf());
-            self.reload_dir(&dir);
+            self.add(image);
         }
         let entry = &self.entries[image];
         if let Some(error) = &entry.error {
@@ -278,13 +388,14 @@ impl NoteBook {
         if written.is_empty() && failure.is_none() {
             return Ok(Vec::new());
         }
-        // Des sidecars ont pu être créés, et d'autres images les partager : on relit le
-        // dossier (une liste de fichiers, puis seulement les sidecars).
-        let before: Vec<(PathBuf, Notes)> = self.by_dir[&dir]
+        // Des sidecars ont pu être créés, et les images de la paire les partager : on les
+        // relit, elles seules (tout le dossier coûtait cher sur un disque lent ou un NAS,
+        // issue n° 15 ; un sidecar n'est partagé qu'entre images de même nom).
+        let before: Vec<(PathBuf, Notes)> = targets
             .iter()
             .map(|p| (p.clone(), self.notes(p).clone()))
             .collect();
-        self.reload_dir(&dir);
+        self.reload_images(&targets);
         if let Some(e) = failure {
             return Err(e);
         }
@@ -393,6 +504,46 @@ impl Filter for NotesFilter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_read_in_the_background_keep_those_set_meanwhile() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("A.RAF"), dir.path().join("B.RAF"));
+        for p in [&a, &b] {
+            std::fs::write(p, b"raw").unwrap();
+        }
+        let three = Notes {
+            stars: 3,
+            ..Notes::default()
+        };
+        xmp::write(&a, &three, Convention::Darktable).unwrap();
+        xmp::write(&b, &three, Convention::Darktable).unwrap();
+        let images = [a.as_path(), b.as_path()];
+        // En attente : notes vides, sans rien lire.
+        let mut book = NoteBook::pending(images, Convention::Darktable);
+        assert!(book.is_pending());
+        assert_eq!(book.notes(&a).stars, 0);
+        // Lecture « en fond » faite maintenant ; puis A notée avant qu'elle soit reprise.
+        let done = AtomicUsize::new(0);
+        let files: Vec<MediaFile> = images
+            .iter()
+            .map(|p| MediaFile {
+                path: p.to_path_buf(),
+                kind: crate::media::MediaKind::Raw,
+            })
+            .collect();
+        let loaded = NoteBook::load_counting(&files, Convention::Darktable, &done);
+        assert_eq!(done.load(Ordering::Relaxed), 2);
+        book.edit(&a, |n| n.stars = 5).unwrap();
+        book.adopt(loaded);
+        assert!(!book.is_pending());
+        assert_eq!(book.notes(&a).stars, 5, "notée entre-temps : gardée");
+        assert_eq!(book.notes(&b).stars, 3, "lue en fond");
+        // Issue n° 29 : noter A ne relit pas B (changée ailleurs, sans signal ici).
+        xmp::write(&b, &Notes::default(), Convention::Darktable).unwrap();
+        book.edit(&a, |n| n.stars = 1).unwrap();
+        assert_eq!(book.notes(&b).stars, 3, "B pas relue");
+    }
 
     fn notes(stars: u8, flag: Flag, colors: &[Color]) -> Notes {
         Notes {

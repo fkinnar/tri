@@ -7,6 +7,9 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver};
 
 use crate::filter::{Filter, Groups, KindFilter, ungrouped};
 use crate::media::{self, MediaFile};
@@ -36,6 +39,92 @@ impl Folder {
         Ok(Folder { dir, files, notes })
     }
 
+    /// Comme [`Folder::open`], sans lire les notes : la liste des images seulement, rapide
+    /// même sur un disque lent ou un NAS ; les notes se lisent ensuite en fond
+    /// ([`Loading`]) et restent vides en attendant ([`NoteBook::pending`]). Issue n° 15 :
+    /// 2 820 images sur un disque dur externe, 15 s sans rien à l'écran.
+    pub fn scan(dir: &Path, depth: usize, convention: Convention) -> io::Result<Folder> {
+        let dir = std::path::absolute(dir)?;
+        let files = media::scan(&dir, depth)?;
+        let notes = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
+        Ok(Folder { dir, files, notes })
+    }
+}
+
+/// Ce que lit [`Loading`] en fond.
+pub struct Loaded {
+    /// Les notes des images.
+    pub notes: NoteBook,
+    /// État du dossier pour sa surveillance ([`crate::watch::FolderWatch::start_from`]),
+    /// relevé dans la foulée plutôt qu'au démarrage de la surveillance (un accès disque
+    /// par fichier).
+    pub snapshot: Option<crate::watch::Snapshot>,
+}
+
+/// Lecture en fond de ce qu'un dossier ouvert par [`Folder::scan`] attend : ses notes
+/// et l'état de sa surveillance, avec la progression.
+pub struct Loading {
+    done: Arc<AtomicUsize>,
+    total: usize,
+    result: Receiver<Loaded>,
+}
+
+impl Loading {
+    /// Lance la lecture des notes de `folder` (convention de ses notes), et l'état de sa
+    /// surveillance sur `depth` niveaux si `watch`.
+    pub fn start(folder: &Folder, depth: usize, watch: bool) -> Loading {
+        let done = Arc::new(AtomicUsize::new(0));
+        let (tx, result) = mpsc::channel();
+        let total = folder.files.len();
+        let files = folder.files.clone();
+        let dir = folder.dir.clone();
+        let convention = folder.notes.convention();
+        let counter = done.clone();
+        let spawned = std::thread::Builder::new()
+            .name("tri-folder".into())
+            .spawn(move || {
+                let notes = NoteBook::load_counting(&files, convention, &counter);
+                let snapshot = watch
+                    .then(|| crate::watch::Snapshot::of_depth(&dir, depth).ok())
+                    .flatten();
+                let _ = tx.send(Loaded { notes, snapshot });
+            });
+        if spawned.is_err() {
+            // Pas de fil : lecture sur place, plutôt que rien.
+            let (tx, rx) = mpsc::channel();
+            let notes = NoteBook::load_counting(&folder.files, convention, &done);
+            let _ = tx.send(Loaded {
+                notes,
+                snapshot: None,
+            });
+            return Loading {
+                done,
+                total,
+                result: rx,
+            };
+        }
+        Loading {
+            done,
+            total,
+            result,
+        }
+    }
+
+    /// Images lues, sur le total.
+    pub fn progress(&self) -> (usize, usize) {
+        (
+            self.done.load(Ordering::Relaxed).min(self.total),
+            self.total,
+        )
+    }
+
+    /// Le résultat, une fois la lecture finie.
+    pub fn try_take(&self) -> Option<Loaded> {
+        self.result.try_recv().ok()
+    }
+}
+
+impl Folder {
     /// Vrai si aucun dossier n'est ouvert.
     pub fn is_none(&self) -> bool {
         self.dir.as_os_str().is_empty()
@@ -140,6 +229,36 @@ fn bytes_path(bytes: Vec<u8>) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_lists_at_once_and_reads_its_notes_in_the_background() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("A.jpg");
+        image::RgbImage::new(2, 2).save(&image).unwrap();
+        let notes = crate::xmp::Notes {
+            stars: 4,
+            ..Default::default()
+        };
+        crate::xmp::write(&image, &notes, Convention::Darktable).unwrap();
+        let mut folder = Folder::scan(dir.path(), 1, Convention::Darktable).unwrap();
+        assert_eq!(folder.files.len(), 1);
+        assert!(folder.notes.is_pending());
+        assert_eq!(folder.notes.notes(&image).stars, 0, "pas encore lues");
+        let loading = Loading::start(&folder, 1, true);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let loaded = loop {
+            if let Some(loaded) = loading.try_take() {
+                break loaded;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+        assert_eq!(loading.progress(), (1, 1));
+        assert!(loaded.snapshot.is_some(), "état pour la surveillance");
+        folder.notes.adopt(loaded.notes);
+        assert_eq!(folder.notes.notes(&image).stars, 4);
+        assert!(!folder.notes.is_pending());
+    }
 
     #[test]
     fn last_folder_is_remembered_if_it_still_exists() {
