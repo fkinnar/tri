@@ -417,8 +417,9 @@ window = [1400.0, 900.0]
 # RAW renders: "on-demand" (displayed image and neighbours, in RAW mode only) or
 # "background" (the whole folder, after thumbnails and camera renders).
 raw_previews = "on-demand"
-# Maximum thumbnail loading time per displayed frame (ms): beyond it, the rest
-# waits for the next frame, so as not to freeze the interface.
+# Maximum time spent loading thumbnails, and taking in the engine's results, per
+# displayed frame (ms): beyond it, the rest waits for the next frame, so as not to
+# freeze the interface.
 load_budget_ms = 8
 # Progress bars of the status bar: width (points), and hidden once
 # finished (false: always shown).

@@ -413,8 +413,9 @@ window = [1400.0, 900.0]
 # Rendus RAW : "on-demand" (image affichée et voisines, en mode RAW seulement) ou
 # "background" (tout le dossier, après vignettes et aperçus boîtier).
 raw_previews = "on-demand"
-# Temps maximal de chargement des vignettes par image affichée (ms) : au-delà, la suite
-# attend l'image suivante, pour ne pas figer l'interface.
+# Temps maximal de chargement des vignettes, et d'intégration des résultats du moteur,
+# par image affichée (ms) : au-delà, la suite attend l'image suivante, pour ne pas figer
+# l'interface.
 load_budget_ms = 8
 # Barres de progression de la barre d'état : largeur (points), et masquées une fois
 # terminées (false : toujours affichées).

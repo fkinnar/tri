@@ -24,13 +24,26 @@ Le format des sidecars est l'affaire de [xmp.md](xmp.md).
   paire est signalé (`XmpError::Image`, qui nomme l'image) sans empêcher les autres
   écritures.
 - `reload()` : relit tout (notes changées par un autre logiciel).
+- **Lecture en fond** (23/10/2026, issue n° 15) : `NoteBook::pending(images, convention)`
+  crée un carnet sans rien lire (notes vides) ; `load_counting(&files, convention,
+  &compteur)` lit tout en comptant (dans un autre fil, `folder::Loading`) ; `adopt(lu)`
+  reprend ce qui a été lu, **sauf** les images lues ou écrites entre-temps (une note posée
+  pendant la lecture, un sidecar modifié ailleurs), plus fraîches ; `seed(&ancien)`
+  garde les notes d'un carnet précédent du même dossier en attendant (dossier relu après
+  un renommage) ; `is_pending()`. Une image notée avant la fin de la lecture est lue seule,
+  avec sa paire.
+- **Accès disque** (issues n° 15 et 29) : un sidecar n'est ouvert que s'il existe
+  (`SidecarIndex::existing_sidecar`, sans `stat` quand il n'y en a qu'un) ; après une
+  écriture, seules l'image et sa paire sont relues (avant : tout le dossier, à chaque
+  note ; un sidecar n'est partagé qu'entre images de même nom).
 
 Pourquoi tout en mémoire : **filtrer doit rester instantané** (`CLAUDE.md`, « analyse ≠
 filtrage ») ; seule une modification touche le disque.
 
 Mesure (17/10/2026, Mac Apple Silicon, release, copies de 131 vrais sidecars darktable) :
-**7 ms** de chargement (23 ms à froid), soit ~0,06 ms par image. Synchrone à l'ouverture
-d'un dossier pour l'instant ; à passer en tâche de fond si une carte SD lente le demande.
+**7 ms** de chargement (23 ms à froid), soit ~0,06 ms par image. Sur un disque dur externe
+(23/10/2026, 2 820 DNG et leurs sidecars Lightroom) : **15 s**, ~5 ms par image (un
+déplacement de tête par fichier) ; d'où la lecture en fond ci-dessus.
 
 Opérations sur `xmp::Notes` : `set_stars(n)` (le drapeau ne change pas : une photo rejetée
 garde ses étoiles), `toggle_color(c, multiple)` (une seule couleur : une autre remplace, la

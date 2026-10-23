@@ -6,6 +6,15 @@ manipule quand on « ouvre un dossier ».
 - `Folder::open(dir, profondeur, convention)` : chemin rendu absolu (sans résoudre les
   liens : `std::path::absolute`, pas de préfixe `\\?\` sous Windows), images
   ([media.md](media.md)), notes ([notes.md](notes.md)) ;
+- `Folder::scan(dir, profondeur, convention)` (23/10/2026, issue n° 15) : comme `open`,
+  sans lire les notes, qui restent vides en attendant (`NoteBook::pending`). Lister un
+  dossier est rapide ; lire ses sidecars, non : 2 820 images sur un disque dur externe,
+  15 s de fenêtre vide. L'interface ouvre ainsi tout dossier, puis lance
+  `Loading::start(&dossier, profondeur, surveillance)` : un fil `tri-folder` lit les notes
+  (`NoteBook::load_counting`, progression `progress()` → (lues, total)) et, si demandé,
+  l'état du dossier pour sa surveillance (`watch::Snapshot`, un accès disque par fichier,
+  autant le faire là). `try_take()` rend `Loaded { notes, snapshot }` une fois fini ;
+  l'interface reprend les notes par `NoteBook::adopt` ;
 - `Folder::filtered(type, règle)` : filtre par type puis filtre sur les notes, combinés ici
   une fois pour toutes (avant : dans l'interface) ;
 - `Folder::default()` / `is_none()` : aucun dossier ouvert (interface lancée sans dossier).

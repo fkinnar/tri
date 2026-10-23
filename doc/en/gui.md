@@ -31,7 +31,14 @@ system one ("cold" measurements, experiments).
   by default) rather than in the accent colour, which drew the eye to background
   information (feedback of 2026-10-17); folder, number of images (including RAW), filter,
   progress of thumbnails, of "Camera render" previews (hidden if there is no RAW) and of
-  standard previews, name of the selected image.
+  standard previews, name of the selected image. **Ratings** first while they are read in
+  the background (issue #15, 2026-10-23): a folder opens with the list of its images
+  (`Folder::scan`), the grid shows at once, the ratings follow (`folder::Loading`,
+  `TriApp::poll_loading`; a filter on ratings applies once they are read). The engine's
+  results are taken within one frame's budget (`[gui] load_budget_ms`, like thumbnails;
+  thousands arrive at once on an already computed folder), and those already known
+  (announced again after each refilter) are not reread. The remembered order is applied
+  at startup (issue #30).
 - **Selection** with the keyboard or the mouse; the scheduler is notified (`set_focus`), so
   the preview of the selected image and of its neighbours moves to the head of the queue.
 - **Selection on click, framed hover** (2026-10-17, second version): the selection

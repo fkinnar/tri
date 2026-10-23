@@ -294,6 +294,7 @@ status-selected = { $n ->
    *[other] { $n } sélectionnées
 }
 status-visual-mode = { " " }· mode visuel
+progress-notes = notes
 progress-thumbnails = vignettes
 progress-embedded = rendu boîtier
 progress-previews = aperçus

@@ -31,7 +31,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   thème par défaut) plutôt qu'en couleur d'accent, qui attirait le regard sur une
   information de fond (retour du 17/10/2026) ; dossier, nombre d'images (dont RAW), filtre, progression des vignettes,
   des aperçus « rendu boîtier » (masquée s'il n'y a aucun RAW) et des aperçus standard, nom
-  de l'image sélectionnée.
+  de l'image sélectionnée. **Notes** en tête tant qu'elles se lisent en fond (issue n° 15,
+  23/10/2026) : un dossier s'ouvre par la liste de ses images (`Folder::scan`), la grille
+  s'affiche aussitôt, les notes suivent (`folder::Loading`, `TriApp::poll_loading` ; un
+  filtre sur les notes s'applique une fois lues). Les résultats du moteur sont intégrés
+  dans le budget d'une image (`[gui] load_budget_ms`, comme les vignettes ; des milliers
+  arrivent d'un coup sur un dossier déjà calculé), et ceux déjà connus (ré-annoncés après
+  chaque refiltrage) ne sont pas relus. L'ordre retenu est appliqué dès le lancement
+  (issue n° 30).
 - **Sélection** au clavier ou à la souris ; le scheduler est prévenu (`set_focus`), donc
   l'aperçu de l'image sélectionnée et de ses voisines passe en tête de file.
 - **Sélection au clic, survol encadré** (17/10/2026, deuxième version) : la sélection

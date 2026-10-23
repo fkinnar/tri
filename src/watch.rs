@@ -149,10 +149,22 @@ impl FolderWatch {
         interval: Duration,
         on_change: impl Fn(Changes) + Send + 'static,
     ) -> FolderWatch {
+        let known = Snapshot::of_depth(dir, depth).unwrap_or_default();
+        FolderWatch::start_from(dir, depth, interval, known, on_change)
+    }
+
+    /// [`FolderWatch::start_depth`] à partir de l'état `known`, déjà relevé (en fond, avec
+    /// les notes du dossier : [`crate::folder::Loading`]) : rien à relire sur le disque au
+    /// démarrage, un accès par fichier sur un disque lent (issue n° 15).
+    pub fn start_from(
+        dir: &Path,
+        depth: usize,
+        interval: Duration,
+        known: Snapshot,
+        on_change: impl Fn(Changes) + Send + 'static,
+    ) -> FolderWatch {
         let stop = Arc::new(AtomicBool::new(false));
-        let known = Arc::new(Mutex::new(
-            Snapshot::of_depth(dir, depth).unwrap_or_default(),
-        ));
+        let known = Arc::new(Mutex::new(known));
         let thread = {
             let (stop, known, dir) = (stop.clone(), known.clone(), dir.to_path_buf());
             std::thread::Builder::new()

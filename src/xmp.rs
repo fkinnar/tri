@@ -296,14 +296,23 @@ impl SidecarIndex {
     /// Le sidecar à lire et à écrire pour `image` : le plus récent des existants, sinon
     /// celui de la convention `default`.
     pub fn sidecar_path(&self, image: &Path, default: Convention) -> PathBuf {
-        self.sidecars(image)
-            .into_iter()
-            .max_by_key(|p| {
+        self.existing_sidecar(image)
+            .unwrap_or_else(|| default.sidecar(image))
+    }
+
+    /// Le sidecar existant à lire pour `image` (le plus récent s'il y en a deux), sans
+    /// toucher au disque s'il n'y en a qu'un ou aucun : sur un disque lent ou un NAS,
+    /// chaque accès compte (issue n° 15).
+    pub fn existing_sidecar(&self, image: &Path) -> Option<PathBuf> {
+        let mut found = self.sidecars(image);
+        if found.len() > 1 {
+            found.sort_by_key(|p| {
                 fs::metadata(p)
                     .and_then(|m| m.modified())
                     .unwrap_or(SystemTime::UNIX_EPOCH)
-            })
-            .unwrap_or_else(|| default.sidecar(image))
+            });
+        }
+        found.pop()
     }
 }
 

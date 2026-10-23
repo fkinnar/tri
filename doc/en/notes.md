@@ -23,13 +23,26 @@ these ratings. The sidecar format is the business of [xmp.md](xmp.md).
   A pair that already differs is realigned. A malformed sidecar in the pair is reported
   (`XmpError::Image`, which names the image) without blocking the other writes.
 - `reload()`: rereads everything (ratings changed by another program).
+- **Background reading** (2026-10-23, issue #15): `NoteBook::pending(images, convention)`
+  creates a book without reading anything (empty ratings); `load_counting(&files,
+  convention, &counter)` reads everything while counting (in another thread,
+  `folder::Loading`); `adopt(read)` takes what was read, **except** the images read or
+  written meanwhile (a rating set during the reading, a sidecar changed elsewhere), which
+  are fresher; `seed(&old)` keeps a previous book's ratings for the same folder meanwhile
+  (folder reread after a rename); `is_pending()`. An image rated before the reading ends
+  is read alone, with its pair.
+- **Disk accesses** (issues #15 and #29): a sidecar is only opened if it exists
+  (`SidecarIndex::existing_sidecar`, no `stat` when there is only one); after a write,
+  only the image and its pair are reread (before: the whole folder, on every rating; a
+  sidecar is only shared between images of the same name).
 
 Why everything in memory: **filtering must stay instantaneous** (`CLAUDE.md`, "analysis ≠
 filtering"); only a modification touches the disk.
 
 Measurement (2026-10-17, Apple Silicon Mac, release, copies of 131 real darktable
-sidecars): **7 ms** to load (23 ms cold), i.e. ~0.06 ms per image. Synchronous when a
-folder is opened for now; to be moved to the background if a slow SD card calls for it.
+sidecars): **7 ms** to load (23 ms cold), i.e. ~0.06 ms per image. On an external hard
+drive (2026-10-23, 2,820 DNG and their Lightroom sidecars): **15 s**, ~5 ms per image (one
+head seek per file); hence the background reading above.
 
 Operations on `xmp::Notes`: `set_stars(n)` (the flag does not change: a rejected photo
 keeps its stars), `toggle_color(c, multiple)` (single colour: another one replaces it,

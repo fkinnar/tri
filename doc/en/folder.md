@@ -6,6 +6,15 @@ one "opens a folder".
 - `Folder::open(dir, depth, convention)`: path made absolute (without resolving links:
   `std::path::absolute`, no `\\?\` prefix on Windows), images ([media.md](media.md)),
   ratings ([notes.md](notes.md));
+- `Folder::scan(dir, depth, convention)` (2026-10-23, issue #15): like `open`, without
+  reading the ratings, which stay empty meanwhile (`NoteBook::pending`). Listing a folder
+  is fast; reading its sidecars is not: 2,820 images on an external hard drive, 15 s of
+  empty window. The interface thus opens every folder, then starts
+  `Loading::start(&folder, depth, watch)`: a `tri-folder` thread reads the ratings
+  (`NoteBook::load_counting`, progress `progress()` → (read, total)) and, if asked, the
+  folder's state for its watch (`watch::Snapshot`, one disk access per file, best done
+  there). `try_take()` returns `Loaded { notes, snapshot }` once done; the interface takes
+  the ratings with `NoteBook::adopt`;
 - `Folder::filtered(type, rule)`: filter by type then filter on ratings, combined here
   once and for all (previously: in the interface);
 - `Folder::default()` / `is_none()`: no folder open (interface launched without a folder).

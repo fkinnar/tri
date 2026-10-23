@@ -292,6 +292,7 @@ status-images = { $n ->
 } ({ $raws } RAW) · filter: { $filter }
 status-selected = { $n } selected
 status-visual-mode = { " " }· visual mode
+progress-notes = ratings
 progress-thumbnails = thumbnails
 progress-embedded = camera render
 progress-previews = previews
