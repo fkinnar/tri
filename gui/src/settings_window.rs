@@ -282,9 +282,6 @@ pub struct SettingsWindow {
     /// Entrer dans la partie droite au clavier (→, Entrée ou Tab depuis la recherche) :
     /// le premier réglage montré prend le focus.
     focus_first: bool,
-    /// Pendant une recherche : section de la liste dont les résultats sont à amener en
-    /// vue (clic sur la section).
-    scroll_to: Option<usize>,
     /// Défilement de la liste des sections (tests).
     #[cfg(test)]
     sections_offset: f32,
@@ -342,7 +339,6 @@ impl SettingsWindow {
             recording: None,
             section_moved: false,
             focus_first: false,
-            scroll_to: None,
             #[cfg(test)]
             sections_offset: 0.0,
             naming: None,
@@ -687,7 +683,8 @@ impl SettingsWindow {
     }
 
     /// Liste des sections, à gauche ; pendant une recherche (`hits`), le nombre de
-    /// résultats de chacune, les autres grisées, et un clic amène ses résultats en vue.
+    /// résultats de chacune, les autres grisées ; un clic quitte la recherche et ouvre la
+    /// section.
     fn section_list(
         &mut self,
         ui: &mut Ui,
@@ -695,6 +692,7 @@ impl SettingsWindow {
         height: f32,
         hits: Option<&[(usize, Found)]>,
     ) {
+        let mut open = None;
         let _output = ScrollArea::vertical()
             .id_salt("settings_sections")
             .max_height(height)
@@ -746,8 +744,16 @@ impl SettingsWindow {
                             }
                             let label =
                                 ui.add_enabled(count > 0, egui::Button::selectable(false, job));
+                            // Un clic ouvre la section comme sans recherche (issue n° 24 :
+                            // il amenait seulement ses résultats en vue, et une famille
+                            // montrait alors tous ses membres en entier, l'un après l'autre).
+                            // Pour une famille, le membre le mieux trouvé.
                             if label.clicked() {
-                                self.scroll_to = Some(i);
+                                open = hits
+                                    .iter()
+                                    .map(|(s, _)| *s)
+                                    .find(|&s| listed_of(schema, s) == i)
+                                    .or(Some(i));
                             }
                             continue;
                         }
@@ -766,6 +772,12 @@ impl SettingsWindow {
         #[cfg(test)]
         {
             self.sections_offset = _output.state.clamped_offset().y;
+        }
+        if let Some(i) = open {
+            self.query.clear();
+            self.section = i;
+            self.section_moved = true;
+            self.naming = None;
         }
     }
 
@@ -1015,7 +1027,7 @@ impl SettingsWindow {
     }
 
     /// Résultats d'une recherche : par section, les réglages trouvés, sous le titre de
-    /// leur section ; `scroll_to` : section à amener en vue (clic dans la liste).
+    /// leur section.
     fn found(
         &mut self,
         ui: &mut Ui,
@@ -1025,11 +1037,7 @@ impl SettingsWindow {
         let mut changed = None;
         for (i, found) in hits {
             let section = &schema.sections[*i];
-            let title = ui.label(section_title(ui, &section.name, true));
-            if self.scroll_to == Some(listed_of(schema, *i)) {
-                title.scroll_to_me(Some(egui::Align::TOP));
-                self.scroll_to = None;
-            }
+            ui.label(section_title(ui, &section.name, true));
             let result = if section.name == "keys" {
                 self.keys_entries(ui, Some(&found.actions))
             } else {
@@ -1845,6 +1853,37 @@ mod tests {
                 .unwrap()
                 .contains("name = \"Tirage A3\""),
             "écrit"
+        );
+    }
+
+    #[test]
+    fn a_section_clicked_during_a_search_opens_like_without_search() {
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = SettingsWindow::open(&dir.path().join("config.toml")).unwrap();
+        w.search("export");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        // Issue n° 24 : tous les préréglages d'export s'affichaient l'un après l'autre.
+        h.get_by_label_contains("Préréglages d'export").click();
+        h.run_steps(2);
+        let w = h.state();
+        assert!(w.query.is_empty(), "recherche quittée");
+        let section = &w.schema().sections[w.section].name;
+        assert!(section.starts_with("export.profiles."), "{section}");
+        h.run_steps(2);
+        assert!(
+            h.query_by_label("Renommer…").is_some(),
+            "en-tête de la famille"
         );
     }
 

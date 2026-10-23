@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Réglages** : pendant une recherche, un clic sur une section de la liste l'ouvre
+  comme sans recherche (les préréglages d'export s'affichaient tous à la suite ;
+  issue n° 24).
 - **Versions** : « Original » est réservé à l'image non recadrée de la liste des
   versions ; une version au rapport de l'image s'appelle d'abord « Recadrage ».
 - **Gros dossiers sur un disque lent ou un NAS** : la grille s'affiche aussitôt, les notes
@@ -12,6 +15,10 @@
   sidecars du dossier ; les résultats du moteur ne figent plus les premières images
   (issues n° 15 et 29).
 - **Ordre** : l'ordre retenu est aussi appliqué au lancement (issue n° 30).
+- **XMP** : sidecars avec un `rdf:Description` niché (Lightroom, coordonnées du
+  photographe) : les versions de recadrage s'écrivent de nouveau (annoncées enregistrées,
+  elles ne l'étaient pas), et une note placée après le bloc niché est lue et remplacée
+  (issue n° 27).
 
 ## 1.0.0-alpha.6 — 22/10/2026
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Settings**: during a search, a click on a section in the list opens it as without
+  search (export presets were all shown one after the other; issue #24).
 - **Versions**: "Original" is reserved for the uncropped image in the versions list; a
   version at the image's ratio is first named "Crop".
 - **Large folders on a slow disk or NAS**: the grid shows at once, the ratings are read in
@@ -12,6 +14,9 @@
   of the folder; the engine's results no longer freeze the first frames (issues #15,
   #29).
 - **Order**: the remembered order is applied at startup too (issue #30).
+- **XMP**: sidecars with a nested `rdf:Description` (Lightroom, photographer's contact
+  details): crop versions are written again (they were reported as saved but not
+  written), and a rating field after the nested block is read and replaced (issue #27).
 
 ## 1.0.0-alpha.6 — 2026-10-22
 
