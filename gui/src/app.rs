@@ -11102,13 +11102,13 @@ mod tests {
             wait(&mut h, &|app| app.folder.notes.notes(&img0).stars == 3),
             "notes relues"
         );
+        // L'avis peut arriver une image plus tard (CI Windows).
         assert!(
-            h.state()
+            wait(&mut h, &|app| app
                 .notice
                 .as_ref()
-                .unwrap()
-                .0
-                .contains("modifiées ailleurs")
+                .is_some_and(|n| n.0.contains("modifiées ailleurs"))),
+            "avis des notes modifiées ailleurs"
         );
     }
 
@@ -11794,7 +11794,13 @@ mod tests {
             "Maj+C ouvre le grand histogramme"
         );
         assert_eq!(h.state().histogram_channel, Some(0));
-        run_until(&mut h, |app| app.analysis_texture.is_some());
+        // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
+        // celle du rouge.
+        run_until(&mut h, |app| {
+            app.analysis_texture
+                .as_ref()
+                .is_some_and(|t| t.0.1 == Some(0))
+        });
         assert_eq!(
             h.state().analysis_texture.as_ref().unwrap().0,
             (white_path.clone(), Some(0))
