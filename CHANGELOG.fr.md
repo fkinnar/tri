@@ -6,6 +6,10 @@
 
 - **Versions** : « Original » est réservé à l'image non recadrée de la liste des
   versions ; une version au rapport de l'image s'appelle d'abord « Recadrage ».
+- **XMP** : sidecars avec un `rdf:Description` niché (Lightroom, coordonnées du
+  photographe) : les versions de recadrage s'écrivent de nouveau (annoncées enregistrées,
+  elles ne l'étaient pas), et une note placée après le bloc niché est lue et remplacée
+  (issue n° 27).
 
 ## 1.0.0-alpha.6 — 22/10/2026
 

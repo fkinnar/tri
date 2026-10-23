@@ -21,7 +21,12 @@ event** (`quick-xml`) and rewritten **identically**, except for our fields:
 - if nothing changes, the file is not rewritten at all; otherwise, atomic write
   (temporary file then rename);
 - a **malformed** sidecar (invalid XML, or without `rdf:Description`) is never
-  rewritten: `XmpError::Malformed` / `NoDescription`.
+  rewritten: `XmpError::Malformed` / `NoDescription`;
+- only a **top-level** `rdf:Description` carries our fields: another one can be nested
+  in a property (Lightroom's `Iptc4xmpCore:CreatorContactInfo`, the photographer's
+  contact details) and is left as is (issue #27, 2026-10-23: taken for the main one, it
+  lost the fields placed after it, and a "saved" version was never written); a list
+  (`write_list`) that does not read back is an error, never a silent success.
 
 ## The fields
 
