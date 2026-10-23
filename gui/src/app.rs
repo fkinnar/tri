@@ -11091,6 +11091,14 @@ mod tests {
                 .0
                 .contains("dossier relu")
         );
+        // Une copie peut être vue en deux fois (Windows : fichier encore en cours
+        // d'écriture au premier passage, à 20 ms) : laisser passer une éventuelle
+        // seconde relecture, pour qu'elle ne se mêle pas au sidecar ci-dessous.
+        for _ in 0..15 {
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        h.state_mut().notice = None;
         // Notes posées par un autre logiciel (darktable) : relues.
         let img0 = photos.join("img0.jpg");
         let three = tri::xmp::Notes {
@@ -11102,13 +11110,14 @@ mod tests {
             wait(&mut h, &|app| app.folder.notes.notes(&img0).stars == 3),
             "notes relues"
         );
+        // L'avis peut arriver une image plus tard (CI Windows).
         assert!(
-            h.state()
+            wait(&mut h, &|app| app
                 .notice
                 .as_ref()
-                .unwrap()
-                .0
-                .contains("modifiées ailleurs")
+                .is_some_and(|n| n.0.contains("modifiées ailleurs"))),
+            "avis des notes modifiées ailleurs, vu : {:?}",
+            h.state().notice
         );
     }
 
@@ -11794,7 +11803,13 @@ mod tests {
             "Maj+C ouvre le grand histogramme"
         );
         assert_eq!(h.state().histogram_channel, Some(0));
-        run_until(&mut h, |app| app.analysis_texture.is_some());
+        // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
+        // celle du rouge.
+        run_until(&mut h, |app| {
+            app.analysis_texture
+                .as_ref()
+                .is_some_and(|t| t.0.1 == Some(0))
+        });
         assert_eq!(
             h.state().analysis_texture.as_ref().unwrap().0,
             (white_path.clone(), Some(0))

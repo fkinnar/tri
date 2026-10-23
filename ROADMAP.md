@@ -26,6 +26,7 @@ French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`) and Windows (
 | Testers' manual | Screenshots redone with real photos (RAW, focus point, histogram) |
 | Large folders on a slow disk | Folder read in the background with visible progress (the window froze while listing thousands of files and their sidecars on an external hard drive) |
 | Sort by rating, colour | To design with the stacks and the sharpness judgement, which rely on the shooting order |
+| Clearing the cache in the interface | Whole cache, one level, or the open folder (today: `tri <folder> --clear-cache`), with the space used |
 
 The beta is **not signed**: macOS and Windows warn on first launch, the steps are in the
 README.

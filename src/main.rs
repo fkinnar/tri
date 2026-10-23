@@ -6,8 +6,11 @@
 //!                            [--workers N] [--mixed] [--cache DOSSIER]
 //!       calcule vignettes et aperçus standard en tâche de fond, avec progression
 //!       (`--mixed` : sans attendre la fin des vignettes pour les aperçus) ;
-//!   tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
-//!       vide le cache (un niveau, ou tout) ;
+//!   tri [<dossier>] --clear-cache [<niveau>] [--depth N] [--cache DOSSIER]
+//!       vide le cache (un niveau, ou tout) ; avec un dossier, seulement ses images (et
+//!       celles de ses sous-dossiers jusqu'à `--depth`), pour les faire recalculer ;
+//!       niveaux : thumbnail, embedded, standard, embedded-full, full, exposure,
+//!       sharpness, similarity, developed ;
 //!   tri --cache-usage [--cache DOSSIER]
 //!       affiche la taille du cache par niveau ;
 //!   tri --check-update
@@ -51,7 +54,7 @@
 //! lui.
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -132,10 +135,12 @@ fn parse_level(name: &str) -> Option<Level> {
         "thumbnail" => Some(Level::Thumbnail),
         "embedded" => Some(Level::Embedded),
         "standard" => Some(Level::Standard),
+        "embedded-full" => Some(Level::EmbeddedFull),
         "full" => Some(Level::Full),
         "exposure" => Some(Level::Exposure),
         "sharpness" => Some(Level::Sharpness),
         "similarity" => Some(Level::Similarity),
+        "developed" => Some(Level::Developed),
         _ => None,
     }
 }
@@ -251,6 +256,39 @@ fn settings(args: &Args) -> EngineSettings {
 
 fn mib(bytes: u64) -> f64 {
     bytes as f64 / (1024.0 * 1024.0)
+}
+
+/// Vide le cache des images de `dir` et de ses sous-dossiers jusqu'à `depth` (1 : le
+/// dossier seul, comme [`scan`]).
+fn clear_folders(cache: &Cache, dir: &Path, depth: usize, level: Option<Level>) -> AnyResult<()> {
+    if !dir.is_dir() {
+        return Err(t!("files-not-a-directory", path = dir.display().to_string()).into());
+    }
+    let mut folders = vec![(dir.to_path_buf(), 1)];
+    let mut total = tri::cache::Usage::default();
+    while let Some((folder, d)) = folders.pop() {
+        let freed = cache.clear_folder(&folder, level)?;
+        total.bytes += freed.bytes;
+        total.entries += freed.entries;
+        if d < depth {
+            for entry in std::fs::read_dir(&folder)?.flatten() {
+                if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    folders.push((entry.path(), d + 1));
+                }
+            }
+        }
+    }
+    println!(
+        "{}",
+        t!(
+            "cli-cache-folder-cleared",
+            folder = dir.display().to_string(),
+            level = level.map_or(t!("cli-cache-all"), |l| format!("{l:?}")),
+            entries = total.entries,
+            mib = format!("{:.1}", mib(total.bytes))
+        )
+    );
+    Ok(())
 }
 
 fn print_usage(cache: &Cache) -> AnyResult<()> {
@@ -994,6 +1032,9 @@ fn run() -> AnyResult<()> {
 
     if let Some(level) = args.clear {
         let cache = settings.open_cache()?;
+        if let Some(dir) = &args.dir {
+            return clear_folders(&cache, dir, args.depth.unwrap_or(1), level);
+        }
         cache.clear(level)?;
         println!(
             "{}",

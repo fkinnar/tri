@@ -9,9 +9,9 @@ computes nothing. The work queue that fills it in the background sits on top.
 
 ```
 <racine>/
-└── v1/                      format version (FORMAT_VERSION)
+└── v2/                      format version (FORMAT_VERSION)
     ├── thumbnail/
-    │   ├── 3f/
+    │   ├── 8c41…07/         one folder of photos (start of the hash of its path)
     │   │   └── 3f9a…e1.jpg  one entry = one quality-90 JPEG
     │   └── …
     ├── embedded/            previews taken from the camera JPEG (RAW only)
@@ -23,11 +23,15 @@ computes nothing. The work queue that fills it in the background sits on top.
 
 - **One file per entry**, with no database or index: the state of the cache *is* the
   content of the folder. Nothing to rebuild, nothing to corrupt beyond a single file.
-- **2-character subfolders** from the hash: at most a few hundred files per folder, even
-  with tens of thousands of entries.
-- **`v1/`**: changing the format (or the key algorithm) is done by incrementing
-  `FORMAT_VERSION`. Old entries become invisible and can be deleted by clearing the
-  cache.
+- **One subfolder per folder of photos** (2026-10-23, format `v2`): its name is the
+  start (16 characters) of the hash of the photos' folder path. Clearing the cache of one
+  folder (`clear_folder`, `tri <folder> --clear-cache`) removes that subfolder in each
+  level, without having to recompute the keys: they depend on the settings, and the
+  standard preview size on the screen, which the command line does not know. Before, the
+  subfolders were the first 2 characters of the entry's hash.
+- **`v2/`**: changing the format (or the key algorithm) is done by incrementing
+  `FORMAT_VERSION`. Old entries become invisible; the previous formats listed in
+  `OLD_FORMATS` (`v1/`) are deleted in the background when the cache is opened.
 
 ### Default location: `default_dir()`
 
@@ -83,6 +87,7 @@ value to detect any accidental change.
 | `put(&key, &bitmap)` | Writes the entry (JPEG at the cache's quality, via [`jpeg`](jpeg.md): 4:4:4 for 1:1, 4:2:0 elsewhere), overwriting the old one |
 | `remove(&key)` | Deletes an entry (no error if absent) |
 | `clear(Some(level))` / `clear(None)` | Clears one level / the whole cache |
+| `clear_folder(folder, level)` | Clears the entries of the images of `folder` (not its subfolders), one level or all, whatever the settings they were computed with; returns what was freed |
 | `usage(level) -> Usage` | Bytes and number of entries of a level |
 | `evict(level, max_bytes) -> Usage` (wired up on 2026-10-17: `EngineSettings::trim_cache` limits each 1:1 level to `[cache] zoom_max_mb`, at interface startup in a separate thread and at the end of `tri --previews`; until then, 1:1 renders piled up without limit) | Deletes the least recently used entries down to `max_bytes`, returns what was freed |
 

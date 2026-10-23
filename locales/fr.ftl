@@ -135,7 +135,7 @@ cli-usage =
     usage :
       tri <dossier> [--raw|--flat] [--depth N]
       tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
-      tri --clear-cache [thumbnail|embedded|standard|full|exposure] [--cache DOSSIER]
+      tri [<dossier>] --clear-cache [<niveau>] [--depth N] [--cache DOSSIER]
       tri --cache-usage [--cache DOSSIER]
       tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
@@ -215,6 +215,7 @@ cli-groups-header = image	suivante	distance	écart (s)
 cli-groups-summary = { $n } images, { $groups } groupes au seuil { $threshold } ({ $ms } ms par empreinte)
 cli-cache-cleared = cache vidé ({ $level })
 cli-cache-all = tout
+cli-cache-folder-cleared = cache de { $folder } vidé ({ $level }) : { $entries } entrées, { $mib } Mio libérés
 cli-group = GROUPE { $index } ({ $n } images)
 
 ## Netteté (ligne de commande)
