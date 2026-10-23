@@ -6,6 +6,8 @@
 
 - **Settings**: during a search, a click on a section in the list opens it as without
   search (export presets were all shown one after the other; issue #24).
+- **Versions**: "Original" is reserved for the uncropped image in the versions list; a
+  version at the image's ratio is first named "Crop".
 
 ## 1.0.0-alpha.6 — 2026-10-22
 

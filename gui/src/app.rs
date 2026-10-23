@@ -10731,10 +10731,16 @@ mod tests {
             Scope::Metadata,
             "clic dans les métadonnées"
         );
-        h.get_by_label("séance-1").click();
-        // Le panneau des métadonnées se remplit en fond : sous la charge des autres tests,
-        // quelques images de plus peuvent être nécessaires.
-        run_until(&mut h, |app| app.focus == Scope::Folders);
+        // Le panneau des métadonnées se remplit en fond et peut décaler la mise en page :
+        // sous la charge (CI Windows), le clic tombait parfois à côté. Recliqué tant que le
+        // clavier n'est pas passé aux dossiers.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while h.state().focus != Scope::Folders {
+            assert!(Instant::now() < deadline, "clic sur un dossier jamais reçu");
+            h.get_by_label("séance-1").click();
+            h.run_steps(3);
+            std::thread::sleep(Duration::from_millis(10));
+        }
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Images);
         // Ctrl+B puis l : les métadonnées.
@@ -11550,6 +11556,8 @@ mod tests {
 
     /// Fait tourner l'interface jusqu'à ce que `done` soit vrai (le moteur travaille dans
     /// d'autres threads), au plus 20 s.
+    // Ligne de l'appel dans le message d'échec : savoir ce qui n'est jamais arrivé.
+    #[track_caller]
     fn run_until(h: &mut Harness<'_, TriApp>, done: impl Fn(&TriApp) -> bool) {
         // Large : les machines d'intégration continue sont plus lentes (20 s ne suffisaient
         // pas au zoom sur une image de 4000 × 3000) ; rapide quand tout va bien.
@@ -11563,6 +11571,7 @@ mod tests {
 
     /// Attend qu'un élément de libellé `label` soit affiché (une fenêtre egui peut demander
     /// une image de plus pour apparaître, plus sur une machine d'intégration continue lente).
+    #[track_caller]
     fn wait_for_label(h: &mut Harness<'_, TriApp>, label: &str) {
         let deadline = Instant::now() + Duration::from_secs(60);
         while h.query_by_label(label).is_none() {
@@ -12027,9 +12036,16 @@ mod tests {
             h.query_by_label_contains("1 copiés").is_some(),
             "bilan dans la barre d'état"
         );
-        h.get_by_label_contains("Ouvrir la séance").click();
-        h.run_steps(3);
-        assert_ne!(h.state().folder.dir, before, "séance ouverte à la demande");
+        // Recliqué tant que la séance n'est pas ouverte (CI Linux : le clic, à côté du bilan
+        // qui venait de s'afficher, se perdait parfois).
+        while h.state().folder.dir == before {
+            assert!(
+                Instant::now() < deadline,
+                "séance jamais ouverte à la demande"
+            );
+            h.get_by_label_contains("Ouvrir la séance").click();
+            h.run_steps(3);
+        }
         assert_eq!(names(&h), ["IMG0.jpg"]);
         assert!(h.state().offloaded.is_none());
     }
@@ -12315,6 +12331,12 @@ mod tests {
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
+        // Rapport de l'image : « Recadrage », pas « Original », réservé à l'image non
+        // recadrée dans la liste des versions (retour du 23/10/2026).
+        assert_eq!(h.state().crop.as_ref().unwrap().name, "Recadrage");
+        h.state_mut().crop.as_mut().unwrap().name = "original".into();
+        assert!(h.state().crop.as_ref().unwrap().name_taken());
+        h.state_mut().crop.as_mut().unwrap().name = "Recadrage".into();
         // 5 : 3:2 ; flèches : le cadre bouge, l'image reste la même.
         press(&mut h, Key::Num5, Modifiers::NONE);
         let before = h.state().crop.as_ref().unwrap().rect;

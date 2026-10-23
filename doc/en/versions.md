@@ -82,7 +82,9 @@ The interface only draws; all the computation is here.
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
   already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is
   greyed out (Enter too: message). A reopened version keeps its own name
-  (`Versions::without`).
+  (`Versions::without`). "Original" is **reserved** for the uncropped image in the
+  versions list (feedback of 2026-10-23: two indistinguishable "Original" entries): a
+  version at the image's ratio is first named "Crop".
 - **Keyboard**, "crop" context (`Scope::Crop`, takes precedence while the frame is shown):
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);
