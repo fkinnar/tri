@@ -14,6 +14,10 @@
   issue n° 38).
 - **Grille** : Ctrl / Cmd + molette, ou une pince au pavé tactile, change la taille des
   vignettes (issue n° 44).
+- **Filtre « bien exposées »** : deux curseurs, « brûlé » et « bouché », à côté du
+  soleil, comme celui du flou ; tout à gauche, ce côté n'exclut plus rien (photos sur
+  fond noir, blancs brûlés exprès). Retenus par dossier ; les badges suivent
+  (`[gui.histogram] strictness_span` ; issue n° 48).
 
 ## 1.0.0-alpha.7 — 23/10/2026
 

@@ -791,6 +791,54 @@ impl Filter for ClipFilter<'_> {
     }
 }
 
+/// Côté de l'écrêtage, pour la sévérité du filtre « bien exposées ».
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Clip {
+    /// Pixels saturés (brûlés).
+    Over,
+    /// Pixels bouchés.
+    Under,
+}
+
+impl Clip {
+    /// Fichier des sévérités par dossier, dans le dossier de données.
+    fn strictness_file(self) -> &'static str {
+        match self {
+            Clip::Over => "clip-over-strictness.tsv",
+            Clip::Under => "clip-under-strictness.tsv",
+        }
+    }
+}
+
+/// Seuil (part de pixels, 0 à 1) du filtre « bien exposées » à la sévérité `strictness`
+/// (-1 à 1, curseur de la barre des filtres) : `base` au centre, multiplié par
+/// `span ^ -strictness` (à droite plus strict, à gauche plus souple), sans dépasser 1.
+/// Tout à gauche : 1, ce côté n'exclut plus rien (fonds noirs, blancs brûlés exprès ;
+/// issue n° 48).
+pub fn clip_threshold(base: f64, strictness: f32, span: f64) -> f64 {
+    if strictness <= -1.0 {
+        return 1.0;
+    }
+    let t = f64::from(strictness.min(1.0));
+    (base * span.max(1.0).powf(-t)).min(1.0)
+}
+
+/// Sévérité du côté `clip` retenue pour le dossier `dir`, s'il y en a une.
+pub fn folder_strictness(data: &Path, dir: &Path, clip: Clip) -> Option<f32> {
+    crate::folder::folder_value(data, clip.strictness_file(), dir)
+}
+
+/// Retient la sévérité `strictness` du côté `clip` pour le dossier `dir` ; `None` :
+/// l'oublie (centre).
+pub fn remember_strictness(
+    data: &Path,
+    dir: &Path,
+    clip: Clip,
+    strictness: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, clip.strictness_file(), dir, strictness)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -987,5 +1035,32 @@ mod tests {
         e.ev[1] = vec![0; bins];
         assert_eq!(e.channel_stats(1, 0.01), None);
         assert_eq!(e.channel_stats(7, 0.01), None);
+    }
+
+    #[test]
+    fn the_clip_threshold_follows_the_strictness() {
+        assert_eq!(clip_threshold(0.05, 0.0, 10.0), 0.05);
+        assert!(
+            (clip_threshold(0.05, 1.0, 10.0) - 0.005).abs() < 1e-12,
+            "plus strict"
+        );
+        assert!((clip_threshold(0.05, -0.5, 10.0) - 0.05 * 10f64.sqrt()).abs() < 1e-12);
+        assert_eq!(clip_threshold(0.5, -0.9, 10.0), 1.0, "plafonné à 1");
+        assert_eq!(
+            clip_threshold(0.005, -1.0, 10.0),
+            1.0,
+            "tout à gauche : ignoré"
+        );
+    }
+
+    #[test]
+    fn each_side_is_remembered_per_folder() {
+        let data = tempfile::tempdir().unwrap();
+        let dir = Path::new("/photos/séance");
+        remember_strictness(data.path(), dir, Clip::Under, Some(-1.0)).unwrap();
+        assert_eq!(folder_strictness(data.path(), dir, Clip::Under), Some(-1.0));
+        assert_eq!(folder_strictness(data.path(), dir, Clip::Over), None);
+        remember_strictness(data.path(), dir, Clip::Under, None).unwrap();
+        assert_eq!(folder_strictness(data.path(), dir, Clip::Under), None);
     }
 }

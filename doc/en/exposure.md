@@ -112,3 +112,11 @@ that channel's values are crushed (`mask::UNDER_R`, `UNDER_G`, `UNDER_B`, functi
 (`mask::UNDER`, unchanged: full-screen zones). Used for the analysis image of the large
 histogram when a single channel is chosen. Cache format unchanged (one byte per cell),
 but `VERSION` goes to 5: analyses already in the cache are recomputed.
+
+## Strictness of the "well exposed" filter (2026-10-24)
+
+`clip_threshold(base, strictness, span)`: threshold of one side (`Clip::Over` blown,
+`Clip::Under` crushed) at a slider's strictness (-1 to 1): `base × span ^ -strictness`,
+at most 1; at -1, 1 (that side no longer excludes anything: black backgrounds, issue
+#48). `folder_strictness` / `remember_strictness`: strictness remembered per folder and
+per side (`clip-over-strictness.tsv`, `clip-under-strictness.tsv` in the data folder).

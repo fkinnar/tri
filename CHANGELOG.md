@@ -12,6 +12,10 @@
   counted the JPEGs left on the card too and moved forward two by two; issue #38).
 - **Grid**: Ctrl / Cmd + mouse wheel, or a pinch on the touchpad, changes the size of the
   thumbnails (issue #44).
+- **"Well exposed" filter**: two sliders, "blown" and "crushed", next to the sun, like the
+  blur one; fully to the left, that side no longer excludes anything (photos on a black
+  background, highlights blown on purpose). Remembered per folder; the badges follow
+  (`[gui.histogram] strictness_span`; issue #48).
 
 ## 1.0.0-alpha.7 — 2026-10-23
 

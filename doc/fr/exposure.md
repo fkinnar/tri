@@ -111,3 +111,10 @@ valeurs de ce canal sont bouchées (`mask::UNDER_R`, `UNDER_G`, `UNDER_B`, fonct
 histogramme quand un seul canal est choisi. Format du cache inchangé (un octet par case),
 mais `VERSION` passe à 5 : les analyses déjà en cache sont recalculées.
 
+## Sévérité du filtre « bien exposées » (24/10/2026)
+
+`clip_threshold(base, sévérité, span)` : seuil d'un côté (`Clip::Over` brûlé,
+`Clip::Under` bouché) à la sévérité d'un curseur (-1 à 1) : `base × span ^ -sévérité`,
+au plus 1 ; à -1, 1 (ce côté n'exclut plus rien : fonds noirs, issue n° 48).
+`folder_strictness` / `remember_strictness` : sévérité retenue par dossier et par côté
+(`clip-over-strictness.tsv`, `clip-under-strictness.tsv` du dossier de données).

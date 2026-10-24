@@ -907,6 +907,12 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.
+- **"Blown" and "crushed" sliders** (2026-10-24, issue #48: photos on a black background
+  were excluded): next to the sun, when the filter is on; same logic as the blur one
+  (centre = badge thresholds, to the right stricter, double-click: the centre), one per
+  side; fully to the left, that side no longer excludes anything. Thresholds multiplied
+  or divided by `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`),
+  remembered per folder; the badges follow.
 - **Crop**: presets on `Tab` / `Shift+Tab` (`p` was also the sharpness map, which stayed
   on; `p` turns it off during cropping); egui moved the focus to the bar there, given
   back at the end of the frame. Image name removed from the rating
