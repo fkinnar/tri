@@ -122,6 +122,10 @@ stack-chosen = { $name } : couverture de sa pile
 stack-position = pile : { $n } / { $total }
 stack-slider-tip = Sévérité des piles : au centre, la valeur calculée d'après le dossier ; vers la droite plus strict (petites piles), vers la gauche plus souple ; double-clic : retour au centre ; Maj pendant le réglage : piles dépliées ({ $keys } : réglages fins)
 blur-slider-tip = Sévérité du flou : vers la droite plus strict (plus de photos floues), vers la gauche plus souple ; au centre, les réglages. Double-clic : retour au centre
+clip-slider-over = brûlé
+clip-slider-over-tip = Photos brûlées exclues : vers la droite plus strict, vers la gauche plus souple ; tout à gauche, les hautes lumières brûlées n'excluent plus rien. Au centre, les réglages. Double-clic : retour au centre
+clip-slider-under = bouché
+clip-slider-under-tip = Photos bouchées exclues : vers la droite plus strict, vers la gauche plus souple ; tout à gauche, les noirs bouchés n'excluent plus rien (fonds noirs). Au centre, les réglages. Double-clic : retour au centre
 sharpness-strictness = Sévérité de la netteté : { $value } % (0 : les réglages)
 stack-icon-tip = Clic droit : réglages fins ({ $keys })
 action-core-panel-left = Clavier au panneau de gauche
@@ -312,6 +316,7 @@ status-open-session = Ouvrir la séance « { $name } »
 ## Boîtes, bandeau, filtres, aide
 
 close = Fermer
+close-tip = Fermer (Échap)
 histogram-scale-ev = en IL
 histogram-scale-linear = linéaire
 histogram-scale-tip = Échelle { $current } ; clic ou { $keys } : { $other }

@@ -34,7 +34,7 @@ et pour que les erreurs prévisibles arrivent avant la première modification.
 | `plan_delete(images, settings) -> Group` | fichiers à supprimer |
 | `delete(&Group, trash)` | corbeille (crate [`trash`](https://crates.io/crates/trash)) ou suppression définitive |
 | `reveal(path)` | gestionnaire de fichiers, fichier sélectionné |
-| `editor_command(editor, files)` / `open_with(editor, files)` | éditeur externe (commande construite à part, pour être testée sans rien lancer) |
+| `editor_command(editor, files)` / `open_with(editor, files)` | éditeur externe (commande construite à part, pour être testée sans rien lancer) ; programmes lancés sans entrée ni sorties (leurs traces ne vont pas dans le terminal de `tri`) |
 
 Le renommage garde l'extension : on saisit le nom sans elle. `IMG.RAF`, `IMG.JPG`,
 `IMG.RAF.xmp`, `IMG.xmp` deviennent `NOUVEAU.RAF`, `NOUVEAU.JPG`, `NOUVEAU.RAF.xmp`,
@@ -150,6 +150,13 @@ entier, sous-dossiers compris (`DirTransfer` : fichiers, sous-dossiers à créer
 de quoi les retrouver), `untrash` les remet en place (voir `history.md`). Sur macOS, la
 mise à la corbeille passe par `NSFileManager` (emplacement exact renvoyé) plutôt que par
 le crate `trash`, qui ne le donne pas.
+
+`delete_with_progress(&Group, corbeille, progression)` : la même, avec (faits, total)
+après chaque fichier. L'interface la lance dans un fil à part, avec une barre dans la
+boîte (24/10/2026, issue n° 43 : une centaine d'images à la corbeille figeait la
+fenêtre). Sous Linux et Windows, les fichiers partent un par un, puis la corbeille est
+lue une seule fois (indexée par emplacement d'origine) pour retrouver de quoi les en
+ressortir.
 
 ## Dossiers (18/10/2026)
 

@@ -123,6 +123,10 @@ stack-chosen = { $name }: cover of its stack
 stack-position = stack: { $n } / { $total }
 stack-slider-tip = Stack strictness: in the middle, the value computed from the folder; to the right stricter (smaller stacks), to the left more lenient; double-click: back to the middle; hold Shift while adjusting to expand the stacks ({ $keys }: fine settings)
 blur-slider-tip = Blur strictness: to the right stricter (more blurry photos), to the left more lenient; in the middle, the settings. Double click: back to the middle
+clip-slider-over = blown
+clip-slider-over-tip = Blown photos excluded: to the right stricter, to the left more lenient; fully to the left, blown highlights no longer exclude anything. In the middle, the settings. Double click: back to the middle
+clip-slider-under = crushed
+clip-slider-under-tip = Crushed photos excluded: to the right stricter, to the left more lenient; fully to the left, crushed blacks no longer exclude anything (black backgrounds). In the middle, the settings. Double click: back to the middle
 sharpness-strictness = Sharpness strictness: { $value } % (0: the settings)
 stack-icon-tip = Right click: fine settings ({ $keys })
 action-core-panel-left = Keyboard to the left panel
@@ -310,6 +314,7 @@ status-open-session = Open the session "{ $name }"
 ## Dialogs, rating bar, filters, help
 
 close = Close
+close-tip = Close (Esc)
 histogram-scale-ev = in EV
 histogram-scale-linear = linear
 histogram-scale-tip = Scale { $current }; click or { $keys }: { $other }

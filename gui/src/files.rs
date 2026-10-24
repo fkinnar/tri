@@ -28,6 +28,8 @@ pub enum FileDialog {
         has_pairs: bool,
         group: Group,
         at: Pos2,
+        /// Suppression lancée (confirmée).
+        job: Option<Deleting>,
     },
     /// Copier / déplacer vers un dossier.
     Transfer(Box<Transfer>),
@@ -132,6 +134,14 @@ pub struct Transfer {
     bring_cache: bool,
 }
 
+/// Suppression en cours, dans un fil à part : une centaine d'images à la corbeille prend
+/// plusieurs secondes (issue n° 43).
+pub struct Deleting {
+    done: Arc<AtomicUsize>,
+    total: usize,
+    handle: Option<JoinHandle<Result<Vec<files::Trashed>, FileError>>>,
+}
+
 /// Copie en cours, dans un fil à part (copies vérifiées : longues vers un autre disque).
 struct Job {
     done: Arc<AtomicUsize>,
@@ -210,12 +220,17 @@ impl FileDialog {
             has_pairs: files::adds_pairs(images),
             group: files::plan_delete(images, settings),
             at,
+            job: None,
         }
     }
 
-    /// Copie en cours : la boîte ne se ferme pas.
+    /// Copie ou suppression en cours : la boîte ne se ferme pas.
     pub fn busy(&self) -> bool {
-        matches!(self, FileDialog::Transfer(t) if t.job.is_some())
+        match self {
+            FileDialog::Transfer(t) => t.job.is_some(),
+            FileDialog::Delete { job, .. } => job.is_some(),
+            _ => false,
+        }
     }
 
     /// Boîte « Copier / déplacer vers… » pour `source` (des images ou un dossier) ;
@@ -384,9 +399,14 @@ impl FileDialog {
                 has_pairs,
                 group,
                 at,
+                job,
             } => {
+                if job.is_some() {
+                    return deleting(ctx, settings, group, *at, job);
+                }
                 let before = *pairs;
-                let outcome = delete_dialog(ctx, settings, group, *at, has_pairs.then_some(pairs));
+                let outcome =
+                    delete_dialog(ctx, settings, group, *at, has_pairs.then_some(pairs), job);
                 if *pairs != before {
                     *group = files::plan_delete(images, &with_pairs(settings, *pairs));
                 }
@@ -501,12 +521,82 @@ fn pairs_checkbox(ui: &mut egui::Ui, pairs: &mut bool) {
         .on_hover_text(t!("files-with-pairs-tip"));
 }
 
+/// Titre de la boîte de suppression.
+fn delete_title(settings: &FileSettings, group: &Group) -> String {
+    let n = group.files().count();
+    if settings.trash {
+        t!("delete-trash-question", n = n)
+    } else {
+        t!("delete-permanently-question", n = n)
+    }
+}
+
+/// Lance la suppression de `group` dans un fil à part.
+fn start_delete(ctx: &egui::Context, settings: &FileSettings, group: &Group) -> Deleting {
+    let done = Arc::new(AtomicUsize::new(0));
+    let (counter, ctx, group, trash) = (done.clone(), ctx.clone(), group.clone(), settings.trash);
+    let total = group.files().count();
+    let handle = std::thread::spawn(move || {
+        files::delete_with_progress(&group, trash, |n, _| {
+            counter.store(n, Ordering::Relaxed);
+            ctx.request_repaint();
+        })
+    });
+    Deleting {
+        done,
+        total,
+        handle: Some(handle),
+    }
+}
+
+/// Suppression en cours : progression ; à la fin, le pas de l'historique.
+fn deleting(
+    ctx: &egui::Context,
+    settings: &FileSettings,
+    group: &Group,
+    at: Pos2,
+    job: &mut Option<Deleting>,
+) -> Outcome {
+    let Some(running) = job else {
+        return Outcome::Open;
+    };
+    if running.handle.as_ref().is_some_and(|h| h.is_finished()) {
+        let result = running.handle.take().map(|h| h.join());
+        *job = None;
+        return match result {
+            Some(Ok(Ok(trashed))) => Outcome::Done {
+                select: None,
+                step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
+            },
+            Some(Ok(Err(e))) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
+            _ => Outcome::Failed(t!("delete-failed", error = "?")),
+        };
+    }
+    let (done, total) = (running.done.load(Ordering::Relaxed), running.total);
+    crate::app::modal_at("delete_dialog", at)
+        .title(delete_title(settings, group))
+        .busy()
+        .show(ctx, |ui| {
+            ui.add(
+                egui::ProgressBar::new(done as f32 / total.max(1) as f32).text(t!(
+                    "transfer-progress",
+                    done = done,
+                    total = total
+                )),
+            );
+        });
+    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    Outcome::Open
+}
+
+/// Boîte de confirmation ; confirmée, la suppression part en fond (`job`).
 fn delete_dialog(
     ctx: &egui::Context,
     settings: &FileSettings,
     group: &Group,
     at: Pos2,
     pairs: Option<&mut bool>,
+    job: &mut Option<Deleting>,
 ) -> Outcome {
     let (mut confirm, mut cancel) = (false, false);
     let verb = if settings.trash {
@@ -514,14 +604,8 @@ fn delete_dialog(
     } else {
         t!("delete-permanently")
     };
-    let n = group.files().count();
-    let title = if settings.trash {
-        t!("delete-trash-question", n = n)
-    } else {
-        t!("delete-permanently-question", n = n)
-    };
     let modal = crate::app::modal_at("delete_dialog", at)
-        .title(title)
+        .title(delete_title(settings, group))
         .show(ctx, |ui| {
             ui.add_space(6.0);
             ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
@@ -549,13 +633,8 @@ fn delete_dialog(
     // Entrée confirme (pas de champ de saisie ici).
     confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
     if confirm {
-        return match files::delete(group, settings.trash) {
-            Ok(trashed) => Outcome::Done {
-                select: None,
-                step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
-            },
-            Err(e) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
-        };
+        *job = Some(start_delete(ctx, settings, group));
+        return Outcome::Open;
     }
     if cancel || modal.should_close() {
         Outcome::Cancelled
@@ -916,6 +995,7 @@ impl Transfer {
         };
         crate::app::modal_at("transfer_dialog", self.at)
             .title(title)
+            .busy()
             .show(ctx, |ui| {
                 ui.label(job.dest.display().to_string());
                 ui.add(

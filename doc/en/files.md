@@ -33,7 +33,7 @@ that foreseeable errors happen before the first modification.
 | `plan_delete(images, settings) -> Group` | files to delete |
 | `delete(&Group, trash)` | trash ([`trash`](https://crates.io/crates/trash) crate) or permanent deletion |
 | `reveal(path)` | file manager, file selected |
-| `editor_command(editor, files)` / `open_with(editor, files)` | external editor (command built separately, to be tested without launching anything) |
+| `editor_command(editor, files)` / `open_with(editor, files)` | external editor (command built separately, to be tested without launching anything); programs launched without input or outputs (their traces do not go to the terminal of `tri`) |
 
 Renaming keeps the extension: the name is typed without it. `IMG.RAF`, `IMG.JPG`,
 `IMG.RAF.xmp`, `IMG.xmp` become `NOUVEAU.RAF`, `NOUVEAU.JPG`, `NOUVEAU.RAF.xmp`,
@@ -145,6 +145,12 @@ subfolders included (`DirTransfer`: files, subfolders to create, target `dest/no
 them again), `untrash` puts them back (see `history.md`). On macOS, moving to the trash goes
 through `NSFileManager` (exact location returned) rather than through the `trash` crate,
 which does not provide it.
+
+`delete_with_progress(&Group, trash, progress)`: the same, with (done, total) after each
+file. The interface runs it in a separate thread, with a bar in the dialog (2026-10-24,
+issue #43: a hundred images to the trash froze the window). On Linux and Windows, the
+files go one by one, then the trash is read only once (indexed by original location) to
+find what is needed to take them out again.
 
 ## Folders (2026-10-18)
 

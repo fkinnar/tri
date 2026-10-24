@@ -503,6 +503,8 @@ blur_badge = true
 stack_slider = 90.0
 # Largeur du curseur de sévérité du flou de la barre des filtres.
 blur_slider = 90.0
+# Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
+clip_slider = 60.0
 # Largeur du curseur de taille des vignettes, en bas de la grille.
 size_slider = 90.0
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
@@ -649,6 +651,11 @@ clipping_channels = true
 # au-delà de laquelle une vignette est signalée.
 badge_over = 0.005
 badge_under = 0.05
+# Curseurs « brûlé » / « bouché » du filtre « bien exposées » (barre des filtres) : au
+# centre, les seuils ci-dessus ; à fond à droite, divisés par strictness_span ; vers la
+# gauche, multipliés ; tout à gauche, ce côté n'exclut plus rien (fonds noirs, blancs
+# brûlés exprès). Retenus par dossier ; les badges suivent.
+strictness_span = 10.0
 # Pastilles saturés / bouchés dans les coins de l'histogramme : allumées au-delà de cette
 # part des pixels (0,001 = 0,1 %), pas pour quelques pixels morts.
 indicator_min = 0.001
