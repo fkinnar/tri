@@ -2,6 +2,15 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Cache with the photos**: the cache can be kept at the root of a removable drive (a
+  transfer drive, found again on another computer) or in a folder (it follows the folder
+  when it is moved): right click in the folder panel, `tri <folder> --cache-here` /
+  `--cache-user`, or by default with `[cache] location = "disk"` / `"folder"`. Moving or
+  renaming a folder from `tri` brings its cache along. The existing cache is computed
+  again once (new format; issue #55).
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.

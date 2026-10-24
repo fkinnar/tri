@@ -137,6 +137,7 @@ cli-usage =
       tri <dossier> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache DOSSIER]
       tri [<dossier>] --clear-cache [<niveau>] [--depth N] [--cache DOSSIER]
       tri --cache-usage [--cache DOSSIER]
+      tri <dossier> --cache-here|--cache-user [--cache DOSSIER]
       tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
@@ -214,6 +215,10 @@ cli-export-failed = { $failed } images sans fichier écrit (illisibles par darkt
 cli-groups-header = image	suivante	distance	écart (s)
 cli-groups-summary = { $n } images, { $groups } groupes au seuil { $threshold } ({ $ms } ms par empreinte)
 cli-cache-cleared = cache vidé ({ $level })
+cli-cache-here = cache gardé dans { $place }
+cli-cache-released = cache retiré de { $place }
+cli-cache-moved = { $n } entrées déplacées
+cli-cache-move-failed = déplacement du cache impossible : { $error }
 cli-cache-all = tout
 cli-cache-folder-cleared = cache de { $folder } vidé ({ $level }) : { $entries } entrées, { $mib } Mio libérés
 cli-group = GROUPE { $index } ({ $n } images)

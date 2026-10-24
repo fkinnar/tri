@@ -481,6 +481,8 @@ transfer-move = Move
 transfer-confirm = Confirm
 transfer-hint = Tab: complete · up / down arrows: recent destinations
 transfer-recent = Recent
+transfer-bring-cache = Bring the cache along
+transfer-bring-cache-tip = Thumbnails, previews and analyses follow the folder: nothing to compute again
 transfer-progress = { $done } / { $total } files
 transfer-failed = copy / move failed: { $error }
 transfer-folder-title = Folder “{ $name }” to…
@@ -623,6 +625,14 @@ folder-menu-delete = Delete…
 folder-menu-offload = Offload the card…
 folder-menu-eject = Eject
 folder-menu-offload-here = Offload a card here…
+folder-menu-cache-folder = Keep the cache in this folder
+folder-menu-cache-disk = Keep the cache on this drive
+folder-menu-cache-release = No longer keep the cache here
+folder-menu-cache-tip = Thumbnails, previews and analyses of the photos of this folder (subfolders included) stored in .tri-cache: they travel with it, found again on another computer
+cache-kept-here = Cache kept in { $place }
+cache-released = Cache removed from { $place }
+cache-kept-failed = Cache kept in the user's folder: { $error }
+cache-move-failed = Cannot move the cache: { $error }
 watch-reloaded = { $count ->
     [one] One image added, removed or changed elsewhere: folder reloaded
    *[other] { $count } images added, removed or changed elsewhere: folder reloaded

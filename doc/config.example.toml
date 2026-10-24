@@ -50,6 +50,12 @@ jpeg_quality = 90
 # les moins récemment utilisés sont supprimés au démarrage (~5 Mo par 1:1 de 26 Mpx).
 # 0 : pas de limite.
 zoom_max_mb = 2000
+# Où garder le cache d'un dossier ouvert qui n'en a pas encore : "user" (chez
+# l'utilisateur, ci-dessus : photos qui ne bougent pas), "disk" (à la racine du disque
+# amovible du dossier, dans .tri-cache : disque de transfert, retrouvé sur un autre
+# ordinateur) ou "folder" (dans le dossier lui-même : il le suit quand on le déplace).
+# Au cas par cas : clic droit sur un dossier ou un disque du panneau des dossiers.
+location = "user"
 
 [scheduler]
 # Workers parallèles pour les vignettes et images plates, ou "auto" : moitié des cœurs.

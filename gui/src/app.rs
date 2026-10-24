@@ -156,6 +156,9 @@ pub struct TriApp {
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
+    /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
+    /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
+    cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
     /// Message pour la barre d'état (texte, vrai si c'est une erreur).
     notice: Option<(String, bool)>,
     /// Réglages du moteur (fichier de configuration).
@@ -594,6 +597,7 @@ impl TriApp {
             update: None,
             build: tri::update::Build::current(),
             ejecting: None,
+            cache_jobs: Vec::new(),
             notice: None,
             settings: settings.engine(),
             warning,
@@ -906,6 +910,7 @@ impl TriApp {
                     .data_dir()
                     .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
                     .unwrap_or(0.0);
+                self.apply_cache_location(&folder.dir);
                 self.folder = folder;
                 self.start_loading();
                 self.apply_sort();
@@ -1220,6 +1225,10 @@ impl TriApp {
         let mut eject = None;
         let mut offload = None;
         let mut menu: Option<(PathBuf, Action)> = None;
+        // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
+        let mut cache_menu: Option<(PathBuf, bool)> = None;
+        let location = self.settings.cache.location;
+        let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
         drag_preview(ui.ctx());
         ui.horizontal(|ui| {
@@ -1376,6 +1385,32 @@ impl TriApp {
                                 t!("folder-menu-favorite-name"),
                             );
                         }
+                        // Cache (issue n° 55) : pas proposé là où le réglage par défaut le
+                        // met déjà.
+                        if let Some(cache) = &cache {
+                            use tri::cache::Location;
+                            let here = cache.disk_of(&row.path).as_deref() == Some(&row.path);
+                            let offer = if removable {
+                                (location != Location::Disk).then(|| t!("folder-menu-cache-disk"))
+                            } else {
+                                (location != Location::Folder)
+                                    .then(|| t!("folder-menu-cache-folder"))
+                            };
+                            let text = if here {
+                                Some(t!("folder-menu-cache-release"))
+                            } else {
+                                offer
+                            };
+                            if let Some(text) = text
+                                && ui
+                                    .button(text)
+                                    .on_hover_text(t!("folder-menu-cache-tip"))
+                                    .clicked()
+                            {
+                                cache_menu = Some((row.path.clone(), !here));
+                                ui.close();
+                            }
+                        }
                         ui.separator();
                         if removable {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
@@ -1460,6 +1495,9 @@ impl TriApp {
         }
         // Menu du clic droit : le dossier visé devient la ligne pointée, puis la même
         // action qu'au clavier.
+        if let Some((path, on)) = cache_menu {
+            self.keep_cache_in(path, on);
+        }
         if let Some((path, action)) = menu {
             self.tree.point_at(&path);
             let ctx = ui.ctx().clone();
@@ -1711,6 +1749,82 @@ impl TriApp {
                 self.start_eject(ctx, volume);
             }
         }
+    }
+
+    /// Lance `work` sur le cache dans un fil à part (déplacer des entrées peut copier vers
+    /// un autre disque) ; son message, s'il y en a un, va dans la barre d'état à la fin.
+    fn cache_job(
+        &mut self,
+        work: impl FnOnce(tri::cache::Cache) -> Option<(String, bool)> + Send + 'static,
+    ) {
+        if let Some(engine) = &self.engine {
+            let cache = engine.cache.clone();
+            self.cache_jobs
+                .push(std::thread::spawn(move || work(cache)));
+        }
+    }
+
+    /// Déplacements du cache finis : leurs messages.
+    fn poll_cache_jobs(&mut self) {
+        let (done, running): (Vec<_>, Vec<_>) = std::mem::take(&mut self.cache_jobs)
+            .into_iter()
+            .partition(|job| job.is_finished());
+        self.cache_jobs = running;
+        for job in done {
+            if let Ok(Some(notice)) = job.join() {
+                self.notice = Some(notice);
+            }
+        }
+    }
+
+    /// Garde le cache des photos de `root` dans `root` (`on`), ou ne l'y garde plus (clic
+    /// droit du panneau des dossiers, issue n° 55).
+    fn keep_cache_in(&mut self, root: PathBuf, on: bool) {
+        self.cache_job(move |cache| {
+            let place = crate::files::tilde(&root);
+            Some(
+                match (
+                    on,
+                    if on {
+                        cache.use_disk(&root)
+                    } else {
+                        cache.release_disk(&root)
+                    },
+                ) {
+                    (true, Ok(_)) => (t!("cache-kept-here", place = place), false),
+                    (false, Ok(_)) => (t!("cache-released", place = place), false),
+                    (_, Err(e)) => (t!("cache-move-failed", error = e.to_string()), true),
+                },
+            )
+        });
+    }
+
+    /// `[cache] location` appliqué au dossier ouvert `dir`, si son cache est encore chez
+    /// l'utilisateur (en fond : la liste des disques amovibles et le déplacement prennent
+    /// un moment).
+    fn apply_cache_location(&mut self, dir: &Path) {
+        let location = self.settings.cache.location;
+        if location == tri::cache::Location::User {
+            return;
+        }
+        let (dir, places) = (dir.to_path_buf(), self.settings.places.clone());
+        self.cache_job(move |cache| {
+            let removable = if location == tri::cache::Location::Disk {
+                tri::places::removable_roots(&places)
+            } else {
+                Vec::new()
+            };
+            match cache.apply(location, &dir, &removable) {
+                Ok(Some((root, _))) => Some((
+                    t!("cache-kept-here", place = crate::files::tilde(&root)),
+                    false,
+                )),
+                Ok(None) => None,
+                // Carte verrouillée, disque en lecture seule : le cache reste chez
+                // l'utilisateur.
+                Err(e) => Some((t!("cache-kept-failed", error = e.to_string()), true)),
+            }
+        });
     }
 
     /// Fin d'une éjection : message, et liste des volumes relue.
@@ -5921,10 +6035,20 @@ impl TriApp {
                 step,
                 point,
                 renamed,
+                cache_follows,
             } => {
                 self.file_dialog = None;
                 if let Some(step) = step {
                     self.history.push(step);
+                }
+                // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
+                if cache_follows && let Some((from, to)) = renamed.clone() {
+                    self.cache_job(move |cache| {
+                        cache
+                            .relocate(&from, &to)
+                            .err()
+                            .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
+                    });
                 }
                 self.after_folder_change(renamed, point);
             }
@@ -8152,6 +8276,7 @@ impl eframe::App for TriApp {
         }
         self.watch_folder(&ctx);
         self.poll_eject();
+        self.poll_cache_jobs();
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
@@ -11203,6 +11328,35 @@ mod tests {
         press(&mut h, Key::M, Modifiers::NONE);
         assert!(tri::places::favorites(&data).is_empty());
         assert_eq!(favorite(&h.state().tree.rows()), None);
+    }
+
+    #[test]
+    fn a_folder_keeps_its_cache_from_the_right_click() {
+        // Issue n° 55 : clic droit, « Garder le cache dans ce dossier », puis l'inverse.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seance = dir.path().join("séance");
+        std::fs::create_dir(&seance).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        h.run_steps(2);
+        let marker = seance.join(tri::cache::DISK_DIR);
+        for (label, kept) in [
+            (t!("folder-menu-cache-folder"), true),
+            (t!("folder-menu-cache-release"), false),
+        ] {
+            h.get_by_label("séance").click_secondary();
+            h.run_steps(2);
+            h.get_by_label(&label).click();
+            h.run_steps(2);
+            run_until(&mut h, |app| app.cache_jobs.is_empty());
+            assert_eq!(marker.is_dir(), kept);
+        }
     }
 
     #[test]
