@@ -1098,8 +1098,14 @@ pub fn open_with(editor: &[String], files: &[PathBuf]) -> Result<()> {
 }
 
 /// Lance `command` sans l'attendre ; un fil récupère sa fin (pas de processus zombie).
+/// Entrée et sorties fermées : le programme lancé (éditeur, visionneuse Qt…) écrivait ses
+/// traces dans le terminal de `tri` (retour du 24/10/2026, sous Mint).
 fn spawn(command: &mut Command, name: &str) -> Result<()> {
+    use std::process::Stdio;
     let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .map_err(|e| FileError::Launch(name.into(), e))?;
     std::thread::spawn(move || child.wait());

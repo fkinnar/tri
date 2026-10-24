@@ -34,7 +34,7 @@ et pour que les erreurs prévisibles arrivent avant la première modification.
 | `plan_delete(images, settings) -> Group` | fichiers à supprimer |
 | `delete(&Group, trash)` | corbeille (crate [`trash`](https://crates.io/crates/trash)) ou suppression définitive |
 | `reveal(path)` | gestionnaire de fichiers, fichier sélectionné |
-| `editor_command(editor, files)` / `open_with(editor, files)` | éditeur externe (commande construite à part, pour être testée sans rien lancer) |
+| `editor_command(editor, files)` / `open_with(editor, files)` | éditeur externe (commande construite à part, pour être testée sans rien lancer) ; programmes lancés sans entrée ni sorties (leurs traces ne vont pas dans le terminal de `tri`) |
 
 Le renommage garde l'extension : on saisit le nom sans elle. `IMG.RAF`, `IMG.JPG`,
 `IMG.RAF.xmp`, `IMG.xmp` deviennent `NOUVEAU.RAF`, `NOUVEAU.JPG`, `NOUVEAU.RAF.xmp`,

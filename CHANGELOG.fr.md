@@ -2,6 +2,11 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Programmes lancés** (éditeur, application par défaut, gestionnaire de fichiers) :
+  leurs messages ne remplissent plus le terminal d'où `tri` a été lancé.
+
 ## 1.0.0-alpha.7 — 23/10/2026
 
 Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.

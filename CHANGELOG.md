@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **External programs** (editor, default application, file manager): their messages no
+  longer fill the terminal `tri` was started from.
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.
