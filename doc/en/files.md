@@ -33,7 +33,7 @@ that foreseeable errors happen before the first modification.
 | `plan_delete(images, settings) -> Group` | files to delete |
 | `delete(&Group, trash)` | trash ([`trash`](https://crates.io/crates/trash) crate) or permanent deletion |
 | `reveal(path)` | file manager, file selected |
-| `editor_command(editor, files)` / `open_with(editor, files)` | external editor (command built separately, to be tested without launching anything) |
+| `editor_command(editor, files)` / `open_with(editor, files)` | external editor (command built separately, to be tested without launching anything); programs launched without input or outputs (their traces do not go to the terminal of `tri`) |
 
 Renaming keeps the extension: the name is typed without it. `IMG.RAF`, `IMG.JPG`,
 `IMG.RAF.xmp`, `IMG.xmp` become `NOUVEAU.RAF`, `NOUVEAU.JPG`, `NOUVEAU.RAF.xmp`,
