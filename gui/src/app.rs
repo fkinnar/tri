@@ -1429,15 +1429,25 @@ impl TriApp {
                         } else if self.ejecting.is_none() {
                             // Un seul déchargement à la fois.
                             if self.offload.is_none() {
+                                // Au survol, décharger à l'accent et éjecter en rouge :
+                                // deux petites icônes voisines à ne pas confondre (issue
+                                // n° 41).
                                 let (rect, response) =
                                     marks::clickable(ui, size, &t!("folders-offload"));
-                                marks::offload(ui.painter(), rect, color);
+                                let hover = marks::accent_mark(ui.ctx());
+                                let c = if response.hovered() { hover } else { color };
+                                marks::offload(ui.painter(), rect, c);
                                 if response.clicked() {
                                     offload = Some((row.path.clone(), rect.right_bottom()));
                                 }
                             }
                             let (rect, response) = marks::clickable(ui, size, &t!("eject"));
-                            marks::eject(ui.painter(), rect, color);
+                            let c = if response.hovered() {
+                                Color32::from(self.gui.colors.error)
+                            } else {
+                                color
+                            };
+                            marks::eject(ui.painter(), rect, c);
                             if response.clicked() {
                                 eject = Some((row.path.clone(), rect.right_bottom()));
                             }

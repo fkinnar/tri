@@ -67,7 +67,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   éjection en fond (`places::eject`) ; le résultat, ou le message du système, s'affiche
   dans la barre d'état. Un volume **fixé** (`[places] fixed`, ex. le disque de travail
   toujours branché) n'a pas d'icône d'éjection mais une icône de disque, non cliquable :
-  pas d'éjection par accident (idée de l'utilisateur, 17/10/2026). Le
+  pas d'éjection par accident (idée de l'utilisateur, 17/10/2026). Au survol, l'icône
+  « décharger » passe à l'accent et « éjecter » en rouge (`[gui.colors] error`) : deux
+  petites icônes voisines à ne pas confondre (24/10/2026, issue n° 41). Le
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` rouvre le dernier dossier ouvert (`[gui] reopen_last`,
