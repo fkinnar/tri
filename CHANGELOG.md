@@ -18,6 +18,8 @@
   (`[gui.histogram] strictness_span`; issue #48).
 - **Folder panel**: on hover, the "offload" icon of a volume turns to the accent colour and
   "eject" to red, so they are not confused (issue #41).
+- **Auto advance**: the star of the button stays visible when it is on (it had the accent
+  colour of the background; issue #59).
 - **External programs** (editor, default application, file manager): their messages no
   longer fill the terminal `tri` was started from.
 

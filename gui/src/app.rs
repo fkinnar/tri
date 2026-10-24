@@ -6404,12 +6404,13 @@ impl TriApp {
                             .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
                     }
                     let color = ui.style().interact(&response).fg_stroke.color;
-                    marks::bar_icon(
+                    marks::bar_icon_on(
                         ui.painter(),
                         rect.shrink(icon * 0.2),
                         action,
                         color,
                         &colors,
+                        active,
                     );
                     if response.clicked() {
                         clicked = Some(action);
