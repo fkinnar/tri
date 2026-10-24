@@ -420,7 +420,9 @@ impl Cache {
                 let source = source.trim_end();
                 let folder = match base {
                     Some(base) if source.is_empty() => base.to_path_buf(),
-                    Some(base) => base.join(source),
+                    // Écrit avec des « / » (`relative_name`) : recollé composant par
+                    // composant, sinon un chemin Windows mélangerait « \ » et « / ».
+                    Some(base) => source.split('/').fold(base.to_path_buf(), |p, c| p.join(c)),
                     None => PathBuf::from(source),
                 };
                 if folder.starts_with(under) {
