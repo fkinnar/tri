@@ -9611,6 +9611,8 @@ mod tests {
                 .is_some()
         );
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         let photos = dir.path().join("photos");
         assert!(photos.join("a.jpg").exists() && photos.join("b.jpg").exists());
         assert!(!photos.join("c.jpg").exists() && !photos.join("d.jpg").exists());
