@@ -136,6 +136,7 @@ cli-usage =
       tri <folder> --previews [--raw|--flat] [--depth N] [--side N] [--thumb N] [--workers N] [--mixed] [--cache FOLDER]
       tri [<folder>] --clear-cache [<level>] [--depth N] [--cache FOLDER]
       tri --cache-usage [--cache FOLDER]
+      tri <folder> --cache-here|--cache-user [--cache FOLDER]
       tri --check-update
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
@@ -213,6 +214,10 @@ cli-export-failed = { $failed } images without a written file (unreadable by dar
 cli-groups-header = image	next	distance	gap (s)
 cli-groups-summary = { $n } images, { $groups } groups at threshold { $threshold } ({ $ms } ms per signature)
 cli-cache-cleared = cache cleared ({ $level })
+cli-cache-here = cache kept in { $place }
+cli-cache-released = cache removed from { $place }
+cli-cache-moved = { $n } entries moved
+cli-cache-move-failed = cannot move the cache: { $error }
 cli-cache-all = all
 cli-cache-folder-cleared = cache of { $folder } cleared ({ $level }): { $entries } entries, { $mib } MiB freed
 cli-group = GROUP { $index } ({ $n } images)

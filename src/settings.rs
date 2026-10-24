@@ -210,6 +210,9 @@ pub struct CacheSection {
     /// ~5 Mo). 0 : pas de limite. Les autres niveaux, bien plus légers, ne sont pas
     /// limités.
     pub zoom_max_mb: u64,
+    /// Où garder le cache d'un dossier ouvert qui n'en a pas encore : chez l'utilisateur,
+    /// sur le disque amovible, dans le dossier ([`cache::Location`]).
+    pub location: cache::Location,
 }
 
 impl Default for CacheSection {
@@ -218,6 +221,7 @@ impl Default for CacheSection {
             dir: None,
             jpeg_quality: cache::DEFAULT_JPEG_QUALITY,
             zoom_max_mb: 2000,
+            location: cache::Location::User,
         }
     }
 }

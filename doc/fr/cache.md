@@ -9,9 +9,10 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
 
 ```
 <racine>/
-└── v2/                      version du format (FORMAT_VERSION)
+└── v3/                      version du format (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         un dossier de photos (début du hash de son chemin)
+    │   │   ├── .source      ce dossier de photos, en clair
     │   │   └── 3f9a…e1.jpg  une entrée = un JPEG qualité 90
     │   └── …
     ├── embedded/            aperçus tirés du JPEG du boîtier (RAW seulement)
@@ -29,9 +30,44 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
   chaque niveau, sans devoir recalculer les clés : elles dépendent des réglages, et la
   taille de l'aperçu standard de l'écran, que la ligne de commande ne connaît pas.
   Avant, les sous-dossiers étaient les 2 premiers caractères du hash de l'entrée.
-- **`v2/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
+- **`v3/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
   `FORMAT_VERSION`. Les anciennes entrées deviennent invisibles ; les formats précédents
-  listés dans `OLD_FORMATS` (`v1/`) sont supprimés en fond à l'ouverture du cache.
+  listés dans `OLD_FORMATS` (`v1/`, `v2/`) sont supprimés en fond à l'ouverture du cache.
+  `v3` (24/10/2026) : clé sans le dossier, fichier `.source` (voir plus bas).
+
+## Cache sur le disque des photos (24/10/2026, issue n° 55)
+
+Trois places possibles pour le cache d'une photo :
+
+- **chez l'utilisateur** (ci-dessus) : photos qui ne bougent pas ;
+- **à la racine d'un disque amovible** : un disque de transfert, branché sur plusieurs
+  ordinateurs ;
+- **dans un dossier** : un dossier qu'on déplace.
+
+Les deux derniers sont un même mécanisme : un dossier caché `.tri-cache` (`DISK_DIR`)
+garde le cache de toutes les photos en dessous, sous-dossiers compris, avec la même
+organisation (`.tri-cache/v3/<niveau>/<dossier>/`), mais le dossier est repéré par son
+chemin **relatif** à la racine (écrit avec des `/` sur tous les systèmes). Monté ailleurs
+(`/Volumes/T7` sur un Mac, `/media/u/T7` sous Linux), le disque retrouve son cache.
+`Cache::disk_of(dossier)` cherche le `.tri-cache` le plus proche en remontant (gardé en
+mémoire par dossier, oublié à chaque changement).
+
+- `use_disk(racine)` : crée `.tri-cache` et y **déplace** les entrées déjà calculées
+  (cache central, ou `.tri-cache` plus haut) : rien n'est recalculé ;
+- `release_disk(racine)` : l'inverse, les entrées vont où leurs photos les attendent
+  désormais (`.tri-cache` plus haut, sinon chez l'utilisateur) ;
+- `relocate(de, vers)` : après le déplacement ou le renommage d'un dossier, ses entrées
+  le suivent (un `.tri-cache` dans le dossier même est parti avec lui) ;
+- `apply(location, dossier, amovibles)` : le réglage `[cache] location` (`user`, `disk`,
+  `folder`) appliqué à un dossier ouvert dont le cache est encore chez l'utilisateur ;
+  un choix déjà fait est respecté (`wanted_root`, `places::removable_roots`).
+
+Le fichier `.source` de chaque dossier d'entrées (chemin absolu au centre, relatif sur un
+disque) permet ces déplacements sans connaître les réglages. Vers un autre disque, copie
+puis suppression ; une entrée déjà présente à l'arrivée est gardée. Les niveaux 1:1 d'un
+`.tri-cache` ne sont pas limités par `zoom_max_mb`, et `--cache-usage` ne compte que le
+cache central. Disques FAT32 : la date de modification y est en heure locale, un
+ordinateur réglé sur un autre fuseau recalcule tout (exFAT, APFS, ext4 : non).
 
 ### Emplacement par défaut : `default_dir()`
 
@@ -50,8 +86,8 @@ sauvegardes Time Machine sous macOS, nettoyables par l'utilisateur.
 Une clé est un hash **BLAKE3** (256 bits, en hexadécimal) de :
 
 1. la version du format ;
-2. le **chemin absolu** du fichier source (`std::path::absolute`) : `photo.RAF` et
-   `/dossier/photo.RAF` donnent la même clé ;
+2. le **nom** du fichier source (depuis `v3` ; le dossier, lui, choisit le rangement : le
+   cache peut ainsi changer de place sans rien recalculer) ;
 3. sa **taille** et sa **date de modification** (nanosecondes) ;
 4. le **niveau** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`) ;
 5. les **paramètres** de calcul, une chaîne libre fournie par l'appelant (ex.
@@ -62,8 +98,10 @@ Conséquences :
 - **fichier modifié** (retouché, réécrit) ⇒ nouvelle clé ⇒ recalcul automatique ;
 - **réglages changés** (taille d'aperçu, balance des blancs…) ⇒ idem, à condition que
   l'appelant les inclue dans `params` ;
-- **dossier déplacé ou renommé** ⇒ le cache n'est plus retrouvé (choix assumé : vérifier le
-  contenu imposerait de relire chaque RAW de ~30 Mo) ;
+- **dossier déplacé ou renommé** ⇒ le cache n'est plus retrouvé, sauf s'il le suit
+  (`relocate` : renommage et déplacement depuis `tri`, case « Emporter le cache ») ou
+  s'il est dans le dossier (`.tri-cache`) ; vérifier le contenu imposerait de relire
+  chaque RAW de ~30 Mo ;
 - l'ancienne entrée n'est **pas supprimée** : elle reste jusqu'au vidage ou à l'éviction.
 
 Chaque champ est préfixé par sa longueur avant d'être hashé : (`ab`, `c`) et (`a`, `bc`) ne
