@@ -20,6 +20,8 @@
   (`[gui.histogram] strictness_span` ; issue n° 48).
 - **Panneau des dossiers** : au survol, l'icône « décharger » d'un volume passe à la
   couleur d'accent et « éjecter » en rouge, pour ne plus les confondre (issue n° 41).
+- **Avance auto** : l'étoile du bouton reste visible quand il est allumé (elle avait la
+  couleur d'accent du fond ; issue n° 59).
 - **Programmes lancés** (éditeur, application par défaut, gestionnaire de fichiers) :
   leurs messages ne remplissent plus le terminal d'où `tri` a été lancé.
 - **Cache avec les photos** : le cache peut être gardé à la racine d'un disque amovible
