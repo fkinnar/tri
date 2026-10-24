@@ -20,6 +20,8 @@
   (`[gui.histogram] strictness_span` ; issue n° 48).
 - **Panneau des dossiers** : au survol, l'icône « décharger » d'un volume passe à la
   couleur d'accent et « éjecter » en rouge, pour ne plus les confondre (issue n° 41).
+- **Avance auto dans les piles** : en plein écran en mode pile, une note passe à la photo
+  suivante de la pile, comme →, et non à la pile suivante (issue n° 60).
 - **Programmes lancés** (éditeur, application par défaut, gestionnaire de fichiers) :
   leurs messages ne remplissent plus le terminal d'où `tri` a été lancé.
 

@@ -18,6 +18,8 @@
   (`[gui.histogram] strictness_span`; issue #48).
 - **Folder panel**: on hover, the "offload" icon of a volume turns to the accent colour and
   "eject" to red, so they are not confused (issue #41).
+- **Auto advance in stacks**: in full screen in stack mode, a rating moves to the next
+  photo of the stack, like →, instead of the next stack (issue #60).
 - **External programs** (editor, default application, file manager): their messages no
   longer fill the terminal `tri` was started from.
 

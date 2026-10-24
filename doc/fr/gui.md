@@ -476,6 +476,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     en sauterait une (bug connu de Capture One à une époque). On n'avance donc que si
     l'image notée est toujours dans la liste ;
   - **l'autre image d'une paire RAW+JPEG**, notée en même temps, est sautée.
+  En plein écran en mode pile, on avance dans la pile comme avec → (arrêt en fin de
+  pile, ou boucle selon `[gui.view] stack_wrap`), pas à la pile suivante (24/10/2026,
+  issue n° 60).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).
 - **Notation à la souris** (17/10/2026, demande de l'utilisateur : tout le monde ne veut
   pas tout faire au clavier) :

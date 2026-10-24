@@ -3213,6 +3213,23 @@ impl TriApp {
         if self.stacks_dirty {
             self.regroup();
         }
+        // Plein écran en mode pile : la photo suivante de la pile, comme → (arrêt au bout,
+        // ou boucle selon `[gui.view] stack_wrap`), pas la pile suivante (issue n° 60).
+        if self.mode == Mode::View && self.stacking {
+            let wrap = self.gui.view.stack_wrap;
+            let mut at = self.selected;
+            let next = loop {
+                match self.stacks.step_in_stack(at, 1, wrap) {
+                    Some(i) if i == self.selected => break None,
+                    Some(i) if siblings.contains(&self.files[i].path) => at = i,
+                    other => break other,
+                }
+            };
+            if let Some(next) = next {
+                self.select(next);
+            }
+            return;
+        }
         let pos = self.stacks.position(self.selected);
         let next = match pos {
             Some(pos) => self.stacks.shown[pos + 1..]
@@ -11716,6 +11733,16 @@ mod tests {
         assert!(h.state().stacking, "piles actives : en plein écran aussi");
         let start = h.state().selected;
         let range = h.state().stacks.range_of(start).cloned().unwrap();
+        // Avance automatique : la photo suivante de la pile, pas la pile suivante (#60).
+        h.state_mut().select(range.start);
+        h.state_mut().auto_advance = true;
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(h.state().selected, range.start + 1, "{}", selected_name(&h));
+        // En fin de pile, on y reste (comme →, `stack_wrap` désactivé).
+        h.state_mut().select(range.end - 1);
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(h.state().selected, range.end - 1, "{}", selected_name(&h));
+        h.state_mut().auto_advance = false;
         for _ in 0..5 {
             press(&mut h, Key::ArrowRight, Modifiers::NONE);
         }
