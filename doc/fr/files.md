@@ -151,6 +151,13 @@ de quoi les retrouver), `untrash` les remet en place (voir `history.md`). Sur ma
 mise à la corbeille passe par `NSFileManager` (emplacement exact renvoyé) plutôt que par
 le crate `trash`, qui ne le donne pas.
 
+`delete_with_progress(&Group, corbeille, progression)` : la même, avec (faits, total)
+après chaque fichier. L'interface la lance dans un fil à part, avec une barre dans la
+boîte (24/10/2026, issue n° 43 : une centaine d'images à la corbeille figeait la
+fenêtre). Sous Linux et Windows, les fichiers partent un par un, puis la corbeille est
+lue une seule fois (indexée par emplacement d'origine) pour retrouver de quoi les en
+ressortir.
+
 ## Dossiers (18/10/2026)
 
 `create_dir(parent, nom)`, `rename_dir(dossier, nom)` (même parent ; la casse seule peut

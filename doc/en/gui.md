@@ -423,6 +423,11 @@ system one ("cold" measurements, experiments).
   folder (copy / move, offload root, settings), Tab completes like a terminal: a single
   possible folder is taken; otherwise the common prefix, and the list of folders under
   the field.
+- **Close cross** (2026-10-24, issue #39): every dialog (common `Dialog` frame) has the
+  same cross at the top right, at the title's height, labelled "Close"; no more "Close"
+  button at the bottom (Cancel stays in dialogs to confirm). Without a cross
+  (`Dialog::busy`): copy and deletion in progress, which cannot be interrupted. The help,
+  an egui window, already had its own.
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
   common `Dialog` frame); "grab" elsewhere, to move the dialog.
 - **File actions** (2026-10-17, engine: `tri::files`, see `files.md`): rename (`F2`),
@@ -892,7 +897,8 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   `[gui.grid] cell_min` / `cell_max`, double-click: `cell`), "all on screen" button
   (`grid::fit_all`: the largest size that shows the whole filtered folder); on the
   keyboard, like Lightroom, `+` / `-` (a quarter more or less, `grid::step_cell`) and
-  `*`. Size remembered between launches. Controls shown only if the rating bar has room
+  `*`; with the mouse, Ctrl / Cmd + wheel or a pinch on the touchpad, continuously
+  (2026-10-24, issue #44). Size remembered between launches. Controls shown only if the rating bar has room
   (otherwise they covered the ratings).
 - **Clear filters**: a crossed-out funnel at the far right of the filter bar, greyed out
   without a filter, the image count just to its left.
@@ -903,6 +909,12 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.
+- **"Blown" and "crushed" sliders** (2026-10-24, issue #48: photos on a black background
+  were excluded): next to the sun, when the filter is on; same logic as the blur one
+  (centre = badge thresholds, to the right stricter, double-click: the centre), one per
+  side; fully to the left, that side no longer excludes anything. Thresholds multiplied
+  or divided by `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`),
+  remembered per folder; the badges follow.
 - **Crop**: presets on `Tab` / `Shift+Tab` (`p` was also the sharpness map, which stayed
   on; `p` turns it off during cropping); egui moved the focus to the bar there, given
   back at the end of the frame. Image name removed from the rating
