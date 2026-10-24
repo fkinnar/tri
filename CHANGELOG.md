@@ -2,6 +2,13 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **"Well exposed" filter**: two sliders, "blown" and "crushed", next to the sun, like the
+  blur one; fully to the left, that side no longer excludes anything (photos on a black
+  background, highlights blown on purpose). Remembered per folder; the badges follow
+  (`[gui.histogram] strictness_span`; issue #48).
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.

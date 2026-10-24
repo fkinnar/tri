@@ -420,6 +420,8 @@ pub struct GridSettings {
     pub stack_slider: f32,
     /// Largeur du curseur de sévérité du flou de la barre des filtres (points).
     pub blur_slider: f32,
+    /// Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
+    pub clip_slider: f32,
     /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
     pub size_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
@@ -449,6 +451,7 @@ impl Default for GridSettings {
             blur_badge: true,
             stack_slider: 90.0,
             blur_slider: 90.0,
+            clip_slider: 60.0,
             size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
@@ -869,6 +872,10 @@ pub struct HistogramSettings {
     pub badge_over: f64,
     /// Badge « bouchée » au-delà de cette part de pixels bouchés.
     pub badge_under: f64,
+    /// Curseurs « brûlé » / « bouché » de la barre des filtres : à fond à droite, seuils
+    /// des badges divisés par cette valeur ; vers la gauche, multipliés (tout à gauche, ce
+    /// côté n'exclut plus rien).
+    pub strictness_span: f64,
     /// Pastilles saturés / bouchés de l'histogramme : allumées au-delà de cette part des
     /// pixels (canal le plus touché, 0 à 1), pas pour quelques pixels morts.
     pub indicator_min: f64,
@@ -905,6 +912,7 @@ impl Default for HistogramSettings {
             clipping_channels: true,
             badge_over: 0.005,
             badge_under: 0.05,
+            strictness_span: 10.0,
             indicator_min: 0.001,
             classes: 80,
             smoothing: 1.5,

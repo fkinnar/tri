@@ -2,6 +2,13 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Filtre « bien exposées »** : deux curseurs, « brûlé » et « bouché », à côté du
+  soleil, comme celui du flou ; tout à gauche, ce côté n'exclut plus rien (photos sur
+  fond noir, blancs brûlés exprès). Retenus par dossier ; les badges suivent
+  (`[gui.histogram] strictness_span` ; issue n° 48).
+
 ## 1.0.0-alpha.7 — 23/10/2026
 
 Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.

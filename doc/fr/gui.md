@@ -928,6 +928,12 @@ photos nettes.
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
+- **Curseurs « brûlé » et « bouché »** (24/10/2026, issue n° 48 : des photos sur fond
+  noir étaient exclues) : à côté du soleil, filtre allumé ; même logique que celui du
+  flou (centre = seuils des badges, à droite plus strict, double-clic : le centre), un
+  par côté ; tout à gauche, ce côté n'exclut plus rien. Seuils multipliés ou divisés par
+  `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`), retenus par
+  dossier ; les badges suivent.
 - **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` aussi la carte de netteté, qui
   restait affichée ; `p` l'éteint pendant le recadrage) ; egui y déplaçait le focus vers
   la barre, rendu en fin d'image. Nom de l'image retiré du

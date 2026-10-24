@@ -399,6 +399,9 @@ pub struct TriApp {
     /// Sévérité du jugement de netteté (-1 souple à 1 strict, 0 : les seuils des
     /// réglages), réglée au curseur de la barre des filtres, retenue par dossier.
     blur_strictness: f32,
+    /// Sévérités du filtre « bien exposées » (brûlé, bouché ; -1 : ce côté ignoré, 0 :
+    /// les seuils des réglages), curseurs de la barre des filtres, retenues par dossier.
+    clip_strictness: (f32, f32),
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -720,6 +723,7 @@ impl TriApp {
             group_strictness: 0.0,
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
+            clip_strictness: (0.0, 0.0),
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -906,6 +910,16 @@ impl TriApp {
                     .data_dir()
                     .and_then(|d| tri::sharpness::folder_strictness(&d, &folder.dir))
                     .unwrap_or(0.0);
+                let clip = |side| {
+                    self.settings
+                        .data_dir()
+                        .and_then(|d| tri::exposure::folder_strictness(&d, &folder.dir, side))
+                        .unwrap_or(0.0)
+                };
+                self.clip_strictness = (
+                    clip(tri::exposure::Clip::Over),
+                    clip(tri::exposure::Clip::Under),
+                );
                 self.folder = folder;
                 self.start_loading();
                 self.apply_sort();
@@ -1779,11 +1793,11 @@ impl TriApp {
         };
         let groups = if self.well_exposed {
             self.load_clip_summary();
-            let h = self.gui.histogram;
+            let (over, under) = self.clip_thresholds();
             tri::exposure::ClipFilter {
                 fractions: &self.clip_summary,
-                over: h.badge_over,
-                under: h.badge_under,
+                over,
+                under,
             }
             .apply(groups)
         } else {
@@ -1874,6 +1888,51 @@ impl TriApp {
         {
             let keep = (self.group_strictness != 0.0).then_some(self.group_strictness);
             let _ = tri::similarity::remember_strictness(&data, &self.folder.dir, keep);
+        }
+    }
+
+    /// Seuils du filtre « bien exposées » et des badges (parts saturée, bouchée) : ceux de
+    /// `[gui.histogram]` à la sévérité des curseurs (issue n° 48).
+    fn clip_thresholds(&self) -> (f64, f64) {
+        let h = self.gui.histogram;
+        let (over, under) = self.clip_strictness;
+        (
+            tri::exposure::clip_threshold(h.badge_over, over, h.strictness_span),
+            tri::exposure::clip_threshold(h.badge_under, under, h.strictness_span),
+        )
+    }
+
+    /// Curseur « brûlé » ou « bouché » du filtre « bien exposées » (issue n° 48 : fonds
+    /// noirs exclus) : effet en direct, retenu pour le dossier au lâcher.
+    fn clip_slider(&mut self, ui: &mut Ui, side: tri::exposure::Clip) {
+        use tri::exposure::Clip;
+        let (label, tip, value) = match side {
+            Clip::Over => (
+                t!("clip-slider-over"),
+                t!("clip-slider-over-tip"),
+                self.clip_strictness.0,
+            ),
+            Clip::Under => (
+                t!("clip-slider-under"),
+                t!("clip-slider-under-tip"),
+                self.clip_strictness.1,
+            ),
+        };
+        ui.weak(label);
+        let (slider, t) = strictness_slider(ui, self.gui.grid.clip_slider, value, tip);
+        if t != value {
+            match side {
+                Clip::Over => self.clip_strictness.0 = t,
+                Clip::Under => self.clip_strictness.1 = t,
+            }
+            self.refilter(Reveal::Minimal);
+        }
+        if (slider.drag_stopped() || slider.double_clicked_slider(ui))
+            && let Some(data) = self.settings.data_dir()
+            && !self.folder.is_none()
+        {
+            let keep = (t != 0.0).then_some(t);
+            let _ = tri::exposure::remember_strictness(&data, &self.folder.dir, side, keep);
         }
     }
 
@@ -6230,7 +6289,6 @@ impl TriApp {
         } else {
             (None, false)
         };
-        let histogram = self.gui.histogram;
         ui.horizontal(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a));
@@ -6270,9 +6328,10 @@ impl TriApp {
             // Brûlée, bouchée (clic : grand histogramme), floue (clic : carte de netteté).
             let mut badges: Vec<(String, Option<bool>, Action)> = Vec::new();
             if let Some((over, under)) = clip {
+                let (over_max, under_max) = self.clip_thresholds();
                 for (fraction, threshold, what, is_over) in [
-                    (over, histogram.badge_over, "badge-over", true),
-                    (under, histogram.badge_under, "badge-under", false),
+                    (over, over_max, "badge-over", true),
+                    (under, under_max, "badge-under", false),
                 ] {
                     if fraction > threshold {
                         let percent = tri::i18n::decimal((fraction * 1000.0).round() / 10.0, 1);
@@ -6589,10 +6648,14 @@ impl TriApp {
                 if response.clicked() {
                     clicked.push(action);
                 }
-            }
-            // Seulement avec un filtre sur la netteté, comme celui des piles avec les piles.
-            if self.blur_rule.is_some() {
-                self.blur_slider(ui);
+                // Curseurs seulement avec leur filtre, comme celui des piles avec les piles.
+                if action == Action::FilterBlurry && on {
+                    self.blur_slider(ui);
+                }
+                if action == Action::FilterWellExposed && on {
+                    self.clip_slider(ui, tri::exposure::Clip::Over);
+                    self.clip_slider(ui, tri::exposure::Clip::Under);
+                }
             }
             ui.separator();
             for color in Color::ALL {
@@ -7164,12 +7227,12 @@ impl TriApp {
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
         if let Some((over, under)) = self.clip_fractions(index, deadline) {
-            let h = self.gui.histogram;
+            let (over_max, under_max) = self.clip_thresholds();
             let side = g.marks * 1.3;
             let mut at = image_area.min + vec2(4.0, 4.0);
             for (fraction, threshold, what, is_over) in [
-                (over, h.badge_over, "badge-over", true),
-                (under, h.badge_under, "badge-under", false),
+                (over, over_max, "badge-over", true),
+                (under, under_max, "badge-under", false),
             ] {
                 if fraction > threshold {
                     let badge = Rect::from_min_size(at, vec2(side, side));
@@ -11752,6 +11815,16 @@ mod tests {
         }
         assert_eq!(h.state().engine.as_ref().unwrap().generation, generation);
         assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
+        // Curseurs « brûlé » / « bouché » avec le filtre ; tout à gauche, plus rien n'est
+        // exclu (fonds noirs, issue n° 48), et plus de badge.
+        assert!(h.query_by_label(&t!("clip-slider-under")).is_some());
+        h.state_mut().clip_strictness = (-1.0, -1.0);
+        h.state_mut().refilter(Reveal::Minimal);
+        assert_eq!(h.state().files.len(), n);
+        assert_eq!(h.state().clip_thresholds(), (1.0, 1.0));
+        h.state_mut().clip_strictness = (0.0, 0.0);
+        h.state_mut().refilter(Reveal::Minimal);
+        assert_eq!(h.state().files.len(), n - badly.len());
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::I, Modifiers::NONE);
         let shown: Vec<_> = h.state().files.iter().map(|f| f.path.clone()).collect();
