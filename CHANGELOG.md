@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Offload, RAW only**: the progress counts only the RAW files, one by one (it
+  counted the JPEGs left on the card too and moved forward two by two; issue #38).
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.
