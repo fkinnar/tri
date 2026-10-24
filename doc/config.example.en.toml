@@ -50,6 +50,12 @@ jpeg_quality = 90
 # least recently used are deleted at startup (~5 MB per 26 Mpx 1:1).
 # 0: no limit.
 zoom_max_mb = 2000
+# Where to keep the cache of an opened folder that has none yet: "user" (the user's,
+# above: photos that do not move), "disk" (at the root of the folder's removable drive,
+# in .tri-cache: transfer drive, found again on another computer) or "folder" (in the
+# folder itself: it follows when the folder is moved). Case by case: right click on a
+# folder or a drive in the folder panel.
+location = "user"
 
 [scheduler]
 # Parallel workers for thumbnails and flat images, or "auto": half the cores.

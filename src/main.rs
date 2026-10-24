@@ -128,6 +128,8 @@ struct Args {
     eject: bool,
     delete_copied: bool,
     delete_left: bool,
+    /// `--cache-here` (vrai) / `--cache-user` (faux) : cache gardé dans le dossier.
+    keep_cache: Option<bool>,
 }
 
 fn parse_level(name: &str) -> Option<Level> {
@@ -162,6 +164,8 @@ fn parse() -> AnyResult<Args> {
             "--mixed" => args.mixed = true,
             "--cache" => args.cache = Some(value()?.into()),
             "--cache-usage" => args.usage = true,
+            "--cache-here" => args.keep_cache = Some(true),
+            "--cache-user" => args.keep_cache = Some(false),
             "--check-update" => args.check_update = true,
             "--convert-xmp" => {
                 args.convert = Some(match value()?.as_str() {
@@ -318,8 +322,25 @@ fn print_usage(cache: &Cache) -> AnyResult<()> {
 }
 
 /// Calcule les aperçus du dossier en affichant la progression sur une ligne.
-fn previews(settings: &EngineSettings, files: Vec<tri::media::MediaFile>) -> AnyResult<()> {
+fn previews(
+    settings: &EngineSettings,
+    dir: &Path,
+    files: Vec<tri::media::MediaFile>,
+) -> AnyResult<()> {
     let cache = settings.open_cache()?;
+    // `[cache] location` : le cache du dossier à sa place avant de le remplir.
+    let removable = match settings.cache.location {
+        tri::cache::Location::Disk => tri::places::removable_roots(&settings.places),
+        _ => Vec::new(),
+    };
+    match cache.apply(settings.cache.location, dir, &removable) {
+        Ok(Some((root, _))) => println!(
+            "{}",
+            t!("cli-cache-here", place = root.display().to_string())
+        ),
+        Ok(None) => {}
+        Err(e) => eprintln!("{}", t!("cli-cache-move-failed", error = e.to_string())),
+    }
     let n = files.len();
     let raws = files.iter().filter(|f| f.kind == MediaKind::Raw).count();
     // Pas d'écran : la taille « auto » prend sa valeur de repli. Démonstration et mesure :
@@ -567,7 +588,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
     }
     if args.previews {
         let files = scan(&dest, 1)?;
-        previews(settings, files)?;
+        previews(settings, &dest, files)?;
     }
     if report.errors.is_empty() {
         Ok(())
@@ -1055,6 +1076,23 @@ fn run() -> AnyResult<()> {
     if args.usage {
         return print_usage(&settings.open_cache()?);
     }
+    if let Some(on) = args.keep_cache {
+        let dir = args.dir.as_ref().ok_or_else(usage)?;
+        let cache = settings.open_cache()?;
+        let moved = if on {
+            cache.use_disk(dir)?
+        } else {
+            cache.release_disk(dir)?
+        };
+        let place = dir.display().to_string();
+        if on {
+            println!("{}", t!("cli-cache-here", place = place));
+        } else {
+            println!("{}", t!("cli-cache-released", place = place));
+        }
+        println!("{}", t!("cli-cache-moved", n = moved.entries));
+        return Ok(());
+    }
     if args.check_update {
         let build = tri::update::Build::current();
         match tri::update::check(&build, &settings.update)? {
@@ -1122,7 +1160,7 @@ fn run() -> AnyResult<()> {
         return convert_xmp(&files, target, args.dry_run);
     }
     if args.previews {
-        return previews(&settings, groups.into_iter().flatten().collect());
+        return previews(&settings, &dir, groups.into_iter().flatten().collect());
     }
     for (index, group) in groups.iter().enumerate() {
         println!("===== {}", t!("cli-group", index = index, n = group.len()));

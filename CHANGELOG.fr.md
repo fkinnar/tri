@@ -22,6 +22,13 @@
   couleur d'accent et « éjecter » en rouge, pour ne plus les confondre (issue n° 41).
 - **Programmes lancés** (éditeur, application par défaut, gestionnaire de fichiers) :
   leurs messages ne remplissent plus le terminal d'où `tri` a été lancé.
+- **Cache avec les photos** : le cache peut être gardé à la racine d'un disque amovible
+  (disque de transfert, retrouvé sur un autre ordinateur) ou dans un dossier (il le suit
+  quand on le déplace) : clic droit dans le panneau des dossiers,
+  `tri <dossier> --cache-here` / `--cache-user`, ou par défaut avec
+  `[cache] location = "disk"` / `"folder"`. Déplacer ou renommer un dossier depuis `tri`
+  emporte son cache. Le cache existant est recalculé une fois (nouveau format ;
+  issue n° 55).
 
 ## 1.0.0-alpha.7 — 23/10/2026
 

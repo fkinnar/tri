@@ -130,6 +130,8 @@ pub struct Transfer {
     /// sélection en a (case montrée), calculé à la première image.
     pairs: Option<bool>,
     has_pairs: Option<bool>,
+    /// Dossier déplacé : son cache le suit (coché d'office).
+    bring_cache: bool,
 }
 
 /// Suppression en cours, dans un fil à part : une centaine d'images à la corbeille prend
@@ -167,6 +169,8 @@ pub enum Outcome {
         step: Option<tri::history::Step>,
         point: Option<PathBuf>,
         renamed: Option<(PathBuf, PathBuf)>,
+        /// Renommé ou déplacé : son cache le suit (case « Emporter le cache »).
+        cache_follows: bool,
     },
     /// Nom donné au favori `path` (vide : retiré).
     FavoriteNamed { path: PathBuf, name: String },
@@ -253,6 +257,7 @@ impl FileDialog {
             job: None,
             pairs: None,
             has_pairs: None,
+            bring_cache: true,
         }))
     }
 
@@ -309,6 +314,7 @@ impl FileDialog {
                             step: Some(tri::history::Step::CreateDir(path.clone())),
                             point: Some(path),
                             renamed: None,
+                            cache_follows: false,
                         },
                         Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
                     },
@@ -344,6 +350,7 @@ impl FileDialog {
                             step: Some(tri::history::Step::RenameDir(path.clone(), to.clone())),
                             point: Some(to.clone()),
                             renamed: Some((path.clone(), to)),
+                            cache_follows: true,
                         },
                         Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
                     },
@@ -734,6 +741,7 @@ fn delete_folder_dialog(
                 step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
                 point: path.parent().map(Path::to_path_buf),
                 renamed: None,
+                cache_follows: false,
             },
             Err(e) => Outcome::Failed(t!("folder-failed", error = e.to_string())),
         };
@@ -845,6 +853,11 @@ impl Transfer {
                 }
                 if has_pairs {
                     pairs_checkbox(ui, &mut pairs);
+                }
+                // Dossier déplacé : son cache le suit, sur demande (issue n° 55).
+                if matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move {
+                    ui.checkbox(&mut self.bring_cache, t!("transfer-bring-cache"))
+                        .on_hover_text(t!("transfer-bring-cache-tip"));
                 }
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().error_fg_color, e);
@@ -967,6 +980,7 @@ impl Transfer {
                             renamed: (plan.mode == TransferMode::Move)
                                 .then(|| (plan.from.clone(), plan.to.clone())),
                             step: Some(tri::history::transfer_dir_step(plan)),
+                            cache_follows: self.bring_cache,
                         },
                     }
                 }

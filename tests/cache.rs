@@ -303,3 +303,82 @@ fn concurrent_puts_and_gets_never_see_partial_entries() {
     });
     assert_eq!(s.cache.usage(Level::Standard).unwrap().entries, 1);
 }
+
+#[test]
+fn a_disk_keeps_its_cache_and_finds_it_mounted_elsewhere() {
+    // Issue n° 55 : un disque amovible branché sur plusieurs ordinateurs.
+    let dir = tempfile::tempdir().unwrap();
+    let cache = Cache::open(dir.path().join("cache")).unwrap();
+    let disk = dir.path().join("disque");
+    let photo = disk.join("2026/séance/DSCF0001.RAF");
+    fs::create_dir_all(photo.parent().unwrap()).unwrap();
+    fs::write(&photo, b"contenu RAW factice").unwrap();
+    let key = Key::new(&photo, Level::Thumbnail, "s=400").unwrap();
+    cache.put(&key, &gradient()).unwrap();
+    let analysis = Key::new(&photo, Level::Exposure, "v").unwrap();
+    cache.put_bytes(&analysis, b"histogrammes").unwrap();
+    assert!(cache.disk_of(photo.parent().unwrap()).is_none());
+    // Sur le disque : les entrées déjà calculées y passent, rien à recalculer.
+    let moved = cache.use_disk(&disk).unwrap();
+    assert_eq!(moved.entries, 2);
+    assert!(disk.join(tri::cache::DISK_DIR).is_dir());
+    assert_eq!(cache.disk_of(photo.parent().unwrap()), Some(disk.clone()));
+    assert!(cache.contains(&key));
+    assert_eq!(cache.usage(Level::Thumbnail).unwrap(), Usage::default());
+    // Monté ailleurs (autre ordinateur, autre cache central) : retrouvé.
+    let elsewhere = dir.path().join("media/autre-nom");
+    fs::create_dir_all(elsewhere.parent().unwrap()).unwrap();
+    fs::rename(&disk, &elsewhere).unwrap();
+    let other = Cache::open(dir.path().join("autre-cache")).unwrap();
+    let moved_photo = elsewhere.join("2026/séance/DSCF0001.RAF");
+    let key = Key::new(&moved_photo, Level::Thumbnail, "s=400").unwrap();
+    assert!(other.contains(&key), "cache du disque retrouvé");
+    assert_eq!(
+        other.get_bytes(&Key::new(&moved_photo, Level::Exposure, "v").unwrap()),
+        Some(b"histogrammes".to_vec())
+    );
+    // Vidé par dossier comme le cache central.
+    let image = Key::new(&moved_photo, Level::Standard, "x").unwrap();
+    other.put(&image, &gradient()).unwrap();
+    let freed = other
+        .clear_folder(moved_photo.parent().unwrap(), Some(Level::Standard))
+        .unwrap();
+    assert_eq!(freed.entries, 1);
+    // Plus sur le disque : retour dans le cache central, dossier caché supprimé.
+    let back = other.release_disk(&elsewhere).unwrap();
+    assert_eq!(back.entries, 2);
+    assert!(!elsewhere.join(tri::cache::DISK_DIR).exists());
+    assert!(other.disk_of(moved_photo.parent().unwrap()).is_none());
+    assert!(other.contains(&key));
+    assert_eq!(other.usage(Level::Thumbnail).unwrap().entries, 1);
+}
+
+#[test]
+fn a_folder_keeps_its_cache_inside_or_brings_it_along_when_moved() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = Cache::open(dir.path().join("cache")).unwrap();
+    let disk = dir.path().join("disque");
+    let seance = disk.join("séance");
+    let photo = seance.join("sous/IMG.JPG");
+    fs::create_dir_all(photo.parent().unwrap()).unwrap();
+    fs::write(&photo, b"jpeg").unwrap();
+    // Cache sur le disque, puis dans la séance elle-même : il descend d'un cran.
+    cache.use_disk(&disk).unwrap();
+    let key = Key::new(&photo, Level::Thumbnail, "s").unwrap();
+    cache.put(&key, &gradient()).unwrap();
+    assert_eq!(cache.use_disk(&seance).unwrap().entries, 1);
+    assert_eq!(cache.disk_of(photo.parent().unwrap()), Some(seance.clone()));
+    assert!(cache.contains(&key));
+    // Rendu à l'étage du dessus (le disque), pas au cache central.
+    assert_eq!(cache.release_disk(&seance).unwrap().entries, 1);
+    assert_eq!(cache.disk_of(photo.parent().unwrap()), Some(disk.clone()));
+    assert!(cache.contains(&key));
+    cache.release_disk(&disk).unwrap();
+    // Dossier déplacé : ses entrées (sous-dossiers compris) le suivent.
+    let moved = dir.path().join("ailleurs/séance");
+    fs::create_dir_all(moved.parent().unwrap()).unwrap();
+    fs::rename(&seance, &moved).unwrap();
+    assert_eq!(cache.relocate(&seance, &moved).unwrap().entries, 1);
+    let key = Key::new(&moved.join("sous/IMG.JPG"), Level::Thumbnail, "s").unwrap();
+    assert!(cache.contains(&key), "le cache a suivi le dossier");
+}

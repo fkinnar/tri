@@ -8,24 +8,46 @@
 //! `<dossier>` est un hash du dossier de la photo. Vider le cache d'un dossier
 //! ([`Cache::clear_folder`]) n'a donc besoin ni des réglages ni de la taille de l'écran
 //! qui entrent dans les clés.
+//!
+//! Cache sur le disque des photos (24/10/2026, issue n° 55) : un dossier [`DISK_DIR`] à la
+//! racine d'un disque (ou de n'importe quel dossier) y garde le cache de toutes les photos
+//! en dessous, rangé par chemin *relatif* à cette racine ; la clé ne contient que le nom du
+//! fichier (le dossier est dans le rangement). Branché sur un autre ordinateur, monté
+//! ailleurs, le disque garde son cache.
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::bitmap::Bitmap;
 use crate::jpeg::{self, Chroma};
 
 /// Version du format du cache. L'incrémenter rend toutes les anciennes entrées invisibles.
-/// v2 (23/10/2026) : entrées rangées par dossier d'origine.
-const FORMAT_VERSION: &str = "v2";
+/// v2 (23/10/2026) : entrées rangées par dossier d'origine. v3 (24/10/2026) : clé sans le
+/// chemin du dossier (cache sur le disque des photos), source de chaque dossier notée.
+const FORMAT_VERSION: &str = "v3";
 
 /// Formats précédents, supprimés en fond à l'ouverture (invisibles, ils ne feraient
 /// qu'occuper le disque).
-const OLD_FORMATS: [&str; 1] = ["v1"];
+const OLD_FORMATS: [&str; 2] = ["v1", "v2"];
+
+/// Dossier caché qui garde, à la racine d'un disque, le cache des photos de ce disque
+/// ([`Cache::use_disk`]).
+pub const DISK_DIR: &str = ".tri-cache";
+
+/// Fichier de chaque dossier d'entrées : le dossier de photos d'origine (chemin absolu
+/// dans le cache central, relatif à la racine sur un disque), pour déplacer les entrées
+/// entre les deux.
+const SOURCE: &str = ".source";
+
+/// Change à chaque [`Cache::use_disk`] / [`Cache::release_disk`] : les caches ouverts
+/// oublient où ranger chaque dossier.
+static DISK_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Longueur (caractères hexadécimaux) du nom du dossier d'une entrée.
 const FOLDER_ID_LEN: usize = 16;
@@ -98,8 +120,8 @@ impl Level {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
     level: Level,
-    /// Dossier d'origine (voir [`folder_id`]).
-    folder: String,
+    /// Dossier d'origine (absolu) : il choisit le rangement, pas la clé.
+    folder: PathBuf,
     hash: String,
 }
 
@@ -142,14 +164,16 @@ impl Key {
             h.update(bytes);
         };
         field(FORMAT_VERSION.as_bytes());
-        field(path.as_encoded_bytes());
+        // Le nom seul : le dossier est dans le rangement (cache déplaçable sur un disque).
+        let path = Path::new(path);
+        field(path.file_name().unwrap_or_default().as_encoded_bytes());
         field(&size.to_le_bytes());
         field(&modified_ns.to_le_bytes());
         field(level.dir_name().as_bytes());
         field(params.as_bytes());
         Key {
             level,
-            folder: folder_id(Path::new(path).parent().unwrap_or(Path::new(""))),
+            folder: path.parent().unwrap_or(Path::new("")).to_path_buf(),
             hash: h.finalize().to_hex().to_string(),
         }
     }
@@ -160,12 +184,47 @@ impl Key {
     }
 }
 
+/// Où garder le cache d'un dossier ouvert dont le cache est encore chez l'utilisateur
+/// (`[cache] location`, issue n° 55).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Location {
+    /// Cache de l'utilisateur ([`default_dir`]) : photos qui ne bougent pas.
+    #[default]
+    User,
+    /// À la racine du disque amovible du dossier (disque de transfert) ; ailleurs, chez
+    /// l'utilisateur.
+    Disk,
+    /// Dans le dossier lui-même (dossier qu'on déplace).
+    Folder,
+}
+
+/// Racine où ranger le cache de `folder` (absolu) selon `location` ; `removable` : racines
+/// des disques amovibles. `None` : chez l'utilisateur.
+pub fn wanted_root(location: Location, folder: &Path, removable: &[PathBuf]) -> Option<PathBuf> {
+    match location {
+        Location::User => None,
+        Location::Folder => Some(folder.to_path_buf()),
+        Location::Disk => removable
+            .iter()
+            .filter(|root| folder.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned(),
+    }
+}
+
+/// Génération et racine du cache sur disque de chaque dossier (voir [`Cache::disk_of`]).
+type DiskMemo = (u64, HashMap<PathBuf, Option<PathBuf>>);
+
 /// Cache sur disque, enraciné dans un dossier. Ne garde aucun état en mémoire : plusieurs
 /// threads (ou processus) peuvent utiliser le même dossier en même temps.
 #[derive(Clone, Debug)]
 pub struct Cache {
     root: PathBuf,
     quality: u8,
+    /// Racine du cache sur disque de chaque dossier déjà vu (`None` : cache central), et la
+    /// génération ([`DISK_GENERATION`]) où elle a été lue.
+    disks: Arc<Mutex<DiskMemo>>,
 }
 
 impl Cache {
@@ -174,6 +233,7 @@ impl Cache {
         let cache = Cache {
             root: root.into(),
             quality: DEFAULT_JPEG_QUALITY,
+            disks: Arc::default(),
         };
         for level in Level::ALL {
             fs::create_dir_all(cache.level_dir(level))?;
@@ -226,10 +286,172 @@ impl Cache {
         self.root.join(FORMAT_VERSION).join(level.dir_name())
     }
 
+    /// Dossier des entrées des images de `folder` (absolu) au niveau `level`, et sa source
+    /// (voir [`SOURCE`]). Un sous-dossier par dossier d'origine : vidage par dossier, et
+    /// pas des dizaines de milliers de fichiers dans un même dossier.
+    fn shard(&self, level: Level, folder: &Path) -> (PathBuf, String) {
+        match self.disk_of(folder) {
+            Some(disk) => {
+                let relative = relative_name(folder.strip_prefix(&disk).unwrap_or(Path::new("")));
+                let dir = disk_level_dir(&disk, level).join(folder_id(relative.as_ref()));
+                (dir, relative)
+            }
+            None => (
+                self.level_dir(level).join(folder_id(folder)),
+                folder.to_string_lossy().into_owned(),
+            ),
+        }
+    }
+
+    /// Racine du cache sur disque qui garde les images de `folder` (absolu) : le plus proche
+    /// dossier parent (ou `folder` lui-même) qui contient [`DISK_DIR`] ; `None` : cache
+    /// central. Gardé en mémoire par dossier.
+    pub fn disk_of(&self, folder: &Path) -> Option<PathBuf> {
+        let generation = DISK_GENERATION.load(Ordering::Relaxed);
+        let mut disks = self.disks.lock().unwrap_or_else(|e| e.into_inner());
+        if disks.0 != generation {
+            *disks = (generation, HashMap::new());
+        }
+        disks
+            .1
+            .entry(folder.to_path_buf())
+            .or_insert_with(|| {
+                folder
+                    .ancestors()
+                    .find(|a| a.join(DISK_DIR).is_dir())
+                    .map(Path::to_path_buf)
+            })
+            .clone()
+    }
+
+    /// Garde désormais dans `root` (racine d'un disque amovible, ou un dossier qu'on veut
+    /// pouvoir déplacer) le cache des photos qui sont dessous : crée [`DISK_DIR`] et y
+    /// déplace les entrées déjà calculées (cache central, ou cache sur disque plus haut).
+    /// Renvoie ce qui a été déplacé.
+    pub fn use_disk(&self, root: &Path) -> io::Result<Usage> {
+        let root = std::path::absolute(root)?;
+        let holder = self.disk_of(&root);
+        if holder.as_deref() == Some(root.as_path()) {
+            return Ok(Usage::default());
+        }
+        let mut shards = self.shards_under(&self.root, None, &root);
+        if let Some(holder) = &holder {
+            shards.extend(self.shards_under(&holder.join(DISK_DIR), Some(holder), &root));
+        }
+        fs::create_dir_all(root.join(DISK_DIR).join(FORMAT_VERSION))?;
+        DISK_GENERATION.fetch_add(1, Ordering::Relaxed);
+        self.rehome(shards, Path::to_path_buf)
+    }
+
+    /// Applique `location` à `folder` (dossier ouvert) si son cache est encore chez
+    /// l'utilisateur ; un choix déjà fait (un [`DISK_DIR`] au-dessus) est respecté.
+    /// Renvoie la racine choisie et ce qui y a été déplacé ; `None` : rien à faire.
+    pub fn apply(
+        &self,
+        location: Location,
+        folder: &Path,
+        removable: &[PathBuf],
+    ) -> io::Result<Option<(PathBuf, Usage)>> {
+        let folder = std::path::absolute(folder)?;
+        if self.disk_of(&folder).is_some() {
+            return Ok(None);
+        }
+        match wanted_root(location, &folder, removable) {
+            Some(root) => Ok(Some((root.clone(), self.use_disk(&root)?))),
+            None => Ok(None),
+        }
+    }
+
+    /// Ne garde plus le cache dans `root` ([`Cache::use_disk`]) : ses entrées vont où ses
+    /// photos les attendent désormais (cache sur disque plus haut, sinon cache central),
+    /// puis [`DISK_DIR`] est supprimé. Renvoie ce qui a été déplacé.
+    pub fn release_disk(&self, root: &Path) -> io::Result<Usage> {
+        let root = std::path::absolute(root)?;
+        let marker = root.join(DISK_DIR);
+        if !marker.is_dir() {
+            return Ok(Usage::default());
+        }
+        // Mis de côté d'abord : le dossier ne compte plus comme cache pendant le
+        // déplacement.
+        let aside = root.join(format!("{DISK_DIR}-{}", std::process::id()));
+        fs::rename(&marker, &aside)?;
+        DISK_GENERATION.fetch_add(1, Ordering::Relaxed);
+        let shards = self.shards_under(&aside, Some(&root), &root);
+        let moved = self.rehome(shards, Path::to_path_buf)?;
+        fs::remove_dir_all(&aside)?;
+        Ok(moved)
+    }
+
+    /// Après le déplacement (ou le renommage) du dossier `from` en `to` : ses entrées et
+    /// celles de ses sous-dossiers suivent (sinon, recalculées). Un cache gardé dans le
+    /// dossier lui-même est déjà parti avec lui.
+    pub fn relocate(&self, from: &Path, to: &Path) -> io::Result<Usage> {
+        let (from, to) = (std::path::absolute(from)?, std::path::absolute(to)?);
+        let mut shards = self.shards_under(&self.root, None, &from);
+        if let Some(holder) = self.disk_of(&from)
+            && !holder.starts_with(&from)
+        {
+            shards.extend(self.shards_under(&holder.join(DISK_DIR), Some(&holder), &from));
+        }
+        self.rehome(shards, |folder| {
+            to.join(folder.strip_prefix(&from).unwrap_or(Path::new("")))
+        })
+    }
+
+    /// Dossiers d'entrées du rangement `store` (le cache central, ou le [`DISK_DIR`] d'un
+    /// disque dont `base` est la racine) qui gardent les photos de `under` ou d'un de ses
+    /// sous-dossiers : (niveau, dossier d'entrées, dossier de photos).
+    fn shards_under(
+        &self,
+        store: &Path,
+        base: Option<&Path>,
+        under: &Path,
+    ) -> Vec<(Level, PathBuf, PathBuf)> {
+        let mut found = Vec::new();
+        for level in Level::ALL {
+            let dir = store.join(FORMAT_VERSION).join(level.dir_name());
+            let Ok(shards) = fs::read_dir(dir) else {
+                continue;
+            };
+            for shard in shards.flatten() {
+                let Ok(source) = fs::read_to_string(shard.path().join(SOURCE)) else {
+                    continue;
+                };
+                let source = source.trim_end();
+                let folder = match base {
+                    Some(base) if source.is_empty() => base.to_path_buf(),
+                    // Écrit avec des « / » (`relative_name`) : recollé composant par
+                    // composant, sinon un chemin Windows mélangerait « \ » et « / ».
+                    Some(base) => source.split('/').fold(base.to_path_buf(), |p, c| p.join(c)),
+                    None => PathBuf::from(source),
+                };
+                if folder.starts_with(under) {
+                    found.push((level, shard.path(), folder));
+                }
+            }
+        }
+        found
+    }
+
+    /// Range à nouveau des dossiers d'entrées ([`Cache::shards_under`]) là où leurs photos,
+    /// au nouveau chemin donné par `place`, les attendent.
+    fn rehome(
+        &self,
+        shards: Vec<(Level, PathBuf, PathBuf)>,
+        place: impl Fn(&Path) -> PathBuf,
+    ) -> io::Result<Usage> {
+        let mut moved = Usage::default();
+        for (level, shard, folder) in shards {
+            let (to, source) = self.shard(level, &place(&folder));
+            if to != shard {
+                moved.add(move_entries(&shard, &to, &source)?);
+            }
+        }
+        Ok(moved)
+    }
+
     fn entry_path(&self, key: &Key) -> PathBuf {
-        // Un sous-dossier par dossier d'origine : vidage par dossier, et pas des dizaines
-        // de milliers de fichiers dans un même dossier.
-        self.level_dir(key.level).join(&key.folder).join(format!(
+        self.shard(key.level, &key.folder).0.join(format!(
             "{}.{}",
             key.hash,
             if key.level.is_image() { "jpg" } else { "bin" }
@@ -295,6 +517,10 @@ impl Cache {
             .parent()
             .expect("une entrée a toujours un dossier parent");
         fs::create_dir_all(dir)?;
+        let source = dir.join(SOURCE);
+        if !source.exists() {
+            fs::write(&source, self.shard(key.level, &key.folder).1)?;
+        }
         let tmp = temp_path(&path);
         let result = (|| {
             let mut file = File::create(&tmp)?;
@@ -333,11 +559,11 @@ impl Cache {
     /// un niveau ou à tous si `level` vaut `None`, quels que soient les réglages avec
     /// lesquels elles ont été calculées. Renvoie l'espace libéré.
     pub fn clear_folder(&self, folder: &Path, level: Option<Level>) -> io::Result<Usage> {
-        let id = folder_id(&std::path::absolute(folder)?);
+        let folder = std::path::absolute(folder)?;
         let levels = level.map_or(Level::ALL.to_vec(), |l| vec![l]);
         let mut freed = Usage::default();
         for level in levels {
-            let dir = self.level_dir(level).join(&id);
+            let dir = self.shard(level, &folder).0;
             let entries = match fs::read_dir(&dir) {
                 Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
                 result => result?,
@@ -424,6 +650,56 @@ pub struct Usage {
     pub bytes: u64,
     /// Nombre d'entrées.
     pub entries: usize,
+}
+
+impl Usage {
+    fn add(&mut self, other: Usage) {
+        self.bytes += other.bytes;
+        self.entries += other.entries;
+    }
+}
+
+/// Dossier d'un niveau dans le cache du disque `root`.
+fn disk_level_dir(root: &Path, level: Level) -> PathBuf {
+    root.join(DISK_DIR)
+        .join(FORMAT_VERSION)
+        .join(level.dir_name())
+}
+
+/// Chemin relatif écrit avec des « / » quel que soit le système : le même dossier d'un
+/// disque a le même rangement sous macOS, Linux et Windows.
+fn relative_name(relative: &Path) -> String {
+    relative
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Déplace les entrées du dossier `from` dans `to` (créé, sa source notée), puis supprime
+/// `from`. Vers un autre disque, copie puis suppression ; une entrée déjà présente dans
+/// `to` (calculée pendant le déplacement) est gardée.
+fn move_entries(from: &Path, to: &Path, source: &str) -> io::Result<Usage> {
+    fs::create_dir_all(to)?;
+    fs::write(to.join(SOURCE), source)?;
+    let mut moved = Usage::default();
+    for file in fs::read_dir(from)?.flatten() {
+        let path = file.path();
+        if path.extension().is_none_or(|e| e != "jpg" && e != "bin") {
+            continue;
+        }
+        let target = to.join(file.file_name());
+        if !target.exists() {
+            let bytes = file.metadata()?.len();
+            if fs::rename(&path, &target).is_err() {
+                fs::copy(&path, &target)?;
+            }
+            moved.bytes += bytes;
+            moved.entries += 1;
+        }
+    }
+    fs::remove_dir_all(from)?;
+    Ok(moved)
 }
 
 struct Entry {
@@ -555,14 +831,26 @@ mod tests {
         assert_eq!(&k.hash[..16], STABLE_PREFIX);
     }
 
-    const STABLE_PREFIX: &str = "7745d33317e78532";
+    const STABLE_PREFIX: &str = "12b437316e982875";
 
     #[test]
     fn entries_of_one_folder_share_a_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path()).unwrap();
         let key = |p: &str| Key::from_parts(p.as_ref(), 1, 1, Level::Full, "p");
-        assert_eq!(key("/a/x.RAF").folder, key("/a/y.JPG").folder);
-        assert_ne!(key("/a/x.RAF").folder, key("/b/x.RAF").folder);
-        assert_eq!(key("/a/x.RAF").folder.len(), FOLDER_ID_LEN);
+        let shard = |p: &str| cache.entry_path(&key(p)).parent().unwrap().to_path_buf();
+        assert_eq!(shard("/a/x.RAF"), shard("/a/y.JPG"));
+        assert_ne!(shard("/a/x.RAF"), shard("/b/x.RAF"));
+        assert_eq!(shard("/a/x.RAF").file_name().unwrap().len(), FOLDER_ID_LEN);
+        // Même nom dans deux dossiers : même clé, rangée à deux endroits.
+        assert_eq!(key("/a/x.RAF").hash, key("/b/x.RAF").hash);
+    }
+
+    #[test]
+    fn relative_names_use_slashes() {
+        let relative: PathBuf = ["2026", "séance"].iter().collect();
+        assert_eq!(relative_name(&relative), "2026/séance");
+        assert_eq!(relative_name(Path::new("")), "");
     }
 
     #[test]
@@ -572,5 +860,25 @@ mod tests {
         assert_ne!(a, b);
         assert_eq!(a.parent(), target.parent());
         assert!(a.extension().is_some_and(|e| e == "tmp"));
+    }
+
+    #[test]
+    fn the_wanted_root_follows_the_location() {
+        let removable = [PathBuf::from("/Volumes/SD"), PathBuf::from("/Volumes/T7")];
+        let folder = Path::new("/Volumes/T7/2026/séance");
+        assert_eq!(wanted_root(Location::User, folder, &removable), None);
+        assert_eq!(
+            wanted_root(Location::Disk, folder, &removable),
+            Some(PathBuf::from("/Volumes/T7"))
+        );
+        assert_eq!(
+            wanted_root(Location::Disk, Path::new("/Users/u/Photos"), &removable),
+            None,
+            "pas sur un disque amovible : chez l'utilisateur"
+        );
+        assert_eq!(
+            wanted_root(Location::Folder, folder, &removable),
+            Some(folder.to_path_buf())
+        );
     }
 }
