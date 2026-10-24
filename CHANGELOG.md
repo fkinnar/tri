@@ -20,6 +20,8 @@
   "eject" to red, so they are not confused (issue #41).
 - **Auto advance**: the star of the button stays visible when it is on (it had the accent
   colour of the background; issue #59).
+- **Auto advance in stacks**: in full screen in stack mode, a rating moves to the next
+  photo of the stack, like →, instead of the next stack (issue #60).
 - **External programs** (editor, default application, file manager): their messages no
   longer fill the terminal `tri` was started from.
 - **Cache with the photos**: the cache can be kept at the root of a removable drive (a

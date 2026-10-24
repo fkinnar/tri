@@ -22,6 +22,8 @@
   couleur d'accent et « éjecter » en rouge, pour ne plus les confondre (issue n° 41).
 - **Avance auto** : l'étoile du bouton reste visible quand il est allumé (elle avait la
   couleur d'accent du fond ; issue n° 59).
+- **Avance auto dans les piles** : en plein écran en mode pile, une note passe à la photo
+  suivante de la pile, comme →, et non à la pile suivante (issue n° 60).
 - **Programmes lancés** (éditeur, application par défaut, gestionnaire de fichiers) :
   leurs messages ne remplissent plus le terminal d'où `tri` a été lancé.
 - **Cache avec les photos** : le cache peut être gardé à la racine d'un disque amovible
