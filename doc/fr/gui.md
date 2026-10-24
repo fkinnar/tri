@@ -921,7 +921,8 @@ photos nettes.
   `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
   (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
   clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
-  et `*`. Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
+  et `*` ; à la souris, Ctrl / Cmd + molette ou pince au pavé tactile, en continu
+  (24/10/2026, issue n° 44). Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
   la place dans le bandeau (sinon ils recouvraient les notes).
 - **Effacer les filtres** : un entonnoir barré tout à droite de la barre des filtres,
   grisé sans filtre, le nombre d'images juste à sa gauche.

@@ -10,6 +10,8 @@
   button at the bottom (issue #39).
 - **Offload, RAW only**: the progress counts only the RAW files, one by one (it
   counted the JPEGs left on the card too and moved forward two by two; issue #38).
+- **Grid**: Ctrl / Cmd + mouse wheel, or a pinch on the touchpad, changes the size of the
+  thumbnails (issue #44).
 
 ## 1.0.0-alpha.7 — 2026-10-23
 
