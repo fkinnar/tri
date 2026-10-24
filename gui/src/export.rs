@@ -664,10 +664,6 @@ pub fn report_dialog(
                 });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.button(t!("close")).clicked() {
-                    action = Some(ReportAction::Close);
-                }
-                ui.weak(t!("or-escape"));
                 // Effacer la liste : petit balai à droite, loin de Fermer (retour du
                 // 20/10/2026).
                 if !entries.is_empty() {

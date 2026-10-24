@@ -85,7 +85,7 @@ tant qu'un déchargement existe.
   autres fichiers ; `Plan::to_copy`, `Plan::bytes` ;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression) ->
-  Report` (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers et octets ;
+  Report` (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande

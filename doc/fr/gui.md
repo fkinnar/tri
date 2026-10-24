@@ -435,6 +435,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier existant (copier / déplacer, racine du déchargement, réglages), Tab complète
   comme un terminal : un seul dossier possible, il est pris ; sinon le début commun, et
   la liste des dossiers sous le champ.
+- **Croix de fermeture** (24/10/2026, issue n° 39) : toutes les boîtes (cadre commun
+  `Dialog`) ont la même croix en haut à droite, à la hauteur du titre, libellée
+  « Fermer » ; plus de bouton « Fermer » en bas (Annuler reste dans les boîtes à
+  confirmer). Sans croix (`Dialog::busy`) : copie et suppression en cours, qu'on ne peut
+  pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
