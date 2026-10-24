@@ -66,7 +66,9 @@ system one ("cold" measurements, experiments).
   (otherwise the system refuses), then ejection in the background (`places::eject`); the
   result, or the system's message, is shown in the status bar. A **fixed** volume
   (`[places] fixed`, e.g. the always-connected work drive) has no eject icon but a drive
-  icon, not clickable: no accidental ejection (user's idea, 2026-10-17). The open folder
+  icon, not clickable: no accidental ejection (user's idea, 2026-10-17). On hover, the
+  "offload" icon turns to the accent and "eject" to red (`[gui.colors] error`): two
+  small neighbouring icons not to be confused (2026-10-24, issue #41). The open folder
   is expanded and shown at startup. `Shift+D` shows or hides the panel; settings
   `[gui.folders]` (shown, width, indent, hidden folders). Without a folder argument,
   `tri-gui` reopens the last opened folder (`[gui] reopen_last`, remembered by the engine

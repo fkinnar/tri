@@ -2,6 +2,11 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Panneau des dossiers** : au survol, l'icône « décharger » d'un volume passe à la
+  couleur d'accent et « éjecter » en rouge, pour ne plus les confondre (issue n° 41).
+
 ## 1.0.0-alpha.7 — 23/10/2026
 
 Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.
