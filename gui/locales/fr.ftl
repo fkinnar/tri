@@ -485,6 +485,8 @@ transfer-move = Déplacer
 transfer-confirm = Valider
 transfer-hint = Tab : compléter · flèches haut / bas : destinations récentes
 transfer-recent = Récentes
+transfer-bring-cache = Emporter le cache
+transfer-bring-cache-tip = Vignettes, aperçus et analyses suivent le dossier : rien à recalculer
 transfer-progress = { $done } / { $total } fichiers
 transfer-failed = copie / déplacement impossible : { $error }
 transfer-folder-title = Dossier « { $name } » vers…
@@ -627,6 +629,14 @@ folder-menu-delete = Supprimer…
 folder-menu-offload = Décharger la carte…
 folder-menu-eject = Éjecter
 folder-menu-offload-here = Décharger une carte ici…
+folder-menu-cache-folder = Garder le cache dans ce dossier
+folder-menu-cache-disk = Garder le cache sur ce disque
+folder-menu-cache-release = Ne plus garder le cache ici
+folder-menu-cache-tip = Vignettes, aperçus et analyses des photos de ce dossier (sous-dossiers compris) rangés dans .tri-cache : ils voyagent avec lui, retrouvés sur un autre ordinateur
+cache-kept-here = Cache gardé dans { $place }
+cache-released = Cache retiré de { $place }
+cache-kept-failed = Cache gardé chez l'utilisateur : { $error }
+cache-move-failed = Déplacement du cache impossible : { $error }
 watch-reloaded = { $count ->
     [one] Une image ajoutée, retirée ou modifiée ailleurs : dossier relu
    *[other] { $count } images ajoutées, retirées ou modifiées ailleurs : dossier relu

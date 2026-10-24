@@ -220,8 +220,11 @@ impl History {
 /// déchargés d'après `history`.
 pub fn plan(source: &Path, history: &History) -> io::Result<Plan> {
     let files = media::scan(source, usize::MAX)?;
+    // Dossiers cachés écartés comme par `media::scan` (cache `.tri-cache` d'une carte
+    // ouverte directement) : pas comptés parmi les fichiers ignorés.
     let all = walkdir::WalkDir::new(source)
         .into_iter()
+        .filter_entry(|e| e.depth() == 0 || !media::is_hidden_dir(e))
         .flatten()
         .filter(|e| e.file_type().is_file())
         .count();

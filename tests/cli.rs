@@ -442,3 +442,29 @@ fn a_jpeg_is_exported_as_is() {
         "copie à l'identique"
     );
 }
+
+#[test]
+fn a_folder_keeps_its_cache_and_gives_it_back() {
+    // Issue n° 55 : cache dans le dossier (il voyage avec lui), puis rendu.
+    let env = Env::new();
+    let seance = env.photos().join("séance");
+    env.image(&seance, "a.jpg");
+    ok(env.run([arg(&seance), "--previews".as_ref()]));
+    let computed = cache_entries(&env);
+    assert!(computed > 0);
+    let out = stdout(&ok(env.run([arg(&seance), "--cache-here".as_ref()])));
+    assert!(out.contains(&format!("{computed} entries moved")), "{out}");
+    assert!(seance.join(tri::cache::DISK_DIR).is_dir());
+    assert_eq!(
+        cache_entries(&env),
+        0,
+        "plus rien dans le cache de l'utilisateur"
+    );
+    // Tout est déjà là : rien à recalculer.
+    let out = stdout(&ok(env.run([arg(&seance), "--previews".as_ref()])));
+    assert_eq!(entries_in(&out), 0, "{out}");
+    let out = stdout(&ok(env.run([arg(&seance), "--cache-user".as_ref()])));
+    assert!(out.contains(&format!("{computed} entries moved")), "{out}");
+    assert!(!seance.join(tri::cache::DISK_DIR).exists());
+    assert_eq!(cache_entries(&env), computed);
+}

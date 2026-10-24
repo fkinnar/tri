@@ -428,6 +428,13 @@ system one ("cold" measurements, experiments).
   button at the bottom (Cancel stays in dialogs to confirm). Without a cross
   (`Dialog::busy`): copy and deletion in progress, which cannot be interrupted. The help,
   an egui window, already had its own.
+- **Cache kept with the photos** (2026-10-24, issue #55): right click on a folder of
+  the panel, "Keep the cache in this folder" (on a removable drive: "on this drive"), or
+  "No longer keep the cache here"; not offered where `[cache] location` already puts it.
+  When a folder is opened, `location` (`disk`, `folder`) applies if its cache is still
+  the user's. Moving a folder: "Bring the cache along" checkbox (ticked); renaming: the
+  cache always follows. The work is done in the background (`TriApp::cache_job`), message
+  in the status bar.
 - **Pointer in dialogs**: the hand on everything clickable (`interact_cursor` in the
   common `Dialog` frame); "grab" elsewhere, to move the dialog.
 - **File actions** (2026-10-17, engine: `tri::files`, see `files.md`): rename (`F2`),

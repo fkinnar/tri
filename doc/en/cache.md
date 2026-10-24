@@ -9,9 +9,10 @@ computes nothing. The work queue that fills it in the background sits on top.
 
 ```
 <racine>/
-└── v2/                      format version (FORMAT_VERSION)
+└── v3/                      format version (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         one folder of photos (start of the hash of its path)
+    │   │   ├── .source      that folder of photos, in plain text
     │   │   └── 3f9a…e1.jpg  one entry = one quality-90 JPEG
     │   └── …
     ├── embedded/            previews taken from the camera JPEG (RAW only)
@@ -29,9 +30,44 @@ computes nothing. The work queue that fills it in the background sits on top.
   level, without having to recompute the keys: they depend on the settings, and the
   standard preview size on the screen, which the command line does not know. Before, the
   subfolders were the first 2 characters of the entry's hash.
-- **`v2/`**: changing the format (or the key algorithm) is done by incrementing
+- **`v3/`**: changing the format (or the key algorithm) is done by incrementing
   `FORMAT_VERSION`. Old entries become invisible; the previous formats listed in
-  `OLD_FORMATS` (`v1/`) are deleted in the background when the cache is opened.
+  `OLD_FORMATS` (`v1/`, `v2/`) are deleted in the background when the cache is opened.
+  `v3` (2026-10-24): key without the folder, `.source` file (see below).
+
+## Cache on the photos' drive (2026-10-24, issue #55)
+
+Three possible places for a photo's cache:
+
+- **the user's** (above): photos that do not move;
+- **at the root of a removable drive**: a transfer drive, plugged into several
+  computers;
+- **in a folder**: a folder that gets moved.
+
+The last two are one mechanism: a hidden `.tri-cache` folder (`DISK_DIR`) keeps the cache
+of all the photos below it, subfolders included, with the same layout
+(`.tri-cache/v3/<level>/<folder>/`), but the folder is identified by its path
+**relative** to the root (written with `/` on every system). Mounted elsewhere
+(`/Volumes/T7` on a Mac, `/media/u/T7` on Linux), the drive finds its cache again.
+`Cache::disk_of(folder)` looks for the nearest `.tri-cache` going up (remembered per
+folder, forgotten at every change).
+
+- `use_disk(root)`: creates `.tri-cache` and **moves** the entries already computed into
+  it (central cache, or a `.tri-cache` higher up): nothing is computed again;
+- `release_disk(root)`: the reverse, the entries go where their photos now expect them
+  (a `.tri-cache` higher up, otherwise the user's);
+- `relocate(from, to)`: after a folder is moved or renamed, its entries follow it (a
+  `.tri-cache` in the folder itself has left with it);
+- `apply(location, folder, removable)`: the `[cache] location` setting (`user`, `disk`,
+  `folder`) applied to an opened folder whose cache is still the user's; a choice already
+  made is respected (`wanted_root`, `places::removable_roots`).
+
+The `.source` file of each folder of entries (absolute path in the central cache,
+relative on a drive) makes these moves possible without knowing the settings. To another
+drive: copy then delete; an entry already present at the destination is kept. The 1:1
+levels of a `.tri-cache` are not limited by `zoom_max_mb`, and `--cache-usage` counts the
+central cache only. FAT32 drives: the modification date is in local time there, a
+computer set to another time zone computes everything again (exFAT, APFS, ext4: no).
 
 ### Default location: `default_dir()`
 
@@ -50,8 +86,8 @@ Machine backups on macOS, cleanable by the user.
 A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
 
 1. the format version;
-2. the **absolute path** of the source file (`std::path::absolute`): `photo.RAF` and
-   `/dossier/photo.RAF` give the same key;
+2. the **name** of the source file (since `v3`; the folder chooses the layout instead:
+   the cache can thus change place without computing anything again);
 3. its **size** and **modification date** (nanoseconds);
 4. the **level** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`);
 5. the computation **parameters**, a free-form string supplied by the caller (e.g.
@@ -62,8 +98,10 @@ Consequences:
 - **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation;
 - **settings changed** (preview size, white balance…) ⇒ same, provided the caller
   includes them in `params`;
-- **folder moved or renamed** ⇒ the cache is no longer found (deliberate choice: checking
-  the content would mean re-reading every ~30 MB RAW);
+- **folder moved or renamed** ⇒ the cache is no longer found, unless it follows
+  (`relocate`: renaming and moving from `tri`, "Bring the cache along" checkbox) or it is
+  in the folder (`.tri-cache`); checking the content would mean re-reading every ~30 MB
+  RAW;
 - the old entry is **not deleted**: it remains until clearing or eviction.
 
 Each field is prefixed with its length before being hashed: (`ab`, `c`) and (`a`, `bc`)

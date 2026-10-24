@@ -18,10 +18,18 @@
   (`[gui.histogram] strictness_span`; issue #48).
 - **Folder panel**: on hover, the "offload" icon of a volume turns to the accent colour and
   "eject" to red, so they are not confused (issue #41).
+- **Auto advance**: the star of the button stays visible when it is on (it had the accent
+  colour of the background; issue #59).
 - **Auto advance in stacks**: in full screen in stack mode, a rating moves to the next
   photo of the stack, like →, instead of the next stack (issue #60).
 - **External programs** (editor, default application, file manager): their messages no
   longer fill the terminal `tri` was started from.
+- **Cache with the photos**: the cache can be kept at the root of a removable drive (a
+  transfer drive, found again on another computer) or in a folder (it follows the folder
+  when it is moved): right click in the folder panel, `tri <folder> --cache-here` /
+  `--cache-user`, or by default with `[cache] location = "disk"` / `"folder"`. Moving or
+  renaming a folder from `tri` brings its cache along. The existing cache is computed
+  again once (new format; issue #55).
 
 ## 1.0.0-alpha.7 — 2026-10-23
 

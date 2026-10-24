@@ -442,6 +442,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « Fermer » ; plus de bouton « Fermer » en bas (Annuler reste dans les boîtes à
   confirmer). Sans croix (`Dialog::busy`) : copie et suppression en cours, qu'on ne peut
   pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
+- **Cache gardé avec les photos** (24/10/2026, issue n° 55) : clic droit sur un dossier
+  du panneau, « Garder le cache dans ce dossier » (sur un disque amovible : « sur ce
+  disque »), ou « Ne plus garder le cache ici » ; pas proposé là où `[cache] location`
+  le met déjà. À l'ouverture d'un dossier, `location` (`disk`, `folder`) s'applique s'il
+  est encore chez l'utilisateur. Déplacement d'un dossier : case « Emporter le cache »
+  (cochée) ; renommage : le cache suit toujours. Le travail se fait en fond
+  (`TriApp::cache_job`), message dans la barre d'état.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :

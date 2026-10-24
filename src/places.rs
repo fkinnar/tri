@@ -149,6 +149,16 @@ fn wildcard(pattern: &str, text: &str) -> bool {
     go(&lower(pattern), &lower(text))
 }
 
+/// Racines des disques amovibles branchés (volumes qu'on peut éjecter, voir
+/// [`PlaceSettings::ejectable`]) : là où `[cache] location = "disk"` range le cache.
+pub fn removable_roots(filter: &PlaceSettings) -> Vec<PathBuf> {
+    places_filtered(filter)
+        .into_iter()
+        .filter(|p| filter.ejectable(p))
+        .map(|p| p.path)
+        .collect()
+}
+
 /// Emplacements de cette machine, sauf ceux que `filter` masque.
 pub fn places_filtered(filter: &PlaceSettings) -> Vec<Place> {
     places().into_iter().filter(|p| !filter.hides(p)).collect()
