@@ -310,7 +310,7 @@ pub fn dir_contents(path: &Path) -> (usize, usize) {
 /// quoi l'en ressortir, voir [`untrash`]), sinon définitivement.
 pub fn delete_dir(path: &Path, trash: bool) -> Result<Vec<Trashed>> {
     if trash {
-        return to_trash(&[&path.to_path_buf()]);
+        return to_trash(&[&path.to_path_buf()], &mut |_, _| {});
     }
     std::fs::remove_dir_all(path).map_err(|e| FileError::Io(path.to_path_buf(), e))?;
     Ok(Vec::new())
@@ -391,12 +391,24 @@ pub struct Trashed {
 /// Renvoie les fichiers mis à la corbeille, pour pouvoir les remettre en place
 /// ([`untrash`] ; vide pour une suppression définitive).
 pub fn delete(group: &Group, trash: bool) -> Result<Vec<Trashed>> {
+    delete_with_progress(group, trash, |_, _| {})
+}
+
+/// Comme [`delete`] ; `progress` reçoit (faits, total) après chaque fichier (une
+/// centaine d'images à la corbeille prend du temps : à lancer hors de l'interface).
+pub fn delete_with_progress(
+    group: &Group,
+    trash: bool,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<Vec<Trashed>> {
     let files: Vec<&PathBuf> = group.files().collect();
     if trash {
-        return to_trash(&files);
+        return to_trash(&files, &mut progress);
     }
-    for file in files {
+    let total = files.len();
+    for (i, file) in files.into_iter().enumerate() {
         std::fs::remove_file(file).map_err(|e| FileError::Io(file.clone(), e))?;
+        progress(i + 1, total);
     }
     Ok(Vec::new())
 }
@@ -404,7 +416,7 @@ pub fn delete(group: &Group, trash: bool) -> Result<Vec<Trashed>> {
 /// macOS : le crate `trash` ne dit pas où il met les fichiers ; on demande au système
 /// (`NSFileManager`), qui renvoie l'emplacement exact dans la corbeille.
 #[cfg(target_os = "macos")]
-fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+fn to_trash(files: &[&PathBuf], progress: &mut dyn FnMut(usize, usize)) -> Result<Vec<Trashed>> {
     use objc2_foundation::{NSFileManager, NSString, NSURL};
     let manager = NSFileManager::defaultManager();
     let mut trashed = Vec::new();
@@ -422,6 +434,7 @@ fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
             original: absolute,
             location,
         });
+        progress(trashed.len(), files.len());
     }
     Ok(trashed)
 }
@@ -435,7 +448,7 @@ fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
         not(target_os = "android")
     )
 ))]
-fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+fn to_trash(files: &[&PathBuf], progress: &mut dyn FnMut(usize, usize)) -> Result<Vec<Trashed>> {
     let absolute: Vec<PathBuf> = files
         .iter()
         .map(|f| std::path::absolute(f).map_err(|e| FileError::Io((*f).clone(), e)))
@@ -444,17 +457,31 @@ fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64 - 2)
         .unwrap_or(0);
-    trash::delete_all(&absolute).map_err(|e| FileError::Trash(e.to_string()))?;
-    // Retrouvés dans la corbeille par leur emplacement d'origine (les plus récents).
-    let items = trash::os_limited::list().unwrap_or_default();
+    // Un par un, pour la progression.
+    for (i, file) in absolute.iter().enumerate() {
+        trash::delete(file).map_err(|e| FileError::Trash(e.to_string()))?;
+        progress(i + 1, absolute.len());
+    }
+    // Retrouvés dans la corbeille par leur emplacement d'origine (les plus récents) ; la
+    // corbeille entière est lue une fois, indexée pour ne pas la parcourir par fichier.
+    let mut latest: std::collections::HashMap<PathBuf, trash::TrashItem> =
+        std::collections::HashMap::new();
+    for item in trash::os_limited::list().unwrap_or_default() {
+        if item.time_deleted < since {
+            continue;
+        }
+        let original = item.original_path();
+        if latest
+            .get(&original)
+            .is_none_or(|known| known.time_deleted < item.time_deleted)
+        {
+            latest.insert(original, item);
+        }
+    }
     Ok(absolute
         .into_iter()
         .map(|original| {
-            let item = items
-                .iter()
-                .filter(|i| i.original_path() == original && i.time_deleted >= since)
-                .max_by_key(|i| i.time_deleted)
-                .cloned();
+            let item = latest.remove(&original);
             Trashed { original, item }
         })
         .collect())
@@ -465,8 +492,9 @@ fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
     target_os = "windows",
     all(unix, not(target_os = "ios"), not(target_os = "android"))
 )))]
-fn to_trash(files: &[&PathBuf]) -> Result<Vec<Trashed>> {
+fn to_trash(files: &[&PathBuf], progress: &mut dyn FnMut(usize, usize)) -> Result<Vec<Trashed>> {
     trash::delete_all(files).map_err(|e| FileError::Trash(e.to_string()))?;
+    progress(files.len(), files.len());
     Ok(Vec::new())
 }
 

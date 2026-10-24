@@ -501,6 +501,8 @@ blur_badge = true
 stack_slider = 90.0
 # Width of the blur strictness slider of the filter bar.
 blur_slider = 90.0
+# Width of each of the "blown" / "crushed" sliders of the filter bar.
+clip_slider = 60.0
 # Width of the thumbnail size slider at the bottom of the grid.
 size_slider = 90.0
 # Stacks (similar images grouped) shown at startup; false: each image
@@ -648,6 +650,11 @@ clipping_channels = true
 # beyond which a thumbnail is flagged.
 badge_over = 0.005
 badge_under = 0.05
+# "Blown" / "crushed" sliders of the "well exposed" filter (filter bar): at the centre,
+# the thresholds above; fully to the right, divided by strictness_span; to the left,
+# multiplied; fully to the left, that side no longer excludes anything (black
+# backgrounds, highlights blown on purpose). Remembered per folder; the badges follow.
+strictness_span = 10.0
 # Saturated / crushed indicators in the corners of the histogram: lit beyond this
 # share of pixels (0.001 = 0.1 %), not for a few dead pixels.
 indicator_min = 0.001

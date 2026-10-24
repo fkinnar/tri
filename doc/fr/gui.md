@@ -67,7 +67,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   éjection en fond (`places::eject`) ; le résultat, ou le message du système, s'affiche
   dans la barre d'état. Un volume **fixé** (`[places] fixed`, ex. le disque de travail
   toujours branché) n'a pas d'icône d'éjection mais une icône de disque, non cliquable :
-  pas d'éjection par accident (idée de l'utilisateur, 17/10/2026). Le
+  pas d'éjection par accident (idée de l'utilisateur, 17/10/2026). Au survol, l'icône
+  « décharger » passe à l'accent et « éjecter » en rouge (`[gui.colors] error`) : deux
+  petites icônes voisines à ne pas confondre (24/10/2026, issue n° 41). Le
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` rouvre le dernier dossier ouvert (`[gui] reopen_last`,
@@ -435,6 +437,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier existant (copier / déplacer, racine du déchargement, réglages), Tab complète
   comme un terminal : un seul dossier possible, il est pris ; sinon le début commun, et
   la liste des dossiers sous le champ.
+- **Croix de fermeture** (24/10/2026, issue n° 39) : toutes les boîtes (cadre commun
+  `Dialog`) ont la même croix en haut à droite, à la hauteur du titre, libellée
+  « Fermer » ; plus de bouton « Fermer » en bas (Annuler reste dans les boîtes à
+  confirmer). Sans croix (`Dialog::busy`) : copie et suppression en cours, qu'on ne peut
+  pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
@@ -916,7 +923,8 @@ photos nettes.
   `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
   (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
   clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
-  et `*`. Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
+  et `*` ; à la souris, Ctrl / Cmd + molette ou pince au pavé tactile, en continu
+  (24/10/2026, issue n° 44). Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
   la place dans le bandeau (sinon ils recouvraient les notes).
 - **Effacer les filtres** : un entonnoir barré tout à droite de la barre des filtres,
   grisé sans filtre, le nombre d'images juste à sa gauche.
@@ -928,6 +936,12 @@ photos nettes.
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
+- **Curseurs « brûlé » et « bouché »** (24/10/2026, issue n° 48 : des photos sur fond
+  noir étaient exclues) : à côté du soleil, filtre allumé ; même logique que celui du
+  flou (centre = seuils des badges, à droite plus strict, double-clic : le centre), un
+  par côté ; tout à gauche, ce côté n'exclut plus rien. Seuils multipliés ou divisés par
+  `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`), retenus par
+  dossier ; les badges suivent.
 - **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` aussi la carte de netteté, qui
   restait affichée ; `p` l'éteint pendant le recadrage) ; egui y déplaçait le focus vers
   la barre, rendu en fin d'image. Nom de l'image retiré du

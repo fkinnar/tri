@@ -4,6 +4,20 @@
 
 ## Unreleased
 
+- **Trash**: deleting many images no longer freezes the window; a progress bar shows
+  in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
+- **Dialogs**: the same close cross at the top right of every dialog, instead of a "Close"
+  button at the bottom (issue #39).
+- **Offload, RAW only**: the progress counts only the RAW files, one by one (it
+  counted the JPEGs left on the card too and moved forward two by two; issue #38).
+- **Grid**: Ctrl / Cmd + mouse wheel, or a pinch on the touchpad, changes the size of the
+  thumbnails (issue #44).
+- **"Well exposed" filter**: two sliders, "blown" and "crushed", next to the sun, like the
+  blur one; fully to the left, that side no longer excludes anything (photos on a black
+  background, highlights blown on purpose). Remembered per folder; the badges follow
+  (`[gui.histogram] strictness_span`; issue #48).
+- **Folder panel**: on hover, the "offload" icon of a volume turns to the accent colour and
+  "eject" to red, so they are not confused (issue #41).
 - **External programs** (editor, default application, file manager): their messages no
   longer fill the terminal `tri` was started from.
 
