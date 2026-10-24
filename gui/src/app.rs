@@ -9611,6 +9611,8 @@ mod tests {
                 .is_some()
         );
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         let photos = dir.path().join("photos");
         assert!(photos.join("a.jpg").exists() && photos.join("b.jpg").exists());
         assert!(!photos.join("c.jpg").exists() && !photos.join("d.jpg").exists());
@@ -10270,6 +10272,8 @@ mod tests {
         press(&mut h, Key::Backspace, Modifiers::NONE);
         assert!(h.state().file_dialog.is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("img0.jpg").exists());
         assert_eq!(h.state().files.len(), 2);
         assert_eq!(selected_name(&h), "img1.jpg");
@@ -10289,6 +10293,8 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("a.jpg").exists());
         assert!(photos.join("a.png").exists(), "l'autre de la paire reste");
         // Case laissée cochée : la paire part entière.
@@ -10298,6 +10304,8 @@ mod tests {
         press(&mut h, Key::Delete, Modifiers::NONE);
         assert!(h.query_by_label(&label).is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("b.jpg").exists() && !photos.join("b.png").exists());
         // Image seule : pas de case.
         h.state_mut().select(0);

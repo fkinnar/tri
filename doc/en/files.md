@@ -146,6 +146,12 @@ them again), `untrash` puts them back (see `history.md`). On macOS, moving to th
 through `NSFileManager` (exact location returned) rather than through the `trash` crate,
 which does not provide it.
 
+`delete_with_progress(&Group, trash, progress)`: the same, with (done, total) after each
+file. The interface runs it in a separate thread, with a bar in the dialog (2026-10-24,
+issue #43: a hundred images to the trash froze the window). On Linux and Windows, the
+files go one by one, then the trash is read only once (indexed by original location) to
+find what is needed to take them out again.
+
 ## Folders (2026-10-18)
 
 `create_dir(parent, nom)`, `rename_dir(dossier, nom)` (same parent; the case alone can
