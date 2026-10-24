@@ -568,6 +568,7 @@ fn deleting(
     let (done, total) = (running.done.load(Ordering::Relaxed), running.total);
     crate::app::modal_at("delete_dialog", at)
         .title(delete_title(settings, group))
+        .busy()
         .show(ctx, |ui| {
             ui.add(
                 egui::ProgressBar::new(done as f32 / total.max(1) as f32).text(t!(
@@ -980,6 +981,7 @@ impl Transfer {
         };
         crate::app::modal_at("transfer_dialog", self.at)
             .title(title)
+            .busy()
             .show(ctx, |ui| {
                 ui.label(job.dest.display().to_string());
                 ui.add(

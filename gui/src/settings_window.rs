@@ -589,7 +589,6 @@ impl SettingsWindow {
         let size = vec2(screen.x * 0.8 - 60.0, screen.y * 0.8 - 160.0);
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 30.0);
         let mut changed = None;
-        let mut close = false;
         let title = t!("settings-title");
         let modal = crate::app::modal_at("settings_window", at)
             .title(title)
@@ -647,8 +646,6 @@ impl SettingsWindow {
                 });
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    close = ui.button(t!("close")).clicked();
-                    ui.weak(t!("or-escape"));
                     ui.weak(t!(
                         "settings-file",
                         path = self.file.path.display().to_string()
@@ -670,7 +667,7 @@ impl SettingsWindow {
                 )
             });
         }
-        if close || modal.should_close() {
+        if modal.should_close() {
             if self.dirty {
                 let _ = self.file.save();
             }

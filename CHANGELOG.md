@@ -6,6 +6,8 @@
 
 - **Trash**: deleting many images no longer freezes the window; a progress bar shows
   in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
+- **Dialogs**: the same close cross at the top right of every dialog, instead of a "Close"
+  button at the bottom (issue #39).
 - **Offload, RAW only**: the progress counts only the RAW files, one by one (it
   counted the JPEGs left on the card too and moved forward two by two; issue #38).
 
