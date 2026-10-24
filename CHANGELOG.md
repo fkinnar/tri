@@ -6,6 +6,8 @@
 
 - **Trash**: deleting many images no longer freezes the window; a progress bar shows
   in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
+- **Dialogs**: the same close cross at the top right of every dialog, instead of a "Close"
+  button at the bottom (issue #39).
 
 ## 1.0.0-alpha.7 — 2026-10-23
 

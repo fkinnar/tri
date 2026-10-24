@@ -7,6 +7,8 @@
 - **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
   progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
   pour chaque fichier ; issue n° 43).
+- **Boîtes** : la même croix de fermeture en haut à droite de toutes les boîtes, au lieu
+  d'un bouton « Fermer » en bas (issue n° 39).
 
 ## 1.0.0-alpha.7 — 23/10/2026
 
