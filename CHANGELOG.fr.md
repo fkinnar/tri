@@ -2,6 +2,11 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Grille** : Ctrl / Cmd + molette, ou une pince au pavé tactile, change la taille des
+  vignettes (issue n° 44).
+
 ## 1.0.0-alpha.7 — 23/10/2026
 
 Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.

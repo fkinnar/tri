@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Grid**: Ctrl / Cmd + mouse wheel, or a pinch on the touchpad, changes the size of the
+  thumbnails (issue #44).
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.

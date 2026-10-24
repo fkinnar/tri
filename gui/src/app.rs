@@ -6829,6 +6829,21 @@ impl TriApp {
         self.reveal = Some(Reveal::Top);
     }
 
+    /// Ctrl / Cmd + molette, ou pince au pavé tactile, sur la grille : taille des
+    /// vignettes, en continu, dans les bornes du curseur (issue n° 44).
+    fn wheel_cell(&mut self, ui: &Ui) {
+        let factor = ui.input(|i| i.zoom_delta());
+        let over = ui.rect_contains_pointer(ui.max_rect());
+        if over && (factor - 1.0).abs() > 1e-4 {
+            let g = self.gui.grid;
+            let cell = (self.grid_cell * factor).clamp(g.cell_min, g.cell_max.max(g.cell_min));
+            if cell != self.grid_cell {
+                self.grid_cell = cell;
+                self.reveal = Some(Reveal::Minimal);
+            }
+        }
+    }
+
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         #[cfg(test)]
@@ -6836,6 +6851,7 @@ impl TriApp {
         self.hovered = None;
         self.over_cell = false;
         let g = self.gui.grid;
+        self.wheel_cell(ui);
         let cell = self.grid_cell;
         self.grid_width = ui.available_width();
         self.layout = Layout::fit(ui.available_width(), cell, g.gap);
@@ -9136,6 +9152,14 @@ mod tests {
         h.event(UiEvent::Text("*".into()));
         h.run_steps(3);
         assert_eq!(h.state().grid_cell, fitted);
+        // Ctrl + molette ou pince au-dessus de la grille : en continu, bornée (#44).
+        h.hover_at(h.ctx.content_rect().center());
+        h.event(UiEvent::Zoom(0.8));
+        h.run_steps(3);
+        assert!((h.state().grid_cell - fitted * 0.8).abs() < 0.01);
+        h.event(UiEvent::Zoom(0.001));
+        h.run_steps(3);
+        assert_eq!(h.state().grid_cell, h.state().gui.grid.cell_min, "plancher");
     }
 
     #[test]

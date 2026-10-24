@@ -890,7 +890,8 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   `[gui.grid] cell_min` / `cell_max`, double-click: `cell`), "all on screen" button
   (`grid::fit_all`: the largest size that shows the whole filtered folder); on the
   keyboard, like Lightroom, `+` / `-` (a quarter more or less, `grid::step_cell`) and
-  `*`. Size remembered between launches. Controls shown only if the rating bar has room
+  `*`; with the mouse, Ctrl / Cmd + wheel or a pinch on the touchpad, continuously
+  (2026-10-24, issue #44). Size remembered between launches. Controls shown only if the rating bar has room
   (otherwise they covered the ratings).
 - **Clear filters**: a crossed-out funnel at the far right of the filter bar, greyed out
   without a filter, the image count just to its left.
