@@ -80,7 +80,7 @@ a time: the "offload" icon disappears from the volumes while an offload exists.
   other files; `Plan::to_copy`, `Plan::bytes`;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression) ->
-  Report` (copied, skipped, errors, interrupted, duration); `Progress`: files and bytes;
+  Report` (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes;
 - `delete_sources(&report)`.
 
 ## Command line

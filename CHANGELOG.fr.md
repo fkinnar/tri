@@ -9,6 +9,9 @@
   pour chaque fichier ; issue n° 43).
 - **Boîtes** : la même croix de fermeture en haut à droite de toutes les boîtes, au lieu
   d'un bouton « Fermer » en bas (issue n° 39).
+- **Déchargement des RAW seulement** : la progression ne compte que les RAW, un par un
+  (elle comptait aussi les JPEG laissés sur la carte et avançait de deux en deux ;
+  issue n° 38).
 
 ## 1.0.0-alpha.7 — 23/10/2026
 
