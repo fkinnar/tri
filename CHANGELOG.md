@@ -2,6 +2,11 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## Unreleased
+
+- **Trash**: deleting many images no longer freezes the window; a progress bar shows
+  in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
+
 ## 1.0.0-alpha.7 — 2026-10-23
 
 Seventh test version: large folders open at once, cache of one folder from the command line, XMP and settings fixes.

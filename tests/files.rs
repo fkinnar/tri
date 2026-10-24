@@ -123,6 +123,19 @@ fn deleting_removes_the_pair_and_its_sidecars_only() {
     assert_eq!(listing(d), ["AUTRE.RAF", "AUTRE.RAF.xmp"]);
 }
 
+#[test]
+fn a_deletion_reports_its_progress_file_by_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    touch(d, &["A.JPG", "B.JPG", "C.JPG"]);
+    let images: Vec<_> = ["A.JPG", "B.JPG", "C.JPG"].map(|n| d.join(n)).into();
+    let group = files::plan_delete(&images, &FileSettings::default());
+    let mut steps = Vec::new();
+    files::delete_with_progress(&group, false, |done, total| steps.push((done, total))).unwrap();
+    assert_eq!(steps, [(1, 3), (2, 3), (3, 3)]);
+    assert!(listing(d).is_empty());
+}
+
 /// Met de vrais fichiers à la corbeille de l'utilisateur : seulement sur demande.
 #[test]
 #[ignore = "met un fichier temporaire dans la corbeille de l'utilisateur"]

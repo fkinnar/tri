@@ -2,6 +2,12 @@
 
 *[English version](CHANGELOG.md)*
 
+## À venir
+
+- **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
+  progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
+  pour chaque fichier ; issue n° 43).
+
 ## 1.0.0-alpha.7 — 23/10/2026
 
 Septième version de test : gros dossiers ouverts aussitôt, cache d'un dossier en ligne de commande, corrections XMP et réglages.
