@@ -267,15 +267,23 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
     let plan = offload::plan(&src, &history).unwrap();
     assert_eq!(plan.to_copy(&raw_only).count(), 2);
     assert_eq!(plan.bytes(&raw_only), 5 + 12);
+    let mut counts = Vec::new();
     let report = offload::run(
         &plan,
         &dst,
         &raw_only,
         &mut history,
         &AtomicBool::new(false),
-        |_| {},
+        |p| counts.push((p.files_done, p.files_total)),
     );
     assert_eq!(report.copied.len(), 2);
+    // L'avancement ne compte que les RAW, un par un (#38).
+    assert!(counts.iter().all(|&(_, total)| total == 2), "{counts:?}");
+    assert!(
+        counts.windows(2).all(|w| w[1].0 - w[0].0 <= 1),
+        "{counts:?}"
+    );
+    assert_eq!(counts.last(), Some(&(2, 2)));
     assert_eq!(report.left, [src.join("DCIM/100_FUJI/DSCF0001.JPG")]);
     assert_eq!(names(&dst), ["DSCF0001.RAF", "DSCF0002.RAF"]);
     // Suppression des JPEG laissés, sur demande : seulement eux.

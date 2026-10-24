@@ -4,6 +4,16 @@
 
 ## À venir
 
+- **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
+  progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
+  pour chaque fichier ; issue n° 43).
+- **Boîtes** : la même croix de fermeture en haut à droite de toutes les boîtes, au lieu
+  d'un bouton « Fermer » en bas (issue n° 39).
+- **Déchargement des RAW seulement** : la progression ne compte que les RAW, un par un
+  (elle comptait aussi les JPEG laissés sur la carte et avançait de deux en deux ;
+  issue n° 38).
+- **Grille** : Ctrl / Cmd + molette, ou une pince au pavé tactile, change la taille des
+  vignettes (issue n° 44).
 - **Filtre « bien exposées »** : deux curseurs, « brûlé » et « bouché », à côté du
   soleil, comme celui du flou ; tout à gauche, ce côté n'exclut plus rien (photos sur
   fond noir, blancs brûlés exprès). Retenus par dossier ; les badges suivent

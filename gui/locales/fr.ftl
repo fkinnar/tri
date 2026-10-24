@@ -316,6 +316,7 @@ status-open-session = Ouvrir la séance « { $name } »
 ## Boîtes, bandeau, filtres, aide
 
 close = Fermer
+close-tip = Fermer (Échap)
 histogram-scale-ev = en IL
 histogram-scale-linear = linéaire
 histogram-scale-tip = Échelle { $current } ; clic ou { $keys } : { $other }

@@ -435,6 +435,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier existant (copier / déplacer, racine du déchargement, réglages), Tab complète
   comme un terminal : un seul dossier possible, il est pris ; sinon le début commun, et
   la liste des dossiers sous le champ.
+- **Croix de fermeture** (24/10/2026, issue n° 39) : toutes les boîtes (cadre commun
+  `Dialog`) ont la même croix en haut à droite, à la hauteur du titre, libellée
+  « Fermer » ; plus de bouton « Fermer » en bas (Annuler reste dans les boîtes à
+  confirmer). Sans croix (`Dialog::busy`) : copie et suppression en cours, qu'on ne peut
+  pas interrompre. L'aide, fenêtre d'egui, avait déjà la sienne.
 - **Pointeur dans les boîtes** : la main sur tout ce qui se clique (`interact_cursor` dans
   le cadre commun `Dialog`) ; « saisir » ailleurs, pour déplacer la boîte.
 - **Actions sur les fichiers** (17/10/2026, moteur : `tri::files`, voir `files.md`) :
@@ -916,7 +921,8 @@ photos nettes.
   `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
   (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
   clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
-  et `*`. Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
+  et `*` ; à la souris, Ctrl / Cmd + molette ou pince au pavé tactile, en continu
+  (24/10/2026, issue n° 44). Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
   la place dans le bandeau (sinon ils recouvraient les notes).
 - **Effacer les filtres** : un entonnoir barré tout à droite de la barre des filtres,
   grisé sans filtre, le nombre d'images juste à sa gauche.

@@ -338,7 +338,7 @@ pub fn destination(root: &Path, folder: &str) -> io::Result<PathBuf> {
 pub struct Progress {
     /// Fichiers traités (copiés, ignorés ou en erreur).
     pub files_done: usize,
-    /// Fichiers à traiter.
+    /// Fichiers à traiter (sans ceux laissés sur la carte, `raw_only`).
     pub files_total: usize,
     /// Octets copiés.
     pub bytes_done: u64,
@@ -389,7 +389,10 @@ pub fn run(
         destination: destination.to_path_buf(),
         ..Report::default()
     };
-    let todo: Vec<&Item> = plan.items.iter().collect();
+    // Les images laissées sur la carte (`raw_only`) ne comptent pas dans l'avancement.
+    let (todo, left): (Vec<&Item>, Vec<&Item>) =
+        plan.items.iter().partition(|i| selected(i, settings));
+    report.left = left.into_iter().map(|i| i.source.clone()).collect();
     let mut p = Progress {
         files_total: todo.len(),
         bytes_total: plan.bytes(settings),
@@ -409,9 +412,7 @@ pub fn run(
         }
         p.current = Some(item.source.clone());
         progress(&p);
-        if !selected(item, settings) {
-            report.left.push(item.source.clone());
-        } else if settings.skip_known && item.known {
+        if settings.skip_known && item.known {
             report.skipped.push(item.source.clone());
         } else {
             match copy_one(

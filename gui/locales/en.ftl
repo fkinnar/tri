@@ -314,6 +314,7 @@ status-open-session = Open the session "{ $name }"
 ## Dialogs, rating bar, filters, help
 
 close = Close
+close-tip = Close (Esc)
 histogram-scale-ev = in EV
 histogram-scale-linear = linear
 histogram-scale-tip = Scale { $current }; click or { $keys }: { $other }

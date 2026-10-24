@@ -573,9 +573,6 @@ impl OffloadDialog {
                             if !*ejected && ui.button(t!("offload-eject")).clicked() {
                                 request = Some(Request::Eject(source.clone()));
                             }
-                            if ui.button(t!("close")).clicked() {
-                                request = Some(Request::Close);
-                            }
                         });
                     }
                 }

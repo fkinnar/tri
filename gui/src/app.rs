@@ -1612,8 +1612,6 @@ impl TriApp {
                         ui.colored_label(ui.visuals().error_fg_color, e);
                     }
                 }
-                ui.add_space(6.0);
-                close |= ui.button(t!("close")).clicked();
             });
         if matches!(self.update, Some(UpdateCheck::Running(_))) {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -5678,7 +5676,7 @@ impl TriApp {
         let screen = ctx.content_rect().size();
         let fraction = self.gui.histogram.large.clamp(0.2, 1.0);
         let size = vec2(screen.x * fraction, screen.y * fraction * 0.6);
-        let (mut scale, mut close, mut channel) = (false, false, None);
+        let (mut scale, mut channel) = (false, None);
         // Comme les autres boîtes (titre, déplaçable : retour du 17/10/2026), ouverte au
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
@@ -5815,8 +5813,6 @@ impl TriApp {
                 self.histogram_stats(ui, e);
             }
             ui.horizontal(|ui| {
-                close = ui.button(t!("close")).clicked();
-                ui.weak(t!("or-escape"));
                 // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
                 // couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sur la ligne de
                 // « Fermer », à droite (retour du 19/10/2026) : sous le tableau, elle
@@ -5841,7 +5837,7 @@ impl TriApp {
         if toggle_photo {
             self.histogram_photo = !self.histogram_photo;
         }
-        if close || modal.should_close() {
+        if modal.should_close() {
             self.histogram_large = false;
         }
     }
@@ -6201,7 +6197,6 @@ impl TriApp {
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
         let mut clicked = None;
         let mut file_action = None;
-        let mut close = false;
         let modal = modal_at("rating_dialog", at)
             .title(file_name(&path))
             .show(ctx, |ui| {
@@ -6236,11 +6231,6 @@ impl TriApp {
                         }
                     }
                 });
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    close = ui.button(t!("close")).clicked();
-                    ui.weak(t!("or-escape"));
-                });
             });
         if let Some(action) = clicked {
             self.rate_path(path.clone(), action);
@@ -6250,7 +6240,7 @@ impl TriApp {
             self.file_action(action, vec![path], at);
             return;
         }
-        if close || modal.should_close() {
+        if modal.should_close() {
             self.rating_dialog = None;
         }
     }
@@ -6892,6 +6882,21 @@ impl TriApp {
         self.reveal = Some(Reveal::Top);
     }
 
+    /// Ctrl / Cmd + molette, ou pince au pavé tactile, sur la grille : taille des
+    /// vignettes, en continu, dans les bornes du curseur (issue n° 44).
+    fn wheel_cell(&mut self, ui: &Ui) {
+        let factor = ui.input(|i| i.zoom_delta());
+        let over = ui.rect_contains_pointer(ui.max_rect());
+        if over && (factor - 1.0).abs() > 1e-4 {
+            let g = self.gui.grid;
+            let cell = (self.grid_cell * factor).clamp(g.cell_min, g.cell_max.max(g.cell_min));
+            if cell != self.grid_cell {
+                self.grid_cell = cell;
+                self.reveal = Some(Reveal::Minimal);
+            }
+        }
+    }
+
     fn grid(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         #[cfg(test)]
@@ -6899,6 +6904,7 @@ impl TriApp {
         self.hovered = None;
         self.over_cell = false;
         let g = self.gui.grid;
+        self.wheel_cell(ui);
         let cell = self.grid_cell;
         self.grid_width = ui.available_width();
         self.layout = Layout::fit(ui.available_width(), cell, g.gap);
@@ -7644,7 +7650,7 @@ impl TriApp {
             return;
         }
         let mut target = None;
-        let (mut undo, mut redo, mut close) = (false, false, false);
+        let (mut undo, mut redo) = (false, false);
         let at = ctx.content_rect().center() - vec2(220.0, 200.0);
         let position = self.history.position();
         let modal = modal_at("history_dialog", at)
@@ -7695,8 +7701,6 @@ impl TriApp {
                         )
                         .on_hover_text(tip(Action::Redo))
                         .clicked();
-                    close = ui.button(t!("close")).clicked();
-                    ui.weak(t!("or-escape"));
                 });
             });
         let convention = self.settings.xmp.sidecar;
@@ -7712,7 +7716,7 @@ impl TriApp {
             let result = self.history.redo(convention);
             self.after_history(result.map(|a| vec![a]).map_err(Some));
         }
-        if close || modal.should_close() {
+        if modal.should_close() {
             self.history_open = false;
         }
     }
@@ -7757,7 +7761,7 @@ impl TriApp {
         }
         let at = ctx.content_rect().center() - vec2(200.0, 160.0);
         let default_gap = self.settings.similarity.max_gap_s;
-        let (mut close, mut reset) = (false, false);
+        let mut reset = false;
         let (mut strictness, mut gap, mut stacking) =
             (self.group_strictness, self.group_gap, self.stacking);
         let threshold = t!(
@@ -7824,8 +7828,6 @@ impl TriApp {
                     reset = ui
                         .add_enabled(strictness != 0.0, egui::Button::new(t!("groups-default")))
                         .clicked();
-                    close = ui.button(t!("close")).clicked();
-                    ui.weak(t!("or-escape"));
                 });
             });
         if reset {
@@ -7837,7 +7839,7 @@ impl TriApp {
             self.stacking = stacking;
             self.stacks_dirty = true;
         }
-        if close || modal.should_close() {
+        if modal.should_close() {
             self.group_dialog = false;
             self.remember_group_strictness();
         }
@@ -8760,6 +8762,7 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         start: at + vec2(4.0, 4.0),
         title: None,
         free_width: false,
+        closable: true,
     }
 }
 
@@ -8773,6 +8776,52 @@ pub(crate) struct Dialog {
     /// Sans largeurs minimale et maximale (`[gui.dialogs]`) : la boîte prend la taille de
     /// son contenu (grand histogramme).
     free_width: bool,
+    /// Croix de fermeture à droite du titre (issue n° 39 : la même dans toutes les boîtes).
+    closable: bool,
+}
+
+/// Réponse de [`Dialog::show`] : celle de la `Modal` d'egui, plus la croix.
+pub(crate) struct DialogResponse<R> {
+    modal: egui::ModalResponse<R>,
+    closed: bool,
+}
+
+impl<R> DialogResponse<R> {
+    /// Fermeture demandée : croix, Échap ou clic à côté.
+    pub(crate) fn should_close(&self) -> bool {
+        self.closed || self.modal.should_close()
+    }
+}
+
+impl<R> std::ops::Deref for DialogResponse<R> {
+    type Target = egui::ModalResponse<R>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.modal
+    }
+}
+
+/// Croix de fermeture dans `rect` ; vrai si elle est cliquée. Libellée « Fermer » (tests,
+/// lecteurs d'écran).
+fn close_cross(ui: &mut Ui, rect: Rect) -> bool {
+    let response = ui
+        .interact(rect, ui.scope_id().with("dialog_close"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(t!("close-tip"));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, t!("close"))
+    });
+    let visuals = ui.style().interact(&response);
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 4.0, visuals.bg_fill);
+    }
+    let r = rect.shrink(rect.width() * 0.28);
+    let stroke = egui::Stroke::new(1.5, visuals.fg_stroke.color);
+    ui.painter()
+        .line_segment([r.left_top(), r.right_bottom()], stroke);
+    ui.painter()
+        .line_segment([r.right_top(), r.left_bottom()], stroke);
+    response.clicked()
 }
 
 impl Dialog {
@@ -8788,6 +8837,12 @@ impl Dialog {
         self
     }
 
+    /// Sans croix : travail en cours qu'on ne peut pas interrompre (copie, suppression).
+    pub(crate) fn busy(mut self) -> Self {
+        self.closable = false;
+        self
+    }
+
     /// Affiche la boîte, mise en forme selon `[gui.dialogs]` (réglages déposés dans le
     /// contexte à chaque image, voir [`dialog_settings_id`]). La `Modal` d'egui n'est pas
     /// déplaçable (sa zone couvre aussi le fond grisé) : la position est gardée ici et
@@ -8797,7 +8852,7 @@ impl Dialog {
         self,
         ctx: &egui::Context,
         add: impl FnOnce(&mut Ui) -> R,
-    ) -> egui::ModalResponse<R> {
+    ) -> DialogResponse<R> {
         let d: crate::settings::DialogSettings = ctx
             .data(|data| data.get_temp(dialog_settings_id()))
             .unwrap_or_default();
@@ -8814,6 +8869,7 @@ impl Dialog {
             .constrain(true);
         let frame = egui::Frame::popup(&ctx.global_style()).inner_margin(d.margin);
         let mut moved = egui::Vec2::ZERO;
+        let mut closed = false;
         // Le cadre est dessiné dans la zone de glissement : marges comprises, toute la boîte
         // se saisit.
         let modal = egui::Modal::new(self.id)
@@ -8842,7 +8898,15 @@ impl Dialog {
                         }
                         if let Some(title) = &self.title {
                             let color = Color32::from(d.title_color);
-                            ui.label(egui::RichText::new(title).size(d.title_size).color(color));
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(title).size(d.title_size).color(color),
+                                );
+                                // La place de la croix, posée ensuite dans le coin.
+                                if self.closable {
+                                    ui.add_space(d.title_size * 1.2);
+                                }
+                            });
                             ui.separator();
                         }
                         add(ui)
@@ -8851,6 +8915,20 @@ impl Dialog {
             });
             if scope.response.dragged() {
                 moved = scope.response.drag_delta();
+            }
+            // Croix dans le coin haut droit, à la hauteur du titre (après le reste : elle
+            // passe devant la zone de glissement).
+            if self.closable && self.title.is_some() {
+                let frame = scope.response.rect;
+                let side = d.title_size * 1.2;
+                let rect = Rect::from_min_size(
+                    egui::pos2(
+                        frame.right() - d.margin - side,
+                        frame.top() + d.margin - 2.0,
+                    ),
+                    vec2(side, side),
+                );
+                closed = close_cross(ui, rect);
             }
             // Sans écraser le pointeur choisi par un élément de la boîte (main sur les
             // pastilles du grand histogramme : retour du 18/10/2026).
@@ -8874,7 +8952,10 @@ impl Dialog {
             ctx.data_mut(|data| data.insert_temp(pos_id, pos + moved));
             ctx.request_repaint();
         }
-        response
+        DialogResponse {
+            modal: response,
+            closed,
+        }
     }
 }
 
@@ -9199,6 +9280,14 @@ mod tests {
         h.event(UiEvent::Text("*".into()));
         h.run_steps(3);
         assert_eq!(h.state().grid_cell, fitted);
+        // Ctrl + molette ou pince au-dessus de la grille : en continu, bornée (#44).
+        h.hover_at(h.ctx.content_rect().center());
+        h.event(UiEvent::Zoom(0.8));
+        h.run_steps(3);
+        assert!((h.state().grid_cell - fitted * 0.8).abs() < 0.01);
+        h.event(UiEvent::Zoom(0.001));
+        h.run_steps(3);
+        assert_eq!(h.state().grid_cell, h.state().gui.grid.cell_min, "plancher");
     }
 
     #[test]
@@ -9674,6 +9763,8 @@ mod tests {
                 .is_some()
         );
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         let photos = dir.path().join("photos");
         assert!(photos.join("a.jpg").exists() && photos.join("b.jpg").exists());
         assert!(!photos.join("c.jpg").exists() && !photos.join("d.jpg").exists());
@@ -10315,6 +10406,26 @@ mod tests {
     }
 
     #[test]
+    fn every_dialog_closes_with_its_cross() {
+        // Issue n° 39 : la même croix en haut à droite dans toutes les boîtes, plus de
+        // bouton « Fermer » en bas.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().history_open = true;
+        h.run_steps(3);
+        assert_eq!(h.query_all_by_label("Fermer").count(), 1, "la croix seule");
+        h.get_by_label("Fermer").click();
+        h.run_steps(3);
+        assert!(!h.state().history_open);
+        // Une boîte à confirmer garde Annuler, et a aussi la croix.
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.query_by_label("Annuler").is_some());
+        h.get_by_label("Fermer").click();
+        h.run_steps(3);
+        assert!(h.state().file_dialog.is_none());
+    }
+
+    #[test]
     fn delete_asks_then_removes_and_selects_the_next_image() {
         let (mut h, dir) = harness();
         h.run_steps(3);
@@ -10333,6 +10444,8 @@ mod tests {
         press(&mut h, Key::Backspace, Modifiers::NONE);
         assert!(h.state().file_dialog.is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("img0.jpg").exists());
         assert_eq!(h.state().files.len(), 2);
         assert_eq!(selected_name(&h), "img1.jpg");
@@ -10352,6 +10465,8 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("a.jpg").exists());
         assert!(photos.join("a.png").exists(), "l'autre de la paire reste");
         // Case laissée cochée : la paire part entière.
@@ -10361,6 +10476,8 @@ mod tests {
         press(&mut h, Key::Delete, Modifiers::NONE);
         assert!(h.query_by_label(&label).is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
+        // Suppression en fond : attendue.
+        run_until(&mut h, |app| app.file_dialog.is_none());
         assert!(!photos.join("b.jpg").exists() && !photos.join("b.png").exists());
         // Image seule : pas de case.
         h.state_mut().select(0);
@@ -12042,7 +12159,14 @@ mod tests {
         assert!(h.query_by_label_contains("2 à copier").is_some());
         // « Ouvrir le dossier à la fin » est coché par défaut ; « RAW seulement » non.
         h.get_by_label("Décharger").click();
-        wait_for(&mut h, "Fermer");
+        while h
+            .query_by_label_contains("2 fichiers copiés et vérifiés")
+            .is_none()
+        {
+            assert!(Instant::now() < deadline, "jamais copiés");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
         h.run_steps(3);
         assert!(
             h.query_by_label_contains("2 fichiers copiés et vérifiés")
@@ -12167,7 +12291,7 @@ mod tests {
             if round == 0 {
                 wait_for(&mut h, "2 à copier");
                 h.get_by_label("Décharger").click();
-                wait_for(&mut h, "Fermer");
+                wait_for(&mut h, "2 fichiers copiés et vérifiés");
                 h.get_by_label("Fermer").click();
                 h.run_steps(2);
             } else {
