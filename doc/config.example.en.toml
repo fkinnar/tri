@@ -569,6 +569,10 @@ stack_wrap = false
 # stack, true: the first photo of the next stack (then takes precedence over stack_wrap);
 # false: stay on the last one.
 stack_advance_next = false
+# Stacks on, in full screen: entering a stack (up / down), "cover": its cover; "first":
+# its first photo. The rating bar button, in stack mode, changes this choice (remembered
+# from one launch to the next).
+stack_enter = "cover"
 # Overlays (o, Shift+O for the orientation, see overlay.md): line thickness (points);
 # opacity of the built-in grids (thirds, golden ratio, diagonals), colour: [gui.colors]
 # overlay.

@@ -545,6 +545,12 @@ pub fn bar_icon_on(
                 stroke,
             ));
         }
+        Action::StackEnterToggle => {
+            // Entrer par la première photo : barre et chevron (« au début ») ; allumé
+            // quand c'est le choix, éteint : la couverture.
+            painter.line_segment([p(0.24, 0.22), p(0.24, 0.78)], stroke);
+            chevron(0.5, 0.78);
+        }
         Action::StacksAll => {
             // Piles dépliées : trois feuilles côte à côte.
             for x in [0.0, 0.36, 0.72] {

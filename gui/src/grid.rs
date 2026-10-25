@@ -153,6 +153,9 @@ pub fn navigate(
         | Action::ZoomFit
         | Action::Zoom100
         | Action::StackChoose
+        | Action::StackFirst
+        | Action::StackLast
+        | Action::StackEnterToggle
         | Action::FocusLeft
         | Action::FocusRight
         | Action::FocusNext

@@ -233,6 +233,13 @@ pub enum Action {
     Zoom100,
     /// Faire de l'image la couverture de sa pile (sa préférée).
     StackChoose,
+    /// Première image de la pile (issue n° 62).
+    StackFirst,
+    /// Dernière image de la pile.
+    StackLast,
+    /// En entrant dans une pile : sa couverture, ou sa première image (`[gui.view]
+    /// stack_enter`, bouton du bandeau en mode pile).
+    StackEnterToggle,
     /// Clavier au panneau de gauche (après le leader, `Ctrl+B` par défaut).
     FocusLeft,
     /// Clavier au panneau de droite.
@@ -387,7 +394,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 160] = [
+    pub const ALL: [Action; 163] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -479,6 +486,9 @@ impl Action {
         Action::ZoomFit,
         Action::Zoom100,
         Action::StackChoose,
+        Action::StackFirst,
+        Action::StackLast,
+        Action::StackEnterToggle,
         Action::FocusLeft,
         Action::FocusRight,
         Action::FocusNext,
@@ -603,7 +613,8 @@ impl Action {
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
             | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
-            StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose => Group::Selection,
+            StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose | StackFirst
+            | StackLast | StackEnterToggle => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
@@ -707,6 +718,9 @@ impl Action {
             Action::ZoomFit => "core.view.zoom_fit",
             Action::Zoom100 => "core.view.zoom_100",
             Action::StackChoose => "core.stack.choose",
+            Action::StackFirst => "core.stack.first",
+            Action::StackLast => "core.stack.last",
+            Action::StackEnterToggle => "core.stack.enter",
             Action::FocusLeft => "core.panel.left",
             Action::FocusRight => "core.panel.right",
             Action::FocusNext => "core.panel.next",
@@ -969,6 +983,9 @@ const CLASSIC: &[Binding] = {
         (&[plain(Key::ArrowDown)], NavDown),
         (&[plain(Key::Home)], NavFirst),
         (&[plain(Key::End)], NavLast),
+        // Début / fin de la pile (issue n° 62) : Maj en plus, Début / Fin restant le dossier.
+        (&[shifted(Key::Home)], StackFirst),
+        (&[shifted(Key::End)], StackLast),
         (&[plain(Key::PageUp)], NavPageUp),
         (&[plain(Key::PageDown)], NavPageDown),
         (&[shifted(Key::ArrowLeft)], PanLeft),
@@ -1034,12 +1051,17 @@ const VIM: &[Binding] = {
         (&[shifted(Key::K)], CropSize(Dir::Up)),
         (&[shifted(Key::J)], CropSize(Dir::Down)),
         // `y` copie (« yank »), `x` supprime (efface le caractère : ici l'image ; une
-        // confirmation suit). Toute la pile : `dw` / `yw`, comme un mot (idée de
-        // l'utilisateur, 18/10/2026 : une ligne de la grille, `dd`, n'a pas de sens). `y`
-        // seul attend alors un court instant la suite (`[gui] key_ambiguous_timeout_ms`).
+        // confirmation suit). La pile est une phrase (choix de l'utilisateur, 25/10/2026,
+        // issue n° 62) : `(` / `)` son début et sa fin, `d)` / `y)` toute la pile (`dw` /
+        // `yw` avant : une pile comme un mot ; `[` / `]` écartés : Alt+Maj en AZERTY sur
+        // macOS). Caractères plutôt que touches : directs en AZERTY, Maj+9 / Maj+0 en
+        // QWERTY. `y` seul attend un court instant la suite
+        // (`[gui] key_ambiguous_timeout_ms`).
         (&[plain(Key::Y)], FileCopy),
-        (&[plain(Key::Y), plain(Key::W)], FileCopyStack),
-        (&[plain(Key::D), plain(Key::W)], FileDeleteStack),
+        (&[plain(Key::Y), Chord::char(')')], FileCopyStack),
+        (&[plain(Key::D), Chord::char(')')], FileDeleteStack),
+        (&[Chord::char('(')], StackFirst),
+        (&[Chord::char(')')], StackLast),
         (&[plain(Key::X)], FileDelete),
         (&[plain(Key::U)], Undo),
         (&[ctrl(Key::R)], Redo),
@@ -1198,6 +1220,8 @@ const FILES: &[Binding] = {
         // mode pile, en plein écran).
         (&[ctrl(Key::S)], StackMode),
         (&[shifted(Key::Enter)], StackChoose),
+        // En entrant dans une pile : couverture ou première photo (bouton du bandeau).
+        (&[ctrl_shift(Key::S)], StackEnterToggle),
     ]
 };
 
@@ -1693,10 +1717,10 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
     }
-    // « + - * / » : des caractères, pas des touches (le zoom) ; la touche dépend de la
-    // disposition (« + » demande Maj sur un AZERTY), le caractère est le même partout,
-    // pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/".contains(*c))
+    // « + - * / ( ) » : des caractères, pas des touches (le zoom, les piles) ; la touche
+    // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
+    // caractère est le même partout, pavé numérique compris.
+    if let Some(c) = single.filter(|c| "+-*/()".contains(*c))
         && !shift
         && !ctrl
     {
@@ -2463,7 +2487,7 @@ mod tests {
 
     #[test]
     fn a_key_that_starts_a_sequence_waits_for_the_rest() {
-        // `y` copie, `y w` copie la pile : `y` attend la suite le temps du délai court.
+        // `y` copie, `y )` copie la pile : `y` attend la suite le temps du délai court.
         let km = Keymap::default();
         let mut seq =
             Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
@@ -2472,7 +2496,10 @@ mod tests {
         let ms = |n| t0 + Duration::from_millis(n);
         assert!(seq.feed(&km, key(Key::Y), t0).is_empty());
         assert_eq!(seq.deadline(), Some(ms(300)));
-        assert_eq!(seq.feed(&km, key(Key::W), ms(100)), [Action::FileCopyStack]);
+        assert_eq!(
+            seq.feed(&km, Chord::char(')'), ms(100)),
+            [Action::FileCopyStack]
+        );
         // Seul : fait au bout du délai court.
         assert!(seq.feed(&km, key(Key::Y), ms(1000)).is_empty());
         assert_eq!(seq.expire(ms(1100)), None, "encore en attente");
@@ -2484,11 +2511,16 @@ mod tests {
             seq.feed(&km, key(Key::J), ms(2100)),
             [Action::FileCopy, Action::NavDown]
         );
-        // `d w` : une séquence ordinaire (`d` seul ne fait rien).
+        // `d )` : une séquence ordinaire (`d` seul ne fait rien).
         assert!(seq.feed(&km, key(Key::D), ms(3000)).is_empty());
         assert_eq!(
-            seq.feed(&km, key(Key::W), ms(3500)),
+            seq.feed(&km, Chord::char(')'), ms(3500)),
             [Action::FileDeleteStack]
+        );
+        // `)` seul : la fin de la pile (issue n° 62).
+        assert_eq!(
+            seq.feed(&km, Chord::char(')'), ms(5000)),
+            [Action::StackLast]
         );
         // Plus de signalement : la touche seule reste joignable.
         let (_, warnings) =

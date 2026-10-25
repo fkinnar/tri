@@ -567,6 +567,10 @@ stack_wrap = false
 # pile, true : la première photo de la pile suivante (prime alors sur stack_wrap) ; false :
 # on reste sur la dernière.
 stack_advance_next = false
+# Piles actives, en plein écran : en entrant dans une pile (haut / bas), "cover" : sa
+# couverture ; "first" : sa première photo. Le bouton du bandeau, en mode pile, change ce
+# choix (retenu d'un lancement à l'autre).
+stack_enter = "cover"
 # Superpositions (o, Maj+O pour l'orientation, voir overlay.md) : épaisseur des traits (points) ; opacité
 # des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
 overlay_line_width = 1.0
