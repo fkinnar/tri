@@ -613,6 +613,9 @@ title_color = "#50bedc"
 # Panneau qui a le clavier : son fond un peu plus clair en thème sombre, un peu plus foncé
 # en thème clair (part de la couleur du texte mêlée au fond, de 0 à 1).
 focus_panel_tint = 0.06
+# Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
+# texte, à cette opacité (de 0 à 1), sur toute la largeur.
+cursor_tint = 0.12
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.

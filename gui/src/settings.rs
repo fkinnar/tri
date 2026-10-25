@@ -499,6 +499,9 @@ pub struct DialogSettings {
     /// Fond du panneau qui a le clavier : part de la couleur du texte mêlée au fond des
     /// panneaux (0 : aucune différence, 1 : couleur du texte).
     pub focus_panel_tint: f32,
+    /// Ligne pointée au clavier (panneaux, listes) : une bande de la couleur du texte à
+    /// cette opacité (0 à 1), sur toute la largeur.
+    pub cursor_tint: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
     /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
@@ -518,6 +521,7 @@ impl Default for DialogSettings {
             title_size: 17.0,
             title_color: Color([80, 190, 220]),
             focus_panel_tint: 0.06,
+            cursor_tint: 0.12,
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,

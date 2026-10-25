@@ -1075,7 +1075,6 @@ impl TriApp {
         // 17/10/2026) ; panneau masqué : en plein écran, il est sur l'image.
         let settings = self.gui.metadata;
         let focused = self.focus == crate::actions::Scope::Metadata;
-        let accent = Color32::from(self.gui.dialogs.title_color);
         self.meta_has_histogram = false;
         if settings.histogram && self.histogram {
             match self.exposure_of(self.selected) {
@@ -1184,17 +1183,12 @@ impl TriApp {
                                     .sense(Sense::click()),
                             );
                             let rect = a.rect.union(b.rect).expand(2.0);
-                            // Sélection (y la copie) ; la ligne pointée au clavier encadrée.
+                            // Sélection (y la copie) ; la ligne pointée au clavier en bande.
                             if focused && picked(i) && hi > lo {
                                 ui.painter().rect_filled(rect, 3.0, selection_fill);
                             }
                             if focused && i == self.meta_cursor {
-                                ui.painter().rect_stroke(
-                                    rect,
-                                    3.0,
-                                    egui::Stroke::new(1.5, accent),
-                                    egui::StrokeKind::Outside,
-                                );
+                                cursor_row(ui, rect, self.gui.dialogs.cursor_tint);
                                 if scroll {
                                     ui.scroll_to_rect(rect, Some(egui::Align::Center));
                                 }
@@ -1635,14 +1629,9 @@ impl TriApp {
                         }
                     }
                 });
-                // Curseur clavier : cadre de la couleur d'accent autour de la ligne.
+                // Curseur clavier : une bande discrète sur toute la largeur.
                 if cursor == Some(i) {
-                    ui.painter().rect_stroke(
-                        line.response.rect.expand(1.0),
-                        3.0,
-                        egui::Stroke::new(1.5, accent),
-                        egui::StrokeKind::Outside,
-                    );
+                    cursor_row(ui, line.response.rect, self.gui.dialogs.cursor_tint);
                     if scroll {
                         line.response.scroll_to_me(Some(egui::Align::Center));
                     }
@@ -4360,19 +4349,13 @@ impl TriApp {
         if enter && let Some((path, _)) = self.folder_results.get(self.folder_result) {
             open = Some(path.clone());
         }
-        let accent = Color32::from(self.gui.dialogs.title_color);
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             for (i, (path, _)) in self.folder_results.iter().enumerate() {
                 let relative = path.strip_prefix(&base).unwrap_or(path);
                 let label =
                     ui.selectable_label(i == self.folder_result, relative.display().to_string());
                 if i == self.folder_result {
-                    ui.painter().rect_stroke(
-                        label.rect.expand(1.0),
-                        3.0,
-                        egui::Stroke::new(1.5, accent),
-                        egui::StrokeKind::Outside,
-                    );
+                    cursor_row(ui, label.rect, self.gui.dialogs.cursor_tint);
                     if focused_search {
                         label.scroll_to_me(None);
                     }
@@ -9612,6 +9595,20 @@ fn panel_focus_fill(ui: &Ui, tint: f32) {
         .panel_fill
         .lerp_to_gamma(visuals.text_color(), tint.clamp(0.0, 1.0));
     ui.painter().rect_filled(ui.clip_rect(), 0.0, fill);
+}
+
+/// Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
+/// texte à `tint` (`[gui.dialogs] cursor_tint`), sur toute la largeur visible. Remplace
+/// le cadre d'accent (retour du 25/10/2026 : trop voyant, et coupé à gauche quand le
+/// panneau défile).
+fn cursor_row(ui: &Ui, rect: Rect, tint: f32) {
+    let clip = ui.clip_rect();
+    let band = Rect::from_x_y_ranges(clip.x_range(), rect.expand(1.0).y_range());
+    let fill = ui
+        .visuals()
+        .text_color()
+        .gamma_multiply(tint.clamp(0.0, 1.0));
+    ui.painter().rect_filled(band, 0.0, fill);
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
