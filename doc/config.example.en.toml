@@ -458,8 +458,12 @@ sort_descending = false
 # Keep from one launch to the next what is shown or hidden with a key (focus point,
 # sharpness map, zones, histogram, panels, bars, auto-advance), in
 # gui-state.toml in the data folder; the values below are then only used on the
-# first launch. false: always the values of this file.
+# first launch. false: always the values of this file. The window too: size, position
+# and maximized state when closed (window is then only used on the first launch).
 remember_display = true
+# Window moved or resized: remembered once still for this delay (ms), and always when
+# closed.
+window_save_ms = 1000
 # Mouse rating bar (flags, stars, colours of the selected image)
 # shown at startup; Shift+N shows or hides it. Right-clicking an image opens
 # a dialog with the same controls.

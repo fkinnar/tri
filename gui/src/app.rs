@@ -253,6 +253,11 @@ pub struct TriApp {
     data_dir: Option<PathBuf>,
     /// État d'affichage tel qu'écrit la dernière fois (`state.rs`).
     display_saved: crate::state::DisplayState,
+    /// Fenêtre telle qu'elle est (issue n° 58), et depuis quand ; recopiée dans
+    /// `window_kept` (l'état écrit) une fois stable depuis `[gui] window_save_ms`, ou à la
+    /// fermeture : pas une écriture par image pendant qu'on la déplace.
+    window_now: Option<(crate::state::WindowState, Instant)>,
+    window_kept: Option<crate::state::WindowState>,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
@@ -685,6 +690,8 @@ impl TriApp {
             zoom_focus_pending: None,
             data_dir: data.clone(),
             display_saved: Default::default(),
+            window_now: None,
+            window_kept: None,
             peaking_texture: None,
             peaking_asked: None,
             compare: Vec::new(),
@@ -869,6 +876,43 @@ impl TriApp {
             auto_advance: Some(self.auto_advance),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
+            window: self.window_kept,
+        }
+    }
+
+    /// Suit la fenêtre (issue n° 58) : taille hors agrandissement, position, agrandie ;
+    /// gardée pour l'écriture une fois stable depuis `[gui] window_save_ms`, ou tout de
+    /// suite à la fermeture.
+    fn track_window(&mut self, ctx: &egui::Context) {
+        let (inner, outer, maximized, closing) = ctx.input(|i| {
+            let v = i.viewport();
+            (v.inner_rect, v.outer_rect, v.maximized, v.close_requested())
+        });
+        let Some(inner) = inner else { return };
+        let maximized = maximized.unwrap_or(false);
+        let mut window = self
+            .window_now
+            .map(|(w, _)| w)
+            .or(self.window_kept)
+            .unwrap_or_default();
+        window.maximized = maximized;
+        // Agrandie : la taille et la position d'avant restent (rendues en sortant).
+        if !maximized {
+            window.size = [inner.width(), inner.height()];
+            window.position = outer.map(|o| [o.min.x, o.min.y]);
+        }
+        let now = Instant::now();
+        let since = match self.window_now {
+            Some((w, at)) if w == window => at,
+            _ => now,
+        };
+        self.window_now = Some((window, since));
+        let stable = now.duration_since(since) >= Duration::from_millis(self.gui.window_save_ms);
+        if (stable || closing) && self.window_kept != Some(window) {
+            self.window_kept = Some(window);
+            if closing {
+                self.save_display();
+            }
         }
     }
 
@@ -901,6 +945,7 @@ impl TriApp {
         if let Some(order) = s.sort {
             self.order = order;
         }
+        self.window_kept = s.window;
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
@@ -8845,6 +8890,7 @@ impl eframe::App for TriApp {
                 }
             });
         }
+        self.track_window(&ctx);
         self.save_display();
         self.handle_screenshot(&ctx);
     }
@@ -11133,6 +11179,37 @@ mod tests {
         assert!(h.state().folder.is_none());
         assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
         assert!(h.query_by_label("Dossiers").is_some());
+    }
+
+    #[test]
+    fn the_window_is_remembered_once_still() {
+        // Issue n° 58 : la fenêtre (ici celle du banc de test) est retenue une fois
+        // immobile depuis `window_save_ms`, et écrite avec l'état d'affichage.
+        let (mut h, dir) = harness();
+        h.state_mut().gui.window_save_ms = 60_000;
+        // Le banc de test ne donne pas la fenêtre : celle d'une vraie, déplacée.
+        let viewport = h
+            .input_mut()
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default();
+        viewport.inner_rect = Some(Rect::from_min_size(pos2(50.0, 80.0), vec2(1000.0, 700.0)));
+        viewport.outer_rect = Some(Rect::from_min_size(pos2(50.0, 50.0), vec2(1000.0, 730.0)));
+        h.run_steps(3);
+        assert!(h.state().window_now.is_some(), "suivie");
+        assert_eq!(
+            h.state().window_kept,
+            None,
+            "pas encore immobile assez longtemps"
+        );
+        h.state_mut().gui.window_save_ms = 0;
+        h.run_steps(2);
+        let kept = h.state().window_kept.expect("retenue");
+        assert_eq!(kept.size, [1000.0, 700.0]);
+        assert_eq!(kept.position, Some([50.0, 50.0]), "coin du cadre");
+        assert!(!kept.maximized);
+        let saved = crate::state::load(&dir.path().join("data"));
+        assert_eq!(saved.window, Some(kept), "écrite dans l'état d'affichage");
     }
 
     #[test]

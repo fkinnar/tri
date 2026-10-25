@@ -46,6 +46,36 @@ pub struct DisplayState {
     pub grid_info: Option<bool>,
     /// Taille des vignettes de la grille (curseur, `+` / `-`, `*`).
     pub grid_cell: Option<f32>,
+    /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
+    pub window: Option<WindowState>,
+}
+
+/// Taille, position et agrandissement de la fenêtre (points d'egui).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WindowState {
+    /// Taille de l'intérieur hors agrandissement (rendue en sortant de l'agrandissement).
+    pub size: [f32; 2],
+    /// Coin haut gauche du cadre ; absent quand le système ne le donne pas (Wayland).
+    pub position: Option<[f32; 2]>,
+    /// Agrandie (plein écran du bureau, pas le mode concentration).
+    pub maximized: bool,
+}
+
+/// La fenêtre `window` du lancement précédent appliquée à `viewport` : taille (si
+/// plausible), position (si connue), agrandie.
+pub fn restore_window(
+    viewport: eframe::egui::ViewportBuilder,
+    window: &WindowState,
+) -> eframe::egui::ViewportBuilder {
+    let [w, h] = window.size;
+    let mut viewport = viewport.with_maximized(window.maximized);
+    if w >= 1.0 && h >= 1.0 {
+        viewport = viewport.with_inner_size([w, h]);
+    }
+    if let Some(position) = window.position {
+        viewport = viewport.with_position(position);
+    }
+    viewport
 }
 
 /// État lu dans le dossier de données `data` ; vide si absent ou illisible (on repart des
@@ -78,11 +108,39 @@ mod tests {
         let state = DisplayState {
             focus_point: Some(false),
             histogram: Some(true),
+            window: Some(WindowState {
+                size: [1200.0, 800.0],
+                position: Some([40.0, 30.0]),
+                maximized: true,
+            }),
             ..DisplayState::default()
         };
         save(dir.path(), &state).unwrap();
         assert_eq!(load(dir.path()), state);
         std::fs::write(dir.path().join(FILE), "focus_point = 12").unwrap();
         assert_eq!(load(dir.path()), DisplayState::default(), "illisible");
+    }
+
+    #[test]
+    fn the_window_comes_back_as_it_was() {
+        // Issue n° 58 : taille, position, agrandie ; sans position (Wayland), seulement le
+        // reste ; une taille absurde ignorée.
+        let window = WindowState {
+            size: [1200.0, 800.0],
+            position: Some([40.0, 30.0]),
+            maximized: true,
+        };
+        let v = restore_window(eframe::egui::ViewportBuilder::default(), &window);
+        assert_eq!(v.inner_size, Some(eframe::egui::vec2(1200.0, 800.0)));
+        assert_eq!(v.position, Some(eframe::egui::pos2(40.0, 30.0)));
+        assert_eq!(v.maximized, Some(true));
+        let wayland = WindowState {
+            size: [0.0, 0.0],
+            position: None,
+            maximized: false,
+        };
+        let v = restore_window(eframe::egui::ViewportBuilder::default(), &wayland);
+        assert_eq!((v.inner_size, v.position), (None, None));
+        assert_eq!(v.maximized, Some(false));
     }
 }

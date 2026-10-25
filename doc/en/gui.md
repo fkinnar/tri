@@ -121,7 +121,12 @@ system one ("cold" measurements, experiments).
   restored at the next launch, from `gui-state.toml` in the data folder; the
   configuration only gives the first-launch value (`[gui] remember_display = false`:
   always that value). Written only when the state changes (temporary file then rename),
-  never during an automatic screenshot nor in tests (temporary data folder).
+  never during an automatic screenshot nor in tests (temporary data folder). **The window
+  too** (2026-10-25, issue #58): size outside maximization, frame position (absent on
+  Wayland, which does not give it) and maximized state, followed on each frame
+  (`TriApp::track_window`) but kept once still for `[gui] window_save_ms` (1 s), or when
+  closing; restored at launch (`state::restore_window`), `[gui] window` only used on the
+  first one.
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.

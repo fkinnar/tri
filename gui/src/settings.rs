@@ -167,8 +167,12 @@ pub struct GuiSettings {
     pub sort_descending: bool,
     /// Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
     /// carte de netteté, zones, histogramme, panneaux, barres, avance automatique) ; les
-    /// valeurs de la configuration ne servent qu'au premier lancement.
+    /// valeurs de la configuration ne servent qu'au premier lancement. La fenêtre aussi
+    /// (taille, position, agrandie ; issue n° 58) : `window` ne sert alors qu'au premier.
     pub remember_display: bool,
+    /// Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms),
+    /// pas à chaque image du mouvement (et toujours à la fermeture).
+    pub window_save_ms: u64,
     /// Bandeau de notation à la souris affiché au démarrage (Maj+N l'affiche ou le masque).
     pub rating_bar: bool,
     /// Barre du haut : icône et nom de l'application à gauche (comme darktable).
@@ -230,6 +234,7 @@ impl Default for GuiSettings {
             sort: tri::sort::SortKey::Name,
             sort_descending: false,
             remember_display: true,
+            window_save_ms: 1000,
             rating_bar: true,
             title_bar: true,
             title_bar_size: 26.0,
