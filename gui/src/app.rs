@@ -71,6 +71,10 @@ enum Reveal {
     Minimal,
     /// Mettre la ligne sélectionnée en haut de la vue (nouvelle liste).
     Top,
+    /// Garder la région affichée : l'image `TriApp::scroll_anchor` (la première visible
+    /// avant un refiltrage, ou la suivante restée dans la liste) en haut de la vue, au
+    /// même décalage (issue n° 100 : la grille repartait au début à chaque réglage).
+    Anchor,
 }
 
 /// Disponibilité d'un niveau d'image pour un fichier.
@@ -420,6 +424,9 @@ pub struct TriApp {
     scroll_offset: f32,
     view_height: f32,
     reveal: Option<Reveal>,
+    /// Image gardée en haut de la vue après un refiltrage, et son décalage sous le haut
+    /// de sa rangée ([`Reveal::Anchor`]).
+    scroll_anchor: Option<(PathBuf, f32)>,
     screenshot: Option<Screenshot>,
     help: bool,
     /// Historique des modifications de la session (annuler, rétablir).
@@ -781,6 +788,7 @@ impl TriApp {
             scroll_offset: 0.0,
             view_height: 0.0,
             reveal: None,
+            scroll_anchor: None,
             screenshot,
             help: false,
             settings_window: None,
@@ -2179,6 +2187,11 @@ impl TriApp {
     fn refilter(&mut self, reveal: Reveal) {
         self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
+        // Sélection hors de la vue (on a défilé sans la déplacer) : on garde la région
+        // affichée plutôt que d'y revenir.
+        let anchor = (reveal == Reveal::Minimal && self.mode == Mode::Grid)
+            .then(|| self.grid_anchor())
+            .flatten();
         // Type de fichier et recherche par nom (`/`) : la base, jamais inversée.
         let base = tri::fuzzy::NameFilter {
             query: &self.name_query,
@@ -2240,11 +2253,58 @@ impl TriApp {
         }
         self.selected = self.selected.min(self.files.len().saturating_sub(1));
         self.reveal = Some(reveal);
+        // L'image gardée en haut : la première visible, ou la suivante restée dans la liste.
+        if let Some((candidates, shift)) = anchor
+            && let Some(path) = candidates
+                .into_iter()
+                .find(|p| self.files.iter().any(|f| &f.path == p))
+        {
+            self.scroll_anchor = Some((path, shift));
+            self.reveal = Some(Reveal::Anchor);
+        }
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
         }
         self.stacks_dirty = true;
         self.tell_shown();
+    }
+
+    /// Région de la grille à garder au prochain refiltrage, si la sélection n'y est pas :
+    /// les images à partir de la première visible (dans l'ordre de la liste, pour trouver
+    /// la suivante si elle disparaît), et le décalage de la vue sous le haut de sa rangée.
+    fn grid_anchor(&self) -> Option<(Vec<PathBuf>, f32)> {
+        let pitch = self.layout.row_pitch();
+        if pitch <= 0.0 || self.view_height <= 0.0 || self.layout.columns == 0 {
+            return None;
+        }
+        let shown: Vec<usize> = if self.stacks.shown.is_empty() {
+            (0..self.files.len()).collect()
+        } else {
+            self.stacks.shown.clone()
+        };
+        let row_of = |i: usize| {
+            shown
+                .iter()
+                .position(|&s| s == i)
+                .map(|p| p / self.layout.columns)
+        };
+        let top = self.scroll_offset;
+        let bottom = top + self.view_height;
+        let selection_seen = !self.cursor_hidden
+            && row_of(self.stacks.visible(self.selected)).is_some_and(|r| {
+                let y = r as f32 * pitch;
+                y + pitch > top && y < bottom
+            });
+        if selection_seen {
+            return None;
+        }
+        let first_row = (top / pitch).floor() as usize;
+        let first = *shown.get(first_row * self.layout.columns)?;
+        let shift = top - first_row as f32 * pitch;
+        Some((
+            self.files[first..].iter().map(|f| f.path.clone()).collect(),
+            shift,
+        ))
     }
 
     /// Curseur de sévérité du flou (demandé le 20/10/2026), à côté des gouttes : au
@@ -7772,6 +7832,12 @@ impl TriApp {
         let row = shown.iter().position(|&i| i == self.selected).unwrap_or(0) / self.layout.columns;
         let offset = match self.reveal.take() {
             Some(Reveal::Top) => Some(row as f32 * self.layout.row_pitch()),
+            Some(Reveal::Anchor) => self.scroll_anchor.take().and_then(|(path, shift)| {
+                let index = self.files.iter().position(|f| f.path == path)?;
+                let index = self.stacks.visible(index);
+                let at = shown.iter().position(|&i| i == index)?;
+                Some((at / self.layout.columns) as f32 * self.layout.row_pitch() + shift)
+            }),
             // Grille pas encore mise en page (hauteur visible inconnue, 0) : on attend
             // l'image suivante, sinon la rangée de l'image passait sous le haut de la vue
             // (actions dès le démarrage, `TRI_GUI_ACTIONS`).
@@ -12752,6 +12818,36 @@ mod tests {
                 .0
                 .contains("Piles désactivées")
         );
+    }
+
+    #[test]
+    fn a_refilter_keeps_the_region_shown() {
+        // Issue n° 100 : sélection en haut, grille défilée plus bas à la molette ; un
+        // refiltrage (réglage d'un curseur de filtre) ne ramène pas au début.
+        let names: Vec<String> = (0..60).map(|i| format!("i{i:02}.jpg")).collect();
+        let images = names
+            .iter()
+            .map(|n| (n.as_str(), image::RgbImage::new(16, 16)))
+            .collect();
+        let (mut h, _dir) = harness_images(images);
+        h.run_steps(3);
+        // Défile vers le bas (rangée de l'image 40 en haut), sélection laissée sur 0.
+        h.state_mut().selected = 40;
+        h.state_mut().reveal = Some(Reveal::Top);
+        h.run_steps(3);
+        h.state_mut().selected = 0;
+        h.run_steps(2);
+        let before = h.state().scroll_offset;
+        assert!(before > 0.0, "défilée");
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        assert_eq!(h.state().scroll_offset, before, "même région");
+        // La sélection visible : on la montre, comme avant.
+        h.state_mut().reveal = Some(Reveal::Top);
+        h.run_steps(3);
+        h.state_mut().refilter(Reveal::Minimal);
+        h.run_steps(3);
+        assert_eq!(h.state().scroll_offset, 0.0, "sur la sélection");
     }
 
     #[test]
