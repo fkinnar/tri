@@ -910,7 +910,13 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   being viewed left the filter and the image changed): refiltered on returning to the
   grid.
 - **Progress bars** hidden for `[gui] progress_delay_ms` (400 ms) after a refilter: the
-  cache almost always answers first, a bar shown for 1/10 s was unreadable.
+  cache almost always answers first, a bar shown for 1/10 s was unreadable. **A single
+  bar** since 2026-10-25 (issue #36: with an offload in the background, they lined up at
+  the bottom): background tasks (ratings, folder computations, export, copies and offload
+  in the background, `TriApp::tasks`) gathered into one global bar (number of tasks,
+  mean progress) at the bottom of the metadata panel, or in the status bar when it is
+  hidden; a click unfolds the details, one bar per task above (click on a copy or an
+  offload: its dialog; "×": interrupt the export). A single task: its bar directly.
 - "Camera JPEG" becomes **"Camera render"**, the counterpart of "RAW render".
 - Thumbnails' **RAW badge** in the accent colour (the light blue was hard to read; on the
   selected cell, whose background is the accent, its text colour); thumbnails' stars in

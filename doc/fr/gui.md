@@ -938,7 +938,13 @@ photos nettes.
   regardée sortait du filtre et l'image changeait) : refiltrage au retour à la grille.
 - **Barres de progression** masquées `[gui] progress_delay_ms` (400 ms) après un
   refiltrage : le cache répond presque toujours avant, une barre montrée 1/10 s ne se
-  lisait pas.
+  lisait pas. **Une seule barre** depuis le 25/10/2026 (issue n° 36 : avec un
+  déchargement en arrière-plan, elles s'alignaient en bas) : tâches de fond (notes,
+  calculs du dossier, export, copies et déchargement en arrière-plan, `TriApp::tasks`)
+  réunies en une barre globale (nombre de tâches, avancement moyen) en bas du panneau
+  des métadonnées, ou dans la barre d'état s'il est masqué ; un clic déplie le détail,
+  une barre par tâche au-dessus (clic sur une copie ou un déchargement : sa boîte ;
+  « × » : interrompre l'export). Une seule tâche : sa barre directement.
 - « JPEG boîtier » devient **« Rendu boîtier »**, pendant de « Rendu RAW ».
 - **Badge RAW** des vignettes à l'accent (le bleu clair se lisait mal ; sur la cellule
   sélectionnée, dont le fond est l'accent, la couleur de son texte) ; étoiles des

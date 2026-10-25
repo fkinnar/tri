@@ -226,6 +226,11 @@ pub struct TriApp {
     /// Barres de progression masquées jusqu'à cet instant (après un refiltrage :
     /// `[gui] progress_delay_ms`).
     progress_hidden_until: Option<Instant>,
+    /// Détail des tâches de fond déplié (clic sur la barre globale, issue n° 36).
+    tasks_open: bool,
+    /// Clic sur une tâche du panneau des métadonnées, traité à l'image suivante avec ceux
+    /// de la barre d'état (dessinée avant le panneau).
+    task_click: Option<StatusClick>,
     /// Jugement de netteté changé hors de la grille (curseur en plein écran) : grille
     /// refiltrée seulement au retour, pour ne pas retirer l'image regardée (retour du
     /// 21/10/2026).
@@ -691,6 +696,8 @@ impl TriApp {
             exposure_refilter_pending: false,
             refiltered_at: Instant::now(),
             progress_hidden_until: None,
+            tasks_open: false,
+            task_click: None,
             developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
             peaking_color: 0,
@@ -5687,6 +5694,185 @@ impl TriApp {
 
     /// Barre d'état ; renvoie l'action d'une icône cliquée (afficher / masquer un
     /// panneau).
+    /// Vrai si le panneau des métadonnées est dessiné (les tâches de fond y vont).
+    fn metadata_panel_shown(&self) -> bool {
+        self.metadata_panel && !self.focus_mode && self.error.is_none() && !self.folder.is_none()
+    }
+
+    /// Tâches de fond en cours (issue n° 36) : notes, calculs du dossier, export, copies
+    /// et déchargement en arrière-plan.
+    fn tasks(&self, ui: &Ui) -> Vec<Task> {
+        let mut tasks = Vec::new();
+        let notes = self.loading.as_ref().map_or(Progress::default(), |l| {
+            let (done, total) = l.progress();
+            Progress { done, total }
+        });
+        // Juste après un refiltrage : le cache répond souvent avant le délai.
+        let waiting = self.progress_hidden_until.is_some_and(|t| {
+            let now = Instant::now();
+            if now < t {
+                ui.ctx().request_repaint_after(t - now);
+            }
+            now < t
+        });
+        for (name, p) in [
+            (t!("progress-notes"), notes),
+            (t!("progress-thumbnails"), self.progress[0]),
+            (t!("progress-embedded"), self.progress[1]),
+            (t!("progress-previews"), self.progress[2]),
+            (t!("progress-histograms"), self.progress[3]),
+            (t!("progress-sharpness"), self.progress[4]),
+            (t!("progress-groups"), self.progress[5]),
+        ] {
+            // Rien à calculer en fond pour ce niveau, ou déjà fini.
+            if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
+                continue;
+            }
+            tasks.push(Task {
+                text: format!("{name} {}/{}", p.done, p.total),
+                fraction: p.fraction(),
+                tip: None,
+                click: None,
+                cancel: None,
+            });
+        }
+        if let Some(job) = &self.export_job {
+            let done = job.done.load(std::sync::atomic::Ordering::Relaxed);
+            tasks.push(Task {
+                text: t!(
+                    "export-progress",
+                    profile = job.profile.as_str(),
+                    done = done,
+                    total = job.total
+                ),
+                fraction: done as f32 / job.total.max(1) as f32,
+                tip: Some(crate::files::tilde(&job.dest)),
+                click: None,
+                cancel: Some((t!("export-cancel"), StatusClick::CancelExport)),
+            });
+        }
+        if let Some((text, fraction)) = self
+            .background_transfers
+            .first()
+            .and_then(|d| d.transfer_status())
+        {
+            tasks.push(Task {
+                text,
+                fraction,
+                tip: Some(t!("status-show-transfer")),
+                click: Some(StatusClick::RevealTransfer),
+                cancel: None,
+            });
+        }
+        if let Some((text, fraction)) = self
+            .offload
+            .as_ref()
+            .filter(|d| d.is_hidden())
+            .and_then(|d| d.status())
+        {
+            tasks.push(Task {
+                text,
+                fraction,
+                tip: Some(t!("status-show-offload")),
+                click: Some(StatusClick::RevealOffload),
+                cancel: None,
+            });
+        }
+        tasks
+    }
+
+    /// Tâches de fond (issue n° 36) : une seule barre globale (nombre de tâches,
+    /// avancement moyen) ; un clic déplie le détail, chaque tâche sur sa barre, au-dessus.
+    /// Une seule tâche : sa barre directement. `inline` : dans la barre d'état (détail
+    /// dans une bulle au-dessus) ; sinon en bas du panneau des métadonnées.
+    fn tasks_ui(&self, ui: &mut Ui, tasks: &[Task], inline: bool) -> Option<StatusClick> {
+        let mut clicked = None;
+        let fill = self
+            .gui
+            .colors
+            .progress
+            .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
+        let width = if inline {
+            self.gui.progress_width
+        } else {
+            ui.available_width()
+        };
+        let bar = |ui: &mut Ui, task: &Task, clicked: &mut Option<StatusClick>| {
+            ui.horizontal(|ui| {
+                let room = width - task.cancel.as_ref().map_or(0.0, |_| 24.0);
+                let mut response = ui.add(
+                    egui::ProgressBar::new(task.fraction)
+                        .desired_width(room)
+                        .fill(fill)
+                        .text(task.text.as_str()),
+                );
+                if let Some(tip) = &task.tip {
+                    response = response.on_hover_text(tip);
+                }
+                if let Some(click) = task.click {
+                    let response = response
+                        .interact(Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if response.clicked() {
+                        *clicked = Some(click);
+                    }
+                }
+                if let Some((tip, cancel)) = &task.cancel
+                    && ui.small_button("×").on_hover_text(tip).clicked()
+                {
+                    *clicked = Some(*cancel);
+                }
+            });
+        };
+        if let [task] = tasks {
+            bar(ui, task, &mut clicked);
+            return clicked;
+        }
+        let mean = tasks.iter().map(|t| t.fraction).sum::<f32>() / tasks.len() as f32;
+        let summary = Task {
+            text: t!(
+                "tasks-global",
+                n = tasks.len(),
+                percent = format!("{:.0}", mean * 100.0)
+            ),
+            fraction: mean,
+            tip: Some(if self.tasks_open {
+                t!("tasks-fold")
+            } else {
+                t!("tasks-unfold")
+            }),
+            click: Some(StatusClick::ToggleTasks),
+            cancel: None,
+        };
+        if inline {
+            let at = ui.cursor().min;
+            bar(ui, &summary, &mut clicked);
+            if self.tasks_open {
+                // Détail au-dessus de la barre d'état, de bas en haut.
+                egui::Area::new(egui::Id::unique("tasks_detail"))
+                    .order(egui::Order::Foreground)
+                    .pivot(Align2::LEFT_BOTTOM)
+                    .fixed_pos(at)
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            for task in tasks.iter().rev() {
+                                bar(ui, task, &mut clicked);
+                            }
+                        });
+                    });
+            }
+        } else {
+            // En bas du panneau, dessiné de bas en haut : la barre globale, puis le détail.
+            if self.tasks_open {
+                for task in tasks.iter().rev() {
+                    bar(ui, task, &mut clicked);
+                }
+            }
+            bar(ui, &summary, &mut clicked);
+        }
+        clicked
+    }
+
     fn status_bar(&self, ui: &mut Ui) -> Option<StatusClick> {
         let mut clicked = None;
         let size = ui.text_style_height(&egui::TextStyle::Body) + 2.0;
@@ -5749,72 +5935,15 @@ impl TriApp {
                 }
                 ui.colored_label(Color32::from(self.gui.colors.marked), text);
             }
-            ui.separator();
-            let notes = self.loading.as_ref().map_or(Progress::default(), |l| {
-                let (done, total) = l.progress();
-                Progress { done, total }
-            });
-            for (name, p) in [
-                (t!("progress-notes"), notes),
-                (t!("progress-thumbnails"), self.progress[0]),
-                (t!("progress-embedded"), self.progress[1]),
-                (t!("progress-previews"), self.progress[2]),
-                (t!("progress-histograms"), self.progress[3]),
-                (t!("progress-sharpness"), self.progress[4]),
-                (t!("progress-groups"), self.progress[5]),
-            ] {
-                // Rien à calculer en fond pour ce niveau, ou déjà fini.
-                // Juste après un refiltrage : le cache répond souvent avant le délai.
-                let waiting = self.progress_hidden_until.is_some_and(|t| {
-                    let now = Instant::now();
-                    if now < t {
-                        ui.ctx().request_repaint_after(t - now);
+            // Tâches de fond : une barre globale (issue n° 36), ici quand le panneau des
+            // métadonnées est masqué ; sinon en bas de ce panneau.
+            if !self.metadata_panel_shown() {
+                let tasks = self.tasks(ui);
+                if !tasks.is_empty() {
+                    ui.separator();
+                    if let Some(c) = self.tasks_ui(ui, &tasks, true) {
+                        clicked = Some(c);
                     }
-                    now < t
-                });
-                if p.total == 0 || waiting || (self.gui.progress_hide_done && p.done >= p.total) {
-                    continue;
-                }
-                // Gris discret, pas la couleur d'accent : une information de fond, qui ne
-                // doit pas attirer le regard (retour du 17/10/2026).
-                let fill = self
-                    .gui
-                    .colors
-                    .progress
-                    .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
-                ui.add(
-                    egui::ProgressBar::new(p.fraction())
-                        .desired_width(self.gui.progress_width)
-                        .fill(fill)
-                        .text(format!("{name} {}/{}", p.done, p.total)),
-                );
-            }
-            if let Some(job) = &self.export_job {
-                let done = job.done.load(std::sync::atomic::Ordering::Relaxed);
-                let fill = self
-                    .gui
-                    .colors
-                    .progress
-                    .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
-                let text = t!(
-                    "export-progress",
-                    profile = job.profile.as_str(),
-                    done = done,
-                    total = job.total
-                );
-                ui.add(
-                    egui::ProgressBar::new(done as f32 / job.total.max(1) as f32)
-                        .desired_width(self.gui.progress_width)
-                        .fill(fill)
-                        .text(text),
-                )
-                .on_hover_text(crate::files::tilde(&job.dest));
-                if ui
-                    .small_button("×")
-                    .on_hover_text(t!("export-cancel"))
-                    .clicked()
-                {
-                    job.cancel();
                 }
             }
             // Nom de l'image en plein écran seulement : en grille, il est sous la vignette
@@ -5908,57 +6037,6 @@ impl TriApp {
                     Action::ToggleMetadata,
                 ) {
                     clicked = Some(c);
-                }
-                // Copie en arrière-plan : progression (clic : réafficher la boîte).
-                if let Some((text, fraction)) = self
-                    .background_transfers
-                    .first()
-                    .and_then(|d| d.transfer_status())
-                {
-                    let fill = self
-                        .gui
-                        .colors
-                        .progress
-                        .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
-                    let bar = ui
-                        .add(
-                            egui::ProgressBar::new(fraction)
-                                .desired_width(260.0)
-                                .fill(fill)
-                                .text(text),
-                        )
-                        .interact(Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(t!("status-show-transfer"));
-                    if bar.clicked() {
-                        clicked = Some(StatusClick::RevealTransfer);
-                    }
-                }
-                // Déchargement en arrière-plan : progression (clic : réafficher la boîte).
-                if let Some((text, fraction)) = self
-                    .offload
-                    .as_ref()
-                    .filter(|d| d.is_hidden())
-                    .and_then(|d| d.status())
-                {
-                    let fill = self
-                        .gui
-                        .colors
-                        .progress
-                        .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
-                    let bar = ui
-                        .add(
-                            egui::ProgressBar::new(fraction)
-                                .desired_width(260.0)
-                                .fill(fill)
-                                .text(text),
-                        )
-                        .interact(Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(t!("status-show-offload"));
-                    if bar.clicked() {
-                        clicked = Some(StatusClick::RevealOffload);
-                    }
                 }
                 if self.eject_failed.is_some()
                     && self.ejecting.is_none()
@@ -8838,7 +8916,13 @@ impl eframe::App for TriApp {
                 .show(ui, |ui| self.status_bar(ui))
                 .inner
         };
-        match status_click {
+        match status_click.or(self.task_click.take()) {
+            Some(StatusClick::ToggleTasks) => self.tasks_open = !self.tasks_open,
+            Some(StatusClick::CancelExport) => {
+                if let Some(job) = &self.export_job {
+                    job.cancel();
+                }
+            }
             Some(StatusClick::Action(action)) => self.perform(&ctx, action),
             Some(StatusClick::RevealOffload) => {
                 if let Some(dialog) = &mut self.offload {
@@ -8875,6 +8959,21 @@ impl eframe::App for TriApp {
                 .show(ui, |ui| {
                     if self.focus == crate::actions::Scope::Metadata {
                         panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+                    }
+                    // Tâches de fond en bas du panneau (issue n° 36), détail au-dessus.
+                    let tasks = self.tasks(ui);
+                    if !tasks.is_empty() {
+                        let click = egui::Panel::bottom("tasks")
+                            .show(ui, |ui| {
+                                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                                    self.tasks_ui(ui, &tasks, false)
+                                })
+                                .inner
+                            })
+                            .inner;
+                        if click.is_some() {
+                            self.task_click = click;
+                        }
                     }
                     ScrollArea::vertical()
                         .auto_shrink(false)
@@ -9220,6 +9319,18 @@ fn folder_name(path: &Path) -> String {
     file_name(path)
 }
 
+/// Une tâche de fond, pour la barre globale (issue n° 36).
+struct Task {
+    text: String,
+    fraction: f32,
+    /// Bulle au survol.
+    tip: Option<String>,
+    /// Clic sur la barre.
+    click: Option<StatusClick>,
+    /// Bouton « × » : sa bulle, et ce qu'il fait.
+    cancel: Option<(String, StatusClick)>,
+}
+
 /// Clic dans la barre d'état.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StatusClick {
@@ -9227,6 +9338,10 @@ enum StatusClick {
     Action(Action),
     /// Progression d'un déchargement en arrière-plan : réafficher sa boîte.
     RevealOffload,
+    /// Barre globale des tâches de fond : déplier / replier le détail (issue n° 36).
+    ToggleTasks,
+    /// Interrompre l'export en cours.
+    CancelExport,
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
     RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
@@ -13058,6 +13173,41 @@ mod tests {
     }
 
     #[test]
+    fn background_tasks_share_one_bar() {
+        // Issue n° 36 : plusieurs tâches, une barre globale en bas du panneau des
+        // métadonnées ; un clic déplie le détail. Panneau masqué : dans la barre d'état.
+        let (mut h, _dir) = harness();
+        run_until(&mut h, |app| {
+            app.engine
+                .as_ref()
+                .unwrap()
+                .scheduler
+                .wait_idle(Duration::ZERO)
+        });
+        h.run_steps(3);
+        let app = h.state_mut();
+        app.gui.progress_hide_done = true;
+        app.progress_hidden_until = None;
+        app.progress[0] = Progress { done: 1, total: 4 };
+        app.progress[3] = Progress { done: 3, total: 4 };
+        h.run_steps(2);
+        let global = t!("tasks-global", n = 2, percent = "50");
+        assert!(
+            h.query_by_label_contains(&global).is_some(),
+            "une barre globale"
+        );
+        assert!(h.query_by_label_contains("1/4").is_none(), "détail replié");
+        h.get_by_label_contains(&global).click();
+        h.run_steps(3);
+        assert!(h.state().tasks_open);
+        assert!(h.query_by_label_contains("1/4").is_some(), "détail déplié");
+        // Panneau des métadonnées masqué : la barre globale passe dans la barre d'état.
+        h.state_mut().metadata_panel = false;
+        h.run_steps(3);
+        assert!(h.query_by_label_contains(&global).is_some());
+    }
+
+    #[test]
     fn status_bar_icons_toggle_the_panels() {
         let (mut h, _dir) = harness();
         // Calculs de fond finis : leurs barres de progression, en apparaissant ou en
@@ -13209,6 +13359,9 @@ mod tests {
         let image = h.state().files[0].path.clone();
         let (go, held) = mpsc::channel();
         let settings = h.state().settings.files.clone();
+        // D'autres tâches (vignettes du dossier) peuvent tourner : détail des tâches
+        // déplié, la copie y a toujours sa barre (#36).
+        h.state_mut().tasks_open = true;
         h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
             vec![image],
             &dest,
