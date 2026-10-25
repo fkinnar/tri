@@ -433,6 +433,9 @@ load_budget_ms = 8
 # terminées (false : toujours affichées).
 progress_width = 160.0
 progress_hide_done = true
+# Tâches de fond repliées : une fine barre grise, de cette hauteur (points) ; un clic
+# ouvre le détail.
+tasks_folded_height = 4.0
 # Délai avant d'afficher les barres de progression après un changement de filtre (ms) :
 # souvent tout est déjà en cache, une barre montrée un instant ne se lit pas.
 progress_delay_ms = 400

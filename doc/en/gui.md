@@ -917,7 +917,9 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   in the background, `TriApp::tasks`) gathered into one global bar (number of tasks,
   mean progress) at the bottom of the metadata panel, or in the status bar when it is
   hidden; a click unfolds the details, one bar per task above (click on a copy or an
-  offload: its dialog; "×": interrupt the export). A single task: its bar directly.
+  offload: its dialog; "×": interrupt the export). Folded (feedback of 2026-10-25), the
+  global bar is a **thin grey bar** without text (`[gui] tasks_folded_height`, text on
+  hover); it stays in place once unfolded, a second click folds. A single task: the same.
 - "Camera JPEG" becomes **"Camera render"**, the counterpart of "RAW render".
 - Thumbnails' **RAW badge** in the accent colour (the light blue was hard to read; on the
   selected cell, whose background is the accent, its text colour); thumbnails' stars in

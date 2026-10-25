@@ -945,7 +945,9 @@ photos nettes.
   réunies en une barre globale (nombre de tâches, avancement moyen) en bas du panneau
   des métadonnées, ou dans la barre d'état s'il est masqué ; un clic déplie le détail,
   une barre par tâche au-dessus (clic sur une copie ou un déchargement : sa boîte ;
-  « × » : interrompre l'export). Une seule tâche : sa barre directement.
+  « × » : interrompre l'export). Repliée (retour du 25/10/2026), la barre globale est
+  une **fine barre grise** sans texte (`[gui] tasks_folded_height`, texte au survol) ;
+  elle reste à sa place une fois dépliée, un second clic replie. Une seule tâche : pareil.
 - « JPEG boîtier » devient **« Rendu boîtier »**, pendant de « Rendu RAW ».
 - **Badge RAW** des vignettes à l'accent (le bleu clair se lisait mal ; sur la cellule
   sélectionnée, dont le fond est l'accent, la couleur de son texte) ; étoiles des

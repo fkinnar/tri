@@ -315,7 +315,10 @@ status-key-problems = { $n ->
 }
 status-invalid-config = configuration invalide : réglages par défaut
 status-show-offload = Afficher le déchargement
-tasks-global = { $n } tâches en cours · { $percent } %
+tasks-global = { $n ->
+        [one] 1 tâche en cours
+       *[other] { $n } tâches en cours
+    } · { $percent } %
 tasks-unfold = Cliquer : le détail
 tasks-fold = Cliquer : replier le détail
 status-retry-eject = Réessayer l'éjection
