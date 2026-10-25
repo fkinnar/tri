@@ -126,7 +126,10 @@ system one ("cold" measurements, experiments).
   Wayland, which does not give it) and maximized state, followed on each frame
   (`TriApp::track_window`) but kept once still for `[gui] window_save_ms` (1 s), or when
   closing; restored at launch (`state::restore_window`), `[gui] window` only used on the
-  first one.
+  first one. Under Wayland, egui does not give the inner rectangle either (it needs the
+  position): the size comes from the drawing area (feedback of 2026-10-25: nothing was
+  kept). The position stays with the compositor: Wayland does not let an application
+  place its window.
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
