@@ -13220,6 +13220,9 @@ mod tests {
         let image = h.state().files[0].path.clone();
         let (go, held) = mpsc::channel();
         let settings = h.state().settings.files.clone();
+        // D'autres tâches (vignettes du dossier) peuvent tourner : détail des tâches
+        // déplié, la copie y a toujours sa barre (#36).
+        h.state_mut().tasks_open = true;
         h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
             vec![image],
             &dest,
