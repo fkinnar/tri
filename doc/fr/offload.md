@@ -76,6 +76,15 @@ qu'à lancer la copie. Seuls comptent les supports éjectables (pas un disque fi
 `[places] fixed`). Les aperçus de chaque séance se calculent à part : l'application
 garde une liste de leurs schedulers.
 
+Retours du soir même : la boîte n'est pas obligée d'être restée ouverte. Bilan refermé,
+ou copie faite en arrière-plan : l'application garde le dernier déchargement fini
+(`TriApp::last_offload` : séance et choix de la boîte), et une carte d'appareil (avec un
+dossier `DCIM`) branchée ensuite ouvre la boîte sur elle, vers cette séance
+(`OffloadDialog::propose_session`). Refermée sans décharger, plus rien n'est proposé
+ensuite. La nouvelle carte peut être montée **au même chemin** que la précédente (deux
+cartes du même boîtier ont le même nom de volume, `/media/…/disk`) : elle vient
+d'apparaître, c'est une autre carte.
+
 ## En arrière-plan (17/10/2026)
 
 Pour trier une séance pendant qu'une autre carte se décharge : pendant la copie,

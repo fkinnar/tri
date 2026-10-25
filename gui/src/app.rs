@@ -150,6 +150,10 @@ pub struct TriApp {
     session_previews: Vec<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
+    /// Dernier déchargement fini (séance, choix de la boîte) : une carte branchée ensuite
+    /// y va, même si la boîte a été fermée ou la copie faite en arrière-plan (issue
+    /// n° 37). Oublié si on referme sans décharger la boîte ouverte pour la carte suivante.
+    last_offload: Option<(PathBuf, tri::offload::OffloadSettings)>,
     /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
     /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
     missing_last: Option<PathBuf>,
@@ -642,6 +646,7 @@ impl TriApp {
             offload: None,
             session_previews: Vec::new(),
             offloaded: None,
+            last_offload: None,
             missing_last,
             eject_failed: None,
             eject_dialog: None,
@@ -1258,11 +1263,34 @@ impl TriApp {
             .filter(|p| !before.contains(p))
             .collect();
         for card in arrived {
-            if let Some(dialog) = &mut self.offload
-                && dialog.next_card(card, ctx)
-            {
-                self.attach_previews();
-                break;
+            match &mut self.offload {
+                Some(dialog) => {
+                    if dialog.next_card(card, ctx) {
+                        self.attach_previews();
+                        break;
+                    }
+                }
+                // Boîte fermée, ou copie faite en arrière-plan : la boîte s'ouvre sur la
+                // carte (une carte d'appareil seulement, avec son DCIM), vers la séance.
+                None => {
+                    if let Some((session, settings)) = &self.last_offload
+                        && card.join("DCIM").is_dir()
+                        && self.ejecting.is_none()
+                    {
+                        let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                        let mut dialog = OffloadDialog::new(
+                            card,
+                            at,
+                            settings.clone(),
+                            self.settings.data_dir(),
+                            ctx,
+                        );
+                        dialog.propose_session(&session.clone());
+                        self.offload = Some(dialog);
+                        self.attach_previews();
+                        break;
+                    }
+                }
             }
         }
         self.reopen_missing_last();
@@ -1914,9 +1942,14 @@ impl TriApp {
         } else {
             dialog.show(ctx)
         };
+        if matches!(request, Some(OffloadRequest::Finished { .. }))
+            && let Some(session) = dialog.destination()
+        {
+            self.last_offload = Some((session, dialog.settings().clone()));
+        }
         match request {
             None => {}
-            Some(OffloadRequest::Close) => self.offload = None,
+            Some(OffloadRequest::Close) => self.close_offload(),
             // Fin de la copie : la boîte reste ouverte sur le bilan.
             Some(OffloadRequest::Finished {
                 open,
@@ -1945,6 +1978,16 @@ impl TriApp {
                 self.offload = None;
                 self.start_eject(ctx, volume);
             }
+        }
+    }
+
+    /// Ferme la boîte de déchargement ; refermée sans avoir déchargé (la carte suivante
+    /// n'était pas à décharger), plus de carte suivante proposée.
+    fn close_offload(&mut self) {
+        if let Some(dialog) = self.offload.take()
+            && dialog.destination().is_none()
+        {
+            self.last_offload = None;
         }
     }
 
@@ -2912,7 +2955,7 @@ impl TriApp {
             // Boîte de déchargement : seule la fermeture (pas pendant la copie).
             if let Some(dialog) = self.offload.as_ref().filter(|d| !d.is_hidden()) {
                 if action == Action::Back && !dialog.is_running() {
-                    self.offload = None;
+                    self.close_offload();
                 } else if action.works_over_overlay() && action != Action::Back {
                     self.perform(ctx, action);
                 }
@@ -13407,6 +13450,68 @@ mod tests {
         h.get_by_label("Décharger").click();
         wait_for(&mut h, "1 fichiers copiés et vérifiés");
         assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
+    }
+
+    #[test]
+    fn the_next_card_comes_after_closing_even_at_the_same_path() {
+        // Retour du 25/10/2026 (#37) : bilan refermé (ou copie en arrière-plan), et la
+        // carte suivante montée au même chemin (deux cartes du même boîtier) : la boîte
+        // s'ouvre quand même sur elle, vers la même séance.
+        let (mut h, dir) = harness();
+        let path = dir.path().join("disk");
+        std::fs::create_dir_all(path.join("DCIM")).unwrap();
+        image::RgbImage::new(16, 16)
+            .save(path.join("DCIM/A.jpg"))
+            .unwrap();
+        let card = tri::places::Place {
+            name: "disk".into(),
+            path: path.clone(),
+            kind: tri::places::PlaceKind::Volume,
+        };
+        h.state_mut().tree = Tree::with_places(vec![card.clone()], false);
+        h.state_mut().settings.offload.open_after = false;
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let wait_for = |h: &mut Harness<'_, TriApp>, text: &str| {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label_contains(text).is_none() {
+                assert!(Instant::now() < deadline, "jamais vu : {text}");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        wait_for(&mut h, "1 à copier");
+        h.get_by_label("Décharger").click();
+        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        let session = h.state().offload.as_ref().unwrap().destination().unwrap();
+        h.get_by_label("Fermer").click();
+        h.run_steps(2);
+        assert!(h.state().offload.is_none());
+        // La carte part, une autre arrive au même chemin.
+        let ctx = h.ctx.clone();
+        h.state_mut().set_volumes(&ctx, vec![]);
+        std::fs::remove_file(path.join("DCIM/A.jpg")).unwrap();
+        image::RgbImage::new(16, 16)
+            .save(path.join("DCIM/B.jpg"))
+            .unwrap();
+        h.state_mut().set_volumes(&ctx, vec![card.clone()]);
+        assert_eq!(h.state().offload.as_ref().unwrap().source(), path);
+        wait_for(&mut h, "1 à copier");
+        h.get_by_label("Décharger").click();
+        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
+        // Refermée sans décharger : plus de carte suivante proposée.
+        h.get_by_label("Fermer").click();
+        h.run_steps(2);
+        h.state_mut().set_volumes(&ctx, vec![]);
+        h.state_mut().set_volumes(&ctx, vec![card.clone()]);
+        wait_for(&mut h, "0 à copier");
+        h.get_by_label("Annuler").click();
+        h.run_steps(2);
+        assert!(h.state().offload.is_none());
+        h.state_mut().set_volumes(&ctx, vec![]);
+        h.state_mut().set_volumes(&ctx, vec![card]);
+        assert!(h.state().offload.is_none(), "oubliée");
     }
 
     #[test]
