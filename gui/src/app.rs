@@ -12673,6 +12673,54 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_goes_on_in_the_background() {
+        // Issue n° 72 : pendant une copie, « Continuer en arrière-plan » libère l'interface ;
+        // la progression est dans la barre d'état, la fin y est annoncée.
+        let (mut h, dir) = harness();
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        let image = h.state().files[0].path.clone();
+        let (go, held) = mpsc::channel();
+        let settings = h.state().settings.files.clone();
+        h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
+            vec![image],
+            &dest,
+            &settings,
+            held,
+        ));
+        h.run_steps(2);
+        h.get_by_label(&t!("transfer-background")).click();
+        h.run_steps(2);
+        assert!(h.state().file_dialog.is_none(), "boîte libérée");
+        assert_eq!(h.state().background_transfers.len(), 1);
+        assert!(
+            h.query_by_label_contains("copie vers").is_some(),
+            "barre d'état"
+        );
+        // Clic sur la progression : la boîte revient, puis repart en arrière-plan.
+        // Recliqué tant que la boîte n'est pas revenue (CI Windows : un clic juste après
+        // l'apparition de la barre se perdait).
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.state().file_dialog.is_none() {
+            assert!(Instant::now() < deadline, "jamais réaffichée");
+            h.get_by_label_contains("copie vers").click();
+            h.run_steps(3);
+        }
+        while h.state().file_dialog.is_some() {
+            assert!(Instant::now() < deadline, "jamais remise en arrière-plan");
+            h.get_by_label(&t!("transfer-background")).click();
+            h.run_steps(2);
+        }
+        go.send(()).unwrap();
+        run_until(&mut h, |app| app.background_transfers.is_empty());
+        assert!(dest.join("img0.jpg").is_file());
+        assert_eq!(
+            h.state().notice.as_ref().map(|(text, _)| text.clone()),
+            Some(t!("transfer-done"))
+        );
+    }
+
+    #[test]
     fn an_offload_in_the_background_offers_the_session_without_switching() {
         let (mut h, dir) = harness();
         let card = dir.path().join("CARTE");
@@ -13487,53 +13535,5 @@ mod tests {
             .filter(|a| a.available() && a.group() == group)
             .count();
         assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
-    }
-
-    #[test]
-    fn a_copy_goes_on_in_the_background() {
-        // Issue n° 72 : pendant une copie, « Continuer en arrière-plan » libère l'interface ;
-        // la progression est dans la barre d'état, la fin y est annoncée.
-        let (mut h, dir) = harness();
-        let dest = dir.path().join("dest");
-        std::fs::create_dir(&dest).unwrap();
-        let image = h.state().files[0].path.clone();
-        let (go, held) = mpsc::channel();
-        let settings = h.state().settings.files.clone();
-        h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
-            vec![image],
-            &dest,
-            &settings,
-            held,
-        ));
-        h.run_steps(2);
-        h.get_by_label(&t!("transfer-background")).click();
-        h.run_steps(2);
-        assert!(h.state().file_dialog.is_none(), "boîte libérée");
-        assert_eq!(h.state().background_transfers.len(), 1);
-        assert!(
-            h.query_by_label_contains("copie vers").is_some(),
-            "barre d'état"
-        );
-        // Clic sur la progression : la boîte revient, puis repart en arrière-plan.
-        // Recliqué tant que la boîte n'est pas revenue (CI Windows : un clic juste après
-        // l'apparition de la barre se perdait).
-        let deadline = Instant::now() + Duration::from_secs(20);
-        while h.state().file_dialog.is_none() {
-            assert!(Instant::now() < deadline, "jamais réaffichée");
-            h.get_by_label_contains("copie vers").click();
-            h.run_steps(3);
-        }
-        while h.state().file_dialog.is_some() {
-            assert!(Instant::now() < deadline, "jamais remise en arrière-plan");
-            h.get_by_label(&t!("transfer-background")).click();
-            h.run_steps(2);
-        }
-        go.send(()).unwrap();
-        run_until(&mut h, |app| app.background_transfers.is_empty());
-        assert!(dest.join("img0.jpg").is_file());
-        assert_eq!(
-            h.state().notice.as_ref().map(|(text, _)| text.clone()),
-            Some(t!("transfer-done"))
-        );
     }
 }
