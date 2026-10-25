@@ -382,3 +382,32 @@ fn a_folder_keeps_its_cache_inside_or_brings_it_along_when_moved() {
     let key = Key::new(&moved.join("sous/IMG.JPG"), Level::Thumbnail, "s").unwrap();
     assert!(cache.contains(&key), "le cache a suivi le dossier");
 }
+
+#[test]
+fn only_a_1_1_read_counts_as_a_use() {
+    // Issue n° 74 : une lecture n'écrit plus rien, sauf pour un 1:1 (date de dernier usage,
+    // pour l'éviction) ; une écriture par lecture ralentissait tout sur une clé USB.
+    let s = setup();
+    let old = SystemTime::now() - Duration::from_secs(3600);
+    let mut seen = Vec::new();
+    let mut dates = Vec::new();
+    for level in [Level::Standard, Level::Full] {
+        let k = key(&s.source, level);
+        s.cache.put(&k, &gradient()).unwrap();
+        let path = jpg_files(s._dir.path())
+            .into_iter()
+            .find(|p| !seen.contains(p))
+            .unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        assert!(s.cache.get(&k).is_some());
+        dates.push(fs::metadata(&path).unwrap().modified().unwrap());
+        seen.push(path);
+    }
+    assert_eq!(dates[0], old, "aperçu standard : date inchangée");
+    assert!(dates[1] > old, "1:1 : date de dernier usage");
+}

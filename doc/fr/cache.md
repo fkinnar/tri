@@ -9,7 +9,7 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
 
 ```
 <racine>/
-└── v3/                      version du format (FORMAT_VERSION)
+└── v4/                      version du format (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         un dossier de photos (début du hash de son chemin)
     │   │   ├── .source      ce dossier de photos, en clair
@@ -30,10 +30,11 @@ ne calcule rien. La file de travail qui le remplit en tâche de fond viendra par
   chaque niveau, sans devoir recalculer les clés : elles dépendent des réglages, et la
   taille de l'aperçu standard de l'écran, que la ligne de commande ne connaît pas.
   Avant, les sous-dossiers étaient les 2 premiers caractères du hash de l'entrée.
-- **`v3/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
+- **`v4/`** : changer le format (ou l'algorithme de clé) se fait en incrémentant
   `FORMAT_VERSION`. Les anciennes entrées deviennent invisibles ; les formats précédents
-  listés dans `OLD_FORMATS` (`v1/`, `v2/`) sont supprimés en fond à l'ouverture du cache.
-  `v3` (24/10/2026) : clé sans le dossier, fichier `.source` (voir plus bas).
+  listés dans `OLD_FORMATS` (`v1/` à `v3/`) sont supprimés en fond à l'ouverture du cache.
+  `v3` (24/10/2026) : clé sans le dossier, fichier `.source` (voir plus bas). `v4`
+  (25/10/2026) : date de modification au quart d'heure près (voir la clé).
 
 ## Cache sur le disque des photos (24/10/2026, issue n° 55)
 
@@ -46,7 +47,7 @@ Trois places possibles pour le cache d'une photo :
 
 Les deux derniers sont un même mécanisme : un dossier caché `.tri-cache` (`DISK_DIR`)
 garde le cache de toutes les photos en dessous, sous-dossiers compris, avec la même
-organisation (`.tri-cache/v3/<niveau>/<dossier>/`), mais le dossier est repéré par son
+organisation (`.tri-cache/v4/<niveau>/<dossier>/`), mais le dossier est repéré par son
 chemin **relatif** à la racine (écrit avec des `/` sur tous les systèmes). Monté ailleurs
 (`/Volumes/T7` sur un Mac, `/media/u/T7` sous Linux), le disque retrouve son cache.
 `Cache::disk_of(dossier)` cherche le `.tri-cache` le plus proche en remontant (gardé en
@@ -66,8 +67,8 @@ Le fichier `.source` de chaque dossier d'entrées (chemin absolu au centre, rela
 disque) permet ces déplacements sans connaître les réglages. Vers un autre disque, copie
 puis suppression ; une entrée déjà présente à l'arrivée est gardée. Les niveaux 1:1 d'un
 `.tri-cache` ne sont pas limités par `zoom_max_mb`, et `--cache-usage` ne compte que le
-cache central. Disques FAT32 : la date de modification y est en heure locale, un
-ordinateur réglé sur un autre fuseau recalcule tout (exFAT, APFS, ext4 : non).
+cache central. Disques FAT32 : la date de modification y est en heure locale, décalée
+par un changement d'heure ou de fuseau ; la clé n'en dépend plus depuis `v4` (voir la clé).
 
 ### Emplacement par défaut : `default_dir()`
 
@@ -88,7 +89,12 @@ Une clé est un hash **BLAKE3** (256 bits, en hexadécimal) de :
 1. la version du format ;
 2. le **nom** du fichier source (depuis `v3` ; le dossier, lui, choisit le rangement : le
    cache peut ainsi changer de place sans rien recalculer) ;
-3. sa **taille** et sa **date de modification** (nanosecondes) ;
+3. sa **taille** et sa **date de modification** (nanosecondes), réduite au reste de sa
+   division par 15 minutes (depuis `v4`, issue n° 74) : un disque FAT32 note ses dates
+   en heure locale, et le passage à l'heure d'hiver les décalait toutes d'une heure, donc
+   tout le cache d'une clé USB était recalculé. Changements d'heure et fuseaux décalent
+   toujours d'un multiple de 15 minutes ; une vraie modification change la taille, ou la
+   date d'autre chose ;
 4. le **niveau** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`) ;
 5. les **paramètres** de calcul, une chaîne libre fournie par l'appelant (ex.
    `"half=1;side=2560"`).
@@ -139,8 +145,10 @@ valeur de référence pour détecter tout changement accidentel.
   `get`, qui renvoie `None` : l'appelant la recalcule comme une entrée absente.
 - **Partage** : `Cache` ne garde aucun état en mémoire (juste le chemin). Il est `Clone`,
   utilisable depuis plusieurs threads, et même plusieurs processus, sur le même dossier.
-- **Dernier usage** : `get` remet à jour la date de modification du fichier. `evict` s'en sert
-  comme date de dernier usage, ce qui évite d'avoir à tenir un index.
+- **Dernier usage** : pour un 1:1 (seuls niveaux évincés), `get` remet à jour la date de
+  modification du fichier. `evict` s'en sert comme date de dernier usage, ce qui évite
+  d'avoir à tenir un index. Pas ailleurs (issue n° 74) : une écriture par lecture
+  ralentissait tout sur une clé USB.
 
 ## Tailles et performances
 
