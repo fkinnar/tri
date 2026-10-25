@@ -4,6 +4,47 @@
 
 ## À venir
 
+- **Grille** : plus de badge d'écrêtage sur une pile repliée, à la place de son nombre
+  d'images (issue n° 75).
+- **Panneaux** : le panneau qui a le clavier a un fond un peu plus clair (plus foncé
+  en thème clair) au lieu d'un liseré d'accent ; `[gui.dialogs] focus_panel_tint`
+  remplace `focus_frame_width`. Le curseur des métadonnées n'encadre plus
+  l'histogramme (issues n° 77, 78).
+- **Filtre « bien exposées »** : un seul curseur, avec un interrupteur à l'icône des
+  badges d'écrêtage pour choisir entre hautes lumières brûlées et noirs bouchés, au
+  lieu de deux curseurs aux libellés gris peu lisibles.
+- **Filtres netteté et exposition pendant les analyses** : la grille se complète au
+  fil du calcul (au plus toutes les `[gui] analysis_refilter_ms`, 5 s) au lieu
+  d'attendre la fin, et la barre d'état dit combien de photos sont analysées quand on
+  allume le filtre ; un refiltrage n'abandonne plus l'analyse en cours (issue n° 73).
+- **Copier / déplacer vers…** : « Continuer en arrière-plan » referme la boîte pendant
+  la copie ; sa progression est dans la barre d'état (un clic la rouvre) et la fin y
+  est annoncée (issue n° 72).
+- **Fenêtre étroite** : la fin de la barre des filtres ne recouvre plus le champ de
+  recherche (tri et nombre d'images dans un menu « … », inversion et effacement
+  toujours visibles), et les boutons de droite du bandeau de notation passent à la
+  ligne au lieu de recouvrir les couleurs (issue n° 71).
+- **Dernier dossier disparu** : lancée alors que le disque du dernier dossier est
+  débranché, la fenêtre dit lequel et pourquoi, en grand au centre, et le rouvre
+  d'elle-même quand le disque revient, sauf si un autre dossier a été ouvert
+  entre-temps (issue n° 66).
+- **Fenêtre** : sa taille, sa position et son agrandissement sont repris au lancement
+  suivant (issue n° 58 ; position indisponible sous Wayland).
+- **Piles** : début et fin de la pile avec `(` / `)` (vim) ou Maj+Début / Maj+Fin
+  (classique) ; dans le profil vim, toute la pile est désormais `d)` / `y)` (au lieu
+  de `dw` / `yw` : une pile est une phrase, comme dans vim ; en AZERTY, Maj+5 donne
+  toujours 5 étoiles). En mode pile, un bouton « |‹ » près des flèches (Ctrl+Maj+S,
+  `[gui.view] stack_enter`) choisit si ↑ / ↓ arrivent sur la couverture de la pile ou
+  sur sa première photo (issue n° 62). L'emplacement du cache a une liste déroulante
+  dans la fenêtre de réglages.
+- **Builds de nuit** : leurs paquets portent la date et le commit dans leur nom
+  (`tri-1.0.0-alpha.7-nightly-20261025-d16c32f-…`), plus celui de la version publiée.
+- **Curseur des piles** : vers la droite (plus strict), il suit le rang des distances
+  du dossier, donc chaque cran joint à peu près autant de photos et tout à droite il
+  ne reste aucune pile ; il était sensible au pixel de ce côté et s'arrêtait avec des
+  piles restantes (issue n° 61).
+- **Paquets Linux** : un `.deb` (Debian, Ubuntu, Mint) et une AppImage (pour essayer
+  sans rien installer), à côté de l'archive `.tar.gz`.
 - **Déchargement** : les aperçus et analyses de chaque photo se calculent dès qu'elle est
   copiée, pendant la suite de la copie ; la séance est prête plus tôt. Case dans la boîte
   de déchargement, `[offload] previews` (oui par défaut) ; `--previews` en ligne de
