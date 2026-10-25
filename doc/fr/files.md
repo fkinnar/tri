@@ -168,5 +168,8 @@ ressortir.
 changer), `dir_contents` (fichiers et sous-dossiers, pour la confirmation),
 `delete_dir(dossier, corbeille)` (tout le contenu ; à la corbeille, de quoi l'en
 ressortir). Noms vérifiés comme pour les images (`check_name`). Annulables (voir
-`history.md`).
+`history.md`). Dans l'interface (`TriApp::after_folder_change`), le travail de fond suit :
+dossier ouvert supprimé, il se ferme et ses calculs s'arrêtent ; sous-dossier supprimé avec
+« Sous-dossiers » coché, ses images quittent la liste ; rendus darktable d'un dossier
+supprimé, interrompus (25/10/2026).
 
