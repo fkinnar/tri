@@ -332,6 +332,14 @@ pub struct TriApp {
     /// Champ de recherche qui avait le clavier à l'image précédente : egui le retire dès
     /// qu'Échap arrive, avant les raccourcis ; c'est lui qui dit à qui Échap revient.
     search_focused: Option<egui::Id>,
+    /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
+    /// menu « … », mesurée à l'image précédente (issue n° 71).
+    filter_tail: (f32, f32),
+    /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
+    /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
+    rating_tail: f32,
+    /// Largeur du bandeau quand ses boutons de droite sont passés à la ligne.
+    rating_wrapped_at: Option<f32>,
     /// Recherche de dossiers (panneau des dossiers) : texte, parcours en fond, résultats
     /// (meilleurs d'abord) et celui pointé.
     folder_query: String,
@@ -700,6 +708,9 @@ impl TriApp {
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
+            filter_tail: (0.0, 0.0),
+            rating_tail: 0.0,
+            rating_wrapped_at: None,
             folder_query: String::new(),
             folder_search: None,
             folder_results: Vec::new(),
@@ -6645,7 +6656,9 @@ impl TriApp {
         } else {
             (None, false)
         };
-        ui.horizontal(|ui| {
+        // Fenêtre étroite (issue n° 71 : les boutons de droite recouvraient les couleurs) :
+        // passage à la ligne avant eux ; leur largeur est mesurée à l'image précédente.
+        ui.horizontal_wrapped(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a));
 
@@ -6725,7 +6738,18 @@ impl TriApp {
             }
             // À droite (posés de droite à gauche) : avance automatique, puis image suivante
             // et précédente, des icônes (retour du 17/10/2026).
+            // Passée à la ligne, elle y reste tant que sa largeur ne change pas : sinon,
+            // un libellé plus court (version « Original ») la remettait sur une ligne, et
+            // tout bougeait sous le pointeur.
+            let width = ui.max_rect().width();
+            let wrap = self.rating_wrapped_at == Some(width)
+                || ui.available_size_before_wrap().x < self.rating_tail;
+            self.rating_wrapped_at = wrap.then_some(width);
+            if wrap {
+                ui.end_row();
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let right = ui.max_rect().right();
                 let icon = self.gui.bar_icon_size;
                 // Le bouton 1:1 allumé à 100 % seulement (pas à 13 % ni à 200 %).
                 let zoomed = self.mode != Mode::Grid
@@ -6813,6 +6837,7 @@ impl TriApp {
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                     marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
+                self.rating_tail = right - ui.min_rect().left();
             });
         });
         match clicked {
@@ -7128,12 +7153,26 @@ impl TriApp {
                 || !self.name_query.trim().is_empty();
             // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
             ui.add_space(self.gui.dialogs.spacing);
+            // Fenêtre étroite (issue n° 71 : la fin de la barre recouvrait le champ) : le tri
+            // et le nombre d'images passent dans un menu « … », juste avant l'inversion et
+            // l'effacement, toujours visibles ; le champ se rétrécit. Largeurs mesurées à
+            // l'image précédente.
+            let (full_tail, compact_tail) = self.filter_tail;
+            let spacing = ui.spacing().item_spacing.x;
+            let room = ui.available_size_before_wrap().x - spacing;
+            let grid = self.gui.grid;
+            let compact = room < grid.search_width + full_tail;
+            let search_width = if compact {
+                (room - compact_tail).clamp(grid.search_min_width, grid.search_width)
+            } else {
+                grid.search_width
+            };
             let hint = t!("search-grid-hint", keys = self.search_keys());
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.name_query)
                     .id(grid_search_id())
                     .hint_text(hint)
-                    .desired_width(self.gui.grid.search_width),
+                    .desired_width(search_width),
             );
             if self.focus_request == Some(grid_search_id()) {
                 field.request_focus();
@@ -7148,6 +7187,7 @@ impl TriApp {
             // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
             // grisé sans filtre), et juste à sa gauche le nombre d'images.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let right = ui.max_rect().right();
                 let tip = self.action_tip(Action::FilterClear);
                 ui.add_enabled_ui(any, |ui| {
                     let (rect, response) =
@@ -7177,38 +7217,53 @@ impl TriApp {
                         clicked.push(Action::FilterInvert);
                     }
                 });
-                ui.weak(t!(
-                    "filter-bar-count",
-                    shown = self.files.len(),
-                    n = self.folder.files.len()
-                ))
-                .on_hover_text(t!("filter-bar-count-tip"));
-                // Ordre : sens, puis la clé (posés de droite à gauche).
-                ui.separator();
-                let (rect, response) =
-                    marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
-                let color = ui.style().interact(&response).fg_stroke.color;
-                marks::sort_arrow(
-                    ui.painter(),
-                    rect.shrink(size * 0.1),
-                    self.order.descending,
-                    color,
-                );
-                if response.clicked() {
-                    clicked.push(Action::SortReverse);
-                }
-                let mut key = self.order.key;
-                egui::ComboBox::from_id_salt("sort")
-                    .selected_text(sort_name(key))
-                    .show_ui(ui, |ui| {
-                        for k in tri::sort::SortKey::ALL {
-                            ui.selectable_value(&mut key, k, sort_name(k));
-                        }
+                let mut sort = |ui: &mut Ui| {
+                    ui.weak(t!(
+                        "filter-bar-count",
+                        shown = self.files.len(),
+                        n = self.folder.files.len()
+                    ))
+                    .on_hover_text(t!("filter-bar-count-tip"));
+                    // Ordre : sens, puis la clé (posés de droite à gauche).
+                    ui.separator();
+                    let (rect, response) =
+                        marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::sort_arrow(
+                        ui.painter(),
+                        rect.shrink(size * 0.1),
+                        self.order.descending,
+                        color,
+                    );
+                    if response.clicked() {
+                        clicked.push(Action::SortReverse);
+                    }
+                    let mut key = self.order.key;
+                    egui::ComboBox::from_id_salt("sort")
+                        .selected_text(sort_name(key))
+                        .show_ui(ui, |ui| {
+                            for k in tri::sort::SortKey::ALL {
+                                ui.selectable_value(&mut key, k, sort_name(k));
+                            }
+                        })
+                        .response
+                        .on_hover_text(self.action_tip(Action::SortNext));
+                    if key != self.order.key {
+                        sort_choice = Some(key);
+                    }
+                };
+                if compact {
+                    ui.menu_button("…", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), sort)
+                        });
                     })
                     .response
-                    .on_hover_text(self.action_tip(Action::SortNext));
-                if key != self.order.key {
-                    sort_choice = Some(key);
+                    .on_hover_text(t!("filter-bar-more"));
+                    self.filter_tail.1 = right - ui.min_rect().left();
+                } else {
+                    sort(ui);
+                    self.filter_tail.0 = right - ui.min_rect().left();
                 }
             });
         });
@@ -9643,9 +9698,9 @@ mod tests {
     fn thumbnail_info_and_size_from_the_keyboard_and_the_bottom_bar() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        // Fenêtre étroite (1000 points) et panneaux ouverts : pas la place pour les
-        // contrôles de la grille, qui recouvriraient les notes du bandeau.
-        assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_none());
+        // Fenêtre étroite (1000 points) et panneaux ouverts : les contrôles de la grille
+        // passent à la ligne au lieu de recouvrir les notes du bandeau (issue n° 71).
+        assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_some());
         press(&mut h, Key::D, Modifiers::SHIFT);
         press(&mut h, Key::M, Modifiers::SHIFT);
         assert_eq!(
@@ -11144,6 +11199,36 @@ mod tests {
             elsewhere,
             "on reste où on est allé"
         );
+    }
+
+    #[test]
+    fn a_narrow_filter_bar_folds_its_end_into_a_menu() {
+        // Issue n° 71 : fenêtre étroite, le tri et le nombre d'images passent dans « … »,
+        // l'inversion et l'effacement restent visibles ; large, tout est dans la barre.
+        let (mut h, _dir) = harness();
+        let more = "…";
+        let clear = t!("filter-bar-clear");
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "large : pas de menu");
+        h.set_size(vec2(760.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_some(), "étroite : le menu");
+        assert!(
+            h.query_by_label(&clear).is_some(),
+            "effacer toujours visible"
+        );
+        // Le menu ouvert : le nombre d'images y est.
+        h.get_by_label(more).click();
+        h.run_steps(3);
+        let count = t!("filter-bar-count", shown = 3, n = 3);
+        assert!(
+            h.query_by_label(&count).is_some(),
+            "nombre d'images dans le menu"
+        );
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "de nouveau large");
     }
 
     #[test]

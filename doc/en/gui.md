@@ -262,7 +262,11 @@ system one ("cold" measurements, experiments).
   live from the settings.
 - **Search** (2026-10-19): `/` in the grid and in the folders panel (in full screen, `/`
   stays "fit"), Ctrl+F everywhere. **Grid**: field after the filter bar's counter
-  (`[gui.grid] search_width`), live filter by file name (`tri::fuzzy::NameFilter`,
+  (`[gui.grid] search_width`; narrow window, issue #71: the sort and the number of images
+  go into a "…" menu just before invert and clear, always visible, and the field shrinks
+  down to `search_min_width`; the right-hand buttons of the rating bar wrap to a second
+  line, and stay there while the width does not change; widths measured on the previous
+  frame), live filter by file name (`tri::fuzzy::NameFilter`,
   combined with the other filters, "Clear" empties it too); Enter keeps the filter and
   gives the keyboard back to the grid, Esc clears it. **Folders**: field under the title;
   during the search, the results replace the tree (see `places.md`: `~/…`, `/…`,
