@@ -13515,11 +13515,19 @@ mod tests {
             "barre d'état"
         );
         // Clic sur la progression : la boîte revient, puis repart en arrière-plan.
-        h.get_by_label_contains("copie vers").click();
-        h.run_steps(3);
-        assert!(h.state().file_dialog.is_some(), "réaffichée");
-        h.get_by_label(&t!("transfer-background")).click();
-        h.run_steps(2);
+        // Recliqué tant que la boîte n'est pas revenue (CI Windows : un clic juste après
+        // l'apparition de la barre se perdait).
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.state().file_dialog.is_none() {
+            assert!(Instant::now() < deadline, "jamais réaffichée");
+            h.get_by_label_contains("copie vers").click();
+            h.run_steps(3);
+        }
+        while h.state().file_dialog.is_some() {
+            assert!(Instant::now() < deadline, "jamais remise en arrière-plan");
+            h.get_by_label(&t!("transfer-background")).click();
+            h.run_steps(2);
+        }
         go.send(()).unwrap();
         run_until(&mut h, |app| app.background_transfers.is_empty());
         assert!(dest.join("img0.jpg").is_file());
