@@ -66,6 +66,16 @@ besoins de tous, pas seulement les siens.
 - Seules les images (RAW et plates) sont copiées ; vidéos et fichiers du boîtier sont
   comptés (`Plan::ignored`) et laissés.
 
+## Plusieurs cartes à la suite (25/10/2026, issue n° 37)
+
+La boîte restée ouverte sur le bilan d'une carte (éjectée ou non), une nouvelle carte
+branchée : la boîte repart sur elle (`OffloadDialog::next_card`, appelé par la
+surveillance des volumes, `TriApp::set_volumes`), vers **le même dossier de séance**
+(racine et nom repris du déchargement précédent), avec les mêmes choix ; il ne reste
+qu'à lancer la copie. Seuls comptent les supports éjectables (pas un disque fixé,
+`[places] fixed`). Les aperçus de chaque séance se calculent à part : l'application
+garde une liste de leurs schedulers.
+
 ## En arrière-plan (17/10/2026)
 
 Pour trier une séance pendant qu'une autre carte se décharge : pendant la copie,

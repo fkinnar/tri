@@ -147,7 +147,7 @@ pub struct TriApp {
     /// Aperçus de la séance calculés pendant un déchargement (issue n° 40) : gardés ici,
     /// la boîte pouvant se fermer avant la fin ; arrêtés quand la séance s'ouvre (le moteur
     /// du dossier prend le relais) ou une fois le travail fini.
-    session_previews: Option<Arc<Scheduler>>,
+    session_previews: Vec<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
     /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
@@ -631,7 +631,7 @@ impl TriApp {
             watch_snapshot: None,
             engine_backlog: false,
             offload: None,
-            session_previews: None,
+            session_previews: Vec::new(),
             offloaded: None,
             missing_last,
             eject_failed: None,
@@ -1223,10 +1223,36 @@ impl TriApp {
         if let Some((_, rx)) = &self.volumes
             && let Some(places) = rx.try_iter().last()
         {
-            trace(|| format!("volumes : {}", places.len()));
-            self.tree.set_places(places);
-            self.reopen_missing_last();
+            self.set_volumes(ctx, places);
         }
+    }
+
+    /// Nouvelle liste des volumes (disque branché ou débranché) : panneau, carte suivante
+    /// du déchargement (issue n° 37), dernier dossier rouvert (issue n° 66).
+    fn set_volumes(&mut self, ctx: &egui::Context, places: Vec<Place>) {
+        trace(|| format!("volumes : {}", places.len()));
+        // Une carte de plus, la boîte de déchargement ouverte sur le bilan de la
+        // précédente : elle repart sur la nouvelle (issue n° 37).
+        let before: Vec<PathBuf> = self.tree.places().iter().map(|p| p.path.clone()).collect();
+        self.tree.set_places(places);
+        // Les supports éjectables seulement (pas un disque fixé, `[places] fixed`).
+        let arrived: Vec<PathBuf> = self
+            .tree
+            .rows()
+            .into_iter()
+            .filter(|r| r.kind == Some(PlaceKind::Volume) && r.ejectable)
+            .map(|r| r.path)
+            .filter(|p| !before.contains(p))
+            .collect();
+        for card in arrived {
+            if let Some(dialog) = &mut self.offload
+                && dialog.next_card(card, ctx)
+            {
+                self.attach_previews();
+                break;
+            }
+        }
+        self.reopen_missing_last();
     }
 
     /// Disque du dernier dossier rebranché, aucun autre dossier ouvert entre-temps (sinon,
@@ -1823,7 +1849,7 @@ impl TriApp {
     /// Ouvre la séance déchargée dans la grille, et la montre dans l'arborescence.
     fn open_offloaded(&mut self, dir: &Path) {
         // Le moteur du dossier reprend ce qui reste (le fait est lu dans le cache).
-        self.session_previews = None;
+        self.session_previews.clear();
         self.tree.reload();
         self.tree.reveal(dir);
         self.reveal_folder = true;
@@ -1850,20 +1876,16 @@ impl TriApp {
             location: self.settings.cache.location,
             places: self.settings.places.clone(),
         });
-        self.session_previews = Some(scheduler);
+        self.session_previews.push(scheduler);
     }
 
     /// Boîte de déchargement : affichage, et suites (ouvrir la séance, éjecter la carte),
     /// choisies avant la copie et enchaînées à la fin.
     fn offload_dialog(&mut self, ctx: &egui::Context) {
-        // Plus de copie, et plus rien à calculer : le scheduler de la séance s'arrête.
-        if self.offload.is_none()
-            && self
-                .session_previews
-                .as_ref()
-                .is_some_and(|s| s.wait_idle(Duration::ZERO))
-        {
-            self.session_previews = None;
+        // Plus de copie, et plus rien à calculer : les schedulers des séances s'arrêtent.
+        if self.offload.is_none() {
+            self.session_previews
+                .retain(|s| !s.wait_idle(Duration::ZERO));
         }
         let Some(dialog) = &mut self.offload else {
             return;
@@ -13092,6 +13114,50 @@ mod tests {
     }
 
     #[test]
+    fn the_next_card_goes_to_the_same_session() {
+        // Issue n° 37 : la boîte restée sur le bilan, une nouvelle carte branchée : elle
+        // repart sur cette carte, vers le même dossier de séance.
+        let (mut h, dir) = harness();
+        let card = |name: &str, image: &str| {
+            let card = dir.path().join(name);
+            std::fs::create_dir_all(card.join("DCIM")).unwrap();
+            image::RgbImage::new(16, 16)
+                .save(card.join("DCIM").join(image))
+                .unwrap();
+            tri::places::Place {
+                name: name.into(),
+                path: card,
+                kind: tri::places::PlaceKind::Volume,
+            }
+        };
+        let (first, second) = (card("CARTE1", "A.jpg"), card("CARTE2", "B.jpg"));
+        h.state_mut().tree = Tree::with_places(vec![first.clone()], false);
+        h.state_mut().settings.offload.open_after = false;
+        h.run_steps(2);
+        h.get_by_label("Décharger la carte…").click();
+        let wait_for = |h: &mut Harness<'_, TriApp>, text: &str| {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while h.query_by_label_contains(text).is_none() {
+                assert!(Instant::now() < deadline, "jamais vu : {text}");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        wait_for(&mut h, "1 à copier");
+        h.get_by_label("Décharger").click();
+        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        let session = h.state().offload.as_ref().unwrap().destination().unwrap();
+        // CARTE2 arrive : la boîte repart sur elle, même séance proposée.
+        let ctx = h.ctx.clone();
+        h.state_mut().set_volumes(&ctx, vec![first, second.clone()]);
+        assert_eq!(h.state().offload.as_ref().unwrap().source(), second.path);
+        wait_for(&mut h, "1 à copier");
+        h.get_by_label("Décharger").click();
+        wait_for(&mut h, "1 fichiers copiés et vérifiés");
+        assert!(session.join("A.jpg").is_file() && session.join("B.jpg").is_file());
+    }
+
+    #[test]
     fn the_same_card_twice_counts_duplicates_in_the_chosen_folder() {
         let (mut h, dir) = harness();
         let card = dir.path().join("CARTE");
@@ -13229,7 +13295,7 @@ mod tests {
         );
         // Aperçus de la séance calculés pendant la copie (issue n° 40), dossier pas ouvert :
         // le scheduler de la séance s'arrête une fois fini, la vignette est en cache.
-        while h.state().session_previews.is_some() {
+        while !h.state().session_previews.is_empty() {
             assert!(
                 Instant::now() < deadline,
                 "aperçus de la séance jamais finis"
