@@ -77,7 +77,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avec au centre, en grand et en gris, l'invitation à choisir un dossier. Dernier dossier
   disparu (disque débranché, issue n° 66) : son nom et son chemin au-dessus, et il se
   rouvre de lui-même quand le disque revient (surveillance des volumes), sauf si un autre
-  dossier a été ouvert entre-temps (ce serait revenir en arrière sans l'avoir demandé). La barre de filtres passe à la
+  dossier a été ouvert entre-temps (ce serait revenir en arrière sans l'avoir demandé).
+  Disque du dossier **ouvert** retiré sans éjection pendant les calculs, puis rebranché
+  (issue n° 98) : le dossier est relu et les calculs reprennent (`TriApp::set_volumes`). La barre de filtres passe à la
   ligne quand la place manque.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),

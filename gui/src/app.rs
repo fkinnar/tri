@@ -1266,6 +1266,22 @@ impl TriApp {
             }
         }
         self.reopen_missing_last();
+        // Le disque du dossier ouvert revient (débranché sans éjection pendant les
+        // calculs, issue n° 98) : le dossier est relu, les calculs reprennent là où ils
+        // ont échoué (ce qui est déjà en cache passe tout de suite).
+        let back = self
+            .tree
+            .places()
+            .iter()
+            .map(|p| p.path.clone())
+            .filter(|p| !before.contains(p))
+            .any(|p| !self.folder.is_none() && self.folder.dir.starts_with(&p));
+        if back && self.folder.dir.is_dir() {
+            trace(|| format!("disque revenu : {}", self.folder.dir.display()));
+            let selected = self.files.get(self.selected).map(|f| f.path.clone());
+            self.reload_folder(selected);
+            self.notice = Some((t!("volume-back"), false));
+        }
     }
 
     /// Disque du dernier dossier rebranché, aucun autre dossier ouvert entre-temps (sinon,
@@ -11553,6 +11569,30 @@ mod tests {
         assert!(!kept.maximized);
         let saved = crate::state::load(&dir.path().join("data"));
         assert_eq!(saved.window, Some(kept), "écrite dans l'état d'affichage");
+    }
+
+    #[test]
+    fn computations_resume_when_the_drive_comes_back() {
+        // Issue n° 98 : disque du dossier ouvert retiré sans éjection pendant les calculs,
+        // puis rebranché : le dossier est relu, les calculs repartent.
+        let (mut h, dir) = harness();
+        let drive = tri::places::Place {
+            name: "usb".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Volume,
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut().set_volumes(&ctx, vec![drive.clone()]);
+        h.run_steps(2);
+        let generation = h.state().engine.as_ref().unwrap().generation;
+        h.state_mut().set_volumes(&ctx, vec![]);
+        h.state_mut().set_volumes(&ctx, vec![drive]);
+        assert!(
+            h.state().engine.as_ref().unwrap().generation > generation,
+            "travail relancé"
+        );
+        assert_eq!(h.state().notice.as_ref().unwrap().0, t!("volume-back"));
+        assert_eq!(h.state().files.len(), 3);
     }
 
     #[test]

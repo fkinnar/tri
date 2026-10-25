@@ -75,7 +75,10 @@ system one ("cold" measurements, experiments).
   in the data folder), otherwise opens on the panel, with the invitation to pick a folder
   large and grey in the centre. Last folder gone (drive unplugged, issue #66): its name
   and path above, and it opens again by itself when the drive is back (volume watching),
-  unless another folder was opened meanwhile (that would go back without being asked). The filter bar wraps when space runs
+  unless another folder was opened meanwhile (that would go back without being asked).
+  Drive of the **open** folder pulled out without ejecting during the computations, then
+  plugged back (issue #98): the folder is read again and the computations resume
+  (`TriApp::set_volumes`). The filter bar wraps when space runs
   out.
 - **Rating** (2026-10-17): stars, colours, picked / rejected on the selected image
   (grid or full screen), written immediately to its XMP sidecar (see [xmp.md](xmp.md),

@@ -20,6 +20,7 @@ action-core-filter-stars-4 = Filtre : au moins 4 étoiles
 action-core-filter-stars-5 = Filtre : 5 étoiles
 action-core-filter-flag-accepted = Filtre : acceptées seulement
 action-core-filter-flag-not_rejected = Filtre : masquer les rejetées
+volume-back = Disque revenu : dossier relu, calculs repris.
 action-core-filter-flag-rejected = Filtre : rejetées seulement
 action-core-filter-color-red = Filtre : rouge (ajouter / retirer)
 action-core-filter-color-yellow = Filtre : jaune (ajouter / retirer)
