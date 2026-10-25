@@ -263,14 +263,6 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
-    /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
-    /// menu « … », mesurée à l'image précédente (issue n° 71).
-    filter_tail: (f32, f32),
-    /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
-    /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
-    rating_tail: f32,
-    /// Largeur du bandeau quand ses boutons de droite sont passés à la ligne.
-    rating_wrapped_at: Option<f32>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
     /// Version montrée en plein écran : (image, place dans sa liste).
@@ -331,6 +323,14 @@ pub struct TriApp {
     /// Champ de recherche qui avait le clavier à l'image précédente : egui le retire dès
     /// qu'Échap arrive, avant les raccourcis ; c'est lui qui dit à qui Échap revient.
     search_focused: Option<egui::Id>,
+    /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
+    /// menu « … », mesurée à l'image précédente (issue n° 71).
+    filter_tail: (f32, f32),
+    /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
+    /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
+    rating_tail: f32,
+    /// Largeur du bandeau quand ses boutons de droite sont passés à la ligne.
+    rating_wrapped_at: Option<f32>,
     /// Recherche de dossiers (panneau des dossiers) : texte, parcours en fond, résultats
     /// (meilleurs d'abord) et celui pointé.
     folder_query: String,
@@ -634,9 +634,6 @@ impl TriApp {
             cell_action: None,
             rating_dialog: None,
             file_dialog: None,
-            filter_tail: (0.0, 0.0),
-            rating_tail: 0.0,
-            rating_wrapped_at: None,
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
@@ -695,6 +692,9 @@ impl TriApp {
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
+            filter_tail: (0.0, 0.0),
+            rating_tail: 0.0,
+            rating_wrapped_at: None,
             folder_query: String::new(),
             folder_search: None,
             folder_results: Vec::new(),
