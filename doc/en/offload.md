@@ -62,6 +62,15 @@ everyone's needs, not just his.
 - Only images (RAW and flat) are copied; videos and camera files are counted
   (`Plan::ignored`) and left.
 
+## Several cards in a row (2026-10-25, issue #37)
+
+With the dialog left open on the summary of a card (ejected or not), a new card plugged
+in: the dialog starts again on it (`OffloadDialog::next_card`, called by the volume
+watcher, `TriApp::set_volumes`), towards **the same session folder** (root and name
+taken from the previous offload), with the same choices; only the copy is left to start.
+Only ejectable media count (not a fixed drive, `[places] fixed`). The previews of each
+session are computed apart: the application keeps a list of their schedulers.
+
 ## In the background (2026-10-17)
 
 To cull one session while another card is being offloaded: during the copy, "Continue in

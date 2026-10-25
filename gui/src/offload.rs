@@ -105,6 +105,9 @@ pub struct OffloadDialog {
     root_here: Option<String>,
     /// « Décharger ici » : supports amovibles possibles (dossier, nom), au choix.
     sources: Vec<(PathBuf, String)>,
+    /// Carte suivante (issue n° 37) : le dossier de séance de la précédente, proposé à
+    /// la place du nom suggéré.
+    folder_here: Option<String>,
     /// Aperçus calculés pendant la copie ([`OffloadSettings::previews`]).
     previews: Option<SessionPreviews>,
 }
@@ -128,6 +131,7 @@ impl OffloadDialog {
             hidden: false,
             root_here: None,
             sources: Vec::new(),
+            folder_here: None,
             previews: None,
         }
     }
@@ -155,6 +159,25 @@ impl OffloadDialog {
         self.previews = Some(previews);
     }
 
+    /// Nouvelle carte branchée alors que la boîte montre le bilan d'une autre (issue
+    /// n° 37 : plusieurs cartes à la suite) : elle repart sur `source`, vers le même
+    /// dossier de séance, avec les mêmes choix. Faux si la boîte n'en est pas là.
+    pub fn next_card(&mut self, source: PathBuf, ctx: &egui::Context) -> bool {
+        let Stage::Done { report, .. } = &self.stage else {
+            return false;
+        };
+        if self.hidden || source == self.source {
+            return false;
+        }
+        let destination = report.destination.clone();
+        self.root_here = destination.parent().map(|p| p.display().to_string());
+        self.folder_here = destination
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
+        self.change_source(source, ctx);
+        true
+    }
+
     /// Change de support (liste de « décharger ici ») : nouvel inventaire, la racine
     /// saisie gardée.
     fn change_source(&mut self, source: PathBuf, ctx: &egui::Context) {
@@ -170,6 +193,15 @@ impl OffloadDialog {
     #[cfg(test)]
     pub fn source(&self) -> &Path {
         &self.source
+    }
+
+    /// Dossier de la séance du dernier déchargement fini (tests).
+    #[cfg(test)]
+    pub fn destination(&self) -> Option<PathBuf> {
+        match &self.stage {
+            Stage::Done { report, .. } => Some(report.destination.clone()),
+            _ => None,
+        }
     }
 
     /// Racine proposée par « décharger ici » (tests).
@@ -288,8 +320,9 @@ impl OffloadDialog {
                 if let Ok(result) = rx.try_recv() {
                     self.stage = match result {
                         Ok((plan, history)) => {
-                            let folder =
-                                offload::suggest_folder(&plan, &self.settings).unwrap_or_default();
+                            let folder = self.folder_here.clone().unwrap_or_else(|| {
+                                offload::suggest_folder(&plan, &self.settings).unwrap_or_default()
+                            });
                             Stage::Ready {
                                 plan,
                                 history: Some(history),
