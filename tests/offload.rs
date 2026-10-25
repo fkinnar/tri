@@ -84,6 +84,7 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     );
 
     let mut seen = 0;
+    let mut copies = Vec::new();
     let report = offload::run(
         &plan,
         &dst,
@@ -91,8 +92,18 @@ fn a_card_is_copied_flat_verified_and_remembered() {
         &mut history,
         &AtomicBool::new(false),
         |_| seen += 1,
+        |copy| copies.push(copy.to_path_buf()),
     );
     assert!(seen > 0, "progression signalée");
+    // Chaque copie signalée dès qu'elle est faite (aperçus pendant la copie, issue n° 40).
+    assert_eq!(
+        copies,
+        report
+            .copied
+            .iter()
+            .map(|(_, c)| c.clone())
+            .collect::<Vec<_>>()
+    );
     assert_eq!(report.copied.len(), 3);
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     assert_eq!(
@@ -123,7 +134,15 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     );
     let other = tmp.path().join("photos/ailleurs");
     let stop = AtomicBool::new(false);
-    let report = offload::run(&again, &other, &with_history(), &mut history, &stop, |_| {});
+    let report = offload::run(
+        &again,
+        &other,
+        &with_history(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     assert_eq!(report.skipped.len(), 3);
     assert!(
         report.already_there.is_empty(),
@@ -135,9 +154,25 @@ fn a_card_is_copied_flat_verified_and_remembered() {
     // reconnus (contenus comparés).
     assert_eq!(offload::already_in(&again, &settings(), &dst), (3, 22));
     assert_eq!(offload::already_in(&again, &settings(), &other), (0, 0));
-    let report = offload::run(&again, &other, &settings(), &mut history, &stop, |_| {});
+    let report = offload::run(
+        &again,
+        &other,
+        &settings(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     assert_eq!(report.copied.len(), 3, "second endroit");
-    let report = offload::run(&again, &dst, &settings(), &mut history, &stop, |_| {});
+    let report = offload::run(
+        &again,
+        &dst,
+        &settings(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     assert!(report.copied.is_empty());
     assert_eq!(report.skipped.len(), 3, "même endroit : doublons ignorés");
     assert_eq!(report.already_there.len(), 3, "copies identiques vérifiées");
@@ -159,6 +194,7 @@ fn name_clashes_and_identical_copies() {
         &settings(),
         &mut history,
         &AtomicBool::new(false),
+        |_| {},
         |_| {},
     );
     assert_eq!(report.skipped, [src.join("DCIM/101_FUJI/DSCF0002.RAF")]);
@@ -184,6 +220,7 @@ fn only_verified_copies_are_deleted_from_the_card() {
         &mut history,
         &AtomicBool::new(false),
         |_| {},
+        |_| {},
     );
     assert!(offload::delete_sources(&report).is_empty());
     assert!(!src.join("DCIM/100_FUJI/DSCF0001.RAF").exists());
@@ -202,10 +239,26 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
     let stop = AtomicBool::new(false);
     let mut history = History::in_memory();
     let plan = offload::plan(&src, &history).unwrap();
-    offload::run(&plan, &dst, &settings(), &mut history, &stop, |_| {});
+    offload::run(
+        &plan,
+        &dst,
+        &settings(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     // Seconde fois, même destination : rien de copié, tout « déjà là » et vérifié.
     let plan = offload::plan(&src, &history).unwrap();
-    let report = offload::run(&plan, &dst, &settings(), &mut history, &stop, |_| {});
+    let report = offload::run(
+        &plan,
+        &dst,
+        &settings(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     assert!(report.copied.is_empty());
     assert!(offload::delete_sources(&report).is_empty());
     assert!(
@@ -221,7 +274,15 @@ fn verified_duplicates_are_deleted_too_but_not_history_only_ones() {
     card(&src);
     let plan = offload::plan(&src, &history).unwrap();
     let other = tmp.path().join("ailleurs");
-    let report = offload::run(&plan, &other, &with_history(), &mut history, &stop, |_| {});
+    let report = offload::run(
+        &plan,
+        &other,
+        &with_history(),
+        &mut history,
+        &stop,
+        |_| {},
+        |_| {},
+    );
     assert_eq!(report.skipped.len(), 3);
     assert!(report.already_there.is_empty());
     assert!(offload::delete_sources(&report).is_empty());
@@ -244,6 +305,7 @@ fn cancelling_copies_nothing() {
         &settings(),
         &mut history,
         &AtomicBool::new(true),
+        |_| {},
         |_| {},
     );
     assert!(report.cancelled);
@@ -275,6 +337,7 @@ fn raw_only_leaves_the_jpegs_on_the_card() {
         &mut history,
         &AtomicBool::new(false),
         |p| counts.push((p.files_done, p.files_total)),
+        |_| {},
     );
     assert_eq!(report.copied.len(), 2);
     // L'avancement ne compte que les RAW, un par un (#38).
@@ -324,6 +387,7 @@ fn the_root_is_remembered_and_a_known_card_still_gets_a_name() {
         &global,
         &mut history,
         &stop,
+        |_| {},
         |_| {},
     );
     let again = offload::plan(&src, &history).unwrap();

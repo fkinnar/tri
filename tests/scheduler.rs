@@ -918,3 +918,31 @@ fn exposure_analyses_run_after_previews_of_the_grid_and_before_raw_renders() {
         "toutes les analyses RAW avant le premier rendu RAW de fond (même worker)"
     );
 }
+
+#[test]
+fn files_added_on_the_way_join_the_queue_without_restarting_it() {
+    // Issue n° 40 : le déchargement ajoute chaque photo copiée, sans interrompre les
+    // calculs en cours.
+    let fake = Fake::with_delay(Duration::from_millis(20));
+    let (scheduler, events) = start(&fake, 1);
+    let all = files(4, MediaKind::Flat);
+    let generation = scheduler.set_folder(all[..1].to_vec());
+    scheduler.add_files(all[1..3].to_vec());
+    scheduler.add_files(all[3..].to_vec());
+    assert!(scheduler.wait_idle(LONG));
+    let mut done = ready(&events, generation, Level::Thumbnail);
+    done.sort();
+    assert_eq!(
+        done,
+        vec![0, 1, 2, 3],
+        "même génération, positions à la suite"
+    );
+    assert!(
+        fake.log().iter().all(|(_, _, r)| r.is_ok()),
+        "rien d'annulé"
+    );
+    assert_eq!(
+        scheduler.progress(Level::Thumbnail),
+        Some(Progress { done: 4, total: 4 })
+    );
+}

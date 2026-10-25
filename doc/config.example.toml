@@ -286,6 +286,11 @@ eject_after = true
 delete_after = false
 # Avec raw_only et delete_after : supprimer aussi les JPEG laissés sur la carte (non copiés).
 delete_left = false
+# Calculer aperçus et analyses (vignettes, rendu boîtier, histogrammes, netteté,
+# regroupement) de chaque photo dès qu'elle est copiée, pendant la suite de la copie : la
+# séance est prête plus tôt. Case de la boîte de déchargement ; en ligne de commande,
+# --previews.
+previews = true
 
 [files]
 # Renommer, supprimer, copier ou déplacer une image : l'autre image de sa paire RAW+JPEG

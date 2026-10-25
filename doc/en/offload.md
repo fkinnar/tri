@@ -73,14 +73,36 @@ user's eyes —: the status bar offers "Open the session" (and "dismiss"), with 
 summary. Dialog left open until the end: automatic opening as before. Only one offload at
 a time: the "offload" icon disappears from the volumes while an offload exists.
 
+## Previews during the copy (2026-10-25, issue #40)
+
+A card is offloaded to work on it: waiting for the end of the copy to compute the
+previews wastes time, while the copy (reads and writes) leaves the processor almost idle.
+Each copied and verified photo (or one found identical in the destination) joins a
+background computation at once: thumbnails, camera JPEGs, histograms, sharpness,
+grouping, as when a folder is opened.
+
+- **From the copy, not from the card**: the photo has just been written, the system
+  still has it in memory, and the card reads are not slowed down.
+- **A separate scheduler** (`Scheduler::add_files`: photos added one by one, nothing
+  interrupted), with the preview settings of the interface's engine: the same keys as the
+  folder opened afterwards. The application keeps it, not the dialog (which may close
+  before the end); it stops when the session is opened (the folder's engine takes over
+  what is left, what is done is read from the cache) or once everything is computed.
+- **`[cache] location`** is applied to the session before the copy: its cache fills up
+  in its place directly.
+- **Setting** `[offload] previews` (on by default), checkbox "Compute the previews during
+  the copy" in the dialog. On the command line, `--previews`.
+- Known limit: in the background, while another folder is viewed, two LibRaw workers may
+  run at once (the displayed folder's and the session's).
+
 ## API
 
 - `History::open(fichier)`, `History::open_configured(&réglages)`, `History::in_memory()`;
 - `plan(carte, &historique) -> Plan`: images (`Item`: source, size, date, `known`),
   other files; `Plan::to_copy`, `Plan::bytes`;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)`;
-- `run(&plan, destination, &réglages, &mut historique, &annulation, progression) ->
-  Report` (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes;
+- `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
+  copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes;
 - `delete_sources(&report)`.
 
 ## Command line
@@ -91,8 +113,9 @@ tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] 
 
 On the command line, nothing happens on the card without an explicit option (`--eject`,
 `--delete-copied`; `open_after`, `eject_after`, `delete_after` only apply to the
-interface). `--dry-run` lists what would be copied; `--previews` then computes the
-session's thumbnails, previews and histograms. Measured (2026-10-17, local disk image,
+interface). `--dry-run` lists what would be copied; `--previews` computes the session's
+thumbnails, previews and analyses during the copy, then waits for the end of the
+computations. Measured (2026-10-17, local disk image,
 Apple Silicon Mac): 4 RAFs (109 MB) copied and verified in 0.23 s; second pass: "nothing
 to copy".
 

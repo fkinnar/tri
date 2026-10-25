@@ -390,6 +390,16 @@ struct State {
 }
 
 impl State {
+    /// Niveaux calculés en fond pour un fichier de type `kind`, selon les réglages.
+    fn background_levels(&self, kind: MediaKind) -> Vec<Level> {
+        let mut levels =
+            background_levels(kind, self.raw_previews, (self.exposure, self.sharpness));
+        if self.similarity {
+            levels.push(Level::Similarity);
+        }
+        levels
+    }
+
     /// Prend la tâche la plus prioritaire pour ce type de worker.
     fn take(&mut self, heavy: bool) -> Option<(Job, MediaFile, Arc<AtomicBool>)> {
         if self.paused {
@@ -521,21 +531,12 @@ impl Scheduler {
         s.cancel_running(|_| false);
         s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
         s.on_demand.clear();
-        let (policy, analyses) = (s.raw_previews, (s.exposure, s.sharpness));
-        let similarity = s.similarity;
-        let background_levels = |kind, policy, analyses| {
-            let mut levels = background_levels(kind, policy, analyses);
-            if similarity {
-                levels.push(Level::Similarity);
-            }
-            levels
-        };
         s.generation += 1;
         s.focus = None;
         s.group.clear();
         s.pending = (0..files.len())
             .flat_map(|i| {
-                background_levels(files[i].kind, policy, analyses)
+                s.background_levels(files[i].kind)
                     .into_iter()
                     .map(move |l| (i, l))
             })
@@ -543,7 +544,7 @@ impl Scheduler {
         let total = |level: Level| {
             files
                 .iter()
-                .filter(|f| background_levels(f.kind, policy, analyses).contains(&level))
+                .filter(|f| s.background_levels(f.kind).contains(&level))
                 .count()
         };
         s.progress = TRACKED.map(|l| Progress {
@@ -555,6 +556,38 @@ impl Scheduler {
         drop(s);
         self.shared.work.notify_all();
         generation
+    }
+
+    /// Ajoute `files` à la fin du dossier en cours sans rien interrompre : leur travail de
+    /// fond rejoint la file, les totaux d'avancement grandissent (signalés par
+    /// [`Event::Progress`]). Sert au déchargement, qui calcule chaque photo dès qu'elle est
+    /// copiée (issue n° 40). Les positions continuent celles du dossier.
+    pub fn add_files(&self, files: Vec<MediaFile>) {
+        let mut s = self.shared.lock();
+        let start = s.files.len();
+        let mut grown = [false; TRACKED.len()];
+        for (k, file) in files.iter().enumerate() {
+            for level in s.background_levels(file.kind) {
+                s.pending.insert((start + k, level));
+                if let Some(i) = TRACKED.iter().position(|&l| l == level) {
+                    s.progress[i].total += 1;
+                    grown[i] = true;
+                }
+            }
+        }
+        s.files.extend(files);
+        let generation = s.generation;
+        for (i, &level) in TRACKED.iter().enumerate().filter(|(i, _)| grown[*i]) {
+            let progress = s.progress[i];
+            s.outbox.push_back(Event::Progress {
+                generation,
+                level,
+                progress,
+            });
+        }
+        drop(s);
+        self.shared.work.notify_all();
+        deliver(&self.shared);
     }
 
     /// Indique l'image affichée : son aperçu passe en tête, puis ses voisines. Les demandes

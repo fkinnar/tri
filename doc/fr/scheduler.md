@@ -36,7 +36,8 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
   l'image regardée arrive au plus tôt. Une priorité ne vaut que pour les tâches *en
   attente* : une tâche lancée ne s'interrompt pas (le dématriçage X-Trans moins encore),
   d'où l'importance de l'ordre d'envoi des demandes (voir [gui.md](gui.md)).
-- **API** : `set_folder(files) -> génération`, `set_focus(index)`, `set_shown(images)`,
+- **API** : `set_folder(files) -> génération`, `add_files(files)` (à la suite du dossier,
+  sans rien interrompre : déchargement, issue n° 40), `set_focus(index)`, `set_shown(images)`,
   `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
   `Drop` annule et arrête les threads.
 - **Images affichées** (17/10/2026) : un groupe, l'image principale en tête.

@@ -47,6 +47,9 @@ pub struct OffloadSettings {
     /// Avec `raw_only` et `delete_after` : supprimer aussi les images laissées sur la
     /// carte (les JPEG du boîtier, non copiés).
     pub delete_left: bool,
+    /// Calculer aperçus et analyses de chaque photo dès qu'elle est copiée (et vérifiée),
+    /// pendant la suite de la copie (issue n° 40) : la séance est prête plus tôt.
+    pub previews: bool,
 }
 
 impl Default for OffloadSettings {
@@ -61,6 +64,7 @@ impl Default for OffloadSettings {
             eject_after: true,
             delete_after: false,
             delete_left: false,
+            previews: true,
         }
     }
 }
@@ -378,7 +382,9 @@ pub struct Report {
 /// sous-dossiers de la carte, `DCIM/100_FUJI`…, ne sont pas reproduits). Un nom déjà pris
 /// par un *autre* fichier reçoit un suffixe (`DSCF0001-2.RAF`) ; une copie identique déjà
 /// présente est ignorée. `cancel` interrompt entre deux fichiers (la copie en cours est
-/// abandonnée et effacée).
+/// abandonnée et effacée). `copied` reçoit chaque copie dès qu'elle est faite (et
+/// vérifiée), ou trouvée identique dans la destination : de quoi calculer ses aperçus
+/// pendant la suite de la copie.
 pub fn run(
     plan: &Plan,
     destination: &Path,
@@ -386,6 +392,7 @@ pub fn run(
     history: &mut History,
     cancel: &AtomicBool,
     mut progress: impl FnMut(&Progress),
+    mut copied: impl FnMut(&Path),
 ) -> Report {
     let start = std::time::Instant::now();
     let mut report = Report {
@@ -432,10 +439,12 @@ pub fn run(
                             .errors
                             .push((item.source.clone(), format!("historique : {e}")));
                     }
+                    copied(&copy);
                     report.copied.push((item.source.clone(), copy));
                 }
                 Ok(Outcome::AlreadyThere(copy)) => {
                     let _ = history.record(item, &copy);
+                    copied(&copy);
                     report.skipped.push(item.source.clone());
                     report.already_there.push((item.source.clone(), copy));
                 }

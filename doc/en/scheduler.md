@@ -36,7 +36,8 @@ Background work queue that fills the cache for a folder.
   image being looked at arrives as early as possible. A priority only applies to *pending*
   tasks: a started task is not interrupted (X-Trans demosaicing even less so), hence the
   importance of the order in which requests are sent (see [gui.md](gui.md)).
-- **API**: `set_folder(files) -> generation`, `set_focus(index)`, `set_shown(images)`,
+- **API**: `set_folder(files) -> generation`, `add_files(files)` (after the folder's,
+  nothing interrupted: offload, issue #40), `set_focus(index)`, `set_shown(images)`,
   `request(index, level)`, `set_paused(bool)`, `progress(level)`, `wait_idle(timeout)`.
   `Drop` cancels and stops the threads.
 - **Displayed images** (2026-10-17): a group, the main image first. `set_focus(n)` = the

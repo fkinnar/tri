@@ -9,6 +9,21 @@ use std::sync::mpsc::{self, Receiver};
 
 use eframe::egui::{self, Pos2};
 use tri::offload::{self, History, OffloadSettings, Plan, Progress, Report};
+use tri::scheduler::Scheduler;
+
+/// De quoi calculer les aperçus de la séance pendant la copie (issue n° 40) : un
+/// scheduler à part, gardé aussi par l'application (la boîte peut se fermer avant la fin
+/// des calculs), et la place voulue pour le cache de la séance.
+pub struct SessionPreviews {
+    /// Scheduler de la séance (dossier vide au départ, photos ajoutées une à une).
+    pub scheduler: Arc<Scheduler>,
+    /// Cache à remplir.
+    pub cache: tri::cache::Cache,
+    /// `[cache] location`, appliqué à la séance avant la copie.
+    pub location: tri::cache::Location,
+    /// Réglages du panneau des dossiers (disques amovibles, pour `location = "disk"`).
+    pub places: tri::places::PlaceSettings,
+}
 
 /// Ce que la boîte demande à l'application.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,6 +105,8 @@ pub struct OffloadDialog {
     root_here: Option<String>,
     /// « Décharger ici » : supports amovibles possibles (dossier, nom), au choix.
     sources: Vec<(PathBuf, String)>,
+    /// Aperçus calculés pendant la copie ([`OffloadSettings::previews`]).
+    previews: Option<SessionPreviews>,
 }
 
 impl OffloadDialog {
@@ -111,6 +128,7 @@ impl OffloadDialog {
             hidden: false,
             root_here: None,
             sources: Vec::new(),
+            previews: None,
         }
     }
 
@@ -129,6 +147,12 @@ impl OffloadDialog {
         dialog.root_here = Some(root.display().to_string());
         dialog.sources = sources;
         Some(dialog)
+    }
+
+    /// Calcule les aperçus de la séance pendant la copie avec `previews` (voir
+    /// [`SessionPreviews`]).
+    pub fn set_previews(&mut self, previews: SessionPreviews) {
+        self.previews = Some(previews);
     }
 
     /// Change de support (liste de « décharger ici ») : nouvel inventaire, la racine
@@ -332,13 +356,33 @@ impl OffloadDialog {
         let cancel = Arc::new(AtomicBool::new(false));
         let (plan, mut history) = (plan.clone(), history.take().unwrap_or_default());
         let (settings, stop, repaint) = (self.settings.clone(), cancel.clone(), ctx.clone());
+        let previews = self.previews.take().filter(|_| settings.previews);
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
             let progress_ctx = repaint.clone();
-            let report = offload::run(&plan, &destination, &settings, &mut history, &stop, |p| {
-                let _ = progress_tx.send(Message::Progress(p.clone()));
-                progress_ctx.request_repaint();
-            });
+            if let Some(p) = &previews {
+                session_cache(p, &destination);
+                p.scheduler.set_folder(Vec::new());
+            }
+            let report = offload::run(
+                &plan,
+                &destination,
+                &settings,
+                &mut history,
+                &stop,
+                |p| {
+                    let _ = progress_tx.send(Message::Progress(p.clone()));
+                    progress_ctx.request_repaint();
+                },
+                |copy| {
+                    if let (Some(p), Some(kind)) = (&previews, tri::media::kind_of(copy)) {
+                        p.scheduler.add_files(vec![tri::media::MediaFile {
+                            path: copy.to_path_buf(),
+                            kind,
+                        }]);
+                    }
+                },
+            );
             let _ = tx.send(Message::Done(report));
             repaint.request_repaint();
         });
@@ -474,6 +518,10 @@ impl OffloadDialog {
                         ui.checkbox(&mut settings.raw_only, t!("offload-raw-only"))
                             .on_hover_text(t!("offload-raw-only-tip"));
                         ui.checkbox(&mut settings.open_after, t!("offload-open-after"));
+                        if self.previews.is_some() {
+                            ui.checkbox(&mut settings.previews, t!("offload-previews"))
+                                .on_hover_text(t!("offload-previews-tip"));
+                        }
                         ui.checkbox(&mut settings.eject_after, t!("offload-eject-after"));
                         ui.checkbox(&mut settings.delete_after, t!("offload-delete-after"))
                             .on_hover_text(t!("offload-delete-after-tip"));
@@ -637,4 +685,17 @@ fn plan_in_background(
         repaint.request_repaint();
     });
     rx
+}
+
+/// `[cache] location` appliqué au dossier de la séance avant la copie : son cache se
+/// remplit directement à sa place (sans déplacement ensuite). Un échec (disque en lecture
+/// seule) laisse le cache chez l'utilisateur.
+fn session_cache(previews: &SessionPreviews, destination: &Path) {
+    let removable = match previews.location {
+        tri::cache::Location::Disk => tri::places::removable_roots(&previews.places),
+        _ => Vec::new(),
+    };
+    let _ = previews
+        .cache
+        .apply(previews.location, destination, &removable);
 }

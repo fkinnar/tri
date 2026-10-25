@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Déchargement** : les aperçus et analyses de chaque photo se calculent dès qu'elle est
+  copiée, pendant la suite de la copie ; la séance est prête plus tôt. Case dans la boîte
+  de déchargement, `[offload] previews` (oui par défaut) ; `--previews` en ligne de
+  commande (issue n° 40).
 - **Cache sur une clé USB** : le passage à l'heure d'hiver ne fait plus recalculer tout le
   cache d'un disque FAT32 (dates en heure locale, décalées d'une heure) ; lire le cache
   n'écrit plus sur le disque ; activer le filtre « bien exposées » pendant les analyses ne
