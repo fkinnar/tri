@@ -83,13 +83,21 @@ fn main() -> eframe::Result {
     if cache.is_some() {
         settings.cache.dir = cache;
     }
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_title("tri")
+        // Wayland : relie la fenêtre au fichier `tri.desktop` (icône, nom).
+        .with_app_id("tri")
+        .with_icon(app::window_icon())
+        .with_inner_size(settings.gui.window);
+    // Fenêtre du lancement précédent (issue n° 58) : taille, position, agrandie.
+    if settings.gui.remember_display
+        && let Some(data) = settings.engine().data_dir()
+        && let Some(window) = state::load(&data).window
+    {
+        viewport = state::restore_window(viewport, &window);
+    }
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("tri")
-            // Wayland : relie la fenêtre au fichier `tri.desktop` (icône, nom).
-            .with_app_id("tri")
-            .with_icon(app::window_icon())
-            .with_inner_size(settings.gui.window),
+        viewport,
         ..Default::default()
     };
     trace::trace(|| "ouverture de la fenêtre".into());

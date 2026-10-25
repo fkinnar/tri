@@ -121,7 +121,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   du dossier de données ; la configuration ne donne que la valeur du premier lancement
   (`[gui] remember_display = false` : toujours elle). Écrit seulement quand l'état change
   (fichier temporaire puis renommage), jamais pendant une capture automatique ni dans les
-  tests (dossier de données temporaire).
+  tests (dossier de données temporaire). **La fenêtre aussi** (25/10/2026, issue n° 58) :
+  taille hors agrandissement, position du cadre (absente sous Wayland, qui ne la donne
+  pas) et agrandie, suivies à chaque image (`TriApp::track_window`) mais retenues une fois
+  immobiles depuis `[gui] window_save_ms` (1 s), ou à la fermeture ; reprises au
+  lancement (`state::restore_window`), `[gui] window` ne servant qu'au premier.
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.

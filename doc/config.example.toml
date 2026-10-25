@@ -452,8 +452,12 @@ sort_descending = false
 # Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,
 # carte de netteté, zones, histogramme, panneaux, barres, avance automatique), dans
 # gui-state.toml du dossier de données ; les valeurs ci-dessous ne servent alors qu'au
-# premier lancement. false : toujours les valeurs de ce fichier.
+# premier lancement. false : toujours les valeurs de ce fichier. La fenêtre aussi : taille,
+# position et agrandissement à la fermeture (window ne sert alors qu'au premier lancement).
 remember_display = true
+# Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms), et
+# toujours à la fermeture.
+window_save_ms = 1000
 # Bandeau de notation à la souris (drapeaux, étoiles, couleurs de l'image sélectionnée)
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
