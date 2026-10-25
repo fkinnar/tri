@@ -839,7 +839,11 @@ Pure functions, tested without a window:
 Scrolling is stored as an *intention* (`Reveal::Minimal` after a move, `Reveal::Top`
 after a list change) and resolved when drawing the grid, when the width, hence the number
 of columns, is known. Computing it earlier gave a wrong row at startup (bug seen on a
-screenshot).
+screenshot). A refilter (a filter slider, ratings, analyses coming in) while the selection
+is out of view (scrolled with the wheel without moving it) keeps the **region shown**
+(`Reveal::Anchor`, `TriApp::grid_anchor`): the first visible image, or the next one still
+in the list, stays at the top, at the same offset (issue #100: the grid went back to the
+start).
 
 ### Settings (`settings.rs`)
 

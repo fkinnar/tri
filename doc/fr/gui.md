@@ -866,7 +866,11 @@ Fonctions pures, testées sans fenêtre :
 Le défilement est mémorisé comme une *intention* (`Reveal::Minimal` après un déplacement,
 `Reveal::Top` après un changement de liste) et résolu au moment de dessiner la grille, quand
 la largeur, donc le nombre de colonnes, est connue. Le calculer plus tôt donnait une mauvaise
-ligne au démarrage (bug vu sur une capture).
+ligne au démarrage (bug vu sur une capture). Un refiltrage (curseur d'un filtre, notes,
+analyses qui arrivent) alors que la sélection est hors de la vue — on a défilé à la
+molette sans la déplacer — garde la **région affichée** (`Reveal::Anchor`,
+`TriApp::grid_anchor`) : la première image visible, ou la suivante restée dans la liste,
+reste en haut, au même décalage (issue n° 100 : la grille repartait au début).
 
 ### Réglages (`settings.rs`)
 
