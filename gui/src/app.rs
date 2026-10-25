@@ -2097,13 +2097,15 @@ impl TriApp {
         !self.notes_rule.is_empty() || self.blur_rule.is_some() || self.well_exposed
     }
 
-    /// Parts saturées / bouchées de tout le dossier ouvert, lues dans le cache d'analyse
-    /// pour celles qui manquent (filtre « bien exposées » : les images masquées comptent
-    /// aussi). Une image pas encore analysée est absente, donc gardée par le filtre.
+    /// Parts saturées / bouchées des images de la grille dont l'analyse est prête, lues
+    /// dans le cache d'analyse pour celles qui manquent (filtre « bien exposées »). Une
+    /// image pas encore analysée est absente, donc gardée par le filtre. Seulement les
+    /// prêtes (issue n° 74) : chercher les autres dans le cache lisait aussi chaque
+    /// fichier source, et figeait l'interface quand le disque était occupé par le calcul.
     fn load_clip_summary(&mut self) {
         let Some(engine) = &self.engine else { return };
-        for file in &self.folder.files {
-            if self.clip_summary.contains_key(&file.path) {
+        for (index, file) in self.files.iter().enumerate() {
+            if self.clip_summary.contains_key(&file.path) || !self.ready(index, Level::Exposure) {
                 continue;
             }
             if let Some(e) = preview::exposure(&engine.cache, file, &engine.preview) {

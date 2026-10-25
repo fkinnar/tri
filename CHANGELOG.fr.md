@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Cache sur une clé USB** : le passage à l'heure d'hiver ne fait plus recalculer tout le
+  cache d'un disque FAT32 (dates en heure locale, décalées d'une heure) ; lire le cache
+  n'écrit plus sur le disque ; activer le filtre « bien exposées » pendant les analyses ne
+  fige plus la fenêtre (issue n° 74). Le cache est recalculé une fois.
 - **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
   progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
   pour chaque fichier ; issue n° 43).

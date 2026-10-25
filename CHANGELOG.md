@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Cache on a USB stick**: the switch to winter time no longer computes the whole cache
+  of a FAT32 drive again (dates in local time, shifted by one hour); reading the cache
+  no longer writes to the drive; turning on the "well exposed" filter during the analyses
+  no longer freezes the window (issue #74). The cache is computed again once.
 - **Trash**: deleting many images no longer freezes the window; a progress bar shows
   in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
 - **Dialogs**: the same close cross at the top right of every dialog, instead of a "Close"
