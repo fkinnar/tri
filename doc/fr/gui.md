@@ -198,7 +198,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; pour une
   pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille,
-  `f c` encore ou « Effacer » rend tout) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
+  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
   grand possible (nombre de colonnes choisi d'après les proportions des images et de la
   fenêtre, dernière ligne centrée). L'**image active** (cadre de la couleur de sélection)
@@ -512,8 +512,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   issue n° 60). En option, `[gui.view] stack_advance_next` (désactivé par
   défaut) passe au bout de la pile à la première photo de la pile suivante (25/10/2026).
   De pile en pile (↑ / ↓), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
-  "first"`, sur sa première photo : bouton « |‹ » près des flèches en mode pile, ou
-  Ctrl+Maj+S, retenu d'un lancement à l'autre (issue n° 62).
+  "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
+  l'interrupteur des piles (toujours là depuis le 25/10/2026), ou Ctrl+Maj+S, retenu
+  d'un lancement à l'autre (issue n° 62) ; un message dit lequel est actif (rien ne
+  bouge à l'écran).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).
 - **Notation à la souris** (17/10/2026, demande de l'utilisateur : tout le monde ne veut
   pas tout faire au clavier) :

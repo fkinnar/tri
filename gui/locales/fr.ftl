@@ -347,6 +347,9 @@ update-open-page = Ouvrir la page de téléchargement
 rating-bar-title = Notes
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
 filter-stack-none = f c : placez-vous sur une pile (piles actives)
+stack-enter-cover = En entrant dans une pile : sa couverture
+stack-enter-first = En entrant dans une pile : sa première photo
+stack-enter-needs-stacks = { $now } (en plein écran, piles actives : { $keys })
 filter-summary-stack = pile de { $n }
 filter-summary-stars = { $n ->
     [5] 5 étoiles

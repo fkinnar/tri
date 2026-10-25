@@ -345,6 +345,9 @@ update-open-page = Open the download page
 rating-bar-title = Ratings
 rating-bar-applies = ratings apply to the { $n } selected images
 filter-stack-none = f c: stand on a stack (stacks on)
+stack-enter-cover = Entering a stack: its cover
+stack-enter-first = Entering a stack: its first photo
+stack-enter-needs-stacks = { $now } (in full screen, stacks on: { $keys })
 filter-summary-stack = stack of { $n }
 filter-summary-stars = { $n ->
     [5] 5 stars
