@@ -125,6 +125,7 @@ blur-slider-tip = Sévérité du flou : vers la droite plus strict (plus de phot
 clip-slider-over = brûlé
 clip-slider-over-tip = Photos brûlées exclues : vers la droite plus strict, vers la gauche plus souple ; tout à gauche, les hautes lumières brûlées n'excluent plus rien. Au centre, les réglages. Double-clic : retour au centre
 clip-slider-under = bouché
+clip-slider-switch = Curseur : { $side } (clic : passer à l'autre côté)
 clip-slider-under-tip = Photos bouchées exclues : vers la droite plus strict, vers la gauche plus souple ; tout à gauche, les noirs bouchés n'excluent plus rien (fonds noirs). Au centre, les réglages. Double-clic : retour au centre
 sharpness-strictness = Sévérité de la netteté : { $value } % (0 : les réglages)
 stack-icon-tip = Clic droit : réglages fins ({ $keys })

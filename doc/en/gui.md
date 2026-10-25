@@ -925,7 +925,10 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   (centre = badge thresholds, to the right stricter, double-click: the centre), one per
   side; fully to the left, that side no longer excludes anything. Thresholds multiplied
   or divided by `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`),
-  remembered per folder; the badges follow.
+  remembered per folder; the badges follow. Since 2026-10-25 (user feedback: two sliders
+  with grey labels were hard to read): **a single slider**, and on its left a switch with
+  the clipping badges' icon (white triangle: blown, black: crushed) that chooses the side
+  being set.
 - **Crop**: presets on `Tab` / `Shift+Tab` (`p` was also the sharpness map, which stayed
   on; `p` turns it off during cropping); egui moved the focus to the bar there, given
   back at the end of the frame. Image name removed from the rating
