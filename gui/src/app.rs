@@ -435,6 +435,9 @@ pub struct TriApp {
     group_strictness: f32,
     /// Filtre « pile courante » (`f c`, issue n° 52) : les images de la pile gardée.
     stack_only: Option<HashSet<PathBuf>>,
+    /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
+    /// nouveau en quittant le filtre (retour du 25/10/2026).
+    stack_only_unfolded: Vec<PathBuf>,
     /// Distances triées des liens du dossier : le curseur suit leur rang (issue n° 61).
     group_distances: Vec<f32>,
     /// Centre du curseur des piles : seuil calculé d'après le dossier
@@ -787,6 +790,7 @@ impl TriApp {
             group_strictness: 0.0,
             group_distances: Vec::new(),
             stack_only: None,
+            stack_only_unfolded: Vec::new(),
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
@@ -1043,7 +1047,7 @@ impl TriApp {
             }
         }
         self.files.clear(); // la sélection ne survit pas au changement de dossier
-        self.stack_only = None;
+        self.leave_stack_only();
         self.expanded.clear();
         self.selection.clear();
         self.scores.clear();
@@ -2099,6 +2103,14 @@ impl TriApp {
         });
         self.ejecting = None;
         self.tree.refresh();
+    }
+
+    /// Quitte le filtre « pile courante » : la pile repliée avant `f c` se replie.
+    fn leave_stack_only(&mut self) {
+        self.stack_only = None;
+        for path in self.stack_only_unfolded.drain(..) {
+            self.expanded.remove(&path);
+        }
     }
 
     /// Ferme le dossier ouvert (avant d'éjecter son volume).
@@ -3399,6 +3411,21 @@ impl TriApp {
                     StackEnter::Cover => StackEnter::First,
                     StackEnter::First => StackEnter::Cover,
                 };
+                // Rien ne change à l'écran tant qu'on n'entre pas dans une pile : le dire
+                // (retour du 25/10/2026 : « le raccourci ne fait rien »).
+                let now = match self.stack_enter {
+                    StackEnter::Cover => t!("stack-enter-cover"),
+                    StackEnter::First => t!("stack-enter-first"),
+                };
+                self.hint = Some(if self.stacking {
+                    now
+                } else {
+                    t!(
+                        "stack-enter-needs-stacks",
+                        now = now,
+                        keys = self.keymap.keys_for(Action::StackMode).join(" / ")
+                    )
+                });
             }
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
@@ -3505,7 +3532,7 @@ impl TriApp {
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
                 self.well_exposed = false;
-                self.stack_only = None;
+                self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
             }
@@ -3521,12 +3548,19 @@ impl TriApp {
             }
             // Seulement la pile courante, toute dépliée (issue n° 52) ; encore : tout.
             Action::FilterStack => {
-                if self.stack_only.take().is_none() {
+                if self.stack_only.is_some() {
+                    self.leave_stack_only();
+                } else {
                     match self.stacks.range_of(self.selected).filter(|r| r.len() > 1) {
                         Some(r) if self.stacking => {
                             let paths: HashSet<PathBuf> = self.files[r.clone()]
                                 .iter()
                                 .map(|f| f.path.clone())
+                                .collect();
+                            self.stack_only_unfolded = paths
+                                .iter()
+                                .filter(|p| !self.expanded.contains(*p))
+                                .cloned()
                                 .collect();
                             self.expanded.extend(paths.iter().cloned());
                             self.stack_only = Some(paths);
@@ -7102,10 +7136,12 @@ impl TriApp {
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
                 if self.mode == Mode::View {
                     if self.stacking {
-                        // Entrer dans une pile par sa couverture ou sa première photo (#62).
-                        actions.extend([Action::NavDown, Action::NavUp, Action::StackEnterToggle]);
+                        actions.extend([Action::NavDown, Action::NavUp]);
                     }
-                    actions.push(Action::StackMode);
+                    // Entrer dans une pile par sa couverture ou sa première photo (#62) :
+                    // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
+                    // caché sans les piles, on ne le trouvait pas).
+                    actions.extend([Action::StackEnterToggle, Action::StackMode]);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && self.darktable {
@@ -12637,6 +12673,16 @@ mod tests {
         let before = h.state().stack_enter;
         press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
         assert_ne!(h.state().stack_enter, before);
+        // Rien ne bouge à l'écran : un message dit ce qui a changé.
+        assert!(
+            h.state()
+                .hint
+                .as_ref()
+                .is_some_and(|h| h.contains(&t!("stack-enter-first"))
+                    || h.contains(&t!("stack-enter-cover"))),
+            "{:?}",
+            h.state().hint
+        );
         press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
         assert_eq!(h.state().stack_enter, before);
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -12707,6 +12753,17 @@ mod tests {
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 6, "tout");
+        h.run_steps(2);
+        // Repliée avant `f c` : repliée de nouveau en sortant (retour du 25/10/2026).
+        assert_eq!(h.state().stacks.shown.len(), 2, "pile repliée de nouveau");
+        // Dépliée avant (s) : elle le reste.
+        press(&mut h, Key::S, Modifiers::NONE);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 4, "pile restée dépliée");
         h.state_mut().expanded.clear();
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);

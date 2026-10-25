@@ -195,7 +195,7 @@ system one ("cold" measurements, experiments).
   the selected images, or with no selection those of the current stack (2026-10-25,
   issue #52: `c` on a collapsed stack; Esc comes back to its cover; for a stack larger
   than the limit, `f c` shows the whole stack, expanded, in the grid, `f c` again or
-  "Clear" gives everything back) (at least 2, at most `[gui.compare] max`, 6 by default: each keeps
+  "Clear" gives everything back, and a stack that was collapsed collapses again) (at least 2, at most `[gui.compare] max`, 6 by default: each keeps
   its preview and its 1:1 in graphics memory), laid out to be seen as large as possible
   (number of columns chosen from the proportions of the images and of the window, last
   row centred). The **active image** (frame in the selection colour) is the current
@@ -492,8 +492,9 @@ system one ("cold" measurements, experiments).
   (2026-10-24, issue #60). As an option, `[gui.view] stack_advance_next` (off by default)
   moves at the end of the stack to the first photo of the next stack (2026-10-25). From
   stack to stack (↑ / ↓), we land on its cover or, with `[gui.view] stack_enter =
-  "first"`, on its first photo: "|‹" button next to the arrows in stack mode, or
-  Ctrl+Shift+S, remembered from one launch to the next (issue #62).
+  "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
+  switch (always there since 2026-10-25), or Ctrl+Shift+S, remembered from one launch
+  to the next (issue #62); a message says which one is on (nothing moves on screen).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
   everything with the keyboard):
