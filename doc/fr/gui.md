@@ -73,7 +73,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` rouvre le dernier dossier ouvert (`[gui] reopen_last`,
-  mémorisé par le moteur dans le dossier de données), sinon s'ouvre sur le panneau. La barre de filtres passe à la
+  mémorisé par le moteur dans le dossier de données), sinon s'ouvre sur le panneau,
+  avec au centre, en grand et en gris, l'invitation à choisir un dossier. Dernier dossier
+  disparu (disque débranché, issue n° 66) : son nom et son chemin au-dessus, et il se
+  rouvre de lui-même quand le disque revient (surveillance des volumes), sauf si un autre
+  dossier a été ouvert entre-temps (ce serait revenir en arrière sans l'avoir demandé). La barre de filtres passe à la
   ligne quand la place manque.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),

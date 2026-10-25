@@ -150,6 +150,9 @@ pub struct TriApp {
     session_previews: Option<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
+    /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
+    /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
+    missing_last: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -548,11 +551,12 @@ impl TriApp {
     pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
         let gui = settings.gui.clone();
         let data = settings.engine().data_dir();
-        let dir = dir.or_else(|| {
-            gui.reopen_last
-                .then(|| tri::folder::last(data.as_deref()?))
-                .flatten()
-        });
+        // Dernier dossier disparu (disque débranché) : dit, et rouvert s'il revient.
+        let remembered = (dir.is_none() && gui.reopen_last)
+            .then(|| tri::folder::remembered(data.as_deref()?))
+            .flatten();
+        let missing_last = remembered.clone().filter(|p| !p.is_dir());
+        let dir = dir.or(remembered.filter(|p| p.is_dir()));
         let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
         let depth = folder_depth(subfolders, &gui);
         let (folder, error) = match &dir {
@@ -606,6 +610,7 @@ impl TriApp {
             offload: None,
             session_previews: None,
             offloaded: None,
+            missing_last,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -910,6 +915,8 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
+        // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
+        self.missing_last = None;
         match Folder::scan(dir, self.folder_depth(), self.settings.xmp.sidecar) {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
@@ -1143,6 +1150,22 @@ impl TriApp {
         {
             trace(|| format!("volumes : {}", places.len()));
             self.tree.set_places(places);
+            self.reopen_missing_last();
+        }
+    }
+
+    /// Disque du dernier dossier rebranché, aucun autre dossier ouvert entre-temps (sinon,
+    /// ce serait revenir en arrière sans l'avoir demandé ; issue n° 66) : il est rouvert.
+    fn reopen_missing_last(&mut self) {
+        if let Some(path) = self.missing_last.clone()
+            && path.is_dir()
+        {
+            self.missing_last = None;
+            if self.folder.is_none() {
+                self.open_folder(&path);
+                self.tree.reveal(&path);
+                self.reveal_folder = true;
+            }
         }
     }
 
@@ -8591,10 +8614,28 @@ impl eframe::App for TriApp {
         let center = central.show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
+            } else if self.folder.is_none() {
+                // Rien d'ouvert : en grand, au centre, en gris (issue n° 66), et le dossier
+                // du lancement précédent s'il a disparu.
+                let mut text = String::new();
+                if let Some(path) = &self.missing_last {
+                    text = format!(
+                        "{}\n{}\n{}\n\n",
+                        t!("empty-folder-gone", name = folder_name(path)),
+                        crate::files::tilde(path),
+                        t!("empty-folder-gone-back")
+                    );
+                }
+                text += &t!("empty-no-folder");
+                ui.centered_and_justified(|ui| {
+                    ui.label(
+                        egui::RichText::new(text)
+                            .size(self.gui.dialogs.title_size)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                });
             } else if self.files.is_empty() {
-                ui.label(if self.folder.is_none() {
-                    t!("empty-no-folder")
-                } else if self.folder.files.is_empty() {
+                ui.label(if self.folder.files.is_empty() {
                     t!("empty-folder")
                 } else {
                     t!("empty-filtered")
@@ -10963,6 +11004,36 @@ mod tests {
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(None, s, None));
         assert!(off.state().folder.is_none());
+        // Disque débranché (dossier disparu) : dit au centre, rouvert à son retour (#66).
+        let away = dir.path().join("débranché");
+        std::fs::rename(&photos, &away).unwrap();
+        let s = settings(true);
+        let mut gone = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        gone.run_steps(3);
+        assert!(gone.state().folder.is_none());
+        assert!(gone.query_by_label_contains("n'est plus là").is_some());
+        assert!(gone.query_by_label_contains("séance").is_some(), "son nom");
+        std::fs::rename(&away, &photos).unwrap();
+        gone.state_mut().reopen_missing_last();
+        assert_eq!(gone.state().folder.dir, photos, "rebranché : rouvert");
+        // Un autre dossier choisi entre-temps : pas de retour en arrière.
+        std::fs::rename(&photos, &away).unwrap();
+        let s = settings(true);
+        let mut other = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        let elsewhere = dir.path().join("ailleurs");
+        std::fs::create_dir(&elsewhere).unwrap();
+        other.state_mut().open_folder(&elsewhere);
+        std::fs::rename(&away, &photos).unwrap();
+        other.state_mut().reopen_missing_last();
+        assert_eq!(
+            other.state().folder.dir,
+            elsewhere,
+            "on reste où on est allé"
+        );
     }
 
     #[test]

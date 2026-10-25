@@ -198,9 +198,14 @@ pub fn remember(data: &Path, dir: &Path) -> io::Result<()> {
 /// Dernier dossier ouvert ([`remember`]) dans le dossier de données `data`, s'il existe
 /// toujours.
 pub fn last(data: &Path) -> Option<PathBuf> {
+    remembered(data).filter(|p| p.is_dir())
+}
+
+/// Dernier dossier ouvert ([`remember`]), qu'il existe ou non (disque débranché depuis :
+/// l'interface le dit, et le rouvre quand il revient, issue n° 66).
+pub fn remembered(data: &Path) -> Option<PathBuf> {
     let bytes = std::fs::read(data.join("last-folder")).ok()?;
-    let path = bytes_path(bytes)?;
-    path.is_dir().then_some(path)
+    bytes_path(bytes)
 }
 
 /// Octets d'un chemin : bruts sous Unix (les noms non UTF-8 survivent), UTF-8 ailleurs.
@@ -267,8 +272,10 @@ mod tests {
         assert_eq!(last(data.path()), None);
         remember(data.path(), photos.path()).unwrap();
         assert_eq!(last(data.path()).as_deref(), Some(photos.path()));
+        let gone = photos.path().to_path_buf();
         drop(photos);
         assert_eq!(last(data.path()), None, "dossier disparu : rien");
+        assert_eq!(remembered(data.path()), Some(gone), "mais toujours retenu");
     }
 
     #[test]
