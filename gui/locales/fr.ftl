@@ -314,6 +314,9 @@ status-key-problems = { $n ->
 }
 status-invalid-config = configuration invalide : réglages par défaut
 status-show-offload = Afficher le déchargement
+tasks-global = { $n } tâches en cours · { $percent } %
+tasks-unfold = Cliquer : le détail
+tasks-fold = Cliquer : replier le détail
 status-retry-eject = Réessayer l'éjection
 status-dismiss = ignorer
 status-open-session = Ouvrir la séance « { $name } »
