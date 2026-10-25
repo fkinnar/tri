@@ -546,7 +546,8 @@ system one ("cold" measurements, experiments).
     Configurable colours and opacity;
   - **badges** in the grid: half-white half-black triangle at the top left of the
     thumbnail (dots at the top right until 2026-10-21; click: large histogram) above `[gui.histogram] badge_over` / `badge_under`, details on hover;
-    analyses read from the cache within the image's loading budget;
+    analyses read from the cache within the image's loading budget; not on a collapsed
+    stack (issue #75: its image count is there);
   - checked on a real shoot: fully blown photo (red everywhere, badge), portrait in a
     black sweater (blue zones in the folds, blue badge, -3.5 EV of headroom), portraits on
     a white background (nothing, -0.45 EV of headroom).
