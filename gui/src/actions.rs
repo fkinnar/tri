@@ -157,6 +157,8 @@ pub enum Action {
     FilterBlurry,
     /// Filtre : seulement les photos bien exposées (ni brûlées ni bouchées).
     FilterWellExposed,
+    /// Filtre : seulement la pile courante, toute dépliée (issue n° 52).
+    FilterStack,
     /// Inverser les filtres : ce qu'ils retirent (les floues, avec « nettes »…).
     FilterInvert,
     /// Ordre suivant : nom, date de prise de vue, date de modification.
@@ -394,7 +396,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 163] = [
+    pub const ALL: [Action; 164] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -421,6 +423,7 @@ impl Action {
         Action::FilterClear,
         Action::FilterBlurry,
         Action::FilterWellExposed,
+        Action::FilterStack,
         Action::FilterInvert,
         Action::SortNext,
         Action::SortReverse,
@@ -605,9 +608,8 @@ impl Action {
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
-            | FilterBlurry | FilterWellExposed | FilterInvert | SortNext | SortReverse => {
-                Group::Filters
-            }
+            | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert | SortNext
+            | SortReverse => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -659,6 +661,7 @@ impl Action {
             Action::FilterClear => "core.filter.clear",
             Action::FilterBlurry => "core.filter.blurry",
             Action::FilterWellExposed => "core.filter.well_exposed",
+            Action::FilterStack => "core.filter.stack",
             Action::FilterInvert => "core.filter.invert",
             Action::SortNext => "core.filter.sort",
             Action::SortReverse => "core.filter.sort_reverse",
@@ -1364,6 +1367,8 @@ const FILTERS: &[Binding] = {
         (&[F, plain(Key::B)], FilterBlurry),
         // Bien exposées : `w` comme les zones d'exposition (« warnings ») ; inverser : `i`.
         (&[F, plain(Key::W)], FilterWellExposed),
+        // « pile courante » (issue n° 52).
+        (&[F, plain(Key::C)], FilterStack),
         (&[F, plain(Key::I)], FilterInvert),
         // Ordre (« sort ») : suivant, et sens (« reverse »).
         (&[F, plain(Key::S)], SortNext),

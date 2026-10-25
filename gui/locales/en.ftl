@@ -29,6 +29,7 @@ action-core-filter-color-purple = Filter: purple (add / remove)
 action-core-filter-clear = Clear all filters
 action-core-filter-blurry = Filter: hide blurry
 action-core-filter-well_exposed = Filter: well exposed (neither blown nor blocked)
+action-core-filter-stack = Filter: only the current stack, fully expanded (again: everything)
 action-core-filter-invert = Filter: invert (what the filters remove)
 action-core-filter-sort = Next order: name, shooting date, modification date
 action-core-filter-sort_reverse = Reverse the order (ascending / descending)
@@ -47,7 +48,7 @@ action-core-view-grid_info = Show / hide the thumbnail info (name, format, ratin
 action-core-rate-auto_advance = Auto-advance after rating: on / off
 action-core-select-toggle = Select / deselect the image
 action-core-select-visual = Visual mode: select a range (v to confirm)
-action-core-view-compare = Compare the selected images side by side
+action-core-view-compare = Compare the selected images side by side (no selection: those of the stack)
 action-core-view-peaking = Show / hide sharpness (sharp edges)
 action-core-view-sharpness_lenient = More lenient sharpness (fewer blurry photos, more sharp edges)
 action-core-view-sharpness_strict = Stricter sharpness (more blurry photos, fewer sharp edges)
@@ -281,7 +282,7 @@ cache-unavailable = cache unavailable: { $error }
 ## Comparison, full screen, status bar
 
 rating-not-saved = rating not saved: { $error }
-compare-needs-two = compare: select at least 2 images (Space, v, Ctrl+A, Shift+click)
+compare-needs-two = compare: select at least 2 images (Space, v, Ctrl+A, Shift+click), or stand on a stack
 compare-limited = comparison limited to the first { $max } ([gui.compare] max)
 view-info-selected = { " " }· selected
 view-info-peaking = { " " }· sharpness
@@ -340,6 +341,8 @@ update-available = Version { $version } available (you have { $current }).
 update-open-page = Open the download page
 rating-bar-title = Ratings
 rating-bar-applies = ratings apply to the { $n } selected images
+filter-stack-none = f c: stand on a stack (stacks on)
+filter-summary-stack = stack of { $n }
 filter-summary-stars = { $n ->
     [5] 5 stars
     [one] { $n } star and more
