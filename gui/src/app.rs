@@ -263,6 +263,9 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
+    /// Copies et déplacements mis en arrière-plan (issue n° 72), suivis jusqu'à leur fin ;
+    /// la boîte des fichiers reste libre pour le reste.
+    background_transfers: Vec<crate::files::FileDialog>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
     /// Version montrée en plein écran : (image, place dans sa liste).
@@ -626,6 +629,7 @@ impl TriApp {
             cell_action: None,
             rating_dialog: None,
             file_dialog: None,
+            background_transfers: Vec::new(),
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
@@ -5670,6 +5674,31 @@ impl TriApp {
                 ) {
                     clicked = Some(c);
                 }
+                // Copie en arrière-plan : progression (clic : réafficher la boîte).
+                if let Some((text, fraction)) = self
+                    .background_transfers
+                    .first()
+                    .and_then(|d| d.transfer_status())
+                {
+                    let fill = self
+                        .gui
+                        .colors
+                        .progress
+                        .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
+                    let bar = ui
+                        .add(
+                            egui::ProgressBar::new(fraction)
+                                .desired_width(260.0)
+                                .fill(fill)
+                                .text(text),
+                        )
+                        .interact(Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(t!("status-show-transfer"));
+                    if bar.clicked() {
+                        clicked = Some(StatusClick::RevealTransfer);
+                    }
+                }
                 // Déchargement en arrière-plan : progression (clic : réafficher la boîte).
                 if let Some((text, fraction)) = self
                     .offload
@@ -6159,11 +6188,96 @@ impl TriApp {
     }
 
     /// Boîte « Renommer » ou « Corbeille » ; une fois l'action faite, le dossier est relu.
+    /// Copies en arrière-plan (issue n° 72) : suivies sans boîte ; à la fin, historique,
+    /// dossier relu et message dans la barre d'état.
+    fn background_transfers(&mut self, ctx: &egui::Context) {
+        // Réaffichée depuis la barre d'état : de nouveau la boîte des fichiers, avant de
+        // dessiner (une boîte ne l'est qu'une fois par image) ; si la boîte est prise,
+        // elle reste en arrière-plan.
+        if let Some(i) = self
+            .background_transfers
+            .iter()
+            .position(|d| !d.is_hidden())
+        {
+            if self.file_dialog.is_none() {
+                self.file_dialog = Some(self.background_transfers.remove(i));
+            } else {
+                self.background_transfers[i].hide();
+            }
+        }
+        let mut finished = Vec::new();
+        for (i, dialog) in self.background_transfers.iter_mut().enumerate() {
+            let outcome = dialog.show(ctx, &self.settings.files, self.data_dir.as_deref());
+            if !matches!(outcome, crate::files::Outcome::Open) {
+                finished.push((i, outcome));
+            }
+        }
+        for (i, outcome) in finished.into_iter().rev() {
+            self.background_transfers.remove(i);
+            match outcome {
+                crate::files::Outcome::Done { step, .. } => {
+                    if let Some(step) = step {
+                        self.history.push(step);
+                    }
+                    self.notice = Some((t!("transfer-done"), false));
+                    self.reload_folder(None);
+                }
+                crate::files::Outcome::Folder {
+                    step,
+                    point,
+                    renamed,
+                    cache_follows,
+                } => {
+                    self.notice = Some((t!("transfer-done"), false));
+                    self.folder_outcome(step, point, renamed, cache_follows);
+                }
+                crate::files::Outcome::Failed(e) => {
+                    self.file_error = Some(e);
+                    self.reload_folder(None);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Dossier renommé, déplacé ou copié : historique, cache qui suit, panneau et dossier
+    /// ouvert à jour.
+    fn folder_outcome(
+        &mut self,
+        step: Option<tri::history::Step>,
+        point: Option<PathBuf>,
+        renamed: Option<(PathBuf, PathBuf)>,
+        cache_follows: bool,
+    ) {
+        if let Some(step) = step {
+            self.history.push(step);
+        }
+        // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
+        if cache_follows && let Some((from, to)) = renamed.clone() {
+            self.cache_job(move |cache| {
+                cache
+                    .relocate(&from, &to)
+                    .err()
+                    .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
+            });
+        }
+        self.after_folder_change(renamed, point);
+    }
+
     fn file_dialog(&mut self, ctx: &egui::Context) {
+        self.background_transfers(ctx);
         let Some(dialog) = &mut self.file_dialog else {
             return;
         };
-        match dialog.show(ctx, &self.settings.files, self.data_dir.as_deref()) {
+        let outcome = dialog.show(ctx, &self.settings.files, self.data_dir.as_deref());
+        // Copie mise en arrière-plan : gardée à part, la boîte est libre.
+        if dialog.is_hidden()
+            && let Some(dialog) = self.file_dialog.take()
+        {
+            self.background_transfers.push(dialog);
+            return;
+        }
+        match outcome {
             crate::files::Outcome::Open => {}
             crate::files::Outcome::Cancelled => self.file_dialog = None,
             crate::files::Outcome::Folder {
@@ -6173,19 +6287,7 @@ impl TriApp {
                 cache_follows,
             } => {
                 self.file_dialog = None;
-                if let Some(step) = step {
-                    self.history.push(step);
-                }
-                // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
-                if cache_follows && let Some((from, to)) = renamed.clone() {
-                    self.cache_job(move |cache| {
-                        cache
-                            .relocate(&from, &to)
-                            .err()
-                            .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
-                    });
-                }
-                self.after_folder_change(renamed, point);
+                self.folder_outcome(step, point, renamed, cache_follows);
             }
             crate::files::Outcome::FavoriteNamed { path, name } => {
                 self.file_dialog = None;
@@ -8455,6 +8557,12 @@ impl eframe::App for TriApp {
                     dialog.reveal();
                 }
             }
+            // Réaffichée quand la boîte des fichiers est libre (`background_transfers`).
+            Some(StatusClick::RevealTransfer) => {
+                if let Some(dialog) = self.background_transfers.first_mut() {
+                    dialog.reveal();
+                }
+            }
             Some(StatusClick::OpenOffloaded) => {
                 if let Some(dir) = self.offloaded.take() {
                     self.open_offloaded(&dir);
@@ -8816,6 +8924,8 @@ enum StatusClick {
     Action(Action),
     /// Progression d'un déchargement en arrière-plan : réafficher sa boîte.
     RevealOffload,
+    /// Progression d'une copie en arrière-plan : réafficher sa boîte.
+    RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
     OpenOffloaded,
     /// Ne plus la proposer.
@@ -13377,5 +13487,45 @@ mod tests {
             .filter(|a| a.available() && a.group() == group)
             .count();
         assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
+    }
+
+    #[test]
+    fn a_copy_goes_on_in_the_background() {
+        // Issue n° 72 : pendant une copie, « Continuer en arrière-plan » libère l'interface ;
+        // la progression est dans la barre d'état, la fin y est annoncée.
+        let (mut h, dir) = harness();
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        let image = h.state().files[0].path.clone();
+        let (go, held) = mpsc::channel();
+        let settings = h.state().settings.files.clone();
+        h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
+            vec![image],
+            &dest,
+            &settings,
+            held,
+        ));
+        h.run_steps(2);
+        h.get_by_label(&t!("transfer-background")).click();
+        h.run_steps(2);
+        assert!(h.state().file_dialog.is_none(), "boîte libérée");
+        assert_eq!(h.state().background_transfers.len(), 1);
+        assert!(
+            h.query_by_label_contains("copie vers").is_some(),
+            "barre d'état"
+        );
+        // Clic sur la progression : la boîte revient, puis repart en arrière-plan.
+        h.get_by_label_contains("copie vers").click();
+        h.run_steps(3);
+        assert!(h.state().file_dialog.is_some(), "réaffichée");
+        h.get_by_label(&t!("transfer-background")).click();
+        h.run_steps(2);
+        go.send(()).unwrap();
+        run_until(&mut h, |app| app.background_transfers.is_empty());
+        assert!(dest.join("img0.jpg").is_file());
+        assert_eq!(
+            h.state().notice.as_ref().map(|(text, _)| text.clone()),
+            Some(t!("transfer-done"))
+        );
     }
 }

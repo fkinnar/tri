@@ -108,7 +108,11 @@ which only one image leaves) is **copied**, never moved: both images keep their 
 - Interface: `y` (copy, vim's *yank*) and `Ctrl+X` (move, "cut"; `x` deletes, as in vim),
   on the selection, and right-click buttons; dialog with a field (Tab completes, up / down
   arrows: recent ones, missing folder created if only one level is missing), copy / move
-  toggle, progress during the copy (in a thread: the window stays alive).
+  toggle, progress during the copy (in a thread: the window stays alive). "Continue in
+  the background" (2026-10-25, issue #72) closes the dialog: the copy goes on, its
+  progress is in the status bar (a click reopens the dialog), the end is announced there
+  and the folder read again; the other dialogs (rename, delete…) stay usable, and several
+  copies can run that way (`TriApp::background_transfers`).
 
 ## Copy / move a folder (2026-10-20)
 
