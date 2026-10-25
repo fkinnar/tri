@@ -54,6 +54,13 @@ plus grandes) ; double-clic : retour au centre.
   0,77), contre 0,25 fixe.
 - `with_strictness(centre, s, strictness_span)` : `centre × span^(-s)` (×3 à ÷3 par
   défaut).
+- `threshold_by_rank(distances triées, centre, s, span, min)` (25/10/2026, issue n° 61 :
+  côté strict sensible au pixel, et des piles restaient tout à droite) : le curseur suit
+  le **rang** des distances (`distances_by_rank`), pas leur valeur. Au centre, `centre` ;
+  vers la droite, de moins en moins de liens joints, à parts égales, jusqu'à aucun ; vers
+  la gauche, jusqu'à `centre × span`. Simulé sur six vraies séances : tout à droite, 9 à
+  40 piles restaient avec le seuil géométrique, aucune maintenant. Moins de `min` liens :
+  `with_strictness`.
 - `folder_strictness` / `remember_strictness` : la sévérité choisie, retenue pour chaque
   dossier (`group-strictness.tsv` du dossier de données) ; au centre, elle est oubliée.
   Les seuils par dossier d'avant (`group-thresholds.tsv`) ne sont plus lus.

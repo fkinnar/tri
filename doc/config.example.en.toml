@@ -382,9 +382,10 @@ auto_min_links = 8
 auto_separation = 0.5
 # Bounds of the computed centre: between threshold / auto_range and threshold × auto_range.
 auto_range = 2.0
-# Range of the stacks slider: all the way right (stricter, small stacks), the threshold
-# is divided by this value; all the way left, multiplied. The chosen strictness is
-# remembered for each folder.
+# Range of the stacks slider, all the way left (more lenient, large stacks): the
+# threshold is multiplied by this value. Towards the right, the slider follows the rank of
+# the folder's distances until no stack is left (too few images: threshold divided by
+# this value). The chosen strictness is remembered for each folder.
 strictness_span = 3.0
 # Capture time gap beyond which two neighbouring images are never
 # grouped (seconds; 0: no limit).

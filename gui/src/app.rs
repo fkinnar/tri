@@ -416,6 +416,8 @@ pub struct TriApp {
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
     /// réglée au curseur de la barre des filtres, retenue par dossier.
     group_strictness: f32,
+    /// Distances triées des liens du dossier : le curseur suit leur rang (issue n° 61).
+    group_distances: Vec<f32>,
     /// Centre du curseur des piles : seuil calculé d'après le dossier
     /// (`similarity::suggested_threshold`), au dernier regroupement.
     group_centre: f32,
@@ -757,6 +759,7 @@ impl TriApp {
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
+            group_distances: Vec::new(),
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
@@ -2075,8 +2078,14 @@ impl TriApp {
 
     /// Seuil de regroupement en vigueur : le centre du dossier à la sévérité choisie.
     fn group_threshold(&self) -> f32 {
-        let span = self.settings.similarity.strictness_span;
-        tri::similarity::with_strictness(self.group_centre, self.group_strictness, span)
+        let s = &self.settings.similarity;
+        tri::similarity::threshold_by_rank(
+            &self.group_distances,
+            self.group_centre,
+            self.group_strictness,
+            s.strictness_span,
+            s.auto_min_links,
+        )
     }
 
     /// Retient la sévérité des piles pour le dossier ouvert (oubliée au centre).
@@ -2323,6 +2332,7 @@ impl TriApp {
             .collect();
         let links = tri::similarity::distances(&signatures, s.shape_weight);
         self.group_centre = tri::similarity::suggested_threshold(&links, s);
+        self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
         let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
         let files = &self.files;
         let notes = &self.folder.notes;

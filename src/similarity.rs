@@ -48,8 +48,9 @@ pub struct SimilaritySettings {
     /// Bornes du centre calculé : entre `threshold / auto_range` et
     /// `threshold × auto_range`.
     pub auto_range: f32,
-    /// Étendue du curseur de sévérité : à fond à droite (plus strict, petites piles), le
-    /// seuil est divisé par `strictness_span` ; à fond à gauche, multiplié.
+    /// Étendue du curseur de sévérité, à fond à gauche : seuil multiplié par
+    /// `strictness_span` ; vers la droite, il suit le rang des distances jusqu'à aucune
+    /// pile ([`threshold_by_rank`] ; trop peu de liens : seuil divisé).
     pub strictness_span: f32,
     /// Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
     /// dans le même groupe (secondes ; 0 : sans limite).
@@ -290,17 +291,10 @@ pub fn suggested_threshold(links: &[Option<Link>], settings: &SimilaritySettings
     if !settings.auto {
         return fallback;
     }
-    let gap = settings.max_gap_s;
-    let mut d: Vec<f32> = links
-        .iter()
-        .flatten()
-        .filter(|l| gap <= 0.0 || l.gap_s.is_none_or(|g| g <= gap))
-        .map(|l| l.distance)
-        .collect();
+    let d = distances_by_rank(links, settings.max_gap_s);
     if d.len() < settings.auto_min_links.max(2) {
         return fallback;
     }
-    d.sort_by(f32::total_cmp);
     let n = d.len() as f32;
     let total: f32 = d.iter().sum();
     let mean = total / n;
@@ -332,6 +326,55 @@ pub fn suggested_threshold(links: &[Option<Link>], settings: &SimilaritySettings
 /// droite plus strict (seuil plus bas, petites piles), comme le curseur du flou.
 pub fn with_strictness(centre: f32, strictness: f32, span: f32) -> f32 {
     centre * span.max(1.0).powf(-strictness.clamp(-1.0, 1.0))
+}
+
+/// Distances des liens `links` que l'écart de temps ne coupe pas déjà (`max_gap_s`, 0 :
+/// sans limite), triées : celles que le seuil départage.
+pub fn distances_by_rank(links: &[Option<Link>], max_gap_s: f32) -> Vec<f32> {
+    let mut d: Vec<f32> = links
+        .iter()
+        .flatten()
+        .filter(|l| max_gap_s <= 0.0 || l.gap_s.is_none_or(|g| g <= max_gap_s))
+        .map(|l| l.distance)
+        .collect();
+    d.sort_by(f32::total_cmp);
+    d
+}
+
+/// Seuil à la sévérité `strictness` d'après les distances `sorted` du dossier
+/// ([`distances_by_rank`]) : le curseur suit leur **rang**, pas leur valeur (issue
+/// n° 61 : les petites distances, serrées, rendaient le côté strict sensible au pixel,
+/// et il restait des piles tout à droite). Au centre, `centre` ; vers la droite, de moins
+/// en moins de liens joints, à parts égales, jusqu'à aucun ; vers la gauche, jusqu'au
+/// seuil `centre × span` (comme [`with_strictness`]). Trop peu de distances (moins de
+/// `min_links`) : [`with_strictness`].
+pub fn threshold_by_rank(
+    sorted: &[f32],
+    centre: f32,
+    strictness: f32,
+    span: f32,
+    min_links: usize,
+) -> f32 {
+    let t = strictness.clamp(-1.0, 1.0);
+    if sorted.len() < min_links.max(2) || t == 0.0 {
+        return with_strictness(centre, t, span);
+    }
+    let n = sorted.len();
+    // Nombre de liens joints (distance sous le seuil) : au centre, puis tout à gauche.
+    let below = |x: f32| sorted.partition_point(|&d| d <= x);
+    let middle = below(centre) as f32;
+    let k = if t > 0.0 {
+        (middle * (1.0 - t)).round() as usize
+    } else {
+        let loose = below(centre * span.max(1.0)) as f32;
+        (middle + (loose - middle) * -t).round() as usize
+    };
+    // Seuil entre la k-ième et la suivante : exactement k liens joints.
+    match k.min(n) {
+        0 => sorted[0] - (sorted[0].abs() + 1.0),
+        k if k == n => sorted[n - 1],
+        k => (sorted[k - 1] + sorted[k]) / 2.0,
+    }
 }
 
 /// Fichier des sévérités par dossier, dans le dossier de données (remplace les seuils
@@ -541,5 +584,31 @@ mod tests {
         assert_eq!(b - a, 7 * 3600 + 3 * 60 + 9);
         assert_eq!(parse_time("1970:01:01 00:00:00"), Some(0));
         assert_eq!(parse_time("pas une date"), None);
+    }
+
+    #[test]
+    fn the_stack_slider_follows_the_rank_of_the_distances() {
+        // Issue n° 61 : à parts égales de liens joints, jusqu'à aucun tout à droite.
+        let sorted: Vec<f32> = (1..=10).map(|i| i as f32 / 100.0).collect();
+        let joined = |t: f32| {
+            let thr = threshold_by_rank(&sorted, 0.055, t, 3.0, 2);
+            sorted.iter().filter(|&&d| d <= thr).count()
+        };
+        assert_eq!(
+            threshold_by_rank(&sorted, 0.055, 0.0, 3.0, 2),
+            0.055,
+            "centre"
+        );
+        assert_eq!(joined(0.0), 5);
+        assert_eq!(joined(1.0), 0, "tout à droite : plus aucune pile");
+        assert_eq!(joined(0.6), 2);
+        assert_eq!(joined(-1.0), 10, "tout à gauche : jusqu'à centre × span");
+        let steps: Vec<usize> = (-10..=10).map(|t| joined(t as f32 / 10.0)).collect();
+        assert!(steps.windows(2).all(|w| w[0] >= w[1]), "{steps:?}");
+        // Trop peu de liens : le seuil géométrique d'avant.
+        assert_eq!(
+            threshold_by_rank(&sorted[..1], 0.2, 1.0, 3.0, 2),
+            with_strictness(0.2, 1.0, 3.0)
+        );
     }
 }
