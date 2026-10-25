@@ -925,11 +925,23 @@ impl TriApp {
     /// gardée pour l'écriture une fois stable depuis `[gui] window_save_ms`, ou tout de
     /// suite à la fermeture.
     fn track_window(&mut self, ctx: &egui::Context) {
-        let (inner, outer, maximized, closing) = ctx.input(|i| {
+        let (size, outer, maximized, minimized, closing) = ctx.input(|i| {
             let v = i.viewport();
-            (v.inner_rect, v.outer_rect, v.maximized, v.close_requested())
+            // Sous Wayland, la position de la fenêtre est inconnue (le compositeur la
+            // place) : egui ne donne pas `inner_rect`, la taille est celle de la zone de
+            // dessin (issue n° 58 : rien n'était retenu, pas même la taille).
+            let size = v.inner_rect.map_or(i.content_rect().size(), |r| r.size());
+            (
+                size,
+                v.outer_rect,
+                v.maximized,
+                v.minimized,
+                v.close_requested(),
+            )
         });
-        let Some(inner) = inner else { return };
+        if minimized == Some(true) || size.x < 1.0 || size.y < 1.0 {
+            return;
+        }
         let maximized = maximized.unwrap_or(false);
         let mut window = self
             .window_now
@@ -939,7 +951,7 @@ impl TriApp {
         window.maximized = maximized;
         // Agrandie : la taille et la position d'avant restent (rendues en sortant).
         if !maximized {
-            window.size = [inner.width(), inner.height()];
+            window.size = [size.x, size.y];
             window.position = outer.map(|o| [o.min.x, o.min.y]);
         }
         let now = Instant::now();
@@ -11703,6 +11715,29 @@ mod tests {
         assert!(h.state().folder.is_none());
         assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
         assert!(h.query_by_label("Dossiers").is_some());
+    }
+
+    #[test]
+    fn under_wayland_the_window_size_is_still_remembered() {
+        // Retour du 25/10/2026 (#58) : sous Wayland, ni position ni `inner_rect` (egui
+        // ne les connaît pas) ; la taille de la zone de dessin est retenue quand même.
+        let (mut h, _dir) = harness();
+        h.state_mut().gui.window_save_ms = 0;
+        let viewport = h
+            .input_mut()
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default();
+        viewport.inner_rect = None;
+        viewport.outer_rect = None;
+        h.run_steps(3);
+        let kept = h.state().window_kept.expect("retenue");
+        let size = h.ctx.content_rect().size();
+        assert_eq!(kept.size, [size.x, size.y]);
+        assert_eq!(
+            kept.position, None,
+            "position inconnue : le compositeur la choisit"
+        );
     }
 
     #[test]
