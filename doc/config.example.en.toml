@@ -521,6 +521,9 @@ size_slider = 90.0
 stacks = false
 # Search by file name (/ or Ctrl+F in the grid): width of the field (points).
 search_width = 200.0
+# Minimum width of this field when the bar lacks room (narrow window: the sort and the
+# number of images then go into a "…" menu).
+search_min_width = 80.0
 
 [gui.view]
 # Time spent on an image before launching its 100 % RAW (ms): images merely

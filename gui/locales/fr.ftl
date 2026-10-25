@@ -766,6 +766,7 @@ filter-bar-no-blurry = sans les floues
 filter-bar-well-exposed = bien exposées
 filter-bar-inverted = inversé
 filter-bar-count-tip = images affichées / images du dossier
+filter-bar-more = Tri et nombre d'images (la barre manque de place)
 badge-blurry = Jugée floue (score de netteté)
 badge-blurry-view = Jugée floue (score de netteté) ; clic : carte de netteté
 panel-sharpness = Netteté

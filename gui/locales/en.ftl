@@ -764,6 +764,7 @@ filter-bar-no-blurry = without blurry
 filter-bar-well-exposed = well exposed
 filter-bar-inverted = inverted
 filter-bar-count-tip = images shown / images in the folder
+filter-bar-more = Sort and number of images (the bar lacks room)
 badge-blurry = Judged blurry (sharpness score)
 badge-blurry-view = Judged blurry (sharpness score); click: sharpness map
 panel-sharpness = Sharpness

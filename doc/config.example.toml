@@ -518,6 +518,9 @@ size_slider = 90.0
 stacks = false
 # Recherche par nom de fichier (/ ou Ctrl+F en grille) : largeur du champ (points).
 search_width = 200.0
+# Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
+# le nombre d'images passent alors dans un menu « … »).
+search_min_width = 80.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement

@@ -430,6 +430,9 @@ pub struct GridSettings {
     pub stacks: bool,
     /// Champ de recherche par nom de la barre des filtres (`/`, Ctrl+F) : largeur (points).
     pub search_width: f32,
+    /// Largeur minimale de ce champ quand la barre manque de place (le tri et le nombre
+    /// d'images passent alors dans un menu « … », issue n° 71).
+    pub search_min_width: f32,
 }
 
 impl Default for GridSettings {
@@ -455,6 +458,7 @@ impl Default for GridSettings {
             size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
+            search_min_width: 80.0,
         }
     }
 }
