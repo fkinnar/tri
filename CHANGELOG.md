@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- **Comparing a stack**: `c` with no selection compares the photos of the current
+  stack side by side (a collapsed stack too); `f c` shows only the current stack,
+  expanded, in the grid (issue #52).
+- **Several cards in a row**: with the offload dialog left open on its summary,
+  plugging in the next card starts it again on that card, towards the same session
+  folder (issue #37).
+- **Background tasks**: one global bar (number of tasks, mean progress) at the bottom
+  of the metadata panel, or in the status bar when it is hidden, instead of a row of
+  bars; a click unfolds one bar per task above it (issue #36).
+- **A whole folder in darktable**: Ctrl+Shift+B, or the right click on a folder of the
+  panel, renders in the background every image with a darktable sidecar, one after the
+  other, into the cache (progress in the background tasks, "×" to interrupt, summary
+  at the end) (issue #69).
 - **Grid**: no clipping badge on a collapsed stack, where its image count is (issue
   #75).
 - **Panels**: the panel that has the keyboard has a slightly lighter background
