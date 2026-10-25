@@ -188,16 +188,26 @@ fn name_clashes_and_identical_copies() {
     write(&dst.join("DSCF0002.RAF"), b"raw-2-longer", SHOT + 60);
     let mut history = History::in_memory();
     let plan = offload::plan(&src, &history).unwrap();
+    let mut last = None;
     let report = offload::run(
         &plan,
         &dst,
         &settings(),
         &mut history,
         &AtomicBool::new(false),
-        |_| {},
+        |p| last = Some(p.clone()),
         |_| {},
     );
     assert_eq!(report.skipped, [src.join("DCIM/101_FUJI/DSCF0002.RAF")]);
+    // La copie identique passée compte quand même dans les octets : la barre finit
+    // pleine, au même rythme que les fichiers (#101).
+    let last = last.unwrap();
+    assert_eq!(last.files_done, last.files_total);
+    assert_eq!(last.bytes_done, last.bytes_total);
+    assert_eq!(
+        last.bytes_total,
+        plan.items.iter().map(|i| i.size).sum::<u64>()
+    );
     assert_eq!(fs::read(dst.join("DSCF0001-2.RAF")).unwrap(), b"raw-1");
     assert_eq!(
         fs::read(dst.join("DSCF0001.RAF")).unwrap(),

@@ -117,7 +117,7 @@ histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
   autres fichiers ; `Plan::to_copy`, `Plan::bytes` ;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)` ;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
-  copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets ;
+  copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets (un fichier passé, déjà déchargé ou déjà présent, compte d'un coup : la barre suit les fichiers) ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande
