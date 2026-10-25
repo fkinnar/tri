@@ -10985,6 +10985,36 @@ mod tests {
     }
 
     #[test]
+    fn a_narrow_filter_bar_folds_its_end_into_a_menu() {
+        // Issue n° 71 : fenêtre étroite, le tri et le nombre d'images passent dans « … »,
+        // l'inversion et l'effacement restent visibles ; large, tout est dans la barre.
+        let (mut h, _dir) = harness();
+        let more = "…";
+        let clear = t!("filter-bar-clear");
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "large : pas de menu");
+        h.set_size(vec2(760.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_some(), "étroite : le menu");
+        assert!(
+            h.query_by_label(&clear).is_some(),
+            "effacer toujours visible"
+        );
+        // Le menu ouvert : le nombre d'images y est.
+        h.get_by_label(more).click();
+        h.run_steps(3);
+        let count = t!("filter-bar-count", shown = 3, n = 3);
+        assert!(
+            h.query_by_label(&count).is_some(),
+            "nombre d'images dans le menu"
+        );
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "de nouveau large");
+    }
+
+    #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
         assert!(
@@ -13432,35 +13462,5 @@ mod tests {
             .filter(|a| a.available() && a.group() == group)
             .count();
         assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
-    }
-
-    #[test]
-    fn a_narrow_filter_bar_folds_its_end_into_a_menu() {
-        // Issue n° 71 : fenêtre étroite, le tri et le nombre d'images passent dans « … »,
-        // l'inversion et l'effacement restent visibles ; large, tout est dans la barre.
-        let (mut h, _dir) = harness();
-        let more = "…";
-        let clear = t!("filter-bar-clear");
-        h.set_size(vec2(2000.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_none(), "large : pas de menu");
-        h.set_size(vec2(760.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_some(), "étroite : le menu");
-        assert!(
-            h.query_by_label(&clear).is_some(),
-            "effacer toujours visible"
-        );
-        // Le menu ouvert : le nombre d'images y est.
-        h.get_by_label(more).click();
-        h.run_steps(3);
-        let count = t!("filter-bar-count", shown = 3, n = 3);
-        assert!(
-            h.query_by_label(&count).is_some(),
-            "nombre d'images dans le menu"
-        );
-        h.set_size(vec2(2000.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_none(), "de nouveau large");
     }
 }
