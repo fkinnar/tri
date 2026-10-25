@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Avance automatique, mode pile** : option `[gui.view] stack_advance_next`
+  (désactivée par défaut) pour passer, au bout d'une pile, à la première photo de la pile
+  suivante.
 - **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
   progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
   pour chaque fichier ; issue n° 43).

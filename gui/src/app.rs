@@ -3328,12 +3328,23 @@ impl TriApp {
             self.regroup();
         }
         // Plein écran en mode pile : la photo suivante de la pile, comme → (arrêt au bout,
-        // ou boucle selon `[gui.view] stack_wrap`), pas la pile suivante (issue n° 60).
+        // ou boucle selon `[gui.view] stack_wrap`), pas la pile suivante (issue n° 60) ;
+        // avec `[gui.view] stack_advance_next`, la première photo de la pile suivante au
+        // bout (la boucle ne s'applique plus : elle n'en sortirait jamais).
         if self.mode == Mode::View && self.stacking {
-            let wrap = self.gui.view.stack_wrap;
+            let next_stack = self.gui.view.stack_advance_next;
+            let wrap = self.gui.view.stack_wrap && !next_stack;
             let mut at = self.selected;
             let next = loop {
-                match self.stacks.step_in_stack(at, 1, wrap) {
+                let step = match self.stacks.step_in_stack(at, 1, wrap) {
+                    None if next_stack => self
+                        .stacks
+                        .neighbour_group(at, true)
+                        .and_then(|cover| self.stacks.range_of(cover))
+                        .map(|r| r.start),
+                    other => other,
+                };
+                match step {
                     Some(i) if i == self.selected => break None,
                     Some(i) if siblings.contains(&self.files[i].path) => at = i,
                     other => break other,
@@ -11897,6 +11908,16 @@ mod tests {
         h.state_mut().select(range.end - 1);
         press(&mut h, Key::Num1, Modifiers::NONE);
         assert_eq!(h.state().selected, range.end - 1, "{}", selected_name(&h));
+        // Avec `stack_advance_next` : la première photo de la pile suivante, même si
+        // `stack_wrap` est actif.
+        h.state_mut().gui.view.stack_advance_next = true;
+        h.state_mut().gui.view.stack_wrap = true;
+        press(&mut h, Key::Num1, Modifiers::NONE);
+        assert_eq!(h.state().selected, range.end, "{}", selected_name(&h));
+        assert!(selected_name(&h).starts_with('b'), "pile suivante");
+        h.state_mut().gui.view.stack_advance_next = false;
+        h.state_mut().gui.view.stack_wrap = false;
+        h.state_mut().select(range.end - 1);
         h.state_mut().auto_advance = false;
         for _ in 0..5 {
             press(&mut h, Key::ArrowRight, Modifiers::NONE);

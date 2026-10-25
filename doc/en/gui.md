@@ -469,7 +469,8 @@ system one ("cold" measurements, experiments).
   - **the other image of a RAW+JPEG pair**, rated at the same time, is skipped.
   In full screen in stack mode, it advances within the stack like → (stops at the end of
   the stack, or wraps around with `[gui.view] stack_wrap`), not to the next stack
-  (2026-10-24, issue #60).
+  (2026-10-24, issue #60). As an option, `[gui.view] stack_advance_next` (off by default)
+  moves at the end of the stack to the first photo of the next stack (2026-10-25).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
   everything with the keyboard):

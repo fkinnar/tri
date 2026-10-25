@@ -551,6 +551,10 @@ zoom_on_focus_point = true
 # stack, up / down to the previous / next stack; at the end of the stack, true: start again
 # from the other end; false: stop.
 stack_wrap = false
+# Active stacks, in full screen, auto advance after a rating (Shift+A): at the end of the
+# stack, true: the first photo of the next stack (then takes precedence over stack_wrap);
+# false: stay on the last one.
+stack_advance_next = false
 # Overlays (o, Shift+O for the orientation, see overlay.md): line thickness (points);
 # opacity of the built-in grids (thirds, golden ratio, diagonals), colour: [gui.colors]
 # overlay.

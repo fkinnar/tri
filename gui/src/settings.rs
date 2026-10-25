@@ -683,6 +683,10 @@ pub struct ViewSettings {
     /// Mode pile (plein écran) : au bout de la pile, ← / → repartent de l'autre bout
     /// (sinon on s'arrête).
     pub stack_wrap: bool,
+    /// Mode pile (plein écran), avance automatique après une note : au bout de la pile,
+    /// passer à la première photo de la pile suivante (sinon on reste ; prime sur
+    /// `stack_wrap` pour l'avance automatique).
+    pub stack_advance_next: bool,
     /// Superpositions (o) : épaisseur des traits (points).
     pub overlay_line_width: f32,
     /// Grilles intégrées (tiers, nombre d'or, diagonales) : opacité des lignes.
@@ -704,6 +708,7 @@ impl Default for ViewSettings {
             image_info: true,
             zoom_on_focus_point: true,
             stack_wrap: false,
+            stack_advance_next: false,
             overlay_line_width: 1.0,
             overlay_opacity: 0.6,
         }
