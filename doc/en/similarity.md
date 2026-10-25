@@ -52,6 +52,13 @@ double-click: back to the middle.
   (2026-10-17): 0.21, 0.16 and 0.15 (separation 0.66 to 0.77), against a fixed 0.25.
 - `with_strictness(centre, s, strictness_span)`: `centre × span^(-s)` (×3 to ÷3 by
   default).
+- `threshold_by_rank(sorted distances, centre, s, span, min)` (2026-10-25, issue #61: the
+  strict side was pixel-sensitive, and stacks remained fully to the right): the slider
+  follows the **rank** of the distances (`distances_by_rank`), not their value. In the
+  middle, `centre`; towards the right, fewer and fewer links joined, in equal shares,
+  down to none; towards the left, up to `centre × span`. Simulated on six real shoots:
+  fully to the right, 9 to 40 stacks remained with the geometric threshold, none now.
+  Fewer than `min` links: `with_strictness`.
 - `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
   folder (`group-strictness.tsv` in the data folder); in the middle, it is forgotten. The
   former per-folder thresholds (`group-thresholds.tsv`) are no longer read.

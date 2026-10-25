@@ -379,9 +379,10 @@ auto_min_links = 8
 auto_separation = 0.5
 # Bornes du centre calculé : entre threshold / auto_range et threshold × auto_range.
 auto_range = 2.0
-# Étendue du curseur des piles : à fond à droite (plus strict, petites piles), le seuil
-# est divisé par cette valeur ; à fond à gauche, multiplié. La sévérité choisie est
-# retenue pour chaque dossier.
+# Étendue du curseur des piles, à fond à gauche (plus souple, grandes piles) : le seuil
+# est multiplié par cette valeur. Vers la droite, le curseur suit le rang des distances du
+# dossier jusqu'à ne plus faire aucune pile (trop peu d'images : seuil divisé par cette
+# valeur). La sévérité choisie est retenue pour chaque dossier.
 strictness_span = 3.0
 # Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
 # groupées (secondes ; 0 : sans limite).
