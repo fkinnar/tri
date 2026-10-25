@@ -98,6 +98,14 @@ les branches d'erreur d'entrée-sortie et les fonctions `main`.
 - sans la feature `heif` : la fixture HEIC donne `HeifNotCompiled` ;
 - avec `TRI_TEST_HEIC` : un vrai HEIC d'iPhone se décode en RGB8 cohérent.
 
+### `develop_batch` (unitaires, `gui/src/develop_batch.rs`)
+
+- seules les images développées (sidecar darktable à historique) sont rendues ; sans
+  darktable, l'échec est compté et le lot va au bout ;
+- avec `TRI_TEST_DEVELOP` (dossier de RAW dont certains développés, darktable installé,
+  `#[ignore]`) : les développés rendus, les autres passés. Le 25/10/2026, sur trois RAF
+  (deux développés) : 13 s.
+
 ### `cache` (unitaires, `src/cache.rs`)
 
 - emplacement par défaut par OS (HOME, XDG_CACHE_HOME absolu ou relatif, LOCALAPPDATA),

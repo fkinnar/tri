@@ -82,5 +82,14 @@ developed 1:1: you zoom into the render. The focus point and the clipped / block
 placed on the whole sensor, are hidden on a developed image (cropped). Without darktable,
 the source is not offered and `Shift+B` says so.
 
+**A whole folder in the background** (2026-10-25, issue #69): `Ctrl+Shift+B` (the open
+folder) or the right click on a folder of the panel, "Develop the whole folder
+(darktable)". Each image with a darktable sidecar that has a history is rendered one
+after the other (`gui/src/develop_batch.rs`), by the same producer as `Shift+B`
+(`CachedPreviews`, `Developed` level): another rendering program plugged in there will
+serve the same way. Already in the cache: skipped. One batch at a time; its progress is a
+background task ("×": interrupt), the summary (rendered, already done, failed) goes to
+the status bar; afterwards, `b` offers the developed render of each rendered image.
+
 Coming: `darktable-cli` can process a folder in a single launch (amortized startup) — for
 sending developed JPEGs in the "after-development" stage.

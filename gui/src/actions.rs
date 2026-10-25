@@ -334,6 +334,8 @@ pub enum Action {
     FocusMode,
     /// Développer l'image affichée dans darktable (plugin de rendu), puis l'afficher.
     Develop,
+    /// Développer en fond toutes les images du dossier qui ont un sidecar (issue n° 69).
+    DevelopFolder,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
     /// Relire les volumes (disque branché) et les dossiers du panneau.
@@ -396,7 +398,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 164] = [
+    pub const ALL: [Action; 165] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -521,6 +523,7 @@ impl Action {
         Action::Search,
         Action::FocusMode,
         Action::Develop,
+        Action::DevelopFolder,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
         Action::ToggleHistogram,
@@ -603,7 +606,7 @@ impl Action {
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop => Group::View,
+            | Develop | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -760,6 +763,7 @@ impl Action {
             Action::Search => "core.search",
             Action::FocusMode => "core.view.focus_mode",
             Action::Develop => "plugin.darktable.develop",
+            Action::DevelopFolder => "plugin.darktable.develop_folder",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
@@ -1104,6 +1108,8 @@ const BASICS: &[Binding] = {
         (&[plain(Key::F11)], FocusMode),
         // Développer dans darktable : à la demande seulement (quelques secondes).
         (&[shifted(Key::B)], Develop),
+        // Tout le dossier, en fond (issue n° 69).
+        (&[ctrl_shift(Key::B)], DevelopFolder),
         (&[ctrl_shift(Key::F)], FocusMode),
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (&[plain(Key::Questionmark)], Help),

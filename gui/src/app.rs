@@ -327,6 +327,10 @@ pub struct TriApp {
     cursor_hidden: bool,
     /// darktable trouvé au démarrage du moteur : la source « développé » est proposée.
     darktable: bool,
+    /// darktable trouvé (`[develop] darktable`), pour les rendus d'un dossier entier.
+    darktable_tool: Option<tri::develop::Darktable>,
+    /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
+    develop_batch: Option<crate::develop_batch::DevelopBatch>,
     /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
     /// fermés : ils reviennent tels quels en sortant).
     focus_mode: bool,
@@ -723,6 +727,8 @@ impl TriApp {
             hovered: None,
             cursor_hidden: false,
             darktable: false,
+            darktable_tool: None,
+            develop_batch: None,
             focus_mode: false,
             focus_mode_since: None,
             logo: None,
@@ -1561,6 +1567,10 @@ impl TriApp {
                                 ui.close();
                             }
                         }
+                        // Rendus développés de tout le dossier, en fond (issue n° 69).
+                        if self.darktable {
+                            entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
+                        }
                         ui.separator();
                         if removable {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
@@ -1659,6 +1669,7 @@ impl TriApp {
             self.tree.point_at(&path);
             let ctx = ui.ctx().clone();
             match action {
+                Action::DevelopFolder => self.develop_folder(&ctx, Some(path)),
                 Action::FolderOffload | Action::FolderEject => {
                     self.folder_drive_action(&ctx, action)
                 }
@@ -1935,6 +1946,71 @@ impl TriApp {
                 self.start_eject(ctx, volume);
             }
         }
+    }
+
+    /// Rendus développés en fond de toutes les images de `dir` (le dossier ouvert si
+    /// `None`) qui ont un sidecar darktable (issue n° 69) ; un lot à la fois.
+    fn develop_folder(&mut self, ctx: &egui::Context, dir: Option<PathBuf>) {
+        let (Some(darktable), Some(engine)) = (self.darktable_tool.clone(), &self.engine) else {
+            self.notice = Some((t!("develop-batch-unavailable"), true));
+            return;
+        };
+        if self.develop_batch.is_some() {
+            self.notice = Some((t!("develop-batch-busy"), true));
+            return;
+        }
+        let dir = dir.unwrap_or_else(|| self.folder.dir.clone());
+        // Le dossier ouvert : ses images (sous-dossiers compris si la case est cochée) ;
+        // un autre : ses images seules.
+        let files = if dir == self.folder.dir {
+            self.folder.files.clone()
+        } else {
+            match tri::media::scan(&dir, 1) {
+                Ok(files) => files,
+                Err(e) => {
+                    self.notice = Some((format!("{} : {e}", dir.display()), true));
+                    return;
+                }
+            }
+        };
+        let producer = CachedPreviews {
+            cache: engine.cache.clone(),
+            settings: engine.preview,
+            darktable: Some(darktable),
+        };
+        let repaint = ctx.clone();
+        self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
+            dir,
+            files,
+            producer,
+            move || repaint.request_repaint(),
+        ));
+    }
+
+    /// Fin d'un lot de rendus développés : bilan dans la barre d'état ; l'image affichée
+    /// peut maintenant montrer son rendu (`b`).
+    fn poll_develop_batch(&mut self) {
+        let Some(summary) = self.develop_batch.as_mut().and_then(|b| b.finished()) else {
+            return;
+        };
+        let folder = self
+            .develop_batch
+            .take()
+            .map(|b| b.folder)
+            .unwrap_or_default();
+        let mut text = t!(
+            "develop-batch-done",
+            name = folder_name(&folder),
+            rendered = summary.rendered,
+            cached = summary.cached,
+            failed = summary.failed
+        );
+        if summary.cancelled {
+            text.push_str(&t!("develop-batch-cancelled"));
+        }
+        self.notice = Some((text, summary.failed > 0));
+        // Rendus développés arrivés dans le cache : à relire (`b` les propose).
+        self.missing.retain(|(_, level)| *level != Level::Developed);
     }
 
     /// Lance `work` sur le cache dans un fil à part (déplacer des entrées peut copier vers
@@ -2589,6 +2665,7 @@ impl TriApp {
         });
         trace(|| format!("darktable : {:?}", darktable.as_ref().map(|d| &d.cli)));
         self.darktable = darktable.is_some();
+        self.darktable_tool = darktable.clone();
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings: preview,
@@ -3159,6 +3236,7 @@ impl TriApp {
             // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
             Action::Search => self.start_search(),
             Action::Develop => self.develop_current(),
+            Action::DevelopFolder => self.develop_folder(ctx, None),
             Action::Crop => self.start_crop(),
             Action::CropMove(dir) | Action::CropSize(dir) => {
                 let step = self.gui.crop.step;
@@ -5749,6 +5827,22 @@ impl TriApp {
                 tip: Some(crate::files::tilde(&job.dest)),
                 click: None,
                 cancel: Some((t!("export-cancel"), StatusClick::CancelExport)),
+            });
+        }
+        // Rendus développés d'un dossier (issue n° 69).
+        if let Some(batch) = &self.develop_batch {
+            let (done, total) = batch.progress();
+            tasks.push(Task {
+                text: t!(
+                    "develop-batch-progress",
+                    name = folder_name(&batch.folder),
+                    done = done,
+                    total = total
+                ),
+                fraction: done as f32 / total.max(1) as f32,
+                tip: None,
+                click: None,
+                cancel: Some((t!("develop-batch-cancel"), StatusClick::CancelDevelop)),
             });
         }
         if let Some((text, fraction)) = self
@@ -8895,6 +8989,7 @@ impl eframe::App for TriApp {
         self.watch_folder(&ctx);
         self.poll_eject();
         self.poll_cache_jobs();
+        self.poll_develop_batch();
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
@@ -8921,6 +9016,11 @@ impl eframe::App for TriApp {
             Some(StatusClick::CancelExport) => {
                 if let Some(job) = &self.export_job {
                     job.cancel();
+                }
+            }
+            Some(StatusClick::CancelDevelop) => {
+                if let Some(batch) = &self.develop_batch {
+                    batch.cancel();
                 }
             }
             Some(StatusClick::Action(action)) => self.perform(&ctx, action),
@@ -9342,6 +9442,8 @@ enum StatusClick {
     ToggleTasks,
     /// Interrompre l'export en cours.
     CancelExport,
+    /// Interrompre les rendus développés du dossier.
+    CancelDevelop,
     /// Progression d'une copie en arrière-plan : réafficher sa boîte.
     RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
