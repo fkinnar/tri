@@ -162,3 +162,6 @@ find what is needed to take them out again.
 change), `dir_contents` (files and subfolders, for the confirmation),
 `delete_dir(dossier, corbeille)` (all the content; to the trash, with what is needed to get
 it back out). Names checked as for images (`check_name`). Undoable (see `history.md`).
+In the interface (`TriApp::after_folder_change`), background work follows: open folder
+deleted, it closes and its computations stop; subfolder deleted with "Subfolders" on, its
+images leave the list; darktable renders of a deleted folder, interrupted (2026-10-25).

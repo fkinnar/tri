@@ -8282,6 +8282,18 @@ impl TriApp {
                 Some(dir) => self.open_folder(&dir),
                 None => self.close_folder(),
             }
+        } else if !self.folder.is_none() && self.files.iter().any(|f| !f.path.exists()) {
+            // Un sous-dossier du dossier ouvert supprimé ou déplacé (« Sous-dossiers »
+            // coché) : ses images sortent de la liste, leurs calculs s'arrêtent (retour du
+            // 25/10/2026 : ils continuaient pour rien).
+            let selected = self.files.get(self.selected).map(|f| f.path.clone());
+            self.reload_folder(selected);
+        }
+        // Rendus darktable d'un dossier qui n'existe plus : interrompus.
+        if let Some(batch) = &self.develop_batch
+            && !batch.folder.exists()
+        {
+            batch.cancel();
         }
         if let Some(path) = point {
             if let Some(parent) = path.parent() {
@@ -13272,6 +13284,26 @@ mod tests {
         assert_eq!(opened.parent().unwrap(), dir.path().join("photos-local"));
         let history = std::fs::read_to_string(dir.path().join("history.tsv")).unwrap();
         assert_eq!(history.lines().count(), 2, "historique écrit");
+    }
+
+    #[test]
+    fn a_deleted_subfolder_leaves_the_list() {
+        // Retour du 25/10/2026 : « Sous-dossiers » coché, un sous-dossier supprimé : ses
+        // images quittent la liste (leurs calculs s'arrêtent avec).
+        let (mut h, _dir) = harness();
+        let folder = h.state().folder.dir.clone();
+        let sub = folder.join("sous");
+        std::fs::create_dir(&sub).unwrap();
+        image::RgbImage::new(16, 16)
+            .save(sub.join("x.jpg"))
+            .unwrap();
+        h.state_mut().subfolders = true;
+        h.state_mut().reload_folder(None);
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 4);
+        tri::files::delete_dir(&sub, false).unwrap();
+        h.state_mut().after_folder_change(None, Some(sub));
+        assert_eq!(h.state().files.len(), 3, "images du sous-dossier retirées");
     }
 
     #[test]
