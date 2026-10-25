@@ -613,6 +613,9 @@ title_color = "#50bedc"
 # Panel that has the keyboard: its background a little lighter in the dark theme, a little
 # darker in the light theme (share of the text colour mixed into the background, 0 to 1).
 focus_panel_tint = 0.06
+# Line under the keyboard cursor in a panel or a list: a band of the text colour, at
+# this opacity (0 to 1), across the whole width.
+cursor_tint = 0.12
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
 # Minimum width of the help (F1), in points.

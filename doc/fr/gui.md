@@ -413,7 +413,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   fond un peu plus clair (plus foncé en thème clair, `[gui.dialogs] focus_panel_tint` ;
   liseré d'accent jusqu'au 25/10/2026, issue n° 78 : avec le curseur, lui aussi en
   accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
-  l'histogramme, issue n° 77), la barre d'état le dit ;
+  l'histogramme, issue n° 77), la barre d'état le dit ; la ligne pointée au clavier
+  (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
+  toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
+  25/10/2026, trop voyant et coupé à gauche quand le panneau défilait) ;
   un clic dans un panneau lui donne le clavier, un clic dans la zone des images le leur
   rend (`TriApp::click_focus`, 22/10/2026 ; les boîtes ouvertes par-dessus ne comptent
   pas). **Ses touches passent d'abord, les autres
