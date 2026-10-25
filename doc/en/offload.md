@@ -71,6 +71,15 @@ taken from the previous offload), with the same choices; only the copy is left t
 Only ejectable media count (not a fixed drive, `[places] fixed`). The previews of each
 session are computed apart: the application keeps a list of their schedulers.
 
+Feedback of the same evening: the dialog no longer has to stay open. Summary closed, or
+copy done in the background: the application keeps the last finished offload
+(`TriApp::last_offload`: session and the dialog's choices), and a camera card (with a
+`DCIM` folder) plugged in afterwards opens the dialog on it, towards that session
+(`OffloadDialog::propose_session`). Closed without offloading, nothing more is offered.
+The new card may be mounted **at the same path** as the previous one (two cards of the
+same camera have the same volume name, `/media/…/disk`): it has just appeared, so it is
+another card.
+
 ## In the background (2026-10-17)
 
 To cull one session while another card is being offloaded: during the copy, "Continue in

@@ -162,20 +162,33 @@ impl OffloadDialog {
     /// Nouvelle carte branchée alors que la boîte montre le bilan d'une autre (issue
     /// n° 37 : plusieurs cartes à la suite) : elle repart sur `source`, vers le même
     /// dossier de séance, avec les mêmes choix. Faux si la boîte n'en est pas là.
+    /// La carte peut être montée au même chemin que la précédente (deux cartes du même
+    /// boîtier, même nom de volume) : elle vient d'arriver, c'est une autre carte.
     pub fn next_card(&mut self, source: PathBuf, ctx: &egui::Context) -> bool {
         let Stage::Done { report, .. } = &self.stage else {
             return false;
         };
-        if self.hidden || source == self.source {
+        if self.hidden {
             return false;
         }
         let destination = report.destination.clone();
+        self.propose_session(&destination);
+        self.change_source(source, ctx);
+        true
+    }
+
+    /// Propose le dossier de séance `destination` (sa racine, son nom) plutôt qu'un
+    /// nouveau : carte suivante d'un déchargement (issue n° 37).
+    pub fn propose_session(&mut self, destination: &Path) {
         self.root_here = destination.parent().map(|p| p.display().to_string());
         self.folder_here = destination
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
-        self.change_source(source, ctx);
-        true
+    }
+
+    /// Choix de la boîte (cases cochées), repris pour la carte suivante.
+    pub fn settings(&self) -> &OffloadSettings {
+        &self.settings
     }
 
     /// Change de support (liste de « décharger ici ») : nouvel inventaire, la racine
@@ -195,8 +208,7 @@ impl OffloadDialog {
         &self.source
     }
 
-    /// Dossier de la séance du dernier déchargement fini (tests).
-    #[cfg(test)]
+    /// Dossier de la séance du dernier déchargement fini.
     pub fn destination(&self) -> Option<PathBuf> {
         match &self.stage {
             Stage::Done { report, .. } => Some(report.destination.clone()),
