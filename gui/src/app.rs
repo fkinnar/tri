@@ -144,6 +144,10 @@ pub struct TriApp {
     engine_backlog: bool,
     /// Boîte de déchargement d'une carte (éventuellement en arrière-plan).
     offload: Option<OffloadDialog>,
+    /// Aperçus de la séance calculés pendant un déchargement (issue n° 40) : gardés ici,
+    /// la boîte pouvant se fermer avant la fin ; arrêtés quand la séance s'ouvre (le moteur
+    /// du dossier prend le relais) ou une fois le travail fini.
+    session_previews: Option<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
@@ -594,6 +598,7 @@ impl TriApp {
             watch_snapshot: None,
             engine_backlog: false,
             offload: None,
+            session_previews: None,
             offloaded: None,
             eject_failed: None,
             eject_dialog: None,
@@ -1580,6 +1585,7 @@ impl TriApp {
                 self.settings.data_dir(),
                 ui.ctx(),
             ));
+            self.attach_previews();
         }
     }
 
@@ -1721,15 +1727,49 @@ impl TriApp {
 
     /// Ouvre la séance déchargée dans la grille, et la montre dans l'arborescence.
     fn open_offloaded(&mut self, dir: &Path) {
+        // Le moteur du dossier reprend ce qui reste (le fait est lu dans le cache).
+        self.session_previews = None;
         self.tree.reload();
         self.tree.reveal(dir);
         self.reveal_folder = true;
         self.open_folder(dir);
     }
 
+    /// Donne à la boîte de déchargement qui vient de s'ouvrir de quoi calculer les aperçus
+    /// de la séance pendant la copie (issue n° 40) : un scheduler à part, aux réglages
+    /// d'aperçu du moteur (mêmes clés que le dossier ouvert ensuite), sans darktable.
+    fn attach_previews(&mut self) {
+        let (Some(dialog), Some(engine)) = (&mut self.offload, &self.engine) else {
+            return;
+        };
+        let producer = CachedPreviews {
+            cache: engine.cache.clone(),
+            settings: engine.preview,
+            darktable: None,
+        };
+        let config = self.settings.scheduler(self.gui.raw_previews);
+        let scheduler = Arc::new(Scheduler::new(producer, config, |_| {}));
+        dialog.set_previews(crate::offload::SessionPreviews {
+            scheduler: scheduler.clone(),
+            cache: engine.cache.clone(),
+            location: self.settings.cache.location,
+            places: self.settings.places.clone(),
+        });
+        self.session_previews = Some(scheduler);
+    }
+
     /// Boîte de déchargement : affichage, et suites (ouvrir la séance, éjecter la carte),
     /// choisies avant la copie et enchaînées à la fin.
     fn offload_dialog(&mut self, ctx: &egui::Context) {
+        // Plus de copie, et plus rien à calculer : le scheduler de la séance s'arrête.
+        if self.offload.is_none()
+            && self
+                .session_previews
+                .as_ref()
+                .is_some_and(|s| s.wait_idle(Duration::ZERO))
+        {
+            self.session_previews = None;
+        }
         let Some(dialog) = &mut self.offload else {
             return;
         };
@@ -7725,7 +7765,10 @@ impl TriApp {
                 self.settings.data_dir(),
                 ctx,
             ) {
-                Some(dialog) => self.offload = Some(dialog),
+                Some(dialog) => {
+                    self.offload = Some(dialog);
+                    self.attach_previews();
+                }
                 None => self.notice = Some((t!("folders-no-removable"), true)),
             }
             return;
@@ -7745,6 +7788,7 @@ impl TriApp {
                 self.settings.data_dir(),
                 ctx,
             ));
+            self.attach_previews();
         }
     }
 
@@ -12563,6 +12607,27 @@ mod tests {
         assert!(
             h.query_by_label_contains("1 copiés").is_some(),
             "bilan dans la barre d'état"
+        );
+        // Aperçus de la séance calculés pendant la copie (issue n° 40), dossier pas ouvert :
+        // le scheduler de la séance s'arrête une fois fini, la vignette est en cache.
+        while h.state().session_previews.is_some() {
+            assert!(
+                Instant::now() < deadline,
+                "aperçus de la séance jamais finis"
+            );
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let session = h.state().offloaded.clone().unwrap();
+        let engine = h.state().engine.as_ref().unwrap();
+        let copy = MediaFile {
+            path: session.join("IMG0.jpg"),
+            kind: MediaKind::Flat,
+        };
+        let key = preview::key(&copy, Level::Thumbnail, &engine.preview).unwrap();
+        assert!(
+            engine.cache.contains(&key),
+            "vignette calculée sans ouvrir la séance"
         );
         // Recliqué tant que la séance n'est pas ouverte (CI Linux : le clic, à côté du bilan
         // qui venait de s'afficher, se perdait parfois).

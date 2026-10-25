@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Offload**: the previews and analyses of each photo are computed as soon as it is
+  copied, while the copy goes on; the session is ready sooner. Checkbox in the offload
+  dialog, `[offload] previews` (on by default); `--previews` on the command line
+  (issue #40).
 - **Cache on a USB stick**: the switch to winter time no longer computes the whole cache
   of a FAT32 drive again (dates in local time, shifted by one hour); reading the cache
   no longer writes to the drive; turning on the "well exposed" filter during the analyses

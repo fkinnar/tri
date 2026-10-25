@@ -78,14 +78,36 @@ sous les yeux de l'utilisateur — : la barre d'état propose « Ouvrir la séan
 comme avant. Un seul déchargement à la fois : l'icône « décharger » disparaît des volumes
 tant qu'un déchargement existe.
 
+## Aperçus pendant la copie (25/10/2026, issue n° 40)
+
+On décharge une carte pour travailler dessus : attendre la fin de la copie pour calculer
+les aperçus, c'est du temps perdu, alors que la copie (lectures et écritures) laisse le
+processeur presque libre. Chaque photo copiée et vérifiée (ou trouvée identique dans la
+destination) rejoint aussitôt un calcul en fond : vignettes, rendus boîtier,
+histogrammes, netteté, regroupement, comme à l'ouverture d'un dossier.
+
+- **Depuis la copie, pas depuis la carte** : la photo vient d'être écrite, le système
+  l'a encore en mémoire, et la lecture de la carte n'est pas ralentie.
+- **Un scheduler à part** (`Scheduler::add_files` : photos ajoutées une à une, sans rien
+  interrompre), aux réglages d'aperçu du moteur de l'interface : mêmes clés que le
+  dossier ouvert ensuite. Il est gardé par l'application, pas par la boîte (elle peut se
+  fermer avant la fin) ; il s'arrête quand la séance s'ouvre (le moteur du dossier reprend
+  ce qui reste, le fait est lu dans le cache) ou une fois tout calculé.
+- **`[cache] location`** est appliqué à la séance avant la copie : son cache se remplit
+  directement à sa place.
+- **Réglage** `[offload] previews` (oui par défaut), case « Calculer les aperçus pendant
+  la copie » de la boîte. En ligne de commande, `--previews`.
+- Limite connue : en arrière-plan, pendant qu'on regarde un autre dossier, deux workers
+  LibRaw peuvent tourner en même temps (celui du dossier affiché, celui de la séance).
+
 ## API
 
 - `History::open(fichier)`, `History::open_configured(&réglages)`, `History::in_memory()` ;
 - `plan(carte, &historique) -> Plan` : images (`Item` : source, taille, date, `known`),
   autres fichiers ; `Plan::to_copy`, `Plan::bytes` ;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)` ;
-- `run(&plan, destination, &réglages, &mut historique, &annulation, progression) ->
-  Report` (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets ;
+- `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
+  copie) -> Report` (`copie` : chaque copie dès qu'elle est faite, pour les aperçus) (copiés, ignorés, erreurs, interrompu, durée) ; `Progress` : fichiers (sans ceux laissés sur la carte) et octets ;
 - `delete_sources(&report)`.
 
 ## Ligne de commande
@@ -96,8 +118,8 @@ tri --offload <carte> [--to <racine>] [--folder <nom>] [--raw-only] [--dry-run] 
 
 En ligne de commande, rien ne se fait sur la carte sans option explicite (`--eject`,
 `--delete-copied` ; `open_after`, `eject_after`, `delete_after` ne valent que pour
-l'interface). `--dry-run` liste ce qui serait copié ; `--previews` calcule ensuite vignettes, aperçus et
-histogrammes de la séance. Mesuré (17/10/2026, image disque locale, Mac Apple Silicon) :
+l'interface). `--dry-run` liste ce qui serait copié ; `--previews` calcule vignettes, aperçus et
+analyses de la séance pendant la copie, puis attend la fin des calculs. Mesuré (17/10/2026, image disque locale, Mac Apple Silicon) :
 4 RAF (109 Mo) copiés et vérifiés en 0,23 s ; second passage : « rien à copier ».
 
 ## Interface

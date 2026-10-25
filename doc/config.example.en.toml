@@ -289,6 +289,10 @@ eject_after = true
 delete_after = false
 # With raw_only and delete_after: also delete the JPEGs left on the card (not copied).
 delete_left = false
+# Compute previews and analyses (thumbnails, camera JPEG, histograms, sharpness, grouping)
+# of each photo as soon as it is copied, while the copy goes on: the session is ready
+# sooner. Checkbox of the offload dialog; on the command line, --previews.
+previews = true
 
 [files]
 # Renaming, deleting, copying or moving an image: the other image of its RAW+JPEG pair

@@ -327,6 +327,24 @@ fn previews(
     dir: &Path,
     files: Vec<tri::media::MediaFile>,
 ) -> AnyResult<()> {
+    let work = start_previews(settings, dir)?;
+    work.scheduler.set_folder(files.clone());
+    follow_previews(settings, work, &files)
+}
+
+/// Calcul des aperçus lancé ([`start_previews`]), à suivre ([`follow_previews`]).
+struct Previews {
+    cache: tri::cache::Cache,
+    scheduler: Scheduler,
+    events: mpsc::Receiver<Event>,
+    preview: tri::preview::Settings,
+    config: tri::scheduler::Config,
+    start: Instant,
+}
+
+/// Lance le calcul des aperçus du dossier `dir`, encore vide : les fichiers sont donnés
+/// au scheduler ensuite (d'un coup, ou au fil d'un déchargement, issue n° 40).
+fn start_previews(settings: &EngineSettings, dir: &Path) -> AnyResult<Previews> {
     let cache = settings.open_cache()?;
     // `[cache] location` : le cache du dossier à sa place avant de le remplir.
     let removable = match settings.cache.location {
@@ -341,12 +359,47 @@ fn previews(
         Ok(None) => {}
         Err(e) => eprintln!("{}", t!("cli-cache-move-failed", error = e.to_string())),
     }
-    let n = files.len();
-    let raws = files.iter().filter(|f| f.kind == MediaKind::Raw).count();
     // Pas d'écran : la taille « auto » prend sa valeur de repli. Démonstration et mesure :
     // tous les rendus RAW en fond.
     let preview = settings.preview(None);
     let config = settings.scheduler(RawPreviews::Background);
+    let (tx, events) = mpsc::channel();
+    let producer = CachedPreviews {
+        cache: cache.clone(),
+        settings: preview,
+        // Rendus développés : dans l'interface seulement, à la demande.
+        darktable: None,
+    };
+    let scheduler = Scheduler::new(producer, config, move |e| {
+        let _ = tx.send(e);
+    });
+    Ok(Previews {
+        cache,
+        scheduler,
+        events,
+        preview,
+        config,
+        start: Instant::now(),
+    })
+}
+
+/// Suit le calcul des aperçus de `files` (ceux donnés au scheduler) jusqu'au bout, en
+/// affichant la progression sur une ligne, puis le bilan.
+fn follow_previews(
+    settings: &EngineSettings,
+    work: Previews,
+    files: &[tri::media::MediaFile],
+) -> AnyResult<()> {
+    let Previews {
+        cache,
+        scheduler: _scheduler,
+        events: rx,
+        preview,
+        config,
+        start,
+    } = work;
+    let n = files.len();
+    let raws = files.iter().filter(|f| f.kind == MediaKind::Raw).count();
     println!(
         "{}",
         t!(
@@ -367,19 +420,6 @@ fn previews(
         "{}",
         t!("cli-cache", path = cache.root().display().to_string())
     );
-
-    let (tx, rx) = mpsc::channel();
-    let producer = CachedPreviews {
-        cache: cache.clone(),
-        settings: preview,
-        // Rendus développés : dans l'interface seulement, à la demande.
-        darktable: None,
-    };
-    let scheduler = Scheduler::new(producer, config, move |e| {
-        let _ = tx.send(e);
-    });
-    let start = Instant::now();
-    scheduler.set_folder(files);
 
     let (mut thumbs, mut embedded, mut standards, mut exposures) = (
         Progress::default(),
@@ -533,19 +573,45 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         return Ok(());
     }
     let cancel = std::sync::atomic::AtomicBool::new(false);
-    let report = offload::run(&plan, &dest, s, &mut history, &cancel, |p| {
-        print!(
-            "\r  {}",
-            t!(
-                "cli-offload-progress",
-                done = p.files_done,
-                total = p.files_total,
-                mb = format!("{:.0}", p.bytes_done as f64 / 1e6),
-                total_mb = format!("{:.0}", p.bytes_total as f64 / 1e6)
-            )
-        );
-        let _ = std::io::stdout().flush();
-    });
+    // Aperçus pendant la copie (issue n° 40) : chaque photo copiée rejoint le calcul.
+    let work = match args.previews {
+        true => Some(start_previews(settings, &dest)?),
+        false => None,
+    };
+    if let Some(work) = &work {
+        work.scheduler.set_folder(Vec::new());
+    }
+    let mut copies = Vec::new();
+    let report = offload::run(
+        &plan,
+        &dest,
+        s,
+        &mut history,
+        &cancel,
+        |p| {
+            print!(
+                "\r  {}",
+                t!(
+                    "cli-offload-progress",
+                    done = p.files_done,
+                    total = p.files_total,
+                    mb = format!("{:.0}", p.bytes_done as f64 / 1e6),
+                    total_mb = format!("{:.0}", p.bytes_total as f64 / 1e6)
+                )
+            );
+            let _ = std::io::stdout().flush();
+        },
+        |copy| {
+            if let (Some(work), Some(kind)) = (&work, tri::media::kind_of(copy)) {
+                let file = tri::media::MediaFile {
+                    path: copy.to_path_buf(),
+                    kind,
+                };
+                work.scheduler.add_files(vec![file.clone()]);
+                copies.push(file);
+            }
+        },
+    );
     println!();
     for (file, error) in &report.errors {
         eprintln!("{}\t{} : {error}", t!("cli-error"), file.display());
@@ -586,9 +652,8 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
             Err(e) => eprintln!("{}", t!("cli-eject-failed", error = e)),
         }
     }
-    if args.previews {
-        let files = scan(&dest, 1)?;
-        previews(settings, &dest, files)?;
+    if let Some(work) = work {
+        follow_previews(settings, work, &copies)?;
     }
     if report.errors.is_empty() {
         Ok(())
