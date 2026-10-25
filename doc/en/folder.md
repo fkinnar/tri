@@ -23,7 +23,8 @@ one "opens a folder".
   `last-folder` file of the data folder (`EngineSettings::data_dir`: `[data] dir`,
   otherwise the system one), read back only if it still exists; path as raw bytes on
   Unix (non-UTF-8 names), UTF-8 elsewhere. The interface reopens this folder when it is
-  launched without an argument (`[gui] reopen_last`).
+  launched without an argument (`[gui] reopen_last`). `remembered(data)` returns it even
+  if it is gone (drive unplugged: the interface says so, issue #66).
 
 - `subfolders(data)` / `remember_subfolders(data, yes)`: the "Subfolders" checkbox of
   the folders panel (2026-10-20), kept from one session to the next (`subfolders` file);

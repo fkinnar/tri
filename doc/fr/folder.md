@@ -23,7 +23,8 @@ manipule quand on « ouvre un dossier ».
   le fichier `last-folder` du dossier de données (`EngineSettings::data_dir` :
   `[data] dir`, sinon celui du système), relu seulement s'il existe toujours ; chemin en
   octets bruts sous Unix (noms non UTF-8), UTF-8 ailleurs. L'interface rouvre ce dossier
-  quand elle est lancée sans argument (`[gui] reopen_last`).
+  quand elle est lancée sans argument (`[gui] reopen_last`). `remembered(données)` le
+  rend même s'il a disparu (disque débranché : l'interface le dit, issue n° 66).
 
 - `subfolders(données)` / `remember_subfolders(données, oui)` : la case « Sous-dossiers »
   du panneau des dossiers (20/10/2026), gardée d'une session à l'autre (fichier

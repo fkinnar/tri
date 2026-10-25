@@ -72,7 +72,10 @@ system one ("cold" measurements, experiments).
   is expanded and shown at startup. `Shift+D` shows or hides the panel; settings
   `[gui.folders]` (shown, width, indent, hidden folders). Without a folder argument,
   `tri-gui` reopens the last opened folder (`[gui] reopen_last`, remembered by the engine
-  in the data folder), otherwise opens on the panel. The filter bar wraps when space runs
+  in the data folder), otherwise opens on the panel, with the invitation to pick a folder
+  large and grey in the centre. Last folder gone (drive unplugged, issue #66): its name
+  and path above, and it opens again by itself when the drive is back (volume watching),
+  unless another folder was opened meanwhile (that would go back without being asked). The filter bar wraps when space runs
   out.
 - **Rating** (2026-10-17): stars, colours, picked / rejected on the selected image
   (grid or full screen), written immediately to its XMP sidecar (see [xmp.md](xmp.md),
