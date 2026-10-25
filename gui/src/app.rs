@@ -195,6 +195,9 @@ pub struct TriApp {
     view_info: String,
     /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
     auto_advance: bool,
+    /// En entrant dans une pile (mode pile) : sa couverture ou sa première image (issue
+    /// n° 62 ; `[gui.view] stack_enter`, bouton du bandeau).
+    stack_enter: crate::settings::StackEnter,
     /// Infos sur les vignettes (nom, format, notes, badges), `Maj+T`.
     grid_info: bool,
     /// Taille des vignettes (curseur du bas, `+` / `-`, `*`).
@@ -641,6 +644,7 @@ impl TriApp {
             background: None,
             view_info: String::new(),
             auto_advance: gui.auto_advance,
+            stack_enter: gui.view.stack_enter,
             grid_info: gui.grid.info,
             grid_cell: gui.grid.cell,
             grid_width: 0.0,
@@ -867,6 +871,7 @@ impl TriApp {
             background: self.background,
             sort: Some(self.order),
             auto_advance: Some(self.auto_advance),
+            stack_enter: Some(self.stack_enter),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
         }
@@ -898,6 +903,9 @@ impl TriApp {
             }
         }
         self.background = s.background;
+        if let Some(enter) = s.stack_enter {
+            self.stack_enter = enter;
+        }
         if let Some(order) = s.sort {
             self.order = order;
         }
@@ -3193,9 +3201,40 @@ impl TriApp {
             }
             Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stacking => {
                 let forward = action == Action::NavDown;
-                if let Some(i) = self.stacks.neighbour_group(self.selected, forward) {
-                    self.select(i);
+                if let Some(cover) = self.stacks.neighbour_group(self.selected, forward) {
+                    let at = match self.stack_enter {
+                        crate::settings::StackEnter::Cover => cover,
+                        crate::settings::StackEnter::First => {
+                            self.stacks.range_of(cover).map_or(cover, |r| r.start)
+                        }
+                    };
+                    self.select(at);
                 }
+            }
+            // Début / fin de la pile (issue n° 62) ; en grille, une pile repliée montre sa
+            // couverture.
+            Action::StackFirst | Action::StackLast => {
+                if let Some(r) = self.stacks.range_of(self.selected).cloned() {
+                    let at = if action == Action::StackFirst {
+                        r.start
+                    } else {
+                        r.end - 1
+                    };
+                    let browsing = self.mode == Mode::View && self.stacking;
+                    let at = if browsing {
+                        at
+                    } else {
+                        self.stacks.visible(at)
+                    };
+                    self.select(at);
+                }
+            }
+            Action::StackEnterToggle => {
+                use crate::settings::StackEnter;
+                self.stack_enter = match self.stack_enter {
+                    StackEnter::Cover => StackEnter::First,
+                    StackEnter::First => StackEnter::Cover,
+                };
             }
             Action::NavUp | Action::NavDown | Action::NavPageUp | Action::NavPageDown
                 if self.mode == Mode::View => {}
@@ -6760,7 +6799,8 @@ impl TriApp {
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
                 if self.mode == Mode::View {
                     if self.stacking {
-                        actions.extend([Action::NavDown, Action::NavUp]);
+                        // Entrer dans une pile par sa couverture ou sa première photo (#62).
+                        actions.extend([Action::NavDown, Action::NavUp, Action::StackEnterToggle]);
                     }
                     actions.push(Action::StackMode);
                 }
@@ -6776,6 +6816,9 @@ impl TriApp {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
                         Action::StackMode => self.stacking,
+                        Action::StackEnterToggle => {
+                            self.stack_enter == crate::settings::StackEnter::First
+                        }
                         Action::Develop => self.source == Source::Developed,
                         _ => false,
                     };
@@ -12136,7 +12179,9 @@ mod tests {
     }
 
     #[test]
-    fn dw_and_yw_act_on_the_whole_stack() {
+    fn the_stack_is_a_paragraph_for_d_y_and_brackets() {
+        // Issue n° 62 (choix de l'utilisateur) : `d]` / `y]` toute la pile, `[` / `]` son
+        // début et sa fin ; Maj+Début / Maj+Fin en classique.
         let ramp = |tint: u8| {
             image::RgbImage::from_fn(64, 48, |x, _| image::Rgb([(x * tint as u32 / 63) as u8; 3]))
         };
@@ -12155,30 +12200,53 @@ mod tests {
             h.state_mut().signatures.insert(f.path.clone(), sig);
         }
         h.state_mut().stacks_dirty = true;
-        // Délai de la touche ambiguë large : `y` attend le `w`.
+        // Délai de la touche ambiguë large : `y` attend le `]`.
         h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
             .with_ambiguous(Duration::from_secs(60));
         h.run_steps(3);
         assert_eq!(h.state().stacks.count(), 1);
-        // d w : corbeille pour les 3 images de la pile, cachées comprises.
+        let bracket = |h: &mut Harness<'_, TriApp>| {
+            h.event(UiEvent::Text("]".into()));
+            h.run_steps(3);
+        };
+        // d ] : corbeille pour les 3 images de la pile, cachées comprises.
         press(&mut h, Key::D, Modifiers::NONE);
-        press(&mut h, Key::W, Modifiers::NONE);
+        bracket(&mut h);
         assert!(
             h.query_by_label_contains("3 fichiers").is_some(),
             "suppression de la pile"
         );
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
-        // y w : copie de la pile.
+        // y ] : copie de la pile.
         press(&mut h, Key::Y, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none(), "y attend la suite");
-        press(&mut h, Key::W, Modifiers::NONE);
+        bracket(&mut h);
         assert!(h.query_by_label_contains("3 images vers").is_some());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Plein écran, mode pile : `]` la dernière, `[` la première ; Maj+Fin, Maj+Début.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        bracket(&mut h);
+        assert_eq!(h.state().selected, 2, "fin de pile");
+        h.event(UiEvent::Text("[".into()));
+        h.run_steps(3);
+        assert_eq!(h.state().selected, 0, "début de pile");
+        press(&mut h, Key::End, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, 2);
+        press(&mut h, Key::Home, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, 0);
+        // Ctrl+Maj+S : entrer par la première photo, puis de nouveau par la couverture.
+        let before = h.state().stack_enter;
+        press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
+        assert_ne!(h.state().stack_enter, before);
+        press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
+        assert_eq!(h.state().stack_enter, before);
         press(&mut h, Key::Escape, Modifiers::NONE);
         // Piles désactivées : expliqué, rien d'autre.
         h.state_mut().stacking = false;
         press(&mut h, Key::D, Modifiers::NONE);
-        press(&mut h, Key::W, Modifiers::NONE);
+        bracket(&mut h);
         assert!(h.state().file_dialog.is_none());
         assert!(
             h.state()
@@ -12296,6 +12364,28 @@ mod tests {
         assert!(selected_name(&h).starts_with('b'), "pile suivante");
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         assert_eq!(h.state().selected, range.end - 1, "retour : sa couverture");
+        // `stack_enter = "first"` : la première photo de la pile, pas sa couverture (#62).
+        h.state_mut().stack_enter = crate::settings::StackEnter::First;
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        let next = h
+            .state()
+            .stacks
+            .range_of(h.state().selected)
+            .cloned()
+            .unwrap();
+        assert_eq!(
+            h.state().selected,
+            next.start,
+            "première de la pile suivante"
+        );
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        assert_eq!(
+            h.state().selected,
+            range.start,
+            "première de la pile d'avant"
+        );
+        h.state_mut().stack_enter = crate::settings::StackEnter::Cover;
+        h.state_mut().select(range.end - 1);
         // Ctrl+S : plus de piles ; → passe à la photo suivante, toutes visibles.
         press(&mut h, Key::S, Modifiers::CTRL);
         assert!(!h.state().stacking);

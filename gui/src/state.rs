@@ -42,6 +42,8 @@ pub struct DisplayState {
     pub background: Option<crate::settings::Color>,
     /// Avance automatique après une note (`Maj+A`).
     pub auto_advance: Option<bool>,
+    /// En entrant dans une pile : couverture ou première image (bouton du mode pile).
+    pub stack_enter: Option<crate::settings::StackEnter>,
     /// Infos sur les vignettes de la grille (`Maj+T`).
     pub grid_info: Option<bool>,
     /// Taille des vignettes de la grille (curseur, `+` / `-`, `*`).

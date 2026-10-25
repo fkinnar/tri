@@ -697,6 +697,9 @@ pub struct ViewSettings {
     /// passer à la première photo de la pile suivante (sinon on reste ; prime sur
     /// `stack_wrap` pour l'avance automatique).
     pub stack_advance_next: bool,
+    /// Mode pile (plein écran) : en entrant dans une pile (↑ / ↓ de pile en pile), sa
+    /// couverture ou sa première image (issue n° 62 ; bouton du bandeau, retenu).
+    pub stack_enter: StackEnter,
     /// Superpositions (o) : épaisseur des traits (points).
     pub overlay_line_width: f32,
     /// Grilles intégrées (tiers, nombre d'or, diagonales) : opacité des lignes.
@@ -719,6 +722,7 @@ impl Default for ViewSettings {
             zoom_on_focus_point: true,
             stack_wrap: false,
             stack_advance_next: false,
+            stack_enter: StackEnter::Cover,
             overlay_line_width: 1.0,
             overlay_opacity: 0.6,
         }
@@ -837,6 +841,17 @@ impl Default for MetadataSettings {
             histogram_height: 120.0,
         }
     }
+}
+
+/// Image où l'on arrive en entrant dans une pile. Dans le fichier : `"cover"` ou `"first"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StackEnter {
+    /// Sa couverture : la préférée, sinon l'acceptée, la mieux notée, la plus nette.
+    #[default]
+    Cover,
+    /// Sa première image (dans l'ordre de la grille).
+    First,
 }
 
 /// Échelle horizontale de l'histogramme. Dans le fichier : `"ev"` ou `"linear"`.
