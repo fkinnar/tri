@@ -591,8 +591,9 @@ max_width = 520.0
 title_size = 17.0
 # Couleur des titres (accent, turquoise), soulignés d'une ligne de séparation.
 title_color = "#50bedc"
-# Épaisseur du liseré de cette couleur autour du panneau qui a le clavier (points).
-focus_frame_width = 1.0
+# Panneau qui a le clavier : son fond un peu plus clair en thème sombre, un peu plus foncé
+# en thème clair (part de la couleur du texte mêlée au fond, de 0 à 1).
+focus_panel_tint = 0.06
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.

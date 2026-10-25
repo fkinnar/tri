@@ -381,7 +381,7 @@ system one ("cold" measurements, experiments).
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22) (folders, images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has an accent outline (`[gui.dialogs] focus_frame_width`, 1 point), the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77), the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's

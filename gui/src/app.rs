@@ -1006,18 +1006,6 @@ impl TriApp {
                         &self.gui.histogram,
                         &self.gui.colors,
                     );
-                    // Pointé au clavier : Entrée l'ouvre en grand.
-                    if focused && self.meta_cursor == 0 {
-                        ui.painter().rect_stroke(
-                            rect.expand(2.0),
-                            4.0,
-                            egui::Stroke::new(1.5, accent),
-                            egui::StrokeKind::Outside,
-                        );
-                        if std::mem::take(&mut self.scroll_to_cursor) {
-                            ui.scroll_to_rect(rect, Some(egui::Align::Center));
-                        }
-                    }
                 }
                 None => {
                     ui.weak(t!("histogram-computing"));
@@ -1069,11 +1057,12 @@ impl TriApp {
                     }
                     rows.push((t!("panel-sharpness"), text));
                 }
-                let first = usize::from(self.meta_has_histogram);
-                self.meta_cursor = self.meta_cursor.min((rows.len() + first).saturating_sub(1));
-                // Lignes sélectionnées (rangs parmi les lignes : l'histogramme passe avant).
+                // Le curseur ne parcourt que les lignes (issue n° 77 : l'histogramme encadré
+                // n'avait pas de sens ; Entrée l'ouvre en grand de toute façon).
+                self.meta_cursor = self.meta_cursor.min(rows.len().saturating_sub(1));
+                // Lignes sélectionnées.
                 let (lo, hi) = self.meta_range();
-                let picked = |i: usize| (lo..=hi).contains(&(i + first));
+                let picked = |i: usize| (lo..=hi).contains(&i);
                 let selection_fill = ui.visuals().selection.bg_fill.gamma_multiply(0.5);
                 let mut clicked = None;
                 egui::Grid::new("metadata")
@@ -1096,7 +1085,7 @@ impl TriApp {
                             if focused && picked(i) && hi > lo {
                                 ui.painter().rect_filled(rect, 3.0, selection_fill);
                             }
-                            if focused && i + first == self.meta_cursor {
+                            if focused && i == self.meta_cursor {
                                 ui.painter().rect_stroke(
                                     rect,
                                     3.0,
@@ -1108,7 +1097,7 @@ impl TriApp {
                                 }
                             }
                             if a.clicked() || b.clicked() {
-                                clicked = Some((i + first, ui.input(|inp| inp.modifiers.shift)));
+                                clicked = Some((i, ui.input(|inp| inp.modifiers.shift)));
                             }
                             ui.end_row();
                         }
@@ -1237,6 +1226,9 @@ impl TriApp {
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
+        if self.focus == crate::actions::Scope::Folders {
+            panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+        }
         let f = self.gui.folders;
         let mut toggle: Option<usize> = None;
         let mut pointed: Option<usize> = None;
@@ -1508,9 +1500,6 @@ impl TriApp {
                 }
             }
         });
-        if focused {
-            panel_focus_frame(ui, accent, self.gui.dialogs.focus_frame_width);
-        }
         // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
         // l'arborescence se déplient chacun de leur côté.
         if let Some(i) = toggle {
@@ -2824,13 +2813,12 @@ impl TriApp {
                 } else {
                     self.meta_anchor = None;
                 }
-                let first = usize::from(self.meta_has_histogram);
-                let last = (self.meta_rows.len() + first).saturating_sub(1);
+                let last = self.meta_rows.len().saturating_sub(1);
                 self.meta_cursor = (self.meta_cursor + 1).min(last);
                 self.scroll_to_cursor = true;
             }
             Action::MetaOpen => {
-                if self.meta_has_histogram && self.meta_cursor == 0 {
+                if self.meta_has_histogram {
                     self.histogram_large = true;
                 }
             }
@@ -2847,7 +2835,6 @@ impl TriApp {
                 }
             }
             Action::MetaCopy | Action::MetaCopyAll => {
-                let first = usize::from(self.meta_has_histogram);
                 let (lo, hi) = if action == Action::MetaCopyAll {
                     (0, usize::MAX)
                 } else {
@@ -2857,7 +2844,7 @@ impl TriApp {
                     .meta_rows
                     .iter()
                     .enumerate()
-                    .filter(|(i, _)| (lo..=hi).contains(&(i + first)))
+                    .filter(|(i, _)| (lo..=hi).contains(i))
                     .map(|(_, r)| r)
                     .collect();
                 match rows.as_slice() {
@@ -8480,16 +8467,12 @@ impl eframe::App for TriApp {
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
                 .show(ui, |ui| {
+                    if self.focus == crate::actions::Scope::Metadata {
+                        panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+                    }
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.metadata_panel(ui));
-                    if self.focus == crate::actions::Scope::Metadata {
-                        panel_focus_frame(
-                            ui,
-                            Color32::from(self.gui.dialogs.title_color),
-                            self.gui.dialogs.focus_frame_width,
-                        );
-                    }
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -8951,16 +8934,17 @@ fn drag_preview(ctx: &egui::Context) {
         });
 }
 
-/// Liseré de la couleur d'accent autour d'un panneau qui a le clavier, épais de `width`
-/// (`[gui.dialogs] focus_frame_width`, 1 point : 2 paraissaient lourds, retour du
-/// 22/10/2026).
-fn panel_focus_frame(ui: &Ui, color: Color32, width: f32) {
-    ui.painter().rect_stroke(
-        ui.clip_rect().shrink(1.0),
-        0.0,
-        egui::Stroke::new(width, color),
-        egui::StrokeKind::Inside,
-    );
+/// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
+/// mêlé de `tint` de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu
+/// plus clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré
+/// d'accent (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre
+/// alourdissait).
+fn panel_focus_fill(ui: &Ui, tint: f32) {
+    let visuals = ui.visuals();
+    let fill = visuals
+        .panel_fill
+        .lerp_to_gamma(visuals.text_color(), tint.clamp(0.0, 1.0));
+    ui.painter().rect_filled(ui.clip_rect(), 0.0, fill);
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
@@ -11241,20 +11225,16 @@ mod tests {
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::L, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Metadata);
-        // Jusqu'à la dernière ligne (netteté comprise), puis l'histogramme en tête : Entrée
-        // l'ouvre en grand.
+        // Jusqu'à la dernière ligne (netteté comprise) ; le curseur ne passe que par les
+        // lignes (#77), Entrée ouvre l'histogramme en grand.
         run_until(&mut h, |app| {
             app.meta_has_histogram && !app.meta_rows.is_empty()
         });
         for _ in 0..40 {
             press(&mut h, Key::J, Modifiers::NONE);
         }
-        let last = h.state().meta_rows.len();
-        assert_eq!(
-            h.state().meta_cursor,
-            last,
-            "dernière ligne (après l'histogramme)"
-        );
+        let last = h.state().meta_rows.len() - 1;
+        assert_eq!(h.state().meta_cursor, last, "dernière ligne");
         // Maj+k deux fois : trois lignes sélectionnées.
         press(&mut h, Key::K, Modifiers::SHIFT);
         press(&mut h, Key::K, Modifiers::SHIFT);
@@ -11268,9 +11248,13 @@ mod tests {
         for _ in 0..40 {
             press(&mut h, Key::K, Modifiers::NONE);
         }
-        assert_eq!(h.state().meta_cursor, 0);
+        assert_eq!(
+            h.state().meta_cursor,
+            0,
+            "première ligne, pas l'histogramme"
+        );
         press(&mut h, Key::Enter, Modifiers::NONE);
-        assert!(h.state().histogram_large, "Entrée sur l'histogramme");
+        assert!(h.state().histogram_large, "Entrée : l'histogramme en grand");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
         press(&mut h, Key::Escape, Modifiers::NONE);
