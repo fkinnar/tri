@@ -20,6 +20,7 @@ action-core-filter-stars-4 = Filter: at least 4 stars
 action-core-filter-stars-5 = Filter: 5 stars
 action-core-filter-flag-accepted = Filter: picked only
 action-core-filter-flag-not_rejected = Filter: hide rejected
+volume-back = Drive back: folder read again, computations resumed.
 action-core-filter-flag-rejected = Filter: rejected only
 action-core-filter-color-red = Filter: red (add / remove)
 action-core-filter-color-yellow = Filter: yellow (add / remove)
