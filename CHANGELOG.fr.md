@@ -12,6 +12,9 @@
   cache d'un disque FAT32 (dates en heure locale, décalées d'une heure) ; lire le cache
   n'écrit plus sur le disque ; activer le filtre « bien exposées » pendant les analyses ne
   fige plus la fenêtre (issue n° 74). Le cache est recalculé une fois.
+- **Avance automatique, mode pile** : option `[gui.view] stack_advance_next`
+  (désactivée par défaut) pour passer, au bout d'une pile, à la première photo de la pile
+  suivante.
 - **Corbeille** : supprimer beaucoup d'images ne fige plus la fenêtre ; une barre de
   progression s'affiche dans la boîte (sous Linux, toute la corbeille était aussi relue
   pour chaque fichier ; issue n° 43).
