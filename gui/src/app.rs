@@ -12179,8 +12179,8 @@ mod tests {
     }
 
     #[test]
-    fn the_stack_is_a_paragraph_for_d_y_and_brackets() {
-        // Issue n° 62 (choix de l'utilisateur) : `d]` / `y]` toute la pile, `[` / `]` son
+    fn the_stack_is_a_sentence_for_d_y_and_parentheses() {
+        // Issue n° 62 (choix de l'utilisateur) : `d)` / `y)` toute la pile, `(` / `)` son
         // début et sa fin ; Maj+Début / Maj+Fin en classique.
         let ramp = |tint: u8| {
             image::RgbImage::from_fn(64, 48, |x, _| image::Rgb([(x * tint as u32 / 63) as u8; 3]))
@@ -12200,16 +12200,16 @@ mod tests {
             h.state_mut().signatures.insert(f.path.clone(), sig);
         }
         h.state_mut().stacks_dirty = true;
-        // Délai de la touche ambiguë large : `y` attend le `]`.
+        // Délai de la touche ambiguë large : `y` attend le `)`.
         h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
             .with_ambiguous(Duration::from_secs(60));
         h.run_steps(3);
         assert_eq!(h.state().stacks.count(), 1);
         let bracket = |h: &mut Harness<'_, TriApp>| {
-            h.event(UiEvent::Text("]".into()));
+            h.event(UiEvent::Text(")".into()));
             h.run_steps(3);
         };
-        // d ] : corbeille pour les 3 images de la pile, cachées comprises.
+        // d ) : corbeille pour les 3 images de la pile, cachées comprises.
         press(&mut h, Key::D, Modifiers::NONE);
         bracket(&mut h);
         assert!(
@@ -12218,18 +12218,18 @@ mod tests {
         );
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
-        // y ] : copie de la pile.
+        // y ) : copie de la pile.
         press(&mut h, Key::Y, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none(), "y attend la suite");
         bracket(&mut h);
         assert!(h.query_by_label_contains("3 images vers").is_some());
         press(&mut h, Key::Escape, Modifiers::NONE);
-        // Plein écran, mode pile : `]` la dernière, `[` la première ; Maj+Fin, Maj+Début.
+        // Plein écran, mode pile : `)` la dernière, `(` la première ; Maj+Fin, Maj+Début.
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         bracket(&mut h);
         assert_eq!(h.state().selected, 2, "fin de pile");
-        h.event(UiEvent::Text("[".into()));
+        h.event(UiEvent::Text("(".into()));
         h.run_steps(3);
         assert_eq!(h.state().selected, 0, "début de pile");
         press(&mut h, Key::End, Modifiers::SHIFT);

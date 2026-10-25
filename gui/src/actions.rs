@@ -1051,16 +1051,17 @@ const VIM: &[Binding] = {
         (&[shifted(Key::K)], CropSize(Dir::Up)),
         (&[shifted(Key::J)], CropSize(Dir::Down)),
         // `y` copie (« yank »), `x` supprime (efface le caractère : ici l'image ; une
-        // confirmation suit). La pile est un paragraphe (choix de l'utilisateur, 25/10/2026,
-        // issue n° 62) : `[` / `]` son début et sa fin, `d]` / `y]` toute la pile (`dw` /
-        // `yw` avant : une pile comme un mot). Caractères plutôt que touches : en AZERTY,
-        // `[` et `]` viennent d'AltGr ou d'Alt. `y` seul attend un court instant la suite
+        // confirmation suit). La pile est une phrase (choix de l'utilisateur, 25/10/2026,
+        // issue n° 62) : `(` / `)` son début et sa fin, `d)` / `y)` toute la pile (`dw` /
+        // `yw` avant : une pile comme un mot ; `[` / `]` écartés : Alt+Maj en AZERTY sur
+        // macOS). Caractères plutôt que touches : directs en AZERTY, Maj+9 / Maj+0 en
+        // QWERTY. `y` seul attend un court instant la suite
         // (`[gui] key_ambiguous_timeout_ms`).
         (&[plain(Key::Y)], FileCopy),
-        (&[plain(Key::Y), Chord::char(']')], FileCopyStack),
-        (&[plain(Key::D), Chord::char(']')], FileDeleteStack),
-        (&[Chord::char('[')], StackFirst),
-        (&[Chord::char(']')], StackLast),
+        (&[plain(Key::Y), Chord::char(')')], FileCopyStack),
+        (&[plain(Key::D), Chord::char(')')], FileDeleteStack),
+        (&[Chord::char('(')], StackFirst),
+        (&[Chord::char(')')], StackLast),
         (&[plain(Key::X)], FileDelete),
         (&[plain(Key::U)], Undo),
         (&[ctrl(Key::R)], Redo),
@@ -1716,10 +1717,10 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
     }
-    // « + - * / [ ] » : des caractères, pas des touches (le zoom, les piles) ; la touche
-    // dépend de la disposition (« + » demande Maj sur un AZERTY, « [ » AltGr ou Alt), le
+    // « + - * / ( ) » : des caractères, pas des touches (le zoom, les piles) ; la touche
+    // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
     // caractère est le même partout, pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/[]".contains(*c))
+    if let Some(c) = single.filter(|c| "+-*/()".contains(*c))
         && !shift
         && !ctrl
     {
@@ -2486,7 +2487,7 @@ mod tests {
 
     #[test]
     fn a_key_that_starts_a_sequence_waits_for_the_rest() {
-        // `y` copie, `y ]` copie la pile : `y` attend la suite le temps du délai court.
+        // `y` copie, `y )` copie la pile : `y` attend la suite le temps du délai court.
         let km = Keymap::default();
         let mut seq =
             Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
@@ -2496,7 +2497,7 @@ mod tests {
         assert!(seq.feed(&km, key(Key::Y), t0).is_empty());
         assert_eq!(seq.deadline(), Some(ms(300)));
         assert_eq!(
-            seq.feed(&km, Chord::char(']'), ms(100)),
+            seq.feed(&km, Chord::char(')'), ms(100)),
             [Action::FileCopyStack]
         );
         // Seul : fait au bout du délai court.
@@ -2510,15 +2511,15 @@ mod tests {
             seq.feed(&km, key(Key::J), ms(2100)),
             [Action::FileCopy, Action::NavDown]
         );
-        // `d ]` : une séquence ordinaire (`d` seul ne fait rien).
+        // `d )` : une séquence ordinaire (`d` seul ne fait rien).
         assert!(seq.feed(&km, key(Key::D), ms(3000)).is_empty());
         assert_eq!(
-            seq.feed(&km, Chord::char(']'), ms(3500)),
+            seq.feed(&km, Chord::char(')'), ms(3500)),
             [Action::FileDeleteStack]
         );
-        // `]` seul : la fin de la pile (issue n° 62).
+        // `)` seul : la fin de la pile (issue n° 62).
         assert_eq!(
-            seq.feed(&km, Chord::char(']'), ms(5000)),
+            seq.feed(&km, Chord::char(')'), ms(5000)),
             [Action::StackLast]
         );
         // Plus de signalement : la touche seule reste joignable.

@@ -467,12 +467,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   des Mac — ou `x`, comme dans vim ; `dd` retiré le 18/10/2026), afficher dans le Finder / le gestionnaire de
   fichiers (`Maj+R`), ouvrir dans l'éditeur externe (`e`, `[files] editor`), copier
   (`y`) ou déplacer (`Ctrl+X`, couper) vers un dossier, **toute la pile** de l'image :
-  `d]` (corbeille) / `y]` (copier) : la pile est un paragraphe (25/10/2026, issue n° 62,
-  choix de l'utilisateur ; `dw` / `yw` avant, une pile comme un mot, idée du 18/10/2026 :
-  une ligne de la grille, `dd`, n'avait pas de sens ; piles actives requises), et `[` /
-  `]` vont à son début et à sa fin (Maj+Début / Maj+Fin en classique). `[` et `]` sont
-  lus comme des caractères : en AZERTY, AltGr ou Alt les donne. `y` étant aussi le début
-  de `y]`, il attend la suite un court instant
+  `d)` (corbeille) / `y)` (copier) : la pile est une phrase, comme dans vim (25/10/2026,
+  issue n° 62, choix de l'utilisateur ; `dw` / `yw` avant, une pile comme un mot, idée
+  du 18/10/2026 : une ligne de la grille, `dd`, n'avait pas de sens ; piles actives
+  requises), et `(` / `)` vont à son début et à sa fin (Maj+Début / Maj+Fin en
+  classique ; `[` / `]` écartés : Alt+Maj en AZERTY sur macOS). Lus comme des
+  caractères : directs en AZERTY ; en QWERTY, Maj+9 / Maj+0 les donnent (et ne notent
+  donc plus dans le profil vim : 9 et 0 seuls restent). `y` étant aussi le début de
+  `y)`, il attend la suite un court instant
   (`[gui] key_ambiguous_timeout_ms`, 300 ms) : une touche qui est un raccourci et le
   début d'un autre n'est plus signalée comme masquée, le séquenceur
   (`Sequencer::expire`, `deadline`) la fait au bout du délai, ou avant la touche
@@ -742,8 +744,8 @@ suivent le jeu choisi.
 | `core.app.help` | F1, ? | F1, ? |
 | `core.app.quit` | q | q |
 | `core.file.copy` / `core.file.move` | Ctrl+C / Ctrl+X | y / Ctrl+X |
-| `core.file.copy_stack` / `delete_stack` | Ctrl+Maj+C / Maj+Suppr | y] / d] |
-| `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | [ / ] |
+| `core.file.copy_stack` / `delete_stack` | Ctrl+Maj+C / Maj+Suppr | y) / d) |
+| `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | ( / ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |

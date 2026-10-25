@@ -448,12 +448,13 @@ system one ("cold" measurements, experiments).
   move to trash (`Delete`, `Backspace` — the Mac "delete" key — or `x`, as in vim; `dd`
   removed on 2026-10-18), show in the Finder / file manager (`Shift+R`), open in the
   external editor (`e`, `[files] editor`), copy (`y`) or move (`Ctrl+X`, cut) to a
-  folder, **the whole stack** of the image: `d]` (trash) / `y]` (copy): a stack is a
-  paragraph (2026-10-25, issue #62, the user's choice; `dw` / `yw` before, a stack as a
-  word, idea of 2026-10-18: a grid row, `dd`, made no sense; stacks must be active), and
-  `[` / `]` go to its start and end (Shift+Home / Shift+End in classic). `[` and `]` are
-  read as characters: on AZERTY, AltGr or Alt gives them. Since `y` is also the start of
-  `y]`, it waits briefly for what follows
+  folder, **the whole stack** of the image: `d)` (trash) / `y)` (copy): a stack is a
+  sentence, as in vim (2026-10-25, issue #62, the user's choice; `dw` / `yw` before, a
+  stack as a word, idea of 2026-10-18: a grid row, `dd`, made no sense; stacks must be
+  active), and `(` / `)` go to its start and end (Shift+Home / Shift+End in classic;
+  `[` / `]` ruled out: Alt+Shift on a macOS AZERTY). Read as characters: direct on
+  AZERTY; on QWERTY, Shift+9 / Shift+0 give them (and so no longer rate in the vim
+  profile: 9 and 0 alone remain). Since `y` is also the start of `y)`, it waits briefly for what follows
   (`[gui] key_ambiguous_timeout_ms`, 300 ms): a key that is a shortcut and the start of
   another is no longer reported as shadowed, the sequencer (`Sequencer::expire`,
   `deadline`) runs it after the delay, or before the next key that does not continue.
@@ -719,8 +720,8 @@ effect: they follow the chosen set.
 | `core.app.help` | F1, ? | F1, ? |
 | `core.app.quit` | q | q |
 | `core.file.copy` / `core.file.move` | Ctrl+C / Ctrl+X | y / Ctrl+X |
-| `core.file.copy_stack` / `delete_stack` | Ctrl+Shift+C / Shift+Delete | y] / d] |
-| `core.stack.first` / `core.stack.last` | Shift+Home / Shift+End | [ / ] |
+| `core.file.copy_stack` / `delete_stack` | Ctrl+Shift+C / Shift+Delete | y) / d) |
+| `core.stack.first` / `core.stack.last` | Shift+Home / Shift+End | ( / ) |
 | `core.stack.enter` | Ctrl+Shift+S | Ctrl+Shift+S |
 | `core.file.delete` | Delete, Backspace | x, Delete, Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Shift+Z |
