@@ -66,7 +66,10 @@ File de travail en tâche de fond qui remplit le cache pour un dossier.
     reculait (bug trouvé par les tests, voir plus bas) ;
   - `set_folder` purge les événements non livrés de l'ancien dossier. Seul un événement en
     cours de livraison peut encore arriver, et l'interface ignore ceux d'une autre
-    génération.
+    génération. Une tâche de fond en cours pour une image qui reste dans la nouvelle
+    liste (dossier refiltré) continue à sa nouvelle place, dans la nouvelle génération ;
+    les autres sont annulées (issue n° 73 : chaque refiltrage abandonnait l'analyse en
+    cours).
 - **`wait_idle`** ne rend la main qu'une fois **tous les événements livrés** : rien en
   attente, rien en cours, file d'événements vide, aucun callback en cours. Un callback qui
   panique ne bloque pas `wait_idle` (garde `Drop`).

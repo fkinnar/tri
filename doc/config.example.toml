@@ -435,6 +435,10 @@ progress_hide_done = true
 # Délai avant d'afficher les barres de progression après un changement de filtre (ms) :
 # souvent tout est déjà en cache, une barre montrée un instant ne se lit pas.
 progress_delay_ms = 400
+# Filtres netteté et exposition pendant le calcul des analyses : la grille se met à jour
+# au plus toutes les … ms avec les photos déjà analysées, puis à la fin ; 0 : à la fin
+# seulement.
+analysis_refilter_ms = 5000
 # Côté des boutons à icône du bandeau de notation (avance automatique, image précédente /
 # suivante), en points.
 bar_icon_size = 24.0

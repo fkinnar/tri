@@ -943,7 +943,9 @@ photos nettes.
   retire les images brûlées ou bouchées au-delà des seuils des badges
   (`tri::exposure::ClipFilter` ; parts lues dans le cache d'analyse pour tout le dossier,
   une image pas encore analysée reste ; grille refiltrée quand les histogrammes sont
-  finis) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  finis, et depuis le 25/10/2026 au fil du calcul, au plus toutes les `[gui]
+  analysis_refilter_ms` (5 s), netteté comprise ; allumer le filtre pendant les analyses
+  le dit dans la barre d'état, issue n° 73) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.

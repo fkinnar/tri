@@ -10,8 +10,8 @@
 //! Le calcul lui-même est délégué à un [`Producer`] : [`CachedPreviews`] en vrai, un faux
 //! producteur dans les tests. Voir `doc/en/scheduler.md`.
 
-use std::collections::{HashSet, VecDeque};
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -528,9 +528,8 @@ impl Scheduler {
     /// peut encore arriver : l'interface ignore ceux dont la génération n'est pas la sienne.
     pub fn set_folder(&self, files: Vec<MediaFile>) -> u64 {
         let mut s = self.shared.lock();
-        s.cancel_running(|_| false);
         s.outbox.clear(); // événements de l'ancien dossier pas encore livrés
-        s.on_demand.clear();
+        let on_demand = std::mem::take(&mut s.on_demand);
         s.generation += 1;
         s.focus = None;
         s.group.clear();
@@ -541,6 +540,33 @@ impl Scheduler {
                     .map(move |l| (i, l))
             })
             .collect();
+        // Travail de fond en cours pour une image qui reste (même dossier refiltré, issue
+        // n° 73) : il continue, à sa nouvelle place ; le reste est annulé. Sans cela,
+        // chaque refiltrage abandonnait l'analyse en cours.
+        let index_of: HashMap<&Path, usize> = files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.path.as_path(), i))
+            .collect();
+        let generation = s.generation;
+        let mut running = std::mem::take(&mut s.running);
+        for r in &mut running {
+            let level = r.job.1;
+            let moved = s
+                .files
+                .get(r.job.0)
+                .and_then(|f| index_of.get(f.path.as_path()).copied())
+                .filter(|&i| !on_demand.contains(&r.job) && s.pending.contains(&(i, level)));
+            match moved {
+                Some(i) => {
+                    r.job.0 = i;
+                    r.generation = generation;
+                    s.pending.remove(&(i, level));
+                }
+                None => r.cancel.store(true, Ordering::Relaxed),
+            }
+        }
+        s.running = running;
         let total = |level: Level| {
             files
                 .iter()
@@ -748,7 +774,10 @@ fn worker(shared: &Shared, producer: &dyn Producer, heavy: bool) {
                 .iter()
                 .position(|r| Arc::ptr_eq(&r.cancel, &cancel))
                 .expect("tâche en cours introuvable");
-            let generation = s.running.swap_remove(pos).generation;
+            // La tâche a pu changer de place (dossier refiltré, voir `set_folder`).
+            let Running {
+                job, generation, ..
+            } = s.running.swap_remove(pos);
             if generation == s.generation {
                 let events = finish(&mut s, job, file, result);
                 s.outbox.extend(events);
