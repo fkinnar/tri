@@ -4,6 +4,45 @@
 
 ## Unreleased
 
+- **Grid**: no clipping badge on a collapsed stack, where its image count is (issue
+  #75).
+- **Panels**: the panel that has the keyboard has a slightly lighter background
+  (darker in the light theme) instead of an accent outline; `[gui.dialogs]
+  focus_panel_tint` replaces `focus_frame_width`. The metadata cursor no longer frames
+  the histogram (issues #77, #78).
+- **"Well exposed" filter**: a single slider, with a switch showing the clipping badge
+  icon to choose between blown highlights and crushed shadows, instead of two sliders
+  with hard-to-read grey labels.
+- **Sharpness and exposure filters during the analyses**: the grid fills in as they
+  are computed (at most every `[gui] analysis_refilter_ms`, 5 s) instead of only at
+  the end, and the status bar says how many photos are analysed when the filter is
+  turned on; a refilter no longer drops the analysis in progress (issue #73).
+- **Copy / move to…**: "Continue in the background" closes the dialog during the copy;
+  its progress is in the status bar (a click reopens it) and the end is announced
+  there (issue #72).
+- **Narrow window**: the end of the filter bar no longer covers the search field (sort
+  and image count go into a "…" menu, invert and clear stay visible), and the rating
+  bar's right-hand buttons wrap to a second line instead of covering the colours
+  (issue #71).
+- **Last folder gone**: launched while the drive of the last folder is unplugged, the
+  window says which folder and why, large and centred, and opens it again by itself
+  when the drive is back, unless another folder was opened meanwhile (issue #66).
+- **Window**: its size, position and maximized state are restored at the next launch
+  (issue #58; position not available on Wayland).
+- **Stacks**: start and end of the stack with `(` / `)` (vim) or Shift+Home /
+  Shift+End (classic); in the vim profile, the whole stack is now `d)` / `y)` (instead
+  of `dw` / `yw`: a stack is a sentence, as in vim; on AZERTY, Shift+5 still gives 5
+  stars). In stack mode, a "|‹" button next to the arrows (Ctrl+Shift+S, `[gui.view]
+  stack_enter`) chooses whether ↑ / ↓ land on the stack's cover or on its first photo
+  (issue #62). The cache location gets a drop-down list in the settings window.
+- **Nightly builds**: their packages are named after the day and the commit
+  (`tri-1.0.0-alpha.7-nightly-20261025-d16c32f-…`), no longer like the published
+  version.
+- **Stacks slider**: towards the right (stricter), it follows the rank of the folder's
+  distances, so each step joins about as many photos and the far right leaves no stack
+  at all; it was pixel-sensitive there and stopped with stacks left (issue #61).
+- **Linux packages**: a `.deb` (Debian, Ubuntu, Mint) and an AppImage (to try it
+  without installing anything), next to the `.tar.gz` archive.
 - **Offload**: the previews and analyses of each photo are computed as soon as it is
   copied, while the copy goes on; the session is ready sooner. Checkbox in the offload
   dialog, `[offload] previews` (on by default); `--previews` on the command line
