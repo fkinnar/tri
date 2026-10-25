@@ -36,6 +36,7 @@ sort-name = Name
 sort-captured = Shooting date
 sort-modified = Modified
 sort-notice = Order: { $key }, { $direction }
+filter-analysis-partial = Analyses in progress: filter applied to the { $done } / { $total } photos already analysed; the grid fills in as they are computed.
 sort-ascending = ascending
 sort-descending = descending
 action-core-view-filter_bar = Show / hide the filter bar

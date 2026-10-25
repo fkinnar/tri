@@ -236,6 +236,9 @@ pub struct TriApp {
     /// Analyses d'exposition arrivées sous le filtre « bien exposées » : grille à
     /// refiltrer une fois les histogrammes finis.
     exposure_refilter_pending: bool,
+    /// Dernier refiltrage de la grille (filtres sur l'analyse pendant son calcul : au plus
+    /// toutes les `[gui] analysis_refilter_ms`, issue n° 73).
+    refiltered_at: Instant,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -656,6 +659,7 @@ impl TriApp {
             },
             sort_pending: false,
             exposure_refilter_pending: false,
+            refiltered_at: Instant::now(),
             progress_hidden_until: None,
             developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
@@ -1926,6 +1930,7 @@ impl TriApp {
     /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
+        self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
         // Type de fichier et recherche par nom (`/`) : la base, jamais inversée.
         let base = tri::fuzzy::NameFilter {
@@ -2199,13 +2204,36 @@ impl TriApp {
         }
     }
 
-    /// Filtre « bien exposées » : grille refiltrée une fois les analyses d'exposition
-    /// arrivées finies (pas à chacune), en grille seulement (comme la netteté).
+    /// Filtre sur l'analyse allumé pendant son calcul (avancement `p`, d'avant le
+    /// refiltrage) : la barre d'état le dit (issue n° 73 : sinon, le filtre semblait sans
+    /// effet).
+    fn analysis_partial_notice(&mut self, p: Progress) {
+        if p.total > 0 && p.done < p.total {
+            self.notice = Some((
+                t!("filter-analysis-partial", done = p.done, total = p.total),
+                false,
+            ));
+        }
+    }
+
+    /// Vrai si la grille peut être refiltrée avec les analyses arrivées (avancement `p`) :
+    /// toutes là, ou le dernier refiltrage date d'au moins `[gui] analysis_refilter_ms`
+    /// (issue n° 73 : la grille se complète au fil du calcul, pas seulement à la fin).
+    fn analysis_refilter_due(&self, p: Progress) -> bool {
+        let every = self.gui.analysis_refilter_ms;
+        p.total == 0
+            || p.done == p.total
+            || (every > 0 && self.refiltered_at.elapsed() >= Duration::from_millis(every))
+    }
+
+    /// Filtre « bien exposées » : grille refiltrée avec les analyses d'exposition arrivées,
+    /// pas à chacune (voir [`Self::analysis_refilter_due`]), en grille seulement (comme la
+    /// netteté).
     fn exposure_refilter(&mut self) {
         let p = self.progress[3];
         if self.exposure_refilter_pending
             && self.mode == Mode::Grid
-            && (p.total == 0 || p.done == p.total)
+            && self.analysis_refilter_due(p)
         {
             self.exposure_refilter_pending = false;
             if self.well_exposed {
@@ -2476,12 +2504,12 @@ impl TriApp {
         if changed {
             self.rejudge();
         }
-        // Nouveaux scores : grille refiltrée une fois tous connus (pas à chaque score).
+        // Nouveaux scores : grille refiltrée de temps en temps et à la fin (pas à chaque
+        // score, voir `analysis_refilter_due`).
         if changed {
             self.blur_refilter_pending = true;
         }
-        let p = self.progress[4];
-        if p.total == 0 || p.done == p.total {
+        if self.analysis_refilter_due(self.progress[4]) {
             self.blur_refilter();
         }
     }
@@ -3243,11 +3271,19 @@ impl TriApp {
             Action::FilterBlurry => {
                 let rule = tri::sharpness::BlurRule::HideBlurry;
                 self.blur_rule = (self.blur_rule != Some(rule)).then_some(rule);
+                let p = self.progress[4];
                 self.apply_filter();
+                if self.blur_rule.is_some() {
+                    self.analysis_partial_notice(p);
+                }
             }
             Action::FilterWellExposed => {
                 self.well_exposed = !self.well_exposed;
+                let p = self.progress[3];
                 self.apply_filter();
+                if self.well_exposed {
+                    self.analysis_partial_notice(p);
+                }
             }
             Action::FilterInvert => {
                 self.filter_inverted = !self.filter_inverted;
@@ -13396,5 +13432,29 @@ mod tests {
             .filter(|a| a.available() && a.group() == group)
             .count();
         assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
+    }
+
+    #[test]
+    fn analysis_filters_follow_the_computation() {
+        // Issue n° 73 : filtre allumé pendant les analyses, la barre d'état le dit, et la
+        // grille se refiltre au fil du calcul (au plus toutes les `analysis_refilter_ms`).
+        let (mut h, _dir) = harness();
+        let app = h.state_mut();
+        let half = Progress { done: 1, total: 3 };
+        app.gui.analysis_refilter_ms = 0;
+        app.refiltered_at = Instant::now() - Duration::from_secs(3600);
+        assert!(!app.analysis_refilter_due(half), "0 : à la fin seulement");
+        assert!(app.analysis_refilter_due(Progress { done: 3, total: 3 }));
+        app.gui.analysis_refilter_ms = 1000;
+        assert!(app.analysis_refilter_due(half), "dernier refiltrage ancien");
+        app.refilter(Reveal::Minimal);
+        assert!(!app.analysis_refilter_due(half), "refiltré à l'instant");
+        app.notice = None;
+        app.analysis_partial_notice(half);
+        let notice = app.notice.clone().map(|(text, _)| text).unwrap_or_default();
+        assert!(notice.contains("1 / 3"), "{notice}");
+        app.notice = None;
+        app.analysis_partial_notice(Progress { done: 3, total: 3 });
+        assert!(app.notice.is_none(), "tout analysé : rien à dire");
     }
 }

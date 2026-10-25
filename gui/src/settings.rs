@@ -149,6 +149,10 @@ pub struct GuiSettings {
     /// cache répond souvent tout de suite, une barre montrée 1/10 s n'est pas lisible
     /// (retour du 21/10/2026).
     pub progress_delay_ms: u64,
+    /// Filtres sur l'analyse (netteté, exposition) pendant son calcul : la grille est
+    /// refiltrée au plus toutes les `analysis_refilter_ms` (ms) avec les analyses déjà
+    /// arrivées (issue n° 73), puis à la fin ; 0 : à la fin seulement.
+    pub analysis_refilter_ms: u64,
     /// Côté des boutons à icône du bandeau de notation (avance automatique, image
     /// précédente / suivante), en points.
     pub bar_icon_size: f32,
@@ -219,6 +223,7 @@ impl Default for GuiSettings {
             progress_width: 160.0,
             progress_hide_done: true,
             progress_delay_ms: 400,
+            analysis_refilter_ms: 5000,
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,

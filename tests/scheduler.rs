@@ -946,3 +946,50 @@ fn files_added_on_the_way_join_the_queue_without_restarting_it() {
         Some(Progress { done: 4, total: 4 })
     );
 }
+
+#[test]
+fn a_refiltered_folder_keeps_the_work_in_progress() {
+    // Issue n° 73 : refiltrer la grille (même dossier, liste réduite) n'abandonne plus le
+    // calcul en cours d'une image qui reste ; celui d'une image retirée est annulé.
+    let fake = Fake::with_delay(Duration::from_millis(150));
+    let (scheduler, events) = start(&fake, 2);
+    let all = files(3, MediaKind::Flat);
+    scheduler.set_folder(all.clone());
+    let deadline = Instant::now() + LONG;
+    while fake.0.started.lock().unwrap().len() < 2 {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    // img0 et img1 en cours ; img1 retirée, img0 passe en seconde place.
+    let generation = scheduler.set_folder(vec![all[2].clone(), all[0].clone()]);
+    assert!(scheduler.wait_idle(LONG));
+    let thumbnails: Vec<_> = fake
+        .log()
+        .into_iter()
+        .filter(|(_, l, _)| *l == Level::Thumbnail)
+        .collect();
+    let of = |name: &str| -> Vec<Result<(), Failure>> {
+        thumbnails
+            .iter()
+            .filter(|(p, _, _)| p.ends_with(name))
+            .map(|(_, _, r)| r.clone())
+            .collect()
+    };
+    assert_eq!(
+        of("img0.JPG"),
+        vec![Ok(())],
+        "gardée, calculée une seule fois"
+    );
+    assert_eq!(
+        of("img1.JPG"),
+        vec![Err(Failure::Cancelled)],
+        "retirée : annulée"
+    );
+    let mut done = ready(&events, generation, Level::Thumbnail);
+    done.sort();
+    assert_eq!(done, vec![0, 1], "signalées à leur nouvelle place");
+    assert_eq!(
+        scheduler.progress(Level::Thumbnail),
+        Some(Progress { done: 2, total: 2 })
+    );
+}

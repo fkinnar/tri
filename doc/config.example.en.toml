@@ -438,6 +438,9 @@ progress_hide_done = true
 # Delay before showing the progress bars after a filter change (ms):
 # often everything is already cached, a bar shown for an instant can't be read.
 progress_delay_ms = 400
+# Sharpness and exposure filters while the analyses are computed: the grid updates at most
+# every … ms with the photos already analysed, then at the end; 0: at the end only.
+analysis_refilter_ms = 5000
 # Side of the icon buttons of the rating bar (auto-advance, previous /
 # next image), in points.
 bar_icon_size = 24.0

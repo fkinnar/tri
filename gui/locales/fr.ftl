@@ -36,6 +36,7 @@ sort-name = Nom
 sort-captured = Prise de vue
 sort-modified = Modification
 sort-notice = Ordre : { $key }, { $direction }
+filter-analysis-partial = Analyses en cours : filtre appliqué aux { $done } / { $total } photos déjà analysées ; la grille se complète au fil du calcul.
 sort-ascending = croissant
 sort-descending = décroissant
 action-core-view-filter_bar = Afficher / masquer la barre de filtres

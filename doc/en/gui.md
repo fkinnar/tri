@@ -917,7 +917,9 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 - **"Well exposed" and "invert" filters** (late afternoon): sun (`f w`) removing images
   blown or blocked beyond the badge thresholds (`tri::exposure::ClipFilter`; fractions
   read from the analysis cache for the whole folder, an image not yet analysed stays;
-  grid refiltered when the histograms are done); ◐ (`f i`) shows what the **content**
+  grid refiltered when the histograms are done, and since 2026-10-25 as they are
+  computed, at most every `[gui] analysis_refilter_ms` (5 s), sharpness too; turning the
+  filter on during the analyses says so in the status bar, issue #73); ◐ (`f i`) shows what the **content**
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.
