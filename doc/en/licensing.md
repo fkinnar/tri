@@ -245,6 +245,12 @@ requires the agreement of all contributors.
       (Visual Studio redistributable files, "app-local" deployment allowed by Microsoft);
       installer built by WiX (MS-RL licence, which only covers the tool, not the
       `.msi` it produces).
+- [x] Linux (2026-10-25): `.deb` made by `dpkg-deb` (system tool, nothing added);
+      AppImage by `appimagetool` 1.9.1 (MIT, build tool only, downloaded by the CI). The
+      AppImage starts with the AppImage project's type 2 *runtime* (MIT), a separate
+      program that mounts the contents; it embeds libfuse (LGPL-2.1) and squashfuse
+      (BSD-2-Clause), not linked with `tri` (mere aggregation), sources at
+      `github.com/AppImage/type2-runtime`.
 - [x] Decide how HEIF is handled in distributed binaries (§3): **without HEIC**
       (decided on 2026-10-19), builds without the `heif` feature; to be reopened with the
       system decoders (ImageIO, WIC).

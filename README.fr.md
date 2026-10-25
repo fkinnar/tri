@@ -24,9 +24,12 @@ préversion **`nightly`** porte les paquets du `main` de la nuit :
   signée par Apple : au premier lancement, macOS refuse ; ouvrir alors **Réglages
   système → Confidentialité et sécurité → « Ouvrir quand même »**, ou retirer la
   quarantaine dans un terminal : `xattr -dr com.apple.quarantine /Applications/tri.app`.
-- **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 ou plus récent) : décompresser, puis
-  `./install.sh` (dans `~/.local`, sans droits administrateur ; `--uninstall` pour
-  retirer). `tri` apparaît dans le menu des applications.
+- **Linux** (Ubuntu 24.04 / Mint 22, Debian 13 ou plus récent) : **`.deb`** pour
+  Debian, Ubuntu et Mint (double-clic, ou `sudo apt install ./tri-….deb`) ; **AppImage**
+  pour essayer sans rien installer (`chmod +x tri-….AppImage`, puis le lancer ;
+  `./tri-….AppImage tri --help` pour la ligne de commande) ; ou l'archive **`.tar.gz`** :
+  décompresser, puis `./install.sh` (dans `~/.local`, sans droits administrateur ;
+  `--uninstall` pour retirer). `tri` apparaît dans le menu des applications.
 - **Windows** (`.msi`, 64 bits) : lancer l'installateur ; `tri` apparaît dans le menu
   Démarrer (désinstallation depuis les Paramètres de Windows). Pas encore signé :
   SmartScreen avertit, cliquer **« Informations complémentaires » → « Exécuter quand

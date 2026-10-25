@@ -110,14 +110,32 @@ tri-<version>-linux-<arch>/
   manque rien.
 - **Distributions visées** : compilée sur Ubuntu 24.04, l'archive demande une glibc au
   moins aussi récente (2.39) : Ubuntu 24.04 et suivantes, Linux Mint 22, Debian 13, Fedora
-  récentes. Pour des distributions plus anciennes : compiler sur une plus ancienne, ou un
-  AppImage plus tard.
+  récentes. Pour des distributions plus anciennes : compiler sur une plus ancienne.
 - `install.sh` copie tout dans `~/.local/lib/tri` (ou `--prefix DOSSIER`), crée les liens
   `~/.local/bin/tri-gui` et `tri`, le lanceur (`tri.desktop`, dont `Exec` pointe vers
   l'installation) et l'icône ; `install.sh --uninstall` retire le tout. Sans droits
   administrateur. Les données de `tri` (réglages, cache) ne sont jamais touchées.
 - La fenêtre déclare l'identifiant d'application `tri` (Wayland), relié au lanceur
   `tri.desktop` pour l'icône et le nom.
+
+### `.deb` et AppImage (25/10/2026)
+
+Faits de la même arborescence que l'archive (même glibc minimale, mêmes bibliothèques
+livrées), à la suite :
+
+- **`.deb`** (`package_deb`, `dpkg-deb`) : tout dans `/opt/tri`, liens `/usr/bin/tri-gui`
+  et `/usr/bin/tri`, lanceur et icône dans `/usr/share` ; le RPATH `$ORIGIN/../lib` suit
+  le lien. Version Debian : `1.0.0~alpha.7` (`~` : avant la version finale), de nuit
+  `1.0.0~alpha.7+nightly.20261025.d16c32f`. Dépend de la glibc 2.39 et du runtime C++ ;
+  affichage (OpenGL, X11, Wayland) recommandé seulement, chargé par winit à
+  l'exécution.
+- **AppImage** (`package_appimage`, `appimagetool`, `APPIMAGETOOL` ou le `PATH` ; sans
+  lui, sautée) : l'arborescence dans `usr/`, `AppRun` (l'interface ; `tri` en premier
+  argument : la ligne de commande), lanceur et icône à la racine. La CI télécharge
+  `appimagetool` 1.9.1 ; `APPIMAGE_EXTRACT_AND_RUN=1` : sans FUSE.
+- Vérifié le 25/10/2026 dans un conteneur Ubuntu 24.04 (arm64) avec des binaires
+  factices : `dpkg -i` (commandes dans `/usr/bin`, lanceur, icône), `dpkg -r`, AppImage
+  lancée (interface et ligne de commande).
 
 ## Windows
 

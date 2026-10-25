@@ -23,9 +23,12 @@ histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("class
   yet: on first launch macOS refuses it; then open **System Settings → Privacy &
   Security → "Open Anyway"**, or remove the quarantine in a terminal:
   `xattr -dr com.apple.quarantine /Applications/tri.app`.
-- **Linux** (`.tar.gz`, Ubuntu 24.04 / Mint 22 or newer): unpack, then `./install.sh`
-  (into `~/.local`, no administrator rights; `--uninstall` to remove). `tri` appears in
-  the applications menu.
+- **Linux** (Ubuntu 24.04 / Mint 22, Debian 13 or newer): **`.deb`** for Debian, Ubuntu
+  and Mint (double-click, or `sudo apt install ./tri-….deb`); **AppImage** to try it
+  without installing anything (`chmod +x tri-….AppImage`, then run it;
+  `./tri-….AppImage tri --help` for the command line); or the **`.tar.gz`** archive:
+  unpack, then `./install.sh` (into `~/.local`, no administrator rights; `--uninstall`
+  to remove). `tri` appears in the applications menu.
 - **Windows** (`.msi`, 64-bit): run the installer; `tri` appears in the Start menu
   (uninstall from Windows Settings). Not signed yet: SmartScreen warns, click **"More
   info" → "Run anyway"**. Or the portable `.zip`: unpack, then run `tri-gui.exe`.
