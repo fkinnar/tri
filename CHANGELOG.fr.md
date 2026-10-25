@@ -4,6 +4,30 @@
 
 ## À venir
 
+- **Plusieurs cartes à la suite** : la carte suivante est prise aussi après avoir
+  refermé le bilan ou déchargé en arrière-plan, et quand elle est montée au même chemin
+  que la précédente (deux cartes du même boîtier) (issue n° 37).
+- **Tâches de fond** : repliées, une fine barre grise discrète (`[gui]
+  tasks_folded_height`, texte au survol) ; elle reste à sa place une fois dépliée, un
+  second clic replie le détail (issue n° 36).
+- **Panneaux** : la ligne pointée au clavier est une bande grise discrète sur toute la
+  largeur (`[gui.dialogs] cursor_tint`) au lieu d'un cadre d'accent, coupé à gauche dans
+  le panneau des dossiers (issue n° 77).
+- **Piles** : `f c` encore replie la pile qu'il avait dépliée (issue n° 52) ; le bouton
+  « |‹ » (entrer dans une pile par sa couverture ou sa première photo) est toujours dans
+  le bandeau du plein écran, et Ctrl+Maj+S dit lequel est actif (issue n° 62).
+- **Grille** : un refiltrage (curseur d'un filtre, notes, analyses qui arrivent) garde
+  la région affichée quand la sélection est hors de la vue, au lieu de revenir au début
+  (issue n° 100).
+- **Déchargement** : la barre de progression suit les fichiers quand certains sont
+  passés (déjà déchargés ou déjà présents) (issue n° 101).
+- **Disque retiré** sans éjection pendant les calculs : rebranché, le dossier ouvert
+  est relu et les calculs reprennent (issue n° 98).
+- **Fenêtre sous Wayland** : sa taille est retenue (la position reste au compositeur)
+  (issue n° 58).
+- **Dossier supprimé** : un sous-dossier supprimé (« Sous-dossiers » coché) quitte la
+  grille et ses calculs s'arrêtent ; un lot darktable sur un dossier supprimé est
+  interrompu.
 - **Comparer une pile** : `c` sans sélection compare côte à côte les photos de la pile
   courante (repliée aussi) ; `f c` ne montre dans la grille que la pile courante,
   dépliée (issue n° 52).
