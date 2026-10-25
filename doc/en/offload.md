@@ -111,7 +111,7 @@ grouping, as when a folder is opened.
   other files; `Plan::to_copy`, `Plan::bytes`;
 - `suggest_folder(&plan, skip_known)`, `destination(racine, nom)`;
 - `run(&plan, destination, &réglages, &mut historique, &annulation, progression,
-  copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes;
+  copie) -> Report` (`copie`: each copy as soon as it is made, for the previews) (copied, skipped, errors, interrupted, duration); `Progress`: files (without those left on the card) and bytes (a skipped file, already offloaded or already there, counts at once: the bar follows the files);
 - `delete_sources(&report)`.
 
 ## Command line

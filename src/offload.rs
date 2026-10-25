@@ -347,9 +347,11 @@ pub struct Progress {
     pub files_done: usize,
     /// Fichiers à traiter (sans ceux laissés sur la carte, `raw_only`).
     pub files_total: usize,
-    /// Octets copiés.
+    /// Octets traités : copiés, ou comptés d'un coup pour un fichier passé (déjà
+    /// déchargé, copie identique présente) ou en erreur, pour que la barre suive les
+    /// fichiers (#101).
     pub bytes_done: u64,
-    /// Octets à copier.
+    /// Octets de tous les fichiers à traiter (ceux passés compris).
     pub bytes_total: u64,
     /// Fichier en cours.
     pub current: Option<PathBuf>,
@@ -405,9 +407,12 @@ pub fn run(
     report.left = left.into_iter().map(|i| i.source.clone()).collect();
     let mut p = Progress {
         files_total: todo.len(),
-        bytes_total: plan.bytes(settings),
+        bytes_total: todo.iter().map(|i| i.size).sum(),
         ..Progress::default()
     };
+    // Octets des fichiers déjà traités : la barre repart de là après chaque fichier,
+    // quelle qu'en soit l'issue.
+    let mut processed = 0;
     if let Err(e) = fs::create_dir_all(destination) {
         report
             .errors
@@ -457,6 +462,8 @@ pub fn run(
             }
         }
         p.files_done += 1;
+        processed += item.size;
+        p.bytes_done = processed;
     }
     p.current = None;
     progress(&p);
