@@ -547,6 +547,10 @@ zoom_on_focus_point = true
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
+# Piles actives, en plein écran, avance automatique après une note (Maj+A) : au bout de la
+# pile, true : la première photo de la pile suivante (prime alors sur stack_wrap) ; false :
+# on reste sur la dernière.
+stack_advance_next = false
 # Superpositions (o, Maj+O pour l'orientation, voir overlay.md) : épaisseur des traits (points) ; opacité
 # des grilles intégrées (tiers, nombre d'or, diagonales), couleur : [gui.colors] overlay.
 overlay_line_width = 1.0

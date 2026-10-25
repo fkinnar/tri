@@ -8,6 +8,8 @@
   of a FAT32 drive again (dates in local time, shifted by one hour); reading the cache
   no longer writes to the drive; turning on the "well exposed" filter during the analyses
   no longer freezes the window (issue #74). The cache is computed again once.
+- **Auto advance, stack mode**: option `[gui.view] stack_advance_next` (off by default)
+  to move, at the end of a stack, to the first photo of the next stack.
 - **Trash**: deleting many images no longer freezes the window; a progress bar shows
   in the dialog (on Linux, the whole trash was also read again for each file; issue #43).
 - **Dialogs**: the same close cross at the top right of every dialog, instead of a "Close"
