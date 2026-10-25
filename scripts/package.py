@@ -4,7 +4,9 @@
 - macOS : `tri.app` (interface, ligne de commande dans `Contents/MacOS/tri`), avec ses
   bibliothèques dans `Contents/Frameworks`, signé « ad hoc », dans un `.dmg`.
 - Linux : archive `.tar.gz` (`bin/`, `lib/`, `share/`) avec `install.sh` (dans `~/.local`
-  par défaut, ou `--prefix`, `--uninstall`).
+  par défaut, ou `--prefix`, `--uninstall`) ; paquet `.deb` (Debian, Ubuntu, Mint : dans
+  `/opt/tri`) et AppImage (un seul fichier à lancer, pour essayer ; `appimagetool` dans le
+  `PATH` ou `APPIMAGETOOL`, sinon sautée), faits de la même arborescence (25/10/2026).
 - Windows : installateur `.msi` (WiX 5 : `Program Files\\tri`, menu Démarrer) et zip
   « portable », avec les DLL de LibRaw (vcpkg) et le runtime Visual C++.
 
@@ -381,8 +383,106 @@ def package_linux(release, out, ver, archive):
         tgz = out / f"{stage.name}.tar.gz"
         with tarfile.open(tgz, "w:gz") as tar:
             tar.add(stage, arcname=stage.name)
-        return tgz
+        made = [tgz, package_deb(stage, out, ver, arch)]
+        appimage = package_appimage(stage, out, arch)
+        if appimage:
+            made.append(appimage)
+        return made
     return stage
+
+
+def deb_version(ver):
+    """Version au format Debian : `1.0.0-alpha.7` → `1.0.0~alpha.7` (`~` : avant la
+    version finale) ; un build de nuit → `1.0.0~alpha.7+nightly.20261025.d16c32f`."""
+    base, _, nightly = ver.partition("-nightly-")
+    deb = base.replace("-", "~", 1)
+    if nightly:
+        deb += "+nightly." + nightly.replace("-", ".")
+    return deb
+
+
+DEB_ARCH = {"x86_64": "amd64", "aarch64": "arm64"}
+
+# Dépendances du paquet : la glibc de la machine de compilation (Ubuntu 24.04) et le
+# runtime C++ ; LibRaw et les siennes sont livrées. Affichage (X11 / Wayland, OpenGL) :
+# chargé à l'exécution par winit, recommandé seulement.
+DEB_CONTROL = """Package: tri
+Version: {version}
+Architecture: {arch}
+Maintainer: tri <https://github.com/fkinnar/tri>
+Installed-Size: {size}
+Depends: libc6 (>= 2.39), libstdc++6, libgcc-s1
+Recommends: libgl1, libegl1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0
+Section: graphics
+Priority: optional
+Homepage: https://github.com/fkinnar/tri
+Description: Fast RAW viewer for culling photo shoots
+ Thumbnails of a folder, full screen RAW rendering, keyboard driven rating with
+ stars, colours and pick / reject flags stored in XMP sidecars, filters,
+ stacks of similar images, card offloading.
+"""
+
+
+def package_deb(stage, out, ver, arch):
+    """Paquet `.deb` : l'arborescence de l'archive dans `/opt/tri`, les commandes dans
+    `/usr/bin`, le lanceur et l'icône dans `/usr/share` (`dpkg-deb`)."""
+    root = out / f"{stage.name}.deb.d"
+    shutil.rmtree(root, ignore_errors=True)
+    opt = root / "opt" / "tri"
+    shutil.copytree(stage, opt, symlinks=True,
+                    ignore=shutil.ignore_patterns("install.sh", "share"))
+    usr = root / "usr"
+    (usr / "bin").mkdir(parents=True)
+    for name in BINARIES:
+        (usr / "bin" / name).symlink_to(f"../../opt/tri/bin/{name}")
+    shutil.copytree(stage / "share", usr / "share")
+    size = sum(f.stat().st_size for f in root.rglob("*") if f.is_file() and
+               not f.is_symlink()) // 1024
+    debian = root / "DEBIAN"
+    debian.mkdir()
+    (debian / "control").write_text(DEB_CONTROL.format(
+        version=deb_version(ver), arch=DEB_ARCH.get(arch, arch), size=size))
+    deb = out / f"{stage.name}.deb"
+    run(["dpkg-deb", "--root-owner-group", "--build", str(root), str(deb)])
+    shutil.rmtree(root)
+    return deb
+
+
+APPRUN = """#!/bin/sh
+# Lance tri depuis l'AppImage ; `tri` en premier argument : la ligne de commande.
+here="$(dirname "$(readlink -f "$0")")"
+if [ "$1" = tri ]; then
+  shift
+  exec "$here/usr/bin/tri" "$@"
+fi
+exec "$here/usr/bin/tri-gui" "$@"
+"""
+
+
+def package_appimage(stage, out, arch):
+    """AppImage : l'arborescence de l'archive dans `usr/`, `AppRun`, le lanceur et
+    l'icône à la racine (`appimagetool`, dans le `PATH` ou `APPIMAGETOOL`). Sans lui,
+    rien (machine de développement)."""
+    tool = os.environ.get("APPIMAGETOOL") or shutil.which("appimagetool")
+    if not tool:
+        print("appimagetool absent : pas d'AppImage")
+        return None
+    appdir = out / f"{stage.name}.AppDir"
+    shutil.rmtree(appdir, ignore_errors=True)
+    shutil.copytree(stage, appdir / "usr", symlinks=True,
+                    ignore=shutil.ignore_patterns("install.sh"))
+    apprun = appdir / "AppRun"
+    apprun.write_text(APPRUN)
+    apprun.chmod(0o755)
+    shutil.copy2(stage / "share" / "applications" / "tri.desktop", appdir / "tri.desktop")
+    shutil.copy2(stage / "share" / "icons" / "hicolor" / "256x256" / "apps" / "tri.png",
+                 appdir / "tri.png")
+    image = out / f"{stage.name}.AppImage"
+    # Sans FUSE (CI, conteneurs) : l'outil s'extrait et se lance.
+    env = dict(os.environ, ARCH=arch, APPIMAGE_EXTRACT_AND_RUN="1")
+    subprocess.run([tool, str(appdir), str(image)], check=True, env=env)
+    shutil.rmtree(appdir)
+    return image
 
 
 # --- Windows ----------------------------------------------------------------------------
@@ -612,7 +712,8 @@ def main():
         result = package_windows(release, args.out, ver, not args.no_archive)
     else:
         sys.exit(f"système non pris en charge : {sys.platform}")
-    print(f"paquet : {result}")
+    for made in result if isinstance(result, list) else [result]:
+        print(f"paquet : {made}")
 
 
 if __name__ == "__main__":

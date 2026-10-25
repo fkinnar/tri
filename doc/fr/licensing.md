@@ -245,6 +245,12 @@ demande l'accord de tous les contributeurs.
       redistribuables de Visual Studio, déploiement « app-local » permis par Microsoft) ;
       installateur produit par WiX (licence MS-RL, qui ne couvre que l'outil, pas le
       `.msi` produit).
+- [x] Linux (25/10/2026) : `.deb` fait par `dpkg-deb` (outil du système, rien d'ajouté) ;
+      AppImage par `appimagetool` 1.9.1 (MIT, outil de compilation seulement, téléchargé
+      par la CI). L'AppImage commence par le *runtime* type 2 du projet AppImage (MIT),
+      un programme à part qui monte le contenu ; il embarque libfuse (LGPL-2.1) et
+      squashfuse (BSD-2-Clause), sans lien avec `tri` (simple juxtaposition), sources
+      sur `github.com/AppImage/type2-runtime`.
 - [x] Décider du traitement de HEIF dans les binaires distribués (§3) : **sans HEIC**
       (décidé le 19/10/2026), builds sans la feature `heif` ; à rouvrir avec les décodeurs
       du système (ImageIO, WIC).

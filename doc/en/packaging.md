@@ -109,13 +109,32 @@ tri-<version>-linux-<arch>/
   that nothing is missing.
 - **Target distributions**: built on Ubuntu 24.04, the archive needs a glibc at least as
   recent (2.39): Ubuntu 24.04 and later, Linux Mint 22, Debian 13, recent Fedora. For
-  older distributions: build on an older one, or an AppImage later.
+  older distributions: build on an older one.
 - `install.sh` copies everything into `~/.local/lib/tri` (or `--prefix DOSSIER`), creates
   the links `~/.local/bin/tri-gui` and `tri`, the launcher (`tri.desktop`, whose `Exec`
   points to the installation) and the icon; `install.sh --uninstall` removes it all. No
   administrator rights needed. `tri`'s data (settings, cache) is never touched.
 - The window declares the application id `tri` (Wayland), tied to the `tri.desktop`
   launcher for the icon and name.
+
+### `.deb` and AppImage (2026-10-25)
+
+Made from the same tree as the archive (same minimum glibc, same bundled libraries),
+right after it:
+
+- **`.deb`** (`package_deb`, `dpkg-deb`): everything in `/opt/tri`, links
+  `/usr/bin/tri-gui` and `/usr/bin/tri`, launcher and icon in `/usr/share`; the RPATH
+  `$ORIGIN/../lib` follows the link. Debian version: `1.0.0~alpha.7` (`~`: before the
+  final version), nightly `1.0.0~alpha.7+nightly.20261025.d16c32f`. Depends on glibc 2.39
+  and the C++ runtime; display (OpenGL, X11, Wayland) only recommended, loaded by winit
+  at run time.
+- **AppImage** (`package_appimage`, `appimagetool`, `APPIMAGETOOL` or the `PATH`; without
+  it, skipped): the tree in `usr/`, `AppRun` (the interface; `tri` as first argument: the
+  command line), launcher and icon at the root. The CI downloads `appimagetool` 1.9.1;
+  `APPIMAGE_EXTRACT_AND_RUN=1`: no FUSE needed.
+- Checked on 2026-10-25 in an Ubuntu 24.04 container (arm64) with dummy binaries:
+  `dpkg -i` (commands in `/usr/bin`, launcher, icon), `dpkg -r`, AppImage run (interface
+  and command line).
 
 ## Windows
 

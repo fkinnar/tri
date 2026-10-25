@@ -1,5 +1,5 @@
 # Compilation, vérifications et tests sur macOS, Linux et Windows, puis paquets en
-# artefacts (.dmg, .tar.gz ; Windows : .msi, .zip). Lancé à la main (onglet Actions), à
+# artefacts (.dmg ; Linux : .tar.gz, .deb, AppImage ; Windows : .msi, .zip). Lancé à la main (onglet Actions), à
 # chaque version (tag v…), et chaque nuit si `main` a changé (22/10/2026 : build de nuit,
 # publié sur la Release « nightly », remplacée à chaque fois), et sur chaque pull request vers
 # `main` (22/10/2026 : plus d'envoi direct sur `main`, branches fix/… et feat/… ; la PR ne
@@ -116,6 +116,15 @@ jobs:
         with:
           tool: cargo-about
 
+      # AppImage (Linux) : appimagetool, version fixée (MIT ; doc/en/licensing.md).
+      - name: appimagetool (Linux)
+        if: runner.os == 'Linux' && github.event_name != 'pull_request'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          echo "APPIMAGETOOL=$RUNNER_TEMP/appimagetool" >> "$GITHUB_ENV"
+
       - name: WiX (Windows)
         if: runner.os == 'Windows' && github.event_name != 'pull_request'
         run: dotnet tool install --global wix --version 5.0.2
@@ -135,6 +144,8 @@ jobs:
           path: |
             target/dist/*.dmg
             target/dist/*.tar.gz
+            target/dist/*.deb
+            target/dist/*.AppImage
             target/dist/*.msi
             target/dist/*.zip
             LICENSE
@@ -189,7 +200,7 @@ jobs:
           } > notes.md
           prerelease=""
           case "$version" in *-*) prerelease="--prerelease" ;; esac
-          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.zip' \))
+          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.msi' -o -name '*.zip' \))
           printf 'paquet : %s\n' "${files[@]}"
           gh release create "$GITHUB_REF_NAME" $prerelease \
             --title "tri $version" --notes-file notes.md "${files[@]}"
@@ -219,7 +230,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete nightly --cleanup-tag --yes || true
-          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.zip' \))
+          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.msi' -o -name '*.zip' \))
           printf 'paquet : %s\n' "${files[@]}"
           short="${GITHUB_SHA::7}"
           {
