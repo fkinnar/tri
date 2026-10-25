@@ -9,7 +9,7 @@ computes nothing. The work queue that fills it in the background sits on top.
 
 ```
 <racine>/
-└── v3/                      format version (FORMAT_VERSION)
+└── v4/                      format version (FORMAT_VERSION)
     ├── thumbnail/
     │   ├── 8c41…07/         one folder of photos (start of the hash of its path)
     │   │   ├── .source      that folder of photos, in plain text
@@ -30,10 +30,11 @@ computes nothing. The work queue that fills it in the background sits on top.
   level, without having to recompute the keys: they depend on the settings, and the
   standard preview size on the screen, which the command line does not know. Before, the
   subfolders were the first 2 characters of the entry's hash.
-- **`v3/`**: changing the format (or the key algorithm) is done by incrementing
+- **`v4/`**: changing the format (or the key algorithm) is done by incrementing
   `FORMAT_VERSION`. Old entries become invisible; the previous formats listed in
-  `OLD_FORMATS` (`v1/`, `v2/`) are deleted in the background when the cache is opened.
-  `v3` (2026-10-24): key without the folder, `.source` file (see below).
+  `OLD_FORMATS` (`v1/` to `v3/`) are deleted in the background when the cache is opened.
+  `v3` (2026-10-24): key without the folder, `.source` file (see below). `v4`
+  (2026-10-25): modification date to the quarter hour (see the key).
 
 ## Cache on the photos' drive (2026-10-24, issue #55)
 
@@ -46,7 +47,7 @@ Three possible places for a photo's cache:
 
 The last two are one mechanism: a hidden `.tri-cache` folder (`DISK_DIR`) keeps the cache
 of all the photos below it, subfolders included, with the same layout
-(`.tri-cache/v3/<level>/<folder>/`), but the folder is identified by its path
+(`.tri-cache/v4/<level>/<folder>/`), but the folder is identified by its path
 **relative** to the root (written with `/` on every system). Mounted elsewhere
 (`/Volumes/T7` on a Mac, `/media/u/T7` on Linux), the drive finds its cache again.
 `Cache::disk_of(folder)` looks for the nearest `.tri-cache` going up (remembered per
@@ -66,8 +67,8 @@ The `.source` file of each folder of entries (absolute path in the central cache
 relative on a drive) makes these moves possible without knowing the settings. To another
 drive: copy then delete; an entry already present at the destination is kept. The 1:1
 levels of a `.tri-cache` are not limited by `zoom_max_mb`, and `--cache-usage` counts the
-central cache only. FAT32 drives: the modification date is in local time there, a
-computer set to another time zone computes everything again (exFAT, APFS, ext4: no).
+central cache only. FAT32 drives: the modification date is in local time there, shifted
+by a clock change or a time zone; the key no longer depends on it since `v4` (see the key).
 
 ### Default location: `default_dir()`
 
@@ -88,7 +89,11 @@ A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
 1. the format version;
 2. the **name** of the source file (since `v3`; the folder chooses the layout instead:
    the cache can thus change place without computing anything again);
-3. its **size** and **modification date** (nanoseconds);
+3. its **size** and **modification date** (nanoseconds), reduced to the remainder of its
+   division by 15 minutes (since `v4`, issue #74): a FAT32 drive stores its dates in local
+   time, and the switch to winter time shifted them all by one hour, so the whole cache of
+   a USB stick was computed again. Clock changes and time zones always shift by a multiple
+   of 15 minutes; a real change alters the size, or the date by something else;
 4. the **level** (`Thumbnail`, `Embedded`, `Standard`, `EmbeddedFull`, `Full`);
 5. the computation **parameters**, a free-form string supplied by the caller (e.g.
    `"half=1;side=2560"`).
@@ -139,8 +144,9 @@ value to detect any accidental change.
   `get`, which returns `None`: the caller recomputes it like a missing entry.
 - **Sharing**: `Cache` keeps no state in memory (just the path). It is `Clone`, usable
   from several threads, and even several processes, on the same folder.
-- **Last use**: `get` updates the file's modification date. `evict` uses it as the
-  last-use date, which avoids having to maintain an index.
+- **Last use**: for a 1:1 (the only evicted levels), `get` updates the file's modification
+  date. `evict` uses it as the last-use date, which avoids having to maintain an index.
+  Not elsewhere (issue #74): one write per read slowed everything down on a USB stick.
 
 ## Sizes and performance
 

@@ -30,11 +30,20 @@ use crate::jpeg::{self, Chroma};
 /// Version du format du cache. L'incrémenter rend toutes les anciennes entrées invisibles.
 /// v2 (23/10/2026) : entrées rangées par dossier d'origine. v3 (24/10/2026) : clé sans le
 /// chemin du dossier (cache sur le disque des photos), source de chaque dossier notée.
-const FORMAT_VERSION: &str = "v3";
+/// v4 (25/10/2026) : date de modification prise au quart d'heure près ([`ZONE_STEP_NS`]).
+const FORMAT_VERSION: &str = "v4";
 
 /// Formats précédents, supprimés en fond à l'ouverture (invisibles, ils ne feraient
 /// qu'occuper le disque).
-const OLD_FORMATS: [&str; 2] = ["v1", "v2"];
+const OLD_FORMATS: [&str; 3] = ["v1", "v2", "v3"];
+
+/// Pas des fuseaux horaires (15 min, en nanosecondes). La clé ne garde de la date de
+/// modification que le reste de sa division par ce pas : un disque FAT32 note ses dates en
+/// heure locale, et un changement d'heure ou de fuseau les décale toutes d'un multiple de
+/// ce pas (issue n° 74 : tout le cache d'une clé USB recalculé au passage à l'heure
+/// d'hiver). Une vraie modification change la taille, ou la date d'autre chose qu'un
+/// multiple exact de ce pas. Constante du calendrier, pas un réglage.
+const ZONE_STEP_NS: u128 = 15 * 60 * 1_000_000_000;
 
 /// Dossier caché qui garde, à la racine d'un disque, le cache des photos de ce disque
 /// ([`Cache::use_disk`]).
@@ -168,7 +177,7 @@ impl Key {
         let path = Path::new(path);
         field(path.file_name().unwrap_or_default().as_encoded_bytes());
         field(&size.to_le_bytes());
-        field(&modified_ns.to_le_bytes());
+        field(&(modified_ns % ZONE_STEP_NS).to_le_bytes());
         field(level.dir_name().as_bytes());
         field(params.as_bytes());
         Key {
@@ -466,8 +475,8 @@ impl Cache {
     /// Lit une entrée. `None` si elle n'existe pas. Une entrée illisible ou corrompue est
     /// supprimée et donne `None` : elle sera recalculée.
     ///
-    /// Une lecture réussie met à jour la date de modification du fichier, qui sert de date
-    /// de dernier usage pour [`Cache::evict`].
+    /// Pour un 1:1, une lecture réussie met à jour la date de modification du fichier, qui
+    /// sert de date de dernier usage pour [`Cache::evict`].
     pub fn get(&self, key: &Key) -> Option<Bitmap> {
         let path = self.entry_path(key);
         let bytes = fs::read(&path).ok()?;
@@ -475,9 +484,7 @@ impl Cache {
             let _ = fs::remove_file(&path);
             return None;
         };
-        if let Ok(file) = File::options().write(true).open(&path) {
-            let _ = file.set_modified(SystemTime::now());
-        }
+        touch(key.level, &path);
         Some(bitmap)
     }
 
@@ -495,13 +502,11 @@ impl Cache {
     }
 
     /// Lit une entrée binaire (analyse), telle qu'écrite par [`Cache::put_bytes`]. `None`
-    /// si elle n'existe pas. Une lecture réussie met à jour sa date (dernier usage).
+    /// si elle n'existe pas.
     pub fn get_bytes(&self, key: &Key) -> Option<Vec<u8>> {
         let path = self.entry_path(key);
         let bytes = fs::read(&path).ok()?;
-        if let Ok(file) = File::options().write(true).open(&path) {
-            let _ = file.set_modified(SystemTime::now());
-        }
+        touch(key.level, &path);
         Some(bytes)
     }
 
@@ -710,6 +715,17 @@ struct Entry {
 
 /// Nom du sous-dossier des entrées des images du dossier `folder` (chemin absolu) : début
 /// d'un hash de son chemin.
+/// Date de dernier usage d'une entrée lue, pour l'éviction ([`Cache::evict`]) : les 1:1
+/// seulement, seuls à être évincés. Ailleurs, une écriture par lecture ralentissait tout
+/// sur un disque amovible (issue n° 74 : clé USB, écritures vidées aussitôt sous Linux).
+fn touch(level: Level, path: &Path) {
+    if matches!(level, Level::Full | Level::EmbeddedFull)
+        && let Ok(file) = File::options().write(true).open(path)
+    {
+        let _ = file.set_modified(SystemTime::now());
+    }
+}
+
 fn folder_id(folder: &Path) -> String {
     let mut h = blake3::Hasher::new();
     h.update(folder.as_os_str().as_encoded_bytes());
@@ -831,7 +847,21 @@ mod tests {
         assert_eq!(&k.hash[..16], STABLE_PREFIX);
     }
 
-    const STABLE_PREFIX: &str = "12b437316e982875";
+    const STABLE_PREFIX: &str = "272e1707a1420cd8";
+
+    #[test]
+    fn a_time_zone_shift_keeps_the_key() {
+        // Issue n° 74 : FAT32 en heure locale, passage à l'heure d'hiver.
+        let at = |ns: u128| Key::from_parts("a.RAF".as_ref(), 10, ns, Level::Standard, "p");
+        let t = 1_792_000_000 * 1_000_000_000;
+        let hour = 3600 * 1_000_000_000;
+        for shift in [hour, 2 * hour, ZONE_STEP_NS * 22] {
+            assert_eq!(at(t + shift).hash, at(t).hash);
+            assert_eq!(at(t - shift).hash, at(t).hash);
+        }
+        // Une modification deux secondes plus tard (FAT32 : pas de 2 s) se voit.
+        assert_ne!(at(t + 2_000_000_000).hash, at(t).hash);
+    }
 
     #[test]
     fn entries_of_one_folder_share_a_directory() {

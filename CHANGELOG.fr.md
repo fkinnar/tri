@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Cache sur une clé USB** : le passage à l'heure d'hiver ne fait plus recalculer tout le
+  cache d'un disque FAT32 (dates en heure locale, décalées d'une heure) ; lire le cache
+  n'écrit plus sur le disque ; activer le filtre « bien exposées » pendant les analyses ne
+  fige plus la fenêtre (issue n° 74). Le cache est recalculé une fois.
 - **Avance automatique, mode pile** : option `[gui.view] stack_advance_next`
   (désactivée par défaut) pour passer, au bout d'une pile, à la première photo de la pile
   suivante.
