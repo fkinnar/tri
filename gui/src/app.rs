@@ -5918,29 +5918,52 @@ impl TriApp {
                 }
             });
         };
-        if let [task] = tasks {
-            bar(ui, task, &mut clicked);
-            return clicked;
-        }
+        // Replié : une fine barre grise, discrète (moyenne des tâches, texte au survol) ;
+        // un clic déplie le détail lisible, un autre le replie. La fine barre reste à sa
+        // place dans les deux cas, pour qu'on puisse recliquer au même endroit.
         let mean = tasks.iter().map(|t| t.fraction).sum::<f32>() / tasks.len() as f32;
-        let summary = Task {
-            text: t!(
-                "tasks-global",
-                n = tasks.len(),
-                percent = format!("{:.0}", mean * 100.0)
-            ),
-            fraction: mean,
-            tip: Some(if self.tasks_open {
-                t!("tasks-fold")
-            } else {
-                t!("tasks-unfold")
-            }),
-            click: Some(StatusClick::ToggleTasks),
-            cancel: None,
+        let text = t!(
+            "tasks-global",
+            n = tasks.len(),
+            percent = format!("{:.0}", mean * 100.0)
+        );
+        // Une seule tâche : son texte au survol, plus parlant que le compte.
+        let hover = match tasks {
+            [task] => task.text.clone(),
+            _ => text.clone(),
+        };
+        let tip = if self.tasks_open {
+            t!("tasks-fold")
+        } else {
+            t!("tasks-unfold")
+        };
+        let folded = |ui: &mut Ui, clicked: &mut Option<StatusClick>| {
+            let height = self.gui.tasks_folded_height;
+            // Zone cliquable plus haute que la barre (une barre de 4 points se rate).
+            let row = ui.text_style_height(&egui::TextStyle::Body).max(height);
+            let (rect, response) = ui.allocate_exact_size(vec2(width, row), Sense::click());
+            let bar = Rect::from_center_size(rect.center(), vec2(width, height));
+            let visuals = ui.visuals();
+            let back = visuals.widgets.inactive.bg_fill;
+            let front = visuals.weak_text_color().gamma_multiply(0.6);
+            let painter = ui.painter();
+            painter.rect_filled(bar, height / 2.0, back);
+            let mut done = bar;
+            done.set_width(bar.width() * mean.clamp(0.0, 1.0));
+            painter.rect_filled(done, height / 2.0, front);
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::ProgressIndicator, true, &text)
+            });
+            let response = response
+                .on_hover_text(format!("{hover}\n{tip}"))
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if response.clicked() {
+                *clicked = Some(StatusClick::ToggleTasks);
+            }
         };
         if inline {
             let at = ui.cursor().min;
-            bar(ui, &summary, &mut clicked);
+            folded(ui, &mut clicked);
             if self.tasks_open {
                 // Détail au-dessus de la barre d'état, de bas en haut.
                 egui::Area::new(egui::Id::unique("tasks_detail"))
@@ -5956,13 +5979,13 @@ impl TriApp {
                     });
             }
         } else {
-            // En bas du panneau, dessiné de bas en haut : la barre globale, puis le détail.
+            // En bas du panneau, dessiné de bas en haut : la fine barre, puis le détail.
+            folded(ui, &mut clicked);
             if self.tasks_open {
                 for task in tasks.iter().rev() {
                     bar(ui, task, &mut clicked);
                 }
             }
-            bar(ui, &summary, &mut clicked);
         }
         clicked
     }
@@ -13303,6 +13326,14 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().tasks_open);
         assert!(h.query_by_label_contains("1/4").is_some(), "détail déplié");
+        // La fine barre reste à sa place : un second clic replie (retour du 25/10/2026).
+        h.get_by_label_contains(&global).click();
+        h.run_steps(3);
+        assert!(!h.state().tasks_open);
+        assert!(
+            h.query_by_label_contains("1/4").is_none(),
+            "replié de nouveau"
+        );
         // Panneau des métadonnées masqué : la barre globale passe dans la barre d'état.
         h.state_mut().metadata_panel = false;
         h.run_steps(3);

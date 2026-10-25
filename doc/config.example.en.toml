@@ -436,6 +436,9 @@ load_budget_ms = 8
 # finished (false: always shown).
 progress_width = 160.0
 progress_hide_done = true
+# Folded background tasks: a thin grey bar of this height (points); a click
+# opens the details.
+tasks_folded_height = 4.0
 # Delay before showing the progress bars after a filter change (ms):
 # often everything is already cached, a bar shown for an instant can't be read.
 progress_delay_ms = 400

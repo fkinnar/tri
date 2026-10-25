@@ -145,6 +145,9 @@ pub struct GuiSettings {
     pub progress_width: f32,
     /// Masquer les barres de progression terminées (la barre d'état reste courte).
     pub progress_hide_done: bool,
+    /// Hauteur de la fine barre des tâches de fond repliée (points), grise et discrète
+    /// (retour du 25/10/2026) ; le détail lisible s'ouvre d'un clic.
+    pub tasks_folded_height: f32,
     /// Délai avant d'afficher les barres de progression après un refiltrage (ms) : le
     /// cache répond souvent tout de suite, une barre montrée 1/10 s n'est pas lisible
     /// (retour du 21/10/2026).
@@ -226,6 +229,7 @@ impl Default for GuiSettings {
             load_budget_ms: 8,
             progress_width: 160.0,
             progress_hide_done: true,
+            tasks_folded_height: 4.0,
             progress_delay_ms: 400,
             analysis_refilter_ms: 5000,
             bar_icon_size: 24.0,

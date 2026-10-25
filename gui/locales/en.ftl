@@ -313,7 +313,10 @@ status-key-problems = { $n ->
 }
 status-invalid-config = invalid configuration: default settings
 status-show-offload = Show the offload
-tasks-global = { $n } tasks running · { $percent } %
+tasks-global = { $n ->
+        [one] 1 task running
+       *[other] { $n } tasks running
+    } · { $percent } %
 tasks-unfold = Click: show the details
 tasks-fold = Click: fold the details
 status-retry-eject = Retry ejecting
