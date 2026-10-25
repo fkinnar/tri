@@ -29,6 +29,7 @@ action-core-filter-color-purple = Filtre : violet (ajouter / retirer)
 action-core-filter-clear = Effacer tous les filtres
 action-core-filter-blurry = Filtre : masquer les floues
 action-core-filter-well_exposed = Filtre : bien exposées (ni brûlées ni bouchées)
+action-core-filter-stack = Filtre : seulement la pile courante, toute dépliée (encore : tout)
 action-core-filter-invert = Filtre : inverser (ce que les filtres retirent)
 action-core-filter-sort = Ordre suivant : nom, date de prise de vue, date de modification
 action-core-filter-sort_reverse = Inverser l'ordre (croissant / décroissant)
@@ -47,7 +48,7 @@ action-core-view-grid_info = Afficher / masquer les infos des vignettes (nom, fo
 action-core-rate-auto_advance = Avance automatique après une note : oui / non
 action-core-select-toggle = Sélectionner / désélectionner l'image
 action-core-select-visual = Mode visuel : sélectionner une plage (v pour valider)
-action-core-view-compare = Comparer les images sélectionnées côte à côte
+action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : celles de la pile)
 action-core-view-peaking = Afficher / masquer la netteté (contours nets)
 action-core-view-sharpness_lenient = Netteté plus souple (moins de photos floues, plus de contours nets)
 action-core-view-sharpness_strict = Netteté plus stricte (plus de photos floues, moins de contours nets)
@@ -280,7 +281,7 @@ cache-unavailable = cache inaccessible : { $error }
 ## Comparaison, plein écran, barre d'état
 
 rating-not-saved = note non enregistrée : { $error }
-compare-needs-two = comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic)
+compare-needs-two = comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic), ou placez-vous sur une pile
 compare-limited = comparaison limitée aux { $max } premières ([gui.compare] max)
 view-info-selected = { " " }· sélectionnée
 view-info-peaking = { " " }· netteté
@@ -342,6 +343,8 @@ update-available = Version { $version } disponible (vous avez la { $current }).
 update-open-page = Ouvrir la page de téléchargement
 rating-bar-title = Notes
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
+filter-stack-none = f c : placez-vous sur une pile (piles actives)
+filter-summary-stack = pile de { $n }
 filter-summary-stars = { $n ->
     [5] 5 étoiles
     [one] { $n } étoile et plus

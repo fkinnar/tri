@@ -424,6 +424,8 @@ pub struct TriApp {
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
     /// réglée au curseur de la barre des filtres, retenue par dossier.
     group_strictness: f32,
+    /// Filtre « pile courante » (`f c`, issue n° 52) : les images de la pile gardée.
+    stack_only: Option<HashSet<PathBuf>>,
     /// Distances triées des liens du dossier : le curseur suit leur rang (issue n° 61).
     group_distances: Vec<f32>,
     /// Centre du curseur des piles : seuil calculé d'après le dossier
@@ -771,6 +773,7 @@ impl TriApp {
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
             group_distances: Vec::new(),
+            stack_only: None,
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
@@ -1027,6 +1030,7 @@ impl TriApp {
             }
         }
         self.files.clear(); // la sélection ne survit pas au changement de dossier
+        self.stack_only = None;
         self.expanded.clear();
         self.selection.clear();
         self.scores.clear();
@@ -2031,6 +2035,15 @@ impl TriApp {
             query: &self.name_query,
         }
         .apply(self.folder.filtered(self.filter, &NotesRule::default()));
+        // Seulement la pile courante (`f c`, issue n° 52).
+        let base: Vec<Vec<MediaFile>> = match &self.stack_only {
+            Some(only) => base
+                .into_iter()
+                .map(|g| g.into_iter().filter(|f| only.contains(&f.path)).collect())
+                .filter(|g: &Vec<MediaFile>| !g.is_empty())
+                .collect(),
+            None => base,
+        };
         // Filtres sur le contenu : notes, netteté (jugée par le moteur d'après les scores
         // connus), exposition (seuils des badges).
         let groups = self
@@ -3396,6 +3409,7 @@ impl TriApp {
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
                 self.well_exposed = false;
+                self.stack_only = None;
                 self.filter_inverted = false;
                 self.apply_filter();
             }
@@ -3408,6 +3422,26 @@ impl TriApp {
                 if self.blur_rule.is_some() {
                     self.analysis_partial_notice(p);
                 }
+            }
+            // Seulement la pile courante, toute dépliée (issue n° 52) ; encore : tout.
+            Action::FilterStack => {
+                if self.stack_only.take().is_none() {
+                    match self.stacks.range_of(self.selected).filter(|r| r.len() > 1) {
+                        Some(r) if self.stacking => {
+                            let paths: HashSet<PathBuf> = self.files[r.clone()]
+                                .iter()
+                                .map(|f| f.path.clone())
+                                .collect();
+                            self.expanded.extend(paths.iter().cloned());
+                            self.stack_only = Some(paths);
+                        }
+                        _ => {
+                            self.hint = Some(t!("filter-stack-none"));
+                            return;
+                        }
+                    }
+                }
+                self.apply_filter();
             }
             Action::FilterWellExposed => {
                 self.well_exposed = !self.well_exposed;
@@ -3715,9 +3749,20 @@ impl TriApp {
             .collect()
     }
 
-    /// Entre en comparaison avec les images sélectionnées (au moins deux).
+    /// Entre en comparaison avec les images sélectionnées (au moins deux) ; sans
+    /// sélection, piles actives, avec les images de la pile courante (issue n° 52 : `c`
+    /// sur une pile repliée compare ses photos d'un coup d'œil).
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
+        if targets.len() < 2
+            && self.stacking
+            && let Some(r) = self.stacks.range_of(self.selected).filter(|r| r.len() > 1)
+        {
+            targets = self.files[r.clone()]
+                .iter()
+                .map(|f| f.path.clone())
+                .collect();
+        }
         if targets.len() < 2 {
             self.hint = Some(t!("compare-needs-two"));
             return;
@@ -3748,6 +3793,9 @@ impl TriApp {
     fn leave_compare(&mut self) {
         self.mode = Mode::Grid;
         self.compare.clear();
+        // Image d'une pile repliée (comparaison de la pile) : la grille montre sa
+        // couverture.
+        self.selected = self.stacks.visible(self.selected);
         self.zoom = None;
         self.zoom_anchor = None;
         self.reveal = Some(Reveal::Minimal);
@@ -6992,6 +7040,9 @@ impl TriApp {
         }
         if self.well_exposed {
             parts.push(t!("filter-bar-well-exposed"));
+        }
+        if let Some(only) = &self.stack_only {
+            parts.push(t!("filter-summary-stack", n = only.len()));
         }
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
@@ -12330,6 +12381,16 @@ mod tests {
         press(&mut h, Key::S, Modifiers::CTRL | Modifiers::SHIFT);
         assert_eq!(h.state().stack_enter, before);
         press(&mut h, Key::Escape, Modifiers::NONE);
+        // `c` sur la pile repliée, sans sélection : ses photos côte à côte (#52) ; Échap
+        // revient à la grille, sur sa couverture.
+        assert_eq!(h.state().mode, Mode::Grid);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 3, "toute la pile");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        let cover = h.state().stacks.visible(h.state().selected);
+        assert_eq!(h.state().selected, cover, "la couverture, visible");
         // Piles désactivées : expliqué, rien d'autre.
         h.state_mut().stacking = false;
         press(&mut h, Key::D, Modifiers::NONE);
@@ -12378,6 +12439,18 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().stacks.shown.len(), 2, "deux piles repliées");
         assert_eq!(h.state().stacks.count(), 2);
+        // `f c` : seulement la pile courante, dépliée ; encore : tout (#52).
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 3, "une pile");
+        assert_eq!(h.state().stacks.shown.len(), 3, "dépliée");
+        assert!(h.state().filter_summary().contains("pile de 3"));
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), 6, "tout");
+        h.state_mut().expanded.clear();
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
         // Toutes brûlées : pas de badge d'écrêtage sur une pile repliée (#75).
         for f in &files {
             h.state_mut()

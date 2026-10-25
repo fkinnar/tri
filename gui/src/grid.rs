@@ -100,6 +100,7 @@ pub fn navigate(
         | Action::FilterClear
         | Action::FilterBlurry
         | Action::FilterWellExposed
+        | Action::FilterStack
         | Action::FilterInvert
         | Action::SortNext
         | Action::SortReverse
