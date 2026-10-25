@@ -4,6 +4,19 @@
 
 ## À venir
 
+- **Comparer une pile** : `c` sans sélection compare côte à côte les photos de la pile
+  courante (repliée aussi) ; `f c` ne montre dans la grille que la pile courante,
+  dépliée (issue n° 52).
+- **Plusieurs cartes à la suite** : la boîte de déchargement restée ouverte sur son
+  bilan, brancher la carte suivante la fait repartir sur elle, vers le même dossier de
+  séance (issue n° 37).
+- **Tâches de fond** : une seule barre globale (nombre de tâches, avancement moyen) en
+  bas du panneau des métadonnées, ou dans la barre d'état s'il est masqué, au lieu
+  d'une rangée de barres ; un clic déplie une barre par tâche au-dessus (issue n° 36).
+- **Tout un dossier dans darktable** : Ctrl+Maj+B, ou le clic droit sur un dossier du
+  panneau, rend en fond chaque image qui a un sidecar darktable, l'une après l'autre,
+  dans le cache (progression dans les tâches de fond, « × » pour interrompre, bilan à
+  la fin) (issue n° 69).
 - **Grille** : plus de badge d'écrêtage sur une pile repliée, à la place de son nombre
   d'images (issue n° 75).
 - **Panneaux** : le panneau qui a le clavier a un fond un peu plus clair (plus foncé
