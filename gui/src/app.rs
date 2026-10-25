@@ -409,6 +409,9 @@ pub struct TriApp {
     /// Sévérités du filtre « bien exposées » (brûlé, bouché ; -1 : ce côté ignoré, 0 :
     /// les seuils des réglages), curseurs de la barre des filtres, retenues par dossier.
     clip_strictness: (f32, f32),
+    /// Côté réglé par le curseur unique du filtre « bien exposées » (brûlé ou bouché),
+    /// changé par l'interrupteur à côté.
+    clip_side: tri::exposure::Clip,
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -733,6 +736,7 @@ impl TriApp {
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
+            clip_side: tri::exposure::Clip::Over,
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -2053,23 +2057,33 @@ impl TriApp {
         )
     }
 
-    /// Curseur « brûlé » ou « bouché » du filtre « bien exposées » (issue n° 48 : fonds
-    /// noirs exclus) : effet en direct, retenu pour le dossier au lâcher.
-    fn clip_slider(&mut self, ui: &mut Ui, side: tri::exposure::Clip) {
+    /// Curseur du filtre « bien exposées » (issue n° 48 : fonds noirs exclus) : un seul,
+    /// pour le brûlé ou le bouché, choisi par l'interrupteur à côté, à l'icône des badges
+    /// d'écrêtage (retour du 25/10/2026 : deux curseurs à libellé gris se lisaient mal).
+    /// Effet en direct, retenu pour le dossier au lâcher.
+    fn clip_slider(&mut self, ui: &mut Ui, size: f32) {
         use tri::exposure::Clip;
-        let (label, tip, value) = match side {
+        let side = self.clip_side;
+        let (label, tip, value, other) = match side {
             Clip::Over => (
                 t!("clip-slider-over"),
                 t!("clip-slider-over-tip"),
                 self.clip_strictness.0,
+                Clip::Under,
             ),
             Clip::Under => (
                 t!("clip-slider-under"),
                 t!("clip-slider-under-tip"),
                 self.clip_strictness.1,
+                Clip::Over,
             ),
         };
-        ui.weak(label);
+        let switch_tip = t!("clip-slider-switch", side = label.as_str());
+        let (rect, response) = marks::clickable_named(ui, size, &label, &switch_tip);
+        marks::clip_badge(ui.painter(), rect, side == Clip::Over);
+        if response.clicked() {
+            self.clip_side = other;
+        }
         let (slider, t) = strictness_slider(ui, self.gui.grid.clip_slider, value, tip);
         if t != value {
             match side {
@@ -6835,8 +6849,7 @@ impl TriApp {
                     self.blur_slider(ui);
                 }
                 if action == Action::FilterWellExposed && on {
-                    self.clip_slider(ui, tri::exposure::Clip::Over);
-                    self.clip_slider(ui, tri::exposure::Clip::Under);
+                    self.clip_slider(ui, size);
                 }
             }
             ui.separator();
@@ -12194,6 +12207,11 @@ mod tests {
         assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
         // Curseurs « brûlé » / « bouché » avec le filtre ; tout à gauche, plus rien n'est
         // exclu (fonds noirs, issue n° 48), et plus de badge.
+        // Un seul curseur ; son interrupteur passe du brûlé au bouché.
+        assert!(h.query_by_label(&t!("clip-slider-under")).is_none());
+        h.get_by_label(&t!("clip-slider-over")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().clip_side, tri::exposure::Clip::Under);
         assert!(h.query_by_label(&t!("clip-slider-under")).is_some());
         h.state_mut().clip_strictness = (-1.0, -1.0);
         h.state_mut().refilter(Reveal::Minimal);

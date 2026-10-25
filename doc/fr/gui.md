@@ -956,7 +956,10 @@ photos nettes.
   flou (centre = seuils des badges, à droite plus strict, double-clic : le centre), un
   par côté ; tout à gauche, ce côté n'exclut plus rien. Seuils multipliés ou divisés par
   `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`), retenus par
-  dossier ; les badges suivent.
+  dossier ; les badges suivent. Depuis le 25/10/2026 (retour de l'utilisateur : deux
+  curseurs à libellé gris se lisaient mal) : **un seul curseur**, et à sa gauche un
+  interrupteur à l'icône des badges d'écrêtage (triangle blanc : brûlé, noir : bouché)
+  qui choisit le côté réglé.
 - **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` aussi la carte de netteté, qui
   restait affichée ; `p` l'éteint pendant le recadrage) ; egui y déplaçait le focus vers
   la barre, rendu en fin d'image. Nom de l'image retiré du

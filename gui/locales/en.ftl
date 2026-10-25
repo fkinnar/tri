@@ -126,6 +126,7 @@ blur-slider-tip = Blur strictness: to the right stricter (more blurry photos), t
 clip-slider-over = blown
 clip-slider-over-tip = Blown photos excluded: to the right stricter, to the left more lenient; fully to the left, blown highlights no longer exclude anything. In the middle, the settings. Double click: back to the middle
 clip-slider-under = crushed
+clip-slider-switch = Slider: { $side } (click: switch to the other side)
 clip-slider-under-tip = Crushed photos excluded: to the right stricter, to the left more lenient; fully to the left, crushed blacks no longer exclude anything (black backgrounds). In the middle, the settings. Double click: back to the middle
 sharpness-strictness = Sharpness strictness: { $value } % (0: the settings)
 stack-icon-tip = Right click: fine settings ({ $keys })
