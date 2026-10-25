@@ -150,6 +150,9 @@ pub struct TriApp {
     session_previews: Option<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
+    /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
+    /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
+    missing_last: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -263,9 +266,6 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
-    /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
-    /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
-    missing_last: Option<PathBuf>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
     /// Version montrée en plein écran : (image, place dans sa liste).
@@ -604,6 +604,7 @@ impl TriApp {
             offload: None,
             session_previews: None,
             offloaded: None,
+            missing_last,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -630,7 +631,6 @@ impl TriApp {
             cell_action: None,
             rating_dialog: None,
             file_dialog: None,
-            missing_last,
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
