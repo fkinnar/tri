@@ -563,7 +563,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     saturation. Couleurs et opacité réglables ;
   - **badges** dans la grille : triangle mi-blanc mi-noir en haut à gauche de la vignette
     (pastilles en haut à droite jusqu'au 21/10/2026), clic : grand histogramme, au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
-    survol ; analyses lues dans le cache dans le budget de chargement de l'image ;
+    survol ; analyses lues dans le cache dans le budget de chargement de l'image ; pas
+    sur une pile repliée (issue n° 75 : son nombre d'images est à cette place) ;
   - vérifié sur une vraie séance : photo entièrement brûlée (rouge partout, badge),
     portrait au pull noir (zones bleues dans les plis, badge bleu, -3,5 IL de marge),
     portraits sur fond blanc (rien, -0,45 IL de marge).

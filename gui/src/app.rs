@@ -7397,7 +7397,10 @@ impl TriApp {
         marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
-        if let Some((over, under)) = self.clip_fractions(index, deadline) {
+        // Pas sur une pile repliée (issue n° 75) : son nombre d'images est à cette place,
+        // et l'écrêtage d'une seule de ses photos n'y a pas de sens.
+        let stacked = self.stacks.collapsed_count(index).is_some();
+        if !stacked && let Some((over, under)) = self.clip_fractions(index, deadline) {
             let (over_max, under_max) = self.clip_thresholds();
             let side = g.marks * 1.3;
             let mut at = image_area.min + vec2(4.0, 4.0);
@@ -11877,6 +11880,15 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().stacks.shown.len(), 2, "deux piles repliées");
         assert_eq!(h.state().stacks.count(), 2);
+        // Toutes brûlées : pas de badge d'écrêtage sur une pile repliée (#75).
+        for f in &files {
+            h.state_mut()
+                .clip_summary
+                .insert(f.path.clone(), (1.0, 0.0));
+        }
+        h.run_steps(2);
+        let over = t!("badge-over", percent = tri::i18n::decimal(100.0, 1));
+        assert_eq!(h.query_all_by_label(&over).count(), 0, "piles repliées");
         // La flèche droite saute les images cachées : de la première pile à la seconde.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert!(selected_name(&h).starts_with('b'), "{}", selected_name(&h));
@@ -11887,6 +11899,11 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 2, "tout replié");
         press(&mut h, Key::S, Modifiers::SHIFT);
         assert_eq!(h.state().stacks.shown.len(), 6, "tout déplié");
+        h.run_steps(2);
+        assert!(
+            h.query_all_by_label(&over).count() > 0,
+            "dépliées : les badges"
+        );
         press(&mut h, Key::S, Modifiers::SHIFT);
         h.state_mut().expanded.clear();
         h.state_mut().stacks_dirty = true;
