@@ -4,6 +4,29 @@
 
 ## Unreleased
 
+- **Several cards in a row**: the next card is also picked up after closing the
+  offload summary or offloading in the background, and when it is mounted at the
+  previous card's path (two cards of the same camera) (issue #37).
+- **Background tasks**: folded, a thin discreet grey bar (`[gui] tasks_folded_height`,
+  text on hover); it stays in place once unfolded, so a second click folds the details
+  again (issue #36).
+- **Panels**: the line under the keyboard cursor is a discreet grey band across the
+  whole width (`[gui.dialogs] cursor_tint`) instead of an accent frame, which was cut
+  on the left in the folder panel (issue #77).
+- **Stacks**: `f c` again folds back a stack it unfolded (issue #52); the "|‹" button
+  (enter a stack by its cover or its first photo) is always in the full screen bar, and
+  Ctrl+Shift+S says which one is on (issue #62).
+- **Grid**: a refilter (filter slider, ratings, analyses coming in) keeps the region
+  shown when the selection is out of view, instead of going back to the start (issue
+  #100).
+- **Offload**: the progress bar follows the files when some are skipped (already
+  offloaded or already there) (issue #101).
+- **Drive pulled out** without ejecting during the computations: plugged back, the
+  open folder is read again and the computations resume (issue #98).
+- **Window under Wayland**: its size is remembered (the position stays with the
+  compositor) (issue #58).
+- **Deleted folder**: a deleted subfolder (with "Subfolders" on) leaves the grid and
+  its computations stop; a darktable batch on a deleted folder is interrupted.
 - **Comparing a stack**: `c` with no selection compares the photos of the current
   stack side by side (a collapsed stack too); `f c` shows only the current stack,
   expanded, in the grid (issue #52).
