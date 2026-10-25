@@ -150,6 +150,9 @@ pub struct TriApp {
     session_previews: Option<Arc<Scheduler>>,
     /// Séance déchargée en arrière-plan, proposée à l'ouverture dans la barre d'état.
     offloaded: Option<PathBuf>,
+    /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
+    /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
+    missing_last: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -236,6 +239,9 @@ pub struct TriApp {
     /// Analyses d'exposition arrivées sous le filtre « bien exposées » : grille à
     /// refiltrer une fois les histogrammes finis.
     exposure_refilter_pending: bool,
+    /// Dernier refiltrage de la grille (filtres sur l'analyse pendant son calcul : au plus
+    /// toutes les `[gui] analysis_refilter_ms`, issue n° 73).
+    refiltered_at: Instant,
     /// Carte de netteté affichée en 1:1 (`p`).
     peaking: bool,
     /// Collimateur de mise au point affiché (`m`).
@@ -268,6 +274,9 @@ pub struct TriApp {
     selection: tri::selection::Selection,
     /// Boîte « Renommer » ou « Corbeille » ouverte.
     file_dialog: Option<crate::files::FileDialog>,
+    /// Copies et déplacements mis en arrière-plan (issue n° 72), suivis jusqu'à leur fin ;
+    /// la boîte des fichiers reste libre pour le reste.
+    background_transfers: Vec<crate::files::FileDialog>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
     /// Version montrée en plein écran : (image, place dans sa liste).
@@ -328,6 +337,14 @@ pub struct TriApp {
     /// Champ de recherche qui avait le clavier à l'image précédente : egui le retire dès
     /// qu'Échap arrive, avant les raccourcis ; c'est lui qui dit à qui Échap revient.
     search_focused: Option<egui::Id>,
+    /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
+    /// menu « … », mesurée à l'image précédente (issue n° 71).
+    filter_tail: (f32, f32),
+    /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
+    /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
+    rating_tail: f32,
+    /// Largeur du bandeau quand ses boutons de droite sont passés à la ligne.
+    rating_wrapped_at: Option<f32>,
     /// Recherche de dossiers (panneau des dossiers) : texte, parcours en fond, résultats
     /// (meilleurs d'abord) et celui pointé.
     folder_query: String,
@@ -414,6 +431,9 @@ pub struct TriApp {
     /// Sévérités du filtre « bien exposées » (brûlé, bouché ; -1 : ce côté ignoré, 0 :
     /// les seuils des réglages), curseurs de la barre des filtres, retenues par dossier.
     clip_strictness: (f32, f32),
+    /// Côté réglé par le curseur unique du filtre « bien exposées » (brûlé ou bouché),
+    /// changé par l'interrupteur à côté.
+    clip_side: tri::exposure::Clip,
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -547,11 +567,12 @@ impl TriApp {
     pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
         let gui = settings.gui.clone();
         let data = settings.engine().data_dir();
-        let dir = dir.or_else(|| {
-            gui.reopen_last
-                .then(|| tri::folder::last(data.as_deref()?))
-                .flatten()
-        });
+        // Dernier dossier disparu (disque débranché) : dit, et rouvert s'il revient.
+        let remembered = (dir.is_none() && gui.reopen_last)
+            .then(|| tri::folder::remembered(data.as_deref()?))
+            .flatten();
+        let missing_last = remembered.clone().filter(|p| !p.is_dir());
+        let dir = dir.or(remembered.filter(|p| p.is_dir()));
         let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
         let depth = folder_depth(subfolders, &gui);
         let (folder, error) = match &dir {
@@ -605,6 +626,7 @@ impl TriApp {
             offload: None,
             session_previews: None,
             offloaded: None,
+            missing_last,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -631,6 +653,7 @@ impl TriApp {
             cell_action: None,
             rating_dialog: None,
             file_dialog: None,
+            background_transfers: Vec::new(),
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
@@ -658,6 +681,7 @@ impl TriApp {
             },
             sort_pending: false,
             exposure_refilter_pending: false,
+            refiltered_at: Instant::now(),
             progress_hidden_until: None,
             developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
@@ -691,6 +715,9 @@ impl TriApp {
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
+            filter_tail: (0.0, 0.0),
+            rating_tail: 0.0,
+            rating_wrapped_at: None,
             folder_query: String::new(),
             folder_search: None,
             folder_results: Vec::new(),
@@ -740,6 +767,7 @@ impl TriApp {
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
+            clip_side: tri::exposure::Clip::Over,
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -947,6 +975,8 @@ impl TriApp {
     /// filtres sont gardés ; la sélection repart de la première image. En cas d'erreur, le
     /// message remplace la grille, le panneau reste là pour choisir un autre dossier.
     fn open_folder(&mut self, dir: &Path) {
+        // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
+        self.missing_last = None;
         match Folder::scan(dir, self.folder_depth(), self.settings.xmp.sidecar) {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
@@ -1051,18 +1081,6 @@ impl TriApp {
                         &self.gui.histogram,
                         &self.gui.colors,
                     );
-                    // Pointé au clavier : Entrée l'ouvre en grand.
-                    if focused && self.meta_cursor == 0 {
-                        ui.painter().rect_stroke(
-                            rect.expand(2.0),
-                            4.0,
-                            egui::Stroke::new(1.5, accent),
-                            egui::StrokeKind::Outside,
-                        );
-                        if std::mem::take(&mut self.scroll_to_cursor) {
-                            ui.scroll_to_rect(rect, Some(egui::Align::Center));
-                        }
-                    }
                 }
                 None => {
                     ui.weak(t!("histogram-computing"));
@@ -1114,11 +1132,12 @@ impl TriApp {
                     }
                     rows.push((t!("panel-sharpness"), text));
                 }
-                let first = usize::from(self.meta_has_histogram);
-                self.meta_cursor = self.meta_cursor.min((rows.len() + first).saturating_sub(1));
-                // Lignes sélectionnées (rangs parmi les lignes : l'histogramme passe avant).
+                // Le curseur ne parcourt que les lignes (issue n° 77 : l'histogramme encadré
+                // n'avait pas de sens ; Entrée l'ouvre en grand de toute façon).
+                self.meta_cursor = self.meta_cursor.min(rows.len().saturating_sub(1));
+                // Lignes sélectionnées.
                 let (lo, hi) = self.meta_range();
-                let picked = |i: usize| (lo..=hi).contains(&(i + first));
+                let picked = |i: usize| (lo..=hi).contains(&i);
                 let selection_fill = ui.visuals().selection.bg_fill.gamma_multiply(0.5);
                 let mut clicked = None;
                 egui::Grid::new("metadata")
@@ -1141,7 +1160,7 @@ impl TriApp {
                             if focused && picked(i) && hi > lo {
                                 ui.painter().rect_filled(rect, 3.0, selection_fill);
                             }
-                            if focused && i + first == self.meta_cursor {
+                            if focused && i == self.meta_cursor {
                                 ui.painter().rect_stroke(
                                     rect,
                                     3.0,
@@ -1153,7 +1172,7 @@ impl TriApp {
                                 }
                             }
                             if a.clicked() || b.clicked() {
-                                clicked = Some((i + first, ui.input(|inp| inp.modifiers.shift)));
+                                clicked = Some((i, ui.input(|inp| inp.modifiers.shift)));
                             }
                             ui.end_row();
                         }
@@ -1191,6 +1210,22 @@ impl TriApp {
         {
             trace(|| format!("volumes : {}", places.len()));
             self.tree.set_places(places);
+            self.reopen_missing_last();
+        }
+    }
+
+    /// Disque du dernier dossier rebranché, aucun autre dossier ouvert entre-temps (sinon,
+    /// ce serait revenir en arrière sans l'avoir demandé ; issue n° 66) : il est rouvert.
+    fn reopen_missing_last(&mut self) {
+        if let Some(path) = self.missing_last.clone()
+            && path.is_dir()
+        {
+            self.missing_last = None;
+            if self.folder.is_none() {
+                self.open_folder(&path);
+                self.tree.reveal(&path);
+                self.reveal_folder = true;
+            }
         }
     }
 
@@ -1282,6 +1317,9 @@ impl TriApp {
     /// Panneau des dossiers : l'arborescence du moteur ([`Tree`]), dessinée ligne par
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
+        if self.focus == crate::actions::Scope::Folders {
+            panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+        }
         let f = self.gui.folders;
         let mut toggle: Option<usize> = None;
         let mut pointed: Option<usize> = None;
@@ -1553,9 +1591,6 @@ impl TriApp {
                 }
             }
         });
-        if focused {
-            panel_focus_frame(ui, accent, self.gui.dialogs.focus_frame_width);
-        }
         // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
         // l'arborescence se déplient chacun de leur côté.
         if let Some(i) = toggle {
@@ -1978,6 +2013,7 @@ impl TriApp {
     /// place dans la liste (l'image suivante : on vient de rejeter une photo avec « masquer
     /// les rejetées », on passe à la suite).
     fn refilter(&mut self, reveal: Reveal) {
+        self.refiltered_at = Instant::now();
         let selected_path = self.files.get(self.selected).map(|f| f.path.clone());
         // Type de fichier et recherche par nom (`/`) : la base, jamais inversée.
         let base = tri::fuzzy::NameFilter {
@@ -2109,23 +2145,33 @@ impl TriApp {
         )
     }
 
-    /// Curseur « brûlé » ou « bouché » du filtre « bien exposées » (issue n° 48 : fonds
-    /// noirs exclus) : effet en direct, retenu pour le dossier au lâcher.
-    fn clip_slider(&mut self, ui: &mut Ui, side: tri::exposure::Clip) {
+    /// Curseur du filtre « bien exposées » (issue n° 48 : fonds noirs exclus) : un seul,
+    /// pour le brûlé ou le bouché, choisi par l'interrupteur à côté, à l'icône des badges
+    /// d'écrêtage (retour du 25/10/2026 : deux curseurs à libellé gris se lisaient mal).
+    /// Effet en direct, retenu pour le dossier au lâcher.
+    fn clip_slider(&mut self, ui: &mut Ui, size: f32) {
         use tri::exposure::Clip;
-        let (label, tip, value) = match side {
+        let side = self.clip_side;
+        let (label, tip, value, other) = match side {
             Clip::Over => (
                 t!("clip-slider-over"),
                 t!("clip-slider-over-tip"),
                 self.clip_strictness.0,
+                Clip::Under,
             ),
             Clip::Under => (
                 t!("clip-slider-under"),
                 t!("clip-slider-under-tip"),
                 self.clip_strictness.1,
+                Clip::Over,
             ),
         };
-        ui.weak(label);
+        let switch_tip = t!("clip-slider-switch", side = label.as_str());
+        let (rect, response) = marks::clickable_named(ui, size, &label, &switch_tip);
+        marks::clip_badge(ui.painter(), rect, side == Clip::Over);
+        if response.clicked() {
+            self.clip_side = other;
+        }
         let (slider, t) = strictness_slider(ui, self.gui.grid.clip_slider, value, tip);
         if t != value {
             match side {
@@ -2241,13 +2287,36 @@ impl TriApp {
         }
     }
 
-    /// Filtre « bien exposées » : grille refiltrée une fois les analyses d'exposition
-    /// arrivées finies (pas à chacune), en grille seulement (comme la netteté).
+    /// Filtre sur l'analyse allumé pendant son calcul (avancement `p`, d'avant le
+    /// refiltrage) : la barre d'état le dit (issue n° 73 : sinon, le filtre semblait sans
+    /// effet).
+    fn analysis_partial_notice(&mut self, p: Progress) {
+        if p.total > 0 && p.done < p.total {
+            self.notice = Some((
+                t!("filter-analysis-partial", done = p.done, total = p.total),
+                false,
+            ));
+        }
+    }
+
+    /// Vrai si la grille peut être refiltrée avec les analyses arrivées (avancement `p`) :
+    /// toutes là, ou le dernier refiltrage date d'au moins `[gui] analysis_refilter_ms`
+    /// (issue n° 73 : la grille se complète au fil du calcul, pas seulement à la fin).
+    fn analysis_refilter_due(&self, p: Progress) -> bool {
+        let every = self.gui.analysis_refilter_ms;
+        p.total == 0
+            || p.done == p.total
+            || (every > 0 && self.refiltered_at.elapsed() >= Duration::from_millis(every))
+    }
+
+    /// Filtre « bien exposées » : grille refiltrée avec les analyses d'exposition arrivées,
+    /// pas à chacune (voir [`Self::analysis_refilter_due`]), en grille seulement (comme la
+    /// netteté).
     fn exposure_refilter(&mut self) {
         let p = self.progress[3];
         if self.exposure_refilter_pending
             && self.mode == Mode::Grid
-            && (p.total == 0 || p.done == p.total)
+            && self.analysis_refilter_due(p)
         {
             self.exposure_refilter_pending = false;
             if self.well_exposed {
@@ -2518,12 +2587,12 @@ impl TriApp {
         if changed {
             self.rejudge();
         }
-        // Nouveaux scores : grille refiltrée une fois tous connus (pas à chaque score).
+        // Nouveaux scores : grille refiltrée de temps en temps et à la fin (pas à chaque
+        // score, voir `analysis_refilter_due`).
         if changed {
             self.blur_refilter_pending = true;
         }
-        let p = self.progress[4];
-        if p.total == 0 || p.done == p.total {
+        if self.analysis_refilter_due(self.progress[4]) {
             self.blur_refilter();
         }
     }
@@ -2869,13 +2938,12 @@ impl TriApp {
                 } else {
                     self.meta_anchor = None;
                 }
-                let first = usize::from(self.meta_has_histogram);
-                let last = (self.meta_rows.len() + first).saturating_sub(1);
+                let last = self.meta_rows.len().saturating_sub(1);
                 self.meta_cursor = (self.meta_cursor + 1).min(last);
                 self.scroll_to_cursor = true;
             }
             Action::MetaOpen => {
-                if self.meta_has_histogram && self.meta_cursor == 0 {
+                if self.meta_has_histogram {
                     self.histogram_large = true;
                 }
             }
@@ -2892,7 +2960,6 @@ impl TriApp {
                 }
             }
             Action::MetaCopy | Action::MetaCopyAll => {
-                let first = usize::from(self.meta_has_histogram);
                 let (lo, hi) = if action == Action::MetaCopyAll {
                     (0, usize::MAX)
                 } else {
@@ -2902,7 +2969,7 @@ impl TriApp {
                     .meta_rows
                     .iter()
                     .enumerate()
-                    .filter(|(i, _)| (lo..=hi).contains(&(i + first)))
+                    .filter(|(i, _)| (lo..=hi).contains(i))
                     .map(|(_, r)| r)
                     .collect();
                 match rows.as_slice() {
@@ -3287,11 +3354,19 @@ impl TriApp {
             Action::FilterBlurry => {
                 let rule = tri::sharpness::BlurRule::HideBlurry;
                 self.blur_rule = (self.blur_rule != Some(rule)).then_some(rule);
+                let p = self.progress[4];
                 self.apply_filter();
+                if self.blur_rule.is_some() {
+                    self.analysis_partial_notice(p);
+                }
             }
             Action::FilterWellExposed => {
                 self.well_exposed = !self.well_exposed;
+                let p = self.progress[3];
                 self.apply_filter();
+                if self.well_exposed {
+                    self.analysis_partial_notice(p);
+                }
             }
             Action::FilterInvert => {
                 self.filter_inverted = !self.filter_inverted;
@@ -5715,6 +5790,31 @@ impl TriApp {
                 ) {
                     clicked = Some(c);
                 }
+                // Copie en arrière-plan : progression (clic : réafficher la boîte).
+                if let Some((text, fraction)) = self
+                    .background_transfers
+                    .first()
+                    .and_then(|d| d.transfer_status())
+                {
+                    let fill = self
+                        .gui
+                        .colors
+                        .progress
+                        .map_or(ui.visuals().widgets.inactive.bg_fill, Color32::from);
+                    let bar = ui
+                        .add(
+                            egui::ProgressBar::new(fraction)
+                                .desired_width(260.0)
+                                .fill(fill)
+                                .text(text),
+                        )
+                        .interact(Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(t!("status-show-transfer"));
+                    if bar.clicked() {
+                        clicked = Some(StatusClick::RevealTransfer);
+                    }
+                }
                 // Déchargement en arrière-plan : progression (clic : réafficher la boîte).
                 if let Some((text, fraction)) = self
                     .offload
@@ -6204,11 +6304,96 @@ impl TriApp {
     }
 
     /// Boîte « Renommer » ou « Corbeille » ; une fois l'action faite, le dossier est relu.
+    /// Copies en arrière-plan (issue n° 72) : suivies sans boîte ; à la fin, historique,
+    /// dossier relu et message dans la barre d'état.
+    fn background_transfers(&mut self, ctx: &egui::Context) {
+        // Réaffichée depuis la barre d'état : de nouveau la boîte des fichiers, avant de
+        // dessiner (une boîte ne l'est qu'une fois par image) ; si la boîte est prise,
+        // elle reste en arrière-plan.
+        if let Some(i) = self
+            .background_transfers
+            .iter()
+            .position(|d| !d.is_hidden())
+        {
+            if self.file_dialog.is_none() {
+                self.file_dialog = Some(self.background_transfers.remove(i));
+            } else {
+                self.background_transfers[i].hide();
+            }
+        }
+        let mut finished = Vec::new();
+        for (i, dialog) in self.background_transfers.iter_mut().enumerate() {
+            let outcome = dialog.show(ctx, &self.settings.files, self.data_dir.as_deref());
+            if !matches!(outcome, crate::files::Outcome::Open) {
+                finished.push((i, outcome));
+            }
+        }
+        for (i, outcome) in finished.into_iter().rev() {
+            self.background_transfers.remove(i);
+            match outcome {
+                crate::files::Outcome::Done { step, .. } => {
+                    if let Some(step) = step {
+                        self.history.push(step);
+                    }
+                    self.notice = Some((t!("transfer-done"), false));
+                    self.reload_folder(None);
+                }
+                crate::files::Outcome::Folder {
+                    step,
+                    point,
+                    renamed,
+                    cache_follows,
+                } => {
+                    self.notice = Some((t!("transfer-done"), false));
+                    self.folder_outcome(step, point, renamed, cache_follows);
+                }
+                crate::files::Outcome::Failed(e) => {
+                    self.file_error = Some(e);
+                    self.reload_folder(None);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Dossier renommé, déplacé ou copié : historique, cache qui suit, panneau et dossier
+    /// ouvert à jour.
+    fn folder_outcome(
+        &mut self,
+        step: Option<tri::history::Step>,
+        point: Option<PathBuf>,
+        renamed: Option<(PathBuf, PathBuf)>,
+        cache_follows: bool,
+    ) {
+        if let Some(step) = step {
+            self.history.push(step);
+        }
+        // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
+        if cache_follows && let Some((from, to)) = renamed.clone() {
+            self.cache_job(move |cache| {
+                cache
+                    .relocate(&from, &to)
+                    .err()
+                    .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
+            });
+        }
+        self.after_folder_change(renamed, point);
+    }
+
     fn file_dialog(&mut self, ctx: &egui::Context) {
+        self.background_transfers(ctx);
         let Some(dialog) = &mut self.file_dialog else {
             return;
         };
-        match dialog.show(ctx, &self.settings.files, self.data_dir.as_deref()) {
+        let outcome = dialog.show(ctx, &self.settings.files, self.data_dir.as_deref());
+        // Copie mise en arrière-plan : gardée à part, la boîte est libre.
+        if dialog.is_hidden()
+            && let Some(dialog) = self.file_dialog.take()
+        {
+            self.background_transfers.push(dialog);
+            return;
+        }
+        match outcome {
             crate::files::Outcome::Open => {}
             crate::files::Outcome::Cancelled => self.file_dialog = None,
             crate::files::Outcome::Folder {
@@ -6218,19 +6403,7 @@ impl TriApp {
                 cache_follows,
             } => {
                 self.file_dialog = None;
-                if let Some(step) = step {
-                    self.history.push(step);
-                }
-                // Le cache suit le dossier renommé ou déplacé (sinon, recalculé).
-                if cache_follows && let Some((from, to)) = renamed.clone() {
-                    self.cache_job(move |cache| {
-                        cache
-                            .relocate(&from, &to)
-                            .err()
-                            .map(|e| (t!("cache-move-failed", error = e.to_string()), true))
-                    });
-                }
-                self.after_folder_change(renamed, point);
+                self.folder_outcome(step, point, renamed, cache_follows);
             }
             crate::files::Outcome::FavoriteNamed { path, name } => {
                 self.file_dialog = None;
@@ -6528,7 +6701,9 @@ impl TriApp {
         } else {
             (None, false)
         };
-        ui.horizontal(|ui| {
+        // Fenêtre étroite (issue n° 71 : les boutons de droite recouvraient les couleurs) :
+        // passage à la ligne avant eux ; leur largeur est mesurée à l'image précédente.
+        ui.horizontal_wrapped(|ui| {
             ui.label(t!("rating-bar-title"));
             clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a));
 
@@ -6608,7 +6783,18 @@ impl TriApp {
             }
             // À droite (posés de droite à gauche) : avance automatique, puis image suivante
             // et précédente, des icônes (retour du 17/10/2026).
+            // Passée à la ligne, elle y reste tant que sa largeur ne change pas : sinon,
+            // un libellé plus court (version « Original ») la remettait sur une ligne, et
+            // tout bougeait sous le pointeur.
+            let width = ui.max_rect().width();
+            let wrap = self.rating_wrapped_at == Some(width)
+                || ui.available_size_before_wrap().x < self.rating_tail;
+            self.rating_wrapped_at = wrap.then_some(width);
+            if wrap {
+                ui.end_row();
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let right = ui.max_rect().right();
                 let icon = self.gui.bar_icon_size;
                 // Le bouton 1:1 allumé à 100 % seulement (pas à 13 % ni à 200 %).
                 let zoomed = self.mode != Mode::Grid
@@ -6696,6 +6882,7 @@ impl TriApp {
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                     marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
+                self.rating_tail = right - ui.min_rect().left();
             });
         });
         match clicked {
@@ -6893,8 +7080,7 @@ impl TriApp {
                     self.blur_slider(ui);
                 }
                 if action == Action::FilterWellExposed && on {
-                    self.clip_slider(ui, tri::exposure::Clip::Over);
-                    self.clip_slider(ui, tri::exposure::Clip::Under);
+                    self.clip_slider(ui, size);
                 }
             }
             ui.separator();
@@ -7012,12 +7198,26 @@ impl TriApp {
                 || !self.name_query.trim().is_empty();
             // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
             ui.add_space(self.gui.dialogs.spacing);
+            // Fenêtre étroite (issue n° 71 : la fin de la barre recouvrait le champ) : le tri
+            // et le nombre d'images passent dans un menu « … », juste avant l'inversion et
+            // l'effacement, toujours visibles ; le champ se rétrécit. Largeurs mesurées à
+            // l'image précédente.
+            let (full_tail, compact_tail) = self.filter_tail;
+            let spacing = ui.spacing().item_spacing.x;
+            let room = ui.available_size_before_wrap().x - spacing;
+            let grid = self.gui.grid;
+            let compact = room < grid.search_width + full_tail;
+            let search_width = if compact {
+                (room - compact_tail).clamp(grid.search_min_width, grid.search_width)
+            } else {
+                grid.search_width
+            };
             let hint = t!("search-grid-hint", keys = self.search_keys());
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.name_query)
                     .id(grid_search_id())
                     .hint_text(hint)
-                    .desired_width(self.gui.grid.search_width),
+                    .desired_width(search_width),
             );
             if self.focus_request == Some(grid_search_id()) {
                 field.request_focus();
@@ -7032,6 +7232,7 @@ impl TriApp {
             // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
             // grisé sans filtre), et juste à sa gauche le nombre d'images.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let right = ui.max_rect().right();
                 let tip = self.action_tip(Action::FilterClear);
                 ui.add_enabled_ui(any, |ui| {
                     let (rect, response) =
@@ -7061,38 +7262,53 @@ impl TriApp {
                         clicked.push(Action::FilterInvert);
                     }
                 });
-                ui.weak(t!(
-                    "filter-bar-count",
-                    shown = self.files.len(),
-                    n = self.folder.files.len()
-                ))
-                .on_hover_text(t!("filter-bar-count-tip"));
-                // Ordre : sens, puis la clé (posés de droite à gauche).
-                ui.separator();
-                let (rect, response) =
-                    marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
-                let color = ui.style().interact(&response).fg_stroke.color;
-                marks::sort_arrow(
-                    ui.painter(),
-                    rect.shrink(size * 0.1),
-                    self.order.descending,
-                    color,
-                );
-                if response.clicked() {
-                    clicked.push(Action::SortReverse);
-                }
-                let mut key = self.order.key;
-                egui::ComboBox::from_id_salt("sort")
-                    .selected_text(sort_name(key))
-                    .show_ui(ui, |ui| {
-                        for k in tri::sort::SortKey::ALL {
-                            ui.selectable_value(&mut key, k, sort_name(k));
-                        }
+                let mut sort = |ui: &mut Ui| {
+                    ui.weak(t!(
+                        "filter-bar-count",
+                        shown = self.files.len(),
+                        n = self.folder.files.len()
+                    ))
+                    .on_hover_text(t!("filter-bar-count-tip"));
+                    // Ordre : sens, puis la clé (posés de droite à gauche).
+                    ui.separator();
+                    let (rect, response) =
+                        marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::sort_arrow(
+                        ui.painter(),
+                        rect.shrink(size * 0.1),
+                        self.order.descending,
+                        color,
+                    );
+                    if response.clicked() {
+                        clicked.push(Action::SortReverse);
+                    }
+                    let mut key = self.order.key;
+                    egui::ComboBox::from_id_salt("sort")
+                        .selected_text(sort_name(key))
+                        .show_ui(ui, |ui| {
+                            for k in tri::sort::SortKey::ALL {
+                                ui.selectable_value(&mut key, k, sort_name(k));
+                            }
+                        })
+                        .response
+                        .on_hover_text(self.action_tip(Action::SortNext));
+                    if key != self.order.key {
+                        sort_choice = Some(key);
+                    }
+                };
+                if compact {
+                    ui.menu_button("…", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), sort)
+                        });
                     })
                     .response
-                    .on_hover_text(self.action_tip(Action::SortNext));
-                if key != self.order.key {
-                    sort_choice = Some(key);
+                    .on_hover_text(t!("filter-bar-more"));
+                    self.filter_tail.1 = right - ui.min_rect().left();
+                } else {
+                    sort(ui);
+                    self.filter_tail.0 = right - ui.min_rect().left();
                 }
             });
         });
@@ -7482,7 +7698,10 @@ impl TriApp {
         marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
-        if let Some((over, under)) = self.clip_fractions(index, deadline) {
+        // Pas sur une pile repliée (issue n° 75) : son nombre d'images est à cette place,
+        // et l'écrêtage d'une seule de ses photos n'y a pas de sens.
+        let stacked = self.stacks.collapsed_count(index).is_some();
+        if !stacked && let Some((over, under)) = self.clip_fractions(index, deadline) {
             let (over_max, under_max) = self.clip_thresholds();
             let side = g.marks * 1.3;
             let mut at = image_area.min + vec2(4.0, 4.0);
@@ -8500,6 +8719,12 @@ impl eframe::App for TriApp {
                     dialog.reveal();
                 }
             }
+            // Réaffichée quand la boîte des fichiers est libre (`background_transfers`).
+            Some(StatusClick::RevealTransfer) => {
+                if let Some(dialog) = self.background_transfers.first_mut() {
+                    dialog.reveal();
+                }
+            }
             Some(StatusClick::OpenOffloaded) => {
                 if let Some(dir) = self.offloaded.take() {
                     self.open_offloaded(&dir);
@@ -8522,16 +8747,12 @@ impl eframe::App for TriApp {
                 .resizable(true)
                 .default_size(self.gui.metadata.width)
                 .show(ui, |ui| {
+                    if self.focus == crate::actions::Scope::Metadata {
+                        panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+                    }
                     ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| self.metadata_panel(ui));
-                    if self.focus == crate::actions::Scope::Metadata {
-                        panel_focus_frame(
-                            ui,
-                            Color32::from(self.gui.dialogs.title_color),
-                            self.gui.dialogs.focus_frame_width,
-                        );
-                    }
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -8601,10 +8822,28 @@ impl eframe::App for TriApp {
         let center = central.show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
+            } else if self.folder.is_none() {
+                // Rien d'ouvert : en grand, au centre, en gris (issue n° 66), et le dossier
+                // du lancement précédent s'il a disparu.
+                let mut text = String::new();
+                if let Some(path) = &self.missing_last {
+                    text = format!(
+                        "{}\n{}\n{}\n\n",
+                        t!("empty-folder-gone", name = folder_name(path)),
+                        crate::files::tilde(path),
+                        t!("empty-folder-gone-back")
+                    );
+                }
+                text += &t!("empty-no-folder");
+                ui.centered_and_justified(|ui| {
+                    ui.label(
+                        egui::RichText::new(text)
+                            .size(self.gui.dialogs.title_size)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                });
             } else if self.files.is_empty() {
-                ui.label(if self.folder.is_none() {
-                    t!("empty-no-folder")
-                } else if self.folder.files.is_empty() {
+                ui.label(if self.folder.files.is_empty() {
                     t!("empty-folder")
                 } else {
                     t!("empty-filtered")
@@ -8862,6 +9101,8 @@ enum StatusClick {
     Action(Action),
     /// Progression d'un déchargement en arrière-plan : réafficher sa boîte.
     RevealOffload,
+    /// Progression d'une copie en arrière-plan : réafficher sa boîte.
+    RevealTransfer,
     /// Ouvrir la séance déchargée en arrière-plan.
     OpenOffloaded,
     /// Ne plus la proposer.
@@ -8994,16 +9235,17 @@ fn drag_preview(ctx: &egui::Context) {
         });
 }
 
-/// Liseré de la couleur d'accent autour d'un panneau qui a le clavier, épais de `width`
-/// (`[gui.dialogs] focus_frame_width`, 1 point : 2 paraissaient lourds, retour du
-/// 22/10/2026).
-fn panel_focus_frame(ui: &Ui, color: Color32, width: f32) {
-    ui.painter().rect_stroke(
-        ui.clip_rect().shrink(1.0),
-        0.0,
-        egui::Stroke::new(width, color),
-        egui::StrokeKind::Inside,
-    );
+/// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
+/// mêlé de `tint` de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu
+/// plus clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré
+/// d'accent (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre
+/// alourdissait).
+fn panel_focus_fill(ui: &Ui, tint: f32) {
+    let visuals = ui.visuals();
+    let fill = visuals
+        .panel_fill
+        .lerp_to_gamma(visuals.text_color(), tint.clamp(0.0, 1.0));
+    ui.painter().rect_filled(ui.clip_rect(), 0.0, fill);
 }
 
 /// Boîte modale ouverte près de `at` (le clic qui l'ouvre), plutôt qu'au centre de la
@@ -9502,9 +9744,9 @@ mod tests {
     fn thumbnail_info_and_size_from_the_keyboard_and_the_bottom_bar() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        // Fenêtre étroite (1000 points) et panneaux ouverts : pas la place pour les
-        // contrôles de la grille, qui recouvriraient les notes du bandeau.
-        assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_none());
+        // Fenêtre étroite (1000 points) et panneaux ouverts : les contrôles de la grille
+        // passent à la ligne au lieu de recouvrir les notes du bandeau (issue n° 71).
+        assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_some());
         press(&mut h, Key::D, Modifiers::SHIFT);
         press(&mut h, Key::M, Modifiers::SHIFT);
         assert_eq!(
@@ -11004,6 +11246,66 @@ mod tests {
             .with_size(vec2(1000.0, 700.0))
             .build_eframe(move |_cc| TriApp::new(None, s, None));
         assert!(off.state().folder.is_none());
+        // Disque débranché (dossier disparu) : dit au centre, rouvert à son retour (#66).
+        let away = dir.path().join("débranché");
+        std::fs::rename(&photos, &away).unwrap();
+        let s = settings(true);
+        let mut gone = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        gone.run_steps(3);
+        assert!(gone.state().folder.is_none());
+        assert!(gone.query_by_label_contains("n'est plus là").is_some());
+        assert!(gone.query_by_label_contains("séance").is_some(), "son nom");
+        std::fs::rename(&away, &photos).unwrap();
+        gone.state_mut().reopen_missing_last();
+        assert_eq!(gone.state().folder.dir, photos, "rebranché : rouvert");
+        // Un autre dossier choisi entre-temps : pas de retour en arrière.
+        std::fs::rename(&photos, &away).unwrap();
+        let s = settings(true);
+        let mut other = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(None, s, None));
+        let elsewhere = dir.path().join("ailleurs");
+        std::fs::create_dir(&elsewhere).unwrap();
+        other.state_mut().open_folder(&elsewhere);
+        std::fs::rename(&away, &photos).unwrap();
+        other.state_mut().reopen_missing_last();
+        assert_eq!(
+            other.state().folder.dir,
+            elsewhere,
+            "on reste où on est allé"
+        );
+    }
+
+    #[test]
+    fn a_narrow_filter_bar_folds_its_end_into_a_menu() {
+        // Issue n° 71 : fenêtre étroite, le tri et le nombre d'images passent dans « … »,
+        // l'inversion et l'effacement restent visibles ; large, tout est dans la barre.
+        let (mut h, _dir) = harness();
+        let more = "…";
+        let clear = t!("filter-bar-clear");
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "large : pas de menu");
+        h.set_size(vec2(760.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_some(), "étroite : le menu");
+        assert!(
+            h.query_by_label(&clear).is_some(),
+            "effacer toujours visible"
+        );
+        // Le menu ouvert : le nombre d'images y est.
+        h.get_by_label(more).click();
+        h.run_steps(3);
+        let count = t!("filter-bar-count", shown = 3, n = 3);
+        assert!(
+            h.query_by_label(&count).is_some(),
+            "nombre d'images dans le menu"
+        );
+        h.set_size(vec2(2000.0, 700.0));
+        h.run_steps(4);
+        assert!(h.query_by_label(more).is_none(), "de nouveau large");
     }
 
     #[test]
@@ -11315,20 +11617,16 @@ mod tests {
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::L, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Metadata);
-        // Jusqu'à la dernière ligne (netteté comprise), puis l'histogramme en tête : Entrée
-        // l'ouvre en grand.
+        // Jusqu'à la dernière ligne (netteté comprise) ; le curseur ne passe que par les
+        // lignes (#77), Entrée ouvre l'histogramme en grand.
         run_until(&mut h, |app| {
             app.meta_has_histogram && !app.meta_rows.is_empty()
         });
         for _ in 0..40 {
             press(&mut h, Key::J, Modifiers::NONE);
         }
-        let last = h.state().meta_rows.len();
-        assert_eq!(
-            h.state().meta_cursor,
-            last,
-            "dernière ligne (après l'histogramme)"
-        );
+        let last = h.state().meta_rows.len() - 1;
+        assert_eq!(h.state().meta_cursor, last, "dernière ligne");
         // Maj+k deux fois : trois lignes sélectionnées.
         press(&mut h, Key::K, Modifiers::SHIFT);
         press(&mut h, Key::K, Modifiers::SHIFT);
@@ -11342,9 +11640,13 @@ mod tests {
         for _ in 0..40 {
             press(&mut h, Key::K, Modifiers::NONE);
         }
-        assert_eq!(h.state().meta_cursor, 0);
+        assert_eq!(
+            h.state().meta_cursor,
+            0,
+            "première ligne, pas l'histogramme"
+        );
         press(&mut h, Key::Enter, Modifiers::NONE);
-        assert!(h.state().histogram_large, "Entrée sur l'histogramme");
+        assert!(h.state().histogram_large, "Entrée : l'histogramme en grand");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -11998,6 +12300,15 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().stacks.shown.len(), 2, "deux piles repliées");
         assert_eq!(h.state().stacks.count(), 2);
+        // Toutes brûlées : pas de badge d'écrêtage sur une pile repliée (#75).
+        for f in &files {
+            h.state_mut()
+                .clip_summary
+                .insert(f.path.clone(), (1.0, 0.0));
+        }
+        h.run_steps(2);
+        let over = t!("badge-over", percent = tri::i18n::decimal(100.0, 1));
+        assert_eq!(h.query_all_by_label(&over).count(), 0, "piles repliées");
         // La flèche droite saute les images cachées : de la première pile à la seconde.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert!(selected_name(&h).starts_with('b'), "{}", selected_name(&h));
@@ -12008,6 +12319,11 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 2, "tout replié");
         press(&mut h, Key::S, Modifiers::SHIFT);
         assert_eq!(h.state().stacks.shown.len(), 6, "tout déplié");
+        h.run_steps(2);
+        assert!(
+            h.query_all_by_label(&over).count() > 0,
+            "dépliées : les badges"
+        );
         press(&mut h, Key::S, Modifiers::SHIFT);
         h.state_mut().expanded.clear();
         h.state_mut().stacks_dirty = true;
@@ -12270,6 +12586,11 @@ mod tests {
         assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
         // Curseurs « brûlé » / « bouché » avec le filtre ; tout à gauche, plus rien n'est
         // exclu (fonds noirs, issue n° 48), et plus de badge.
+        // Un seul curseur ; son interrupteur passe du brûlé au bouché.
+        assert!(h.query_by_label(&t!("clip-slider-under")).is_none());
+        h.get_by_label(&t!("clip-slider-over")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().clip_side, tri::exposure::Clip::Under);
         assert!(h.query_by_label(&t!("clip-slider-under")).is_some());
         h.state_mut().clip_strictness = (-1.0, -1.0);
         h.state_mut().refilter(Reveal::Minimal);
@@ -12637,6 +12958,54 @@ mod tests {
                 h.run_steps(2);
             }
         }
+    }
+
+    #[test]
+    fn a_copy_goes_on_in_the_background() {
+        // Issue n° 72 : pendant une copie, « Continuer en arrière-plan » libère l'interface ;
+        // la progression est dans la barre d'état, la fin y est annoncée.
+        let (mut h, dir) = harness();
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        let image = h.state().files[0].path.clone();
+        let (go, held) = mpsc::channel();
+        let settings = h.state().settings.files.clone();
+        h.state_mut().file_dialog = Some(crate::files::FileDialog::transfer_held(
+            vec![image],
+            &dest,
+            &settings,
+            held,
+        ));
+        h.run_steps(2);
+        h.get_by_label(&t!("transfer-background")).click();
+        h.run_steps(2);
+        assert!(h.state().file_dialog.is_none(), "boîte libérée");
+        assert_eq!(h.state().background_transfers.len(), 1);
+        assert!(
+            h.query_by_label_contains("copie vers").is_some(),
+            "barre d'état"
+        );
+        // Clic sur la progression : la boîte revient, puis repart en arrière-plan.
+        // Recliqué tant que la boîte n'est pas revenue (CI Windows : un clic juste après
+        // l'apparition de la barre se perdait).
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while h.state().file_dialog.is_none() {
+            assert!(Instant::now() < deadline, "jamais réaffichée");
+            h.get_by_label_contains("copie vers").click();
+            h.run_steps(3);
+        }
+        while h.state().file_dialog.is_some() {
+            assert!(Instant::now() < deadline, "jamais remise en arrière-plan");
+            h.get_by_label(&t!("transfer-background")).click();
+            h.run_steps(2);
+        }
+        go.send(()).unwrap();
+        run_until(&mut h, |app| app.background_transfers.is_empty());
+        assert!(dest.join("img0.jpg").is_file());
+        assert_eq!(
+            h.state().notice.as_ref().map(|(text, _)| text.clone()),
+            Some(t!("transfer-done"))
+        );
     }
 
     #[test]
@@ -13454,5 +13823,29 @@ mod tests {
             .filter(|a| a.available() && a.group() == group)
             .count();
         assert!(by_group.iter().filter(|(a, _)| a.group() == group).count() == count);
+    }
+
+    #[test]
+    fn analysis_filters_follow_the_computation() {
+        // Issue n° 73 : filtre allumé pendant les analyses, la barre d'état le dit, et la
+        // grille se refiltre au fil du calcul (au plus toutes les `analysis_refilter_ms`).
+        let (mut h, _dir) = harness();
+        let app = h.state_mut();
+        let half = Progress { done: 1, total: 3 };
+        app.gui.analysis_refilter_ms = 0;
+        app.refiltered_at = Instant::now() - Duration::from_secs(3600);
+        assert!(!app.analysis_refilter_due(half), "0 : à la fin seulement");
+        assert!(app.analysis_refilter_due(Progress { done: 3, total: 3 }));
+        app.gui.analysis_refilter_ms = 1000;
+        assert!(app.analysis_refilter_due(half), "dernier refiltrage ancien");
+        app.refilter(Reveal::Minimal);
+        assert!(!app.analysis_refilter_due(half), "refiltré à l'instant");
+        app.notice = None;
+        app.analysis_partial_notice(half);
+        let notice = app.notice.clone().map(|(text, _)| text).unwrap_or_default();
+        assert!(notice.contains("1 / 3"), "{notice}");
+        app.notice = None;
+        app.analysis_partial_notice(Progress { done: 3, total: 3 });
+        assert!(app.notice.is_none(), "tout analysé : rien à dire");
     }
 }

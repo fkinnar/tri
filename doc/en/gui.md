@@ -72,7 +72,10 @@ system one ("cold" measurements, experiments).
   is expanded and shown at startup. `Shift+D` shows or hides the panel; settings
   `[gui.folders]` (shown, width, indent, hidden folders). Without a folder argument,
   `tri-gui` reopens the last opened folder (`[gui] reopen_last`, remembered by the engine
-  in the data folder), otherwise opens on the panel. The filter bar wraps when space runs
+  in the data folder), otherwise opens on the panel, with the invitation to pick a folder
+  large and grey in the centre. Last folder gone (drive unplugged, issue #66): its name
+  and path above, and it opens again by itself when the drive is back (volume watching),
+  unless another folder was opened meanwhile (that would go back without being asked). The filter bar wraps when space runs
   out.
 - **Rating** (2026-10-17): stars, colours, picked / rejected on the selected image
   (grid or full screen), written immediately to its XMP sidecar (see [xmp.md](xmp.md),
@@ -264,7 +267,11 @@ system one ("cold" measurements, experiments).
   live from the settings.
 - **Search** (2026-10-19): `/` in the grid and in the folders panel (in full screen, `/`
   stays "fit"), Ctrl+F everywhere. **Grid**: field after the filter bar's counter
-  (`[gui.grid] search_width`), live filter by file name (`tri::fuzzy::NameFilter`,
+  (`[gui.grid] search_width`; narrow window, issue #71: the sort and the number of images
+  go into a "…" menu just before invert and clear, always visible, and the field shrinks
+  down to `search_min_width`; the right-hand buttons of the rating bar wrap to a second
+  line, and stay there while the width does not change; widths measured on the previous
+  frame), live filter by file name (`tri::fuzzy::NameFilter`,
   combined with the other filters, "Clear" empties it too); Enter keeps the filter and
   gives the keyboard back to the grid, Esc clears it. **Folders**: field under the title;
   during the search, the results replace the tree (see `places.md`: `~/…`, `/…`,
@@ -386,7 +393,7 @@ system one ("cold" measurements, experiments).
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22) (folders, images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has an accent outline (`[gui.dialogs] focus_frame_width`, 1 point), the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77), the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's
@@ -551,7 +558,8 @@ system one ("cold" measurements, experiments).
     Configurable colours and opacity;
   - **badges** in the grid: half-white half-black triangle at the top left of the
     thumbnail (dots at the top right until 2026-10-21; click: large histogram) above `[gui.histogram] badge_over` / `badge_under`, details on hover;
-    analyses read from the cache within the image's loading budget;
+    analyses read from the cache within the image's loading budget; not on a collapsed
+    stack (issue #75: its image count is there);
   - checked on a real shoot: fully blown photo (red everywhere, badge), portrait in a
     black sweater (blue zones in the folds, blue badge, -3.5 EV of headroom), portraits on
     a white background (nothing, -0.45 EV of headroom).
@@ -921,7 +929,9 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 - **"Well exposed" and "invert" filters** (late afternoon): sun (`f w`) removing images
   blown or blocked beyond the badge thresholds (`tri::exposure::ClipFilter`; fractions
   read from the analysis cache for the whole folder, an image not yet analysed stays;
-  grid refiltered when the histograms are done); ◐ (`f i`) shows what the **content**
+  grid refiltered when the histograms are done, and since 2026-10-25 as they are
+  computed, at most every `[gui] analysis_refilter_ms` (5 s), sharpness too; turning the
+  filter on during the analyses says so in the status bar, issue #73); ◐ (`f i`) shows what the **content**
   filters (ratings, sharpness, exposure) remove, file type and name search still
   applied (`tri::filter::invert`): "blurry only" is "sharp" inverted, the drop and `f B`
   are gone. Triangle and sun in the accent when on, grey otherwise.
@@ -930,7 +940,10 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   (centre = badge thresholds, to the right stricter, double-click: the centre), one per
   side; fully to the left, that side no longer excludes anything. Thresholds multiplied
   or divided by `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`),
-  remembered per folder; the badges follow.
+  remembered per folder; the badges follow. Since 2026-10-25 (user feedback: two sliders
+  with grey labels were hard to read): **a single slider**, and on its left a switch with
+  the clipping badges' icon (white triangle: blown, black: crushed) that chooses the side
+  being set.
 - **Crop**: presets on `Tab` / `Shift+Tab` (`p` was also the sharpness map, which stayed
   on; `p` turns it off during cropping); egui moved the focus to the bar there, given
   back at the end of the frame. Image name removed from the rating

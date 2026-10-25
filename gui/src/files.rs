@@ -132,6 +132,9 @@ pub struct Transfer {
     has_pairs: Option<bool>,
     /// Dossier déplacé : son cache le suit (coché d'office).
     bring_cache: bool,
+    /// Copie en cours mise en arrière-plan (issue n° 72) : plus de boîte, la progression
+    /// est dans la barre d'état.
+    hidden: bool,
 }
 
 /// Suppression en cours, dans un fil à part : une centaine d'images à la corbeille prend
@@ -224,6 +227,42 @@ impl FileDialog {
         }
     }
 
+    /// Copie mise en arrière-plan (issue n° 72) : l'application la garde à part, la
+    /// boîte n'est plus affichée.
+    pub fn is_hidden(&self) -> bool {
+        matches!(self, FileDialog::Transfer(t) if t.hidden)
+    }
+
+    /// Met une copie en cours en arrière-plan.
+    pub fn hide(&mut self) {
+        if let FileDialog::Transfer(t) = self {
+            t.hidden = true;
+        }
+    }
+
+    /// Réaffiche une copie mise en arrière-plan.
+    pub fn reveal(&mut self) {
+        if let FileDialog::Transfer(t) = self {
+            t.hidden = false;
+        }
+    }
+
+    /// Avancement d'une copie, pour la barre d'état : (texte, fraction).
+    pub fn transfer_status(&self) -> Option<(String, f32)> {
+        let FileDialog::Transfer(t) = self else {
+            return None;
+        };
+        let job = t.job.as_ref()?;
+        let done = job.done.load(Ordering::Relaxed);
+        let text = t!(
+            "transfer-status",
+            name = file_name(&job.dest),
+            done = done,
+            total = job.total
+        );
+        Some((text, done as f32 / job.total.max(1) as f32))
+    }
+
     /// Copie ou suppression en cours : la boîte ne se ferme pas.
     pub fn busy(&self) -> bool {
         match self {
@@ -258,6 +297,7 @@ impl FileDialog {
             pairs: None,
             has_pairs: None,
             bring_cache: true,
+            hidden: false,
         }))
     }
 
@@ -988,11 +1028,16 @@ impl Transfer {
                 _ => Outcome::Failed(t!("transfer-failed", error = "?")),
             };
         }
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        if self.hidden {
+            return Outcome::Open;
+        }
         let done = job.done.load(Ordering::Relaxed);
         let title = self.title();
         let Some(job) = &self.job else {
             return Outcome::Open;
         };
+        let mut hide = false;
         crate::app::modal_at("transfer_dialog", self.at)
             .title(title)
             .busy()
@@ -1005,8 +1050,11 @@ impl Transfer {
                         total = job.total
                     )),
                 );
+                // Pour continuer à trier pendant une longue copie (issue n° 72).
+                ui.add_space(6.0);
+                hide = ui.button(t!("transfer-background")).clicked();
             });
-        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        self.hidden = hide;
         Outcome::Open
     }
 }
@@ -1018,5 +1066,40 @@ pub fn tilde(path: &Path) -> String {
         Some(rest) if rest.as_os_str().is_empty() => "~".into(),
         Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
         None => path.display().to_string(),
+    }
+}
+
+#[cfg(test)]
+impl FileDialog {
+    /// Copie de `images` vers `dest` déjà lancée, qui n'avance qu'une fois `go` reçu
+    /// (tests de la copie en arrière-plan, sans dépendre de sa vitesse).
+    pub fn transfer_held(
+        images: Vec<PathBuf>,
+        dest: &Path,
+        settings: &FileSettings,
+        go: std::sync::mpsc::Receiver<()>,
+    ) -> FileDialog {
+        let mut dialog = FileDialog::transfer(
+            Source::Images(images),
+            TransferMode::Copy,
+            Some(dest),
+            None,
+            Pos2::ZERO,
+        );
+        if let FileDialog::Transfer(t) = &mut dialog {
+            let plan = Plan::of(&t.source, dest, t.mode, settings).unwrap();
+            let total = plan.len();
+            let handle = std::thread::spawn(move || {
+                let _ = go.recv();
+                plan.run(|_, _| {}).map(|()| plan)
+            });
+            t.job = Some(Job {
+                done: Arc::new(AtomicUsize::new(0)),
+                total,
+                dest: dest.to_path_buf(),
+                handle: Some(handle),
+            });
+        }
+        dialog
     }
 }

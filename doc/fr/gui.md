@@ -73,7 +73,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   dossier ouvert est déplié et montré au démarrage. `Maj+D` affiche ou masque le
   panneau ; réglages `[gui.folders]` (affiché, largeur, retrait, dossiers cachés). Sans
   dossier en argument, `tri-gui` rouvre le dernier dossier ouvert (`[gui] reopen_last`,
-  mémorisé par le moteur dans le dossier de données), sinon s'ouvre sur le panneau. La barre de filtres passe à la
+  mémorisé par le moteur dans le dossier de données), sinon s'ouvre sur le panneau,
+  avec au centre, en grand et en gris, l'invitation à choisir un dossier. Dernier dossier
+  disparu (disque débranché, issue n° 66) : son nom et son chemin au-dessus, et il se
+  rouvre de lui-même quand le disque revient (surveillance des volumes), sauf si un autre
+  dossier a été ouvert entre-temps (ce serait revenir en arrière sans l'avoir demandé). La barre de filtres passe à la
   ligne quand la place manque.
 - **Notation** (17/10/2026) : étoiles, couleurs, accepté / rejeté sur l'image sélectionnée
   (grille ou plein écran), écrites aussitôt dans son sidecar XMP (voir [xmp.md](xmp.md),
@@ -266,7 +270,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   changeant de thème ; appliqué à chaud depuis les réglages.
 - **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
   écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ après le compteur de
-  la barre des filtres (`[gui.grid] search_width`), filtre en direct par nom de fichier
+  la barre des filtres (`[gui.grid] search_width` ; fenêtre étroite, issue n° 71 : le
+  tri et le nombre d'images passent dans un menu « … » juste avant l'inversion et
+  l'effacement, toujours visibles, et le champ se rétrécit jusqu'à `search_min_width` ;
+  les boutons de droite du bandeau de notation passent à la ligne, et y restent tant que
+  la largeur ne change pas ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
   (`tri::fuzzy::NameFilter`, combiné aux autres filtres, « Effacer » le vide aussi) ;
   Entrée garde le filtre et rend le clavier à la grille, Échap l'efface. **Dossiers** :
   champ sous le titre ; pendant la recherche, les résultats remplacent l'arborescence
@@ -398,7 +406,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   panneau de gauche / de droite, `o` au suivant (leader puis `b` : signaler un problème,
   22/10/2026) (dossiers, images, métadonnées ; un
   panneau masqué s'affiche, les dossiers n'existent qu'en grille). Le panneau actif a un
-  liseré d'accent (`[gui.dialogs] focus_frame_width`, 1 point), la barre d'état le dit ;
+  fond un peu plus clair (plus foncé en thème clair, `[gui.dialogs] focus_panel_tint` ;
+  liseré d'accent jusqu'au 25/10/2026, issue n° 78 : avec le curseur, lui aussi en
+  accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
+  l'histogramme, issue n° 77), la barre d'état le dit ;
   un clic dans un panneau lui donne le clavier, un clic dans la zone des images le leur
   rend (`TriApp::click_focus`, 22/10/2026 ; les boîtes ouvertes par-dessus ne comptent
   pas). **Ses touches passent d'abord, les autres
@@ -567,7 +578,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     saturation. Couleurs et opacité réglables ;
   - **badges** dans la grille : triangle mi-blanc mi-noir en haut à gauche de la vignette
     (pastilles en haut à droite jusqu'au 21/10/2026), clic : grand histogramme, au-delà de `[gui.histogram] badge_over` / `badge_under`, détail au
-    survol ; analyses lues dans le cache dans le budget de chargement de l'image ;
+    survol ; analyses lues dans le cache dans le budget de chargement de l'image ; pas
+    sur une pile repliée (issue n° 75 : son nombre d'images est à cette place) ;
   - vérifié sur une vraie séance : photo entièrement brûlée (rouge partout, badge),
     portrait au pull noir (zones bleues dans les plis, badge bleu, -3,5 IL de marge),
     portraits sur fond blanc (rien, -0,45 IL de marge).
@@ -947,7 +959,9 @@ photos nettes.
   retire les images brûlées ou bouchées au-delà des seuils des badges
   (`tri::exposure::ClipFilter` ; parts lues dans le cache d'analyse pour tout le dossier,
   une image pas encore analysée reste ; grille refiltrée quand les histogrammes sont
-  finis) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
+  finis, et depuis le 25/10/2026 au fil du calcul, au plus toutes les `[gui]
+  analysis_refilter_ms` (5 s), netteté comprise ; allumer le filtre pendant les analyses
+  le dit dans la barre d'état, issue n° 73) ; ◐ (`f i`) montre ce que les filtres sur le **contenu** (notes, netteté,
   exposition) retirent, type de fichier et recherche par nom restant appliqués
   (`tri::filter::invert`) : « floues seulement » est « nettes » inversé, la goutte et
   `f B` sont retirées. Triangle et soleil à l'accent quand ils sont allumés, gris sinon.
@@ -956,7 +970,10 @@ photos nettes.
   flou (centre = seuils des badges, à droite plus strict, double-clic : le centre), un
   par côté ; tout à gauche, ce côté n'exclut plus rien. Seuils multipliés ou divisés par
   `[gui.histogram] strictness_span` (`tri::exposure::clip_threshold`), retenus par
-  dossier ; les badges suivent.
+  dossier ; les badges suivent. Depuis le 25/10/2026 (retour de l'utilisateur : deux
+  curseurs à libellé gris se lisaient mal) : **un seul curseur**, et à sa gauche un
+  interrupteur à l'icône des badges d'écrêtage (triangle blanc : brûlé, noir : bouché)
+  qui choisit le côté réglé.
 - **Recadrage** : préréglages sur `Tab` / `Maj+Tab` (`p` aussi la carte de netteté, qui
   restait affichée ; `p` l'éteint pendant le recadrage) ; egui y déplaçait le focus vers
   la barre, rendu en fin d'image. Nom de l'image retiré du

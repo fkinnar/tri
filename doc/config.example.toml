@@ -435,6 +435,10 @@ progress_hide_done = true
 # Délai avant d'afficher les barres de progression après un changement de filtre (ms) :
 # souvent tout est déjà en cache, une barre montrée un instant ne se lit pas.
 progress_delay_ms = 400
+# Filtres netteté et exposition pendant le calcul des analyses : la grille se met à jour
+# au plus toutes les … ms avec les photos déjà analysées, puis à la fin ; 0 : à la fin
+# seulement.
+analysis_refilter_ms = 5000
 # Côté des boutons à icône du bandeau de notation (avance automatique, image précédente /
 # suivante), en points.
 bar_icon_size = 24.0
@@ -522,6 +526,9 @@ size_slider = 90.0
 stacks = false
 # Recherche par nom de fichier (/ ou Ctrl+F en grille) : largeur du champ (points).
 search_width = 200.0
+# Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
+# le nombre d'images passent alors dans un menu « … »).
+search_min_width = 80.0
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement
@@ -595,8 +602,9 @@ max_width = 520.0
 title_size = 17.0
 # Couleur des titres (accent, turquoise), soulignés d'une ligne de séparation.
 title_color = "#50bedc"
-# Épaisseur du liseré de cette couleur autour du panneau qui a le clavier (points).
-focus_frame_width = 1.0
+# Panneau qui a le clavier : son fond un peu plus clair en thème sombre, un peu plus foncé
+# en thème clair (part de la couleur du texte mêlée au fond, de 0 à 1).
+focus_panel_tint = 0.06
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.

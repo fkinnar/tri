@@ -149,6 +149,10 @@ pub struct GuiSettings {
     /// cache répond souvent tout de suite, une barre montrée 1/10 s n'est pas lisible
     /// (retour du 21/10/2026).
     pub progress_delay_ms: u64,
+    /// Filtres sur l'analyse (netteté, exposition) pendant son calcul : la grille est
+    /// refiltrée au plus toutes les `analysis_refilter_ms` (ms) avec les analyses déjà
+    /// arrivées (issue n° 73), puis à la fin ; 0 : à la fin seulement.
+    pub analysis_refilter_ms: u64,
     /// Côté des boutons à icône du bandeau de notation (avance automatique, image
     /// précédente / suivante), en points.
     pub bar_icon_size: f32,
@@ -223,6 +227,7 @@ impl Default for GuiSettings {
             progress_width: 160.0,
             progress_hide_done: true,
             progress_delay_ms: 400,
+            analysis_refilter_ms: 5000,
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
@@ -435,6 +440,9 @@ pub struct GridSettings {
     pub stacks: bool,
     /// Champ de recherche par nom de la barre des filtres (`/`, Ctrl+F) : largeur (points).
     pub search_width: f32,
+    /// Largeur minimale de ce champ quand la barre manque de place (le tri et le nombre
+    /// d'images passent alors dans un menu « … », issue n° 71).
+    pub search_min_width: f32,
 }
 
 impl Default for GridSettings {
@@ -460,6 +468,7 @@ impl Default for GridSettings {
             size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
+            search_min_width: 80.0,
         }
     }
 }
@@ -483,8 +492,9 @@ pub struct DialogSettings {
     pub title_size: f32,
     /// Couleur des titres (accent).
     pub title_color: Color,
-    /// Épaisseur du liseré, de cette couleur, autour du panneau qui a le clavier (points).
-    pub focus_frame_width: f32,
+    /// Fond du panneau qui a le clavier : part de la couleur du texte mêlée au fond des
+    /// panneaux (0 : aucune différence, 1 : couleur du texte).
+    pub focus_panel_tint: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
     /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
@@ -503,7 +513,7 @@ impl Default for DialogSettings {
             max_width: 520.0,
             title_size: 17.0,
             title_color: Color([80, 190, 220]),
-            focus_frame_width: 1.0,
+            focus_panel_tint: 0.06,
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,

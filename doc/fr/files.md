@@ -113,7 +113,11 @@ gardent leurs notes.
   comme dans vim), sur la sélection,
   et boutons du clic droit ; boîte avec champ (Tab complète, flèches haut / bas : récentes,
   dossier absent créé s'il n'en manque qu'un niveau), bascule copier / déplacer,
-  progression pendant la copie (dans un fil : la fenêtre reste vivante).
+  progression pendant la copie (dans un fil : la fenêtre reste vivante). « Continuer en
+  arrière-plan » (25/10/2026, issue n° 72) referme la boîte : la copie continue, sa
+  progression est dans la barre d'état (un clic rouvre la boîte), la fin y est annoncée
+  et le dossier relu ; les autres boîtes (renommer, supprimer…) restent utilisables, et
+  plusieurs copies peuvent tourner ainsi (`TriApp::background_transfers`).
 
 ## Copier / déplacer un dossier (20/10/2026)
 

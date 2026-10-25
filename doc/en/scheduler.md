@@ -66,7 +66,10 @@ Background work queue that fills the cache for a folder.
     parallel could make "6/6" arrive before "5/6": the progress went backwards (bug found
     by the tests, see below);
   - `set_folder` purges the undelivered events of the previous folder. Only an event being
-    delivered can still arrive, and the interface ignores those of another generation.
+    delivered can still arrive, and the interface ignores those of another generation. A
+    background task running for an image that stays in the new list (refiltered folder)
+    goes on at its new place, in the new generation; the others are cancelled (issue #73:
+    each refilter dropped the analysis in progress).
 - **`wait_idle`** only returns once **all events are delivered**: nothing pending, nothing
   running, event queue empty, no callback in progress. A panicking callback does not block
   `wait_idle` (`Drop` guard).
