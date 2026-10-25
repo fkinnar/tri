@@ -25,7 +25,10 @@ est comparé au commit courant) : tests sur les trois systèmes, paquets, puis l
 **Release `nightly`** (préversion) remplacée par les paquets du jour, avec les derniers
 commits en notes. Son tag n'est pas un numéro de version : la recherche de mise à jour
 l'ignore. Ces binaires portent `TRI_BUILD_CHANNEL=nightly` (`release` sur un tag `v…`)
-et le disent dans l'aide ([update.md](update.md)). Pour la bêta (prévu) : une branche
+et le disent dans l'aide ([update.md](update.md)) ; leurs paquets aussi, dans leur nom
+(`tri-1.0.0-alpha.7-nightly-20261025-d16c32f-macos-arm64.dmg`, `package_version` de
+`scripts/package.py`, 25/10/2026 : le `.dmg` de nuit portait le nom de la version
+publiée). Pour la bêta (prévu) : une branche
 `candidate` pour les versions candidates, et une branche des builds de nuit.
 
 ## Ce qui est livré, et pourquoi

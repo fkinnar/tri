@@ -16,6 +16,7 @@ permet de les remplacer), avec leurs licences et les notices des crates Rust
 Usage : package.py [--out DOSSIER] [--no-build] [--no-archive] [--sign IDENTITÉ]
 """
 import argparse
+import datetime
 import os
 import platform
 import re
@@ -52,6 +53,19 @@ def output(cmd):
 def version():
     text = (ROOT / "gui" / "Cargo.toml").read_text()
     return re.search(r'^version = "([^"]+)"', text, re.M).group(1)
+
+
+def package_version():
+    """Version écrite dans les noms des paquets et leurs métadonnées : celle de
+    `Cargo.toml` ; pour un build de nuit (`TRI_BUILD_CHANNEL=nightly`, posé par la CI),
+    suivie de `-nightly-AAAAMMJJ-<commit>`, sinon son `.dmg` portait le même nom que la
+    version publiée (retour du 25/10/2026)."""
+    ver = version()
+    if os.environ.get("TRI_BUILD_CHANNEL") != "nightly":
+        return ver
+    commit = os.environ.get("GITHUB_SHA") or output(["git", "rev-parse", "HEAD"]).strip()
+    day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+    return f"{ver}-nightly-{day}-{commit[:7]}"
 
 
 def build(target_dir):
@@ -589,7 +603,7 @@ def main():
     target_dir = ROOT / "target" / "package"
     release = target_dir / "release" if args.no_build else build(target_dir)
     args.out.mkdir(parents=True, exist_ok=True)
-    ver = version()
+    ver = package_version()
     if sys.platform == "darwin":
         result = package_macos(release, args.out, ver, not args.no_archive, args.sign)
     elif sys.platform.startswith("linux"):

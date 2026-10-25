@@ -25,7 +25,10 @@ is compared with the current commit): tests on the three systems, packages, then
 **`nightly` Release** (pre-release) replaced with the day's packages and the last commits
 as notes. Its tag is not a version number: the update check ignores it. These binaries
 carry `TRI_BUILD_CHANNEL=nightly` (`release` on a `v…` tag) and say so in the help
-([update.md](update.md)). For the beta (planned): a `candidate` branch for release
+([update.md](update.md)); so do their packages, in their name
+(`tri-1.0.0-alpha.7-nightly-20261025-d16c32f-macos-arm64.dmg`, `package_version` in
+`scripts/package.py`, 2026-10-25: the nightly `.dmg` had the published version's name).
+For the beta (planned): a `candidate` branch for release
 candidates and a nightly build branch.
 
 ## What is shipped, and why
