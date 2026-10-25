@@ -32,6 +32,7 @@ mod app;
 mod compare;
 mod crash;
 mod crop;
+mod develop_batch;
 mod export;
 mod files;
 mod grid;

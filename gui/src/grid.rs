@@ -187,6 +187,7 @@ pub fn navigate(
         | Action::Search
         | Action::FocusMode
         | Action::Develop
+        | Action::DevelopFolder
         | Action::RefreshFolders
         | Action::ToggleHistogram
         | Action::HistogramScale

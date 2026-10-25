@@ -98,6 +98,14 @@ functions.
 - without the `heif` feature: the HEIC fixture gives `HeifNotCompiled`;
 - with `TRI_TEST_HEIC`: a real iPhone HEIC decodes to consistent RGB8.
 
+### `develop_batch` (unit, `gui/src/develop_batch.rs`)
+
+- only the developed images (darktable sidecar with a history) are rendered; without
+  darktable, the failure is counted and the batch goes to the end;
+- with `TRI_TEST_DEVELOP` (a folder of RAWs, some developed, darktable installed,
+  `#[ignore]`): the developed ones rendered, the others skipped. On 2026-10-25, three
+  RAFs (two developed): 13 s.
+
 ### `cache` (unit, `src/cache.rs`)
 
 - default location per OS (HOME, absolute or relative XDG_CACHE_HOME, LOCALAPPDATA),

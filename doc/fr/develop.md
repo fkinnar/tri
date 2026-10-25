@@ -83,5 +83,14 @@ on zoome dans le rendu. Le collimateur et les zones saturées / bouchées, plac�
 capteur entier, sont masqués sur un développé (recadré). Sans darktable, la source n'est
 pas proposée et `Maj+B` le dit.
 
+**Tout un dossier en fond** (25/10/2026, issue n° 69) : `Ctrl+Maj+B` (le dossier ouvert)
+ou le clic droit sur un dossier du panneau, « Développer tout le dossier (darktable) ».
+Chaque image qui a un sidecar darktable à historique est rendue l'une après l'autre
+(`gui/src/develop_batch.rs`), par le même producteur que `Maj+B` (`CachedPreviews`,
+niveau `Developed`) : un autre logiciel de rendu branché là servira de même. Déjà en
+cache : passée. Un lot à la fois ; sa progression est une tâche de fond (« × » :
+interrompre), le bilan (rendus, déjà faits, échecs) va dans la barre d'état ; ensuite,
+`b` propose le développé de chaque image rendue.
+
 À venir : `darktable-cli` sait traiter un dossier en un seul lancement (démarrage
 amorti) — pour l'envoi de JPEG développés de l'« après-développement ».

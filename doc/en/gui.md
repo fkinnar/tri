@@ -213,7 +213,8 @@ system one ("cold" measurements, experiments).
   `Ctrl+A` / `Ctrl+Shift+A`, Shift+click (range), Cmd/Ctrl+click (add / remove); Esc
   deselects before leaving full screen. Ratings, trash and editor apply to the visible
   selected images. Orange frame (`[gui.colors] marked`).
-- **Developed in darktable** (2026-10-19, see `develop.md`): `Shift+B` or the aperture
+- **Developed in darktable** (2026-10-19, see `develop.md`; a whole folder in the background:
+  `Ctrl+Shift+B` or the right click on a folder, 2026-10-25, issue #69): `Shift+B` or the aperture
   button starts the render (a few seconds, kept in cache); only afterwards does `b` go
   from the camera render to the RAW render then to the developed image; focus point and
   zones hidden on the developed image.
