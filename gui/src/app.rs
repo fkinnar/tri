@@ -2747,10 +2747,17 @@ impl TriApp {
             .iter()
             .map(|f| self.signatures.get(&f.path))
             .collect();
-        let links = tri::similarity::distances(&signatures, s.shape_weight);
-        self.group_centre = tri::similarity::suggested_threshold(&links, s);
-        self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
-        let ranges = tri::similarity::group(&links, self.group_threshold(), self.group_gap);
+        // Filtre « pile courante » (`f c`) : ses photos sont une seule pile. Regroupées à
+        // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
+        // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
+        let ranges = if self.stack_only.is_some() {
+            vec![0..self.files.len()]
+        } else {
+            let links = tri::similarity::distances(&signatures, s.shape_weight);
+            self.group_centre = tri::similarity::suggested_threshold(&links, s);
+            self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
+            tri::similarity::group(&links, self.group_threshold(), self.group_gap)
+        };
         let files = &self.files;
         let notes = &self.folder.notes;
         let scores = &self.scores;
@@ -13259,6 +13266,15 @@ mod tests {
         assert_eq!(h.state().files.len(), 3, "une pile");
         assert_eq!(h.state().stacks.shown.len(), 3, "dépliée");
         assert!(h.state().filter_summary().contains("pile de 3"));
+        // Une seule pile, quel que soit le seuil (#163 : regroupées à part, ses photos se
+        // coupaient en deux piles).
+        let similarity = h.state().settings.similarity.clone();
+        h.state_mut().settings.similarity.auto = false;
+        h.state_mut().settings.similarity.threshold = 0.0;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.count(), 1, "une seule pile");
+        h.state_mut().settings.similarity = similarity;
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 6, "tout");
