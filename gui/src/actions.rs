@@ -1730,17 +1730,30 @@ impl Keymap {
         for k in &mine {
             let unshifted: Vec<Chord> = k.iter().map(|c| Chord { shift: false, ..*c }).collect();
             let shift_variant = k.iter().any(|c| c.shift) && mine.contains(&&unshifted);
-            let label = match k.split_first() {
-                Some((first, rest)) if !rest.is_empty() && Some(*first) == self.leader => {
-                    format!("{} {}", t!("key-leader"), sequence_label(rest))
-                }
-                _ => sequence_label(k),
-            };
+            let label = self.sequence_label(k);
             if !shift_variant && !keys.contains(&label) {
                 keys.push(label);
             }
         }
         keys
+    }
+}
+
+impl Keymap {
+    /// Nom lisible d'une séquence, le leader écrit `<leader>` (« <leader> r », #175).
+    fn sequence_label(&self, keys: &[Chord]) -> String {
+        match keys.split_first() {
+            Some((first, rest)) if !rest.is_empty() && Some(*first) == self.leader => {
+                format!("{} {}", t!("key-leader"), sequence_label(rest))
+            }
+            _ => sequence_label(keys),
+        }
+    }
+
+    /// Nom lisible d'un raccourci écrit dans `[keys]` (« gg » pour « g g »), le leader
+    /// écrit `<leader>` (fenêtre de réglages) ; illisible : tel quel.
+    pub fn spec_label(&self, spec: &str) -> String {
+        parse_keys(spec).map_or_else(|_| spec.to_string(), |keys| self.sequence_label(&keys))
     }
 }
 
@@ -1867,12 +1880,6 @@ pub fn keys_spec(keys: &[Chord]) -> String {
         _ => chord_label(c),
     };
     keys.iter().map(spec).collect::<Vec<_>>().join(" ")
-}
-
-/// Nom lisible d'un raccourci écrit dans `[keys]` (« gg » pour « g g ») ; illisible : tel
-/// quel.
-pub fn spec_label(spec: &str) -> String {
-    parse_keys(spec).map_or_else(|_| spec.to_string(), |keys| sequence_label(&keys))
 }
 
 /// Nom lisible d'une combinaison (« Maj+Flèche gauche », « Ctrl+u », « g », « ° »).
@@ -2098,7 +2105,7 @@ mod tests {
                 assert!(km.specs_for(*action).contains(&spec));
             }
         }
-        assert_eq!(spec_label("g g"), "gg");
+        assert_eq!(Keymap::default().spec_label("g g"), "gg");
     }
 
     #[test]
@@ -2245,6 +2252,10 @@ mod tests {
         let keys = km.keys_for(Action::FocusLeft);
         assert!(keys.contains(&"<leader> h".to_string()), "{keys:?}");
         assert!(!keys.iter().any(|k| k.contains("Ctrl")), "{keys:?}");
+        // Fenêtre de réglages aussi (pastilles de `[keys]`).
+        let specs = km.specs_for(Action::FocusNext);
+        let labels: Vec<String> = specs.iter().map(|s| km.spec_label(s)).collect();
+        assert_eq!(labels, ["<leader> o"]);
     }
 
     #[test]
