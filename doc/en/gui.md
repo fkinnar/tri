@@ -132,7 +132,8 @@ system one ("cold" measurements, experiments).
   first one. Under Wayland, egui does not give the inner rectangle either (it needs the
   position): the size comes from the drawing area (feedback of 2026-10-25: nothing was
   kept). The position stays with the compositor: Wayland does not let an application
-  place its window.
+  place its window. Maximizing when the window is created is ignored there (feedback of
+  2026-10-26): it is asked again on the first frame if the window is not maximized.
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
