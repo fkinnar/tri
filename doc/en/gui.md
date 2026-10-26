@@ -499,7 +499,8 @@ system one ("cold" measurements, experiments).
   moves at the end of the stack to the first photo of the next stack (2026-10-25). From
   stack to stack (↑ / ↓), we land on its cover or, with `[gui.view] stack_enter =
   "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
-  switch (always there since 2026-10-25), or Ctrl+Shift+S, remembered from one launch
+  switch (always there since 2026-10-25; in the grid too, with stacks on, to see its
+  state, since 2026-10-26), or Ctrl+Shift+S, remembered from one launch
   to the next (issue #62); a message says which one is on (nothing moves on screen).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
