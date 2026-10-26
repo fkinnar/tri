@@ -8684,14 +8684,18 @@ impl TriApp {
         // De droite à gauche après le format : rendu développé, goutte (floue), puis
         // versions.
         let mut caption_left = badge_rect.min.x;
-        // Rendu montré (#114) : « DEV » si la vignette n'est pas le JPEG boîtier.
+        // Rendu montré (#114) : le nom du logiciel (ou LibRaw) si la vignette n'est pas le
+        // JPEG boîtier (retour du 26/10/2026 : « DEV » ne disait rien).
         let shown = self.texture_levels.get(&file.path).copied();
         if let Some(level @ (Level::Developed(_) | Level::Standard)) = shown
             && file.kind == MediaKind::Raw
         {
             let side = badge_rect.height();
             let galley = ui.painter().layout_no_wrap(
-                t!("grid-render-dev"),
+                match level {
+                    Level::Developed(engine) => engine.name().to_string(),
+                    _ => t!("grid-render-libraw-short"),
+                },
                 FontId::monospace(side * 0.8),
                 text_color,
             );

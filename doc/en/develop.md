@@ -147,8 +147,8 @@ in the filter bar (list on the right, `f d` for the next one), kept from one ses
 next: `embedded` (camera JPEG, default), `latest` (each image's most recent development,
 `develop::resolve` without preference), `darktable` / `rapidraw` (always this software),
 `libraw` (RAW render). The list only offers the installed software. A thumbnail has only
-**two states**: camera JPEG, or "DEV" (a chip under the thumbnail, its tooltip names the
-software or LibRaw). A RAW without the wanted development shows its **LibRaw render**: as
+**two states**: camera JPEG, or developed (a chip under the thumbnail with the software's
+name, or "LibRaw"; "DEV" at first, feedback of 2026-10-26: it said nothing). A RAW without the wanted development shows its **LibRaw render**: as
 soon as the grid shows renders, LibRaw renders go to the background for the whole folder
 (`Scheduler::set_raw_previews`, one more background task). A development not rendered yet:
 in the background, a batch like `Ctrl+Shift+B` (`[gui.grid] develop = "auto"`, no summary if
