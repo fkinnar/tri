@@ -13268,7 +13268,7 @@ mod tests {
         assert!(h.state().filter_summary().contains("pile de 3"));
         // Une seule pile, quel que soit le seuil (#163 : regroupées à part, ses photos se
         // coupaient en deux piles).
-        let similarity = h.state().settings.similarity.clone();
+        let similarity = h.state().settings.similarity;
         h.state_mut().settings.similarity.auto = false;
         h.state_mut().settings.similarity.threshold = 0.0;
         h.state_mut().stacks_dirty = true;
