@@ -7,7 +7,6 @@
 
 use std::cmp::Ordering;
 use std::fmt;
-use std::process::Command;
 
 use serde::Deserialize;
 
@@ -354,7 +353,7 @@ pub fn parse_compare(json: &str) -> Result<u64, UpdateError> {
 
 /// Requête GET par `curl` : code HTTP (0 pour un `file://`) et corps.
 fn get(url: &str, settings: &UpdateSettings) -> Result<(u32, String), UpdateError> {
-    let mut command = Command::new("curl");
+    let mut command = crate::process::command("curl");
     command.args([
         "--silent",
         "--show-error",
@@ -369,12 +368,6 @@ fn get(url: &str, settings: &UpdateSettings) -> Result<(u32, String), UpdateErro
         "\n%{http_code}",
         url,
     ]);
-    // Windows : pas de fenêtre de console le temps de la requête (interface graphique).
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
     let output = command.output().map_err(UpdateError::NoCurl)?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr).trim().to_string();

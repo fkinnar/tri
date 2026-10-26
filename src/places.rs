@@ -297,7 +297,7 @@ const NETWORK_FS: [&str; 13] = [
 /// y est un volume). Rien sous Windows (lecteurs réseau : lettres de lecteur).
 fn network_places(os: &str) -> Vec<Place> {
     let mut places: Vec<Place> = match os {
-        "macos" => std::process::Command::new("/sbin/mount")
+        "macos" => crate::process::command("/sbin/mount")
             .output()
             .map(|o| network_mounts_macos(&String::from_utf8_lossy(&o.stdout)))
             .unwrap_or_default(),
@@ -771,7 +771,7 @@ pub fn unmounted_devices() -> Vec<Device> {
     if std::env::consts::OS != "linux" {
         return Vec::new();
     }
-    std::process::Command::new("lsblk")
+    crate::process::command("lsblk")
         .args([
             "-J",
             "-b",
@@ -850,7 +850,7 @@ pub fn mount(device: &Path) -> Result<PathBuf, String> {
         "linux" => "udisksctl",
         _ => return Err(crate::t!("places-mount-unsupported")),
     };
-    let mut command = std::process::Command::new(program);
+    let mut command = crate::process::command(program);
     command.arg("mount");
     if program == "udisksctl" {
         command.arg("-b");
@@ -896,7 +896,7 @@ fn mount_point_of(mounts: &str, device: &Path) -> Option<PathBuf> {
 
 /// Lance `program` avec `args` ; en cas d'échec, sa sortie d'erreur (ou standard).
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
-    let output = std::process::Command::new(program)
+    let output = crate::process::command(program)
         .args(args)
         .output()
         .map_err(|e| format!("{program} : {e}"))?;

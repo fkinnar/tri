@@ -41,6 +41,7 @@ existe.
 | [update.md](update.md) | Module `tri::update` : rechercher une nouvelle version, sur demande |
 | [watch.md](watch.md) | Module `tri::watch` : surveillance du dossier ouvert (images ajoutées, XMP modifiés ailleurs) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
+| [process.md](process.md) | Module `tri::process` : programmes externes, sans fenêtre de console sous Windows |
 | [metadata.md](metadata.md) | Module `tri::metadata` : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher |
 | [notes.md](notes.md) | Module `tri::notes` : notes d'un dossier en mémoire, modification, filtres sur les notes |
 | [xmp.md](xmp.md) | Module `tri::xmp` : notes (étoiles, couleurs, accepté/rejeté) dans les sidecars XMP |
