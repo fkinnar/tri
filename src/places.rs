@@ -94,7 +94,8 @@ pub struct PlaceSettings {
     /// apparaît ou disparaît de lui-même (voir [`Monitor`]). 0 : pas de surveillance.
     pub watch_ms: u64,
     /// Monter de lui-même un support amovible branché mais pas monté par le système
-    /// (Linux, #113 ; sinon, il attend un clic dans la section des périphériques).
+    /// (Linux, #113 ; activé par défaut, choix de l'utilisateur ; sinon, il attend un clic
+    /// dans la section des périphériques).
     pub auto_mount: bool,
 }
 
@@ -105,7 +106,7 @@ impl Default for PlaceSettings {
             exclude: Vec::new(),
             fixed: Vec::new(),
             watch_ms: 2000,
-            auto_mount: false,
+            auto_mount: true,
         }
     }
 }

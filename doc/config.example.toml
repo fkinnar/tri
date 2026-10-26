@@ -93,7 +93,7 @@ fixed = []
 watch_ms = 2000
 # Monter de lui-même un support amovible que le système n'a pas monté (Linux) ; sinon,
 # il apparaît grisé dans la section des périphériques, monté d'un clic.
-auto_mount = false
+auto_mount = true
 
 [develop]
 # Voir ses développements dans tri (Maj+B en plein écran, puis b : JPEG boîtier, rendu

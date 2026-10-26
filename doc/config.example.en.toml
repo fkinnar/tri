@@ -93,7 +93,7 @@ fixed = []
 watch_ms = 2000
 # Mount by itself a removable device the system did not mount (Linux); otherwise it
 # shows greyed in the devices section, mounted with a click.
-auto_mount = false
+auto_mount = true
 
 [develop]
 # See your developments in tri (Shift+B in full screen, then b: camera render, RAW
