@@ -52,7 +52,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
   la souris, dans la grille comme en plein écran.
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
-  en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) :
+  en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026 ; titres en gras, plus grands que
+  les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :
   disques amovibles, réseau, dossiers personnels (avec Bureau, Documents,
   Téléchargements, Images), favoris, puis seulement le système (racine, repliée) ; case
   **Sous-dossiers** (20/10/2026, gardée) : les images des sous-dossiers s'affichent aussi

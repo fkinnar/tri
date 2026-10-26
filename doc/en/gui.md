@@ -52,7 +52,8 @@ system one ("cold" measurements, experiments).
   **hidden as soon as you type** and reappears at the first mouse movement, in the grid
   as in full screen.
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
-  arranged in titled sections separated by a line (2026-10-20): removable drives,
+  arranged in titled sections separated by a line (2026-10-20; titles in bold, larger than the
+  folders since 2026-10-26, `[gui.folders] section_scale`, #120): removable drives,
   network, personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
   then only the system (root, collapsed); **Subfolders** checkbox (2026-10-20,
   remembered): images of subfolders are shown too (`[gui.folders] subfolders_depth`
