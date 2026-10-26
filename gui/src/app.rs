@@ -4212,16 +4212,18 @@ impl TriApp {
     /// sur une pile repliée compare ses photos d'un coup d'œil).
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
+        // Piles actives : la pile de l'image, même d'une seule photo (#167 : une photo
+        // seule est une pile d'une image ; `c` ne faisait rien).
         if targets.len() < 2
             && self.stacking
-            && let Some(r) = self.stacks.range_of(self.selected).filter(|r| r.len() > 1)
+            && let Some(r) = self.stacks.range_of(self.selected)
         {
             targets = self.files[r.clone()]
                 .iter()
                 .map(|f| f.path.clone())
                 .collect();
         }
-        if targets.len() < 2 {
+        if targets.is_empty() || (targets.len() < 2 && !self.stacking) {
             self.hint = Some(t!("compare-needs-two"));
             return;
         }
@@ -13400,6 +13402,24 @@ mod tests {
         h.state_mut().refilter(Reveal::Minimal);
         h.run_steps(3);
         assert_eq!(h.state().scroll_offset, 0.0, "sur la sélection");
+    }
+
+    #[test]
+    fn a_single_photo_is_a_stack_to_compare() {
+        // #167 : piles actives, `c` sur une photo seule (pile d'une image) la compare.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid, "sans piles : il en faut deux");
+        assert!(h.state().hint.is_some());
+        h.state_mut().stacking = true;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 1);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]

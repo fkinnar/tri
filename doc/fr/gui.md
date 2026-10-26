@@ -210,7 +210,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; pour une
   pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille (une
   seule pile, sans regroupement à part : #163),
-  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
+  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; piles actives, une photo seule est une pile d'une image et se compare
+  aussi, 26/10/2026, #167) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
   grand possible (nombre de colonnes choisi d'après les proportions des images et de la
   fenêtre, dernière ligne centrée). L'**image active** (cadre de la couleur de sélection)
