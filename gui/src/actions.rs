@@ -167,6 +167,9 @@ pub enum Action {
     SortNext,
     /// Inverser le sens de l'ordre.
     SortReverse,
+    /// Rendu des vignettes suivant : JPEG boîtier, dernier développement, un logiciel,
+    /// LibRaw (#114).
+    GridRenderNext,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -405,7 +408,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 168] = [
+    pub const ALL: [Action; 169] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -437,6 +440,7 @@ impl Action {
         Action::FilterInvert,
         Action::SortNext,
         Action::SortReverse,
+        Action::GridRenderNext,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleImageInfo,
@@ -622,7 +626,7 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | SortNext | SortReverse => Group::Filters,
+            | SortNext | SortReverse | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -710,6 +714,7 @@ impl Action {
             Action::FilterStack => "core.filter.stack",
             Action::FilterInvert => "core.filter.invert",
             Action::SortNext => "core.filter.sort",
+            Action::GridRenderNext => "core.grid.render",
             Action::SortReverse => "core.filter.sort_reverse",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
@@ -1426,6 +1431,8 @@ const FILTERS: &[Binding] = {
         // Ordre (« sort ») : suivant, et sens (« reverse »).
         (&[F, plain(Key::S)], SortNext),
         (&[F, plain(Key::R)], SortReverse),
+        // Rendu des vignettes (« développé », #114).
+        (&[F, plain(Key::D)], GridRenderNext),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };

@@ -546,6 +546,18 @@ search_width = 200.0
 # Minimum width of this field when the bar lacks room (narrow window: the sort and the
 # number of images then go into a "…" menu).
 search_min_width = 80.0
+# Thumbnail render, also changed in the filter bar (f d): "embedded" (camera JPEG, to
+# offload and cull), "latest" (each image's most recent development), "darktable" or
+# "rapidraw" (always this software), "libraw" (RAW render). An image without the wanted
+# development shows its LibRaw render, computed in the background.
+render = "embedded"
+# Developments shown by the grid but not rendered yet: "auto" (rendered in the
+# background, one image after another) or "manual" (Ctrl+Shift+B on the folder; LibRaw
+# meanwhile).
+develop = "auto"
+# Thumbnail whose render is awaited: the cache is read again at most once per this
+# interval (ms).
+render_poll_ms = 1000
 
 [gui.view]
 # Time spent on an image before launching its 100 % RAW (ms): images merely

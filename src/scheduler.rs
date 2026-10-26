@@ -594,6 +594,12 @@ impl Scheduler {
         generation
     }
 
+    /// Change la politique des rendus RAW de fond (la grille montre les rendus LibRaw,
+    /// #114) ; elle vaut au prochain [`Scheduler::set_folder`].
+    pub fn set_raw_previews(&self, raw_previews: RawPreviews) {
+        self.shared.lock().raw_previews = raw_previews;
+    }
+
     /// Ajoute `files` à la fin du dossier en cours sans rien interrompre : leur travail de
     /// fond rejoint la file, les totaux d'avancement grandissent (signalés par
     /// [`Event::Progress`]). Sert au déchargement, qui calcule chaque photo dès qu'elle est

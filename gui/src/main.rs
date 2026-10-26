@@ -36,6 +36,7 @@ mod develop_batch;
 mod export;
 mod files;
 mod grid;
+mod grid_render;
 mod histogram;
 mod i18n;
 mod loader;
