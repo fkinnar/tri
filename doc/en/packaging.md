@@ -20,7 +20,7 @@ Prerequisites: those of the build
 ## Nightly builds
 
 Decided on 2026-10-22: while in alpha, the CI (`.github/workflows/ci.yml`) also runs
-**every night** (2:00 UTC) when `main` has changed since the last one (the `nightly` tag
+**every night** (1:17 UTC, not on the hour: GitHub delays scheduled jobs there by hours) when `main` has changed since the last one (the `nightly` tag
 is compared with the current commit): tests on the three systems, packages, then the
 **`nightly` Release** (pre-release) replaced with the day's packages and the last commits
 as notes. Its tag is not a version number: the update check ignores it. These binaries
