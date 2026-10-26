@@ -239,6 +239,9 @@ pub struct TriApp {
     progress_hidden_until: Option<Instant>,
     /// Détail des tâches de fond déplié (clic sur la barre globale, issue n° 36).
     tasks_open: bool,
+    /// Hauteur du panneau des tâches à la dernière image (tests, #158).
+    #[cfg(test)]
+    tasks_height: f32,
     /// Clic sur une tâche du panneau des métadonnées, traité à l'image suivante avec ceux
     /// de la barre d'état (dessinée avant le panneau).
     task_click: Option<StatusClick>,
@@ -723,6 +726,8 @@ impl TriApp {
             refiltered_at: Instant::now(),
             progress_hidden_until: None,
             tasks_open: false,
+            #[cfg(test)]
+            tasks_height: 0.0,
             task_click: None,
             developed_sizes: HashMap::new(),
             peaking: gui.sharpness.visible,
@@ -9439,14 +9444,24 @@ impl eframe::App for TriApp {
                     // Tâches de fond en bas du panneau (issue n° 36), détail au-dessus.
                     let tasks = self.tasks(ui);
                     if !tasks.is_empty() {
-                        let click = egui::Panel::bottom("tasks")
-                            .show(ui, |ui| {
-                                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                                    self.tasks_ui(ui, &tasks, false)
-                                })
-                                .inner
+                        // Un panneau par état : replié, il ne garde pas la hauteur du
+                        // détail (#158 : un grand fond vide restait au-dessus de la barre).
+                        let id = if self.tasks_open {
+                            "tasks-open"
+                        } else {
+                            "tasks"
+                        };
+                        let panel = egui::Panel::bottom(id).show(ui, |ui| {
+                            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                                self.tasks_ui(ui, &tasks, false)
                             })
-                            .inner;
+                            .inner
+                        });
+                        #[cfg(test)]
+                        {
+                            self.tasks_height = panel.response.rect.height();
+                        }
+                        let click = panel.inner;
                         if click.is_some() {
                             self.task_click = click;
                         }
@@ -13919,6 +13934,8 @@ mod tests {
             "une barre globale"
         );
         assert!(h.query_by_label_contains("1/4").is_none(), "détail replié");
+        let folded = h.state().tasks_height;
+        assert!(folded > 0.0, "panneau des tâches");
         h.get_by_label_contains(&global).click();
         h.run_steps(3);
         assert!(h.state().tasks_open);
@@ -13931,6 +13948,8 @@ mod tests {
             h.query_by_label_contains("1/4").is_none(),
             "replié de nouveau"
         );
+        // Sa hauteur d'avant : pas un grand fond vide au-dessus de la barre (#158).
+        assert_eq!(h.state().tasks_height, folded);
         // Panneau des métadonnées masqué : la barre globale passe dans la barre d'état.
         h.state_mut().metadata_panel = false;
         h.run_steps(3);
