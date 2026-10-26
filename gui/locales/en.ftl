@@ -799,6 +799,7 @@ keys-replaces = [keys] "{ $spec }" ({ $action }) replaces the shortcut of { $oth
 keys-unknown-key = unknown key "{ $text }"
 keys-empty = empty shortcut
 key-shift-prefix = Shift+
+key-leader = <leader>
 key-sequence-then = { " then " }
 key-arrow-left = Left arrow
 key-arrow-right = Right arrow

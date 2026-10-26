@@ -411,7 +411,8 @@ system one ("cold" measurements, experiments).
 - **Panels from the keyboard, tmux style** (2026-10-18, `actions::Scope`): the leader
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
-  2026-10-22) (folders, images, metadata; a hidden panel
+  2026-10-22; the help writes it `<leader> h`, #175, since it can be changed) (folders,
+  images, metadata; a hidden panel
   is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled), the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top

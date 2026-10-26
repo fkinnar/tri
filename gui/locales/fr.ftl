@@ -801,6 +801,7 @@ keys-replaces = [keys] « { $spec } » ({ $action }) remplace le raccourci de { 
 keys-unknown-key = touche inconnue « { $text } »
 keys-empty = raccourci vide
 key-shift-prefix = Maj+
+key-leader = <leader>
 key-sequence-then = { " puis " }
 key-arrow-left = Flèche gauche
 key-arrow-right = Flèche droite
