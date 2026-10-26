@@ -135,7 +135,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Wayland, egui ne donne pas non plus le rectangle intérieur (il demande la position) :
   la taille vient de la zone de dessin (retour du 25/10/2026 : rien n'était retenu). La
   position, elle, reste au compositeur : Wayland ne laisse pas une application placer sa
-  fenêtre.
+  fenêtre. L'agrandissement demandé à la création de la fenêtre y est ignoré (retour du
+  26/10/2026) : il est redemandé à la première image si la fenêtre ne l'est pas.
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.

@@ -274,6 +274,10 @@ pub struct TriApp {
     /// fermeture : pas une écriture par image pendant qu'on la déplace.
     window_now: Option<(crate::state::WindowState, Instant)>,
     window_kept: Option<crate::state::WindowState>,
+    /// Fenêtre agrandie au lancement précédent : l'agrandissement est redemandé à la
+    /// première image si elle ne l'est pas (#58 : sous Wayland, la demande faite à la
+    /// création de la fenêtre est ignorée).
+    maximize_pending: bool,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
@@ -726,6 +730,7 @@ impl TriApp {
             display_saved: Default::default(),
             window_now: None,
             window_kept: None,
+            maximize_pending: false,
             peaking_texture: None,
             peaking_asked: None,
             compare: Vec::new(),
@@ -942,6 +947,11 @@ impl TriApp {
         if minimized == Some(true) || size.x < 1.0 || size.y < 1.0 {
             return;
         }
+        if std::mem::take(&mut self.maximize_pending) && maximized != Some(true) {
+            // Rien à retenir de cette image : la fenêtre n'a pas encore sa vraie taille.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            return;
+        }
         let maximized = maximized.unwrap_or(false);
         let mut window = self
             .window_now
@@ -1002,6 +1012,7 @@ impl TriApp {
             self.order = order;
         }
         self.window_kept = s.window;
+        self.maximize_pending = s.window.is_some_and(|w| w.maximized);
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
@@ -11772,6 +11783,25 @@ mod tests {
             kept.position, None,
             "position inconnue : le compositeur la choisit"
         );
+    }
+
+    #[test]
+    fn a_maximized_window_is_maximized_again_after_the_first_frame() {
+        // Retour du 26/10/2026 (#58) : sous Wayland, la fenêtre agrandie ne l'était plus
+        // au lancement suivant ; l'agrandissement est redemandé, une fois.
+        let (mut h, _dir) = harness();
+        h.state_mut().maximize_pending = true;
+        let maximize = |h: &Harness<'_, TriApp>| {
+            h.output()
+                .viewport_output
+                .values()
+                .any(|v| v.commands.contains(&egui::ViewportCommand::Maximized(true)))
+        };
+        h.step();
+        assert!(maximize(&h), "redemandé");
+        assert!(!h.state().maximize_pending);
+        h.step();
+        assert!(!maximize(&h), "une seule fois");
     }
 
     #[test]
