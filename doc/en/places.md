@@ -69,8 +69,8 @@ themselves: nothing to add.
 `mount(device)` mounts as the file manager does, without a password for removable
 media: `udisksctl mount -b` (Linux; folder read from its answer, "Mounted /dev/sdb1 at
 /media/me/X-T4", otherwise from `/proc/mounts`), `diskutil mount` (macOS). `eject` of an
-unmounted medium powers it off (`udisksctl power-off`). `[places] auto_mount` (off by
-default): the `Monitor` mounts by itself a medium **that arrives** (one unmounted on
+unmounted medium powers it off (`udisksctl power-off`). `[places] auto_mount` (on by
+default, user's choice on 2026-10-26): the `Monitor` mounts by itself a medium **that arrives** (one unmounted on
 purpose afterwards stays unmounted).
 
 ## Ejection (`eject(volume)`)

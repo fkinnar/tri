@@ -72,7 +72,7 @@ macOS et Windows montent tout d'eux-mêmes : rien à ajouter.
 support amovible : `udisksctl mount -b` (Linux ; dossier lu dans sa réponse, « Mounted
 /dev/sdb1 at /media/moi/X-T4 », sinon dans `/proc/mounts`), `diskutil mount` (macOS).
 `eject` d'un support pas monté coupe son alimentation (`udisksctl power-off`).
-`[places] auto_mount` (désactivé par défaut) : le `Monitor` monte de lui-même un
+`[places] auto_mount` (activé par défaut, choix de l'utilisateur le 26/10/2026) : le `Monitor` monte de lui-même un
 support **qui arrive** (un support démonté exprès ensuite reste démonté).
 
 ## Éjection (`eject(volume)`)
