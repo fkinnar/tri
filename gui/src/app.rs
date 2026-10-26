@@ -9845,7 +9845,7 @@ fn dismissable(label: egui::Response) -> egui::Response {
     label
         .interact(Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(t!("status-dismiss"))
+        .on_hover_text(t!("status-clear-tip"))
 }
 
 /// Double-clic sur un curseur (valeur par défaut, comme Lightroom) : le curseur d'egui ne
