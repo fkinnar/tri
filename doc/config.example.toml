@@ -665,6 +665,9 @@ search_results = 200
 # Case « Sous-dossiers » du panneau (gardée d'une session à l'autre) : les images des
 # sous-dossiers du dossier ouvert s'affichent aussi, sur ce nombre de niveaux au plus.
 subfolders_depth = 3
+# Titres des sections (« Disques amovibles », « Favoris »…) : taille par rapport au texte
+# des dossiers.
+section_scale = 1.15
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

@@ -668,6 +668,9 @@ search_results = 200
 # "Subfolders" checkbox of the panel (kept from one session to the next): the images of the
 # subfolders of the open folder are shown too, down to this number of levels at most.
 subfolders_depth = 3
+# Section titles ("Removable drives", "Favourites"…): size relative to the folder
+# text.
+section_scale = 1.15
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:

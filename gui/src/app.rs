@@ -1519,7 +1519,10 @@ impl TriApp {
                         tri::places::Section::Favorites => t!("folders-section-favorites"),
                         tri::places::Section::System => t!("folders-section-system"),
                     };
-                    ui.label(egui::RichText::new(title).small().strong().weak());
+                    // Plus grands que les dossiers, en gras (#120 : en petit et estompés,
+                    // ils se perdaient parmi eux).
+                    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+                    ui.label(egui::RichText::new(title).size(size).strong());
                 }
                 let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
