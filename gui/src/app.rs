@@ -1434,7 +1434,7 @@ impl TriApp {
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
         if self.focus == crate::actions::Scope::Folders {
-            panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+            panel_focus_fill(ui, &self.gui.dialogs);
         }
         let f = self.gui.folders;
         let mut toggle: Option<usize> = None;
@@ -9249,7 +9249,7 @@ impl eframe::App for TriApp {
                 .default_size(self.gui.metadata.width)
                 .show(ui, |ui| {
                     if self.focus == crate::actions::Scope::Metadata {
-                        panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+                        panel_focus_fill(ui, &self.gui.dialogs);
                     }
                     // Tâches de fond en bas du panneau (issue n° 36), détail au-dessus.
                     let tasks = self.tasks(ui);
@@ -9770,16 +9770,24 @@ fn drag_preview(ctx: &egui::Context) {
 }
 
 /// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
-/// mêlé de `tint` de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu
-/// plus clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré
-/// d'accent (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre
-/// alourdissait).
-fn panel_focus_fill(ui: &Ui, tint: f32) {
+/// mêlé de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu plus
+/// clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré d'accent
+/// (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre alourdissait).
+/// Plus un trait en haut (`focus_line`, `focus_line_width` ; retour du 26/10/2026, #77 :
+/// le fond seul ne disait pas assez quel panneau a le clavier).
+fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
     let visuals = ui.visuals();
-    let fill = visuals
-        .panel_fill
-        .lerp_to_gamma(visuals.text_color(), tint.clamp(0.0, 1.0));
-    ui.painter().rect_filled(ui.clip_rect(), 0.0, fill);
+    let fill = visuals.panel_fill.lerp_to_gamma(
+        visuals.text_color(),
+        dialogs.focus_panel_tint.clamp(0.0, 1.0),
+    );
+    let clip = ui.clip_rect();
+    ui.painter().rect_filled(clip, 0.0, fill);
+    if dialogs.focus_line_width > 0.0 {
+        let color = dialogs.focus_line.resolve(marks::accent_mark(ui.ctx()));
+        let line = Rect::from_min_size(clip.min, vec2(clip.width(), dialogs.focus_line_width));
+        ui.painter().rect_filled(line, 0.0, color);
+    }
 }
 
 /// Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
