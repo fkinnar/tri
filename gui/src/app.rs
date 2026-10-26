@@ -2283,6 +2283,20 @@ impl TriApp {
         self.tree.refresh();
     }
 
+    /// Plein écran depuis la grille. Sur une pile repliée, on entre par sa couverture ou
+    /// par sa première photo (`stack_enter`), comme de pile en pile (retour du 26/10/2026,
+    /// #62 : seul ↑ / ↓ en tenait compte).
+    fn open_view(&mut self) {
+        if self.stacking
+            && self.stack_enter == crate::settings::StackEnter::First
+            && self.stacks.collapsed_count(self.selected).is_some()
+            && let Some(first) = self.stacks.range_of(self.selected).map(|r| r.start)
+        {
+            self.select(first);
+        }
+        self.mode = Mode::View;
+    }
+
     /// Quitte le filtre « pile courante » : la pile repliée avant `f c` se replie.
     fn leave_stack_only(&mut self) {
         self.stack_only = None;
@@ -3392,7 +3406,7 @@ impl TriApp {
             }
             Action::Open => {
                 if self.mode == Mode::Grid && !self.files.is_empty() {
-                    self.mode = Mode::View;
+                    self.open_view();
                 } else if self.mode == Mode::View && self.stacking {
                     // Mode pile : Entrée choisit la préférée.
                     self.choose_cover();
@@ -8081,7 +8095,7 @@ impl TriApp {
         self.open_rating_dialog(&response, index);
         if response.double_clicked() {
             self.select(index);
-            self.mode = Mode::View;
+            self.open_view();
         }
         let selected = index == self.selected && !self.cursor_hidden;
         let visuals = ui.visuals();
@@ -13281,6 +13295,14 @@ mod tests {
             range.start,
             "première de la pile d'avant"
         );
+        // Depuis la grille aussi (retour du 26/10/2026) : Entrée sur la pile repliée, sa
+        // première photo plutôt que sa couverture.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        h.state_mut().select(range.end - 1);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().selected, range.start, "depuis la grille");
         h.state_mut().stack_enter = crate::settings::StackEnter::Cover;
         h.state_mut().select(range.end - 1);
         // Ctrl+S : plus de piles ; → passe à la photo suivante, toutes visibles.
