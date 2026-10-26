@@ -822,6 +822,10 @@ ms by default, like vim's `timeoutlen`). If it completes no sequence, it acts al
 then `j`: row below). No shortcut is both a single key and the start of a sequence
 (checked by a test): no need to wait for the timeout to decide.
 
+**Held key** (2026-10-26, #160): only the actions meant to repeat follow the keyboard's
+repeat (moves, scrolling, zoom, panels, crop, blur severity: `Action::repeats`); the
+others fire once per press (holding `e` opened the editor over and over on Windows).
+
 **Panning in a zoomed image**: Shift + arrows or Shift + hjkl, by a fraction of the view
 per press (`[gui.view] pan_step`, 0.2), key repeat possible; no effect when not zoomed.
 

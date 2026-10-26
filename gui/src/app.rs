@@ -3091,12 +3091,12 @@ impl TriApp {
 
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let mut chords = ctx.input(|i| self.keymap.chords(&i.events));
+        let mut chords = ctx.input(|i| self.keymap.chords_repeated(&i.events));
         // Saisie dans un champ de texte (nom de dossier, recherche) : les touches sont du
         // texte, pas des raccourcis ; seules les touches qui ne tapent rien (Échap, F1…)
         // agissent. Sans cela, taper « q » dans le nom d'un dossier quittait l'application.
         if ctx.egui_wants_keyboard_input() {
-            chords.retain(|c| c.trigger.types_no_text());
+            chords.retain(|(c, _)| c.trigger.types_no_text());
         }
         if !chords.is_empty() {
             self.mouse_active = false; // on tape : pointeur masqué
@@ -3111,8 +3111,10 @@ impl TriApp {
         self.keymap.set_focus(focus);
         // Touche ambiguë (`y` avant `y w`) restée sans suite : son action, d'abord.
         let mut actions: Vec<Action> = self.sequencer.expire(now).into_iter().collect();
-        for chord in chords {
-            actions.extend(self.sequencer.feed(&self.keymap, chord, now));
+        for (chord, repeated) in chords {
+            let fed = self.sequencer.feed(&self.keymap, chord, now);
+            // Touche tenue : seules les actions faites pour se répéter (#160).
+            actions.extend(fed.into_iter().filter(|a| !repeated || a.repeats()));
         }
         if let Some(at) = self.sequencer.deadline() {
             ctx.request_repaint_after(at.saturating_duration_since(now));

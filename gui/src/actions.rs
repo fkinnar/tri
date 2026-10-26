@@ -630,6 +630,38 @@ impl Action {
         }
     }
 
+    /// Vrai si une touche tenue répète l'action : déplacements, zoom, défilement. Les
+    /// autres ne partent qu'une fois par appui (#160 : `e` tenu ouvrait l'éditeur en
+    /// boucle).
+    pub fn repeats(self) -> bool {
+        use Action::*;
+        matches!(
+            self,
+            NavPrev
+                | NavNext
+                | NavUp
+                | NavDown
+                | NavPageUp
+                | NavPageDown
+                | PanLeft
+                | PanRight
+                | PanUp
+                | PanDown
+                | ZoomIn
+                | ZoomOut
+                | FolderUp
+                | FolderDown
+                | MetaUp
+                | MetaDown
+                | MetaSelectUp
+                | MetaSelectDown
+                | CropMove(_)
+                | CropSize(_)
+                | SharpnessLenient
+                | SharpnessStrict
+        )
+    }
+
     /// Vrai pour les actions encore actives quand une fenêtre (l'aide) est au premier plan.
     pub fn works_over_overlay(self) -> bool {
         matches!(self, Action::Back | Action::Help | Action::Quit)
@@ -1518,7 +1550,10 @@ impl Keymap {
     /// suivie d'un tel caractère est ignorée : « ° » arrive aussi comme Maj + `Minus`
     /// (touche physique, egui ne connaissant pas « ° »), qui interromprait `f °`. egui-winit
     /// livre la touche et son caractère dans la même image (même événement winit).
-    pub fn chords(&self, events: &[Event]) -> Vec<Chord> {
+    ///
+    /// Chacune avec vrai si elle vient de la répétition d'une touche tenue (un caractère
+    /// suit la touche qui le produit).
+    pub fn chords_repeated(&self, events: &[Event]) -> Vec<(Chord, bool)> {
         let bound_char = |e: &Event| match e {
             Event::Text(text) => {
                 let mut chars = text.chars();
@@ -1538,6 +1573,7 @@ impl Keymap {
                 .and_then(bound_char)
                 .is_some()
         };
+        let mut repeated = false;
         events
             .iter()
             .enumerate()
@@ -1546,9 +1582,16 @@ impl Keymap {
                     key,
                     pressed: true,
                     modifiers,
+                    repeat,
                     ..
-                } if !next_is_bound_char(n) => Chord::from_event(*key, *modifiers),
-                Event::Text(_) => bound_char(e).map(Chord::char),
+                } => {
+                    repeated = *repeat;
+                    if next_is_bound_char(n) {
+                        return None;
+                    }
+                    Chord::from_event(*key, *modifiers).map(|c| (c, *repeat))
+                }
+                Event::Text(_) => bound_char(e).map(|c| (Chord::char(c), repeated)),
                 _ => None,
             })
             .collect()
@@ -2550,6 +2593,29 @@ mod tests {
     }
 
     #[test]
+    fn a_held_key_repeats_only_moves() {
+        // #160 : `e` tenu ouvrait l'éditeur en boucle (Windows) ; → tenu avance toujours.
+        let km = Keymap::default();
+        let held = |key| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: true,
+            modifiers: Modifiers::NONE,
+        };
+        let events = [
+            key_event(Key::E, true, Modifiers::NONE),
+            held(Key::E),
+            Event::Text("°".into()),
+        ];
+        // La touche tenue suivie de son caractère : le caractère seul, répété lui aussi.
+        let chords = km.chords_repeated(&events);
+        assert_eq!(chords, [(plain(Key::E), false), (Chord::char('°'), true)]);
+        assert!(Action::NavNext.repeats() && Action::PanLeft.repeats());
+        assert!(!Action::FileEdit.repeats() && !Action::Develop.repeats());
+    }
+
+    #[test]
     fn a_character_replaces_the_key_that_typed_it() {
         let km = Keymap::default();
         // « f ° » sur un AZERTY : f, puis Maj + touche physique Minus et le caractère °.
@@ -2561,7 +2627,11 @@ mod tests {
             Event::Text("°".into()),
             key_event(Key::Minus, false, Modifiers::SHIFT),
         ];
-        let chords = km.chords(&events);
+        let chords: Vec<Chord> = km
+            .chords_repeated(&events)
+            .into_iter()
+            .map(|(c, _)| c)
+            .collect();
         assert_eq!(chords, [plain(Key::F), Chord::char('°')]);
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let now = Instant::now();
