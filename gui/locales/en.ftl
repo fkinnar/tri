@@ -734,7 +734,7 @@ develop-folder-title = Develop "{ $folder }"
 develop-folder-each = Each image's own development (otherwise the RAW render)
 develop-folder-only = All in { $engine } (the images it developed)
 develop-folder-go = Develop
-develop-stale = Development changed in darktable: { $keys } to render it again.
+develop-stale = Development changed in { $engine }: { $keys } to render it again.
 shown-image = Image
 
 ## Histogram
