@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
 
-use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys, spec_label};
+use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys};
 use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
 
 use crate::settings::AppSettings;
@@ -1200,7 +1200,8 @@ impl SettingsWindow {
                 ui.weak(t!("settings-keys-none"));
             }
             for (i, spec) in specs.iter().enumerate() {
-                let chip = egui::Button::new(format!("{}  ×", spec_label(spec))).small();
+                let chip =
+                    egui::Button::new(format!("{}  ×", self.keymap.spec_label(spec))).small();
                 if ui
                     .add(chip)
                     .on_hover_text(t!("settings-keys-remove", keys = spec.as_str()))
