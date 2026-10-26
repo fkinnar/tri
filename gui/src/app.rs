@@ -13442,33 +13442,6 @@ mod tests {
     }
 
     #[test]
-    fn the_star_filter_compares_at_least_exactly_or_at_most() {
-        // #165 : pas seulement « au moins » ; `f =` ou le bouton ≥ / = / ≤.
-        let (mut h, _dir) = harness();
-        h.run_steps(3);
-        for (i, key) in [Key::Num3, Key::Num4, Key::Num5].into_iter().enumerate() {
-            h.state_mut().select(i);
-            press(&mut h, key, Modifiers::NONE);
-        }
-        let count = |h: &Harness<'_, TriApp>| h.state().files.len();
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::Num4, Modifiers::NONE);
-        assert_eq!(count(&h), 2, "au moins 4");
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::Equals, Modifiers::NONE);
-        assert_eq!(count(&h), 1, "exactement 4");
-        assert!(h.state().filter_summary().contains("exactement 4"));
-        h.get_by_label("=").click();
-        h.run_steps(2);
-        assert_eq!(count(&h), 2, "au plus 4");
-        assert!(h.state().filter_summary().contains("4 étoiles ou moins"));
-        h.get_by_label("≤").click();
-        h.run_steps(2);
-        assert_eq!(h.state().stars_op, tri::notes::StarsOp::AtLeast);
-        assert_eq!(count(&h), 2, "au moins 4, de nouveau");
-    }
-
-    #[test]
     fn similar_images_stack_and_unstack() {
         // Deux rafales de 3 images : des dégradés horizontaux, puis verticaux, de teintes
         // différentes ; entre elles, rien de commun.
@@ -14190,6 +14163,33 @@ mod tests {
         h.state_mut().metadata_panel = false;
         h.run_steps(3);
         assert!(h.query_by_label_contains(&global).is_some());
+    }
+
+    #[test]
+    fn the_star_filter_compares_at_least_exactly_or_at_most() {
+        // #165 : pas seulement « au moins » ; `f =` ou le bouton ≥ / = / ≤.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        for (i, key) in [Key::Num3, Key::Num4, Key::Num5].into_iter().enumerate() {
+            h.state_mut().select(i);
+            press(&mut h, key, Modifiers::NONE);
+        }
+        let count = |h: &Harness<'_, TriApp>| h.state().files.len();
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        assert_eq!(count(&h), 2, "au moins 4");
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Equals, Modifiers::NONE);
+        assert_eq!(count(&h), 1, "exactement 4");
+        assert!(h.state().filter_summary().contains("exactement 4"));
+        h.get_by_label("=").click();
+        h.run_steps(2);
+        assert_eq!(count(&h), 2, "au plus 4");
+        assert!(h.state().filter_summary().contains("4 étoiles ou moins"));
+        h.get_by_label("≤").click();
+        h.run_steps(2);
+        assert_eq!(h.state().stars_op, tri::notes::StarsOp::AtLeast);
+        assert_eq!(count(&h), 2, "au moins 4, de nouveau");
     }
 
     #[test]
