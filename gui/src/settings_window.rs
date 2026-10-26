@@ -236,6 +236,8 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
         ("gui.view", "stack_enter") => &["cover", "first"],
         ("cache", "location") => &["user", "disk", "folder"],
+        // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
+        ("develop", "default") => &["auto", "darktable"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })
@@ -253,6 +255,8 @@ pub fn search_id() -> egui::Id {
 /// Fenêtre ouverte.
 pub struct SettingsWindow {
     file: ConfigFile,
+    /// Logiciels de développement installés, pour la liste de `[develop] default`.
+    engines: Vec<tri::develop::Engine>,
     /// Section affichée (sans recherche).
     section: usize,
     query: String,
@@ -329,6 +333,12 @@ pub enum Outcome {
 }
 
 impl SettingsWindow {
+    /// Logiciels de développement installés (ceux que propose `[develop] default`).
+    pub fn with_engines(mut self, engines: Vec<tri::develop::Engine>) -> SettingsWindow {
+        self.engines = engines;
+        self
+    }
+
     /// Ouvre la fenêtre sur le fichier `path` (créé au premier changement s'il n'existe
     /// pas).
     pub fn open(path: &Path) -> Result<SettingsWindow, String> {
@@ -336,6 +346,7 @@ impl SettingsWindow {
         let settings = tri::settings::parse::<AppSettings>(&file.text()).unwrap_or_default();
         let (keymap, key_warnings) = settings.keymap();
         Ok(SettingsWindow {
+            engines: Vec::new(),
             keymap,
             key_warnings,
             recording: None,
@@ -478,6 +489,12 @@ impl SettingsWindow {
     /// d'espace « 16 bits » (ProPhoto…) en JPEG ou en 8 bits, pas de JPEG avec un tel
     /// espace (idée de l'utilisateur, 19/10/2026). Le moteur refuse de toute façon.
     fn fits(&self, section: &str, key: &str, choice: &str) -> bool {
+        // Logiciel de développement préféré : « auto » et ceux installés, plus la valeur
+        // en place (un logiciel désinstallé depuis reste visible).
+        if (section, key) == ("develop", "default") {
+            let current = matches!(self.file.get(section, key), Some(Value::Str(v)) if v == choice);
+            return choice == "auto" || current || self.engines.iter().any(|e| e.id() == choice);
+        }
         let Some(id) = section.strip_prefix("export.profiles.") else {
             return true;
         };

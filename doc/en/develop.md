@@ -15,6 +15,16 @@ it calls `darktable-cli` as a **separate process**: darktable cannot bring `tri`
 and its license remains its own. RawTherapee (`rawtherapee-cli`, `.pp3` profiles) and ART
 would follow the same model.
 
+**Several software** (2026-10-26, for RapidRAW and the next ones): each software is an
+`Engine` (identifier, name, sidecar carrying its development) and a plugin of the
+`Developer` trait (`render`); `Developers` is the list of those found on the machine
+(`Developers::find`, work files under `<cache>/develop`). An image may have been
+developed in several: `resolve` picks the one of the `[develop] default` setting
+(drop-down list in the settings window: "auto" and the installed software) if it
+developed the image, otherwise the latest development (`"auto"`, default). User's
+choice: someone working in darktable who tries another software sets
+`default = "darktable"`, so the latest does not take over.
+
 - `find_darktable(réglage)`: `[develop] darktable` = `"auto"` (the `PATH`, then the usual
   locations: `/Applications/darktable.app/…` on macOS, `/usr/bin` on Linux,
   `Program Files` on Windows), a path, or `""` (never). On Linux, if it is not found: a
@@ -48,7 +58,8 @@ a test checks this on a real render (on a copy).
 
 ## Cache and computation
 
-Level `Level::Developed`: darktable's JPEG, at the standard preview size, stored **as is**
+Level `Level::Developed(engine)`, one per software (folder `developed` for darktable,
+unchanged: its cache stays valid): the software's JPEG, at the standard preview size, stored **as is**
 in the cache. Its key includes the sidecar's fingerprint (size, date): changing the
 development in darktable redoes the render. In the interface, a developed image already
 displayed whose sidecar has changed (folder watching, or at the time of `b` / `Shift+B`)

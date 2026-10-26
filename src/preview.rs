@@ -178,7 +178,9 @@ pub fn params(level: Level, settings: &Settings) -> String {
         ),
         Level::Full => format!("r{RULES_VERSION};{render}"),
         // Le sidecar s'y ajoute dans `key` (propre à chaque image).
-        Level::Developed => format!("r{RULES_VERSION};darktable;side={}", sizes.standard),
+        Level::Developed(engine) => {
+            format!("r{RULES_VERSION};{};side={}", engine.id(), sizes.standard)
+        }
         Level::Exposure => {
             let e = &settings.exposure;
             format!(
@@ -214,10 +216,11 @@ pub fn params(level: Level, settings: &Settings) -> String {
 /// Clé de cache de `file` au niveau `level`.
 pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Key> {
     let mut params = params(level, settings);
-    // Développé : le sidecar aussi (un développement modifié dans darktable refait le
+    // Développé : le sidecar aussi (un développement modifié dans le logiciel refait le
     // rendu).
-    if level == Level::Developed {
-        let stamp = crate::develop::darktable_sidecar(&file.path)
+    if let Level::Developed(engine) = level {
+        let stamp = engine
+            .sidecar(&file.path)
             .map_or_else(|| "aucun".to_string(), |s| crate::develop::stamp(&s));
         params.push_str(&format!(";xmp={stamp}"));
     }
@@ -282,7 +285,7 @@ pub fn compute(
         }
         // Développé : par le producteur, qui connaît le logiciel
         // (`scheduler::CachedPreviews`).
-        (_, Level::Developed) => Err(PreviewError::Develop(
+        (_, Level::Developed(_)) => Err(PreviewError::Develop(
             crate::develop::DevelopError::Unavailable,
         )),
     }

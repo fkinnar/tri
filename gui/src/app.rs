@@ -340,10 +340,9 @@ pub struct TriApp {
     /// Grille : curseur masqué (Échap sans sélection, clic dans le vide), pour une vue
     /// d'ensemble sans image en surbrillance (retour du 18/10/2026, voir les piles).
     cursor_hidden: bool,
-    /// darktable trouvé au démarrage du moteur : la source « développé » est proposée.
-    darktable: bool,
-    /// darktable trouvé (`[develop] darktable`), pour les rendus d'un dossier entier.
-    darktable_tool: Option<tri::develop::Darktable>,
+    /// Logiciels de développement trouvés au démarrage du moteur (`[develop]`) : la source
+    /// « développé » est proposée s'il y en a un.
+    developers: tri::develop::Developers,
     /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
     develop_batch: Option<crate::develop_batch::DevelopBatch>,
     /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
@@ -750,8 +749,7 @@ impl TriApp {
             mouse_active: false,
             hovered: None,
             cursor_hidden: false,
-            darktable: false,
-            darktable_tool: None,
+            developers: tri::develop::Developers::none(),
             develop_batch: None,
             focus_mode: false,
             focus_mode_since: None,
@@ -1667,7 +1665,7 @@ impl TriApp {
                             }
                         }
                         // Rendus développés de tout le dossier, en fond (issue n° 69).
-                        if self.darktable {
+                        if !self.developers.is_empty() {
                             entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
                         }
                         ui.separator();
@@ -1983,7 +1981,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            darktable: None,
+            developers: tri::develop::Developers::none(),
         };
         let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Arc::new(Scheduler::new(producer, config, |_| {}));
@@ -2063,12 +2061,14 @@ impl TriApp {
     }
 
     /// Rendus développés en fond de toutes les images de `dir` (le dossier ouvert si
-    /// `None`) qui ont un sidecar darktable (issue n° 69) ; un lot à la fois.
+    /// `None`) qui ont été développées (issue n° 69), chacune dans son logiciel ; un lot à
+    /// la fois.
     fn develop_folder(&mut self, ctx: &egui::Context, dir: Option<PathBuf>) {
-        let (Some(darktable), Some(engine)) = (self.darktable_tool.clone(), &self.engine) else {
+        let Some(engine) = &self.engine else { return };
+        if self.developers.is_empty() {
             self.notice = Some((t!("develop-batch-unavailable"), true));
             return;
-        };
+        }
         if self.develop_batch.is_some() {
             self.notice = Some((t!("develop-batch-busy"), true));
             return;
@@ -2090,7 +2090,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            darktable: Some(darktable),
+            developers: self.developers.clone(),
         };
         let repaint = ctx.clone();
         self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
@@ -2124,7 +2124,8 @@ impl TriApp {
         }
         self.notice = Some((text, summary.failed > 0));
         // Rendus développés arrivés dans le cache : à relire (`b` les propose).
-        self.missing.retain(|(_, level)| *level != Level::Developed);
+        self.missing
+            .retain(|(_, level)| !matches!(level, Level::Developed(_)));
     }
 
     /// Lance `work` sur le cache dans un fil à part (déplacer des entrées peut copier vers
@@ -2885,22 +2886,20 @@ impl TriApp {
         }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
-        // darktable, s'il est installé : rendus développés à la demande (configuration
-        // propre dans le cache de tri, jamais celle de l'utilisateur).
-        let darktable = tri::develop::find_darktable(&self.settings.develop.darktable).map(|cli| {
-            tri::develop::Darktable {
-                cli,
-                config_dir: cache.root().join("darktable"),
-                high_quality: self.settings.develop.high_quality,
-            }
-        });
-        trace(|| format!("darktable : {:?}", darktable.as_ref().map(|d| &d.cli)));
-        self.darktable = darktable.is_some();
-        self.darktable_tool = darktable.clone();
+        // Logiciels de développement installés : rendus développés à la demande (leurs
+        // fichiers de travail dans le cache de tri, jamais la configuration de
+        // l'utilisateur).
+        let developers = tri::develop::Developers::find(
+            &self.settings.develop,
+            &cache.root().join("develop"),
+            self.settings.develop.high_quality,
+        );
+        trace(|| format!("logiciels de développement : {developers:?}"));
+        self.developers = developers.clone();
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings: preview,
-            darktable,
+            developers,
         };
         let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Scheduler::new(producer, config, move |event| {
@@ -3410,7 +3409,7 @@ impl TriApp {
                 // Le développé n'entre dans la rotation que s'il existe déjà pour l'image
                 // (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B le
                 // calcule.
-                let developed = self.darktable && self.developed_ready(self.selected);
+                let developed = !self.developers.is_empty() && self.developed_ready(self.selected);
                 self.set_source(self.source.next(developed));
                 self.request_zoom();
             }
@@ -4250,10 +4249,11 @@ impl TriApp {
             // Développé : seulement s'il est déjà fait (en cache), jamais calculé d'office
             // (Maj+B le demande pour l'image affichée).
             if self.source == Source::Developed && self.developed_ready(i) {
-                wanted.push((rank == 0, i, Level::Developed));
+                wanted.push((rank == 0, i, self.developed_level(&self.files[i].path)));
             }
             if self.zoom.is_some() || (self.loupe_on && rank == 0) {
-                let level = view::zoom_level(kind, self.source_for(&self.files[i]));
+                let developed = self.developed_level(&self.files[i].path);
+                let level = view::zoom_level(kind, self.source_for(&self.files[i]), developed);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
                 let expensive = level == Level::Full && kind == MediaKind::Raw;
                 if !expensive || self.focus_since.elapsed() >= self.gui.view.full_raw_dwell() {
@@ -4280,7 +4280,7 @@ impl TriApp {
             Level::Exposure => &s.exposure,
             Level::Sharpness => &s.sharpness,
             Level::Similarity => &s.similarity,
-            Level::Developed => &s.developed,
+            Level::Developed(_) => &s.developed,
         };
         *avail == Avail::Ready
     }
@@ -4376,7 +4376,11 @@ impl TriApp {
             && !zoomed
             && let Some(file) = self.files.get(self.selected)
         {
-            let level = view::zoom_level(file.kind, self.source_for(file));
+            let level = view::zoom_level(
+                file.kind,
+                self.source_for(file),
+                self.developed_level(&file.path),
+            );
             let key = (file.path.clone(), level);
             if self.ready(self.selected, level)
                 && !self.loaded(self.selected, level)
@@ -4388,7 +4392,8 @@ impl TriApp {
         for index in displayed {
             let kind = self.files[index].kind;
             let source = self.source_for(&self.files[index]);
-            let level = view::pick(kind, source, zoomed, |l| self.ready(index, l));
+            let developed = self.developed_level(&self.files[index].path);
+            let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
                 if !self.loaded(index, level) && !self.missing.contains(&key) {
@@ -4717,8 +4722,9 @@ impl TriApp {
         if self.source != Source::Developed {
             return self.source;
         }
+        let level = self.developed_level(&file.path);
         let developed = self.engine.as_ref().is_some_and(|engine| {
-            tri::preview::key(file, Level::Developed, &engine.preview)
+            tri::preview::key(file, level, &engine.preview)
                 .is_ok_and(|key| engine.cache.contains(&key))
         });
         if developed {
@@ -4728,18 +4734,33 @@ impl TriApp {
         }
     }
 
+    /// Niveau développé de l'image `path` : celui du logiciel de son développement
+    /// ([`tri::develop::Developers::resolve`]), sinon du premier logiciel installé.
+    fn developed_level(&self, path: &Path) -> Level {
+        let engine = self
+            .developers
+            .resolve(path)
+            .or_else(|| self.developers.engines().first().copied())
+            .unwrap_or(tri::develop::Engine::Darktable);
+        Level::Developed(engine)
+    }
+
     fn developed_ready(&mut self, index: usize) -> bool {
-        let (Some(engine), Some(file)) = (&self.engine, self.files.get(index)) else {
+        let Some(file) = self.files.get(index) else {
             return false;
         };
-        let current = tri::preview::key(file, Level::Developed, &engine.preview)
+        let level = self.developed_level(&file.path);
+        let Some(engine) = &self.engine else {
+            return false;
+        };
+        let current = tri::preview::key(file, level, &engine.preview)
             .is_ok_and(|key| engine.cache.contains(&key));
         if !current && self.status[index].developed == Avail::Ready {
             let path = file.path.clone();
             trace(|| format!("développé périmé : {}", path.display()));
             self.status[index].developed = Avail::Pending;
-            self.requested.remove(&(path.clone(), Level::Developed));
-            self.big.remove(&(path, Level::Developed));
+            self.requested.remove(&(path.clone(), level));
+            self.big.remove(&(path, level));
             if index == self.selected {
                 let keys = self.keymap.keys_for(Action::Develop).join(" / ");
                 self.notice = Some((t!("develop-stale", keys = keys), false));
@@ -4752,7 +4773,7 @@ impl TriApp {
     /// chargée ; `None` si aucune ne l'est.
     fn image_aspect(&mut self, path: &Path) -> Option<f64> {
         let big = [
-            Level::Developed,
+            self.developed_level(path),
             Level::Standard,
             Level::Embedded,
             Level::EmbeddedFull,
@@ -4784,7 +4805,7 @@ impl TriApp {
         version: Option<&tri::versions::Version>,
     ) -> Option<(u32, u32)> {
         let source = self.source_for(file);
-        let level = view::zoom_level(file.kind, source);
+        let level = view::zoom_level(file.kind, source, self.developed_level(&file.path));
         let loaded = |app: &mut Self, level| {
             app.big
                 .get(&(file.path.clone(), level))
@@ -5094,10 +5115,10 @@ impl TriApp {
         }
     }
 
-    /// Maj+B ou le bouton : développer l'image affichée dans darktable, puis l'afficher (à
-    /// la demande seulement : quelques secondes).
+    /// Maj+B ou le bouton : développer l'image affichée dans son logiciel, puis l'afficher
+    /// (à la demande seulement : quelques secondes).
     fn develop_current(&mut self) {
-        if !self.darktable {
+        if self.developers.is_empty() {
             self.notice = Some((t!("develop-not-found"), true));
             return;
         }
@@ -5110,7 +5131,8 @@ impl TriApp {
         self.set_source(Source::Developed);
         // Périmé (sidecar modifié depuis) : oublié ici, donc recalculé.
         self.developed_ready(self.selected);
-        self.request(self.selected, Level::Developed);
+        let level = self.developed_level(&self.files[self.selected].path);
+        self.request(self.selected, level);
         self.request_zoom();
     }
 
@@ -5373,11 +5395,21 @@ impl TriApp {
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, 0.0, self.view_background());
             let source = self.source_for(&file);
-            let zoom_level = view::zoom_level(file.kind, source);
-            let desired = view::pick(file.kind, source, zoomed, |l| self.ready(index, l));
-            let shown = view::pick(file.kind, source, zoomed, |l| {
-                self.ready(index, l) && self.loaded(index, l)
-            });
+            let zoom_level = view::zoom_level(file.kind, source, self.developed_level(&file.path));
+            let desired = view::pick(
+                file.kind,
+                source,
+                zoomed,
+                self.developed_level(&file.path),
+                |l| self.ready(index, l),
+            );
+            let shown = view::pick(
+                file.kind,
+                source,
+                zoomed,
+                self.developed_level(&file.path),
+                |l| self.ready(index, l) && self.loaded(index, l),
+            );
             waiting |= shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
             let drawable: Option<(TextureHandle, Vec2)> = match shown {
                 Some(Level::Thumbnail) => self
@@ -5416,7 +5448,7 @@ impl TriApp {
                 painter.image(texture.id(), image_rect, uv, Color32::WHITE);
                 self.draw_overlay(&ctx, &painter, Some(image_rect));
                 // Repères du capteur : faux sur un développé recadré.
-                let sensor = shown != Some(Level::Developed);
+                let sensor = !matches!(shown, Some(Level::Developed(_)));
                 self.draw_focus_point(&ctx, &painter, &file, sensor.then_some(image_rect));
                 if self.clipping
                     && sensor
@@ -5568,7 +5600,11 @@ impl TriApp {
         }
         let Some((rect, pos)) = over else { return };
         let file = &self.files[index];
-        let level = view::zoom_level(file.kind, self.source_for(file));
+        let level = view::zoom_level(
+            file.kind,
+            self.source_for(file),
+            self.developed_level(&file.path),
+        );
         let ppp = ctx.pixels_per_point();
         // Le 1:1 s'il est chargé, sinon l'image affichée (agrandie, floue un instant).
         let full = self.big.get(&(file.path.clone(), level)).cloned();
@@ -5625,18 +5661,28 @@ impl TriApp {
         let file = self.files[index].clone();
         let zoomed = self.zoom.is_some();
         let source = self.source_for(&file);
-        let desired = view::pick(file.kind, source, zoomed, |l| self.ready(index, l));
+        let desired = view::pick(
+            file.kind,
+            source,
+            zoomed,
+            self.developed_level(&file.path),
+            |l| self.ready(index, l),
+        );
         // En attendant que l'image voulue soit chargée, la meilleure déjà affichable.
-        let shown = view::pick(file.kind, source, zoomed, |l| {
-            self.ready(index, l) && self.loaded(index, l)
-        });
+        let shown = view::pick(
+            file.kind,
+            source,
+            zoomed,
+            self.developed_level(&file.path),
+            |l| self.ready(index, l) && self.loaded(index, l),
+        );
         if (index, shown) != self.last_shown {
             trace(|| format!("affichée : image {index} {shown:?} (voulue {desired:?})"));
             self.last_shown = (index, shown);
         }
         // En attente tant que l'image voulue n'est pas affichée, ou que le 1:1 demandé
         // n'est pas encore calculé.
-        let zoom_level = view::zoom_level(file.kind, source);
+        let zoom_level = view::zoom_level(file.kind, source, self.developed_level(&file.path));
         self.view_waiting =
             shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
 
@@ -5744,7 +5790,7 @@ impl TriApp {
             // Zones saturées / bouchées, étirées sur l'image (aussi zoomée). Pas sur le
             // développé : recadré, il ne correspond plus au capteur.
             if self.clipping
-                && shown != Some(Level::Developed)
+                && !matches!(shown, Some(Level::Developed(_)))
                 && shown_crop.is_none()
                 && let Some(texture) = self.mask_texture(&ctx, index)
             {
@@ -5766,8 +5812,8 @@ impl TriApp {
         };
         self.draw_overlay(&ctx, &painter, crop_frame.or(image_rect));
         // Collimateur : placé sur le capteur entier, faux sur un développé recadré.
-        let sensor_rect =
-            image_rect.filter(|_| shown != Some(Level::Developed) && shown_crop.is_none());
+        let sensor_rect = image_rect
+            .filter(|_| !matches!(shown, Some(Level::Developed(_))) && shown_crop.is_none());
         self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté, sur l'image affichée (ajustée ou 1:1 ; une version : son cadre).
@@ -5866,10 +5912,10 @@ impl TriApp {
         // Développé : en cours, ou pas de développement pour cette image (raison au
         // survol de la barre d'état, ici en clair).
         let developed = &self.status[index].developed;
-        if self.source == Source::Developed && shown != Some(Level::Developed) {
+        if self.source == Source::Developed && !matches!(shown, Some(Level::Developed(_))) {
             let asked = self
                 .requested
-                .contains(&(file.path.clone(), Level::Developed));
+                .contains(&(file.path.clone(), self.developed_level(&file.path)));
             info.push_str(&match developed {
                 Avail::Failed(e) => format!(" · {e}"),
                 _ if asked => t!("view-info-developed-pending"),
@@ -7383,7 +7429,7 @@ impl TriApp {
                     actions.push(Action::StackEnterToggle);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
-                if self.mode == Mode::View && self.darktable {
+                if self.mode == Mode::View && !self.developers.is_empty() {
                     actions.push(Action::Develop);
                 }
                 actions.push(Action::ToggleZoom);
@@ -8940,7 +8986,7 @@ impl TriApp {
         match crate::settings_window::SettingsWindow::open(&path) {
             Ok(w) => {
                 self.help = false;
-                self.settings_window = Some(w);
+                self.settings_window = Some(w.with_engines(self.developers.engines()));
             }
             Err(e) => self.file_error = Some(e),
         }
@@ -9656,7 +9702,7 @@ fn tracked(level: Level) -> Option<usize> {
         Level::Exposure => Some(3),
         Level::Sharpness => Some(4),
         Level::Similarity => Some(5),
-        Level::EmbeddedFull | Level::Full | Level::Developed => None,
+        Level::EmbeddedFull | Level::Full | Level::Developed(_) => None,
     }
 }
 
@@ -9671,7 +9717,7 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Exposure => s.exposure = avail,
             Level::Sharpness => s.sharpness = avail,
             Level::Similarity => s.similarity = avail,
-            Level::Developed => s.developed = avail,
+            Level::Developed(_) => s.developed = avail,
         }
     }
 }
@@ -10326,6 +10372,34 @@ enum VersionAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Niveau développé de darktable.
+    const DT: Level = Level::Developed(tri::develop::Engine::Darktable);
+
+    /// darktable « installé » (simulé) : son rendu échoue toujours.
+    #[derive(Debug)]
+    struct FakeDarktable;
+
+    impl tri::develop::Developer for FakeDarktable {
+        fn engine(&self) -> tri::develop::Engine {
+            tri::develop::Engine::Darktable
+        }
+
+        fn render(
+            &self,
+            _: &Path,
+            _: &Path,
+            _: &Path,
+            _: u32,
+            _: &AtomicBool,
+        ) -> Result<(), tri::develop::DevelopError> {
+            Err(tri::develop::DevelopError::Unavailable)
+        }
+    }
+
+    fn fake_darktable() -> tri::develop::Developers {
+        tri::develop::Developers::none().with(Arc::new(FakeDarktable))
+    }
     use eframe::egui::{Event as UiEvent, Key, Modifiers};
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
@@ -14299,7 +14373,7 @@ mod tests {
         );
         // darktable là, mais rien de développé : b ne lance jamais de rendu (10 s pour
         // rien) et reste boîtier ↔ RAW.
-        h.state_mut().darktable = true;
+        h.state_mut().developers = fake_darktable();
         for expected in [Source::Raw, Source::Embedded] {
             press(&mut h, Key::B, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
@@ -14308,17 +14382,17 @@ mod tests {
             h.state()
                 .requested
                 .iter()
-                .all(|(_, l)| *l != Level::Developed)
+                .all(|(_, l)| !matches!(l, Level::Developed(_)))
         );
         // Développé (fait plus tôt, ou retrouvé en cache) : il entre dans la rotation.
         let key = {
             let app = h.state();
             let engine = app.engine.as_ref().unwrap();
-            let key = tri::preview::key(&app.files[0], Level::Developed, &engine.preview).unwrap();
+            let key = tri::preview::key(&app.files[0], DT, &engine.preview).unwrap();
             engine.cache.put_bytes(&key, b"jpeg").unwrap();
             key
         };
-        set(&mut h.state_mut().status, 0, Level::Developed, Avail::Ready);
+        set(&mut h.state_mut().status, 0, DT, Avail::Ready);
         for expected in [Source::Raw, Source::Developed, Source::Embedded] {
             press(&mut h, Key::B, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
@@ -14659,7 +14733,7 @@ mod tests {
         // échoue proprement, l'image reste visible (rendu RAW ou boîtier) avec la raison.
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        h.state_mut().darktable = true;
+        h.state_mut().developers = fake_darktable();
         press(&mut h, Key::Enter, Modifiers::NONE);
         // Maj+B : développer l'image affichée (à la demande seulement).
         press(&mut h, Key::B, Modifiers::SHIFT);
@@ -14679,7 +14753,7 @@ mod tests {
         let file = h.state().files[0].clone();
         assert_eq!(h.state().source_for(&file), Source::Embedded);
         press(&mut h, Key::Z, Modifiers::NONE);
-        let level = view::zoom_level(file.kind, Source::Embedded);
+        let level = view::zoom_level(file.kind, Source::Embedded, DT);
         run_until(&mut h, |app| app.big.contains(&(file.path.clone(), level)));
         assert_eq!(h.state().source, Source::Developed, "le choix reste");
     }

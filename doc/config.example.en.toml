@@ -108,6 +108,10 @@ auto_mount = false
 darktable = "auto"
 # High quality (--hq): slightly more faithful, slightly slower.
 high_quality = false
+# Software whose developed render is shown when an image was developed in several:
+# "auto" (the latest development) or a software ("darktable"), kept as long as it
+# developed the image.
+default = "auto"
 
 [export]
 # Export of images developed by darktable (Ctrl+E), with one preset per use. Nothing is

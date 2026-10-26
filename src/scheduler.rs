@@ -45,36 +45,46 @@ pub struct CachedPreviews {
     pub cache: Cache,
     /// Réglages de calcul (tailles, rendu, seuils).
     pub settings: Settings,
-    /// darktable, pour le niveau [`Level::Developed`] (`None` : pas de rendu développé).
-    pub darktable: Option<crate::develop::Darktable>,
+    /// Logiciels de développement, pour les niveaux [`Level::Developed`] (aucun : pas de
+    /// rendu développé).
+    pub developers: crate::develop::Developers,
 }
 
 impl CachedPreviews {
-    /// Niveau développé : rendu par darktable dans un fichier temporaire (dans sa
-    /// configuration, sous le cache), puis le JPEG rangé tel quel dans le cache.
-    fn develop(&self, file: &MediaFile, cancel: &AtomicBool) -> Result<(), Failure> {
-        use crate::develop::{DevelopError, darktable_sidecar};
+    /// Niveau développé : rendu par le logiciel `engine` dans un fichier temporaire (sous
+    /// le cache), puis le JPEG rangé tel quel dans le cache.
+    fn develop(
+        &self,
+        file: &MediaFile,
+        engine: crate::develop::Engine,
+        cancel: &AtomicBool,
+    ) -> Result<(), Failure> {
+        use crate::develop::DevelopError;
         let failure = |e: DevelopError| match e {
             DevelopError::Cancelled => Failure::Cancelled,
             e => Failure::Error(e.to_string()),
         };
-        let key = preview::key(file, Level::Developed, &self.settings)
+        let key = preview::key(file, Level::Developed(engine), &self.settings)
             .map_err(|e| Failure::Error(e.to_string()))?;
         if self.cache.contains(&key) {
             return Ok(());
         }
-        let dt = self
-            .darktable
-            .as_ref()
+        let tool = self
+            .developers
+            .get(engine)
             .ok_or_else(|| failure(DevelopError::Unavailable))?;
-        let sidecar =
-            darktable_sidecar(&file.path).ok_or_else(|| failure(DevelopError::NotDeveloped))?;
-        let out = dt.config_dir.join(format!(
-            "rendu-{}-{:?}.jpg",
+        let sidecar = engine
+            .sidecar(&file.path)
+            .ok_or_else(|| failure(DevelopError::NotDeveloped))?;
+        let work = &self.developers.work_dir;
+        std::fs::create_dir_all(work).map_err(|e| Failure::Error(e.to_string()))?;
+        let out = work.join(format!(
+            "rendu-{}-{}-{:?}.jpg",
+            engine.id(),
             std::process::id(),
             std::thread::current().id()
         ));
-        dt.render(
+        tool.render(
             &file.path,
             &sidecar,
             &out,
@@ -96,8 +106,8 @@ impl Producer for CachedPreviews {
     }
 
     fn produce(&self, file: &MediaFile, level: Level, cancel: &AtomicBool) -> Result<(), Failure> {
-        if level == Level::Developed {
-            return self.develop(file, cancel);
+        if let Level::Developed(engine) = level {
+            return self.develop(file, engine, cancel);
         }
         match preview::ensure(&self.cache, file, level, &self.settings, cancel) {
             Ok(Outcome::Cached | Outcome::Computed) => Ok(()),
@@ -294,7 +304,7 @@ type Job = (usize, Level);
 /// l'analyse d'exposition, elle aussi parallélisée en interne).
 fn is_heavy(kind: MediaKind, level: Level) -> bool {
     // Développé : un logiciel externe qui occupe toute la machine, RAW ou image plate.
-    level == Level::Developed
+    matches!(level, Level::Developed(_))
         || kind == MediaKind::Raw
             && matches!(level, Level::Standard | Level::Full | Level::Exposure)
 }
@@ -338,8 +348,8 @@ fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u
         // Empreintes : vite faites, et le regroupement de la grille en dépend.
         Level::Similarity => (1, EMBEDDED_BACKGROUND),
         Level::EmbeddedFull | Level::Full => (2, STANDARD_BACKGROUND),
-        // Développé (darktable, plusieurs secondes) : comme un ajusté, à la demande.
-        Level::Developed => (0, STANDARD_BACKGROUND),
+        // Développé (plusieurs secondes) : comme un ajusté, à la demande.
+        Level::Developed(_) => (0, STANDARD_BACKGROUND),
     };
     let near = rank_in(group, index);
     // Autres images affichées : voisines (2) en plein écran, plus en comparaison.

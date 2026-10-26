@@ -246,7 +246,8 @@ send-unavailable = { $name } is not available on this machine
 send-refused = { $name } refuses these files
 
 ## Rendering by a development program
-develop-none = no darktable development for this image
+develop-none = no development for this image
+develop-unknown-engine = unknown development software: "{ $value }" (auto, darktable)
 develop-unavailable = darktable not found ([develop] darktable setting)
 develop-failed = darktable: { $error }
 export-bad-bits = export preset “{ $profile }”: { $bits } bits not possible in { $format }

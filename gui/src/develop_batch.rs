@@ -50,23 +50,28 @@ impl DevelopBatch {
         let cancel = Arc::new(AtomicBool::new(false));
         let (d, t, c) = (done.clone(), total.clone(), cancel.clone());
         let handle = std::thread::spawn(move || {
-            // Seulement les images développées (un sidecar du logiciel de rendu).
-            let todo: Vec<MediaFile> = files
+            // Seulement les images développées, chacune dans le logiciel de son
+            // développement ; sans développement, elle garde le rendu LibRaw.
+            let todo: Vec<(MediaFile, tri::develop::Engine)> = files
                 .into_iter()
-                .filter(|f| tri::develop::darktable_sidecar(&f.path).is_some())
+                .filter_map(|f| {
+                    let engine = producer.developers.resolve(&f.path)?;
+                    Some((f, engine))
+                })
                 .collect();
             t.store(todo.len(), Ordering::Relaxed);
             repaint();
             let mut summary = Summary::default();
-            for file in &todo {
+            for (file, engine) in &todo {
+                let level = Level::Developed(*engine);
                 if c.load(Ordering::Relaxed) {
                     summary.cancelled = true;
                     break;
                 }
-                if producer.is_done(file, Level::Developed) {
+                if producer.is_done(file, level) {
                     summary.cached += 1;
                 } else {
-                    match producer.produce(file, Level::Developed, &c) {
+                    match producer.produce(file, level, &c) {
                         Ok(()) => summary.rendered += 1,
                         Err(Failure::Cancelled) => {
                             summary.cancelled = true;
@@ -114,6 +119,28 @@ impl DevelopBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Logiciel de développement dont le rendu échoue toujours.
+    #[derive(Debug)]
+    struct Failing;
+
+    impl tri::develop::Developer for Failing {
+        fn engine(&self) -> tri::develop::Engine {
+            tri::develop::Engine::Darktable
+        }
+
+        fn render(
+            &self,
+            _: &std::path::Path,
+            _: &std::path::Path,
+            _: &std::path::Path,
+            _: u32,
+            _: &AtomicBool,
+        ) -> Result<(), tri::develop::DevelopError> {
+            Err(tri::develop::DevelopError::Failed("essai".into()))
+        }
+    }
+
     use tri::media::MediaKind;
 
     #[test]
@@ -133,10 +160,11 @@ mod tests {
             r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:darktable="http://darktable.sf.net/" darktable:history_end="3"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // darktable « installé », mais son rendu échoue.
         let producer = CachedPreviews {
             cache: tri::cache::Cache::open(dir.path().join("cache")).unwrap(),
             settings: tri::preview::Settings::default(),
-            darktable: None,
+            developers: tri::develop::Developers::none().with(Arc::new(Failing)),
         };
         let mut batch = DevelopBatch::start(dir.path().to_path_buf(), vec![a, b], producer, || {});
         let summary = loop {
@@ -170,11 +198,11 @@ mod tests {
         let producer = CachedPreviews {
             cache: tri::cache::Cache::open(cache.path()).unwrap(),
             settings: tri::preview::Settings::default(),
-            darktable: Some(tri::develop::Darktable {
-                cli: tri::develop::find_darktable("auto").expect("darktable"),
-                config_dir: cache.path().join("darktable"),
-                high_quality: false,
-            }),
+            developers: tri::develop::Developers::find(
+                &tri::develop::DevelopSettings::default(),
+                &cache.path().join("develop"),
+                false,
+            ),
         };
         let mut batch = DevelopBatch::start(dir, files, producer, || {});
         let summary = loop {
