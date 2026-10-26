@@ -8323,15 +8323,18 @@ impl TriApp {
                         clicked.push(Action::SortReverse);
                     }
                     let mut key = self.order.key;
-                    egui::ComboBox::from_id_salt("sort")
-                        .selected_text(sort_name(key))
-                        .show_ui(ui, |ui| {
-                            for k in tri::sort::SortKey::ALL {
-                                ui.selectable_value(&mut key, k, sort_name(k));
-                            }
-                        })
-                        .response
-                        .on_hover_text(self.action_tip(Action::SortNext));
+                    let keys: Vec<_> = tri::sort::SortKey::ALL
+                        .into_iter()
+                        .map(|k| (k, sort_name(k)))
+                        .collect();
+                    bar_choice(
+                        ui,
+                        "sort",
+                        compact,
+                        &mut key,
+                        &keys,
+                        &self.action_tip(Action::SortNext),
+                    );
                     if key != self.order.key {
                         sort_choice = Some(key);
                     }
@@ -8339,15 +8342,18 @@ impl TriApp {
                     ui.separator();
                     let mut render = self.grid_render;
                     let engines = self.developers.engines();
-                    egui::ComboBox::from_id_salt("grid_render")
-                        .selected_text(render.name())
-                        .show_ui(ui, |ui| {
-                            for r in crate::grid_render::GridRender::choices(&engines, render) {
-                                ui.selectable_value(&mut render, r, r.name());
-                            }
-                        })
-                        .response
-                        .on_hover_text(self.action_tip(Action::GridRenderNext));
+                    let renders: Vec<_> = crate::grid_render::GridRender::choices(&engines, render)
+                        .into_iter()
+                        .map(|r| (r, r.name()))
+                        .collect();
+                    bar_choice(
+                        ui,
+                        "grid_render",
+                        compact,
+                        &mut render,
+                        &renders,
+                        &self.action_tip(Action::GridRenderNext),
+                    );
                     if render != self.grid_render {
                         render_choice = Some(render);
                     }
@@ -10162,6 +10168,45 @@ pub fn window_icon() -> egui::IconData {
     }
 }
 
+/// Liste de choix de la barre des filtres : déroulante, ou sous-menu dans le menu « … » de
+/// la fenêtre étroite (issue n° 181 : une liste déroulante ouverte depuis un menu se
+/// refermait avec lui avant qu'on choisisse).
+fn bar_choice<T: Copy + PartialEq>(
+    ui: &mut Ui,
+    id: &str,
+    in_menu: bool,
+    current: &mut T,
+    items: &[(T, String)],
+    tip: &str,
+) {
+    let selected = items
+        .iter()
+        .find(|(v, _)| v == current)
+        .map_or_else(String::new, |(_, name)| name.clone());
+    if in_menu {
+        ui.menu_button(selected, |ui| {
+            for (value, name) in items {
+                if ui.selectable_label(value == current, name).clicked() {
+                    *current = *value;
+                    ui.close();
+                }
+            }
+        })
+        .response
+        .on_hover_text(tip);
+    } else {
+        egui::ComboBox::from_id_salt(id)
+            .selected_text(selected)
+            .show_ui(ui, |ui| {
+                for (value, name) in items {
+                    ui.selectable_value(current, *value, name);
+                }
+            })
+            .response
+            .on_hover_text(tip);
+    }
+}
+
 /// Champ de recherche par nom de la grille.
 fn grid_search_id() -> egui::Id {
     egui::Id::unique("grid_search")
@@ -11040,6 +11085,30 @@ mod tests {
         run_until(&mut h, |app| {
             app.texture_levels.get(&file.path) == Some(&Level::Thumbnail)
         });
+    }
+
+    #[test]
+    fn the_narrow_bar_menu_lists_can_be_chosen() {
+        // Issue n° 181 : fenêtre étroite, l'ordre et le rendu passent dans le menu « … » ;
+        // leurs listes déroulantes s'y refermaient avec le menu. Des sous-menus à la place.
+        let (mut h, _dir) = harness();
+        h.state_mut().filter_bar = true;
+        // « Nom » est aussi une ligne des métadonnées.
+        h.state_mut().metadata_panel = false;
+        h.set_size(vec2(400.0, 700.0));
+        h.run_steps(4);
+        h.get_by_label("…").click();
+        h.run_steps(2);
+        let current = h.state().order.key;
+        let other = tri::sort::SortKey::ALL
+            .into_iter()
+            .find(|&k| k != current)
+            .unwrap();
+        h.get_by_label(&sort_name(current)).click();
+        h.run_steps(2);
+        h.get_by_label(&sort_name(other)).click();
+        h.run_steps(2);
+        assert_eq!(h.state().order.key, other);
     }
 
     #[test]
