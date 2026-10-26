@@ -135,3 +135,12 @@ its own, without dialog.
 
 Coming: `darktable-cli` can process a folder in a single launch (amortized startup) — for
 sending developed JPEGs in the "after-development" stage.
+
+## Comparing developments in full screen (2026-10-26, #114)
+
+`b` goes through everything that exists for the shown image: camera JPEG, RAW render, then
+**each of its developments already rendered** (`view::Source::next`,
+`TriApp::rendered_engines`), its most recent development first (or the preferred
+software's), and back to the camera JPEG. A development not rendered yet is not in the
+round (`Shift+B`, `<leader>d` / `<leader>p` render it). The label says which one is shown
+("Developed in RapidRAW").

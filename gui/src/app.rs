@@ -3503,11 +3503,21 @@ impl TriApp {
             Action::StackChoose => self.choose_cover(),
             Action::ToggleSource => {
                 // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
-                // Le développé n'entre dans la rotation que s'il existe déjà pour l'image
-                // (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B le
-                // calcule.
-                let developed = !self.developers.is_empty() && self.developed_ready(self.selected);
-                self.set_source(self.source.next(developed));
+                // Les développements n'entrent dans la rotation que s'ils existent déjà pour
+                // l'image (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B
+                // les calcule. Tous ceux qui existent, pour les comparer (#114).
+                let rendered = self.rendered_engines(self.selected);
+                let shown = match self.developed_level_at(self.selected) {
+                    Some(Level::Developed(e)) => Some(e),
+                    _ => None,
+                };
+                let (source, engine) = self.source.next(shown, &rendered);
+                if let Some(engine) = engine
+                    && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
+                {
+                    self.choose_developer(&path, engine);
+                }
+                self.set_source(source);
                 self.request_zoom();
             }
             Action::Compare => self.start_compare(),
@@ -4855,6 +4865,33 @@ impl TriApp {
             .or_else(|| self.developers.engines().first().copied())
             .unwrap_or(tri::develop::Engine::Darktable);
         Level::Developed(engine)
+    }
+
+    /// Niveau développé de l'image `index`, s'il y en a une.
+    fn developed_level_at(&self, index: usize) -> Option<Level> {
+        self.files.get(index).map(|f| self.developed_level(&f.path))
+    }
+
+    /// Logiciels dont le développement de l'image `index` est déjà rendu (pour son sidecar
+    /// actuel), dans l'ordre du tour de `b` : celui de son développement d'abord
+    /// ([`tri::develop::Developers::resolve`]), puis les autres.
+    fn rendered_engines(&mut self, index: usize) -> Vec<tri::develop::Engine> {
+        // Le développé affiché, s'il est périmé, est oublié ici (et signalé).
+        self.developed_ready(index);
+        let (Some(file), Some(engine)) = (self.files.get(index), &self.engine) else {
+            return Vec::new();
+        };
+        let mut order = self.developers.engines();
+        if let Some(first) = self.developers.resolve(&file.path)
+            && let Some(i) = order.iter().position(|&e| e == first)
+        {
+            order[..=i].rotate_right(1);
+        }
+        order.retain(|&e| {
+            tri::preview::key(file, Level::Developed(e), &engine.preview)
+                .is_ok_and(|key| engine.cache.contains(&key))
+        });
+        order
     }
 
     fn developed_ready(&mut self, index: usize) -> bool {
@@ -15098,6 +15135,60 @@ mod tests {
             Some(&tri::develop::Engine::Darktable)
         );
         assert!(h.state().rating_dialog.is_none());
+    }
+
+    #[test]
+    fn b_goes_through_every_rendered_development() {
+        // #114 : en plein écran, `b` fait le tour de tout ce qui existe pour l'image, pour
+        // comparer : boîtier, RAW, darktable, RapidRAW, boîtier.
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
+        let file = h.state().files[0].clone();
+        let name = file.path.file_name().unwrap().to_string_lossy().to_string();
+        std::fs::write(
+            file.path.with_file_name(format!("{name}.xmp")),
+            r#"<rdf:Description darktable:history_end="3"/>"#,
+        )
+        .unwrap();
+        std::fs::write(file.path.with_file_name(format!("{name}.rrdata")), "{}").unwrap();
+        // Le sidecar darktable nettement plus ancien (précision des dates selon le système).
+        std::fs::File::options()
+            .write(true)
+            .open(file.path.with_file_name(format!("{name}.xmp")))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
+            .unwrap();
+        {
+            let engine = h.state().engine.as_ref().unwrap();
+            let bitmap = tri::bitmap::Bitmap {
+                width: 8,
+                height: 6,
+                data: vec![100; 8 * 6 * 3],
+            };
+            for e in [Engine::Darktable, Engine::RapidRaw] {
+                let key = preview::key(&file, Level::Developed(e), &engine.preview).unwrap();
+                engine.cache.put(&key, &bitmap).unwrap();
+            }
+        }
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let b = |h: &mut Harness<'_, TriApp>| {
+            press(h, Key::B, Modifiers::NONE);
+            (h.state().source, h.state().developed_level_at(0))
+        };
+        assert_eq!(b(&mut h).0, Source::Raw);
+        // Le développement le plus récent d'abord (le .rrdata).
+        assert_eq!(
+            b(&mut h),
+            (Source::Developed, Some(Level::Developed(Engine::RapidRaw)))
+        );
+        assert_eq!(
+            b(&mut h),
+            (Source::Developed, Some(Level::Developed(Engine::Darktable)))
+        );
+        assert_eq!(b(&mut h).0, Source::Embedded);
+        assert!(h.state().notice.is_none(), "{:?}", h.state().notice);
     }
 
     #[test]
