@@ -141,3 +141,22 @@ sans boîte.
 
 À venir : `darktable-cli` sait traiter un dossier en un seul lancement (démarrage
 amorti) — pour l'envoi de JPEG développés de l'« après-développement ».
+
+## Les développements dans la grille (26/10/2026, #114)
+
+Après le développement, on veut voir les images développées ; au déchargement et au tri,
+le JPEG boîtier suffit. `[gui.grid] render` (`gui/src/grid_render.rs`, `GridRender`),
+aussi dans la barre des filtres (liste à droite, `f d` pour le suivant), retenu d'une
+session à l'autre : `embedded` (JPEG boîtier, défaut), `latest` (le développement le plus
+récent de chaque image, `develop::resolve` sans préférence), `darktable` / `rapidraw`
+(toujours ce logiciel), `libraw` (rendu RAW). La liste ne propose que les logiciels
+installés. Une vignette n'a que **deux états** : JPEG boîtier, ou « DEV » (pastille sous
+la vignette, son infobulle nomme le logiciel ou LibRaw). Un RAW sans le développement voulu
+montre son **rendu LibRaw** : dès que la grille montre les rendus, les rendus LibRaw passent
+en fond pour tout le dossier (`Scheduler::set_raw_previews`, une tâche de fond de plus). Un
+développement pas encore rendu : en fond, un lot comme `Ctrl+Maj+B` (`[gui.grid] develop =
+"auto"`, bilan tu s'il n'y avait rien à rendre), ou à la demande seulement (`"manual"`) ;
+LibRaw, puis la vignette, en attendant. Les rendus du lot, faits hors du moteur, sont
+cherchés dans le cache au plus une fois par `render_poll_ms`. Le rendu, bien plus grand
+qu'une vignette, est décodé réduit (`jpeg::decode` à la taille des vignettes). Les images
+plates gardent leur vignette.

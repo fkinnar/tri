@@ -632,6 +632,32 @@ fn on_demand_policy_leaves_raw_renders_to_requests() {
 }
 
 #[test]
+fn the_raw_render_policy_changes_with_the_next_folder() {
+    // #114 : la grille montre les rendus LibRaw, ils passent en fond pour tout le dossier.
+    let fake = Fake::with_delay(Duration::from_millis(1));
+    let all = files(4, MediaKind::Raw);
+    let (scheduler, _events) = start_with(
+        &fake,
+        Config {
+            light_workers: 2,
+            thumbnails_first: true,
+            raw_previews: RawPreviews::OnDemand,
+            exposure: false,
+            sharpness: false,
+            similarity: false,
+        },
+    );
+    scheduler.set_folder(all.clone());
+    assert!(scheduler.wait_idle(LONG));
+    assert!(fake.order(Level::Standard).is_empty());
+    scheduler.set_raw_previews(RawPreviews::Background);
+    scheduler.set_folder(all);
+    assert!(scheduler.wait_idle(LONG));
+    assert_eq!(fake.order(Level::Standard).len(), 4);
+    assert_eq!(scheduler.progress(Level::Standard), complete(4));
+}
+
+#[test]
 fn moving_focus_drops_requests_that_are_no_longer_near() {
     let fake = Fake::with_delay(Duration::from_millis(1));
     let all = files(10, MediaKind::Raw);

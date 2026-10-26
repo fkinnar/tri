@@ -544,6 +544,17 @@ search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
 # le nombre d'images passent alors dans un menu « … »).
 search_min_width = 80.0
+# Rendu des vignettes, à changer aussi dans la barre des filtres (f d) : "embedded" (JPEG
+# boîtier, pour décharger et trier), "latest" (le développement le plus récent de chaque
+# image), "darktable" ou "rapidraw" (toujours ce logiciel), "libraw" (rendu RAW). Une
+# image sans le développement voulu montre son rendu LibRaw, calculé en fond.
+render = "embedded"
+# Développements montrés par la grille mais pas encore rendus : "auto" (rendus en fond,
+# une image après l'autre) ou "manual" (Ctrl+Maj+B sur le dossier ; LibRaw en attendant).
+develop = "auto"
+# Vignette dont le rendu est attendu : le cache est relu au plus une fois par cet
+# intervalle (ms).
+render_poll_ms = 1000
 
 [gui.view]
 # Attente sur une image avant de lancer son 100 % RAW (ms) : les images seulement

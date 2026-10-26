@@ -138,3 +138,21 @@ its own, without dialog.
 
 Coming: `darktable-cli` can process a folder in a single launch (amortized startup) — for
 sending developed JPEGs in the "after-development" stage.
+
+## Developments in the grid (2026-10-26, #114)
+
+After developing, one wants to see the developed images; when offloading and culling, the
+camera JPEG is enough. `[gui.grid] render` (`gui/src/grid_render.rs`, `GridRender`), also
+in the filter bar (list on the right, `f d` for the next one), kept from one session to the
+next: `embedded` (camera JPEG, default), `latest` (each image's most recent development,
+`develop::resolve` without preference), `darktable` / `rapidraw` (always this software),
+`libraw` (RAW render). The list only offers the installed software. A thumbnail has only
+**two states**: camera JPEG, or "DEV" (a chip under the thumbnail, its tooltip names the
+software or LibRaw). A RAW without the wanted development shows its **LibRaw render**: as
+soon as the grid shows renders, LibRaw renders go to the background for the whole folder
+(`Scheduler::set_raw_previews`, one more background task). A development not rendered yet:
+in the background, a batch like `Ctrl+Shift+B` (`[gui.grid] develop = "auto"`, no summary if
+there was nothing to render), or on request only (`"manual"`); LibRaw, then the thumbnail,
+meanwhile. The batch's renders, made outside the engine, are looked up in the cache at most
+once per `render_poll_ms`. The render, much larger than a thumbnail, is decoded reduced
+(`jpeg::decode` at thumbnail size). Flat images keep their thumbnail.

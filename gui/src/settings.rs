@@ -447,6 +447,16 @@ pub struct GridSettings {
     /// Largeur minimale de ce champ quand la barre manque de place (le tri et le nombre
     /// d'images passent alors dans un menu « … », issue n° 71).
     pub search_min_width: f32,
+    /// Rendu des vignettes (#114) : JPEG boîtier, dernier développement, un logiciel, ou
+    /// LibRaw ; un développement absent retombe sur le rendu LibRaw. Changé à la volée
+    /// dans la barre des filtres (`f d`), retenu d'une session à l'autre.
+    pub render: crate::grid_render::GridRender,
+    /// Développements que la grille montre mais pas encore rendus : en fond (`auto`), ou
+    /// seulement sur demande (`manual`, Ctrl+Maj+B).
+    pub develop: crate::grid_render::GridDevelop,
+    /// Rendu d'une vignette attendu (développement en cours) : relecture du cache au plus
+    /// une fois par cet intervalle (ms).
+    pub render_poll_ms: u64,
 }
 
 impl Default for GridSettings {
@@ -473,6 +483,9 @@ impl Default for GridSettings {
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,
+            render: crate::grid_render::GridRender::Embedded,
+            develop: crate::grid_render::GridDevelop::Auto,
+            render_poll_ms: 1000,
         }
     }
 }

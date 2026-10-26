@@ -48,6 +48,8 @@ pub struct DisplayState {
     pub grid_info: Option<bool>,
     /// Taille des vignettes de la grille (curseur, `+` / `-`, `*`).
     pub grid_cell: Option<f32>,
+    /// Rendu des vignettes (barre des filtres, `f d`, #114).
+    pub grid_render: Option<crate::grid_render::GridRender>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
     pub window: Option<WindowState>,
 }

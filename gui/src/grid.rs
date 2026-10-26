@@ -105,6 +105,7 @@ pub fn navigate(
         | Action::FilterInvert
         | Action::SortNext
         | Action::SortReverse
+        | Action::GridRenderNext
         | Action::ToggleFilterBar
         | Action::ToggleRatingBar
         | Action::ToggleImageInfo

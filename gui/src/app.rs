@@ -20,7 +20,7 @@ use tri::media::{MediaFile, MediaKind};
 use tri::notes::{ColorRule, NotesRule, StarsRule};
 use tri::places::{Monitor, Place, PlaceKind, PlaceSettings, Tree};
 use tri::preview;
-use tri::scheduler::{CachedPreviews, Event, Progress, Scheduler};
+use tri::scheduler::{CachedPreviews, Event, Progress, RawPreviews, Scheduler};
 use tri::settings::EngineSettings;
 use tri::update::Status as UpdateStatus;
 use tri::xmp::{Color, Flag};
@@ -356,6 +356,21 @@ pub struct TriApp {
     develop_folder_dialog: Option<(PathBuf, egui::Pos2, Option<tri::develop::Engine>)>,
     /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
     develop_batch: Option<crate::develop_batch::DevelopBatch>,
+    /// Lot lancé de lui-même pour la grille (`[gui.grid] develop = "auto"`) : pas de
+    /// bilan s'il n'y avait rien à rendre.
+    develop_batch_auto: bool,
+    /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
+    auto_develop_pending: bool,
+    /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
+    grid_render: crate::grid_render::GridRender,
+    /// Niveau montré par chaque vignette (lu dans les sidecars, gardé jusqu'au refiltrage).
+    grid_levels: HashMap<PathBuf, Level>,
+    /// Niveau de la texture chargée de chaque vignette.
+    texture_levels: HashMap<PathBuf, Level>,
+    /// Rendus de vignettes développés trouvés dans le cache, et dernière recherche de ceux
+    /// qui manquaient (`[gui.grid] render_poll_ms`).
+    grid_found: HashSet<(PathBuf, Level)>,
+    grid_looked: HashMap<(PathBuf, Level), Instant>,
     /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
     /// fermés : ils reviennent tels quels en sortant).
     focus_mode: bool,
@@ -767,6 +782,13 @@ impl TriApp {
             develop_choice: HashMap::new(),
             develop_folder_dialog: None,
             develop_batch: None,
+            develop_batch_auto: false,
+            auto_develop_pending: false,
+            grid_render: gui.grid.render,
+            grid_levels: HashMap::new(),
+            texture_levels: HashMap::new(),
+            grid_found: HashSet::new(),
+            grid_looked: HashMap::new(),
             focus_mode: false,
             focus_mode_since: None,
             logo: None,
@@ -886,6 +908,7 @@ impl TriApp {
     fn start_loading(&mut self) {
         self.loading = None;
         self.watch_snapshot = None;
+        self.auto_develop_pending = true;
         if self.folder.is_none() || !self.folder.notes.is_pending() {
             return;
         }
@@ -940,6 +963,7 @@ impl TriApp {
             stack_enter: Some(self.stack_enter),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
+            grid_render: Some(self.grid_render),
             window: self.window_kept,
         }
     }
@@ -1034,6 +1058,9 @@ impl TriApp {
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
+        }
+        if let Some(render) = s.grid_render {
+            self.grid_render = render;
         }
         self.display_saved = self.display();
     }
@@ -2186,6 +2213,14 @@ impl TriApp {
             .take()
             .map(|b| b.folder)
             .unwrap_or_default();
+        // Rendus arrivés : les vignettes qui les attendaient relisent le cache.
+        self.grid_looked.clear();
+        if std::mem::take(&mut self.develop_batch_auto)
+            && summary.rendered == 0
+            && summary.failed == 0
+        {
+            return;
+        }
         let mut text = t!(
             "develop-batch-done",
             name = folder_name(&folder),
@@ -2481,6 +2516,10 @@ impl TriApp {
             self.scroll_anchor = Some((path, shift));
             self.reveal = Some(Reveal::Anchor);
         }
+        // Sidecars peut-être changés (surveillance, renommage…) : niveaux des vignettes relus.
+        self.grid_levels.clear();
+        self.grid_found.clear();
+        self.grid_looked.clear();
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
         }
@@ -2999,7 +3038,7 @@ impl TriApp {
             settings: preview,
             developers,
         };
-        let config = self.settings.scheduler(self.gui.raw_previews);
+        let config = self.settings.scheduler(self.raw_policy());
         let scheduler = Scheduler::new(producer, config, move |event| {
             let _ = tx.send(event);
             repaint.request_repaint();
@@ -3927,6 +3966,14 @@ impl TriApp {
             Action::FilterInvert => {
                 self.filter_inverted = !self.filter_inverted;
                 self.apply_filter();
+            }
+            Action::GridRenderNext => {
+                let next = self.grid_render.next(&self.developers.engines());
+                self.set_grid_render(next);
+                self.notice = Some((
+                    format!("{} : {}", t!("grid-render-tip"), next.name()),
+                    false,
+                ));
             }
             Action::SortNext => self.set_order(tri::sort::Order {
                 key: self.order.key.next(),
@@ -6186,35 +6233,179 @@ impl TriApp {
     }
 
     /// Texture de la vignette `index`, chargée depuis le cache si besoin et si le budget de
-    /// l'image le permet.
+    /// l'image le permet : le rendu choisi pour la grille ([`GridRender`]) s'il est prêt,
+    /// sinon le rendu LibRaw, sinon la vignette (JPEG boîtier) en attendant.
+    ///
+    /// [`GridRender`]: crate::grid_render::GridRender
     fn thumbnail_texture(
         &mut self,
         ctx: &egui::Context,
         index: usize,
         deadline: Instant,
     ) -> Option<TextureHandle> {
+        let path = self.files[index].path.clone();
+        let want = self.grid_level(index);
+        let have = self.textures.get(&path).cloned();
+        let have_level = self.texture_levels.get(&path).copied();
+        if have.is_some() && have_level.unwrap_or(Level::Thumbnail) == want {
+            return have;
+        }
+        // Le rendu voulu, ou en attendant celui de LibRaw (un développement pas encore
+        // rendu), sinon la vignette.
+        let mut candidates = vec![want];
+        if matches!(want, Level::Developed(_)) {
+            candidates.push(Level::Standard);
+        }
+        candidates.push(Level::Thumbnail);
+        for level in candidates {
+            if have.is_some() && have_level == Some(level) {
+                return have;
+            }
+            if !self.grid_render_ready(index, level) {
+                continue;
+            }
+            if Instant::now() > deadline {
+                self.visible_waiting += 1;
+                ctx.request_repaint(); // on continuera à l'image suivante
+                return have;
+            }
+            if let Some(texture) = self.load_grid_texture(ctx, index, level) {
+                return Some(texture);
+            }
+        }
+        if want != Level::Thumbnail && self.develop_batch.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(self.gui.grid.render_poll_ms));
+        }
+        have
+    }
+
+    /// Niveau montré par la vignette `index` (lu dans les sidecars une fois).
+    fn grid_level(&mut self, index: usize) -> Level {
         let file = &self.files[index];
-        if let Some(t) = self.textures.get(&file.path) {
-            return Some(t.clone());
+        if let Some(&level) = self.grid_levels.get(&file.path) {
+            return level;
         }
-        if self.status[index].thumbnail != Avail::Ready {
-            return None;
+        let level = self.grid_render.level(file, &self.developers.engines());
+        self.grid_levels.insert(file.path.clone(), level);
+        level
+    }
+
+    /// Vrai si le niveau `level` de la vignette `index` est dans le cache : d'après le
+    /// moteur pour la vignette et le rendu LibRaw ; pour un développement (rendu par un lot,
+    /// hors du moteur), en relisant le cache au plus une fois par `render_poll_ms`.
+    fn grid_render_ready(&mut self, index: usize, level: Level) -> bool {
+        if !matches!(level, Level::Developed(_)) {
+            return self.ready(index, level);
         }
-        if Instant::now() > deadline {
-            self.visible_waiting += 1;
-            ctx.request_repaint(); // on continuera à l'image suivante
-            return None;
+        let key = (self.files[index].path.clone(), level);
+        if self.grid_found.contains(&key) {
+            return true;
         }
+        let poll = Duration::from_millis(self.gui.grid.render_poll_ms);
+        if self
+            .grid_looked
+            .get(&key)
+            .is_some_and(|t| t.elapsed() < poll)
+        {
+            return false;
+        }
+        self.grid_looked.insert(key.clone(), Instant::now());
+        let found = self.engine.as_ref().is_some_and(|engine| {
+            preview::key(&self.files[index], level, &engine.preview)
+                .is_ok_and(|k| engine.cache.contains(&k))
+        });
+        if found {
+            self.grid_found.insert(key);
+        }
+        found
+    }
+
+    /// Charge le niveau `level` de la vignette `index` depuis le cache, réduit à la taille
+    /// des vignettes (un aperçu standard ou développé est bien plus grand).
+    fn load_grid_texture(
+        &mut self,
+        ctx: &egui::Context,
+        index: usize,
+        level: Level,
+    ) -> Option<TextureHandle> {
         let engine = self.engine.as_ref()?;
-        let key = preview::key(file, Level::Thumbnail, &engine.preview).ok()?;
-        let bitmap = engine.cache.get(&key)?;
+        let file = &self.files[index];
+        let key = preview::key(file, level, &engine.preview).ok()?;
+        let bitmap = if level == Level::Thumbnail {
+            engine.cache.get(&key)?
+        } else {
+            let side = engine.preview.sizes.thumbnail;
+            tri::jpeg::decode(&engine.cache.get_bytes(&key)?, side)
+                .ok()?
+                .fit(side)
+        };
         let image = ColorImage::from_rgb(
             [bitmap.width as usize, bitmap.height as usize],
             &bitmap.data,
         );
-        let texture = ctx.load_texture(file.path.to_string_lossy(), image, TextureOptions::LINEAR);
+        let name = format!("{}#{level:?}", file.path.to_string_lossy());
+        let texture = ctx.load_texture(name, image, TextureOptions::LINEAR);
         self.textures.insert(file.path.clone(), texture.clone());
+        self.texture_levels.insert(file.path.clone(), level);
         Some(texture)
+    }
+
+    /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
+    fn raw_policy(&self) -> RawPreviews {
+        if self.grid_render.needs_libraw() {
+            RawPreviews::Background
+        } else {
+            self.gui.raw_previews
+        }
+    }
+
+    /// Change le rendu des vignettes (barre des filtres, `f d`).
+    fn set_grid_render(&mut self, render: crate::grid_render::GridRender) {
+        if render == self.grid_render {
+            return;
+        }
+        self.grid_render = render;
+        if let Some(engine) = &self.engine {
+            engine.scheduler.set_raw_previews(self.raw_policy());
+        }
+        self.auto_develop_pending = true;
+        self.refilter(Reveal::Minimal);
+    }
+
+    /// Lance le lot de la grille (`[gui.grid] develop = "auto"`) : les développements
+    /// qu'elle montre, pas encore rendus, rendus en fond. Attend la fin d'un autre lot.
+    fn auto_develop(&mut self, ctx: &egui::Context) {
+        if !self.auto_develop_pending || self.develop_batch.is_some() || self.loading.is_some() {
+            return;
+        }
+        self.auto_develop_pending = false;
+        let Some(force) = self.grid_render.to_develop() else {
+            return;
+        };
+        let Some(engine) = &self.engine else { return };
+        if self.gui.grid.develop != crate::grid_render::GridDevelop::Auto
+            || self.developers.is_empty()
+            || self.folder.is_none()
+        {
+            return;
+        }
+        // « Dernier développement » : chaque image dans le logiciel de son plus récent.
+        let mut developers = self.developers.clone();
+        developers.preference = tri::develop::Preference::Auto;
+        let producer = CachedPreviews {
+            cache: engine.cache.clone(),
+            settings: engine.preview,
+            developers,
+        };
+        let repaint = ctx.clone();
+        self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
+            self.folder.dir.clone(),
+            self.folder.files.clone(),
+            producer,
+            force,
+            move || repaint.request_repaint(),
+        ));
+        self.develop_batch_auto = true;
     }
 
     /// Barre d'état ; renvoie l'action d'une icône cliquée (afficher / masquer un
@@ -7792,6 +7983,7 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         let mut refilter = false;
         let mut sort_choice: Option<tri::sort::SortKey> = None;
+        let mut render_choice: Option<crate::grid_render::GridRender> = None;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -8143,6 +8335,22 @@ impl TriApp {
                     if key != self.order.key {
                         sort_choice = Some(key);
                     }
+                    // Rendu des vignettes (#114) : les logiciels installés seulement.
+                    ui.separator();
+                    let mut render = self.grid_render;
+                    let engines = self.developers.engines();
+                    egui::ComboBox::from_id_salt("grid_render")
+                        .selected_text(render.name())
+                        .show_ui(ui, |ui| {
+                            for r in crate::grid_render::GridRender::choices(&engines, render) {
+                                ui.selectable_value(&mut render, r, r.name());
+                            }
+                        })
+                        .response
+                        .on_hover_text(self.action_tip(Action::GridRenderNext));
+                    if render != self.grid_render {
+                        render_choice = Some(render);
+                    }
                 };
                 if compact {
                     ui.menu_button("…", |ui| {
@@ -8164,6 +8372,9 @@ impl TriApp {
         }
         if let Some(key) = sort_choice {
             self.set_order(tri::sort::Order { key, ..self.order });
+        }
+        if let Some(render) = render_choice {
+            self.set_grid_render(render);
         }
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -8470,8 +8681,38 @@ impl TriApp {
             },
         );
         let mut tips = Vec::new();
-        // De droite à gauche après le format : goutte (floue), puis versions.
+        // De droite à gauche après le format : rendu développé, goutte (floue), puis
+        // versions.
         let mut caption_left = badge_rect.min.x;
+        // Rendu montré (#114) : « DEV » si la vignette n'est pas le JPEG boîtier.
+        let shown = self.texture_levels.get(&file.path).copied();
+        if let Some(level @ (Level::Developed(_) | Level::Standard)) = shown
+            && file.kind == MediaKind::Raw
+        {
+            let side = badge_rect.height();
+            let galley = ui.painter().layout_no_wrap(
+                t!("grid-render-dev"),
+                FontId::monospace(side * 0.8),
+                text_color,
+            );
+            let chip = Rect::from_min_size(
+                pos2(caption_left - 6.0 - galley.size().x - 4.0, badge_rect.min.y),
+                vec2(galley.size().x + 4.0, side),
+            );
+            ui.painter().rect_stroke(
+                chip,
+                2.0,
+                egui::Stroke::new(1.0, text_color),
+                egui::StrokeKind::Inside,
+            );
+            ui.painter()
+                .galley(chip.center() - galley.size() / 2.0, galley, text_color);
+            caption_left = chip.min.x;
+            tips.push(match level {
+                Level::Developed(engine) => t!("grid-render-badge", engine = engine.name()),
+                _ => t!("grid-render-badge-libraw"),
+            });
+        }
         if g.blur_badge && self.is_blurry(&file.path) {
             let side = badge_rect.height();
             let drop = Rect::from_min_size(
@@ -9569,6 +9810,7 @@ impl eframe::App for TriApp {
         self.poll_mount();
         self.poll_cache_jobs();
         self.poll_develop_batch();
+        self.auto_develop(&ctx);
         self.run_script(&ctx);
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
@@ -10746,6 +10988,58 @@ mod tests {
     fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
         h.key_press_modifiers(modifiers, key);
         h.run_steps(3);
+    }
+
+    #[test]
+    fn the_grid_shows_the_chosen_render_with_its_badge() {
+        // #114 : `f d` passe au rendu suivant (logiciels installés seulement), retenu d'une
+        // session à l'autre ; un RAW sans développement montre son rendu LibRaw.
+        use crate::grid_render::GridRender;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        let f_then = |h: &mut Harness<'_, TriApp>, key| {
+            press(h, Key::F, Modifiers::NONE);
+            press(h, key, Modifiers::NONE);
+        };
+        f_then(&mut h, Key::D);
+        assert_eq!(h.state().grid_render, GridRender::Latest);
+        assert_eq!(h.state().display().grid_render, Some(GridRender::Latest));
+        assert_eq!(h.state().raw_policy(), RawPreviews::Background);
+        f_then(&mut h, Key::D);
+        assert_eq!(
+            h.state().grid_render,
+            GridRender::Engine(tri::develop::Engine::Darktable)
+        );
+        f_then(&mut h, Key::D);
+        assert_eq!(h.state().grid_render, GridRender::LibRaw);
+        // Une image vue comme un RAW, son rendu LibRaw dans le cache : il remplace la
+        // vignette.
+        let mut file = h.state().files[0].clone();
+        file.kind = MediaKind::Raw;
+        h.state_mut().files[0] = file.clone();
+        h.state_mut().grid_levels.clear();
+        {
+            let engine = h.state().engine.as_ref().unwrap();
+            let key = preview::key(&file, Level::Standard, &engine.preview).unwrap();
+            let bitmap = tri::bitmap::Bitmap {
+                width: 80,
+                height: 60,
+                data: vec![200; 80 * 60 * 3],
+            };
+            engine.cache.put(&key, &bitmap).unwrap();
+        }
+        set(&mut h.state_mut().status, 0, Level::Standard, Avail::Ready);
+        run_until(&mut h, |app| {
+            app.texture_levels.get(&file.path) == Some(&Level::Standard)
+        });
+        // Retour au JPEG boîtier : la vignette revient.
+        f_then(&mut h, Key::D);
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        run_until(&mut h, |app| {
+            app.texture_levels.get(&file.path) == Some(&Level::Thumbnail)
+        });
     }
 
     #[test]
