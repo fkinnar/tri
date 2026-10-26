@@ -522,7 +522,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   défaut) passe au bout de la pile à la première photo de la pile suivante (25/10/2026).
   De pile en pile (↑ / ↓), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
   "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
-  l'interrupteur des piles (toujours là depuis le 25/10/2026), ou Ctrl+Maj+S, retenu
+  l'interrupteur des piles (toujours là depuis le 25/10/2026 ; en grille aussi, piles
+  actives, pour en voir l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu
   d'un lancement à l'autre (issue n° 62) ; un message dit lequel est actif (rien ne
   bouge à l'écran).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).

@@ -7273,6 +7273,11 @@ impl TriApp {
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
                     actions.extend([Action::StackEnterToggle, Action::StackMode]);
+                } else if self.stacking {
+                    // En grille, piles actives : au même endroit, pour voir l'état du
+                    // réglage (retour du 26/10/2026) ; l'interrupteur des piles, lui, est
+                    // dans la barre des filtres.
+                    actions.push(Action::StackEnterToggle);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && self.darktable {
@@ -7361,6 +7366,7 @@ impl TriApp {
                 | Action::NavUp
                 | Action::NavDown
                 | Action::StackMode
+                | Action::StackEnterToggle
                 | Action::Develop
                 | Action::ToggleZoom
                 | Action::ToggleGridInfo
@@ -11359,6 +11365,22 @@ mod tests {
             .click();
         h.run_steps(3);
         assert!(h.state().auto_advance);
+    }
+
+    #[test]
+    fn in_the_grid_the_stack_entry_button_shows_with_stacks() {
+        // Retour du 26/10/2026 (#62) : en grille aussi, piles actives, pour voir l'état.
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        let label = Action::StackEnterToggle.label();
+        assert!(h.query_by_label(&label).is_none(), "sans les piles");
+        h.state_mut().stacking = true;
+        h.run_steps(3);
+        let before = h.state().stack_enter;
+        h.get_by_label(&label).click();
+        h.run_steps(3);
+        assert_ne!(h.state().stack_enter, before);
     }
 
     #[test]
