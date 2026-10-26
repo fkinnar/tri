@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::develop::{Darktable, DevelopError};
+use crate::develop::{Darktable, DevelopError, Engine};
 use crate::media::{MediaKind, kind_of};
 
 /// Espaces couleur proposés (liste déroulante des réglages), dans l'ordre de darktable.
@@ -705,8 +705,11 @@ pub fn export(
     if images.is_empty() {
         return Ok(Report::default());
     }
-    let (args, conf) = profile.darktable_args().map_err(DevelopError::Failed)?;
-    std::fs::create_dir_all(&dt.config_dir).map_err(|e| DevelopError::Failed(e.to_string()))?;
+    let (args, conf) = profile
+        .darktable_args()
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e))?;
+    std::fs::create_dir_all(&dt.config_dir)
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     let mut cmd = dt.cli.command();
     for image in &images {
         cmd.arg("--import").arg(image);
@@ -730,7 +733,7 @@ pub fn export(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| DevelopError::Failed(e.to_string()))?;
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     // Sorties lues dans des fils à part : darktable ne se bloque jamais sur un tuyau plein.
     let (tx, rx) = std::sync::mpsc::channel();
     let stdout = child.stdout.take().expect("stdout");
@@ -766,7 +769,7 @@ pub fn export(
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(e) => return Err(DevelopError::Failed(e.to_string())),
+            Err(e) => return Err(DevelopError::Failed(Engine::Darktable, e.to_string())),
         }
     };
     let message = errors.join().unwrap_or_default();
@@ -783,6 +786,7 @@ pub fn export(
     if report.written.is_empty() && !status.success() {
         let last = message.lines().rev().find(|l| !l.trim().is_empty());
         return Err(DevelopError::Failed(
+            Engine::Darktable,
             last.unwrap_or("darktable-cli").trim().to_string(),
         ));
     }

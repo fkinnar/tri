@@ -608,8 +608,8 @@ pub enum DevelopError {
     Unavailable(Engine),
     /// Rendu annulé (l'image n'est plus affichée).
     Cancelled,
-    /// Échec du programme (dernière ligne de son message d'erreur).
-    Failed(String),
+    /// Échec du logiciel (dernière ligne de son message d'erreur, ou la raison).
+    Failed(Engine, String),
     /// Échec hors de darktable (export par LibRaw ou du JPEG boîtier), message tel quel.
     Other(String),
 }
@@ -628,9 +628,11 @@ impl std::fmt::Display for DevelopError {
                 )
             ),
             DevelopError::Cancelled => write!(f, "annulé"),
-            DevelopError::Failed(e) => {
-                write!(f, "{}", crate::t!("develop-failed", error = e.as_str()))
-            }
+            DevelopError::Failed(engine, e) => write!(
+                f,
+                "{}",
+                crate::t!("develop-failed", engine = engine.name(), error = e.as_str())
+            ),
             DevelopError::Other(e) => write!(f, "{e}"),
         }
     }
@@ -675,7 +677,8 @@ fn render_darktable(
     side: u32,
     cancel: &AtomicBool,
 ) -> Result<(), DevelopError> {
-    std::fs::create_dir_all(&dt.config_dir).map_err(|e| DevelopError::Failed(e.to_string()))?;
+    std::fs::create_dir_all(&dt.config_dir)
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     let _ = std::fs::remove_file(out);
     let side = side.to_string();
     let mut child = dt
@@ -696,7 +699,7 @@ fn render_darktable(
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| DevelopError::Failed(e.to_string()))?;
+        .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
     loop {
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -715,11 +718,12 @@ fn render_darktable(
                 }
                 let last = message.lines().rev().find(|l| !l.trim().is_empty());
                 return Err(DevelopError::Failed(
+                    Engine::Darktable,
                     last.unwrap_or("darktable-cli").trim().to_string(),
                 ));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(e) => return Err(DevelopError::Failed(e.to_string())),
+            Err(e) => return Err(DevelopError::Failed(Engine::Darktable, e.to_string())),
         }
     }
 }
@@ -740,8 +744,8 @@ impl Developer for RapidRaw {
 
     /// `rapidraw export` (RapidRAW ≥ 1.6, sans interface) applique de lui-même le
     /// sidecar `.rrdata` posé à côté de l'image ; il exporte à pleine taille, réduit
-    /// ensuite à `side`. Il refuse de tourner pendant que l'interface de RapidRAW est
-    /// ouverte (lu dans son code source, 26/10/2026) : message clair dans ce cas.
+    /// ensuite à `side`. Interface de RapidRAW ouverte, il a rendu une image toute noire
+    /// sans signaler d'erreur (essai du 26/10/2026) : refusée, avec un message clair.
     fn render(
         &self,
         image: &Path,
@@ -750,7 +754,8 @@ impl Developer for RapidRaw {
         side: u32,
         cancel: &AtomicBool,
     ) -> Result<(), DevelopError> {
-        let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(e.to_string());
+        let failed =
+            |e: &dyn std::fmt::Display| DevelopError::Failed(Engine::RapidRaw, e.to_string());
         std::fs::create_dir_all(&self.work_dir).map_err(|e| failed(&e))?;
         let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
         let export = self.work_dir.join(format!("export-{id}.jpg"));
@@ -771,7 +776,7 @@ impl Developer for RapidRaw {
             .stderr(messages)
             .spawn()
             .map_err(|e| failed(&e))?;
-        let status = wait(child, cancel);
+        let status = wait(child, Engine::RapidRaw, cancel);
         let text = std::fs::read_to_string(&log).unwrap_or_default();
         let _ = std::fs::remove_file(&log);
         let result = match status {
@@ -779,11 +784,12 @@ impl Developer for RapidRaw {
                 shrink(&export, out, side).map_err(|e| failed(&e))
             }
             Ok(_) if text.contains("already running") => {
-                Err(DevelopError::Failed(crate::t!("develop-rapidraw-open")))
+                Err(failed(&crate::t!("develop-rapidraw-open")))
             }
             Ok(_) => {
                 let last = text.lines().rev().find(|l| !l.trim().is_empty());
                 Err(DevelopError::Failed(
+                    Engine::RapidRaw,
                     last.unwrap_or("rapidraw export").trim().to_string(),
                 ))
             }
@@ -797,6 +803,7 @@ impl Developer for RapidRaw {
 /// Attend la fin de `child` ; `cancel` l'arrête.
 fn wait(
     mut child: std::process::Child,
+    engine: Engine,
     cancel: &AtomicBool,
 ) -> Result<std::process::ExitStatus, DevelopError> {
     loop {
@@ -808,17 +815,23 @@ fn wait(
         match child.try_wait() {
             Ok(Some(status)) => return Ok(status),
             Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(e) => return Err(DevelopError::Failed(e.to_string())),
+            Err(e) => return Err(DevelopError::Failed(engine, e.to_string())),
         }
     }
 }
 
 /// Le JPEG `from`, réduit au côté long `side`, écrit dans `to` (qualité du cache).
+/// Une image toute noire (aucun pixel au-dessus de 0) est refusée : c'est ce que rend
+/// RapidRAW quand son interface est ouverte, jamais une vraie photo (le bruit du capteur
+/// suffit à dépasser 0).
 fn shrink(from: &Path, to: &Path, side: u32) -> Result<(), String> {
     let bytes = std::fs::read(from).map_err(|e| e.to_string())?;
     let bitmap = crate::jpeg::decode(&bytes, side)
         .map_err(|e| e.to_string())?
         .fit(side);
+    if bitmap.data.iter().all(|&v| v == 0) {
+        return Err(crate::t!("develop-rapidraw-black"));
+    }
     let jpeg = crate::jpeg::encode(
         &bitmap,
         crate::cache::DEFAULT_JPEG_QUALITY,
@@ -1051,6 +1064,20 @@ mod tests {
         let rr = fake_rapidraw(dir.path(), Some(&big), "");
         rr.render(&image, &image, &out, 100, &cancel).unwrap();
         assert_eq!(image::image_dimensions(&out).unwrap(), (100, 75));
+        // Image toute noire (interface de RapidRAW ouverte) : refusée, rien d'écrit.
+        let black = dir.path().join("black.jpg");
+        let bitmap = crate::bitmap::Bitmap {
+            width: 40,
+            height: 30,
+            data: vec![0; 40 * 30 * 3],
+        };
+        let bytes = crate::jpeg::encode(&bitmap, 90, crate::jpeg::Chroma::Half).unwrap();
+        std::fs::write(&black, bytes).unwrap();
+        let dark = dir.path().join("dark.jpg");
+        let rr = fake_rapidraw(dir.path(), Some(&black), "");
+        let err = rr.render(&image, &image, &dark, 100, &cancel).unwrap_err();
+        assert!(err.to_string().contains("RapidRAW"), "{err}");
+        assert!(!dark.exists());
         // Interface de RapidRAW ouverte : la raison, en clair.
         let rr = fake_rapidraw(
             dir.path(),

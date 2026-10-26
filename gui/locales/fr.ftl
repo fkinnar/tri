@@ -720,6 +720,7 @@ develop-batch-unavailable = darktable introuvable : réglage [develop] darktable
 develop-batch-busy = un dossier est déjà en cours de développement
 develop-batch-progress = développement de « { $name } » { $done }/{ $total }
 develop-batch-done = « { $name } » développé : { $rendered } rendus, { $cached } déjà faits, { $failed } échecs
+develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrompu)" }
 develop-batch-cancel = Interrompre le développement
 view-info-developed-none = { " · " }pas encore développé ({ $keys })

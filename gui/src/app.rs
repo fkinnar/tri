@@ -2193,6 +2193,9 @@ impl TriApp {
             cached = summary.cached,
             failed = summary.failed
         );
+        if let Some(error) = &summary.error {
+            text.push_str(&t!("develop-batch-error", error = error.as_str()));
+        }
         if summary.cancelled {
             text.push_str(&t!("develop-batch-cancelled"));
         }

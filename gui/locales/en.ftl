@@ -721,6 +721,7 @@ develop-batch-unavailable = darktable not found: setting [develop] darktable
 develop-batch-busy = a folder is already being developed
 develop-batch-progress = developing "{ $name }" { $done }/{ $total }
 develop-batch-done = "{ $name }" developed: { $rendered } rendered, { $cached } already done, { $failed } failed
+develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrupted)" }
 develop-batch-cancel = Interrupt the development
 view-info-developed-none = { " · " }not developed yet ({ $keys })
