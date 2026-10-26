@@ -208,7 +208,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; pour une
-  pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille,
+  pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille (une
+  seule pile, sans regroupement à part : #163),
   `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
   grand possible (nombre de colonnes choisi d'après les proportions des images et de la
