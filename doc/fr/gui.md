@@ -420,7 +420,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   fond un peu plus clair (plus foncé en thème clair, `[gui.dialogs] focus_panel_tint` ;
   liseré d'accent jusqu'au 25/10/2026, issue n° 78 : avec le curseur, lui aussi en
   accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
-  l'histogramme, issue n° 77), la barre d'état le dit ; la ligne pointée au clavier
+  l'histogramme, issue n° 77) et un **trait en haut** (26/10/2026, #77 : le fond seul
+  ne se voyait pas assez ; `focus_line` = `"accent"` ou `"#rrggbb"`, `focus_line_width`,
+  0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
   25/10/2026, trop voyant et coupé à gauche quand le panneau défilait) ;

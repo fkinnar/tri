@@ -616,6 +616,10 @@ focus_panel_tint = 0.06
 # Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
 # texte, à cette opacité (de 0 à 1), sur toute la largeur.
 cursor_tint = 0.12
+# Trait en haut du panneau qui a le clavier : "accent" (couleur d'accent du thème) ou
+# "#rrggbb", et son épaisseur en points (0 : aucun trait).
+focus_line = "accent"
+focus_line_width = 2.0
 # Côté des boutons à icône (actions sur le fichier, dans la boîte du clic droit), en points.
 icon_size = 34.0
 # Largeur minimale de l'aide (F1), en points.
