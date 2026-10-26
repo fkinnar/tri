@@ -13,11 +13,12 @@ action-core-nav-page_up = Page précédente
 action-core-nav-page_down = Page suivante
 action-core-filter-cycle = Filtre de type : tout, RAW, JPEG…
 action-core-filter-stars-0 = Filtre : étoiles indifférentes
-action-core-filter-stars-1 = Filtre : au moins 1 étoile
-action-core-filter-stars-2 = Filtre : au moins 2 étoiles
-action-core-filter-stars-3 = Filtre : au moins 3 étoiles
-action-core-filter-stars-4 = Filtre : au moins 4 étoiles
-action-core-filter-stars-5 = Filtre : 5 étoiles
+action-core-filter-stars-1 = Filtre : 1 étoile (au moins, exactement ou au plus : f =)
+action-core-filter-stars-2 = Filtre : 2 étoiles (au moins, exactement ou au plus : f =)
+action-core-filter-stars-3 = Filtre : 3 étoiles (au moins, exactement ou au plus : f =)
+action-core-filter-stars-4 = Filtre : 4 étoiles (au moins, exactement ou au plus : f =)
+action-core-filter-stars-5 = Filtre : 5 étoiles (au moins, exactement ou au plus : f =)
+action-core-filter-stars-op = Filtre d'étoiles : au moins, exactement, au plus
 action-core-filter-flag-accepted = Filtre : acceptées seulement
 action-core-filter-flag-not_rejected = Filtre : masquer les rejetées
 volume-back = Disque revenu : dossier relu, calculs repris.
@@ -366,6 +367,17 @@ filter-summary-stars = { $n ->
     [one] { $n } étoile et plus
    *[other] { $n } étoiles et plus
 }
+filter-summary-stars-exactly = { $n ->
+    [one] exactement { $n } étoile
+   *[other] exactement { $n } étoiles
+}
+filter-summary-stars-at-most = { $n ->
+    [one] { $n } étoile ou moins
+   *[other] { $n } étoiles ou moins
+}
+stars-op-at-least = Filtre d'étoiles : au moins
+stars-op-exactly = Filtre d'étoiles : exactement
+stars-op-at-most = Filtre d'étoiles : au plus
 filter-summary-or = { " ou " }
 filter-all = tout
 filter-flat = JPEG…
@@ -958,3 +970,5 @@ kw-core-view-image-info = infos concentration plein écran étiquette
 kw-core-folders-favorite-name = renommer nom favori étiquette
 kw-core-filter-sort = tri trier ordre date nom chronologique
 kw-core-filter-sort-reverse = tri trier ordre inverse décroissant croissant
+
+kw-core-filter-stars-op = étoiles comparaison exactement au plus moins égal

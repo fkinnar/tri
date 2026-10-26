@@ -193,6 +193,8 @@ pub struct TriApp {
     filter: KindFilter,
     /// Filtres sur les notes (étoiles, drapeau, couleurs).
     notes_rule: NotesRule,
+    /// Comparaison du filtre d'étoiles (au moins, exactement, au plus ; #165).
+    stars_op: tri::notes::StarsOp,
     /// Barre de filtres affichée (grille).
     filter_bar: bool,
     /// Bandeau de notation affiché.
@@ -687,6 +689,7 @@ impl TriApp {
             note_error: None,
             filter: KindFilter::All,
             notes_rule: NotesRule::default(),
+            stars_op: tri::notes::StarsOp::default(),
             filter_bar: gui.filter_bar,
             rating_bar: gui.rating_bar,
             image_info: gui.view.image_info,
@@ -3828,8 +3831,17 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::FilterStars(stars) => {
-                self.notes_rule.stars = (stars > 0).then_some(StarsRule::AtLeast(stars));
+                self.notes_rule.stars = (stars > 0).then(|| self.stars_op.rule(stars));
                 self.apply_filter();
+            }
+            Action::FilterStarsOp => {
+                self.stars_op = self.stars_op.next();
+                // Filtre en cours : le même nombre d'étoiles, autre comparaison.
+                if let Some(rule) = self.notes_rule.stars {
+                    self.notes_rule.stars = Some(self.stars_op.rule(rule.parts().1));
+                    self.apply_filter();
+                }
+                self.hint = Some(stars_op_name(self.stars_op));
             }
             Action::FilterFlag(choice) => {
                 // La même touche désactive le filtre.
@@ -7715,8 +7727,13 @@ impl TriApp {
         if self.filter != KindFilter::All {
             parts.push(filter_name(self.filter));
         }
-        if let Some(StarsRule::AtLeast(n)) = self.notes_rule.stars {
-            parts.push(t!("filter-summary-stars", n = n));
+        if let Some(rule) = self.notes_rule.stars {
+            let id = match rule {
+                StarsRule::AtLeast(_) => "filter-summary-stars",
+                StarsRule::Exactly(_) => "filter-summary-stars-exactly",
+                StarsRule::AtMost(_) => "filter-summary-stars-at-most",
+            };
+            parts.push(t!(id, n = rule.parts().1));
         }
         if let Some(flags) = &self.notes_rule.flags
             && let Some(choice) = FlagFilter::ALL.into_iter().find(|c| c.flags() == *flags)
@@ -7815,11 +7832,24 @@ impl TriApp {
                 }
             }
             ui.separator();
-            let current = match self.notes_rule.stars {
-                Some(StarsRule::AtLeast(n)) => n,
-                _ => 0,
-            };
+            let current = self.notes_rule.stars.map_or(0, |r| r.parts().1);
             let size = self.gui.grid.marks + 4.0;
+            // Comparaison (≥, =, ≤) devant les étoiles ; un clic passe à la suivante.
+            let op = ui
+                .add(
+                    egui::Button::new(self.stars_op.symbol())
+                        .small()
+                        .frame(false),
+                )
+                .on_hover_text(format!(
+                    "{}\n{}",
+                    stars_op_name(self.stars_op),
+                    self.action_tip(Action::FilterStarsOp)
+                ))
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if op.clicked() {
+                clicked.push(Action::FilterStarsOp);
+            }
             for n in 1..=5u8 {
                 // Recliquer l'étoile du filtre en cours l'efface.
                 let tip = Action::FilterStars(if n == current { 0 } else { n }).label();
@@ -9998,6 +10028,15 @@ enum StatusClick {
     RetryEject,
     /// Effacer les messages de la barre d'état (#157 : une erreur en rouge restait).
     DismissMessages,
+}
+
+/// Comparaison du filtre d'étoiles, en clair.
+fn stars_op_name(op: tri::notes::StarsOp) -> String {
+    match op {
+        tri::notes::StarsOp::AtLeast => t!("stars-op-at-least"),
+        tri::notes::StarsOp::Exactly => t!("stars-op-exactly"),
+        tri::notes::StarsOp::AtMost => t!("stars-op-at-most"),
+    }
 }
 
 /// Message de la barre d'état qu'un clic efface : main au survol, et l'invite.
@@ -14144,6 +14183,33 @@ mod tests {
         h.state_mut().metadata_panel = false;
         h.run_steps(3);
         assert!(h.query_by_label_contains(&global).is_some());
+    }
+
+    #[test]
+    fn the_star_filter_compares_at_least_exactly_or_at_most() {
+        // #165 : pas seulement « au moins » ; `f =` ou le bouton ≥ / = / ≤.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        for (i, key) in [Key::Num3, Key::Num4, Key::Num5].into_iter().enumerate() {
+            h.state_mut().select(i);
+            press(&mut h, key, Modifiers::NONE);
+        }
+        let count = |h: &Harness<'_, TriApp>| h.state().files.len();
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        assert_eq!(count(&h), 2, "au moins 4");
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Equals, Modifiers::NONE);
+        assert_eq!(count(&h), 1, "exactement 4");
+        assert!(h.state().filter_summary().contains("exactement 4"));
+        h.get_by_label("=").click();
+        h.run_steps(2);
+        assert_eq!(count(&h), 2, "au plus 4");
+        assert!(h.state().filter_summary().contains("4 étoiles ou moins"));
+        h.get_by_label("≤").click();
+        h.run_steps(2);
+        assert_eq!(h.state().stars_op, tri::notes::StarsOp::AtLeast);
+        assert_eq!(count(&h), 2, "au moins 4, de nouveau");
     }
 
     #[test]

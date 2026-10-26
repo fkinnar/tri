@@ -13,11 +13,12 @@ action-core-nav-page_up = Previous page
 action-core-nav-page_down = Next page
 action-core-filter-cycle = Type filter: all, RAW, JPEG…
 action-core-filter-stars-0 = Filter: any stars
-action-core-filter-stars-1 = Filter: at least 1 star
-action-core-filter-stars-2 = Filter: at least 2 stars
-action-core-filter-stars-3 = Filter: at least 3 stars
-action-core-filter-stars-4 = Filter: at least 4 stars
-action-core-filter-stars-5 = Filter: 5 stars
+action-core-filter-stars-1 = Filter: 1 star (at least, exactly or at most: f =)
+action-core-filter-stars-2 = Filter: 2 stars (at least, exactly or at most: f =)
+action-core-filter-stars-3 = Filter: 3 stars (at least, exactly or at most: f =)
+action-core-filter-stars-4 = Filter: 4 stars (at least, exactly or at most: f =)
+action-core-filter-stars-5 = Filter: 5 stars (at least, exactly or at most: f =)
+action-core-filter-stars-op = Star filter: at least, exactly, at most
 action-core-filter-flag-accepted = Filter: picked only
 action-core-filter-flag-not_rejected = Filter: hide rejected
 volume-back = Drive back: folder read again, computations resumed.
@@ -364,6 +365,17 @@ filter-summary-stars = { $n ->
     [one] { $n } star and more
    *[other] { $n } stars and more
 }
+filter-summary-stars-exactly = { $n ->
+    [one] exactly { $n } star
+   *[other] exactly { $n } stars
+}
+filter-summary-stars-at-most = { $n ->
+    [one] { $n } star or fewer
+   *[other] { $n } stars or fewer
+}
+stars-op-at-least = Star filter: at least
+stars-op-exactly = Star filter: exactly
+stars-op-at-most = Star filter: at most
 filter-summary-or = { " or " }
 filter-all = all
 filter-flat = JPEG…
@@ -956,3 +968,5 @@ kw-core-view-image-info = info focus full screen label
 kw-core-folders-favorite-name = rename name favourite label
 kw-core-filter-sort = sort order date name chronological
 kw-core-filter-sort-reverse = sort order reverse descending ascending
+
+kw-core-filter-stars-op = stars comparison exactly at most less equal

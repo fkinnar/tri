@@ -418,7 +418,57 @@ pub enum StarsRule {
     AtMost(u8),
 }
 
+/// Comparaison d'un filtre d'étoiles (#165 : pas seulement « au moins »).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StarsOp {
+    /// Au moins.
+    #[default]
+    AtLeast,
+    /// Exactement.
+    Exactly,
+    /// Au plus.
+    AtMost,
+}
+
+impl StarsOp {
+    /// La règle « `self` n étoiles ».
+    pub fn rule(self, n: u8) -> StarsRule {
+        match self {
+            StarsOp::AtLeast => StarsRule::AtLeast(n),
+            StarsOp::Exactly => StarsRule::Exactly(n),
+            StarsOp::AtMost => StarsRule::AtMost(n),
+        }
+    }
+
+    /// Comparaison suivante : au moins → exactement → au plus → au moins.
+    pub fn next(self) -> StarsOp {
+        match self {
+            StarsOp::AtLeast => StarsOp::Exactly,
+            StarsOp::Exactly => StarsOp::AtMost,
+            StarsOp::AtMost => StarsOp::AtLeast,
+        }
+    }
+
+    /// Symbole (« ≥ », « = », « ≤ »).
+    pub fn symbol(self) -> &'static str {
+        match self {
+            StarsOp::AtLeast => "≥",
+            StarsOp::Exactly => "=",
+            StarsOp::AtMost => "≤",
+        }
+    }
+}
+
 impl StarsRule {
+    /// Comparaison et nombre d'étoiles de la règle.
+    pub fn parts(self) -> (StarsOp, u8) {
+        match self {
+            StarsRule::AtLeast(n) => (StarsOp::AtLeast, n),
+            StarsRule::Exactly(n) => (StarsOp::Exactly, n),
+            StarsRule::AtMost(n) => (StarsOp::AtMost, n),
+        }
+    }
+
     /// Vrai si `stars` vérifie la règle.
     pub fn accepts(self, stars: u8) -> bool {
         match self {
@@ -561,6 +611,17 @@ mod tests {
         assert!(!StarsRule::Exactly(0).accepts(1));
         assert!(StarsRule::AtMost(1).accepts(0));
         assert!(!StarsRule::AtMost(1).accepts(2));
+    }
+
+    #[test]
+    fn a_stars_operator_cycles_and_builds_its_rule() {
+        let mut op = StarsOp::default();
+        assert_eq!(op.rule(3), StarsRule::AtLeast(3));
+        op = op.next();
+        assert_eq!((op.rule(3), op.symbol()), (StarsRule::Exactly(3), "="));
+        op = op.next();
+        assert_eq!(op.rule(3).parts(), (StarsOp::AtMost, 3));
+        assert_eq!(op.next(), StarsOp::AtLeast);
     }
 
     #[test]

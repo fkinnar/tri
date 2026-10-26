@@ -95,6 +95,7 @@ pub fn navigate(
         Action::NavPageDown => (selected + cols * page_rows.max(1)).min(last),
         Action::FilterCycle
         | Action::FilterStars(_)
+        | Action::FilterStarsOp
         | Action::FilterFlag(_)
         | Action::FilterColor(_)
         | Action::FilterClear
