@@ -105,6 +105,15 @@ chaque module, instance principale) :
   inconnue (`None`), plutôt qu'une taille fausse ; de même pour des paramètres
   compressés (`gz…`).
 
+## Comparer les développements en plein écran (26/10/2026, #114)
+
+`b` fait le tour de tout ce qui existe pour l'image affichée : JPEG boîtier, rendu RAW,
+puis **chacun de ses développements déjà rendus** (`view::Source::next`,
+`TriApp::rendered_engines`), celui de son développement le plus récent d'abord (ou du
+logiciel préféré), et retour au boîtier. Un développement pas encore rendu n'entre pas
+dans le tour (`Maj+B`, `<leader>d` / `<leader>p` le rendent). L'étiquette dit lequel est
+affiché (« Développé dans RapidRAW »).
+
 ## Dans l'interface
 
 En attendant le rendu, le rendu RAW (ou le boîtier) avec « développement darktable en
@@ -137,12 +146,3 @@ sans boîte.
 
 À venir : `darktable-cli` sait traiter un dossier en un seul lancement (démarrage
 amorti) — pour l'envoi de JPEG développés de l'« après-développement ».
-
-## Comparer les développements en plein écran (26/10/2026, #114)
-
-`b` fait le tour de tout ce qui existe pour l'image affichée : JPEG boîtier, rendu RAW,
-puis **chacun de ses développements déjà rendus** (`view::Source::next`,
-`TriApp::rendered_engines`), celui de son développement le plus récent d'abord (ou du
-logiciel préféré), et retour au boîtier. Un développement pas encore rendu n'entre pas
-dans le tour (`Maj+B`, `<leader>d` / `<leader>p` le rendent). L'étiquette dit lequel est
-affiché (« Développé dans RapidRAW »).
