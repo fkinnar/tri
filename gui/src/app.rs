@@ -2122,7 +2122,7 @@ impl TriApp {
         // Logiciel imposé : ses rendus s'affichent ensuite pour ces images.
         if let Some(force) = force {
             for f in files.iter().filter(|f| force.sidecar(&f.path).is_some()) {
-                self.develop_choice.insert(f.path.clone(), force);
+                self.choose_developer(&f.path, force);
             }
         }
         let repaint = ctx.clone();
@@ -4873,9 +4873,14 @@ impl TriApp {
             self.status[index].developed = Avail::Pending;
             self.requested.remove(&(path.clone(), level));
             self.big.remove(&(path, level));
-            if index == self.selected {
+            if index == self.selected
+                && let Level::Developed(engine) = level
+            {
                 let keys = self.keymap.keys_for(Action::Develop).join(" / ");
-                self.notice = Some((t!("develop-stale", keys = keys), false));
+                self.notice = Some((
+                    t!("develop-stale", engine = engine.name(), keys = keys),
+                    false,
+                ));
             }
         }
         current
@@ -5239,9 +5244,22 @@ impl TriApp {
             return;
         }
         if let Some(file) = self.files.get(self.selected) {
-            self.develop_choice.insert(file.path.clone(), engine);
+            let path = file.path.clone();
+            self.choose_developer(&path, engine);
         }
         self.develop_current();
+    }
+
+    /// Choisit `engine` pour l'image `path`. Le développé déjà prêt était celui d'un autre
+    /// logiciel : il n'est pas « périmé » pour autant (pas de message), juste plus celui
+    /// qu'on affiche.
+    fn choose_developer(&mut self, path: &Path, engine: tri::develop::Engine) {
+        if self.developed_level(path) != Level::Developed(engine)
+            && let Some(index) = self.files.iter().position(|f| f.path == path)
+        {
+            self.status[index].developed = Avail::Pending;
+        }
+        self.develop_choice.insert(path.to_path_buf(), engine);
     }
 
     /// Maj+B ou le bouton : développer l'image affichée dans son logiciel, puis l'afficher
@@ -10611,13 +10629,13 @@ mod tests {
     /// Niveau développé de darktable.
     const DT: Level = Level::Developed(tri::develop::Engine::Darktable);
 
-    /// darktable « installé » (simulé) : son rendu échoue toujours.
+    /// Logiciel de développement « installé » (simulé) : son rendu échoue toujours.
     #[derive(Debug)]
-    struct FakeDarktable;
+    struct FakeDeveloper(tri::develop::Engine);
 
-    impl tri::develop::Developer for FakeDarktable {
+    impl tri::develop::Developer for FakeDeveloper {
         fn engine(&self) -> tri::develop::Engine {
-            tri::develop::Engine::Darktable
+            self.0
         }
 
         fn render(
@@ -10628,14 +10646,13 @@ mod tests {
             _: u32,
             _: &AtomicBool,
         ) -> Result<(), tri::develop::DevelopError> {
-            Err(tri::develop::DevelopError::Unavailable(
-                tri::develop::Engine::Darktable,
-            ))
+            Err(tri::develop::DevelopError::Unavailable(self.0))
         }
     }
 
     fn fake_darktable() -> tri::develop::Developers {
-        tri::develop::Developers::none().with(Arc::new(FakeDarktable))
+        tri::develop::Developers::none()
+            .with(Arc::new(FakeDeveloper(tri::develop::Engine::Darktable)))
     }
     use eframe::egui::{Event as UiEvent, Key, Modifiers};
     use egui_kittest::Harness;
@@ -15081,6 +15098,28 @@ mod tests {
             Some(&tri::develop::Engine::Darktable)
         );
         assert!(h.state().rating_dialog.is_none());
+    }
+
+    #[test]
+    fn switching_software_is_not_a_stale_development() {
+        // Essai du 26/10/2026 : <leader>p sur une image déjà développée dans darktable
+        // disait « Développement modifié dans darktable ». Changer de logiciel n'est pas
+        // un développement périmé ; un vrai périmé nomme son logiciel.
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
+        let path = h.state().files[0].path.clone();
+        h.state_mut().status[0].developed = Avail::Ready;
+        h.state_mut().notice = None;
+        h.state_mut().choose_developer(&path, Engine::RapidRaw);
+        h.state_mut().developed_ready(0);
+        assert!(h.state().notice.is_none(), "{:?}", h.state().notice);
+        // Prêt pour RapidRAW, puis plus dans le cache : périmé, dans RapidRAW.
+        h.state_mut().status[0].developed = Avail::Ready;
+        h.state_mut().developed_ready(0);
+        let (text, _) = h.state().notice.clone().expect("message");
+        assert!(text.contains("RapidRAW"), "{text}");
     }
 
     #[test]
