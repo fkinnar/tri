@@ -118,7 +118,10 @@ which only one image leaves) is **copied**, never moved: both images keep their 
 
 `plan_transfer_dir(dossier, dest, mode)` prepares the copy or move of a whole folder,
 subfolders included (`DirTransfer`: files, subfolders to create, target `dest/nom`);
-`transfer_dir(plan, progress)` executes it.
+`transfer_dir(plan, progress)` executes it. `tri`'s cache kept in the folder
+(`.tri-cache`, #55) does not follow: stored by path, it would be useless elsewhere, and its
+temporary files came and went during the copy (#157: "No such file"); after a move to
+another volume, the one left in the source is removed.
 
 - **Refused**: a folder into itself or one of its subfolders (`IntoItself`), where it
   already is (`SameFolder`), over a folder with the same name (`Exists`).

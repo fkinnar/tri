@@ -117,7 +117,8 @@ system one ("cold" measurements, experiments).
   drop (outline) under the thumbnail (the word "blurry" until 2026-10-21), "Sharpness" row in the metadata panel, filters
   "without blurry" (`f b`), inverted for blurry only (`f i`); judgement relative to the folder's
   median. Finished progress bars are hidden (`[gui] progress_hide_done`), the status bar
-  stays short.
+  stays short. A click on a status bar message clears it, errors included (2026-10-26,
+  #157: a red error stayed).
 - **Focus point** (2026-10-17): marker of the autofocus point in full screen and in
   comparison (`m`), read from the RAW (Fujifilm for now); square, cross, circle or heart
   (`[gui.view] focus_marker`), colour `[gui.colors] focus`, dark outline underneath to

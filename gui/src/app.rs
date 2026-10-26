@@ -6436,15 +6436,22 @@ impl TriApp {
                 {
                     clicked = Some(StatusClick::Action(Action::ExportReport));
                 }
-                if *error {
-                    ui.colored_label(self.gui.colors.error, text);
+                // Un clic efface le message (#157 : une erreur restait affichée).
+                let label = if *error {
+                    ui.colored_label(self.gui.colors.error, text)
                 } else {
-                    ui.label(text);
+                    ui.label(text)
+                };
+                if dismissable(label).clicked() {
+                    clicked = Some(StatusClick::DismissMessages);
                 }
             }
             for error in [&self.note_error, &self.file_error].into_iter().flatten() {
                 ui.separator();
-                ui.colored_label(self.gui.colors.error, error);
+                let label = ui.colored_label(self.gui.colors.error, error);
+                if dismissable(label).clicked() {
+                    clicked = Some(StatusClick::DismissMessages);
+                }
             }
             if let Some(hint) = &self.hint {
                 ui.separator();
@@ -9394,6 +9401,11 @@ impl eframe::App for TriApp {
         };
         match status_click.or(self.task_click.take()) {
             Some(StatusClick::ToggleTasks) => self.tasks_open = !self.tasks_open,
+            Some(StatusClick::DismissMessages) => {
+                self.notice = None;
+                self.note_error = None;
+                self.file_error = None;
+            }
             Some(StatusClick::CancelExport) => {
                 if let Some(job) = &self.export_job {
                     job.cancel();
@@ -9843,6 +9855,16 @@ enum StatusClick {
     DismissOffloaded,
     /// Réessayer une éjection refusée.
     RetryEject,
+    /// Effacer les messages de la barre d'état (#157 : une erreur en rouge restait).
+    DismissMessages,
+}
+
+/// Message de la barre d'état qu'un clic efface : main au survol, et l'invite.
+fn dismissable(label: egui::Response) -> egui::Response {
+    label
+        .interact(Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(t!("status-clear-tip"))
 }
 
 /// Double-clic sur un curseur (valeur par défaut, comme Lightroom) : le curseur d'egui ne
@@ -13954,6 +13976,18 @@ mod tests {
         h.state_mut().metadata_panel = false;
         h.run_steps(3);
         assert!(h.query_by_label_contains(&global).is_some());
+    }
+
+    #[test]
+    fn a_click_clears_a_status_message() {
+        // #157 : une erreur en rouge restait dans la barre d'état.
+        let (mut h, _dir) = harness();
+        h.state_mut().notice = Some(("copie impossible".into(), true));
+        h.state_mut().file_error = Some("autre erreur".into());
+        h.run_steps(2);
+        h.get_by_label("copie impossible").click();
+        h.run_steps(2);
+        assert!(h.state().notice.is_none() && h.state().file_error.is_none());
     }
 
     #[test]
