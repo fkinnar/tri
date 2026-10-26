@@ -11901,7 +11901,10 @@ mod tests {
         assert!(h.query_by_label(&t!("folders-section-devices")).is_some());
         h.get_by_label("X-T4").click();
         h.run_steps(2);
-        assert!(h.state().offload.is_none(), "rien à décharger avant le montage");
+        assert!(
+            h.state().offload.is_none(),
+            "rien à décharger avant le montage"
+        );
         let start = Instant::now();
         while h.state().mounting.is_some() && start.elapsed() < Duration::from_secs(20) {
             std::thread::sleep(Duration::from_millis(20));

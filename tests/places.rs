@@ -187,7 +187,9 @@ fn fixed_volumes_are_not_ejectable() {
     // La carte sous « Périphériques », puis le disque fixé sous « Disques » (#113).
     let rows = tree.rows();
     assert_eq!(
-        rows.iter().map(|r| (r.ejectable, r.section)).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|r| (r.ejectable, r.section))
+            .collect::<Vec<_>>(),
         [(true, Section::Devices), (false, Section::Drives)]
     );
     assert!(!tree.can_eject(&work.path));
