@@ -15,7 +15,7 @@ trash, copy / move, drag and drop, RAW+JPEG pairs optional), undo, card offload,
 presets, cropped versions, darktable development, overlays, settings in the interface,
 classic and vim shortcuts, mouse selection (Shift+click, Ctrl+click), update check and
 issue report, sort by name or date, named favourites,
-French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`) and Windows (`.msi`,
+French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`, `.deb`, AppImage) and Windows (`.msi`,
 `.zip`), and nightly builds ("nightly" Release).
 
 ## Beta 1 (public)
@@ -27,6 +27,7 @@ French and English. Packages for macOS (`.dmg`), Linux (`.tar.gz`) and Windows (
 | Large folders on a slow disk | Folder read in the background with visible progress (the window froze while listing thousands of files and their sidecars on an external hard drive) |
 | Sort by rating, colour | To design with the stacks and the sharpness judgement, which rely on the shooting order |
 | Clearing the cache in the interface | Whole cache, one level, or the open folder (today: `tri <folder> --clear-cache`), with the space used |
+| RapidRAW development | Render and export through `rapidraw export` (command line since RapidRAW 1.6), with the edits of its `.rrdata` sidecars, as with darktable |
 
 The beta is **not signed**: macOS and Windows warn on first launch, the steps are in the
 README.
@@ -36,7 +37,7 @@ README.
 | Topic | Details |
 | --- | --- |
 | Signing | macOS: Developer ID and notarisation; Windows: SignPath Foundation (free for open source). No more warning on first launch |
-| Other brands' RAWs | Tests with Canon, Nikon, Sony, OM, Panasonic, DNG (raw.pixls.us); focus point for each |
+| Focus point for other brands | Every RAW LibRaw reads is already supported (display, histogram, metadata); the focus point marker is Fujifilm only for now. To add: Canon, Nikon, Sony, OM, Panasonic, checked on samples from raw.pixls.us |
 | Ratings in other software | Check digiKam, RawTherapee, ART; Lightroom and Capture One (testers) |
 | Sharpness in comparison | Sharpness map in side-by-side comparison |
 
@@ -60,7 +61,7 @@ README.
 | External plugins | A separate program, in any language (Python for AI…), exchanging JSON with `tri`: analyses, filters, sending. **Example provided: step-by-step rating**, two shortcuts for everything: rating +1 / −1, next / previous colour (configurable order), rejected → neutral → accepted, and the stars / colour filter one notch up / down; nothing moves at the end of the sequence |
 | HEIC through the system | macOS (ImageIO) and Windows (HEVC extension) decoders: nothing patented shipped with `tri` |
 | Automatic update | Download and install the new version (after signing) |
-| Other packages | AppImage or Flatpak (Flathub), winget / Microsoft Store, Homebrew: more systems, more visible |
+| Other packages | Flatpak (Flathub), winget / Microsoft Store, Homebrew: more systems, more visible |
 | Video offload | Ignored on the card today |
 | Image analysis | Luminance histogram of flat images, 10-bit HEIC, exposure computed during the RAW render |
 

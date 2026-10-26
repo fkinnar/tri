@@ -16,7 +16,7 @@ annulation, déchargement de carte, export par préréglages, versions recadrée
 darktable, superpositions, réglages dans l'interface, raccourcis classiques et vim,
 sélection à la souris (Maj+clic, Ctrl+clic), recherche de mise à jour et signalement
 de problème, tri par nom ou date, favoris nommés, français et
-anglais. Paquets macOS (`.dmg`), Linux (`.tar.gz`) et Windows (`.msi`, `.zip`), et
+anglais. Paquets macOS (`.dmg`), Linux (`.tar.gz`, `.deb`, AppImage) et Windows (`.msi`, `.zip`), et
 builds de nuit (Release « nightly »).
 
 ## Bêta 1 (publique)
@@ -28,6 +28,7 @@ builds de nuit (Release « nightly »).
 | Gros dossiers sur disque lent | Lecture du dossier en fond, progression visible (la fenêtre se figeait le temps de lister des milliers de fichiers et leurs sidecars sur un disque dur externe) |
 | Tri par note, couleur | À concevoir avec les piles et le jugement de netteté, qui s'appuient sur l'ordre de prise de vue |
 | Vider le cache depuis l'interface | Tout, un niveau, ou le dossier ouvert (aujourd'hui : `tri <dossier> --clear-cache`), avec la place occupée |
+| Développement par RapidRAW | Rendu et export par `rapidraw export` (ligne de commande depuis RapidRAW 1.6), avec les réglages de ses sidecars `.rrdata`, comme avec darktable |
 
 La bêta n'est **pas signée** : macOS et Windows avertissent au premier lancement, la
 marche à suivre est dans le README.
@@ -37,7 +38,7 @@ marche à suivre est dans le README.
 | Sujet | Détail |
 | --- | --- |
 | Signature | macOS : Developer ID et notarisation ; Windows : SignPath Foundation (gratuit pour l'open source). Plus d'avertissement au premier lancement |
-| RAW des autres marques | Essais Canon, Nikon, Sony, OM, Panasonic, DNG (raw.pixls.us) ; collimateur pour chacune |
+| Collimateur des autres marques | Tous les RAW que lit LibRaw sont déjà gérés (affichage, histogramme, métadonnées) ; seul le repère du collimateur est pour l'instant propre à Fujifilm. À ajouter : Canon, Nikon, Sony, OM, Panasonic, vérifiés sur des échantillons de raw.pixls.us |
 | Notes dans les autres logiciels | Vérifier digiKam, RawTherapee, ART ; Lightroom et Capture One (testeurs) |
 | Netteté dans la comparaison | Carte de netteté en mode comparaison côte à côte |
 
@@ -61,7 +62,7 @@ marche à suivre est dans le README.
 | Plugins externes | Un programme à part, dans n'importe quel langage (Python pour l'IA…), qui échange du JSON avec `tri` : analyses, filtres, envois. **Exemple fourni : notation en pas à pas**, deux raccourcis pour tout : note +1 / −1, couleur suivante / précédente (ordre réglable), rejeté → neutre → accepté, et le filtre étoiles / couleur au cran suivant / précédent ; rien ne bouge au bout de la séquence |
 | HEIC par le système | Décodeurs de macOS (ImageIO) et de Windows (extension HEVC) : rien de breveté livré avec `tri` |
 | Mise à jour automatique | Télécharger et installer la nouvelle version (après la signature) |
-| Autres paquets | AppImage ou Flatpak (Flathub), winget / Microsoft Store, Homebrew : plus de systèmes, plus visible |
+| Autres paquets | Flatpak (Flathub), winget / Microsoft Store, Homebrew : plus de systèmes, plus visible |
 | Déchargement des vidéos | Aujourd'hui ignorées sur la carte |
 | Analyses d'image | Histogramme de luminance des images plates, HEIC 10 bits, exposition calculée pendant le rendu RAW |
 
