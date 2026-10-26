@@ -72,7 +72,7 @@ impl CachedPreviews {
         let tool = self
             .developers
             .get(engine)
-            .ok_or_else(|| failure(DevelopError::Unavailable))?;
+            .ok_or_else(|| failure(DevelopError::Unavailable(engine)))?;
         let sidecar = engine
             .sidecar(&file.path)
             .ok_or_else(|| failure(DevelopError::NotDeveloped))?;

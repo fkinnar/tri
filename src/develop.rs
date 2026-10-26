@@ -21,16 +21,19 @@ use std::time::{Duration, SystemTime};
 pub enum Engine {
     /// darktable (`darktable-cli`, historique du sidecar `IMAGE.RAF.xmp`).
     Darktable,
+    /// RapidRAW (`rapidraw export`, réglages du sidecar `IMAGE.RAF.rrdata`).
+    RapidRaw,
 }
 
 impl Engine {
     /// Tous les logiciels, dans l'ordre des listes.
-    pub const ALL: [Engine; 1] = [Engine::Darktable];
+    pub const ALL: [Engine; 2] = [Engine::Darktable, Engine::RapidRaw];
 
     /// Identifiant (configuration, `--level`, clés de cache).
     pub fn id(self) -> &'static str {
         match self {
             Engine::Darktable => "darktable",
+            Engine::RapidRaw => "rapidraw",
         }
     }
 
@@ -38,6 +41,7 @@ impl Engine {
     pub fn name(self) -> &'static str {
         match self {
             Engine::Darktable => "darktable",
+            Engine::RapidRaw => "RapidRAW",
         }
     }
 
@@ -50,6 +54,7 @@ impl Engine {
     pub fn sidecar(self, image: &Path) -> Option<PathBuf> {
         match self {
             Engine::Darktable => darktable_sidecar(image),
+            Engine::RapidRaw => rapidraw_sidecar(image),
         }
     }
 }
@@ -157,6 +162,12 @@ impl Developers {
                 high_quality,
             }));
         }
+        if let Some(cli) = find_rapidraw(&settings.rapidraw) {
+            tools.push(Arc::new(RapidRaw {
+                cli,
+                work_dir: work_dir.join("rapidraw"),
+            }));
+        }
         Developers {
             tools,
             preference: settings.default,
@@ -204,6 +215,11 @@ pub struct DevelopSettings {
     pub darktable: String,
     /// Rendu darktable en haute qualité (`--hq`) : un peu plus fidèle, un peu plus lent.
     pub high_quality: bool,
+    /// RapidRAW (≥ 1.6, commande `export`) : `"auto"` (cherché dans le `PATH`, aux
+    /// emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
+    /// (l'exécutable de RapidRAW ou son AppImage), `"flatpak"`, ou `""` (pas de rendu
+    /// RapidRAW).
+    pub rapidraw: String,
     /// Logiciel préféré quand une image a été développée dans plusieurs : `"auto"` (le
     /// développement le plus récent) ou un logiciel (`"darktable"`).
     pub default: Preference,
@@ -214,6 +230,7 @@ impl Default for DevelopSettings {
         Self {
             darktable: "auto".into(),
             high_quality: false,
+            rapidraw: "auto".into(),
             default: Preference::Auto,
         }
     }
@@ -271,20 +288,27 @@ pub const FLATPAK_APP: &str = "org.darktable.Darktable";
 /// Gestionnaire de logiciels de Linux Mint l'installe ainsi (constaté le 19/10/2026), sans
 /// `darktable-cli` dans le `PATH`.
 fn flatpak() -> Option<Cli> {
+    flatpak_app(FLATPAK_APP, Some("darktable-cli"))
+}
+
+/// L'application Flatpak `app`, si elle est installée, lancée telle quelle ou par sa
+/// commande `command`.
+fn flatpak_app(app: &str, command: Option<&str>) -> Option<Cli> {
     let installed = Command::new("flatpak")
-        .args(["info", FLATPAK_APP])
+        .args(["info", app])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .is_ok_and(|s| s.success());
+    let mut args = vec!["run".to_string()];
+    if let Some(command) = command {
+        args.push(format!("--command={command}"));
+    }
+    args.push(app.into());
     installed.then(|| Cli {
         program: PathBuf::from("flatpak"),
-        args: vec![
-            "run".into(),
-            "--command=darktable-cli".into(),
-            FLATPAK_APP.into(),
-        ],
+        args,
     })
 }
 
@@ -317,7 +341,9 @@ pub fn find_darktable(setting: &str) -> Option<Cli> {
         return native;
     }
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    appimage(home.as_deref()).map(cli_for).or_else(flatpak)
+    appimage(home.as_deref(), "darktable")
+        .map(cli_for)
+        .or_else(flatpak)
 }
 
 /// Un exécutable donné : AppImage de darktable (le binaire `darktable-cli` qu'elle
@@ -339,11 +365,12 @@ fn is_appimage(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("appimage"))
 }
 
-/// AppImage de darktable aux emplacements habituels (`~/AppImages` de Gear Lever ou
-/// AppImageLauncher, `~/Applications`, `~/.local/bin`, `~/bin`, téléchargements, `/opt`) :
-/// la plus récente. Constaté le 19/10/2026 sur la machine Linux Mint de l'utilisateur
-/// (`~/AppImages/darktable.appimage`), format que darktable propose lui-même pour Linux.
-fn appimage(home: Option<&Path>) -> Option<PathBuf> {
+/// AppImage dont le nom contient `name` (« darktable »…) aux emplacements habituels
+/// (`~/AppImages` de Gear Lever ou AppImageLauncher, `~/Applications`, `~/.local/bin`,
+/// `~/bin`, téléchargements, `/opt`) : la plus récente. Constaté le 19/10/2026 sur la
+/// machine Linux Mint de l'utilisateur (`~/AppImages/darktable.appimage`), format que
+/// darktable propose lui-même pour Linux.
+fn appimage(home: Option<&Path>, name: &str) -> Option<PathBuf> {
     let mut dirs: Vec<PathBuf> = [
         "AppImages",
         "Applications",
@@ -363,9 +390,70 @@ fn appimage(home: Option<&Path>) -> Option<PathBuf> {
             is_appimage(p)
                 && p.is_file()
                 && p.file_name()
-                    .is_some_and(|n| n.to_string_lossy().to_lowercase().contains("darktable"))
+                    .is_some_and(|n| n.to_string_lossy().to_lowercase().contains(name))
         })
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// Identifiant Flatpak de RapidRAW (Flathub).
+pub const RAPIDRAW_FLATPAK: &str = "io.github.CyberTimon.RapidRAW";
+
+/// Emplacements habituels de RapidRAW, selon le système.
+fn rapidraw_defaults(os: &str) -> Vec<PathBuf> {
+    match os {
+        "macos" => vec![PathBuf::from(
+            "/Applications/RapidRAW.app/Contents/MacOS/RapidRAW",
+        )],
+        "windows" => vec![PathBuf::from(r"C:\Program Files\RapidRAW\RapidRAW.exe")],
+        _ => ["/usr/bin", "/usr/local/bin"]
+            .iter()
+            .flat_map(|d| ["rapidraw", "RapidRAW"].map(|n| Path::new(d).join(n)))
+            .collect(),
+    }
+}
+
+/// RapidRAW selon le réglage `setting` (voir [`DevelopSettings::rapidraw`]) : `None`
+/// s'il est désactivé ou introuvable. Son exécutable fait aussi la commande `export`
+/// (depuis la version 1.6), AppImage et Flatpak compris.
+pub fn find_rapidraw(setting: &str) -> Option<Cli> {
+    match setting.trim() {
+        "" => return None,
+        "flatpak" => return flatpak_app(RAPIDRAW_FLATPAK, None),
+        "auto" => {}
+        path => {
+            let path = crate::settings::expand_home(path);
+            return path.is_file().then(|| Cli::native(path));
+        }
+    }
+    let names: &[&str] = if cfg!(windows) {
+        &["RapidRAW.exe", "rapidraw.exe"]
+    } else {
+        &["rapidraw", "RapidRAW"]
+    };
+    let native = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
+        .chain(rapidraw_defaults(std::env::consts::OS))
+        .find(|p| p.is_file())
+        .map(Cli::native);
+    if native.is_some() || !cfg!(target_os = "linux") {
+        return native;
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    appimage(home.as_deref(), "rapidraw")
+        .map(Cli::native)
+        .or_else(|| flatpak_app(RAPIDRAW_FLATPAK, None))
+}
+
+/// Sidecar RapidRAW de `image` (`IMAGE.RAF.rrdata`, à côté de l'image), s'il existe :
+/// RapidRAW l'écrit dès qu'on règle l'image. Ses copies virtuelles
+/// (`IMAGE.RAF.<id>.rrdata`) ne sont pas lues.
+pub fn rapidraw_sidecar(image: &Path) -> Option<PathBuf> {
+    let mut name = image.file_name()?.to_os_string();
+    name.push(".rrdata");
+    let sidecar = image.with_file_name(name);
+    sidecar.is_file().then_some(sidecar)
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il porte un vrai développement : un
@@ -516,8 +604,8 @@ pub fn stamp(sidecar: &Path) -> String {
 pub enum DevelopError {
     /// Pas de développement darktable pour cette image (sidecar absent ou sans historique).
     NotDeveloped,
-    /// `darktable-cli` introuvable ou désactivé.
-    Unavailable,
+    /// Logiciel introuvable ou désactivé.
+    Unavailable(Engine),
     /// Rendu annulé (l'image n'est plus affichée).
     Cancelled,
     /// Échec du programme (dernière ligne de son message d'erreur).
@@ -530,7 +618,15 @@ impl std::fmt::Display for DevelopError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DevelopError::NotDeveloped => write!(f, "{}", crate::t!("develop-none")),
-            DevelopError::Unavailable => write!(f, "{}", crate::t!("develop-unavailable")),
+            DevelopError::Unavailable(engine) => write!(
+                f,
+                "{}",
+                crate::t!(
+                    "develop-unavailable",
+                    engine = engine.name(),
+                    id = engine.id()
+                )
+            ),
             DevelopError::Cancelled => write!(f, "annulé"),
             DevelopError::Failed(e) => {
                 write!(f, "{}", crate::t!("develop-failed", error = e.as_str()))
@@ -626,6 +722,110 @@ fn render_darktable(
             Err(e) => return Err(DevelopError::Failed(e.to_string())),
         }
     }
+}
+
+/// RapidRAW, prêt à développer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RapidRaw {
+    /// Exécutable de RapidRAW ([`find_rapidraw`]).
+    pub cli: Cli,
+    /// Fichiers de travail (export temporaire, messages), dans le cache de `tri`.
+    pub work_dir: PathBuf,
+}
+
+impl Developer for RapidRaw {
+    fn engine(&self) -> Engine {
+        Engine::RapidRaw
+    }
+
+    /// `rapidraw export` (RapidRAW ≥ 1.6, sans interface) applique de lui-même le
+    /// sidecar `.rrdata` posé à côté de l'image ; il exporte à pleine taille, réduit
+    /// ensuite à `side`. Il refuse de tourner pendant que l'interface de RapidRAW est
+    /// ouverte (lu dans son code source, 26/10/2026) : message clair dans ce cas.
+    fn render(
+        &self,
+        image: &Path,
+        _sidecar: &Path,
+        out: &Path,
+        side: u32,
+        cancel: &AtomicBool,
+    ) -> Result<(), DevelopError> {
+        let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(e.to_string());
+        std::fs::create_dir_all(&self.work_dir).map_err(|e| failed(&e))?;
+        let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
+        let export = self.work_dir.join(format!("export-{id}.jpg"));
+        let log = self.work_dir.join(format!("export-{id}.log"));
+        let _ = std::fs::remove_file(&export);
+        // Messages dans un fichier plutôt qu'un tube : un programme bavard ne bloque pas.
+        let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
+        let child = self
+            .cli
+            .command()
+            .arg("export")
+            .arg(image)
+            .arg("--output")
+            .arg(&export)
+            .args(["--format", "jpeg", "--quality", "95"])
+            .stdin(Stdio::null())
+            .stdout(messages.try_clone().map_err(|e| failed(&e))?)
+            .stderr(messages)
+            .spawn()
+            .map_err(|e| failed(&e))?;
+        let status = wait(child, cancel);
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        let _ = std::fs::remove_file(&log);
+        let result = match status {
+            Ok(status) if status.success() && export.is_file() => {
+                shrink(&export, out, side).map_err(|e| failed(&e))
+            }
+            Ok(_) if text.contains("already running") => {
+                Err(DevelopError::Failed(crate::t!("develop-rapidraw-open")))
+            }
+            Ok(_) => {
+                let last = text.lines().rev().find(|l| !l.trim().is_empty());
+                Err(DevelopError::Failed(
+                    last.unwrap_or("rapidraw export").trim().to_string(),
+                ))
+            }
+            Err(e) => Err(e),
+        };
+        let _ = std::fs::remove_file(&export);
+        result
+    }
+}
+
+/// Attend la fin de `child` ; `cancel` l'arrête.
+fn wait(
+    mut child: std::process::Child,
+    cancel: &AtomicBool,
+) -> Result<std::process::ExitStatus, DevelopError> {
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(DevelopError::Cancelled);
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(e) => return Err(DevelopError::Failed(e.to_string())),
+        }
+    }
+}
+
+/// Le JPEG `from`, réduit au côté long `side`, écrit dans `to` (qualité du cache).
+fn shrink(from: &Path, to: &Path, side: u32) -> Result<(), String> {
+    let bytes = std::fs::read(from).map_err(|e| e.to_string())?;
+    let bitmap = crate::jpeg::decode(&bytes, side)
+        .map_err(|e| e.to_string())?
+        .fit(side);
+    let jpeg = crate::jpeg::encode(
+        &bitmap,
+        crate::cache::DEFAULT_JPEG_QUALITY,
+        crate::jpeg::Chroma::Half,
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::write(to, jpeg).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -754,6 +954,117 @@ mod tests {
     }
 
     #[test]
+    fn rapidraw_sidecars_and_executable() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        std::fs::write(&image, b"raw").unwrap();
+        assert_eq!(rapidraw_sidecar(&image), None);
+        // Copie virtuelle seule : pas lue.
+        std::fs::write(dir.path().join("DSCF0001.RAF.a1b2.rrdata"), b"{}").unwrap();
+        assert_eq!(rapidraw_sidecar(&image), None);
+        let sidecar = dir.path().join("DSCF0001.RAF.rrdata");
+        std::fs::write(&sidecar, b"{}").unwrap();
+        assert_eq!(rapidraw_sidecar(&image), Some(sidecar));
+        assert_eq!(Engine::RapidRaw.sidecar(&image), rapidraw_sidecar(&image));
+        assert_eq!(find_rapidraw(""), None, "désactivé");
+        assert_eq!(find_rapidraw("/nulle/part/rapidraw"), None);
+        let _ = find_rapidraw("auto"); // trouvé seulement s'il est installé
+        let found = dir.path().join("RapidRAW.AppImage");
+        std::fs::write(&found, b"").unwrap();
+        let cli = find_rapidraw(found.to_str().unwrap()).unwrap();
+        assert!(
+            cli.args.is_empty(),
+            "l'AppImage reçoit `export` directement"
+        );
+    }
+
+    #[test]
+    fn with_two_developments_the_preference_wins_then_the_latest() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        std::fs::write(&image, b"raw").unwrap();
+        let both = [Engine::Darktable, Engine::RapidRaw];
+        std::fs::write(
+            dir.path().join("DSCF0001.RAF.xmp"),
+            r#"<rdf:Description darktable:history_end="3"/>"#,
+        )
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(dir.path().join("DSCF0001.RAF.rrdata"), b"{}").unwrap();
+        assert_eq!(
+            resolve(&image, Preference::Auto, &both),
+            Some(Engine::RapidRaw),
+            "le plus récent"
+        );
+        assert_eq!(
+            resolve(&image, Preference::Engine(Engine::Darktable), &both),
+            Some(Engine::Darktable),
+            "on travaille dans darktable, on essaie RapidRAW"
+        );
+        assert_eq!(
+            resolve(
+                &image,
+                Preference::Engine(Engine::RapidRaw),
+                &[Engine::Darktable]
+            ),
+            Some(Engine::Darktable),
+            "RapidRAW pas installé"
+        );
+    }
+
+    /// Un faux RapidRAW (script) : il copie `jpeg` vers `--output`, ou écrit `message` et
+    /// échoue.
+    #[cfg(unix)]
+    fn fake_rapidraw(dir: &Path, jpeg: Option<&Path>, message: &str) -> RapidRaw {
+        use std::os::unix::fs::PermissionsExt;
+        let script = dir.join("rapidraw");
+        let body = match jpeg {
+            Some(jpeg) => format!(
+                "#!/bin/sh\n[ \"$1\" = export ] || exit 2\ncp '{}' \"$4\"\n",
+                jpeg.display()
+            ),
+            None => format!("#!/bin/sh\necho '{message}' >&2\nexit 1\n"),
+        };
+        std::fs::write(&script, body).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        RapidRaw {
+            cli: Cli::native(script),
+            work_dir: dir.join("work"),
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn rapidraw_exports_then_tri_shrinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.jpg");
+        let bitmap = crate::bitmap::Bitmap {
+            width: 400,
+            height: 300,
+            data: vec![128; 400 * 300 * 3],
+        };
+        let bytes = crate::jpeg::encode(&bitmap, 90, crate::jpeg::Chroma::Half).unwrap();
+        std::fs::write(&big, bytes).unwrap();
+        let out = dir.path().join("out.jpg");
+        let cancel = AtomicBool::new(false);
+        let image = dir.path().join("a.RAF");
+        let rr = fake_rapidraw(dir.path(), Some(&big), "");
+        rr.render(&image, &image, &out, 100, &cancel).unwrap();
+        assert_eq!(image::image_dimensions(&out).unwrap(), (100, 75));
+        // Interface de RapidRAW ouverte : la raison, en clair.
+        let rr = fake_rapidraw(
+            dir.path(),
+            None,
+            "Error: Headless export cannot be attached to an already running GUI instance.",
+        );
+        let err = rr.render(&image, &image, &out, 100, &cancel).unwrap_err();
+        assert!(err.to_string().contains("RapidRAW"), "{err}");
+        let rr = fake_rapidraw(dir.path(), None, "boum");
+        let err = rr.render(&image, &image, &out, 100, &cancel).unwrap_err();
+        assert!(err.to_string().contains("boum"), "{err}");
+    }
+
+    #[test]
     fn darktable_is_found_or_cleanly_absent() {
         assert_eq!(find_darktable(""), None, "désactivé");
         assert_eq!(find_darktable("/nulle/part/darktable-cli"), None);
@@ -774,10 +1085,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let apps = dir.path().join("AppImages");
         std::fs::create_dir(&apps).unwrap();
-        assert_eq!(appimage(Some(dir.path())), None);
+        assert_eq!(appimage(Some(dir.path()), "darktable"), None);
         std::fs::write(apps.join("autre.AppImage"), b"").unwrap();
         std::fs::write(apps.join("darktable.appimage"), b"").unwrap();
-        let found = appimage(Some(dir.path())).unwrap();
+        let found = appimage(Some(dir.path()), "darktable").unwrap();
         assert_eq!(found, apps.join("darktable.appimage"));
         assert_eq!(cli_for(found).args, ["darktable-cli"]);
         assert!(

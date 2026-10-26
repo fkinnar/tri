@@ -49,6 +49,25 @@ choice: someone working in darktable who tries another software sets
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, cancellable (the program is stopped).
 
+## RapidRAW (2026-10-26, #114)
+
+RapidRAW (AGPL-3.0, called as a separate process) has a command without interface since
+version 1.6: `rapidraw export <image> --output <file> --format jpeg --quality 95`, which
+applies by itself the settings of the **`IMAGE.RAF.rrdata`** sidecar next to the image
+(`rapidraw_sidecar`; its virtual copies `IMAGE.RAF.<id>.rrdata` are not read). It exports
+at full size, with no size option: `tri` then shrinks to the standard preview side
+(`shrink`). Read in its source code: the export **refuses to run while RapidRAW's
+interface is open** (single instance); the message says so plainly ("close it and try
+again").
+
+`find_rapidraw(setting)`: `[develop] rapidraw` = `"auto"` (`rapidraw` / `RapidRAW` in the
+`PATH`, `/usr/bin` of the `.deb` package, `RapidRAW.app` on macOS, `Program Files` on
+Windows; on Linux, a `*rapidraw*` AppImage, then the `io.github.CyberTimon.RapidRAW`
+Flatpak), a path (the executable or the AppImage, which receives `export` directly),
+`"flatpak"`, or `""`. The program's messages go to a file (not a pipe: a talkative
+program does not block). The real resolution of the developed image is read for
+darktable only: for RapidRAW, unknown rather than wrong.
+
 ## Nothing is written in the user's files
 
 Configuration specific to `tri` (in its cache), library in memory: neither darktable's

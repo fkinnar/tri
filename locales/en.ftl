@@ -247,8 +247,9 @@ send-refused = { $name } refuses these files
 
 ## Rendering by a development program
 develop-none = no development for this image
-develop-unknown-engine = unknown development software: "{ $value }" (auto, darktable)
-develop-unavailable = darktable not found ([develop] darktable setting)
+develop-unknown-engine = unknown development software: "{ $value }" (auto, darktable, rapidraw)
+develop-unavailable = { $engine } not found ([develop] { $id } setting)
+develop-rapidraw-open = RapidRAW is open: its command line export does not run at the same time, close it and try again
 develop-failed = darktable: { $error }
 export-bad-bits = export preset “{ $profile }”: { $bits } bits not possible in { $format }
 export-bad-quality = export preset “{ $profile }”: quality { $quality } outside 1 to 100
