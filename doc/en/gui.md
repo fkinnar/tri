@@ -207,7 +207,8 @@ system one ("cold" measurements, experiments).
   issue #52: `c` on a collapsed stack; Esc comes back to its cover; for a stack larger
   than the limit, `f c` shows the whole stack, expanded, in the grid (a single stack, not
   regrouped apart: #163), `f c` again or
-  "Clear" gives everything back, and a stack that was collapsed collapses again) (at least 2, at most `[gui.compare] max`, 6 by default: each keeps
+  "Clear" gives everything back, and a stack that was collapsed collapses again; with stacks on, a single photo is a one-image stack and compares
+  too, 2026-10-26, #167) (at least 2, at most `[gui.compare] max`, 6 by default: each keeps
   its preview and its 1:1 in graphics memory), laid out to be seen as large as possible
   (number of columns chosen from the proportions of the images and of the window, last
   row centred). The **active image** (frame in the selection colour) is the current
