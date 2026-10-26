@@ -290,8 +290,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
   écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ après le compteur de
   la barre des filtres (`[gui.grid] search_width` ; fenêtre étroite, issue n° 71 : le
-  tri et le nombre d'images passent dans un menu « … » juste avant l'inversion et
-  l'effacement, toujours visibles, et le champ se rétrécit jusqu'à `search_min_width` ;
+  tri, le rendu des vignettes et le nombre d'images passent dans un menu « … » juste
+  avant l'inversion et l'effacement, toujours visibles, leurs listes en sous-menus
+  (`bar_choice`, #181 : une liste déroulante ouverte depuis un menu se refermait avec lui), et le champ se rétrécit jusqu'à `search_min_width` ;
   les boutons de droite du bandeau de notation passent à la ligne, et y restent tant que
   la largeur ne change pas ; largeurs mesurées à l'image précédente), filtre en direct par nom de fichier
   (`tri::fuzzy::NameFilter`, combiné aux autres filtres, « Effacer » le vide aussi) ;
