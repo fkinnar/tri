@@ -4867,6 +4867,10 @@ impl TriApp {
     /// Taille du développé darktable de `path` (image de `full` pixels) : recadrage lu
     /// dans le sidecar (`develop::developed_size`), relu seulement s'il a changé.
     fn developed_size(&mut self, path: &Path, full: (u32, u32)) -> Option<(u32, u32)> {
+        // Le recadrage de RapidRAW n'est pas lu : taille inconnue plutôt que fausse.
+        if self.developed_level(path) != Level::Developed(tri::develop::Engine::Darktable) {
+            return None;
+        }
         let sidecar = tri::develop::darktable_sidecar_path(path)?;
         let stamp = tri::develop::stamp(&sidecar);
         if let Some((known, size)) = self.developed_sizes.get(path)
@@ -10407,7 +10411,9 @@ mod tests {
             _: u32,
             _: &AtomicBool,
         ) -> Result<(), tri::develop::DevelopError> {
-            Err(tri::develop::DevelopError::Unavailable)
+            Err(tri::develop::DevelopError::Unavailable(
+                tri::develop::Engine::Darktable,
+            ))
         }
     }
 

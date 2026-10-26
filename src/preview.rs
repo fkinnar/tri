@@ -285,8 +285,8 @@ pub fn compute(
         }
         // Développé : par le producteur, qui connaît le logiciel
         // (`scheduler::CachedPreviews`).
-        (_, Level::Developed(_)) => Err(PreviewError::Develop(
-            crate::develop::DevelopError::Unavailable,
+        (_, Level::Developed(engine)) => Err(PreviewError::Develop(
+            crate::develop::DevelopError::Unavailable(engine),
         )),
     }
 }

@@ -107,9 +107,13 @@ auto_mount = false
 darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false
+# RapidRAW (version 1.6 ou plus, pour sa commande « export ») : "auto" (cherché dans le
+# PATH, aux emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
+# (l'exécutable de RapidRAW ou son AppImage), "flatpak", ou "" (pas de rendu RapidRAW).
+rapidraw = "auto"
 # Logiciel dont le rendu développé s'affiche quand une image a été développée dans
-# plusieurs : "auto" (le développement le plus récent) ou un logiciel ("darktable"),
-# gardé tant qu'il a développé l'image.
+# plusieurs : "auto" (le développement le plus récent) ou un logiciel ("darktable",
+# "rapidraw"), gardé tant qu'il a développé l'image.
 default = "auto"
 
 [export]

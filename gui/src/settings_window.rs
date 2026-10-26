@@ -237,7 +237,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui.view", "stack_enter") => &["cover", "first"],
         ("cache", "location") => &["user", "disk", "folder"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
-        ("develop", "default") => &["auto", "darktable"],
+        ("develop", "default") => &["auto", "darktable", "rapidraw"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })

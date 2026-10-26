@@ -888,6 +888,7 @@ kw-offload-destination = destination folder root import
 kw-offload-eject-after = eject card after
 kw-offload-delete-after = erase card clear
 kw-develop-darktable = darktable-cli path appimage flatpak
+kw-develop-rapidraw = rapidraw path appimage flatpak export
 kw-develop-default = preferred default software darktable rapidraw auto
 kw-cache-zoom-max-mb = disk size 100% 1:1
 kw-preview-standard = preview size full screen resolution

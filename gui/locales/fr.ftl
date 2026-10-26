@@ -890,6 +890,7 @@ kw-offload-destination = dossier destination racine importer
 kw-offload-eject-after = éjecter carte après
 kw-offload-delete-after = effacer carte
 kw-develop-darktable = darktable-cli chemin appimage flatpak
+kw-develop-rapidraw = rapidraw chemin appimage flatpak export
 kw-develop-default = logiciel préféré défaut darktable rapidraw auto
 kw-cache-zoom-max-mb = taille disque 100% 1:1
 kw-preview-standard = taille aperçu plein écran résolution

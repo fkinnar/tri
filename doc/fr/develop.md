@@ -49,6 +49,25 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, annulable (le programme est arrêté).
 
+## RapidRAW (26/10/2026, #114)
+
+RapidRAW (AGPL-3.0, appelé en processus séparé) a une commande sans interface depuis
+la version 1.6 : `rapidraw export <image> --output <fichier> --format jpeg --quality 95`,
+qui applique d'elle-même les réglages du sidecar **`IMAGE.RAF.rrdata`** posé à côté de
+l'image (`rapidraw_sidecar` ; ses copies virtuelles `IMAGE.RAF.<id>.rrdata` ne sont
+pas lues). Elle exporte à pleine taille, sans option de taille : `tri` réduit ensuite
+au côté de l'aperçu standard (`shrink`). Lu dans son code source : l'export **refuse de
+tourner pendant que l'interface de RapidRAW est ouverte** (instance unique) ; le
+message le dit en clair (« fermez-le puis recommencez »).
+
+`find_rapidraw(réglage)` : `[develop] rapidraw` = `"auto"` (`rapidraw` / `RapidRAW`
+dans le `PATH`, `/usr/bin` du paquet `.deb`, `RapidRAW.app` sur macOS, `Program Files`
+sur Windows ; sous Linux, une AppImage `*rapidraw*`, puis le Flatpak
+`io.github.CyberTimon.RapidRAW`), un chemin (l'exécutable ou l'AppImage, qui reçoit
+`export` directement), `"flatpak"`, ou `""`. Messages du programme dans un fichier (pas
+un tube : un programme bavard ne bloque pas). La vraie résolution du développé n'est
+lue que pour darktable : pour RapidRAW, inconnue plutôt que fausse.
+
 ## Rien n'est écrit chez l'utilisateur
 
 Configuration propre à `tri` (dans son cache), bibliothèque en mémoire : ni la

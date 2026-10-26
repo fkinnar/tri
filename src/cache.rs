@@ -93,7 +93,7 @@ pub enum Level {
 
 impl Level {
     /// Tous les niveaux.
-    pub const ALL: [Level; 9] = [
+    pub const ALL: [Level; 10] = [
         Level::Thumbnail,
         Level::Embedded,
         Level::Standard,
@@ -103,6 +103,7 @@ impl Level {
         Level::Sharpness,
         Level::Similarity,
         Level::Developed(crate::develop::Engine::Darktable),
+        Level::Developed(crate::develop::Engine::RapidRaw),
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
@@ -123,6 +124,7 @@ impl Level {
             Self::Similarity => "similarity",
             // darktable garde le nom d'avant les autres logiciels : son cache reste valable.
             Self::Developed(crate::develop::Engine::Darktable) => "developed",
+            Self::Developed(crate::develop::Engine::RapidRaw) => "developed-rapidraw",
         }
     }
 }
