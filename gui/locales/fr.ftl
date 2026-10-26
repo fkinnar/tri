@@ -277,6 +277,7 @@ eject-question = Éjecter « { $name } » ?
 eject-open-folder = Le dossier ouvert est sur ce volume : il sera fermé.
 ejecting = Éjection de « { $name } »…
 ejected = « { $name } » éjecté : vous pouvez le retirer.
+status-dismiss = Cliquer pour effacer le message
 mounting = Montage de « { $name } »…
 mounted = « { $name } » monté.
 mount-failed = « { $name } » n'a pas pu être monté : { $error }

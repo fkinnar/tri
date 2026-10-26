@@ -833,7 +833,15 @@ pub fn plan_transfer_dir(dir: &Path, dest: &Path, mode: TransferMode) -> Result<
         files: Vec::new(),
         dirs: vec![to.clone()],
     };
-    for entry in walkdir::WalkDir::new(dir).min_depth(1).sort_by_file_name() {
+    // Le cache de `tri` gardé dans le dossier (`[cache] location = "folder"`, #55) ne
+    // suit pas : rangé par chemin, il ne servirait à rien ailleurs, et ses fichiers
+    // temporaires vont et viennent pendant la copie (#157 : « No such file »).
+    let walk = walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(|e| e.file_name() != crate::cache::DISK_DIR);
+    for entry in walk {
         let entry = entry.map_err(|e| {
             let path = e.path().unwrap_or(dir).to_path_buf();
             FileError::Io(path, e.into())
@@ -921,6 +929,8 @@ fn transfer_dir_with(
             .collect();
         dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
         for d in dirs {
+            // Le cache resté dans la source (non copié) ne vaut plus rien : il part aussi.
+            let _ = std::fs::remove_dir_all(d.join(crate::cache::DISK_DIR));
             let _ = std::fs::remove_dir(d);
         }
     }
@@ -1374,6 +1384,29 @@ mod tests {
         let back = plan_transfer_dir(&copy, dir.path(), TransferMode::Move).unwrap();
         transfer_dir(&back, |_, _| {}).unwrap();
         assert!(!copy.exists() && seance.join("A.RAF.xmp").exists());
+    }
+
+    #[test]
+    fn a_folder_s_own_cache_does_not_follow() {
+        // #157 : le cache gardé dans le dossier (`[cache] location = "folder"`) ne suit
+        // pas : ses fichiers temporaires disparaissaient pendant la copie.
+        let dir = tempfile::tempdir().unwrap();
+        let seance = dir.path().join("Séance");
+        let dest = dir.path().join("Archive");
+        let cache = seance.join(crate::cache::DISK_DIR).join("v4/embedded");
+        std::fs::create_dir_all(&cache).unwrap();
+        std::fs::create_dir(&dest).unwrap();
+        touch(&seance, &["A.RAF"]);
+        touch(&cache, &["x.jpg"]);
+        let plan = plan_transfer_dir(&seance, &dest, TransferMode::Copy).unwrap();
+        assert_eq!(plan.len(), 1, "le RAW seul");
+        assert_eq!(plan.dirs.len(), 1);
+        // Déplacement vers un autre volume : le cache resté dans la source part aussi.
+        let plan = plan_transfer_dir(&seance, &dest, TransferMode::Move).unwrap();
+        transfer_dir_with(&plan, false, |_, _| {}).unwrap();
+        assert!(dest.join("Séance/A.RAF").is_file());
+        assert!(!dest.join("Séance").join(crate::cache::DISK_DIR).exists());
+        assert!(!seance.exists(), "plus rien dans la source");
     }
 
     #[test]

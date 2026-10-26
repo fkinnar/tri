@@ -119,7 +119,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   goutte (contour) sous la vignette (mot « floue » jusqu'au 21/10/2026), ligne « Netteté » du panneau des métadonnées, filtres
   « sans les floues » (`f b`), inversé pour les floues seulement (`f i`) ; jugement relatif à la médiane du dossier. Les barres de
   progression terminées sont masquées (`[gui] progress_hide_done`), la barre d'état reste
-  courte.
+  courte. Un clic sur un message de la barre d'état l'efface, erreurs comprises
+  (26/10/2026, #157 : une erreur en rouge restait).
 - **Collimateur** (17/10/2026) : repère du collimateur de mise au point en plein écran et
   en comparaison (`m`), lu dans le RAW (Fujifilm pour l'instant) ; carré, croix, cercle ou
   cœur (`[gui.view] focus_marker`), couleur `[gui.colors] focus`, liseré sombre dessous
