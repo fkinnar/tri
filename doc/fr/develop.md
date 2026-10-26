@@ -122,5 +122,18 @@ cache : passée. Un lot à la fois ; sa progression est une tâche de fond (« �
 interrompre), le bilan (rendus, déjà faits, échecs) va dans la barre d'état ; ensuite,
 `b` propose le développé de chaque image rendue.
 
+**Choisir le logiciel** (26/10/2026, choix de l'utilisateur ; raccourcis réglables) :
+`Maj+B` et `<leader>r` développent l'image dans son logiciel (celui de son
+développement, voir `[develop] default`), `<leader>d` dans darktable, `<leader>p` dans
+RapidRAW (`Action::DevelopWith`, identifiants `plugin.darktable.develop`,
+`plugin.rapidraw.develop` ; `core.develop.render` et `core.develop.folder` pour les
+deux autres). Au clic droit sur une image, « Développer avec » : les logiciels
+installés, ou le rendu RAW (LibRaw). Le logiciel choisi passe devant celui du
+développement pour cette image, le temps de la session (`develop_choice`). Au clic
+droit sur un dossier, « Développer tout le dossier… » ouvre une boîte : chaque image
+dans le logiciel de son développement (sinon elle garde le rendu RAW), ou tout dans un
+logiciel (les images qu'il a développées). `Ctrl+Maj+B` : chaque image dans le sien,
+sans boîte.
+
 À venir : `darktable-cli` sait traiter un dossier en un seul lancement (démarrage
 amorti) — pour l'envoi de JPEG développés de l'« après-développement ».
