@@ -346,6 +346,12 @@ pub struct TriApp {
     /// Logiciels de développement trouvés au démarrage du moteur (`[develop]`) : la source
     /// « développé » est proposée s'il y en a un.
     developers: tri::develop::Developers,
+    /// Logiciel choisi pour une image (`<leader>d`, `<leader>p`, clic droit), qui passe
+    /// devant celui de son développement le temps de la session.
+    develop_choice: HashMap<PathBuf, tri::develop::Engine>,
+    /// Boîte « Développer le dossier » (clic droit sur un dossier) : dossier, position, et
+    /// logiciel choisi (`None` : chaque image dans le logiciel de son développement).
+    develop_folder_dialog: Option<(PathBuf, egui::Pos2, Option<tri::develop::Engine>)>,
     /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
     develop_batch: Option<crate::develop_batch::DevelopBatch>,
     /// Mode concentration (F11) : plein écran du système, panneaux et barres masqués (pas
@@ -755,6 +761,8 @@ impl TriApp {
             hovered: None,
             cursor_hidden: false,
             developers: tri::develop::Developers::none(),
+            develop_choice: HashMap::new(),
+            develop_folder_dialog: None,
             develop_batch: None,
             focus_mode: false,
             focus_mode_since: None,
@@ -1766,7 +1774,11 @@ impl TriApp {
             self.tree.point_at(&path);
             let ctx = ui.ctx().clone();
             match action {
-                Action::DevelopFolder => self.develop_folder(&ctx, Some(path)),
+                // Clic droit : une boîte pour choisir le logiciel (26/10/2026).
+                Action::DevelopFolder => {
+                    let at = ctx.pointer_latest_pos().unwrap_or_default();
+                    self.develop_folder_dialog = Some((path, at, None));
+                }
                 Action::FolderOpen => self.start_mount(&ctx, path),
                 Action::FolderOffload | Action::FolderEject => {
                     self.folder_drive_action(&ctx, action)
@@ -2068,7 +2080,14 @@ impl TriApp {
     /// Rendus développés en fond de toutes les images de `dir` (le dossier ouvert si
     /// `None`) qui ont été développées (issue n° 69), chacune dans son logiciel ; un lot à
     /// la fois.
-    fn develop_folder(&mut self, ctx: &egui::Context, dir: Option<PathBuf>) {
+    /// `force` : tout dans ce logiciel (les images qu'il a développées), plutôt que
+    /// chacune dans le sien.
+    fn develop_folder(
+        &mut self,
+        ctx: &egui::Context,
+        dir: Option<PathBuf>,
+        force: Option<tri::develop::Engine>,
+    ) {
         let Some(engine) = &self.engine else { return };
         if self.developers.is_empty() {
             self.notice = Some((t!("develop-batch-unavailable"), true));
@@ -2097,13 +2116,60 @@ impl TriApp {
             settings: engine.preview,
             developers: self.developers.clone(),
         };
+        // Logiciel imposé : ses rendus s'affichent ensuite pour ces images.
+        if let Some(force) = force {
+            for f in files.iter().filter(|f| force.sidecar(&f.path).is_some()) {
+                self.develop_choice.insert(f.path.clone(), force);
+            }
+        }
         let repaint = ctx.clone();
         self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
             dir,
             files,
             producer,
+            force,
             move || repaint.request_repaint(),
         ));
+    }
+
+    /// Boîte « Développer le dossier » : chaque image dans le logiciel de son
+    /// développement (sinon le rendu RAW reste), ou tout dans un logiciel choisi.
+    fn develop_folder_dialog(&mut self, ctx: &egui::Context) {
+        let Some((dir, at, mut choice)) = self.develop_folder_dialog.clone() else {
+            return;
+        };
+        let engines = self.developers.engines();
+        let name = |c: Option<tri::develop::Engine>| match c {
+            Some(e) => t!("develop-folder-only", engine = e.name()),
+            None => t!("develop-folder-each"),
+        };
+        let mut go = false;
+        let mut cancel = false;
+        let modal = modal_at("develop_folder_dialog", at)
+            .title(t!("develop-folder-title", folder = folder_name(&dir)))
+            .show(ctx, |ui| {
+                egui::ComboBox::from_id_salt("develop_folder_choice")
+                    .selected_text(name(choice))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut choice, None, name(None));
+                        for &e in &engines {
+                            ui.selectable_value(&mut choice, Some(e), name(Some(e)));
+                        }
+                    });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    go = ui.button(t!("develop-folder-go")).clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if go {
+            self.develop_folder_dialog = None;
+            self.develop_folder(ctx, Some(dir), choice);
+        } else if cancel || modal.should_close() {
+            self.develop_folder_dialog = None;
+        } else if let Some(d) = &mut self.develop_folder_dialog {
+            d.2 = choice;
+        }
     }
 
     /// Fin d'un lot de rendus développés : bilan dans la barre d'état ; l'image affichée
@@ -3491,7 +3557,8 @@ impl TriApp {
             // Rechercher : `/` (ajusté en plein écran) en grille et dans les dossiers.
             Action::Search => self.start_search(),
             Action::Develop => self.develop_current(),
-            Action::DevelopFolder => self.develop_folder(ctx, None),
+            Action::DevelopWith(engine) => self.develop_with(engine),
+            Action::DevelopFolder => self.develop_folder(ctx, None, None),
             Action::Crop => self.start_crop(),
             Action::CropMove(dir) | Action::CropSize(dir) => {
                 let step = self.gui.crop.step;
@@ -4755,12 +4822,15 @@ impl TriApp {
         }
     }
 
-    /// Niveau développé de l'image `path` : celui du logiciel de son développement
-    /// ([`tri::develop::Developers::resolve`]), sinon du premier logiciel installé.
+    /// Niveau développé de l'image `path` : celui du logiciel choisi pour elle, sinon du
+    /// logiciel de son développement ([`tri::develop::Developers::resolve`]), sinon du
+    /// premier logiciel installé.
     fn developed_level(&self, path: &Path) -> Level {
         let engine = self
-            .developers
-            .resolve(path)
+            .develop_choice
+            .get(path)
+            .copied()
+            .or_else(|| self.developers.resolve(path))
             .or_else(|| self.developers.engines().first().copied())
             .unwrap_or(tri::develop::Engine::Darktable);
         Level::Developed(engine)
@@ -5138,6 +5208,19 @@ impl TriApp {
                 self.crop = Some(crop);
             }
         }
+    }
+
+    /// Développe l'image affichée dans `engine` (`<leader>d`, `<leader>p`, clic droit),
+    /// qui reste son logiciel le temps de la session.
+    fn develop_with(&mut self, engine: tri::develop::Engine) {
+        if self.developers.get(engine).is_none() {
+            self.notice = Some((t!("develop-not-installed", engine = engine.name()), true));
+            return;
+        }
+        if let Some(file) = self.files.get(self.selected) {
+            self.develop_choice.insert(file.path.clone(), engine);
+        }
+        self.develop_current();
     }
 
     /// Maj+B ou le bouton : développer l'image affichée dans son logiciel, puis l'afficher
@@ -7262,6 +7345,9 @@ impl TriApp {
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
         let mut clicked = None;
         let mut file_action = None;
+        // Développer avec : `Some(None)` le rendu RAW (LibRaw), `Some(Some(e))` un logiciel.
+        let mut develop: Option<Option<tri::develop::Engine>> = None;
+        let engines = self.developers.engines();
         let modal = modal_at("rating_dialog", at)
             .title(file_name(&path))
             .show(ctx, |ui| {
@@ -7296,7 +7382,50 @@ impl TriApp {
                         }
                     }
                 });
+                // Développer avec (26/10/2026) : les logiciels installés, ou le rendu RAW.
+                if !engines.is_empty() {
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        ui.label(t!("develop-with"));
+                        egui::ComboBox::from_id_salt("develop_with")
+                            .selected_text(t!("develop-with-choose"))
+                            .show_ui(ui, |ui| {
+                                for &engine in &engines {
+                                    let action = Action::DevelopWith(engine);
+                                    if ui
+                                        .selectable_label(false, engine.name())
+                                        .on_hover_text(self.action_tip(action))
+                                        .clicked()
+                                    {
+                                        develop = Some(Some(engine));
+                                    }
+                                }
+                                if ui
+                                    .selectable_label(false, t!("develop-with-libraw"))
+                                    .clicked()
+                                {
+                                    develop = Some(None);
+                                }
+                            });
+                    });
+                }
             });
+        if let Some(choice) = develop {
+            self.rating_dialog = None;
+            if let Some(i) = self.files.iter().position(|f| f.path == path) {
+                self.select(i);
+            }
+            match choice {
+                Some(engine) => self.develop_with(engine),
+                None => {
+                    self.develop_choice.remove(&path);
+                    self.mode = Mode::View;
+                    self.set_source(Source::Raw);
+                    self.request_zoom();
+                }
+            }
+            return;
+        }
         if let Some(action) = clicked {
             self.rate_path(path.clone(), action);
         }
@@ -9603,6 +9732,7 @@ impl eframe::App for TriApp {
         self.export_report_dialog(&ctx);
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
+        self.develop_folder_dialog(&ctx);
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
@@ -14807,6 +14937,85 @@ mod tests {
             h.state().selection.visible(&h.state().files),
             2,
             "clic dans la boîte"
+        );
+    }
+
+    #[test]
+    fn an_image_is_developed_with_the_chosen_software() {
+        // 26/10/2026 : <leader>d / <leader>p, ou « Développer avec » au clic droit ; le
+        // choix passe devant le logiciel du développement, le temps de la session.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        // RapidRAW pas installé : on le dit.
+        h.state_mut().developers = fake_darktable();
+        let lead = |h: &mut Harness<'_, TriApp>| press(h, Key::B, Modifiers::CTRL);
+        lead(&mut h);
+        press(&mut h, Key::P, Modifiers::NONE);
+        let (text, error) = h.state().notice.clone().expect("message");
+        assert!(error && text.contains("RapidRAW"), "{text}");
+        assert!(h.state().develop_choice.is_empty());
+        // darktable : choisi pour l'image, rendu demandé, source « développé ».
+        lead(&mut h);
+        press(&mut h, Key::D, Modifiers::NONE);
+        let path = h.state().files[0].path.clone();
+        assert_eq!(
+            h.state().develop_choice.get(&path),
+            Some(&tri::develop::Engine::Darktable)
+        );
+        assert_eq!(h.state().source, Source::Developed);
+        assert_eq!(h.state().mode, Mode::View);
+        // Clic droit sur une autre image : la liste « Développer avec ».
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        let other = h.state().files[1].path.clone();
+        h.state_mut().rating_dialog = Some((other.clone(), pos2(200.0, 200.0)));
+        h.run_steps(2);
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
+        h.get_by_label("darktable").click();
+        h.run_steps(2);
+        assert_eq!(h.state().selected, 1, "l'image du clic droit");
+        assert_eq!(
+            h.state().develop_choice.get(&other),
+            Some(&tri::develop::Engine::Darktable)
+        );
+        assert!(h.state().rating_dialog.is_none());
+    }
+
+    #[test]
+    fn a_folder_is_developed_in_each_image_s_software_or_in_one() {
+        // Clic droit sur un dossier : une boîte, chaque image dans le logiciel de son
+        // développement, ou tout dans un logiciel choisi.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        let img0 = h.state().files[0].path.clone();
+        std::fs::write(
+            img0.with_file_name("img0.jpg.xmp"),
+            r#"<rdf:Description darktable:history_end="3"/>"#,
+        )
+        .unwrap();
+        let folder = h.state().folder.dir.clone();
+        h.state_mut().develop_folder_dialog = Some((folder, pos2(200.0, 200.0), None));
+        h.run_steps(2);
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("develop-folder-only", engine = "darktable"))
+            .click();
+        h.run_steps(2);
+        h.get_by_label(&t!("develop-folder-go")).click();
+        h.run_steps(2);
+        assert!(h.state().develop_folder_dialog.is_none());
+        // Lot lancé (le faux darktable échoue tout de suite : il peut déjà être fini).
+        assert!(h.state().develop_batch.is_some() || h.state().notice.is_some());
+        assert_eq!(
+            h.state().develop_choice.get(&img0),
+            Some(&tri::develop::Engine::Darktable),
+            "ses rendus s'affichent pour ces images"
+        );
+        assert_eq!(
+            h.state().develop_choice.len(),
+            1,
+            "seulement les développées"
         );
     }
 

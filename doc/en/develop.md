@@ -121,5 +121,17 @@ serve the same way. Already in the cache: skipped. One batch at a time; its prog
 background task ("×": interrupt), the summary (rendered, already done, failed) goes to
 the status bar; afterwards, `b` offers the developed render of each rendered image.
 
+**Choosing the software** (2026-10-26, user's choice; shortcuts configurable):
+`Shift+B` and `<leader>r` develop the image in its software (the one of its development,
+see `[develop] default`), `<leader>d` in darktable, `<leader>p` in RapidRAW
+(`Action::DevelopWith`, identifiers `plugin.darktable.develop`,
+`plugin.rapidraw.develop`; `core.develop.render` and `core.develop.folder` for the other
+two). Right click on an image, "Develop with": the installed software, or the RAW render
+(LibRaw). The chosen software takes over the development's one for that image, for the
+session (`develop_choice`). Right click on a folder, "Develop the whole folder…" opens a
+dialog: each image in the software of its development (otherwise it keeps the RAW
+render), or all in one software (the images it developed). `Ctrl+Shift+B`: each image in
+its own, without dialog.
+
 Coming: `darktable-cli` can process a folder in a single launch (amortized startup) — for
 sending developed JPEGs in the "after-development" stage.

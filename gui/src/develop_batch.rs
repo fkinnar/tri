@@ -43,6 +43,7 @@ impl DevelopBatch {
         folder: PathBuf,
         files: Vec<MediaFile>,
         producer: CachedPreviews,
+        force: Option<tri::develop::Engine>,
         repaint: impl Fn() + Send + 'static,
     ) -> DevelopBatch {
         let done = Arc::new(AtomicUsize::new(0));
@@ -55,7 +56,10 @@ impl DevelopBatch {
             let todo: Vec<(MediaFile, tri::develop::Engine)> = files
                 .into_iter()
                 .filter_map(|f| {
-                    let engine = producer.developers.resolve(&f.path)?;
+                    let engine = match force {
+                        Some(e) => e.sidecar(&f.path).map(|_| e)?,
+                        None => producer.developers.resolve(&f.path)?,
+                    };
                     Some((f, engine))
                 })
                 .collect();
@@ -166,7 +170,8 @@ mod tests {
             settings: tri::preview::Settings::default(),
             developers: tri::develop::Developers::none().with(Arc::new(Failing)),
         };
-        let mut batch = DevelopBatch::start(dir.path().to_path_buf(), vec![a, b], producer, || {});
+        let mut batch =
+            DevelopBatch::start(dir.path().to_path_buf(), vec![a, b], producer, None, || {});
         let summary = loop {
             if let Some(s) = batch.finished() {
                 break s;
@@ -204,7 +209,7 @@ mod tests {
                 false,
             ),
         };
-        let mut batch = DevelopBatch::start(dir, files, producer, || {});
+        let mut batch = DevelopBatch::start(dir, files, producer, None, || {});
         let summary = loop {
             if let Some(s) = batch.finished() {
                 break s;

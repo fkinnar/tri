@@ -332,9 +332,14 @@ pub enum Action {
     Search,
     /// Mode concentration : plein écran du système, panneaux et barres masqués.
     FocusMode,
-    /// Développer l'image affichée dans darktable (plugin de rendu), puis l'afficher.
+    /// Développer l'image affichée dans son logiciel (celui de son développement, ou le
+    /// préféré, `[develop] default`), puis l'afficher.
     Develop,
-    /// Développer en fond toutes les images du dossier qui ont un sidecar (issue n° 69).
+    /// Développer l'image affichée dans ce logiciel-là (plugin de rendu), puis l'afficher
+    /// (26/10/2026 : une image développée dans darktable et dans RapidRAW).
+    DevelopWith(tri::develop::Engine),
+    /// Développer en fond toutes les images du dossier qui ont été développées, chacune
+    /// dans son logiciel (issue n° 69).
     DevelopFolder,
     /// Afficher / masquer le panneau des dossiers.
     ToggleFolderPanel,
@@ -398,7 +403,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 165] = [
+    pub const ALL: [Action; 167] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -523,6 +528,8 @@ impl Action {
         Action::Search,
         Action::FocusMode,
         Action::Develop,
+        Action::DevelopWith(tri::develop::Engine::Darktable),
+        Action::DevelopWith(tri::develop::Engine::RapidRaw),
         Action::DevelopFolder,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
@@ -606,7 +613,7 @@ impl Action {
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopFolder => Group::View,
+            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -794,8 +801,10 @@ impl Action {
             Action::ToggleFolderPanel => "core.view.folders",
             Action::Search => "core.search",
             Action::FocusMode => "core.view.focus_mode",
-            Action::Develop => "plugin.darktable.develop",
-            Action::DevelopFolder => "plugin.darktable.develop_folder",
+            Action::Develop => "core.develop.render",
+            Action::DevelopWith(tri::develop::Engine::Darktable) => "plugin.darktable.develop",
+            Action::DevelopWith(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.develop",
+            Action::DevelopFolder => "core.develop.folder",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",
             Action::HistogramScale => "core.view.histogram_scale",
@@ -1653,8 +1662,9 @@ impl Keymap {
     }
 
     /// Ajoute les raccourcis de changement de panneau, après le leader `leader` (« Ctrl+b »
-    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant ; et
-    /// `b` pour signaler un problème (« bug », demandé le 22/10/2026).
+    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant ; `b`
+    /// pour signaler un problème (« bug », demandé le 22/10/2026) ; `r`, `d`, `p` pour
+    /// développer.
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
         for (key, action) in [
@@ -1664,6 +1674,11 @@ impl Keymap {
             (Key::ArrowRight, Action::FocusRight),
             (Key::O, Action::FocusNext),
             (Key::B, Action::ReportIssue),
+            // Développer (26/10/2026, choix de l'utilisateur) : `r` le logiciel de l'image
+            // (comme Maj+B), `d` darktable, `p` RapidRAW.
+            (Key::R, Action::Develop),
+            (Key::D, Action::DevelopWith(tri::develop::Engine::Darktable)),
+            (Key::P, Action::DevelopWith(tri::develop::Engine::RapidRaw)),
         ] {
             self.bindings.push((vec![lead, plain(key)], action));
         }
@@ -2242,6 +2257,20 @@ mod tests {
         assert_eq!(
             seq.feed_one(&km, key(Key::B), now),
             Some(Action::ReportIssue)
+        );
+        // Développer (26/10/2026) : `r` le logiciel de l'image, `d` darktable, `p` RapidRAW.
+        use tri::develop::Engine;
+        for (k, action) in [
+            (Key::R, Action::Develop),
+            (Key::D, Action::DevelopWith(Engine::Darktable)),
+            (Key::P, Action::DevelopWith(Engine::RapidRaw)),
+        ] {
+            assert_eq!(seq.feed_one(&km, lead, now), None);
+            assert_eq!(seq.feed_one(&km, key(k), now), Some(action));
+        }
+        assert_eq!(
+            Action::from_id("plugin.rapidraw.develop"),
+            Some(Action::DevelopWith(Engine::RapidRaw))
         );
         assert!(Keymap::default().with_leader("Ctrl+").is_err());
     }
