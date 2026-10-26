@@ -427,8 +427,8 @@ export-title = { $n ->
 }
 export-title-version = Exporter la version « { $name } »
 export-contents-darktable = { $n ->
-    [one] 1 RAW, développé par darktable
-   *[other] { $n } RAW, développés par darktable
+    [one] 1 RAW, développé par Darktable
+   *[other] { $n } RAW, développés par Darktable
 }
 export-contents-libraw = { $n ->
     [one] 1 RAW, rendu de base (LibRaw)
@@ -451,7 +451,7 @@ export-profile-tip = Flèches haut / bas : préréglage · Tab : dossier · Entr
 export-destination = Dossier
 export-create = sera créé
 export-goes-to = Destination : { $dest }
-export-no-darktable = darktable absent : rendu de base par LibRaw.
+export-no-darktable = Darktable absent : rendu de base par LibRaw.
 export-passthrough = Sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-button = Exporter
@@ -473,7 +473,7 @@ export-done = { $n ->
    *[other] { $n } images exportées dans { $dest }
 }
 export-done-passthrough = { " " }(dont { $n } sans recompression)
-export-partial = { $n } exportées, { $failed } en échec (illisibles par darktable ?), dans { $dest }
+export-partial = { $n } exportées, { $failed } en échec (illisibles par Darktable ?), dans { $dest }
 export-cancelled = Export arrêté (les fichiers déjà écrits restent).
 export-progress = Export « { $profile } » { $done }/{ $total }
 export-cancel = Arrêter l'export
@@ -591,7 +591,7 @@ settings-section-scheduler = Calculs en arrière-plan
 settings-section-xmp = Notes (XMP)
 settings-section-places = Emplacements
 settings-section-keys = Raccourcis
-settings-section-develop = Rendu darktable
+settings-section-develop = Rendu Darktable
 settings-section-export-profile-user = Préréglage d'export « { $id } »
 settings-section-versions-preset-user = Préréglage de recadrage « { $id } »
 settings-section-export-profiles = Préréglages d'export
@@ -713,11 +713,11 @@ shown-exposure = Analyse d'exposition
 shown-developed = Développé dans { $engine }
 view-info-developed-pending = { " · " }développement en cours…
 action-core-develop-render = Développer l'image affichée (dans le logiciel de son développement)
-action-plugin-darktable-develop = Développer dans darktable (l'image affichée)
+action-plugin-darktable-develop = Développer dans Darktable (l'image affichée)
 action-plugin-rapidraw-develop = Développer dans RapidRAW (l'image affichée)
 action-core-develop-folder = Développer tout le dossier en fond (chaque image dans le logiciel de son développement)
 folder-menu-develop = Développer tout le dossier…
-develop-batch-unavailable = darktable introuvable : réglage [develop] darktable
+develop-batch-unavailable = Darktable introuvable : réglage [develop] darktable
 develop-batch-busy = un dossier est déjà en cours de développement
 develop-batch-progress = développement de « { $name } » { $done }/{ $total }
 develop-batch-done = « { $name } » développé : { $rendered } rendus, { $cached } déjà faits, { $failed } échecs
@@ -725,7 +725,7 @@ develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrompu)" }
 develop-batch-cancel = Interrompre le développement
 view-info-developed-none = { " · " }pas encore développé ({ $keys })
-develop-not-found = aucun logiciel de développement trouvé (darktable, RapidRAW : réglages [develop])
+develop-not-found = aucun logiciel de développement trouvé (Darktable, RapidRAW : réglages [develop])
 develop-not-installed = { $engine } n'est pas installé (ou pas trouvé : réglages [develop])
 grid-render-embedded = JPEG boîtier
 grid-render-latest = Dernier développement

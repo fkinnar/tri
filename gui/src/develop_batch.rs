@@ -191,7 +191,7 @@ mod tests {
             summary,
             Summary {
                 failed: 1,
-                error: Some("darktable : essai".into()),
+                error: Some("Darktable : essai".into()),
                 ..Summary::default()
             }
         );

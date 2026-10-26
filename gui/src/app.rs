@@ -8739,12 +8739,16 @@ impl TriApp {
                     Level::Developed(engine) => engine.name().to_string(),
                     _ => t!("grid-render-libraw-short"),
                 },
-                FontId::monospace(side * 0.8),
+                // Un peu plus petit que la légende : de l'air dans le cadre (retour du
+                // 26/10/2026).
+                FontId::monospace(side * 0.7),
                 text_color,
             );
+            let pad = side * 0.3;
+            let width = galley.size().x + 2.0 * pad;
             let chip = Rect::from_min_size(
-                pos2(caption_left - 6.0 - galley.size().x - 4.0, badge_rect.min.y),
-                vec2(galley.size().x + 4.0, side),
+                pos2(caption_left - 6.0 - width, badge_rect.min.y),
+                vec2(width, side),
             );
             ui.painter().rect_stroke(
                 chip,
@@ -15162,7 +15166,7 @@ mod tests {
             Some(crate::files::FileDialog::Export(_))
         ));
         // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
-        h.get_by_label_contains("darktable absent");
+        h.get_by_label_contains("Darktable absent");
         // Des JPEG : « JPEG tel quel » proposé d'abord (liste déroulante).
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
@@ -15497,7 +15501,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
-        h.get_by_label("darktable").click();
+        h.get_by_label("Darktable").click();
         h.run_steps(2);
         assert_eq!(h.state().selected, 1, "l'image du clic droit");
         assert_eq!(
@@ -15601,7 +15605,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
-        h.get_by_label(&t!("develop-folder-only", engine = "darktable"))
+        h.get_by_label(&t!("develop-folder-only", engine = "Darktable"))
             .click();
         h.run_steps(2);
         h.get_by_label(&t!("develop-folder-go")).click();
@@ -15641,7 +15645,7 @@ mod tests {
         let Avail::Failed(reason) = &h.state().status[0].developed else {
             unreachable!()
         };
-        assert!(reason.contains("darktable"), "{reason}");
+        assert!(reason.contains("Darktable"), "{reason}");
         // Sans développement, l'image se montre dans la source d'avant, et elle zoome
         // (retour du 20/10/2026 : après un Maj+B, plus aucune image ne zoomait).
         let file = h.state().files[0].clone();
