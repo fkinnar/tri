@@ -44,6 +44,7 @@ pub mod offload;
 pub mod overlay;
 pub mod places;
 pub mod preview;
+pub mod process;
 pub mod raw;
 pub mod scheduler;
 pub mod selection;

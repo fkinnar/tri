@@ -275,7 +275,7 @@ impl Cli {
 
     /// La commande, prête à recevoir les arguments de `tri`.
     pub fn command(&self) -> Command {
-        let mut cmd = Command::new(&self.program);
+        let mut cmd = crate::process::command(&self.program);
         cmd.args(&self.args);
         cmd
     }
@@ -294,7 +294,7 @@ fn flatpak() -> Option<Cli> {
 /// L'application Flatpak `app`, si elle est installée, lancée telle quelle ou par sa
 /// commande `command`.
 fn flatpak_app(app: &str, command: Option<&str>) -> Option<Cli> {
-    let installed = Command::new("flatpak")
+    let installed = crate::process::command("flatpak")
         .args(["info", app])
         .stdin(Stdio::null())
         .stdout(Stdio::null())

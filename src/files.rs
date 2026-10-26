@@ -1043,15 +1043,15 @@ pub fn common_prefix(candidates: &[String]) -> String {
 pub fn reveal(path: &Path) -> Result<()> {
     let path = std::path::absolute(path).map_err(|e| FileError::Io(path.into(), e))?;
     if cfg!(target_os = "macos") {
-        return spawn(Command::new("open").arg("-R").arg(&path), "open");
+        return spawn(crate::process::command("open").arg("-R").arg(&path), "open");
     }
     if cfg!(windows) {
         let mut select = std::ffi::OsString::from("/select,");
         select.push(path.as_os_str());
-        return spawn(Command::new("explorer").arg(select), "explorer");
+        return spawn(crate::process::command("explorer").arg(select), "explorer");
     }
     let uri = file_uri(&path);
-    let shown = Command::new("gdbus")
+    let shown = crate::process::command("gdbus")
         .args([
             "call",
             "--session",
@@ -1070,7 +1070,7 @@ pub fn reveal(path: &Path) -> Result<()> {
         return Ok(());
     }
     let dir = path.parent().unwrap_or(Path::new("/"));
-    spawn(Command::new("xdg-open").arg(dir), "xdg-open")
+    spawn(crate::process::command("xdg-open").arg(dir), "xdg-open")
 }
 
 /// URI `file://` de `path`, caractères spéciaux encodés (pour D-Bus).
@@ -1094,7 +1094,7 @@ pub fn editor_command(editor: &[String], files: &[PathBuf]) -> Vec<Command> {
     let Some((program, args)) = editor.split_first() else {
         return files.iter().map(|f| default_opener(f)).collect();
     };
-    let mut command = Command::new(program);
+    let mut command = crate::process::command(program);
     let mut placed = false;
     for arg in args {
         if arg == "{files}" {
@@ -1112,15 +1112,15 @@ pub fn editor_command(editor: &[String], files: &[PathBuf]) -> Vec<Command> {
 
 fn default_opener(file: &Path) -> Command {
     if cfg!(target_os = "macos") {
-        let mut c = Command::new("open");
+        let mut c = crate::process::command("open");
         c.arg(file);
         c
     } else if cfg!(windows) {
-        let mut c = Command::new("cmd");
+        let mut c = crate::process::command("cmd");
         c.args(["/C", "start", ""]).arg(file);
         c
     } else {
-        let mut c = Command::new("xdg-open");
+        let mut c = crate::process::command("xdg-open");
         c.arg(file);
         c
     }
