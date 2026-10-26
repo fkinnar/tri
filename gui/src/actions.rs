@@ -1399,7 +1399,6 @@ const FILTERS: &[Binding] = {
         (&[F, shifted(Key::Num5)], FilterStars(5)),
         // Comparaison : au moins, exactement, au plus (#165).
         (&[F, plain(Key::Equals)], FilterStarsOp),
-        (&[F, Chord::char('=')], FilterStarsOp),
         (&[F, plain(Key::P)], FilterFlag(FlagFilter::Accepted)),
         (&[F, shifted(Key::P)], FilterFlag(FlagFilter::Accepted)),
         (&[F, plain(Key::U)], FilterFlag(FlagFilter::NotRejected)),
