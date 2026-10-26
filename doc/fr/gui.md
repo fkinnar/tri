@@ -526,7 +526,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pile, ou boucle selon `[gui.view] stack_wrap`), pas à la pile suivante (24/10/2026,
   issue n° 60). En option, `[gui.view] stack_advance_next` (désactivé par
   défaut) passe au bout de la pile à la première photo de la pile suivante (25/10/2026).
-  De pile en pile (↑ / ↓), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
+  De pile en pile (↑ / ↓), comme en entrant dans une pile repliée depuis la grille
+  (Entrée, double-clic ; 26/10/2026), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
   "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
   l'interrupteur des piles (toujours là depuis le 25/10/2026 ; en grille aussi, piles
   actives, pour en voir l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu

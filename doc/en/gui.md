@@ -501,7 +501,8 @@ system one ("cold" measurements, experiments).
   the stack, or wraps around with `[gui.view] stack_wrap`), not to the next stack
   (2026-10-24, issue #60). As an option, `[gui.view] stack_advance_next` (off by default)
   moves at the end of the stack to the first photo of the next stack (2026-10-25). From
-  stack to stack (↑ / ↓), we land on its cover or, with `[gui.view] stack_enter =
+  stack to stack (↑ / ↓), as when entering a folded stack from the grid (Enter,
+  double click; 2026-10-26), we land on its cover or, with `[gui.view] stack_enter =
   "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
   switch (always there since 2026-10-25; in the grid too, with stacks on, to see its
   state, since 2026-10-26), or Ctrl+Shift+S, remembered from one launch
