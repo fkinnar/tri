@@ -126,6 +126,8 @@ places-documents = Documents
 places-downloads = Téléchargements
 places-pictures = Images
 places-root = Racine (/)
+places-device = Support de { $size } Go
+places-mount-unsupported = monter un support n'est possible que sous Linux et macOS
 settings-defaults-used = { $warning } ; réglages par défaut utilisés
 settings-file-error = configuration { $path } : { $error }
 

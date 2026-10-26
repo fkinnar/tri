@@ -54,6 +54,25 @@ was expanded stays expanded).
 - Checked on macOS (2026-10-17) with a disk image mounted by `hdiutil attach`: appears in
   under 2 s, disappears on `detach`.
 
+## Unmounted media (`unmounted_devices`, `mount`, #113)
+
+A system that no longer mounts anything by itself (feedback of 2026-10-26, Linux Mint:
+the card only showed under "Devices" in the file manager): on Linux, `places()` adds
+the media plugged in but not mounted, read with `lsblk -J -b -l` (`parse_lsblk`):
+partitions, or disks without partitions, with a file system (no swap, LUKS, LVM…), on
+removable media (`RM`) or hot-plugged (`HOTPLUG`: USB card readers often say they are
+fixed). Older `lsblk` versions write booleans and numbers as text, read too. They become
+`PlaceKind::Device` places whose path is the device's (`/dev/sdb1`), named by their
+volume, otherwise by their size ("31.9 GB media"). macOS and Windows mount everything by
+themselves: nothing to add.
+
+`mount(device)` mounts as the file manager does, without a password for removable
+media: `udisksctl mount -b` (Linux; folder read from its answer, "Mounted /dev/sdb1 at
+/media/me/X-T4", otherwise from `/proc/mounts`), `diskutil mount` (macOS). `eject` of an
+unmounted medium powers it off (`udisksctl power-off`). `[places] auto_mount` (off by
+default): the `Monitor` mounts by itself a medium **that arrives** (one unmounted on
+purpose afterwards stays unmounted).
+
 ## Ejection (`eject(volume)`)
 
 With the system tool (requested on 2026-10-17): `diskutil eject` (macOS); on Linux,
@@ -99,7 +118,8 @@ folders followed; error if `dir` is unreadable.
   ejectable, favorite, section }`), in display order; an unreadable expanded folder
   carries its error;
 - **sections** (requested on 2026-10-20: sorted, and going through the root as little as
-  possible): `Section::Drives` (mounted volumes), `Network` (network shares), `Personal`
+  possible): `Section::Devices` (removable media, mounted or not, #113), `Drives` (fixed
+  drives, `[places] fixed`; `PlaceSettings::section`), `Network` (network shares), `Personal`
   (home folder and its usual folders), `Favorites`, and only then `System` (the root,
   collapsed until opened); `PlaceKind::section`, and `Row::section` on each row
   (subfolders take the one of their place): the interface draws a title and a line at

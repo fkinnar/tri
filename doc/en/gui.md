@@ -52,7 +52,9 @@ system one ("cold" measurements, experiments).
   **hidden as soon as you type** and reappears at the first mouse movement, in the grid
   as in full screen.
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
-  arranged in titled sections separated by a line (2026-10-20): removable drives,
+  arranged in titled sections separated by a line (2026-10-20): devices (cards, keys,
+  external drives, mounted or not: an unmounted one is greyed, a click or `o` mounts
+  then opens it, right click "Mount" / "Eject", 2026-10-26, #113), fixed drives,
   network, personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
   then only the system (root, collapsed); **Subfolders** checkbox (2026-10-20,
   remembered): images of subfolders are shown too (`[gui.folders] subfolders_depth`
