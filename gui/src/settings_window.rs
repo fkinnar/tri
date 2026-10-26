@@ -238,6 +238,8 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("cache", "location") => &["user", "disk", "folder"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
         ("develop", "default") => &["auto", "darktable", "rapidraw"],
+        ("gui.grid", "render") => &["embedded", "latest", "darktable", "rapidraw", "libraw"],
+        ("gui.grid", "develop") => &["auto", "manual"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,
     })
@@ -491,9 +493,10 @@ impl SettingsWindow {
     fn fits(&self, section: &str, key: &str, choice: &str) -> bool {
         // Logiciel de développement préféré : « auto » et ceux installés, plus la valeur
         // en place (un logiciel désinstallé depuis reste visible).
-        if (section, key) == ("develop", "default") {
+        if (section, key) == ("develop", "default") || (section, key) == ("gui.grid", "render") {
             let current = matches!(self.file.get(section, key), Some(Value::Str(v)) if v == choice);
-            return choice == "auto" || current || self.engines.iter().any(|e| e.id() == choice);
+            let engine = tri::develop::Engine::from_id(choice);
+            return engine.is_none_or(|e| self.engines.contains(&e)) || current;
         }
         let Some(id) = section.strip_prefix("export.profiles.") else {
             return true;

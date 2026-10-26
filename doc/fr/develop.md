@@ -56,9 +56,13 @@ la version 1.6 : `rapidraw export <image> --output <fichier> --format jpeg --qua
 qui applique d'elle-même les réglages du sidecar **`IMAGE.RAF.rrdata`** posé à côté de
 l'image (`rapidraw_sidecar` ; ses copies virtuelles `IMAGE.RAF.<id>.rrdata` ne sont
 pas lues). Elle exporte à pleine taille, sans option de taille : `tri` réduit ensuite
-au côté de l'aperçu standard (`shrink`). Lu dans son code source : l'export **refuse de
-tourner pendant que l'interface de RapidRAW est ouverte** (instance unique) ; le
-message le dit en clair (« fermez-le puis recommencez »).
+au côté de l'aperçu standard (`shrink`). **Interface de RapidRAW ouverte** : l'export
+sans interface tourne quand même (il ne passe pas par l'instance unique), mais a rendu
+une **image toute noire** sans erreur (essai du 26/10/2026). `shrink` refuse une image
+dont aucun pixel ne dépasse 0 (le bruit du capteur suffit à dépasser 0 sur une vraie
+photo) : rien n'entre dans le cache, et le message le dit en clair (« fermez-la puis
+recommencez »). Si une version future renvoie le refus « already running », il est
+traduit de même.
 
 `find_rapidraw(réglage)` : `[develop] rapidraw` = `"auto"` (`rapidraw` / `RapidRAW`
 dans le `PATH`, `/usr/bin` du paquet `.deb`, `RapidRAW.app` sur macOS, `Program Files`
@@ -146,3 +150,22 @@ sans boîte.
 
 À venir : `darktable-cli` sait traiter un dossier en un seul lancement (démarrage
 amorti) — pour l'envoi de JPEG développés de l'« après-développement ».
+
+## Les développements dans la grille (26/10/2026, #114)
+
+Après le développement, on veut voir les images développées ; au déchargement et au tri,
+le JPEG boîtier suffit. `[gui.grid] render` (`gui/src/grid_render.rs`, `GridRender`),
+aussi dans la barre des filtres (liste à droite, `f d` pour le suivant), retenu d'une
+session à l'autre : `embedded` (JPEG boîtier, défaut), `latest` (le développement le plus
+récent de chaque image, `develop::resolve` sans préférence), `darktable` / `rapidraw`
+(toujours ce logiciel), `libraw` (rendu RAW). La liste ne propose que les logiciels
+installés. Une vignette n'a que **deux états** : JPEG boîtier, ou « DEV » (pastille sous
+la vignette, son infobulle nomme le logiciel ou LibRaw). Un RAW sans le développement voulu
+montre son **rendu LibRaw** : dès que la grille montre les rendus, les rendus LibRaw passent
+en fond pour tout le dossier (`Scheduler::set_raw_previews`, une tâche de fond de plus). Un
+développement pas encore rendu : en fond, un lot comme `Ctrl+Maj+B` (`[gui.grid] develop =
+"auto"`, bilan tu s'il n'y avait rien à rendre), ou à la demande seulement (`"manual"`) ;
+LibRaw, puis la vignette, en attendant. Les rendus du lot, faits hors du moteur, sont
+cherchés dans le cache au plus une fois par `render_poll_ms`. Le rendu, bien plus grand
+qu'une vignette, est décodé réduit (`jpeg::decode` à la taille des vignettes). Les images
+plates gardent leur vignette.

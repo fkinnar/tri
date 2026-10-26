@@ -167,6 +167,9 @@ pub enum Action {
     SortNext,
     /// Inverser le sens de l'ordre.
     SortReverse,
+    /// Rendu des vignettes suivant : JPEG boîtier, dernier développement, un logiciel,
+    /// LibRaw (#114).
+    GridRenderNext,
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -405,7 +408,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 168] = [
+    pub const ALL: [Action; 169] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -437,6 +440,7 @@ impl Action {
         Action::FilterInvert,
         Action::SortNext,
         Action::SortReverse,
+        Action::GridRenderNext,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleImageInfo,
@@ -622,7 +626,7 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | SortNext | SortReverse => Group::Filters,
+            | SortNext | SortReverse | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -710,6 +714,7 @@ impl Action {
             Action::FilterStack => "core.filter.stack",
             Action::FilterInvert => "core.filter.invert",
             Action::SortNext => "core.filter.sort",
+            Action::GridRenderNext => "core.grid.render",
             Action::SortReverse => "core.filter.sort_reverse",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
@@ -1426,6 +1431,8 @@ const FILTERS: &[Binding] = {
         // Ordre (« sort ») : suivant, et sens (« reverse »).
         (&[F, plain(Key::S)], SortNext),
         (&[F, plain(Key::R)], SortReverse),
+        // Rendu des vignettes (« développé », #114).
+        (&[F, plain(Key::D)], GridRenderNext),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };
@@ -1446,6 +1453,8 @@ impl Profile {
 #[derive(Clone, Debug)]
 pub struct Keymap {
     bindings: Vec<(Vec<Chord>, Action)>,
+    /// Préfixe des panneaux ([`Keymap::with_leader`]) : l'aide écrit `<leader>` à sa place.
+    leader: Option<Chord>,
     /// Panneau qui a le clavier ([`Keymap::set_focus`]).
     focus: Scope,
 }
@@ -1480,6 +1489,7 @@ impl Keymap {
         }
         Keymap {
             bindings,
+            leader: None,
             focus: Scope::Images,
         }
     }
@@ -1673,6 +1683,7 @@ impl Keymap {
     /// développer.
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
+        self.leader = Some(lead);
         for (key, action) in [
             (Key::H, Action::FocusLeft),
             (Key::ArrowLeft, Action::FocusLeft),
@@ -1706,7 +1717,8 @@ impl Keymap {
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
     /// pour l'aide. Une touche liée avec et sans Maj n'apparaît qu'une fois (« 3 », pas
-    /// « 3, Maj+3 »).
+    /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
+    /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
         let mine: Vec<&Vec<Chord>> = self
             .bindings
@@ -1718,7 +1730,12 @@ impl Keymap {
         for k in &mine {
             let unshifted: Vec<Chord> = k.iter().map(|c| Chord { shift: false, ..*c }).collect();
             let shift_variant = k.iter().any(|c| c.shift) && mine.contains(&&unshifted);
-            let label = sequence_label(k);
+            let label = match k.split_first() {
+                Some((first, rest)) if !rest.is_empty() && Some(*first) == self.leader => {
+                    format!("{} {}", t!("key-leader"), sequence_label(rest))
+                }
+                _ => sequence_label(k),
+            };
             if !shift_variant && !keys.contains(&label) {
                 keys.push(label);
             }
@@ -2217,6 +2234,17 @@ mod tests {
             "pavé numérique sous Linux"
         );
         assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ",", "."]);
+    }
+
+    #[test]
+    fn the_help_writes_leader_for_the_panel_prefix() {
+        // #175 : l'aide écrivait « Ctrl+B puis r » ; le leader est réglable, montré à part.
+        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let keys = km.keys_for(Action::Develop);
+        assert!(keys.contains(&"<leader> r".to_string()), "{keys:?}");
+        let keys = km.keys_for(Action::FocusLeft);
+        assert!(keys.contains(&"<leader> h".to_string()), "{keys:?}");
+        assert!(!keys.iter().any(|k| k.contains("Ctrl")), "{keys:?}");
     }
 
     #[test]
