@@ -96,7 +96,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Filtres** (17/10/2026) : type (tout / RAW / plates) et notes (au moins n étoiles ;
   acceptées, sans les rejetées ou rejetées ; une ou plusieurs couleurs), combinés.
   - Clavier : préfixe `f` (choix de l'utilisateur), suivi de la touche de notation
-    correspondante : `f f` type suivant, `f 1`…`f 5` au moins n étoiles, `f 0` étoiles
+    correspondante : `f f` type suivant, `f 1`…`f 5` au moins n étoiles (ou exactement,
+    ou au plus : `f =` ou le bouton ≥ / = / ≤ devant les étoiles de la barre, 26/10/2026,
+    #165), `f 0` étoiles
     indifférentes, `f p` acceptées, `f u` sans les rejetées, `f x` rejetées (la même
     séquence retire le filtre), `f 6`…`f 9`, `f °`, `f ,`, `f .` couleurs (ajouter / retirer),
     `f Échap` tout effacer. Chiffres et lettres avec ou sans Maj.

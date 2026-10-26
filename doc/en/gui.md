@@ -95,7 +95,9 @@ system one ("cold" measurements, experiments).
 - **Filters** (2026-10-17): type (all / RAW / flat) and ratings (at least n stars;
   picked, without rejected or rejected; one or more colours), combined.
   - Keyboard: prefix `f` (user's choice), followed by the matching rating key:
-    `f f` next type, `f 1`…`f 5` at least n stars, `f 0` any stars, `f p` picked,
+    `f f` next type, `f 1`…`f 5` at least n stars (or exactly, or at most: `f =` or the
+    ≥ / = / ≤ button before the stars of the bar, 2026-10-26, #165), `f 0` any stars,
+    `f p` picked,
     `f u` without rejected, `f x` rejected (the same sequence removes the filter),
     `f 6`…`f 9`, `f °`, `f ,`, `f .` colours (add / remove), `f Esc` clear everything.
     Digits and letters with or without Shift.

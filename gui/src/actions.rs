@@ -145,8 +145,10 @@ pub enum Action {
     NavPageDown,
     /// Filtre de type suivant : tout → RAW → plates → tout.
     FilterCycle,
-    /// Filtre : au moins n étoiles (0 : étoiles indifférentes).
+    /// Filtre : n étoiles, selon la comparaison choisie (0 : étoiles indifférentes).
     FilterStars(u8),
+    /// Comparaison du filtre d'étoiles suivante : au moins, exactement, au plus (#165).
+    FilterStarsOp,
     /// Filtre sur le drapeau (activer / désactiver).
     FilterFlag(FlagFilter),
     /// Filtre : ajouter ou retirer une couleur.
@@ -403,7 +405,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 167] = [
+    pub const ALL: [Action; 168] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -419,6 +421,7 @@ impl Action {
         Action::FilterStars(3),
         Action::FilterStars(4),
         Action::FilterStars(5),
+        Action::FilterStarsOp,
         Action::FilterFlag(FlagFilter::Accepted),
         Action::FilterFlag(FlagFilter::NotRejected),
         Action::FilterFlag(FlagFilter::Rejected),
@@ -617,9 +620,9 @@ impl Action {
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
-            FilterCycle | FilterStars(_) | FilterFlag(_) | FilterColor(_) | FilterClear
-            | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert | SortNext
-            | SortReverse => Group::Filters,
+            FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
+            | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
+            | SortNext | SortReverse => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -692,6 +695,7 @@ impl Action {
             Action::FilterStars(3) => "core.filter.stars.3",
             Action::FilterStars(4) => "core.filter.stars.4",
             Action::FilterStars(_) => "core.filter.stars.5",
+            Action::FilterStarsOp => "core.filter.stars.op",
             Action::FilterFlag(FlagFilter::Accepted) => "core.filter.flag.accepted",
             Action::FilterFlag(FlagFilter::NotRejected) => "core.filter.flag.not_rejected",
             Action::FilterFlag(FlagFilter::Rejected) => "core.filter.flag.rejected",
@@ -1393,6 +1397,9 @@ const FILTERS: &[Binding] = {
         (&[F, shifted(Key::Num4)], FilterStars(4)),
         (&[F, plain(Key::Num5)], FilterStars(5)),
         (&[F, shifted(Key::Num5)], FilterStars(5)),
+        // Comparaison : au moins, exactement, au plus (#165).
+        (&[F, plain(Key::Equals)], FilterStarsOp),
+        (&[F, Chord::char('=')], FilterStarsOp),
         (&[F, plain(Key::P)], FilterFlag(FlagFilter::Accepted)),
         (&[F, shifted(Key::P)], FilterFlag(FlagFilter::Accepted)),
         (&[F, plain(Key::U)], FilterFlag(FlagFilter::NotRejected)),
