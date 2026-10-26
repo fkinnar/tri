@@ -55,6 +55,26 @@ appelle `on_change` seulement quand elle change. L'interface y répond par
 - Vérifié sur macOS (17/10/2026) avec une image disque montée par `hdiutil attach` :
   apparition en moins de 2 s, disparition au `detach`.
 
+## Supports pas montés (`unmounted_devices`, `mount`, #113)
+
+Un système qui ne monte plus rien de lui-même (retour du 26/10/2026, Linux Mint : la
+carte n'apparaissait que dans « Périphériques » du gestionnaire de fichiers) : sous
+Linux, `places()` ajoute les supports branchés mais pas montés, lus par `lsblk -J -b -l`
+(`parse_lsblk`) : partitions, ou disques sans partition, avec un système de fichiers
+(ni swap, ni LUKS, ni LVM…), sur un support amovible (`RM`) ou branché à chaud
+(`HOTPLUG` : les lecteurs de cartes USB se disent souvent fixes). Les anciennes versions
+de `lsblk` écrivent booléens et nombres en texte, lus aussi. Ils deviennent des
+emplacements `PlaceKind::Device` dont le chemin est celui du périphérique
+(`/dev/sdb1`), nommés par leur volume, sinon par leur taille (« Support de 31,9 Go »).
+macOS et Windows montent tout d'eux-mêmes : rien à ajouter.
+
+`mount(device)` monte comme le gestionnaire de fichiers, sans mot de passe pour un
+support amovible : `udisksctl mount -b` (Linux ; dossier lu dans sa réponse, « Mounted
+/dev/sdb1 at /media/moi/X-T4 », sinon dans `/proc/mounts`), `diskutil mount` (macOS).
+`eject` d'un support pas monté coupe son alimentation (`udisksctl power-off`).
+`[places] auto_mount` (désactivé par défaut) : le `Monitor` monte de lui-même un
+support **qui arrive** (un support démonté exprès ensuite reste démonté).
+
 ## Éjection (`eject(volume)`)
 
 Avec l'outil du système (demandé le 17/10/2026) : `diskutil eject` (macOS) ; sous Linux,
@@ -101,7 +121,8 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
   ejectable, favorite, section }`), dans l'ordre d'affichage ; un dossier illisible
   déplié porte son erreur ;
 - **sections** (demandé le 20/10/2026 : trié, et passer le moins possible par la
-  racine) : `Section::Drives` (volumes montés), `Network` (partages réseau),
+  racine) : `Section::Devices` (supports amovibles, montés ou non, #113), `Drives`
+  (disques fixés, `[places] fixed` ; `PlaceSettings::section`), `Network` (partages réseau),
   `Personal` (dossier personnel et ses dossiers habituels), `Favorites`, puis seulement
   `System` (la racine, repliée tant qu'on ne l'ouvre pas) ; `PlaceKind::section`, et `Row::section` sur chaque ligne (les
   sous-dossiers prennent celle de leur emplacement) : l'interface dessine un titre et un

@@ -171,6 +171,9 @@ pub struct TriApp {
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
+    /// Montage en cours d'un support pas monté (#113) : périphérique, et dossier où il
+    /// est monté à venir.
+    mounting: Option<(PathBuf, Receiver<Result<PathBuf, String>>)>,
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
@@ -667,6 +670,7 @@ impl TriApp {
             update: None,
             build: tri::update::Build::current(),
             ejecting: None,
+            mounting: None,
             cache_jobs: Vec::new(),
             notice: None,
             settings: settings.engine(),
@@ -1513,6 +1517,7 @@ impl TriApp {
                     }
                     section = Some(row.section);
                     let title = match row.section {
+                        tri::places::Section::Devices => t!("folders-section-devices"),
                         tri::places::Section::Drives => t!("folders-section-drives"),
                         tri::places::Section::Network => t!("folders-section-network"),
                         tri::places::Section::Personal => t!("folders-section-personal"),
@@ -1533,14 +1538,27 @@ impl TriApp {
                         t!("folders-expand")
                     };
                     let size = ui.text_style_height(&egui::TextStyle::Body);
-                    let (rect, response) = marks::clickable(ui, size, &tip);
-                    marks::disclosure(ui.painter(), rect, row.expanded, ui.visuals().text_color());
-                    if response.clicked() {
-                        toggle = Some(i);
-                        pointed = Some(i);
+                    // Support pas monté (#113) : grisé, sans dossiers à déplier ; un clic
+                    // le monte.
+                    let device = row.kind == Some(PlaceKind::Device);
+                    if device {
+                        ui.add_space(size + ui.spacing().item_spacing.x);
+                    } else {
+                        let (rect, response) = marks::clickable(ui, size, &tip);
+                        let color = ui.visuals().text_color();
+                        marks::disclosure(ui.painter(), rect, row.expanded, color);
+                        if response.clicked() {
+                            toggle = Some(i);
+                            pointed = Some(i);
+                        }
                     }
                     let current = row.path == self.folder.dir;
-                    let label = ui.selectable_label(current, &row.name);
+                    let label = if device {
+                        ui.selectable_label(false, egui::RichText::new(&row.name).weak())
+                            .on_hover_text(t!("folders-device-tip"))
+                    } else {
+                        ui.selectable_label(current, &row.name)
+                    };
                     // Glisser-déposer : un dossier se glisse (pas un emplacement) ; tout
                     // dossier reçoit un dossier ou des images de la grille.
                     let label = if row.depth > 0 {
@@ -1573,7 +1591,7 @@ impl TriApp {
                             open = Some(row.path.clone());
                         }
                     }
-                    if label.double_clicked() {
+                    if label.double_clicked() && !device {
                         toggle = Some(i);
                     }
                     // Favori nommé ou non : son chemin au survol (plusieurs « Sources »).
@@ -1597,6 +1615,11 @@ impl TriApp {
                                 ui.close();
                             }
                         };
+                        if device {
+                            entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
+                            entry(ui, Action::FolderEject, t!("folder-menu-eject"));
+                            return;
+                        }
                         entry(ui, Action::FolderCreate, t!("folder-menu-new"));
                         if row.depth > 0 {
                             entry(ui, Action::FolderRename, t!("folder-menu-rename"));
@@ -1674,7 +1697,7 @@ impl TriApp {
                         ui.colored_label(self.gui.colors.error, t!("folders-unreadable"))
                             .on_hover_text(error);
                     }
-                    if row.kind == Some(PlaceKind::Volume) {
+                    if row.kind == Some(PlaceKind::Volume) || device {
                         let color = ui.visuals().text_color();
                         if !row.ejectable {
                             // Volume fixé ([places] fixed) : pas d'éjection, une icône
@@ -1684,8 +1707,8 @@ impl TriApp {
                             marks::drive(ui.painter(), rect, ui.visuals().weak_text_color());
                             response.on_hover_text(t!("folders-fixed-drive"));
                         } else if self.ejecting.is_none() {
-                            // Un seul déchargement à la fois.
-                            if self.offload.is_none() {
+                            // Un seul déchargement à la fois ; pas avant le montage.
+                            if self.offload.is_none() && !device {
                                 // Au survol, décharger à l'accent et éjecter en rouge :
                                 // deux petites icônes voisines à ne pas confondre (issue
                                 // n° 41).
@@ -1741,6 +1764,7 @@ impl TriApp {
             let ctx = ui.ctx().clone();
             match action {
                 Action::DevelopFolder => self.develop_folder(&ctx, Some(path)),
+                Action::FolderOpen => self.start_mount(&ctx, path),
                 Action::FolderOffload | Action::FolderEject => {
                     self.folder_drive_action(&ctx, action)
                 }
@@ -1782,7 +1806,11 @@ impl TriApp {
             }
         }
         if let Some(path) = open {
-            self.open_folder(&path);
+            if self.is_device(&path) {
+                self.start_mount(ui.ctx(), path);
+            } else {
+                self.open_folder(&path);
+            }
         }
         if eject.is_some() {
             self.eject_dialog = eject;
@@ -1931,7 +1959,7 @@ impl TriApp {
             let _ = tx.send(tri::places::eject(&target));
             repaint.request_repaint();
         });
-        self.notice = Some((t!("ejecting", name = folder_name(&volume)), false));
+        self.notice = Some((t!("ejecting", name = self.place_name(&volume)), false));
         self.ejecting = Some((volume, rx));
     }
 
@@ -2175,6 +2203,63 @@ impl TriApp {
         });
     }
 
+    /// Nom affiché de l'emplacement `path` (« X-T4 », « Support de 32 Go »), sinon le nom
+    /// du dossier.
+    fn place_name(&self, path: &Path) -> String {
+        self.tree
+            .places()
+            .iter()
+            .find(|p| p.path == path)
+            .map_or_else(|| folder_name(path), |p| p.name.clone())
+    }
+
+    /// Vrai si `path` est un support pas monté (#113).
+    fn is_device(&self, path: &Path) -> bool {
+        self.tree
+            .places()
+            .iter()
+            .any(|p| p.path == path && p.kind == PlaceKind::Device)
+    }
+
+    /// Monte le support `device` dans un fil à part (une seconde ou deux) ; une fois
+    /// monté, son dossier s'ouvre (`poll_mount`).
+    fn start_mount(&mut self, ctx: &egui::Context, device: PathBuf) {
+        if self.mounting.is_some() {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        let target = device.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(tri::places::mount(&target));
+            repaint.request_repaint();
+        });
+        self.notice = Some((t!("mounting", name = self.place_name(&device)), false));
+        self.mounting = Some((device, rx));
+    }
+
+    /// Fin d'un montage : le dossier monté s'ouvre, ou le refus du système s'affiche.
+    fn poll_mount(&mut self) {
+        let Some((device, rx)) = &self.mounting else {
+            return;
+        };
+        let Ok(result) = rx.try_recv() else {
+            return;
+        };
+        let name = self.place_name(device);
+        self.mounting = None;
+        match result {
+            Ok(dir) => {
+                self.notice = Some((t!("mounted", name = &name), false));
+                self.tree.refresh();
+                self.tree.reveal(&dir);
+                self.reveal_folder = true;
+                self.open_folder(&dir);
+            }
+            Err(e) => self.notice = Some((t!("mount-failed", name = &name, error = e), true)),
+        }
+    }
+
     /// Fin d'une éjection : message, et liste des volumes relue.
     fn poll_eject(&mut self) {
         let Some((path, rx)) = &self.ejecting else {
@@ -2183,7 +2268,7 @@ impl TriApp {
         let Ok(result) = rx.try_recv() else {
             return;
         };
-        let name = folder_name(path);
+        let name = self.place_name(path);
         // Refus (volume utilisé par une autre application, ex. un gestionnaire de
         // fichiers ouvert dessus) : proposer de réessayer, une fois l'application fermée.
         self.eject_failed = result.is_err().then(|| path.clone());
@@ -3199,6 +3284,10 @@ impl TriApp {
             Action::FolderLast => self.tree_cursor(|t| t.cursor_to_end(false)),
             Action::FolderOpen => {
                 if let Some(path) = self.tree.cursor_path() {
+                    if self.is_device(&path) {
+                        self.start_mount(ctx, path);
+                        return;
+                    }
                     if path != self.folder.dir {
                         self.open_folder(&path);
                     }
@@ -8515,6 +8604,17 @@ impl TriApp {
     fn folder_drive_action(&mut self, ctx: &egui::Context, action: Action) {
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
+        // Support pas monté (#113) : `o` le monte d'abord, `e` coupe son alimentation.
+        if row.kind == Some(PlaceKind::Device) {
+            match action {
+                Action::FolderEject => {
+                    let at = ctx.content_rect().center() - vec2(160.0, 120.0);
+                    self.eject_dialog = Some((row.path, at));
+                }
+                _ => self.start_mount(ctx, row.path),
+            }
+            return;
+        }
         let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
         // `o` sur un dossier ordinaire : « décharger ici », depuis un des supports
         // amovibles (idée de l'utilisateur, 18/10/2026).
@@ -9199,6 +9299,7 @@ impl eframe::App for TriApp {
         }
         self.watch_folder(&ctx);
         self.poll_eject();
+        self.poll_mount();
         self.poll_cache_jobs();
         self.poll_develop_batch();
         self.run_script(&ctx);
@@ -11844,6 +11945,37 @@ mod tests {
         assert!(!kept.maximized);
         let saved = crate::state::load(&dir.path().join("data"));
         assert_eq!(saved.window, Some(kept), "écrite dans l'état d'affichage");
+    }
+
+    #[test]
+    fn an_unmounted_card_shows_in_devices_and_a_click_mounts_it() {
+        // #113 : support branché mais pas monté (Linux) : grisé sous « Périphériques »,
+        // un clic le monte (ici un périphérique qui n'existe pas : le refus s'affiche).
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        let card = tri::places::Place {
+            name: "X-T4".into(),
+            path: PathBuf::from("/dev/tri-test-absent"),
+            kind: tri::places::PlaceKind::Device,
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut().set_volumes(&ctx, vec![card]);
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("folders-section-devices")).is_some());
+        h.get_by_label("X-T4").click();
+        h.run_steps(2);
+        assert!(
+            h.state().offload.is_none(),
+            "rien à décharger avant le montage"
+        );
+        let start = Instant::now();
+        while h.state().mounting.is_some() && start.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(20));
+            h.run_steps(1);
+        }
+        let (text, error) = h.state().notice.clone().expect("message");
+        assert!(error, "{text}");
+        assert!(text.contains("X-T4"), "{text}");
     }
 
     #[test]

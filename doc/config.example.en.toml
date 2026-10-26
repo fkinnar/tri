@@ -91,6 +91,9 @@ fixed = []
 # Volume monitoring (ms): a disk or card that is plugged in appears by itself in the
 # folders panel; 0: no monitoring (F5 or "Refresh").
 watch_ms = 2000
+# Mount by itself a removable device the system did not mount (Linux); otherwise it
+# shows greyed in the devices section, mounted with a click.
+auto_mount = false
 
 [develop]
 # See your developments in tri (Shift+B in full screen, then b: camera render, RAW

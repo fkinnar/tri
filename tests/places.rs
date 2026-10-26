@@ -3,7 +3,7 @@
 
 use std::fs;
 
-use tri::places::{self, PlaceKind};
+use tri::places::{self, PlaceKind, Section};
 
 #[test]
 fn subfolders_are_sorted_and_hide_dot_folders() {
@@ -184,10 +184,13 @@ fn fixed_volumes_are_not_ejectable() {
     // L'arborescence l'indique ligne par ligne, et le refuse par chemin.
     let mut tree = places::Tree::new(settings, false);
     tree.set_places(vec![work.clone(), card.clone()]);
+    // La carte sous « Périphériques », puis le disque fixé sous « Disques » (#113).
     let rows = tree.rows();
     assert_eq!(
-        rows.iter().map(|r| r.ejectable).collect::<Vec<_>>(),
-        [false, true]
+        rows.iter()
+            .map(|r| (r.ejectable, r.section))
+            .collect::<Vec<_>>(),
+        [(true, Section::Devices), (false, Section::Drives)]
     );
     assert!(!tree.can_eject(&work.path));
     assert!(tree.can_eject(&card.path));

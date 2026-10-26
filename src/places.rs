@@ -24,13 +24,20 @@ pub enum PlaceKind {
     Root,
     /// Dossier favori, choisi par l'utilisateur (voir [`favorites`]).
     Favorite,
+    /// Support amovible branché mais pas monté (Linux : [`unmounted_devices`]) ; son
+    /// chemin est celui du périphérique (`/dev/sdb1`), à monter ([`mount`]) avant d'en
+    /// lire les dossiers.
+    Device,
 }
 
 /// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
-/// disques amovibles, dossier personnel, favoris, puis seulement la racine.
+/// périphériques, disques, dossier personnel, favoris, puis seulement la racine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Section {
-    /// Volumes montés (cartes, disques, appareils).
+    /// Supports amovibles (cartes, clés, disques externes, appareils), montés ou non
+    /// (#113, comme le gestionnaire de fichiers).
+    Devices,
+    /// Disques fixés ([`PlaceSettings::fixed`]) : toujours branchés, jamais éjectés.
     Drives,
     /// Partages réseau montés.
     Network,
@@ -46,7 +53,7 @@ impl PlaceKind {
     /// Section où se range un emplacement de cette nature.
     pub fn section(self) -> Section {
         match self {
-            PlaceKind::Volume => Section::Drives,
+            PlaceKind::Volume | PlaceKind::Device => Section::Devices,
             PlaceKind::Network => Section::Network,
             PlaceKind::Home => Section::Personal,
             PlaceKind::Favorite => Section::Favorites,
@@ -86,6 +93,9 @@ pub struct PlaceSettings {
     /// Intervalle de surveillance des volumes (ms) : un disque branché ou débranché
     /// apparaît ou disparaît de lui-même (voir [`Monitor`]). 0 : pas de surveillance.
     pub watch_ms: u64,
+    /// Monter de lui-même un support amovible branché mais pas monté par le système
+    /// (Linux, #113 ; sinon, il attend un clic dans la section des périphériques).
+    pub auto_mount: bool,
 }
 
 impl Default for PlaceSettings {
@@ -95,6 +105,7 @@ impl Default for PlaceSettings {
             exclude: Vec::new(),
             fixed: Vec::new(),
             watch_ms: 2000,
+            auto_mount: false,
         }
     }
 }
@@ -106,9 +117,23 @@ impl PlaceSettings {
             || (self.hide_backups && place.kind == PlaceKind::Volume && is_backup(&place.path))
     }
 
-    /// Vrai si `place` est un volume qu'on peut proposer d'éjecter : un volume, pas fixé.
+    /// Vrai si `place` est un volume qu'on peut proposer d'éjecter : un volume, pas fixé,
+    /// ou un support pas monté (on peut couper son alimentation).
     pub fn ejectable(&self, place: &Place) -> bool {
-        place.kind == PlaceKind::Volume && !matches_any(&self.fixed, place)
+        match place.kind {
+            PlaceKind::Volume => !matches_any(&self.fixed, place),
+            PlaceKind::Device => true,
+            _ => false,
+        }
+    }
+
+    /// Section où se range `place` : un volume fixé va dans [`Section::Drives`].
+    pub fn section(&self, place: &Place) -> Section {
+        if place.kind == PlaceKind::Volume && !self.ejectable(place) {
+            Section::Drives
+        } else {
+            place.kind.section()
+        }
     }
 }
 
@@ -183,6 +208,7 @@ pub fn places() -> Vec<Place> {
         }
     }
     places.extend(network);
+    places.extend(unmounted_devices().into_iter().map(|d| d.place()));
     if let Some(home) = home_dir(os, env) {
         let user_dirs = user_dirs(
             os,
@@ -586,7 +612,29 @@ impl Monitor {
         on_change: impl Fn(Vec<Place>) + Send + 'static,
     ) -> Monitor {
         let interval = std::time::Duration::from_millis(settings.watch_ms);
-        Monitor::with_source(interval, move || places_filtered(&settings), on_change)
+        // Supports déjà vus, pour ne monter d'office qu'un support qui arrive : un
+        // support démonté exprès ensuite reste démonté.
+        let seen = std::sync::Mutex::new(HashSet::new());
+        let source = move || {
+            let places = places_filtered(&settings);
+            if !settings.auto_mount {
+                return places;
+            }
+            let mut seen = seen.lock().unwrap_or_else(|e| e.into_inner());
+            seen.retain(|p: &PathBuf| p.exists());
+            let arrived: Vec<&Place> = places
+                .iter()
+                .filter(|p| p.kind == PlaceKind::Device && seen.insert(p.path.clone()))
+                .collect();
+            if arrived.is_empty() {
+                return places;
+            }
+            for device in arrived {
+                let _ = mount(&device.path);
+            }
+            places_filtered(&settings)
+        };
+        Monitor::with_source(interval, source, on_change)
     }
 
     /// Surveillance d'une liste d'emplacements quelconque, relue par `source` toutes les
@@ -643,6 +691,13 @@ impl Drop for Monitor {
 /// refus (disque interne, fichier ouvert sur le volume), le message du système est
 /// renvoyé.
 pub fn eject(path: &Path) -> Result<(), String> {
+    // Support pas monté ([`PlaceKind::Device`]) : il n'y a qu'à couper l'alimentation.
+    if path.starts_with("/dev") {
+        return run(
+            "udisksctl",
+            &["power-off".as_ref(), "-b".as_ref(), path.as_os_str()],
+        );
+    }
     match std::env::consts::OS {
         "macos" => run("diskutil", &["eject".as_ref(), path.as_os_str()]),
         "windows" => {
@@ -678,6 +733,164 @@ pub fn eject(path: &Path) -> Result<(), String> {
             Ok(())
         }
     }
+}
+
+/// Support amovible branché mais pas monté (#113 : un système qui ne monte plus rien de
+/// lui-même ; le gestionnaire de fichiers le montre pourtant, sous « Périphériques »).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Device {
+    /// Périphérique (`/dev/sdb1`).
+    pub path: PathBuf,
+    /// Nom du volume, s'il en a un.
+    pub label: Option<String>,
+    /// Taille (octets).
+    pub size: u64,
+}
+
+impl Device {
+    /// L'emplacement à montrer : son nom, sinon sa taille (« Support de 31,9 Go »).
+    pub fn place(&self) -> Place {
+        let name = self.label.clone().unwrap_or_else(|| {
+            crate::t!(
+                "places-device",
+                size = crate::i18n::decimal(self.size as f64 / 1e9, 1)
+            )
+        });
+        Place {
+            name,
+            path: self.path.clone(),
+            kind: PlaceKind::Device,
+        }
+    }
+}
+
+/// Supports amovibles branchés mais pas montés, d'après `lsblk` (Linux ; rien ailleurs :
+/// macOS et Windows montent tout d'eux-mêmes). `lsblk` absent : rien.
+pub fn unmounted_devices() -> Vec<Device> {
+    if std::env::consts::OS != "linux" {
+        return Vec::new();
+    }
+    std::process::Command::new("lsblk")
+        .args([
+            "-J",
+            "-b",
+            "-l",
+            "-o",
+            "PATH,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,HOTPLUG,TYPE",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| parse_lsblk(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default()
+}
+
+/// Systèmes de fichiers qu'on ne monte pas pour y chercher des photos.
+const NOT_MOUNTABLE: [&str; 5] = [
+    "swap",
+    "crypto_LUKS",
+    "LVM2_member",
+    "linux_raid_member",
+    "zfs_member",
+];
+
+/// Supports pas montés d'après la sortie JSON de `lsblk` (`-J -b -l`) : partitions, ou
+/// disques sans partition (carte formatée d'un bloc), avec un système de fichiers, sur un
+/// support amovible (`RM`) ou branché à chaud (`HOTPLUG` : lecteurs de cartes USB, qui
+/// se disent souvent fixes). Les anciennes versions écrivent booléens et nombres en
+/// texte (`"1"`).
+fn parse_lsblk(json: &str) -> Vec<Device> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
+        return Vec::new();
+    };
+    let text = |d: &serde_json::Value, key: &str| {
+        d.get(key)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let flag = |d: &serde_json::Value, key: &str| match d.get(key) {
+        Some(serde_json::Value::Bool(b)) => *b,
+        Some(serde_json::Value::String(s)) => s == "1",
+        Some(serde_json::Value::Number(n)) => n.as_u64() == Some(1),
+        _ => false,
+    };
+    let size = |d: &serde_json::Value| match d.get("size") {
+        Some(serde_json::Value::Number(n)) => n.as_u64().unwrap_or(0),
+        Some(serde_json::Value::String(s)) => s.parse().unwrap_or(0),
+        _ => 0,
+    };
+    value
+        .get("blockdevices")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter(|d| matches!(text(d, "type").as_deref(), Some("part" | "disk")))
+        .filter(|d| text(d, "mountpoint").is_none())
+        .filter(|d| flag(d, "rm") || flag(d, "hotplug"))
+        .filter(|d| text(d, "fstype").is_some_and(|f| !NOT_MOUNTABLE.contains(&f.as_str())))
+        .filter_map(|d| {
+            Some(Device {
+                path: PathBuf::from(text(d, "path")?),
+                label: text(d, "label"),
+                size: size(d),
+            })
+        })
+        .collect()
+}
+
+/// Monte le support `device` (`/dev/sdb1`) comme le ferait le gestionnaire de fichiers,
+/// sans mot de passe pour un support amovible : `udisksctl mount` (Linux), `diskutil
+/// mount` (macOS). Renvoie le dossier où il est monté. Bloquant (une seconde ou deux) :
+/// hors du fil de l'interface.
+pub fn mount(device: &Path) -> Result<PathBuf, String> {
+    let program = match std::env::consts::OS {
+        "macos" => "diskutil",
+        "linux" => "udisksctl",
+        _ => return Err(crate::t!("places-mount-unsupported")),
+    };
+    let mut command = std::process::Command::new(program);
+    command.arg("mount");
+    if program == "udisksctl" {
+        command.arg("-b");
+    }
+    let output = command
+        .arg(device)
+        .output()
+        .map_err(|e| format!("{program} : {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = Some(stderr.trim())
+            .filter(|t| !t.is_empty())
+            .unwrap_or(stdout.trim());
+        return Err(format!("{program} : {message}"));
+    }
+    parse_mounted(&stdout)
+        .or_else(|| {
+            let mounts = fs::read_to_string("/proc/mounts").unwrap_or_default();
+            mount_point_of(&mounts, device)
+        })
+        .ok_or_else(|| format!("{program} : {}", stdout.trim()))
+}
+
+/// Dossier lu dans la réponse de `udisksctl mount` : « Mounted /dev/sdb1 at
+/// /media/moi/CARTE » (point final selon les versions).
+fn parse_mounted(stdout: &str) -> Option<PathBuf> {
+    let (_, at) = stdout.trim().split_once(" at ")?;
+    let at = at.strip_suffix('.').unwrap_or(at);
+    at.starts_with('/').then(|| PathBuf::from(at))
+}
+
+/// Point de montage de `device` d'après le contenu de `/proc/mounts`.
+fn mount_point_of(mounts: &str, device: &Path) -> Option<PathBuf> {
+    let wanted = device.to_string_lossy();
+    mounts.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let dev = fields.next()?;
+        let point = fields.next()?.replace("\\040", " ");
+        (dev == wanted).then(|| PathBuf::from(point))
+    })
 }
 
 /// Lance `program` avec `args` ; en cas d'échec, sa sortie d'erreur (ou standard).
@@ -928,6 +1141,11 @@ impl Tree {
         let mut tree = Tree::with_places(places_filtered(&filter), hidden);
         tree.filter = filter;
         tree
+    }
+
+    /// Remplace les réglages des emplacements (volumes fixés, masqués).
+    pub fn set_filter(&mut self, filter: PlaceSettings) {
+        self.filter = filter;
     }
 
     /// Arborescence à partir d'emplacements donnés (tests, emplacements choisis).
@@ -1182,10 +1400,10 @@ impl Tree {
         let mut rows = Vec::new();
         let mut places: Vec<&Place> = self.places.iter().collect();
         // Tri stable : l'ordre des volumes entre eux est gardé.
-        places.sort_by_key(|p| p.kind.section());
+        places.sort_by_key(|p| self.filter.section(p));
         let (before, after): (Vec<&Place>, Vec<&Place>) = places
             .into_iter()
-            .partition(|p| p.kind.section() < Section::Favorites);
+            .partition(|p| self.filter.section(p) < Section::Favorites);
         for place in before {
             self.push_place(&mut rows, place);
         }
@@ -1205,7 +1423,7 @@ impl Tree {
 
     fn push_place(&self, rows: &mut Vec<Row>, place: &Place) {
         let first = rows.len();
-        let section = place.kind.section();
+        let section = self.filter.section(place);
         self.push_rows(rows, &place.path, place.name.clone(), 0, section);
         rows[first].kind = Some(place.kind);
         rows[first].ejectable = self.filter.ejectable(place);
@@ -1325,9 +1543,9 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_lists_drives_network_home_favorites_then_root() {
+    fn the_panel_lists_devices_drives_network_home_favorites_then_root() {
         let dir = tempfile::tempdir().unwrap();
-        for d in ["home", "card", "nas", "fav"] {
+        for d in ["home", "card", "nas", "fav", "work"] {
             std::fs::create_dir(dir.path().join(d)).unwrap();
         }
         let place = |name: &str, path: PathBuf, kind| Place {
@@ -1342,23 +1560,35 @@ mod tests {
                 place("Perso", dir.path().join("home"), PlaceKind::Home),
                 place("SD", dir.path().join("card"), PlaceKind::Volume),
                 place("NAS", dir.path().join("nas"), PlaceKind::Network),
+                place("Work", dir.path().join("work"), PlaceKind::Volume),
+                place("Clé", PathBuf::from("/dev/sdb1"), PlaceKind::Device),
             ],
             false,
         );
+        // Un disque fixé va dans « Disques » ; cartes, clés montées ou non, dans
+        // « Périphériques » (#113).
+        tree.set_filter(PlaceSettings {
+            fixed: vec!["Work".into()],
+            ..PlaceSettings::default()
+        });
         tree.set_favorites(vec![dir.path().join("fav")]);
         let rows = tree.rows();
         let got: Vec<(&str, Section)> = rows.iter().map(|r| (r.name.as_str(), r.section)).collect();
         assert_eq!(
             got,
             [
-                ("SD", Section::Drives),
+                ("SD", Section::Devices),
+                ("Clé", Section::Devices),
+                ("Work", Section::Drives),
                 ("NAS", Section::Network),
                 ("Perso", Section::Personal),
                 ("fav", Section::Favorites),
                 ("Racine", Section::System),
             ]
         );
-        assert!(!rows[4].expanded, "racine repliée par défaut");
+        assert!(rows[1].ejectable, "un support pas monté s'éjecte aussi");
+        assert!(!rows[2].ejectable);
+        assert!(!rows[6].expanded, "racine repliée par défaut");
     }
 
     #[test]
@@ -1721,5 +1951,62 @@ mod tests {
     fn hidden_names() {
         assert!(is_hidden(Path::new("/a/.git")));
         assert!(!is_hidden(Path::new("/a/DCIM")));
+    }
+
+    #[test]
+    fn lsblk_gives_the_unmounted_removable_devices() {
+        // #113 : sortie de `lsblk -J -b -l` (util-linux 2.39) : la carte pas montée
+        // seulement ; ni le disque interne, ni la partition montée, ni le swap, ni le
+        // disque partitionné lui-même (sans système de fichiers).
+        let json = r#"{"blockdevices": [
+            {"path":"/dev/nvme0n1p2","label":null,"size":500000000000,"fstype":"ext4","mountpoint":"/","rm":false,"hotplug":false,"type":"part"},
+            {"path":"/dev/nvme0n1p3","label":null,"size":8000000000,"fstype":"swap","mountpoint":null,"rm":false,"hotplug":false,"type":"part"},
+            {"path":"/dev/sdb","label":null,"size":31914983424,"fstype":null,"mountpoint":null,"rm":true,"hotplug":true,"type":"disk"},
+            {"path":"/dev/sdb1","label":"X-T4","size":31910789120,"fstype":"exfat","mountpoint":null,"rm":true,"hotplug":true,"type":"part"},
+            {"path":"/dev/sdc1","label":"CLE","size":16000000000,"fstype":"vfat","mountpoint":"/media/fab/CLE","rm":true,"hotplug":true,"type":"part"},
+            {"path":"/dev/sdd1","label":"","size":64000000000,"fstype":"exfat","mountpoint":null,"rm":false,"hotplug":true,"type":"part"}
+        ]}"#;
+        let devices = parse_lsblk(json);
+        let paths: Vec<&Path> = devices.iter().map(|d| d.path.as_path()).collect();
+        assert_eq!(paths, [Path::new("/dev/sdb1"), Path::new("/dev/sdd1")]);
+        assert_eq!(devices[0].label.as_deref(), Some("X-T4"));
+        assert_eq!(devices[1].label, None, "nom vide : aucun");
+        assert_eq!(devices[1].size, 64_000_000_000);
+        // Anciennes versions : booléens et nombres en texte.
+        let old = r#"{"blockdevices": [
+            {"path":"/dev/sdb1","label":"SD","size":"1000","fstype":"vfat","mountpoint":null,"rm":"1","hotplug":"1","type":"part"}
+        ]}"#;
+        assert_eq!(parse_lsblk(old)[0].size, 1000);
+        assert!(parse_lsblk("pas du JSON").is_empty());
+    }
+
+    #[test]
+    fn a_device_without_a_name_is_shown_by_its_size() {
+        let device = Device {
+            path: PathBuf::from("/dev/sdb1"),
+            label: None,
+            size: 31_910_789_120,
+        };
+        let place = device.place();
+        assert_eq!(place.kind, PlaceKind::Device);
+        assert!(place.name.contains("31"), "{}", place.name);
+    }
+
+    #[test]
+    fn the_mount_point_is_read_from_udisksctl_or_proc_mounts() {
+        assert_eq!(
+            parse_mounted("Mounted /dev/sdb1 at /media/fab/X-T4\n"),
+            Some(PathBuf::from("/media/fab/X-T4"))
+        );
+        assert_eq!(
+            parse_mounted("Mounted /dev/sdb1 at /media/fab/MA CARTE."),
+            Some(PathBuf::from("/media/fab/MA CARTE"))
+        );
+        assert_eq!(parse_mounted("rien"), None);
+        let mounts = "/dev/sda1 / ext4 rw 0 0\n/dev/sdb1 /media/fab/MA\\040CARTE exfat rw 0 0\n";
+        assert_eq!(
+            mount_point_of(mounts, Path::new("/dev/sdb1")),
+            Some(PathBuf::from("/media/fab/MA CARTE"))
+        );
     }
 }
