@@ -85,9 +85,10 @@ pub enum Level {
     Sharpness,
     /// Empreinte de regroupement ([`crate::similarity::Signature`]). Entrée binaire.
     Similarity,
-    /// Image développée par un logiciel externe (darktable, [`crate::develop`]), à la taille
-    /// de l'aperçu standard : le JPEG du logiciel, rangé tel quel.
-    Developed,
+    /// Image développée par un logiciel externe ([`crate::develop`]), à la taille de
+    /// l'aperçu standard : le JPEG du logiciel, rangé tel quel. Un niveau par logiciel :
+    /// une image développée dans deux logiciels a deux rendus.
+    Developed(crate::develop::Engine),
 }
 
 impl Level {
@@ -101,7 +102,7 @@ impl Level {
         Level::Exposure,
         Level::Sharpness,
         Level::Similarity,
-        Level::Developed,
+        Level::Developed(crate::develop::Engine::Darktable),
     ];
 
     /// Vrai pour les niveaux qui sont des images (JPEG) ; faux pour les analyses
@@ -120,7 +121,8 @@ impl Level {
             Self::Exposure => "exposure",
             Self::Sharpness => "sharpness",
             Self::Similarity => "similarity",
-            Self::Developed => "developed",
+            // darktable garde le nom d'avant les autres logiciels : son cache reste valable.
+            Self::Developed(crate::develop::Engine::Darktable) => "developed",
         }
     }
 }

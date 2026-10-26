@@ -33,12 +33,13 @@ impl Source {
 }
 
 /// Niveau du 1:1 pour une source : le JPEG embarqué à sa taille d'origine, ou le rendu RAW
-/// complet. Pour une image plate, l'image elle-même.
-pub fn zoom_level(kind: MediaKind, source: Source) -> Level {
+/// complet. Pour une image plate, l'image elle-même. `developed` : le niveau développé de
+/// l'image (celui de son logiciel).
+pub fn zoom_level(kind: MediaKind, source: Source, developed: Level) -> Level {
     match (kind, source) {
         (MediaKind::Raw, Source::Embedded) => Level::EmbeddedFull,
-        // Pas de 1:1 développé (darktable rend à la taille de l'aperçu) : on zoome dedans.
-        (_, Source::Developed) => Level::Developed,
+        // Pas de 1:1 développé (le logiciel rend à la taille de l'aperçu) : on zoome dedans.
+        (_, Source::Developed) => developed,
         _ => Level::Full,
     }
 }
@@ -50,23 +51,22 @@ pub fn pick(
     kind: MediaKind,
     preferred: Source,
     zoomed: bool,
+    developed: Level,
     have: impl Fn(Level) -> bool,
 ) -> Option<Level> {
-    let zoom = zoom_level(kind, preferred);
+    let zoom = zoom_level(kind, preferred, developed);
     if zoomed && have(zoom) {
         return Some(zoom);
     }
     let order: &[Level] = match (kind, preferred) {
         // Développé : en attendant (ou sans développement), le rendu RAW, puis le boîtier.
         (MediaKind::Raw, Source::Developed) => &[
-            Level::Developed,
+            developed,
             Level::Standard,
             Level::Embedded,
             Level::Thumbnail,
         ],
-        (MediaKind::Flat, Source::Developed) => {
-            &[Level::Developed, Level::Standard, Level::Thumbnail]
-        }
+        (MediaKind::Flat, Source::Developed) => &[developed, Level::Standard, Level::Thumbnail],
         (MediaKind::Flat, _) => &[Level::Standard, Level::Thumbnail],
         (MediaKind::Raw, Source::Embedded) => &[Level::Embedded, Level::Standard, Level::Thumbnail],
         (MediaKind::Raw, Source::Raw) => &[Level::Standard, Level::Embedded, Level::Thumbnail],
@@ -84,7 +84,7 @@ pub fn label(kind: MediaKind, level: Level) -> String {
         (MediaKind::Raw, Level::EmbeddedFull) => t!("shown-embedded-full"),
         (MediaKind::Flat, Level::Full) => t!("shown-image-full"),
         (_, Level::Exposure | Level::Sharpness | Level::Similarity) => t!("shown-exposure"),
-        (_, Level::Developed) => t!("shown-developed"),
+        (_, Level::Developed(engine)) => t!("shown-developed", engine = engine.name()),
         (MediaKind::Flat, _) => t!("shown-image"),
     }
 }
@@ -181,6 +181,9 @@ fn origin(r: Rect) -> Pos2 {
 mod tests {
     use super::*;
 
+    /// Niveau développé de darktable.
+    const DT: Level = Level::Developed(tri::develop::Engine::Darktable);
+
     fn have(levels: &[Level]) -> impl Fn(Level) -> bool + '_ {
         move |l| levels.contains(&l)
     }
@@ -190,15 +193,15 @@ mod tests {
         use Level::*;
         let all = [Thumbnail, Embedded, Standard, Full];
         assert_eq!(
-            pick(MediaKind::Raw, Source::Embedded, false, have(&all)),
+            pick(MediaKind::Raw, Source::Embedded, false, DT, have(&all)),
             Some(Embedded)
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Raw, false, have(&all)),
+            pick(MediaKind::Raw, Source::Raw, false, DT, have(&all)),
             Some(Standard)
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Raw, true, have(&all)),
+            pick(MediaKind::Raw, Source::Raw, true, DT, have(&all)),
             Some(Full)
         );
         assert_eq!(
@@ -206,6 +209,7 @@ mod tests {
                 MediaKind::Raw,
                 Source::Embedded,
                 true,
+                DT,
                 have(&[Embedded, EmbeddedFull, Full])
             ),
             Some(EmbeddedFull),
@@ -221,6 +225,7 @@ mod tests {
                 MediaKind::Raw,
                 Source::Raw,
                 false,
+                DT,
                 have(&[Thumbnail, Embedded])
             ),
             Some(Embedded),
@@ -231,6 +236,7 @@ mod tests {
                 MediaKind::Raw,
                 Source::Embedded,
                 true,
+                DT,
                 have(&[Thumbnail, Standard, Full])
             ),
             Some(Standard),
@@ -241,17 +247,24 @@ mod tests {
                 MediaKind::Raw,
                 Source::Raw,
                 true,
+                DT,
                 have(&[Embedded, Standard])
             ),
             Some(Standard),
             "RAW 100 % pas encore prêt : rendu RAW ajusté"
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Embedded, false, have(&[Thumbnail])),
+            pick(
+                MediaKind::Raw,
+                Source::Embedded,
+                false,
+                DT,
+                have(&[Thumbnail])
+            ),
             Some(Thumbnail)
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Embedded, false, have(&[])),
+            pick(MediaKind::Raw, Source::Embedded, false, DT, have(&[])),
             None
         );
     }
@@ -265,6 +278,7 @@ mod tests {
                     MediaKind::Flat,
                     source,
                     false,
+                    DT,
                     have(&[Thumbnail, Embedded, Standard])
                 ),
                 Some(Standard)
@@ -283,24 +297,24 @@ mod tests {
             "honnête"
         );
         assert_eq!(
-            zoom_level(MediaKind::Raw, Source::Embedded),
+            zoom_level(MediaKind::Raw, Source::Embedded, DT),
             Level::EmbeddedFull
         );
-        assert_eq!(zoom_level(MediaKind::Raw, Source::Raw), Level::Full);
-        assert_eq!(zoom_level(MediaKind::Flat, Source::Embedded), Level::Full);
+        assert_eq!(zoom_level(MediaKind::Raw, Source::Raw, DT), Level::Full);
         assert_eq!(
-            zoom_level(MediaKind::Raw, Source::Developed),
-            Level::Developed
+            zoom_level(MediaKind::Flat, Source::Embedded, DT),
+            Level::Full
         );
+        assert_eq!(zoom_level(MediaKind::Raw, Source::Developed, DT), DT);
         // Développé pas encore prêt : le rendu RAW, puis le boîtier.
         assert_eq!(
-            pick(MediaKind::Raw, Source::Developed, false, |l| l
+            pick(MediaKind::Raw, Source::Developed, false, DT, |l| l
                 == Level::Embedded),
             Some(Level::Embedded)
         );
         assert_eq!(
-            pick(MediaKind::Raw, Source::Developed, false, |_| true),
-            Some(Level::Developed)
+            pick(MediaKind::Raw, Source::Developed, false, DT, |_| true),
+            Some(DT)
         );
         assert_eq!(Source::Raw.next(true), Source::Developed);
         assert_eq!(Source::Raw.next(false), Source::Embedded);

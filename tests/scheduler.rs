@@ -659,7 +659,7 @@ fn moving_focus_drops_requests_that_are_no_longer_near() {
     assert!(fake.order(Level::Standard).is_empty());
     assert!(fake.order(Level::EmbeddedFull).is_empty());
     let mut gone = dropped(&events, generation);
-    gone.sort_by_key(|(i, l)| (*i, *l as u8));
+    gone.sort_by_key(|(i, l)| (*i, Level::ALL.iter().position(|a| a == l)));
     assert_eq!(
         gone,
         [
@@ -763,7 +763,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings,
-            darktable: None,
+            developers: tri::develop::Developers::none(),
         };
         let scheduler = Scheduler::new(
             producer,
@@ -833,7 +833,7 @@ fn real_previews_fill_the_cache_and_are_reused() {
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings,
-            darktable: None,
+            developers: tri::develop::Developers::none(),
         };
         let scheduler = Scheduler::new(
             producer,

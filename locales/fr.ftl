@@ -245,7 +245,8 @@ send-unavailable = { $name } n'est pas disponible sur cette machine
 send-refused = { $name } refuse ces fichiers
 
 ## Rendu par un logiciel de développement
-develop-none = pas de développement darktable pour cette image
+develop-none = pas de développement pour cette image
+develop-unknown-engine = logiciel de développement inconnu : « { $value } » (auto, darktable)
 develop-unavailable = darktable introuvable (réglage [develop] darktable)
 develop-failed = darktable : { $error }
 export-bad-bits = préréglage d'export « { $profile } » : { $bits } bits impossible en { $format }

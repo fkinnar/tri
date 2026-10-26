@@ -15,6 +15,16 @@ Comme les autres plugins (superpositions, envoi), le code est en Rust et compil�
 tomber `tri`, et sa licence reste la sienne. RawTherapee (`rawtherapee-cli`, profils
 `.pp3`) et ART suivraient le même modèle.
 
+**Plusieurs logiciels** (26/10/2026, pour RapidRAW et les suivants) : chaque logiciel
+est un `Engine` (identifiant, nom, sidecar qui porte son développement) et un plugin du
+trait `Developer` (`render`) ; `Developers` est la liste de ceux trouvés sur la machine
+(`Developers::find`, fichiers de travail sous `<cache>/develop`). Une image peut avoir
+été développée dans plusieurs : `resolve` choisit celui du réglage `[develop] default`
+(liste déroulante dans la fenêtre de réglages : « auto » et les logiciels installés)
+s'il a développé l'image, sinon le développement le plus récent (`"auto"`, défaut). Choix
+de l'utilisateur : quelqu'un qui travaille dans darktable et essaie un autre logiciel
+règle `default = "darktable"`, sans que le plus récent passe devant.
+
 - `find_darktable(réglage)` : `[develop] darktable` = `"auto"` (le `PATH`, puis les
   emplacements habituels : `/Applications/darktable.app/…` sur macOS, `/usr/bin` sous
   Linux, `Program Files` sous Windows), un chemin, ou `""` (jamais). Sous Linux, s'il
@@ -48,7 +58,8 @@ quelle que soit la configuration ; un test le vérifie sur un vrai rendu (sur un
 
 ## Cache et calcul
 
-Niveau `Level::Developed` : le JPEG de darktable, à la taille de l'aperçu standard,
+Niveau `Level::Developed(engine)`, un par logiciel (dossier `developed` pour darktable,
+inchangé : son cache reste valable) : le JPEG du logiciel, à la taille de l'aperçu standard,
 rangé **tel quel** dans le cache. Sa clé comprend l'empreinte du sidecar (taille, date) :
 modifier le développement dans darktable refait le rendu. Dans l'interface, un développé
 déjà affiché dont le sidecar a changé (surveillance du dossier, ou au moment de `b` /

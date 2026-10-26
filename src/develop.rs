@@ -12,8 +12,186 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+
+/// Logiciel de développement dont `tri` sait afficher le rendu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Engine {
+    /// darktable (`darktable-cli`, historique du sidecar `IMAGE.RAF.xmp`).
+    Darktable,
+}
+
+impl Engine {
+    /// Tous les logiciels, dans l'ordre des listes.
+    pub const ALL: [Engine; 1] = [Engine::Darktable];
+
+    /// Identifiant (configuration, `--level`, clés de cache).
+    pub fn id(self) -> &'static str {
+        match self {
+            Engine::Darktable => "darktable",
+        }
+    }
+
+    /// Nom affiché.
+    pub fn name(self) -> &'static str {
+        match self {
+            Engine::Darktable => "darktable",
+        }
+    }
+
+    /// Logiciel d'identifiant `id`.
+    pub fn from_id(id: &str) -> Option<Engine> {
+        Engine::ALL.into_iter().find(|e| e.id() == id)
+    }
+
+    /// Sidecar de `image` qui porte un vrai développement de ce logiciel, s'il existe.
+    pub fn sidecar(self, image: &Path) -> Option<PathBuf> {
+        match self {
+            Engine::Darktable => darktable_sidecar(image),
+        }
+    }
+}
+
+/// Logiciel préféré pour le rendu développé d'une image (`[develop] default`) : `"auto"`
+/// (le développement le plus récent), ou un logiciel, gardé tant qu'il a développé
+/// l'image (choix de l'utilisateur, 26/10/2026 : on utilise darktable mais on essaie
+/// RapidRAW, sans que le plus récent passe devant).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Preference {
+    /// Le sidecar modifié en dernier.
+    #[default]
+    Auto,
+    /// Ce logiciel s'il a développé l'image, sinon un autre qui l'a fait.
+    Engine(Engine),
+}
+
+impl Preference {
+    /// Identifiant dans la configuration (`"auto"`, `"darktable"`…).
+    pub fn id(self) -> &'static str {
+        match self {
+            Preference::Auto => "auto",
+            Preference::Engine(e) => e.id(),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Preference {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(d)?;
+        match text.trim() {
+            "auto" => Ok(Preference::Auto),
+            id => Engine::from_id(id).map(Preference::Engine).ok_or_else(|| {
+                serde::de::Error::custom(crate::t!("develop-unknown-engine", value = id))
+            }),
+        }
+    }
+}
+
+/// Logiciel dont le rendu développé de `image` s'affiche, parmi ceux de `available`
+/// (installés) : celui de `preference` s'il a développé l'image, sinon le développement
+/// le plus récent. `None` : aucun développement (l'image garde le rendu LibRaw).
+pub fn resolve(image: &Path, preference: Preference, available: &[Engine]) -> Option<Engine> {
+    let developed: Vec<(Engine, SystemTime)> = available
+        .iter()
+        .filter_map(|&e| {
+            let sidecar = e.sidecar(image)?;
+            let modified = std::fs::metadata(sidecar).and_then(|m| m.modified()).ok()?;
+            Some((e, modified))
+        })
+        .collect();
+    if let Preference::Engine(wanted) = preference
+        && developed.iter().any(|(e, _)| *e == wanted)
+    {
+        return Some(wanted);
+    }
+    developed
+        .into_iter()
+        .max_by_key(|(_, t)| *t)
+        .map(|(e, _)| e)
+}
+
+/// Un logiciel de développement prêt à rendre (plugin : darktable, puis RapidRAW,
+/// RawTherapee…). Le programme externe tourne dans un processus à part.
+pub trait Developer: Send + Sync + std::fmt::Debug {
+    /// Le logiciel.
+    fn engine(&self) -> Engine;
+
+    /// Développe `image` d'après son `sidecar`, dans `out` (JPEG), le côté long ramené à
+    /// `side` ; `cancel` arrête le programme. Le sidecar n'est jamais écrit.
+    fn render(
+        &self,
+        image: &Path,
+        sidecar: &Path,
+        out: &Path,
+        side: u32,
+        cancel: &AtomicBool,
+    ) -> Result<(), DevelopError>;
+}
+
+/// Les logiciels de développement trouvés sur la machine, et la préférence.
+#[derive(Clone, Debug, Default)]
+pub struct Developers {
+    tools: Vec<Arc<dyn Developer>>,
+    /// Logiciel préféré (`[develop] default`).
+    pub preference: Preference,
+    /// Dossier des fichiers de travail (rendus temporaires), dans le cache de `tri`.
+    pub work_dir: PathBuf,
+}
+
+impl Developers {
+    /// Aucun logiciel (rendus développés désactivés).
+    pub fn none() -> Developers {
+        Developers::default()
+    }
+
+    /// Les logiciels trouvés d'après `settings`, leurs fichiers de travail sous `work_dir`
+    /// (dans le cache de `tri` : jamais la configuration de l'utilisateur).
+    pub fn find(settings: &DevelopSettings, work_dir: &Path, high_quality: bool) -> Developers {
+        let mut tools: Vec<Arc<dyn Developer>> = Vec::new();
+        if let Some(cli) = find_darktable(&settings.darktable) {
+            tools.push(Arc::new(Darktable {
+                cli,
+                config_dir: work_dir.join("darktable"),
+                high_quality,
+            }));
+        }
+        Developers {
+            tools,
+            preference: settings.default,
+            work_dir: work_dir.to_path_buf(),
+        }
+    }
+
+    /// Ajoute un logiciel (tests, logiciels choisis).
+    pub fn with(mut self, tool: Arc<dyn Developer>) -> Developers {
+        self.tools.push(tool);
+        self
+    }
+
+    /// Logiciels installés, dans l'ordre de [`Engine::ALL`].
+    pub fn engines(&self) -> Vec<Engine> {
+        let mut engines: Vec<Engine> = self.tools.iter().map(|t| t.engine()).collect();
+        engines.sort();
+        engines
+    }
+
+    /// Vrai si aucun logiciel n'est installé.
+    pub fn is_empty(&self) -> bool {
+        self.tools.is_empty()
+    }
+
+    /// Le logiciel `engine`, s'il est installé.
+    pub fn get(&self, engine: Engine) -> Option<&Arc<dyn Developer>> {
+        self.tools.iter().find(|t| t.engine() == engine)
+    }
+
+    /// Logiciel du rendu développé de `image` (voir [`resolve`]).
+    pub fn resolve(&self, image: &Path) -> Option<Engine> {
+        resolve(image, self.preference, &self.engines())
+    }
+}
 
 /// Réglages (section `[develop]` du fichier de configuration).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -26,6 +204,9 @@ pub struct DevelopSettings {
     pub darktable: String,
     /// Rendu darktable en haute qualité (`--hq`) : un peu plus fidèle, un peu plus lent.
     pub high_quality: bool,
+    /// Logiciel préféré quand une image a été développée dans plusieurs : `"auto"` (le
+    /// développement le plus récent) ou un logiciel (`"darktable"`).
+    pub default: Preference,
 }
 
 impl Default for DevelopSettings {
@@ -33,6 +214,7 @@ impl Default for DevelopSettings {
         Self {
             darktable: "auto".into(),
             high_quality: false,
+            default: Preference::Auto,
         }
     }
 }
@@ -371,11 +553,13 @@ pub struct Darktable {
     pub high_quality: bool,
 }
 
-impl Darktable {
-    /// Développe `image` d'après son `sidecar`, dans `out` (JPEG), le côté long ramené à
-    /// `side`. Bibliothèque en mémoire, sidecars jamais écrits ; `cancel` arrête le
-    /// programme.
-    pub fn render(
+impl Developer for Darktable {
+    fn engine(&self) -> Engine {
+        Engine::Darktable
+    }
+
+    /// Bibliothèque en mémoire, sidecars jamais écrits.
+    fn render(
         &self,
         image: &Path,
         sidecar: &Path,
@@ -532,6 +716,44 @@ mod tests {
     }
 
     #[test]
+    fn the_developed_engine_follows_the_preference_then_the_latest() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0001.RAF");
+        std::fs::write(&image, b"raw").unwrap();
+        let all = [Engine::Darktable];
+        // Sans développement : rien (l'image garde le rendu LibRaw).
+        assert_eq!(resolve(&image, Preference::Auto, &all), None);
+        std::fs::write(
+            dir.path().join("DSCF0001.RAF.xmp"),
+            r#"<rdf:Description darktable:history_end="3"/>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            resolve(&image, Preference::Auto, &all),
+            Some(Engine::Darktable)
+        );
+        assert_eq!(
+            resolve(&image, Preference::Engine(Engine::Darktable), &all),
+            Some(Engine::Darktable)
+        );
+        // Logiciel pas installé : son développement ne compte pas.
+        assert_eq!(resolve(&image, Preference::Auto, &[]), None);
+    }
+
+    #[test]
+    fn the_preference_is_read_from_the_configuration() {
+        let read = |text: &str| crate::settings::parse::<DevelopSettings>(text).map(|s| s.default);
+        assert_eq!(read("").unwrap(), Preference::Auto);
+        assert_eq!(
+            read("default = \"darktable\"").unwrap(),
+            Preference::Engine(Engine::Darktable)
+        );
+        assert!(read("default = \"photoshop\"").is_err());
+        assert_eq!(Preference::Engine(Engine::Darktable).id(), "darktable");
+        assert_eq!(Engine::from_id("darktable"), Some(Engine::Darktable));
+    }
+
+    #[test]
     fn darktable_is_found_or_cleanly_absent() {
         assert_eq!(find_darktable(""), None, "désactivé");
         assert_eq!(find_darktable("/nulle/part/darktable-cli"), None);
@@ -590,8 +812,7 @@ mod tests {
             config_dir: dir.path().join("cfg"),
             high_quality: false,
         };
-        dt.render(&raw, &sidecar, &out, 800, &AtomicBool::new(false))
-            .unwrap();
+        Developer::render(&dt, &raw, &sidecar, &out, 800, &AtomicBool::new(false)).unwrap();
         assert_eq!(std::fs::read(&sidecar).unwrap(), before, "sidecar intact");
         let (w, h) = image::image_dimensions(&out).unwrap();
         assert_eq!(w.max(h), 800);

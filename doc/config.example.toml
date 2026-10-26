@@ -104,6 +104,10 @@ watch_ms = 2000
 darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false
+# Logiciel dont le rendu développé s'affiche quand une image a été développée dans
+# plusieurs : "auto" (le développement le plus récent) ou un logiciel ("darktable"),
+# gardé tant qu'il a développé l'image.
+default = "auto"
 
 [export]
 # Export d'images développées par darktable (Ctrl+E), avec un préréglage par usage. Rien

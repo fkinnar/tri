@@ -142,8 +142,13 @@ fn parse_level(name: &str) -> Option<Level> {
         "exposure" => Some(Level::Exposure),
         "sharpness" => Some(Level::Sharpness),
         "similarity" => Some(Level::Similarity),
-        "developed" => Some(Level::Developed),
-        _ => None,
+        // `developed` : darktable, comme avant les autres logiciels ; sinon
+        // `developed-<logiciel>`.
+        "developed" => Some(Level::Developed(tri::develop::Engine::Darktable)),
+        name => name
+            .strip_prefix("developed-")
+            .and_then(tri::develop::Engine::from_id)
+            .map(Level::Developed),
     }
 }
 
@@ -368,7 +373,7 @@ fn start_previews(settings: &EngineSettings, dir: &Path) -> AnyResult<Previews> 
         cache: cache.clone(),
         settings: preview,
         // Rendus développés : dans l'interface seulement, à la demande.
-        darktable: None,
+        developers: tri::develop::Developers::none(),
     };
     let scheduler = Scheduler::new(producer, config, move |e| {
         let _ = tx.send(e);
