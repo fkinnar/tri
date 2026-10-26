@@ -1446,6 +1446,8 @@ impl Profile {
 #[derive(Clone, Debug)]
 pub struct Keymap {
     bindings: Vec<(Vec<Chord>, Action)>,
+    /// Préfixe des panneaux ([`Keymap::with_leader`]) : l'aide écrit `<leader>` à sa place.
+    leader: Option<Chord>,
     /// Panneau qui a le clavier ([`Keymap::set_focus`]).
     focus: Scope,
 }
@@ -1480,6 +1482,7 @@ impl Keymap {
         }
         Keymap {
             bindings,
+            leader: None,
             focus: Scope::Images,
         }
     }
@@ -1673,6 +1676,7 @@ impl Keymap {
     /// développer.
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
+        self.leader = Some(lead);
         for (key, action) in [
             (Key::H, Action::FocusLeft),
             (Key::ArrowLeft, Action::FocusLeft),
@@ -1706,7 +1710,8 @@ impl Keymap {
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
     /// pour l'aide. Une touche liée avec et sans Maj n'apparaît qu'une fois (« 3 », pas
-    /// « 3, Maj+3 »).
+    /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
+    /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
         let mine: Vec<&Vec<Chord>> = self
             .bindings
@@ -1718,7 +1723,12 @@ impl Keymap {
         for k in &mine {
             let unshifted: Vec<Chord> = k.iter().map(|c| Chord { shift: false, ..*c }).collect();
             let shift_variant = k.iter().any(|c| c.shift) && mine.contains(&&unshifted);
-            let label = sequence_label(k);
+            let label = match k.split_first() {
+                Some((first, rest)) if !rest.is_empty() && Some(*first) == self.leader => {
+                    format!("{} {}", t!("key-leader"), sequence_label(rest))
+                }
+                _ => sequence_label(k),
+            };
             if !shift_variant && !keys.contains(&label) {
                 keys.push(label);
             }
@@ -2217,6 +2227,17 @@ mod tests {
             "pavé numérique sous Linux"
         );
         assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ",", "."]);
+    }
+
+    #[test]
+    fn the_help_writes_leader_for_the_panel_prefix() {
+        // #175 : l'aide écrivait « Ctrl+B puis r » ; le leader est réglable, montré à part.
+        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let keys = km.keys_for(Action::Develop);
+        assert!(keys.contains(&"<leader> r".to_string()), "{keys:?}");
+        let keys = km.keys_for(Action::FocusLeft);
+        assert!(keys.contains(&"<leader> h".to_string()), "{keys:?}");
+        assert!(!keys.iter().any(|k| k.contains("Ctrl")), "{keys:?}");
     }
 
     #[test]
