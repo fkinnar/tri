@@ -855,6 +855,11 @@ ne complète aucune séquence, elle agit seule (`g` puis `j` : ligne du dessous)
 raccourci n'est à la fois une touche seule et le début d'une séquence (vérifié par test) :
 pas besoin d'attendre l'expiration pour décider.
 
+**Touche tenue** (26/10/2026, #160) : seules les actions faites pour se répéter suivent
+la répétition du clavier (déplacements, défilement, zoom, panneaux, recadrage, sévérité
+du flou : `Action::repeats`) ; les autres ne partent qu'une fois par appui (`e` tenu
+ouvrait l'éditeur en boucle sous Windows).
+
 **Déplacement dans une image zoomée** : Maj + flèches ou Maj + hjkl, d'une fraction de la
 vue par appui (`[gui.view] pan_step`, 0,2), touche maintenue possible ; sans effet hors
 zoom.
