@@ -159,8 +159,9 @@ aussi dans la barre des filtres (liste à droite, `f d` pour le suivant), retenu
 session à l'autre : `embedded` (JPEG boîtier, défaut), `latest` (le développement le plus
 récent de chaque image, `develop::resolve` sans préférence), `darktable` / `rapidraw`
 (toujours ce logiciel), `libraw` (rendu RAW). La liste ne propose que les logiciels
-installés. Une vignette n'a que **deux états** : JPEG boîtier, ou « DEV » (pastille sous
-la vignette, son infobulle nomme le logiciel ou LibRaw). Un RAW sans le développement voulu
+installés. Une vignette n'a que **deux états** : JPEG boîtier, ou développée (pastille sous
+la vignette au nom du logiciel, ou « LibRaw » ; « DEV » au début, retour du 26/10/2026 : ne
+disait rien). Un RAW sans le développement voulu
 montre son **rendu LibRaw** : dès que la grille montre les rendus, les rendus LibRaw passent
 en fond pour tout le dossier (`Scheduler::set_raw_previews`, une tâche de fond de plus). Un
 développement pas encore rendu : en fond, un lot comme `Ctrl+Maj+B` (`[gui.grid] develop =

@@ -1,6 +1,6 @@
 //! Rendu montré dans la grille (#114, choix de l'utilisateur du 26/10/2026). Au
 //! déchargement et au tri, le JPEG boîtier suffit ; après le développement, on veut voir
-//! les images développées. Une vignette n'a que deux états : JPEG boîtier, ou « DEV » (le
+//! les images développées. Une vignette n'a que deux états : JPEG boîtier, ou développée (le
 //! développement du logiciel choisi, sinon le rendu LibRaw).
 
 use std::path::Path;
