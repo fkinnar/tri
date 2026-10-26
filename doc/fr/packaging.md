@@ -20,7 +20,7 @@ Prérequis : ceux de la compilation
 ## Builds de nuit
 
 Décidé le 22/10/2026 : tant qu'on est en alpha, la CI (`.github/workflows/ci.yml`) tourne
-aussi **chaque nuit** (2 h UTC) si `main` a changé depuis la dernière (le tag `nightly`
+aussi **chaque nuit** (1 h 17 UTC, pas à l’heure pile : GitHub y retarde les tâches planifiées de plusieurs heures) si `main` a changé depuis la dernière (le tag `nightly`
 est comparé au commit courant) : tests sur les trois systèmes, paquets, puis la
 **Release `nightly`** (préversion) remplacée par les paquets du jour, avec les derniers
 commits en notes. Son tag n'est pas un numéro de version : la recherche de mise à jour

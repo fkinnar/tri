@@ -18,7 +18,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 2 * * *" # 2 h UTC
+    - cron: "17 1 * * *" # 1 h 17 UTC : pas à l’heure pile, où GitHub retarde les tâches planifiées
 
 # Un nouvel envoi sur une PR annule la vérification précédente de la même PR.
 concurrency:
