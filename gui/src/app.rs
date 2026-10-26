@@ -2751,7 +2751,7 @@ impl TriApp {
         // part, avec un seuil recalculé sur elles seules, elles se coupaient (#163 : 11
         // photos en 1 + 10) ; le seuil du dossier reste celui de tout le dossier.
         let ranges = if self.stack_only.is_some() {
-            vec![0..self.files.len()]
+            std::iter::once(0..self.files.len()).collect()
         } else {
             let links = tri::similarity::distances(&signatures, s.shape_weight);
             self.group_centre = tri::similarity::suggested_threshold(&links, s);
