@@ -56,9 +56,12 @@ version 1.6: `rapidraw export <image> --output <file> --format jpeg --quality 95
 applies by itself the settings of the **`IMAGE.RAF.rrdata`** sidecar next to the image
 (`rapidraw_sidecar`; its virtual copies `IMAGE.RAF.<id>.rrdata` are not read). It exports
 at full size, with no size option: `tri` then shrinks to the standard preview side
-(`shrink`). Read in its source code: the export **refuses to run while RapidRAW's
-interface is open** (single instance); the message says so plainly ("close it and try
-again").
+(`shrink`). **RapidRAW's interface open**: the export without interface still runs (it
+skips the single instance), but rendered an **all-black image** without any error (test of
+2026-10-26). `shrink` refuses an image with no pixel above 0 (sensor noise is enough to go
+above 0 on a real photo): nothing enters the cache, and the message says so plainly ("close
+it and try again"). Should a future version return the "already running" refusal, it is
+translated the same way.
 
 `find_rapidraw(setting)`: `[develop] rapidraw` = `"auto"` (`rapidraw` / `RapidRAW` in the
 `PATH`, `/usr/bin` of the `.deb` package, `RapidRAW.app` on macOS, `Program Files` on

@@ -56,9 +56,13 @@ la version 1.6 : `rapidraw export <image> --output <fichier> --format jpeg --qua
 qui applique d'elle-même les réglages du sidecar **`IMAGE.RAF.rrdata`** posé à côté de
 l'image (`rapidraw_sidecar` ; ses copies virtuelles `IMAGE.RAF.<id>.rrdata` ne sont
 pas lues). Elle exporte à pleine taille, sans option de taille : `tri` réduit ensuite
-au côté de l'aperçu standard (`shrink`). Lu dans son code source : l'export **refuse de
-tourner pendant que l'interface de RapidRAW est ouverte** (instance unique) ; le
-message le dit en clair (« fermez-le puis recommencez »).
+au côté de l'aperçu standard (`shrink`). **Interface de RapidRAW ouverte** : l'export
+sans interface tourne quand même (il ne passe pas par l'instance unique), mais a rendu
+une **image toute noire** sans erreur (essai du 26/10/2026). `shrink` refuse une image
+dont aucun pixel ne dépasse 0 (le bruit du capteur suffit à dépasser 0 sur une vraie
+photo) : rien n'entre dans le cache, et le message le dit en clair (« fermez-la puis
+recommencez »). Si une version future renvoie le refus « already running », il est
+traduit de même.
 
 `find_rapidraw(réglage)` : `[develop] rapidraw` = `"auto"` (`rapidraw` / `RapidRAW`
 dans le `PATH`, `/usr/bin` du paquet `.deb`, `RapidRAW.app` sur macOS, `Program Files`

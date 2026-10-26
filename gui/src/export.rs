@@ -596,11 +596,12 @@ impl Job {
             return None;
         }
         let handle = self.handle.take()?;
-        Some(
-            handle
-                .join()
-                .unwrap_or_else(|_| Err(DevelopError::Failed("export".into()))),
-        )
+        Some(handle.join().unwrap_or_else(|_| {
+            Err(DevelopError::Failed(
+                tri::develop::Engine::Darktable,
+                "export".into(),
+            ))
+        }))
     }
 }
 

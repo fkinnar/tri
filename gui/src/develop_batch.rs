@@ -16,12 +16,14 @@ use tri::cache::Level;
 use tri::media::MediaFile;
 use tri::scheduler::{CachedPreviews, Failure, Producer};
 
-/// Bilan d'un lot : rendus faits, déjà en cache, échecs, interrompu.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Bilan d'un lot : rendus faits, déjà en cache, échecs (et la raison du premier),
+/// interrompu.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Summary {
     pub rendered: usize,
     pub cached: usize,
     pub failed: usize,
+    pub error: Option<String>,
     pub cancelled: bool,
 }
 
@@ -81,7 +83,10 @@ impl DevelopBatch {
                             summary.cancelled = true;
                             break;
                         }
-                        Err(Failure::Error(_)) => summary.failed += 1,
+                        Err(Failure::Error(e)) => {
+                            summary.failed += 1;
+                            summary.error.get_or_insert(e);
+                        }
                     }
                 }
                 d.fetch_add(1, Ordering::Relaxed);
@@ -141,7 +146,10 @@ mod tests {
             _: u32,
             _: &AtomicBool,
         ) -> Result<(), tri::develop::DevelopError> {
-            Err(tri::develop::DevelopError::Failed("essai".into()))
+            Err(tri::develop::DevelopError::Failed(
+                tri::develop::Engine::Darktable,
+                "essai".into(),
+            ))
         }
     }
 
@@ -183,6 +191,7 @@ mod tests {
             summary,
             Summary {
                 failed: 1,
+                error: Some("darktable : essai".into()),
                 ..Summary::default()
             }
         );
