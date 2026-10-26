@@ -52,7 +52,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   avec lui le cadre, est **masqué dès qu'on tape** et réapparaît au premier mouvement de
   la souris, dans la grille comme en plein écran.
 - **Panneau des dossiers** (17/10/2026), à gauche de la grille : emplacements dépliables
-  en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) :
+  en arborescence, rangés par sections titrées et séparées d'un trait (20/10/2026) ; titres en gras, plus grands que
+  les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :
   périphériques (cartes, clés, disques externes, montés ou non : un support pas monté
   est grisé, un clic ou `o` le monte puis l'ouvre, clic droit « Monter » / « Éjecter »,
   26/10/2026, #113), disques fixés, réseau, dossiers personnels (avec Bureau, Documents,
@@ -137,7 +138,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   Wayland, egui ne donne pas non plus le rectangle intérieur (il demande la position) :
   la taille vient de la zone de dessin (retour du 25/10/2026 : rien n'était retenu). La
   position, elle, reste au compositeur : Wayland ne laisse pas une application placer sa
-  fenêtre.
+  fenêtre. L'agrandissement demandé à la création de la fenêtre y est ignoré (retour du
+  26/10/2026) : il est redemandé à la première image si la fenêtre ne l'est pas.
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
@@ -421,7 +423,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   fond un peu plus clair (plus foncé en thème clair, `[gui.dialogs] focus_panel_tint` ;
   liseré d'accent jusqu'au 25/10/2026, issue n° 78 : avec le curseur, lui aussi en
   accent, le double cadre alourdissait ; le curseur des métadonnées n'encadre plus
-  l'histogramme, issue n° 77), la barre d'état le dit ; la ligne pointée au clavier
+  l'histogramme, issue n° 77) et un **trait en haut** (26/10/2026, #77 : le fond seul
+  ne se voyait pas assez ; `focus_line` = `"accent"` ou `"#rrggbb"`, `focus_line_width`,
+  0 pour aucun), la barre d'état le dit ; la ligne pointée au clavier
   (dossiers, métadonnées, résultats de recherche) est une **bande grise discrète** sur
   toute la largeur (`[gui.dialogs] cursor_tint`, `cursor_row` ; cadre d'accent avant le
   25/10/2026, trop voyant et coupé à gauche quand le panneau défilait) ;
@@ -524,7 +528,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   défaut) passe au bout de la pile à la première photo de la pile suivante (25/10/2026).
   De pile en pile (↑ / ↓), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
   "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
-  l'interrupteur des piles (toujours là depuis le 25/10/2026), ou Ctrl+Maj+S, retenu
+  l'interrupteur des piles (toujours là depuis le 25/10/2026 ; en grille aussi, piles
+  actives, pour en voir l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu
   d'un lancement à l'autre (issue n° 62) ; un message dit lequel est actif (rien ne
   bouge à l'écran).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).

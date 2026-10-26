@@ -502,6 +502,11 @@ pub struct DialogSettings {
     /// Ligne pointée au clavier (panneaux, listes) : une bande de la couleur du texte à
     /// cette opacité (0 à 1), sur toute la largeur.
     pub cursor_tint: f32,
+    /// Trait en haut du panneau qui a le clavier (#77) : `"accent"` (couleur d'accent du
+    /// thème) ou `"#rrggbb"`.
+    pub focus_line: ThemeColor,
+    /// Épaisseur de ce trait (points) ; 0 : aucun.
+    pub focus_line_width: f32,
     /// Côté des boutons à icône (actions sur le fichier de la boîte du clic droit).
     pub icon_size: f32,
     /// Largeur minimale de l'aide (F1), points : ses lignes ne débordent pas.
@@ -522,6 +527,8 @@ impl Default for DialogSettings {
             title_color: Color([80, 190, 220]),
             focus_panel_tint: 0.06,
             cursor_tint: 0.12,
+            focus_line: ThemeColor::Accent,
+            focus_line_width: 2.0,
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,
@@ -784,6 +791,9 @@ pub struct FolderSettings {
     /// Case « sous-dossiers » du panneau : niveaux de sous-dossiers dont les images
     /// s'affichent aussi dans la grille, au plus (en plus du dossier ouvert).
     pub subfolders_depth: usize,
+    /// Titres des sections (« Disques amovibles », « Favoris »…) : taille par rapport au
+    /// texte des dossiers.
+    pub section_scale: f32,
 }
 
 impl Default for FolderSettings {
@@ -796,6 +806,7 @@ impl Default for FolderSettings {
             search_depth: 4,
             search_results: 200,
             subfolders_depth: 3,
+            section_scale: 1.15,
         }
     }
 }
@@ -1154,6 +1165,55 @@ impl<'de> Deserialize<'de> for Color {
     }
 }
 
+/// Couleur d'accent du thème (`"accent"`, qui suit le thème) ou couleur fixe
+/// (`"#rrggbb"`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeColor {
+    /// Couleur d'accent du thème.
+    Accent,
+    /// Couleur fixe.
+    Rgb(Color),
+}
+
+impl ThemeColor {
+    /// La couleur à peindre, `accent` étant celle du thème en cours.
+    pub fn resolve(self, accent: Color32) -> Color32 {
+        match self {
+            ThemeColor::Accent => accent,
+            ThemeColor::Rgb(c) => c.into(),
+        }
+    }
+}
+
+impl std::str::FromStr for ThemeColor {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, String> {
+        if s.trim().eq_ignore_ascii_case("accent") {
+            Ok(ThemeColor::Accent)
+        } else {
+            s.parse().map(ThemeColor::Rgb)
+        }
+    }
+}
+
+impl Serialize for ThemeColor {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            ThemeColor::Accent => serializer.serialize_str("accent"),
+            ThemeColor::Rgb(c) => c.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeColor {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1170,6 +1230,26 @@ mod tests {
     fn empty_file_gives_defaults() {
         let parsed: AppSettings = tri::settings::parse("").unwrap();
         assert_eq!(parsed, AppSettings::default());
+    }
+
+    #[test]
+    fn a_theme_color_is_accent_or_a_fixed_colour() {
+        // #77 : le trait du panneau actif suit l'accent du thème, ou une couleur donnée.
+        let parsed: AppSettings = tri::settings::parse(
+            r##"
+            [gui.dialogs]
+            focus_line = "#ff8000"
+            "##,
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.gui.dialogs.focus_line,
+            ThemeColor::Rgb(Color([255, 128, 0]))
+        );
+        assert_eq!("Accent".parse::<ThemeColor>(), Ok(ThemeColor::Accent));
+        assert!("bleu".parse::<ThemeColor>().is_err());
+        let accent = Color32::from_rgb(1, 2, 3);
+        assert_eq!(ThemeColor::Accent.resolve(accent), accent);
     }
 
     #[test]

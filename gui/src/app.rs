@@ -277,6 +277,10 @@ pub struct TriApp {
     /// fermeture : pas une écriture par image pendant qu'on la déplace.
     window_now: Option<(crate::state::WindowState, Instant)>,
     window_kept: Option<crate::state::WindowState>,
+    /// Fenêtre agrandie au lancement précédent : l'agrandissement est redemandé à la
+    /// première image si elle ne l'est pas (#58 : sous Wayland, la demande faite à la
+    /// création de la fenêtre est ignorée).
+    maximize_pending: bool,
     /// Couleur de la carte : indice dans `[gui.sharpness] colors` (`Ctrl+P`).
     peaking_color: usize,
     /// Carte de netteté chargée (une seule : celle de l'image affichée).
@@ -730,6 +734,7 @@ impl TriApp {
             display_saved: Default::default(),
             window_now: None,
             window_kept: None,
+            maximize_pending: false,
             peaking_texture: None,
             peaking_asked: None,
             compare: Vec::new(),
@@ -946,6 +951,11 @@ impl TriApp {
         if minimized == Some(true) || size.x < 1.0 || size.y < 1.0 {
             return;
         }
+        if std::mem::take(&mut self.maximize_pending) && maximized != Some(true) {
+            // Rien à retenir de cette image : la fenêtre n'a pas encore sa vraie taille.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            return;
+        }
         let maximized = maximized.unwrap_or(false);
         let mut window = self
             .window_now
@@ -1006,6 +1016,7 @@ impl TriApp {
             self.order = order;
         }
         self.window_kept = s.window;
+        self.maximize_pending = s.window.is_some_and(|w| w.maximized);
         if let Some(cell) = s.grid_cell {
             let g = self.gui.grid;
             self.grid_cell = cell.clamp(g.cell_min, g.cell_max.max(g.cell_min));
@@ -1438,7 +1449,7 @@ impl TriApp {
     /// ligne. Le triangle déplie ou replie ; un clic sur le nom ouvre le dossier.
     fn folder_panel(&mut self, ui: &mut Ui) {
         if self.focus == crate::actions::Scope::Folders {
-            panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+            panel_focus_fill(ui, &self.gui.dialogs);
         }
         let f = self.gui.folders;
         let mut toggle: Option<usize> = None;
@@ -1513,7 +1524,10 @@ impl TriApp {
                         tri::places::Section::Favorites => t!("folders-section-favorites"),
                         tri::places::Section::System => t!("folders-section-system"),
                     };
-                    ui.label(egui::RichText::new(title).small().strong().weak());
+                    // Plus grands que les dossiers, en gras (#120 : en petit et estompés,
+                    // ils se perdaient parmi eux).
+                    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+                    ui.label(egui::RichText::new(title).size(size).strong());
                 }
                 let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
@@ -7362,6 +7376,11 @@ impl TriApp {
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
                     actions.extend([Action::StackEnterToggle, Action::StackMode]);
+                } else if self.stacking {
+                    // En grille, piles actives : au même endroit, pour voir l'état du
+                    // réglage (retour du 26/10/2026) ; l'interrupteur des piles, lui, est
+                    // dans la barre des filtres.
+                    actions.push(Action::StackEnterToggle);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && self.darktable {
@@ -7450,6 +7469,7 @@ impl TriApp {
                 | Action::NavUp
                 | Action::NavDown
                 | Action::StackMode
+                | Action::StackEnterToggle
                 | Action::Develop
                 | Action::ToggleZoom
                 | Action::ToggleGridInfo
@@ -9350,7 +9370,7 @@ impl eframe::App for TriApp {
                 .default_size(self.gui.metadata.width)
                 .show(ui, |ui| {
                     if self.focus == crate::actions::Scope::Metadata {
-                        panel_focus_fill(ui, self.gui.dialogs.focus_panel_tint);
+                        panel_focus_fill(ui, &self.gui.dialogs);
                     }
                     // Tâches de fond en bas du panneau (issue n° 36), détail au-dessus.
                     let tasks = self.tasks(ui);
@@ -9871,16 +9891,24 @@ fn drag_preview(ctx: &egui::Context) {
 }
 
 /// Fond du panneau qui a le clavier, peint avant son contenu : le fond des panneaux
-/// mêlé de `tint` de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu
-/// plus clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré
-/// d'accent (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre
-/// alourdissait).
-fn panel_focus_fill(ui: &Ui, tint: f32) {
+/// mêlé de la couleur du texte (`[gui.dialogs] focus_panel_tint`), donc un peu plus
+/// clair en thème sombre, un peu plus foncé en thème clair. Remplace le liseré d'accent
+/// (issue n° 78 : avec le curseur, lui aussi en accent, le double cadre alourdissait).
+/// Plus un trait en haut (`focus_line`, `focus_line_width` ; retour du 26/10/2026, #77 :
+/// le fond seul ne disait pas assez quel panneau a le clavier).
+fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
     let visuals = ui.visuals();
-    let fill = visuals
-        .panel_fill
-        .lerp_to_gamma(visuals.text_color(), tint.clamp(0.0, 1.0));
-    ui.painter().rect_filled(ui.clip_rect(), 0.0, fill);
+    let fill = visuals.panel_fill.lerp_to_gamma(
+        visuals.text_color(),
+        dialogs.focus_panel_tint.clamp(0.0, 1.0),
+    );
+    let clip = ui.clip_rect();
+    ui.painter().rect_filled(clip, 0.0, fill);
+    if dialogs.focus_line_width > 0.0 {
+        let color = dialogs.focus_line.resolve(marks::accent_mark(ui.ctx()));
+        let line = Rect::from_min_size(clip.min, vec2(clip.width(), dialogs.focus_line_width));
+        ui.painter().rect_filled(line, 0.0, color);
+    }
 }
 
 /// Ligne pointée au clavier dans un panneau ou une liste : une bande de la couleur du
@@ -11463,6 +11491,22 @@ mod tests {
     }
 
     #[test]
+    fn in_the_grid_the_stack_entry_button_shows_with_stacks() {
+        // Retour du 26/10/2026 (#62) : en grille aussi, piles actives, pour voir l'état.
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        let label = Action::StackEnterToggle.label();
+        assert!(h.query_by_label(&label).is_none(), "sans les piles");
+        h.state_mut().stacking = true;
+        h.run_steps(3);
+        let before = h.state().stack_enter;
+        h.get_by_label(&label).click();
+        h.run_steps(3);
+        assert_ne!(h.state().stack_enter, before);
+    }
+
+    #[test]
     fn z_from_the_grid_opens_at_one_to_one_and_the_bar_has_a_one_to_one_button() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -11851,6 +11895,25 @@ mod tests {
             kept.position, None,
             "position inconnue : le compositeur la choisit"
         );
+    }
+
+    #[test]
+    fn a_maximized_window_is_maximized_again_after_the_first_frame() {
+        // Retour du 26/10/2026 (#58) : sous Wayland, la fenêtre agrandie ne l'était plus
+        // au lancement suivant ; l'agrandissement est redemandé, une fois.
+        let (mut h, _dir) = harness();
+        h.state_mut().maximize_pending = true;
+        let maximize = |h: &Harness<'_, TriApp>| {
+            h.output()
+                .viewport_output
+                .values()
+                .any(|v| v.commands.contains(&egui::ViewportCommand::Maximized(true)))
+        };
+        h.step();
+        assert!(maximize(&h), "redemandé");
+        assert!(!h.state().maximize_pending);
+        h.step();
+        assert!(!maximize(&h), "une seule fois");
     }
 
     #[test]

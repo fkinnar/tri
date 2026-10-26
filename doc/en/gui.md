@@ -52,7 +52,8 @@ system one ("cold" measurements, experiments).
   **hidden as soon as you type** and reappears at the first mouse movement, in the grid
   as in full screen.
 - **Folders panel** (2026-10-17), to the left of the grid: places expandable as a tree,
-  arranged in titled sections separated by a line (2026-10-20): devices (cards, keys,
+  arranged in titled sections separated by a line (2026-10-20); titles in bold, larger than the
+  folders since 2026-10-26, `[gui.folders] section_scale`, #120): devices (cards, keys,
   external drives, mounted or not: an unmounted one is greyed, a click or `o` mounts
   then opens it, right click "Mount" / "Eject", 2026-10-26, #113), fixed drives,
   network, personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
@@ -134,7 +135,8 @@ system one ("cold" measurements, experiments).
   first one. Under Wayland, egui does not give the inner rectangle either (it needs the
   position): the size comes from the drawing area (feedback of 2026-10-25: nothing was
   kept). The position stays with the compositor: Wayland does not let an application
-  place its window.
+  place its window. Maximizing when the window is created is ignored there (feedback of
+  2026-10-26): it is asked again on the first frame if the window is not maximized.
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
@@ -405,7 +407,7 @@ system one ("cold" measurements, experiments).
   (`[gui] leader`, `Ctrl+B` by default) then `h` / `l` (or ← / →) gives the keyboard to
   the left / right panel, `o` to the next one (leader then `b`: report a problem,
   2026-10-22) (folders, images, metadata; a hidden panel
-  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled), the
+  is shown, folders only exist in the grid). The active panel has a slightly lighter background (darker in the light theme, `[gui.dialogs] focus_panel_tint`; an accent outline until 2026-10-25, issue #78: with the accent cursor, the double frame was heavy; the metadata cursor no longer frames the histogram, issue #77) and a **line at the top** (2026-10-26, #77: the background alone did not show enough; `focus_line` = `"accent"` or `"#rrggbb"`, `focus_line_width`, 0 for none); the line under the keyboard cursor (folders, metadata, search results) is a **discreet grey band** across the whole width (`[gui.dialogs] cursor_tint`, `cursor_row`; an accent frame before 2026-10-25, too loud and cut on the left when the panel scrolled), the
   status bar says so; a click in a panel gives it the keyboard, a click in the images
   area gives it back to them (`TriApp::click_focus`, 2026-10-22; dialogs opened on top
   do not count). **Its keys go first, the others keep their effect** (user's
@@ -501,7 +503,8 @@ system one ("cold" measurements, experiments).
   moves at the end of the stack to the first photo of the next stack (2026-10-25). From
   stack to stack (↑ / ↓), we land on its cover or, with `[gui.view] stack_enter =
   "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
-  switch (always there since 2026-10-25), or Ctrl+Shift+S, remembered from one launch
+  switch (always there since 2026-10-25; in the grid too, with stacks on, to see its
+  state, since 2026-10-26), or Ctrl+Shift+S, remembered from one launch
   to the next (issue #62); a message says which one is on (nothing moves on screen).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do

@@ -622,6 +622,10 @@ focus_panel_tint = 0.06
 # Line under the keyboard cursor in a panel or a list: a band of the text colour, at
 # this opacity (0 to 1), across the whole width.
 cursor_tint = 0.12
+# Line at the top of the panel that has the keyboard: "accent" (the theme's accent
+# colour) or "#rrggbb", and its thickness in points (0: no line).
+focus_line = "accent"
+focus_line_width = 2.0
 # Side of the icon buttons (file actions, in the right-click dialog), in points.
 icon_size = 34.0
 # Minimum width of the help (F1), in points.
@@ -667,6 +671,9 @@ search_results = 200
 # "Subfolders" checkbox of the panel (kept from one session to the next): the images of the
 # subfolders of the open folder are shown too, down to this number of levels at most.
 subfolders_depth = 3
+# Section titles ("Removable drives", "Favourites"…): size relative to the folder
+# text.
+section_scale = 1.15
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:
