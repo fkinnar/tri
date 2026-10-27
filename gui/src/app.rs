@@ -402,7 +402,7 @@ pub struct TriApp {
     search_focused: Option<egui::Id>,
     /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
     /// menu « … », mesurée à l'image précédente (issue n° 71).
-    filter_tail: (f32, f32),
+    filter_tail: f32,
     /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
     /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
     rating_tail: f32,
@@ -506,7 +506,8 @@ pub struct TriApp {
     clip_strictness: (f32, f32),
     /// Côté réglé par le curseur unique du filtre « bien exposées » (brûlé ou bouché),
     /// changé par l'interrupteur à côté.
-    clip_side: tri::exposure::Clip,
+    /// Sections repliées du panneau de droite (« filters », « grid »…), retenues.
+    panel_folded: HashSet<String>,
     /// Case « sous-dossiers » du panneau des dossiers : les images des sous-dossiers
     /// s'affichent aussi (`[gui.folders] subfolders_depth` niveaux), choix gardé.
     subfolders: bool,
@@ -810,7 +811,7 @@ impl TriApp {
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
-            filter_tail: (0.0, 0.0),
+            filter_tail: 0.0,
             rating_tail: 0.0,
             rating_wrapped_at: None,
             folder_query: String::new(),
@@ -866,7 +867,7 @@ impl TriApp {
             group_centre: settings.similarity.threshold,
             blur_strictness: 0.0,
             clip_strictness: (0.0, 0.0),
-            clip_side: tri::exposure::Clip::Over,
+            panel_folded: HashSet::new(),
             subfolders,
             group_gap: settings.similarity.max_gap_s,
             group_dialog: false,
@@ -982,6 +983,11 @@ impl TriApp {
                 .developed_checked
                 .as_ref()
                 .map(|v| v.iter().map(|e| e.id().to_string()).collect()),
+            panel_folded: Some({
+                let mut folded: Vec<String> = self.panel_folded.iter().cloned().collect();
+                folded.sort();
+                folded
+            }),
             window: self.window_kept,
         }
     }
@@ -1080,6 +1086,9 @@ impl TriApp {
         if let Some(render) = s.grid_render {
             self.grid_render = render;
         }
+        if let Some(folded) = &s.panel_folded {
+            self.panel_folded = folded.iter().cloned().collect();
+        }
         if let Some(ids) = &s.developed_engines {
             self.developed_checked = Some(
                 ids.iter()
@@ -1176,55 +1185,368 @@ impl TriApp {
 
     /// Panneau des métadonnées : celles de l'image sélectionnée (lignes du moteur), et en
     /// grille son histogramme.
+    /// Panneau de droite, en sections titrées et repliables comme celles du panneau des
+    /// dossiers (réorganisation du 27/10/2026, idée de l'utilisateur) : l'histogramme en
+    /// haut, puis les réglages — filtres et grille, en grille seulement —, et les
+    /// métadonnées en bas, comme dans les autres logiciels.
+    fn side_panel(&mut self, ui: &mut Ui) {
+        self.meta_has_histogram = false;
+        if self.gui.metadata.histogram && self.histogram && !self.files.is_empty() {
+            if self.panel_section(ui, "histogram", t!("panel-section-histogram")) {
+                self.histogram_section(ui);
+            }
+            ui.separator();
+        }
+        if self.mode == Mode::Grid {
+            if self.panel_section(ui, "filters", t!("panel-section-filters")) {
+                self.filter_settings(ui);
+            }
+            ui.separator();
+            if self.panel_section(ui, "grid", t!("panel-section-grid")) {
+                self.grid_settings(ui);
+            }
+            ui.separator();
+        }
+        if self.panel_section(ui, "exif", t!("panel-section-exif")) {
+            self.metadata_panel(ui);
+        }
+    }
+
+    /// Titre de section du panneau de droite, à l'allure de ceux du panneau des dossiers
+    /// (gras, `[gui.folders] section_scale`), avec un triangle : un clic replie ou déplie
+    /// la section (retenu d'une session à l'autre). Vrai si elle est dépliée.
+    fn panel_section(&mut self, ui: &mut Ui, id: &str, title: String) -> bool {
+        let open = !self.panel_folded.contains(id);
+        let tip = if open {
+            t!("folders-collapse")
+        } else {
+            t!("folders-expand")
+        };
+        let size = egui::TextStyle::Body.resolve(ui.style()).size * self.gui.folders.section_scale;
+        let clicked = ui
+            .horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                let side = ui.text_style_height(&egui::TextStyle::Body);
+                let (rect, triangle) = marks::clickable(ui, side, &tip);
+                marks::disclosure(ui.painter(), rect, open, ui.visuals().text_color());
+                let label = ui
+                    .add(
+                        egui::Label::new(egui::RichText::new(title).size(size).strong())
+                            .sense(Sense::click()),
+                    )
+                    .on_hover_text(&tip)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                triangle.clicked() || label.clicked()
+            })
+            .inner;
+        if clicked {
+            if open {
+                self.panel_folded.insert(id.to_string());
+            } else {
+                self.panel_folded.remove(id);
+            }
+        }
+        open != clicked
+    }
+
+    /// Interrupteurs des filtres sur l'analyse et les développements, allumés ou non :
+    /// netteté, exposition, et développées s'il y a un logiciel de développement.
+    fn content_toggles(&self) -> Vec<(Action, bool)> {
+        let mut toggles = vec![
+            (Action::FilterBlurry, self.blur_rule.is_some()),
+            (Action::FilterWellExposed, self.well_exposed),
+        ];
+        if !self.developers.is_empty() || self.developed_on {
+            toggles.push((Action::FilterDeveloped, self.developed_on));
+        }
+        toggles
+    }
+
+    /// Section « Filtres » du panneau de droite : chaque filtre réglable, avec sa case
+    /// (comme son icône de la barre du haut) ; ses réglages n'apparaissent que s'il est
+    /// allumé (retour du 27/10/2026 : cachés quand ils ne servent pas). La place ne
+    /// manquant plus, deux curseurs pour l'exposition et les logiciels en cases à plat.
+    fn filter_settings(&mut self, ui: &mut Ui) {
+        let mut clicked = None;
+        let size = self.gui.grid.marks + 4.0;
+        for (action, on) in self.content_toggles() {
+            let name = match action {
+                Action::FilterBlurry => t!("panel-filter-sharp"),
+                Action::FilterWellExposed => t!("panel-filter-exposed"),
+                _ => t!("panel-filter-developed"),
+            };
+            let tip = self.action_tip(action);
+            let row = ui.horizontal(|ui| {
+                let mut checked = on;
+                let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
+                let (rect, icon) = marks::clickable(ui, size, &tip);
+                let color = if on {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                filter_icon(ui.painter(), rect, action, color);
+                let label = ui
+                    .add(egui::Label::new(name).sense(Sense::click()))
+                    .on_hover_text(&tip);
+                check.changed() || icon.clicked() || label.clicked()
+            });
+            if row.inner {
+                clicked = Some(action);
+            }
+            if !on {
+                continue;
+            }
+            ui.indent(action.id(), |ui| {
+                let width = panel_slider_width(ui);
+                match action {
+                    Action::FilterBlurry => {
+                        self.blur_slider(ui, width);
+                        slider_ends(ui, width);
+                    }
+                    Action::FilterWellExposed => {
+                        for side in [tri::exposure::Clip::Over, tri::exposure::Clip::Under] {
+                            self.clip_slider(ui, side, width);
+                        }
+                        slider_ends(ui, width);
+                    }
+                    _ => self.developed_checkboxes(ui),
+                }
+            });
+            ui.add_space(self.gui.dialogs.spacing);
+        }
+        if let Some(action) = clicked {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, action);
+        }
+    }
+
+    /// Logiciels du filtre « développées », en cases à cocher à plat : les installés (et
+    /// un logiciel coché puis désinstallé) ; aucun coché : les images sans développement.
+    fn developed_checkboxes(&mut self, ui: &mut Ui) {
+        let engines = self.developers.engines();
+        let rule = self.developed_rule().unwrap_or_default();
+        let mut checked = rule.engines.clone();
+        let mut listed = engines.clone();
+        listed.extend(checked.iter().filter(|e| !engines.contains(e)));
+        for engine in listed {
+            let mut on = checked.contains(&engine);
+            if ui
+                .checkbox(&mut on, engine.name())
+                .on_hover_text(t!("filter-developed-tip"))
+                .changed()
+            {
+                if on {
+                    checked.push(engine);
+                } else {
+                    checked.retain(|&e| e != engine);
+                }
+            }
+        }
+        ui.weak(t!("filter-developed-none-hint"));
+        if checked != rule.engines {
+            checked.sort();
+            self.developed_checked = Some(checked);
+            self.apply_filter();
+        }
+    }
+
+    /// Section « Grille » du panneau de droite : rendu des vignettes, ordre, taille et
+    /// infos des vignettes, piles (réorganisation du 27/10/2026 : ces réglages
+    /// encombraient la barre des filtres, ou se cachaient dans son menu « … »).
+    fn grid_settings(&mut self, ui: &mut Ui) {
+        let mut clicked: Vec<Action> = Vec::new();
+        let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+        // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
+        subheading(ui, t!("panel-grid-render"))
+            .on_hover_text(self.action_tip(Action::GridRenderNext));
+        let engines = self.developers.engines();
+        let mut render = self.grid_render;
+        for choice in crate::grid_render::GridRender::choices(&engines, render) {
+            ui.radio_value(&mut render, choice, choice.name());
+        }
+        if self.shown_render() != self.grid_render {
+            ui.weak(t!("panel-grid-render-filtered"));
+        }
+        // Ordre : la clé, puis le sens.
+        subheading(ui, t!("panel-grid-sort"));
+        let mut key = self.order.key;
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt("sort")
+                .selected_text(sort_name(key))
+                .show_ui(ui, |ui| {
+                    for k in tri::sort::SortKey::ALL {
+                        ui.selectable_value(&mut key, k, sort_name(k));
+                    }
+                })
+                .response
+                .on_hover_text(self.action_tip(Action::SortNext));
+            let (rect, response) =
+                marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+            let color = ui.style().interact(&response).fg_stroke.color;
+            marks::sort_arrow(
+                ui.painter(),
+                rect.shrink(size * 0.1),
+                self.order.descending,
+                color,
+            );
+            if response.clicked() {
+                clicked.push(Action::SortReverse);
+            }
+        });
+        // Vignettes : taille, infos.
+        subheading(ui, t!("panel-grid-thumbnails"));
+        self.grid_size_slider(ui, panel_slider_width(ui));
+        let mut info = self.grid_info;
+        if ui
+            .checkbox(&mut info, t!("panel-grid-info"))
+            .on_hover_text(self.action_tip(Action::ToggleGridInfo))
+            .changed()
+        {
+            clicked.push(Action::ToggleGridInfo);
+        }
+        // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
+        subheading(ui, t!("panel-grid-stacks"));
+        let mut stacking = self.stacking;
+        if ui
+            .checkbox(&mut stacking, t!("panel-grid-stacks-on"))
+            .on_hover_text(self.action_tip(Action::StackMode))
+            .changed()
+        {
+            clicked.push(Action::StackMode);
+        }
+        if self.stacking {
+            ui.indent("stacks", |ui| {
+                let width = panel_slider_width(ui);
+                // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
+                // calculé d'après le dossier, à droite plus strict (petites piles).
+                ui.label(t!("panel-grid-similarity"));
+                let (slider, t) = strictness_slider(
+                    ui,
+                    width,
+                    self.group_strictness,
+                    t!(
+                        "stack-slider-tip",
+                        keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
+                    ),
+                );
+                slider_ends(ui, width);
+                if t != self.group_strictness {
+                    self.group_strictness = t;
+                    self.stacks_dirty = true;
+                }
+                // Piles dépliées pendant le réglage seulement si Maj est tenue (retour du
+                // 20/10/2026 : repliées, on voit directement les piles obtenues).
+                let shift = ui.input(|i| i.modifiers.shift);
+                let adjusting = (slider.dragged() || slider.has_focus()) && shift;
+                if adjusting != self.grouping_preview {
+                    self.grouping_preview = adjusting;
+                    self.stacks_dirty = true;
+                }
+                if slider.drag_stopped() || slider.double_clicked_slider(ui) {
+                    self.remember_group_strictness();
+                }
+                let mut enter = self.stack_enter;
+                ui.label(t!("panel-grid-stack-enter"));
+                ui.radio_value(
+                    &mut enter,
+                    crate::settings::StackEnter::Cover,
+                    t!("panel-grid-stack-cover"),
+                );
+                ui.radio_value(
+                    &mut enter,
+                    crate::settings::StackEnter::First,
+                    t!("panel-grid-stack-first"),
+                );
+                if enter != self.stack_enter {
+                    clicked.push(Action::StackEnterToggle);
+                }
+                ui.horizontal_wrapped(|ui| {
+                    let all = if self.expanded.is_empty() {
+                        t!("panel-grid-unfold-all")
+                    } else {
+                        t!("panel-grid-fold-all")
+                    };
+                    if ui
+                        .button(all)
+                        .on_hover_text(self.action_tip(Action::StacksAll))
+                        .clicked()
+                    {
+                        clicked.push(Action::StacksAll);
+                    }
+                    if ui
+                        .button(t!("panel-grid-grouping"))
+                        .on_hover_text(self.action_tip(Action::GroupingWindow))
+                        .clicked()
+                    {
+                        clicked.push(Action::GroupingWindow);
+                    }
+                });
+            });
+        }
+        if render != self.grid_render {
+            self.set_grid_render(render);
+        }
+        if key != self.order.key {
+            self.set_order(tri::sort::Order { key, ..self.order });
+        }
+        let ctx = ui.ctx().clone();
+        for action in clicked {
+            self.perform(&ctx, action);
+        }
+    }
+
+    /// Histogramme de l'image sélectionnée, en tête du panneau de droite, en grille comme
+    /// en plein écran (retour du 17/10/2026) ; panneau masqué : en plein écran, il est sur
+    /// l'image. Un clic l'ouvre en grand.
+    fn histogram_section(&mut self, ui: &mut Ui) {
+        let settings = self.gui.metadata;
+        match self.exposure_of(self.selected) {
+            Some(e) => {
+                self.meta_has_histogram = true;
+                let (rect, response) = ui.allocate_exact_size(
+                    vec2(ui.available_width(), settings.histogram_height),
+                    Sense::click(),
+                );
+                let tip = t!(
+                    "histogram-enlarge",
+                    keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
+                );
+                if response
+                    .on_hover_cursor(egui::CursorIcon::ZoomIn)
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    self.histogram_large = true;
+                }
+                let look = histogram::Look {
+                    scale: self.histogram_scale,
+                    details: false,
+                    channel: None,
+                };
+                histogram::draw(
+                    ui.painter(),
+                    rect,
+                    &e,
+                    look,
+                    &self.gui.histogram,
+                    &self.gui.colors,
+                );
+            }
+            None => {
+                ui.weak(t!("histogram-computing"));
+            }
+        }
+    }
+
+    /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
+    /// ligne par donnée, pointables au clavier et copiables.
     fn metadata_panel(&mut self, ui: &mut Ui) {
         let Some(file) = self.files.get(self.selected).cloned() else {
             ui.weak(t!("panel-no-image"));
             return;
         };
-        // Histogramme en haut du panneau, en grille comme en plein écran (retour du
-        // 17/10/2026) ; panneau masqué : en plein écran, il est sur l'image.
-        let settings = self.gui.metadata;
         let focused = self.focus == crate::actions::Scope::Metadata;
-        self.meta_has_histogram = false;
-        if settings.histogram && self.histogram {
-            match self.exposure_of(self.selected) {
-                Some(e) => {
-                    self.meta_has_histogram = true;
-                    let (rect, response) = ui.allocate_exact_size(
-                        vec2(ui.available_width(), settings.histogram_height),
-                        Sense::click(),
-                    );
-                    let tip = t!(
-                        "histogram-enlarge",
-                        keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
-                    );
-                    if response
-                        .on_hover_cursor(egui::CursorIcon::ZoomIn)
-                        .on_hover_text(tip)
-                        .clicked()
-                    {
-                        self.histogram_large = true;
-                    }
-                    let look = histogram::Look {
-                        scale: self.histogram_scale,
-                        details: false,
-                        channel: None,
-                    };
-                    histogram::draw(
-                        ui.painter(),
-                        rect,
-                        &e,
-                        look,
-                        &self.gui.histogram,
-                        &self.gui.colors,
-                    );
-                }
-                None => {
-                    ui.weak(t!("histogram-computing"));
-                }
-            }
-            ui.add_space(8.0);
-        }
         let read = self
             .meta
             .get_or_insert_with(|| MetaLoader::new(ui.ctx().clone()))
@@ -2624,13 +2946,8 @@ impl TriApp {
     /// centre les seuils des réglages, à droite plus strict, à gauche plus souple ; effet
     /// en direct (badges, filtre), retenu pour le dossier au lâcher, double-clic : retour
     /// au centre (repère).
-    fn blur_slider(&mut self, ui: &mut Ui) {
-        let (slider, t) = strictness_slider(
-            ui,
-            self.gui.grid.blur_slider,
-            self.blur_strictness,
-            t!("blur-slider-tip"),
-        );
+    fn blur_slider(&mut self, ui: &mut Ui, width: f32) {
+        let (slider, t) = strictness_slider(ui, width, self.blur_strictness, t!("blur-slider-tip"));
         if t != self.blur_strictness {
             self.set_blur_strictness(t);
         }
@@ -2641,9 +2958,9 @@ impl TriApp {
 
     /// Curseur de taille des vignettes (barre du bas, en grille) ; double-clic : taille
     /// de la configuration.
-    fn grid_size_slider(&mut self, ui: &mut Ui) {
+    fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) {
         let g = self.gui.grid;
-        ui.spacing_mut().slider_width = g.size_slider;
+        ui.spacing_mut().slider_width = width;
         let mut cell = self.grid_cell;
         let keys = [Action::ZoomOut, Action::ZoomIn]
             .map(|a| self.keymap.keys_for(a).join(" / "))
@@ -2697,34 +3014,31 @@ impl TriApp {
         )
     }
 
-    /// Curseur du filtre « bien exposées » (issue n° 48 : fonds noirs exclus) : un seul,
-    /// pour le brûlé ou le bouché, choisi par l'interrupteur à côté, à l'icône des badges
-    /// d'écrêtage (retour du 25/10/2026 : deux curseurs à libellé gris se lisaient mal).
+    /// Curseur du filtre « bien exposées » pour le brûlé ou le bouché (issue n° 48 : fonds
+    /// noirs exclus), sous son nom et le badge d'écrêtage de la grille ; les deux à la fois
+    /// dans le panneau de droite (réorganisation du 27/10/2026 : la place ne manque plus).
     /// Effet en direct, retenu pour le dossier au lâcher.
-    fn clip_slider(&mut self, ui: &mut Ui, size: f32) {
+    fn clip_slider(&mut self, ui: &mut Ui, side: tri::exposure::Clip, width: f32) {
         use tri::exposure::Clip;
-        let side = self.clip_side;
-        let (label, tip, value, other) = match side {
+        let (name, tip, value) = match side {
             Clip::Over => (
-                t!("clip-slider-over"),
+                t!("panel-clip-over"),
                 t!("clip-slider-over-tip"),
                 self.clip_strictness.0,
-                Clip::Under,
             ),
             Clip::Under => (
-                t!("clip-slider-under"),
+                t!("panel-clip-under"),
                 t!("clip-slider-under-tip"),
                 self.clip_strictness.1,
-                Clip::Over,
             ),
         };
-        let switch_tip = t!("clip-slider-switch", side = label.as_str());
-        let (rect, response) = marks::clickable_named(ui, size, &label, &switch_tip);
-        marks::clip_badge(ui.painter(), rect, side == Clip::Over);
-        if response.clicked() {
-            self.clip_side = other;
-        }
-        let (slider, t) = strictness_slider(ui, self.gui.grid.clip_slider, value, tip);
+        ui.horizontal(|ui| {
+            let size = ui.text_style_height(&egui::TextStyle::Body);
+            let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
+            marks::clip_badge(ui.painter(), rect, side == Clip::Over);
+            ui.label(name);
+        });
+        let (slider, t) = strictness_slider(ui, width, value, tip);
         if t != value {
             match side {
                 Clip::Over => self.clip_strictness.0 = t,
@@ -8039,7 +8353,7 @@ impl TriApp {
                         self.grid_fit_all();
                     }
                     if room >= buttons + self.gui.grid.size_slider + spacing {
-                        self.grid_size_slider(ui);
+                        self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
@@ -8047,7 +8361,7 @@ impl TriApp {
                 // gauche).
                 if self.mode == Mode::View && self.peaking {
                     ui.separator();
-                    self.blur_slider(ui);
+                    self.blur_slider(ui, self.gui.grid.blur_slider);
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                     marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
@@ -8139,9 +8453,6 @@ impl TriApp {
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let mut refilter = false;
-        let mut sort_choice: Option<tri::sort::SortKey> = None;
-        let mut render_choice: Option<crate::grid_render::GridRender> = None;
-        let mut developed_choice: Option<Vec<tri::develop::Engine>> = None;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -8250,78 +8561,26 @@ impl TriApp {
                 }
             }
             ui.separator();
-            // Triangle (nettes) et soleil (bien exposées), à l'accent quand ils sont
-            // allumés, gris sinon, comme les étoiles (retour du 21/10/2026 ; la goutte
-            // « floues seulement » est devenue « nettes » inversé).
-            for (action, on) in [
-                (Action::FilterBlurry, self.blur_rule.is_some()),
-                (Action::FilterWellExposed, self.well_exposed),
-            ] {
-                let tip = self.action_tip(action);
+            // Interrupteurs des filtres sur l'analyse et les développements : triangle
+            // (nettes), soleil (bien exposées), bobine (développées), à l'accent quand ils
+            // sont allumés. Leurs réglages sont dans le panneau de droite, section
+            // « Filtres » (réorganisation du 27/10/2026 : la barre ne garde que ce qui se
+            // règle d'un clic).
+            let settings_tip = t!(
+                "filter-settings-in-panel",
+                keys = self.keymap.keys_for(Action::ToggleMetadata).join(" / ")
+            );
+            for (action, on) in self.content_toggles() {
+                let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
                 let color = if on {
                     marks::accent_mark(ui.ctx())
                 } else {
                     ui.visuals().weak_text_color()
                 };
-                if action == Action::FilterBlurry {
-                    marks::sharp_triangle(ui.painter(), rect, color);
-                } else {
-                    marks::sun(ui.painter(), rect, color);
-                }
+                filter_icon(ui.painter(), rect, action, color);
                 if response.clicked() {
                     clicked.push(action);
-                }
-                // Curseurs seulement avec leur filtre, comme celui des piles avec les piles.
-                if action == Action::FilterBlurry && on {
-                    self.blur_slider(ui);
-                }
-                if action == Action::FilterWellExposed && on {
-                    self.clip_slider(ui, size);
-                }
-            }
-            // Développées (idée de l'utilisateur, 27/10/2026) : une bobine qu'on allume,
-            // puis la liste des logiciels installés à cocher (aucun : sans développement).
-            let engines = self.developers.engines();
-            if !engines.is_empty() || self.developed_on {
-                let tip = self.action_tip(Action::FilterDeveloped);
-                let (rect, response) = marks::clickable(ui, size, &tip);
-                let color = if self.developed_on {
-                    marks::accent_mark(ui.ctx())
-                } else {
-                    ui.visuals().weak_text_color()
-                };
-                marks::film_reel(ui.painter(), rect, color);
-                if response.clicked() {
-                    clicked.push(Action::FilterDeveloped);
-                }
-                if self.developed_on {
-                    let rule = self.developed_rule().unwrap_or_default();
-                    let mut checked = rule.engines.clone();
-                    // Un logiciel coché puis désinstallé reste visible.
-                    let mut listed = engines.clone();
-                    listed.extend(checked.iter().filter(|e| !engines.contains(e)));
-                    egui::ComboBox::from_id_salt("developed")
-                        .selected_text(developed_short(&rule))
-                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                        .show_ui(ui, |ui| {
-                            for engine in listed {
-                                let mut on = checked.contains(&engine);
-                                if ui.checkbox(&mut on, engine.name()).changed() {
-                                    if on {
-                                        checked.push(engine);
-                                    } else {
-                                        checked.retain(|&e| e != engine);
-                                    }
-                                }
-                            }
-                            ui.weak(t!("filter-developed-none-hint"));
-                        })
-                        .response
-                        .on_hover_text(t!("filter-developed-tip"));
-                    if checked != rule.engines {
-                        developed_choice = Some(checked);
-                    }
                 }
             }
             ui.separator();
@@ -8346,91 +8605,6 @@ impl TriApp {
                     clicked.push(Action::FilterColor(color));
                 }
             }
-            // Piles : curseur de similarité (retour du 18/10/2026, comme Capture One) ;
-            // pendant le réglage, les piles se déplient sur des fonds alternés.
-            // L'interrupteur des piles, toujours là (fond d'accent quand elles sont
-            // actives, comme en plein écran) ; clic droit : les réglages fins.
-            ui.separator();
-            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
-            let tip = format!(
-                "{}\n{}",
-                self.action_tip(Action::StackMode),
-                t!(
-                    "stack-icon-tip",
-                    keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
-                )
-            );
-            let (rect, icon) = marks::icon_button(ui, size, &Action::StackMode.label(), &tip);
-            if self.stacking {
-                ui.painter()
-                    .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
-            }
-            let color = ui.style().interact(&icon).fg_stroke.color;
-            marks::bar_icon(
-                ui.painter(),
-                rect.shrink(size * 0.2),
-                Action::StackMode,
-                color,
-                &colors,
-            );
-            if icon.clicked() {
-                clicked.push(Action::StackMode);
-            }
-            if icon.secondary_clicked() {
-                clicked.push(Action::GroupingWindow);
-            }
-            if self.stacking {
-                // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
-                // calculé d'après le dossier, à droite plus strict (petites piles).
-                let (slider, t) = strictness_slider(
-                    ui,
-                    self.gui.grid.stack_slider,
-                    self.group_strictness,
-                    t!(
-                        "stack-slider-tip",
-                        keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
-                    ),
-                );
-                if t != self.group_strictness {
-                    self.group_strictness = t;
-                    self.stacks_dirty = true;
-                }
-                // Piles dépliées pendant le réglage seulement si Maj est tenue (retour du
-                // 20/10/2026 : repliées, on voit directement les piles obtenues).
-                let shift = ui.input(|i| i.modifiers.shift);
-                let adjusting = (slider.dragged() || slider.has_focus()) && shift;
-                if adjusting != self.grouping_preview {
-                    self.grouping_preview = adjusting;
-                    self.stacks_dirty = true;
-                }
-                if slider.drag_stopped() || slider.double_clicked_slider(ui) {
-                    self.remember_group_strictness();
-                }
-                // Tout déplier / tout replier (Maj+S), à côté du curseur.
-                let (rect, all) = marks::icon_button(
-                    ui,
-                    size,
-                    &Action::StacksAll.label(),
-                    &self.action_tip(Action::StacksAll),
-                );
-                // Allumé quand les piles sont repliées (retour du 18/10/2026 : « dans
-                // l'autre sens »).
-                if self.expanded.is_empty() {
-                    ui.painter()
-                        .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
-                }
-                let color = ui.style().interact(&all).fg_stroke.color;
-                marks::bar_icon(
-                    ui.painter(),
-                    rect.shrink(size * 0.2),
-                    Action::StacksAll,
-                    color,
-                    &colors,
-                );
-                if all.clicked() {
-                    clicked.push(Action::StacksAll);
-                }
-            }
             ui.separator();
             let content = self.content_filtered();
             let any = self.filter != KindFilter::All
@@ -8439,20 +8613,12 @@ impl TriApp {
                 || !self.name_query.trim().is_empty();
             // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
             ui.add_space(self.gui.dialogs.spacing);
-            // Fenêtre étroite (issue n° 71 : la fin de la barre recouvrait le champ) : le tri
-            // et le nombre d'images passent dans un menu « … », juste avant l'inversion et
-            // l'effacement, toujours visibles ; le champ se rétrécit. Largeurs mesurées à
-            // l'image précédente.
-            let (full_tail, compact_tail) = self.filter_tail;
+            // Le champ prend la place qui reste (jusqu'à `search_width`), sans recouvrir
+            // la fin de la barre (issue n° 71), largeur mesurée à l'image précédente.
             let spacing = ui.spacing().item_spacing.x;
-            let room = ui.available_size_before_wrap().x - spacing;
+            let room = ui.available_size_before_wrap().x - spacing - self.filter_tail;
             let grid = self.gui.grid;
-            let compact = room < grid.search_width + full_tail;
-            let search_width = if compact {
-                (room - compact_tail).clamp(grid.search_min_width, grid.search_width)
-            } else {
-                grid.search_width
-            };
+            let search_width = room.clamp(grid.search_min_width, grid.search_width);
             let hint = t!("search-grid-hint", keys = self.search_keys());
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.name_query)
@@ -8503,91 +8669,17 @@ impl TriApp {
                         clicked.push(Action::FilterInvert);
                     }
                 });
-                let mut sort = |ui: &mut Ui| {
-                    ui.weak(t!(
-                        "filter-bar-count",
-                        shown = self.files.len(),
-                        n = self.folder.files.len()
-                    ))
-                    .on_hover_text(t!("filter-bar-count-tip"));
-                    // Ordre : sens, puis la clé (posés de droite à gauche).
-                    ui.separator();
-                    let (rect, response) =
-                        marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
-                    let color = ui.style().interact(&response).fg_stroke.color;
-                    marks::sort_arrow(
-                        ui.painter(),
-                        rect.shrink(size * 0.1),
-                        self.order.descending,
-                        color,
-                    );
-                    if response.clicked() {
-                        clicked.push(Action::SortReverse);
-                    }
-                    let mut key = self.order.key;
-                    let keys: Vec<_> = tri::sort::SortKey::ALL
-                        .into_iter()
-                        .map(|k| (k, sort_name(k)))
-                        .collect();
-                    bar_choice(
-                        ui,
-                        "sort",
-                        compact,
-                        &mut key,
-                        &keys,
-                        &self.action_tip(Action::SortNext),
-                    );
-                    if key != self.order.key {
-                        sort_choice = Some(key);
-                    }
-                    // Rendu des vignettes (#114) : les logiciels installés seulement.
-                    ui.separator();
-                    let mut render = self.grid_render;
-                    let engines = self.developers.engines();
-                    let renders: Vec<_> = crate::grid_render::GridRender::choices(&engines, render)
-                        .into_iter()
-                        .map(|r| (r, r.name()))
-                        .collect();
-                    bar_choice(
-                        ui,
-                        "grid_render",
-                        compact,
-                        &mut render,
-                        &renders,
-                        &self.action_tip(Action::GridRenderNext),
-                    );
-                    if render != self.grid_render {
-                        render_choice = Some(render);
-                    }
-                };
-                if compact {
-                    ui.menu_button("…", |ui| {
-                        ui.horizontal(|ui| {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), sort)
-                        });
-                    })
-                    .response
-                    .on_hover_text(t!("filter-bar-more"));
-                    self.filter_tail.1 = right - ui.min_rect().left();
-                } else {
-                    sort(ui);
-                    self.filter_tail.0 = right - ui.min_rect().left();
-                }
+                ui.weak(t!(
+                    "filter-bar-count",
+                    shown = self.files.len(),
+                    n = self.folder.files.len()
+                ))
+                .on_hover_text(t!("filter-bar-count-tip"));
+                self.filter_tail = right - ui.min_rect().left();
             });
         });
         if refilter {
             self.refilter(Reveal::Minimal);
-        }
-        if let Some(key) = sort_choice {
-            self.set_order(tri::sort::Order { key, ..self.order });
-        }
-        if let Some(render) = render_choice {
-            self.set_grid_render(render);
-        }
-        if let Some(mut checked) = developed_choice {
-            checked.sort();
-            self.developed_checked = Some(checked);
-            self.apply_filter();
         }
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -10134,7 +10226,7 @@ impl eframe::App for TriApp {
                     }
                     ScrollArea::vertical()
                         .auto_shrink(false)
-                        .show(ui, |ui| self.metadata_panel(ui));
+                        .show(ui, |ui| self.side_panel(ui));
                 });
             metadata_rect = Some(panel.response.rect);
         }
@@ -10406,45 +10498,6 @@ fn developed_summary(rule: &tri::develop::DevelopedRule) -> String {
     }
 }
 
-/// Liste de choix de la barre des filtres : déroulante, ou sous-menu dans le menu « … » de
-/// la fenêtre étroite (issue n° 181 : une liste déroulante ouverte depuis un menu se
-/// refermait avec lui avant qu'on choisisse).
-fn bar_choice<T: Copy + PartialEq>(
-    ui: &mut Ui,
-    id: &str,
-    in_menu: bool,
-    current: &mut T,
-    items: &[(T, String)],
-    tip: &str,
-) {
-    let selected = items
-        .iter()
-        .find(|(v, _)| v == current)
-        .map_or_else(String::new, |(_, name)| name.clone());
-    if in_menu {
-        ui.menu_button(selected, |ui| {
-            for (value, name) in items {
-                if ui.selectable_label(value == current, name).clicked() {
-                    *current = *value;
-                    ui.close();
-                }
-            }
-        })
-        .response
-        .on_hover_text(tip);
-    } else {
-        egui::ComboBox::from_id_salt(id)
-            .selected_text(selected)
-            .show_ui(ui, |ui| {
-                for (value, name) in items {
-                    ui.selectable_value(current, *value, name);
-                }
-            })
-            .response
-            .on_hover_text(tip);
-    }
-}
-
 /// Champ de recherche par nom de la grille.
 fn grid_search_id() -> egui::Id {
     egui::Id::unique("grid_search")
@@ -10608,6 +10661,52 @@ impl SliderDoubleClick for egui::Response {
                     .button_double_clicked(egui::PointerButton::Primary)
             })
     }
+}
+
+/// Icône d'un filtre sur l'analyse ou les développements (barre du haut, panneau de
+/// droite) : triangle (nettes), soleil (bien exposées), bobine (développées).
+fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color32) {
+    match action {
+        Action::FilterBlurry => marks::sharp_triangle(painter, rect, color),
+        Action::FilterWellExposed => marks::sun(painter, rect, color),
+        Action::FilterDeveloped => marks::film_reel(painter, rect, color),
+        _ => {}
+    }
+}
+
+/// Largeur d'un curseur du panneau de droite : la place qui reste, moins la poignée qui
+/// déborde aux deux bouts du rail (sinon le curseur passe sous le bord du panneau).
+fn panel_slider_width(ui: &Ui) -> f32 {
+    (ui.available_width() - ui.spacing().interact_size.y).max(0.0)
+}
+
+/// Intertitre d'un groupe de réglages du panneau de droite (estompé, plus petit que le
+/// titre de section).
+fn subheading(ui: &mut Ui, text: String) -> egui::Response {
+    ui.add_space(ui.spacing().item_spacing.y);
+    ui.label(egui::RichText::new(text).weak())
+}
+
+/// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
+/// strict » à droite, pour lire le sens sans le survoler.
+fn slider_ends(ui: &mut Ui, width: f32) {
+    let small = egui::TextStyle::Small;
+    ui.allocate_ui(vec2(width, ui.text_style_height(&small)), |ui| {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new(t!("slider-lenient"))
+                    .text_style(small.clone())
+                    .weak(),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    egui::RichText::new(t!("slider-strict"))
+                        .text_style(small)
+                        .weak(),
+                );
+            });
+        });
+    });
 }
 
 /// Curseur de sévérité (-1 à 1, centre 0) de largeur `width`, avec un repère au
@@ -11486,27 +11585,48 @@ mod tests {
     }
 
     #[test]
-    fn the_narrow_bar_menu_lists_can_be_chosen() {
-        // Issue n° 181 : fenêtre étroite, l'ordre et le rendu passent dans le menu « … » ;
-        // leurs listes déroulantes s'y refermaient avec le menu. Des sous-menus à la place.
+    fn the_right_panel_holds_the_grid_settings_in_folding_sections() {
+        // Réorganisation du 27/10/2026 : l'ordre, le rendu des vignettes, les piles dans la
+        // section « Grille » du panneau de droite ; un clic sur un titre replie la section,
+        // retenu d'une session à l'autre.
         let (mut h, _dir) = harness();
-        h.state_mut().filter_bar = true;
-        // « Nom » est aussi une ligne des métadonnées.
-        h.state_mut().metadata_panel = false;
-        h.set_size(vec2(400.0, 700.0));
+        h.state_mut().metadata_panel = true;
+        // Les noms d'ordre sont aussi des lignes des Exif (« Nom ») : section repliée.
+        h.state_mut().panel_folded.insert("exif".to_string());
+        h.set_size(vec2(1400.0, 1200.0));
         h.run_steps(4);
-        h.get_by_label("…").click();
-        h.run_steps(2);
         let current = h.state().order.key;
         let other = tri::sort::SortKey::ALL
             .into_iter()
             .find(|&k| k != current)
             .unwrap();
-        h.get_by_label(&sort_name(current)).click();
+        // La seule liste déroulante de la fenêtre (la barre des filtres n'en a plus).
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
         h.get_by_label(&sort_name(other)).click();
         h.run_steps(2);
         assert_eq!(h.state().order.key, other);
+        // Les piles : une case, et leurs réglages quand elles sont actives.
+        assert!(h.query_by_label(&t!("panel-grid-similarity")).is_none());
+        h.get_by_label(&t!("panel-grid-stacks-on")).click();
+        h.run_steps(2);
+        assert!(h.state().stacking);
+        assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
+        // Replier « Grille ».
+        h.get_by_label(&t!("panel-section-grid")).click();
+        h.run_steps(2);
+        assert!(h.state().panel_folded.contains("grid"));
+        assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_none());
+        assert_eq!(
+            h.state().display().panel_folded,
+            Some(vec!["exif".to_string(), "grid".to_string()])
+        );
+        // Les réglages d'un filtre n'apparaissent qu'avec lui.
+        assert!(h.query_by_label(&t!("panel-clip-over")).is_none());
+        h.get_by_label(&t!("panel-filter-exposed")).click();
+        h.run_steps(2);
+        assert!(h.state().well_exposed);
+        assert!(h.query_by_label(&t!("panel-clip-over")).is_some());
     }
 
     #[test]
@@ -13161,33 +13281,23 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_filter_bar_folds_its_end_into_a_menu() {
-        // Issue n° 71 : fenêtre étroite, le tri et le nombre d'images passent dans « … »,
-        // l'inversion et l'effacement restent visibles ; large, tout est dans la barre.
+    fn a_narrow_filter_bar_keeps_its_end_visible() {
+        // Issue n° 71 : fenêtre étroite, la fin de la barre recouvrait le champ de
+        // recherche. Depuis la réorganisation du 27/10/2026, l'ordre et le rendu sont dans
+        // le panneau de droite : le champ se rétrécit, le nombre d'images, l'inversion et
+        // l'effacement restent visibles.
         let (mut h, _dir) = harness();
-        let more = "…";
         let clear = t!("filter-bar-clear");
-        h.set_size(vec2(2000.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_none(), "large : pas de menu");
-        h.set_size(vec2(760.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_some(), "étroite : le menu");
-        assert!(
-            h.query_by_label(&clear).is_some(),
-            "effacer toujours visible"
-        );
-        // Le menu ouvert : le nombre d'images y est.
-        h.get_by_label(more).click();
-        h.run_steps(3);
         let count = t!("filter-bar-count", shown = 3, n = 3);
-        assert!(
-            h.query_by_label(&count).is_some(),
-            "nombre d'images dans le menu"
-        );
-        h.set_size(vec2(2000.0, 700.0));
-        h.run_steps(4);
-        assert!(h.query_by_label(more).is_none(), "de nouveau large");
+        for width in [2000.0, 900.0] {
+            h.set_size(vec2(width, 700.0));
+            h.run_steps(4);
+            assert!(h.query_by_label(&clear).is_some(), "effacer à {width}");
+            assert!(
+                h.query_by_label(&count).is_some(),
+                "nombre d'images à {width}"
+            );
+        }
     }
 
     #[test]
@@ -14623,12 +14733,11 @@ mod tests {
         assert!(!h.state().files.iter().any(|f| badly.contains(&f.path)));
         // Curseurs « brûlé » / « bouché » avec le filtre ; tout à gauche, plus rien n'est
         // exclu (fonds noirs, issue n° 48), et plus de badge.
-        // Un seul curseur ; son interrupteur passe du brûlé au bouché.
-        assert!(h.query_by_label(&t!("clip-slider-under")).is_none());
-        h.get_by_label(&t!("clip-slider-over")).click();
+        // Les deux curseurs dans la section « Filtres » du panneau de droite
+        // (réorganisation du 27/10/2026).
         h.run_steps(2);
-        assert_eq!(h.state().clip_side, tri::exposure::Clip::Under);
-        assert!(h.query_by_label(&t!("clip-slider-under")).is_some());
+        assert!(h.query_by_label(&t!("panel-clip-over")).is_some());
+        assert!(h.query_by_label(&t!("panel-clip-under")).is_some());
         h.state_mut().clip_strictness = (-1.0, -1.0);
         h.state_mut().refilter(Reveal::Minimal);
         assert_eq!(h.state().files.len(), n);
@@ -14722,6 +14831,8 @@ mod tests {
     #[test]
     fn dialogs_show_a_hand_over_checkboxes_and_grab_elsewhere() {
         let (mut h, dir) = harness();
+        // Les cases du panneau de droite ne gênent pas la recherche de celle de la boîte.
+        h.state_mut().metadata_panel = false;
         h.run_steps(3);
         h.state_mut().config_path = Some(dir.path().join("config.toml"));
         press(&mut h, Key::Comma, Modifiers::CTRL);
@@ -15831,8 +15942,10 @@ mod tests {
         h.run_steps(3);
         // RapidRAW pas installé : on le dit.
         h.state_mut().developers = fake_darktable();
-        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        // Une seule liste déroulante, celle de la boîte (le panneau de droite a celle de
+        // l'ordre).
         h.state_mut().filter_bar = false;
+        h.state_mut().metadata_panel = false;
         let lead = |h: &mut Harness<'_, TriApp>| press(h, Key::B, Modifiers::CTRL);
         lead(&mut h);
         press(&mut h, Key::P, Modifiers::NONE);
@@ -15949,8 +16062,10 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
-        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        // Une seule liste déroulante, celle de la boîte (le panneau de droite a celle de
+        // l'ordre).
         h.state_mut().filter_bar = false;
+        h.state_mut().metadata_panel = false;
         let img0 = h.state().files[0].path.clone();
         std::fs::write(
             img0.with_file_name("img0.jpg.xmp"),

@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Right panel in sections**: the filter bar keeps the one-click filters and the name
+  search; their settings and the grid's move to the right panel, in sections titled like
+  the folder panel's and folded with a click: Histogram, Filters (each filter's settings
+  only while it is on; two sliders for exposure; development software as check boxes),
+  Grid (thumbnail render, order, thumbnail size and info, stacks), Exif at the bottom.
+  `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your
+  configuration file if you set them.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
   `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,

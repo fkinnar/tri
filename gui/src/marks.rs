@@ -520,12 +520,7 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
 }
 
 /// Icône du bandeau de notation dans `rect` : flèche (image précédente / suivante), ou
-/// étoile suivie d'une flèche (avance automatique : « après une note, on avance »).
-pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, colors: &Colors) {
-    bar_icon_on(painter, rect, action, color, colors, false);
-}
-
-/// Comme [`bar_icon`] ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
+/// étoile suivie d'une flèche (avance automatique) ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
 /// automatique, à l'accent sinon, y prend la couleur du texte sélectionné (elle
 /// disparaissait dans le fond, issue n° 59).
 pub fn bar_icon_on(

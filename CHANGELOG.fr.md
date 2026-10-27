@@ -4,6 +4,14 @@
 
 ## À venir
 
+- **Panneau de droite en sections** : la barre des filtres garde les filtres d'un clic
+  et la recherche par nom ; leurs réglages et ceux de la grille passent dans le panneau de
+  droite, en sections titrées comme celles du panneau des dossiers et repliables d'un
+  clic : Histogramme, Filtres (réglages d'un filtre seulement quand il est allumé ; deux
+  curseurs pour l'exposition ; logiciels de développement en cases à cocher), Grille
+  (rendu, ordre, taille et infos des vignettes, piles), Exif en bas. `[gui.grid]
+  stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de
+  configuration si vous les aviez réglés.
 - **Développements dans la grille** : après le développement, la grille peut montrer le
   développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`
   (défaut), `latest`, `darktable`, `rapidraw` ou `libraw`, aussi une liste de la barre

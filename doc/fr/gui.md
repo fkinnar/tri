@@ -584,6 +584,28 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la barre d'état ; à la fin, la séance est proposée (« Ouvrir la séance ») plutôt
   qu'ouverte d'office. Voir [offload.md](offload.md). Le travail est dans
   le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
+- **Panneau de droite en sections** (réorganisation du 27/10/2026, idée de
+  l'utilisateur ; `TriApp::side_panel`) : la barre des filtres ne garde que ce qui se
+  règle d'un clic (types, étoiles, drapeaux, interrupteurs nettes / bien exposées /
+  développées, couleurs) et la recherche par nom, avec le nombre d'images, l'inversion
+  et l'effacement ; les **réglages** passent dans le panneau de droite, en sections
+  titrées comme celles du panneau des dossiers (gras, `[gui.folders] section_scale`),
+  repliables d'un clic sur le titre (retenu, `gui-state.toml`, `panel_folded`), dans
+  l'ordre habituel des autres logiciels (Lightroom) : **Histogramme** en haut,
+  **Filtres** et **Grille** (en grille seulement), **Exif** en bas.
+  - *Filtres* : chaque filtre réglable avec une case (comme son icône de la barre), ses
+    réglages seulement quand il est allumé : sévérité du flou ; **deux curseurs** pour
+    l'exposition (brûlé et bouché, à la place d'un curseur et d'un interrupteur) ;
+    logiciels de développement en **cases à plat**. Sous chaque curseur, « plus souple »
+    à gauche, « plus strict » à droite. La bulle des icônes de la barre dit où sont les
+    réglages.
+  - *Grille* : rendu des vignettes en boutons radio (à la place de la liste cachée dans
+    le menu « … » des fenêtres étroites, qui disparaît), ordre (liste et sens), taille
+    et infos des vignettes, piles (case, similarité, entrée par la couverture ou la
+    première photo, tout déplier / replier, réglages fins).
+  - Clés retirées : `[gui.grid] stack_slider` et `clip_slider` (les curseurs du panneau
+    prennent sa largeur) ; `blur_slider` ne sert plus qu'à la barre du bas du plein
+    écran.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
   (`Maj+M`, `[gui.metadata]`) : nom du fichier en première ligne (22/10/2026, plutôt
   qu'un titre), puis les lignes du moteur (`Metadata::rows`, voir

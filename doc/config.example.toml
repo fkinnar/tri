@@ -530,12 +530,9 @@ marked_frame = 3.0
 # Goutte sous les vignettes des photos jugées floues (score de netteté, voir
 # [sharpness]).
 blur_badge = true
-# Largeur du curseur de similarité de la barre des filtres.
-stack_slider = 90.0
-# Largeur du curseur de sévérité du flou de la barre des filtres.
+# Largeur du curseur de sévérité du flou de la barre du bas du plein écran (avec la
+# carte de netteté). Dans le panneau de droite, les curseurs prennent sa largeur.
 blur_slider = 90.0
-# Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
-clip_slider = 60.0
 # Largeur du curseur de taille des vignettes, en bas de la grille.
 size_slider = 90.0
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image

@@ -430,12 +430,10 @@ pub struct GridSettings {
     pub marked_frame: f32,
     /// Goutte sous les vignettes des photos jugées floues (score de netteté).
     pub blur_badge: bool,
-    /// Largeur du curseur de similarité de la barre des filtres (points).
-    pub stack_slider: f32,
-    /// Largeur du curseur de sévérité du flou de la barre des filtres (points).
+    /// Largeur du curseur de sévérité du flou de la barre du bas du plein écran, avec la
+    /// carte de netteté (points). Dans le panneau de droite, les curseurs prennent sa
+    /// largeur.
     pub blur_slider: f32,
-    /// Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
-    pub clip_slider: f32,
     /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
     pub size_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
@@ -476,9 +474,7 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
-            stack_slider: 90.0,
             blur_slider: 90.0,
-            clip_slider: 60.0,
             size_slider: 90.0,
             stacks: false,
             search_width: 200.0,

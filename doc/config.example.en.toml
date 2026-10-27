@@ -532,12 +532,9 @@ marked_frame = 3.0
 # Drop under the thumbnails of photos judged blurry (sharpness score, see
 # [sharpness]).
 blur_badge = true
-# Width of the similarity slider of the filter bar.
-stack_slider = 90.0
-# Width of the blur strictness slider of the filter bar.
+# Width of the blur strictness slider of the full screen bottom bar (with the sharpness
+# map). In the right panel, the sliders take its width.
 blur_slider = 90.0
-# Width of each of the "blown" / "crushed" sliders of the filter bar.
-clip_slider = 60.0
 # Width of the thumbnail size slider at the bottom of the grid.
 size_slider = 90.0
 # Stacks (similar images grouped) shown at startup; false: each image
