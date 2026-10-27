@@ -13,7 +13,8 @@
   pastille sous la vignette nomme le logiciel (issue n° 114).
 - **Filtre « développées »** : une liste de la barre des filtres et `f Maj+D` : un
   développement, ou développées dans un logiciel donné (installés seulement) ;
-  inversible, pour voir les images pas encore développées.
+  inversible, pour voir les images pas encore développées. Sous « développées dans » un
+  logiciel, la grille montre le développement de ce logiciel.
 - **RapidRAW**, deuxième logiciel de développement à côté de darktable : `rapidraw
   export` applique son sidecar `.rrdata` ; trouvé dans le PATH, aux endroits habituels,
   en AppImage ou en Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"`

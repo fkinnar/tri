@@ -365,6 +365,9 @@ pub struct TriApp {
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
     grid_render: crate::grid_render::GridRender,
+    /// Rendu des vignettes au dernier refiltrage ([`TriApp::shown_render`]) : un
+    /// changement relance le lot de la grille.
+    shown_render: crate::grid_render::GridRender,
     /// Niveau montré par chaque vignette (lu dans les sidecars, gardé jusqu'au refiltrage).
     grid_levels: HashMap<PathBuf, Level>,
     /// Niveau de la texture chargée de chaque vignette.
@@ -788,6 +791,7 @@ impl TriApp {
             develop_batch_auto: false,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
+            shown_render: gui.grid.render,
             grid_levels: HashMap::new(),
             texture_levels: HashMap::new(),
             grid_found: HashSet::new(),
@@ -2528,6 +2532,12 @@ impl TriApp {
             self.reveal = Some(Reveal::Anchor);
         }
         // Sidecars peut-être changés (surveillance, renommage…) : niveaux des vignettes relus.
+        // Rendu changé par le filtre « développées dans » : le lot de la grille le suit.
+        let shown = self.shown_render();
+        if shown != self.shown_render {
+            self.shown_render = shown;
+            self.auto_develop_pending = true;
+        }
         self.grid_levels.clear();
         self.grid_found.clear();
         self.grid_looked.clear();
@@ -6349,7 +6359,7 @@ impl TriApp {
         if let Some(&level) = self.grid_levels.get(&file.path) {
             return level;
         }
-        let level = self.grid_render.level(file, &self.developers.engines());
+        let level = self.shown_render().level(file, &self.developers.engines());
         self.grid_levels.insert(file.path.clone(), level);
         level
     }
@@ -6423,6 +6433,22 @@ impl TriApp {
         }
     }
 
+    /// Rendu montré par les vignettes : celui choisi (`f d`), sauf sous le filtre
+    /// « développées dans » un logiciel, qui montre les développements de ce logiciel
+    /// (retour du 27/10/2026 : filtrées sur RapidRAW, les vignettes montraient le
+    /// développement darktable, plus récent). Le JPEG boîtier et LibRaw, choisis
+    /// exprès, restent ; inversé, le filtre montre les images sans ce développement.
+    fn shown_render(&self) -> crate::grid_render::GridRender {
+        use crate::grid_render::GridRender;
+        match (self.grid_render, self.developed_rule) {
+            (
+                GridRender::Latest | GridRender::Engine(_),
+                Some(tri::develop::DevelopedRule::Engine(e)),
+            ) if !self.filter_inverted => GridRender::Engine(e),
+            (render, _) => render,
+        }
+    }
+
     /// Change le rendu des vignettes (barre des filtres, `f d`).
     fn set_grid_render(&mut self, render: crate::grid_render::GridRender) {
         if render == self.grid_render {
@@ -6443,7 +6469,7 @@ impl TriApp {
             return;
         }
         self.auto_develop_pending = false;
-        let Some(force) = self.grid_render.to_develop() else {
+        let Some(force) = self.shown_render().to_develop() else {
             return;
         };
         let Some(engine) = &self.engine else { return };
@@ -11236,6 +11262,58 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().developed_rule, None);
         assert_eq!(h.state().files.len(), all);
+    }
+
+    #[test]
+    fn developed_in_a_software_shows_its_development() {
+        // Retour du 27/10/2026 : sous « développées dans RapidRAW », une image développée
+        // dans les deux montrait le développement darktable (plus récent).
+        use crate::grid_render::GridRender;
+        use tri::develop::{DevelopedRule, Engine};
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
+        let raw = h.state().files[0].path.with_file_name("a.RAF");
+        std::fs::write(&raw, b"raw").unwrap();
+        std::fs::write(raw.with_file_name("a.RAF.rrdata"), b"{}").unwrap();
+        // darktable ensuite : le plus récent.
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(
+            raw.with_file_name("a.RAF.xmp"),
+            r#"<rdf:Description darktable:history_end="3"/>"#,
+        )
+        .unwrap();
+        let file = MediaFile {
+            path: raw,
+            kind: MediaKind::Raw,
+        };
+        let engines = [Engine::Darktable, Engine::RapidRaw];
+        let app = h.state_mut();
+        app.grid_render = GridRender::Latest;
+        assert_eq!(
+            app.shown_render().level(&file, &engines),
+            Level::Developed(Engine::Darktable)
+        );
+        app.developed_rule = Some(DevelopedRule::Engine(Engine::RapidRaw));
+        assert_eq!(
+            app.shown_render().level(&file, &engines),
+            Level::Developed(Engine::RapidRaw)
+        );
+        // Un logiciel choisi pour la grille cède aussi au filtre.
+        app.grid_render = GridRender::Engine(Engine::Darktable);
+        assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
+        // JPEG boîtier et LibRaw, choisis exprès, restent ; inversé, le filtre ne joue pas.
+        app.grid_render = GridRender::Embedded;
+        assert_eq!(app.shown_render(), GridRender::Embedded);
+        app.grid_render = GridRender::LibRaw;
+        assert_eq!(app.shown_render(), GridRender::LibRaw);
+        app.grid_render = GridRender::Latest;
+        app.filter_inverted = true;
+        assert_eq!(app.shown_render(), GridRender::Latest);
+        // « Un développement » : le choix de la grille.
+        app.filter_inverted = false;
+        app.developed_rule = Some(DevelopedRule::Any);
+        assert_eq!(app.shown_render(), GridRender::Latest);
     }
 
     #[test]
