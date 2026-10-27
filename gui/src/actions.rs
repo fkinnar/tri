@@ -163,6 +163,8 @@ pub enum Action {
     FilterStack,
     /// Inverser les filtres : ce qu'ils retirent (les floues, avec « nettes »…).
     FilterInvert,
+    /// Filtre « développées » suivant : un développement, un logiciel, rien.
+    FilterDeveloped,
     /// Ordre suivant : nom, date de prise de vue, date de modification.
     SortNext,
     /// Inverser le sens de l'ordre.
@@ -408,7 +410,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 169] = [
+    pub const ALL: [Action; 170] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -438,6 +440,7 @@ impl Action {
         Action::FilterWellExposed,
         Action::FilterStack,
         Action::FilterInvert,
+        Action::FilterDeveloped,
         Action::SortNext,
         Action::SortReverse,
         Action::GridRenderNext,
@@ -626,7 +629,7 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | SortNext | SortReverse | GridRenderNext => Group::Filters,
+            | FilterDeveloped | SortNext | SortReverse | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
@@ -713,6 +716,7 @@ impl Action {
             Action::FilterWellExposed => "core.filter.well_exposed",
             Action::FilterStack => "core.filter.stack",
             Action::FilterInvert => "core.filter.invert",
+            Action::FilterDeveloped => "core.filter.developed",
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
             Action::SortReverse => "core.filter.sort_reverse",
@@ -1433,6 +1437,8 @@ const FILTERS: &[Binding] = {
         (&[F, plain(Key::R)], SortReverse),
         // Rendu des vignettes (« développé », #114).
         (&[F, plain(Key::D)], GridRenderNext),
+        // Développées : Maj+D, à côté du rendu des vignettes.
+        (&[F, shifted(Key::D)], FilterDeveloped),
         (&[shifted(Key::F)], ToggleFilterBar),
     ]
 };

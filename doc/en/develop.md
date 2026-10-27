@@ -165,3 +165,13 @@ there was nothing to render), or on request only (`"manual"`); LibRaw, then the 
 meanwhile. The batch's renders, made outside the engine, are looked up in the cache at most
 once per `render_poll_ms`. The render, much larger than a thumbnail, is decoded reduced
 (`jpeg::decode` at thumbnail size). Flat images keep their thumbnail.
+
+## Filtering the developed images (2026-10-27)
+
+"Developed or not" list in the filter bar, `f Shift+D` for the next choice: **any
+development** (whatever the software), or **developed in** a given software; installed
+software only, as for display. LibRaw is not offered: it renders every image. Engine:
+`develop::DevelopedRule` and `DevelopedFilter` (`Filter` trait), which read the sidecars
+(`Engine::sidecar`: non-empty darktable history, RapidRAW's `.rrdata`); a flat image has no
+development. It is a content filter: cleared by `f Esc`, invertible (`f i`: the images not
+developed yet).

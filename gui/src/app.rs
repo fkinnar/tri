@@ -253,6 +253,8 @@ pub struct TriApp {
     blur_refilter_pending: bool,
     /// Filtre « bien exposées » (ni brûlées ni bouchées, seuils des badges).
     well_exposed: bool,
+    /// Filtre « développées » : un développement, ou celui d'un logiciel (27/10/2026).
+    developed_rule: Option<tri::develop::DevelopedRule>,
     /// Filtres inversés : ce qu'ils retirent (notes, netteté, exposition).
     filter_inverted: bool,
     /// Ordre des images (`f s`, `f r`, liste de la barre des filtres).
@@ -740,6 +742,7 @@ impl TriApp {
             blurry_applied: HashSet::new(),
             blur_refilter_pending: false,
             well_exposed: false,
+            developed_rule: None,
             filter_inverted: false,
             order: tri::sort::Order {
                 key: gui.sort,
@@ -2486,6 +2489,14 @@ impl TriApp {
         } else {
             groups
         };
+        let groups = match self.developed_rule {
+            Some(rule) => tri::develop::DevelopedFilter {
+                rule,
+                available: &self.developers.engines(),
+            }
+            .apply(groups),
+            None => groups,
+        };
         // Inversé : ce que les filtres sur le contenu ont retiré de la base.
         let groups = if self.filter_inverted && self.content_filtered() {
             tri::filter::invert(base, &groups)
@@ -2722,7 +2733,10 @@ impl TriApp {
     /// Un filtre sur le contenu est actif (notes, netteté, exposition) : ce que
     /// l'inversion retourne.
     fn content_filtered(&self) -> bool {
-        !self.notes_rule.is_empty() || self.blur_rule.is_some() || self.well_exposed
+        !self.notes_rule.is_empty()
+            || self.blur_rule.is_some()
+            || self.well_exposed
+            || self.developed_rule.is_some()
     }
 
     /// Parts saturées / bouchées des images de la grille dont l'analyse est prête, lues
@@ -3924,6 +3938,7 @@ impl TriApp {
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
                 self.well_exposed = false;
+                self.developed_rule = None;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -3976,6 +3991,18 @@ impl TriApp {
             Action::FilterInvert => {
                 self.filter_inverted = !self.filter_inverted;
                 self.apply_filter();
+            }
+            Action::FilterDeveloped => {
+                let rule = tri::develop::DevelopedRule::next(
+                    self.developed_rule,
+                    &self.developers.engines(),
+                );
+                self.developed_rule = rule;
+                self.apply_filter();
+                self.notice = Some((
+                    format!("{} : {}", t!("filter-developed-tip"), developed_name(rule)),
+                    false,
+                ));
             }
             Action::GridRenderNext => {
                 let next = self.grid_render.next(&self.developers.engines());
@@ -7999,6 +8026,9 @@ impl TriApp {
         if self.well_exposed {
             parts.push(t!("filter-bar-well-exposed"));
         }
+        if let Some(rule) = self.developed_rule {
+            parts.push(developed_name(Some(rule)));
+        }
         if let Some(only) = &self.stack_only {
             parts.push(t!("filter-summary-stack", n = only.len()));
         }
@@ -8021,6 +8051,7 @@ impl TriApp {
         let mut refilter = false;
         let mut sort_choice: Option<tri::sort::SortKey> = None;
         let mut render_choice: Option<crate::grid_render::GridRender> = None;
+        let mut developed_choice: Option<Option<tri::develop::DevelopedRule>> = None;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -8157,6 +8188,30 @@ impl TriApp {
                 }
                 if action == Action::FilterWellExposed && on {
                     self.clip_slider(ui, size);
+                }
+            }
+            // Développées (27/10/2026) : seulement avec un logiciel de développement.
+            let engines = self.developers.engines();
+            if !engines.is_empty() || self.developed_rule.is_some() {
+                let mut rule = self.developed_rule;
+                let rules: Vec<_> = std::iter::once(None)
+                    .chain(
+                        tri::develop::DevelopedRule::choices(&engines, rule)
+                            .into_iter()
+                            .map(Some),
+                    )
+                    .map(|r| (r, developed_name(r)))
+                    .collect();
+                bar_choice(
+                    ui,
+                    "developed",
+                    false,
+                    &mut rule,
+                    &rules,
+                    &self.action_tip(Action::FilterDeveloped),
+                );
+                if rule != self.developed_rule {
+                    developed_choice = Some(rule);
                 }
             }
             ui.separator();
@@ -8418,6 +8473,10 @@ impl TriApp {
         }
         if let Some(render) = render_choice {
             self.set_grid_render(render);
+        }
+        if let Some(rule) = developed_choice {
+            self.developed_rule = rule;
+            self.apply_filter();
         }
         let ctx = ui.ctx().clone();
         for action in clicked {
@@ -10213,6 +10272,17 @@ pub fn window_icon() -> egui::IconData {
     }
 }
 
+/// Nom d'un filtre « développées » (`None` : pas de filtre), pour la liste et le résumé.
+fn developed_name(rule: Option<tri::develop::DevelopedRule>) -> String {
+    match rule {
+        None => t!("filter-developed-all"),
+        Some(tri::develop::DevelopedRule::Any) => t!("filter-developed-any"),
+        Some(tri::develop::DevelopedRule::Engine(e)) => {
+            t!("filter-developed-engine", engine = e.name())
+        }
+    }
+}
+
 /// Liste de choix de la barre des filtres : déroulante, ou sous-menu dans le menu « … » de
 /// la fenêtre étroite (issue n° 181 : une liste déroulante ouverte depuis un menu se
 /// refermait avec lui avant qu'on choisisse).
@@ -11130,6 +11200,42 @@ mod tests {
         run_until(&mut h, |app| {
             app.texture_levels.get(&file.path) == Some(&Level::Thumbnail)
         });
+    }
+
+    #[test]
+    fn f_shift_d_keeps_the_developed_images() {
+        // 27/10/2026 : `f Maj+D` passe au filtre « développées » suivant (un développement,
+        // chaque logiciel installé, rien). Les images du dossier de test n'en ont aucun.
+        use tri::develop::{DevelopedRule, Engine};
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        let all = h.state().files.len();
+        assert!(all > 0);
+        let f_shift_d = |h: &mut Harness<'_, TriApp>| {
+            press(h, Key::F, Modifiers::NONE);
+            press(h, Key::D, Modifiers::SHIFT);
+        };
+        f_shift_d(&mut h);
+        assert_eq!(h.state().developed_rule, Some(DevelopedRule::Any));
+        assert!(h.state().files.is_empty());
+        assert!(h.state().content_filtered());
+        f_shift_d(&mut h);
+        assert_eq!(
+            h.state().developed_rule,
+            Some(DevelopedRule::Engine(Engine::Darktable))
+        );
+        // Inversé : les images sans développement.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        assert_eq!(h.state().files.len(), all);
+        f_shift_d(&mut h);
+        assert_eq!(h.state().developed_rule, None);
+        f_shift_d(&mut h);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().developed_rule, None);
+        assert_eq!(h.state().files.len(), all);
     }
 
     #[test]
@@ -15478,6 +15584,8 @@ mod tests {
         h.run_steps(3);
         // RapidRAW pas installé : on le dit.
         h.state_mut().developers = fake_darktable();
+        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        h.state_mut().filter_bar = false;
         let lead = |h: &mut Harness<'_, TriApp>| press(h, Key::B, Modifiers::CTRL);
         lead(&mut h);
         press(&mut h, Key::P, Modifiers::NONE);
@@ -15594,6 +15702,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
+        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        h.state_mut().filter_bar = false;
         let img0 = h.state().files[0].path.clone();
         std::fs::write(
             img0.with_file_name("img0.jpg.xmp"),
