@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **JPEG boîtier dans l'histogramme** : pour un RAW, la courbe du JPEG boîtier se
+  dessine en trait fin par-dessus celle des données du capteur, pour voir ce que le
+  boîtier a fait des hautes lumières et des ombres (`[gui.histogram] camera_jpeg`,
+  `camera_width`, `[gui.colors] hist_camera`).
 - **Panneau de droite en sections** : la barre des filtres garde les filtres d'un clic
   et la recherche par nom ; leurs réglages et ceux de la grille passent dans le panneau de
   droite, en sections titrées comme celles du panneau des dossiers et repliables d'un

@@ -19,6 +19,17 @@ pub fn columns(
     ev_shown: f32,
     columns: usize,
 ) -> Vec<[u64; CHANNELS]> {
+    columns_over(e, scale, shown_stops(e, ev_shown), columns)
+}
+
+/// [`columns`] sur `shown` IL donnés : la courbe du JPEG boîtier se place sur la plage de
+/// celle du RAW, pas sur la sienne.
+fn columns_over(
+    e: &Exposure,
+    scale: HistogramScale,
+    shown: f32,
+    columns: usize,
+) -> Vec<[u64; CHANNELS]> {
     let columns = columns.max(1);
     let mut out = vec![[0u64; CHANNELS]; columns];
     match scale {
@@ -31,7 +42,6 @@ pub fn columns(
             }
         }
         HistogramScale::Ev => {
-            let shown = shown_stops(e, ev_shown);
             for (c, channel) in e.ev.iter().enumerate() {
                 let bins = channel.len().max(1);
                 let per_stop = bins as f32 / e.ev_range;
@@ -162,10 +172,16 @@ fn clipped(e: &Exposure, channel: Option<usize>, counts: &[u64; CHANNELS]) -> f6
 
 /// Histogramme dans `rect` : fond, canaux superposés (ou un seul), graduations,
 /// indicateurs.
+///
+/// `camera` : exposition du JPEG boîtier d'un RAW, dessinée en trait fin par-dessus
+/// (`[gui.histogram] camera_jpeg`), chaque courbe à sa propre hauteur : seule la forme
+/// compte. En IL, chacune est mesurée sous son propre blanc (saturation du capteur, 255
+/// du JPEG).
 pub fn draw(
     painter: &Painter,
     rect: Rect,
     e: &Exposure,
+    camera: Option<&Exposure>,
     look: Look,
     settings: &HistogramSettings,
     colors: &Colors,
@@ -274,6 +290,49 @@ pub fn draw(
             points,
             Stroke::new(1.2, additive(base, 0.9)),
         ));
+    }
+    // JPEG boîtier : une courbe, tous les canaux confondus (ou le canal choisi), en
+    // trait seul.
+    if let Some(j) = camera {
+        let shown_ev = shown_stops(e, settings.ev_shown);
+        let cols = columns_over(j, scale, shown_ev, count);
+        let raw: Vec<f32> = cols
+            .iter()
+            .map(|v| {
+                (0..CHANNELS)
+                    .filter(|&c| shown(c))
+                    .map(|c| v[c] as f32)
+                    .sum()
+            })
+            .collect();
+        let curve = smooth(&raw, settings.smoothing);
+        let peak = curve
+            .iter()
+            .skip(1)
+            .take(curve.len().saturating_sub(2))
+            .copied()
+            .fold(0.0f32, f32::max)
+            .max(1e-6);
+        let y = |v: f32| graph.max.y - (v / peak).min(1.0) * graph.height();
+        let points: Vec<_> = curve
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| pos2(graph.min.x + (i as f32 + 0.5) * class_w, y(v)))
+            .collect();
+        painter.add(eframe::egui::Shape::line(
+            points,
+            Stroke::new(settings.camera_width, Color32::from(colors.hist_camera)),
+        ));
+        // Légende, dans le grand histogramme (en petit, la bulle d'aide le dit).
+        if details {
+            painter.text(
+                graph.left_top() + vec2(4.0, 2.0),
+                Align2::LEFT_TOP,
+                t!("histogram-camera-legend"),
+                FontId::proportional(11.0),
+                Color32::from(colors.hist_camera),
+            );
+        }
     }
     // Graduations.
     let grid = Stroke::new(1.0, Color32::from_white_alpha(40));

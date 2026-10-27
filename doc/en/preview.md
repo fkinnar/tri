@@ -33,5 +33,9 @@ Synchronous computation of the cached images (see `CLAUDE.md`, "Aperçus et cach
 - `exposure(cache, file, settings)`: analysis read from the cache (`None` if missing; an
   unreadable entry is deleted so it gets recomputed). Its key contains all the
   `[exposure]` settings.
+- `camera_exposure(cache, file, settings)` (2026-10-27): exposure of a RAW's **camera
+  JPEG**, from its cached camera preview (`Level::Embedded`); `None` for a flat image or
+  while the preview is missing. No cache of its own (a few tens of ms): the interface
+  keeps it in memory and overlays it on the sensor histogram.
 - `PreviewError`: `Raw`, `Flat`, `Io`, `Cancelled`, `NotAnImage` (`compute` on
   `Level::Exposure`).

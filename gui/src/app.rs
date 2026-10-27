@@ -458,6 +458,8 @@ pub struct TriApp {
     clipping: bool,
     /// Analyses d'exposition lues dans le cache (images affichées récemment).
     exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Expositions du JPEG boîtier des RAW ([`TriApp::camera_exposure_of`]).
+    camera_exposures: Lru<PathBuf, Arc<Exposure>>,
     /// Masques des zones, en textures.
     mask_textures: Lru<PathBuf, TextureHandle>,
     /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
@@ -854,6 +856,7 @@ impl TriApp {
             analysis_texture: None,
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
+            camera_exposures: Lru::new(gui.view.textures),
             mask_textures: Lru::new(gui.view.textures),
             clip_summary: std::collections::HashMap::new(),
             selected,
@@ -1678,10 +1681,14 @@ impl TriApp {
                     vec2(ui.available_width(), settings.histogram_height),
                     Sense::click(),
                 );
-                let tip = t!(
+                let camera = self.camera_exposure_of(self.selected);
+                let mut tip = t!(
                     "histogram-enlarge",
                     keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
                 );
+                if camera.is_some() {
+                    tip = format!("{tip}\n{}", t!("histogram-camera-legend"));
+                }
                 if response
                     .on_hover_cursor(egui::CursorIcon::ZoomIn)
                     .on_hover_text(tip)
@@ -1698,6 +1705,7 @@ impl TriApp {
                     ui.painter(),
                     rect,
                     &e,
+                    camera.as_deref(),
                     look,
                     &self.gui.histogram,
                     &self.gui.colors,
@@ -6883,6 +6891,34 @@ impl TriApp {
         Some(e)
     }
 
+    /// Exposition du JPEG boîtier du RAW `index`, à superposer à son histogramme
+    /// (`[gui.histogram] camera_jpeg`) : calculée une fois l'aperçu boîtier prêt, gardée
+    /// en mémoire ; `None` pour une image plate.
+    fn camera_exposure_of(&mut self, index: usize) -> Option<Arc<Exposure>> {
+        if !self.gui.histogram.camera_jpeg {
+            return None;
+        }
+        let file = self.files.get(index)?;
+        if file.kind != MediaKind::Raw {
+            return None;
+        }
+        let path = file.path.clone();
+        if let Some(e) = self.camera_exposures.get(&path) {
+            return Some(e.clone());
+        }
+        if !self.ready(index, Level::Embedded) {
+            return None;
+        }
+        let engine = self.engine.as_ref()?;
+        let e = Arc::new(preview::camera_exposure(
+            &engine.cache,
+            &self.files[index],
+            &engine.preview,
+        )?);
+        self.camera_exposures.insert(path, e.clone());
+        Some(e)
+    }
+
     /// Masque des zones de l'image `index`, en texture (créée à la première demande).
     fn mask_texture(&mut self, ctx: &egui::Context, index: usize) -> Option<TextureHandle> {
         let path = self.files.get(index)?.path.clone();
@@ -7694,6 +7730,7 @@ impl TriApp {
             return;
         }
         let exposure = self.exposure_of(self.selected);
+        let camera = self.camera_exposure_of(self.selected);
         let analysis = self.analysis_texture(ctx, self.selected);
         let name = self
             .files
@@ -7732,6 +7769,7 @@ impl TriApp {
                             ui.painter(),
                             rect,
                             e,
+                            camera.as_deref(),
                             look,
                             &self.gui.histogram,
                             &self.gui.colors,

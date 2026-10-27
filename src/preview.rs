@@ -504,6 +504,20 @@ pub fn exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<
     }
 }
 
+/// Exposition du **JPEG boîtier** d'un RAW (idée de l'utilisateur, 27/10/2026 : voir ce
+/// que le boîtier a fait des hautes lumières et des ombres, à côté des données du
+/// capteur), d'après son aperçu boîtier en cache ([`Level::Embedded`], déjà réduit) :
+/// `None` pour une image plate, ou tant que cet aperçu n'est pas calculé. Pas de cache
+/// propre : quelques dizaines de ms sur un aperçu de 2560 px, à garder en mémoire par
+/// l'appelant.
+pub fn camera_exposure(cache: &Cache, file: &MediaFile, settings: &Settings) -> Option<Exposure> {
+    if file.kind != MediaKind::Raw {
+        return None;
+    }
+    let bitmap = cache.get(&key(file, Level::Embedded, settings).ok()?)?;
+    Some(Exposure::from_bitmap(&bitmap, &settings.exposure))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -577,6 +591,41 @@ mod tests {
         assert_eq!(
             changed(&|t| t.min_embedded_full = 2000),
             [Level::EmbeddedFull]
+        );
+    }
+
+    #[test]
+    fn the_camera_jpeg_histogram_comes_from_the_cached_embedded_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache")).unwrap();
+        let settings = Settings::default();
+        let raw = MediaFile {
+            path: dir.path().join("a.raf"),
+            kind: MediaKind::Raw,
+        };
+        std::fs::write(&raw.path, b"raw").unwrap();
+        assert!(
+            camera_exposure(&cache, &raw, &settings).is_none(),
+            "pas encore d'aperçu boîtier"
+        );
+        // Aperçu tout blanc : le JPEG boîtier est brûlé.
+        let white = Bitmap {
+            width: 16,
+            height: 16,
+            data: vec![255; 16 * 16 * 3],
+        };
+        let key = key(&raw, Level::Embedded, &settings).unwrap();
+        cache.put(&key, &white).unwrap();
+        let e = camera_exposure(&cache, &raw, &settings).expect("calculée");
+        assert!(e.over_fraction() > 0.9, "{}", e.over_fraction());
+        let flat = MediaFile {
+            path: dir.path().join("b.jpg"),
+            kind: MediaKind::Flat,
+        };
+        std::fs::write(&flat.path, b"jpg").unwrap();
+        assert!(
+            camera_exposure(&cache, &flat, &settings).is_none(),
+            "image plate"
         );
     }
 

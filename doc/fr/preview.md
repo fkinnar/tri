@@ -31,5 +31,9 @@ Calcul synchrone des images mises en cache (voir `CLAUDE.md`, « Aperçus et cac
 - `exposure(cache, file, settings)` : analyse lue dans le cache (`None` si absente ; une
   entrée illisible est supprimée pour être recalculée). Sa clé contient tous les réglages
   `[exposure]`.
+- `camera_exposure(cache, file, settings)` (27/10/2026) : exposition du **JPEG boîtier**
+  d'un RAW, d'après son aperçu boîtier en cache (`Level::Embedded`) ; `None` pour une
+  image plate ou tant que l'aperçu manque. Sans cache propre (quelques dizaines de ms) :
+  l'interface la garde en mémoire et la superpose à l'histogramme du capteur.
 - `PreviewError` : `Raw`, `Flat`, `Io`, `Cancelled`, `NotAnImage` (`compute` sur
   `Level::Exposure`).
