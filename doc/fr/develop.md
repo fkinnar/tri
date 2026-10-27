@@ -170,6 +170,9 @@ LibRaw, puis la vignette, en attendant. Les rendus du lot, faits hors du moteur,
 cherchés dans le cache au plus une fois par `render_poll_ms`. Le rendu, bien plus grand
 qu'une vignette, est décodé réduit (`jpeg::decode` à la taille des vignettes). Les images
 plates gardent leur vignette.
+Entrée ou un double-clic ouvrent le plein écran sur ce que montre la vignette : son
+développement (dans le même logiciel), ou le rendu RAW ; avec le JPEG boîtier dans la
+grille, la source choisie au plein écran (`b`) reste.
 
 ## Filtrer les images développées (27/10/2026)
 

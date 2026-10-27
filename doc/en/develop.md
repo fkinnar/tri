@@ -165,6 +165,9 @@ there was nothing to render), or on request only (`"manual"`); LibRaw, then the 
 meanwhile. The batch's renders, made outside the engine, are looked up in the cache at most
 once per `render_poll_ms`. The render, much larger than a thumbnail, is decoded reduced
 (`jpeg::decode` at thumbnail size). Flat images keep their thumbnail.
+Enter or a double click opens full screen on what the thumbnail shows: its development
+(in the same software), or the RAW render; with the camera JPEG in the grid, the source
+chosen in full screen (`b`) stays.
 
 ## Filtering the developed images (2026-10-27)
 
