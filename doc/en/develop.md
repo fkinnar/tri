@@ -175,5 +175,6 @@ software only, as for display. LibRaw is not offered: it renders every image. En
 (`Engine::sidecar`: non-empty darktable history, RapidRAW's `.rrdata`); a flat image has no
 development. It is a content filter: cleared by `f Esc`, invertible (`f i`: the images not
 developed yet). Under "developed in" a software, the thumbnails show that software's
-development, even when another one is more recent (feedback of 2026-10-27), unless the grid
-shows the camera JPEG or LibRaw on purpose (`TriApp::shown_render`).
+development, even when another one is more recent, whatever the render chosen for the grid
+(feedback of 2026-10-27); under "any development", the latest one, unless the grid already
+shows a software. Inverted, the filter leaves the grid its render (`TriApp::shown_render`).
