@@ -425,8 +425,8 @@ export-title = { $n ->
 }
 export-title-version = Export the “{ $name }” version
 export-contents-darktable = { $n ->
-    [one] 1 RAW, developed by darktable
-   *[other] { $n } RAW, developed by darktable
+    [one] 1 RAW, developed by Darktable
+   *[other] { $n } RAW, developed by Darktable
 }
 export-contents-libraw = { $n ->
     [one] 1 RAW, basic rendering (LibRaw)
@@ -449,7 +449,7 @@ export-profile-tip = Up / down arrows: preset · Tab: folder · Enter: export
 export-destination = Folder
 export-create = will be created
 export-goes-to = Destination: { $dest }
-export-no-darktable = darktable missing: basic LibRaw rendering.
+export-no-darktable = Darktable missing: basic LibRaw rendering.
 export-passthrough = Without recompression
 export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-button = Export
@@ -471,7 +471,7 @@ export-done = { $n ->
    *[other] { $n } images exported to { $dest }
 }
 export-done-passthrough = { " " }({ $n } without recompression)
-export-partial = { $n } exported, { $failed } failed (unreadable by darktable?), to { $dest }
+export-partial = { $n } exported, { $failed } failed (unreadable by Darktable?), to { $dest }
 export-cancelled = Export stopped (files already written are kept).
 export-progress = Export “{ $profile }” { $done }/{ $total }
 export-cancel = Stop the export
@@ -591,7 +591,7 @@ settings-section-cache = Cache
 settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
 settings-section-keys = Shortcuts
-settings-section-develop = darktable rendering
+settings-section-develop = Darktable rendering
 settings-section-export-profile-user = Export preset “{ $id }”
 settings-section-versions-preset-user = Crop preset “{ $id }”
 settings-section-export-profiles = Export presets
@@ -714,11 +714,11 @@ shown-exposure = Exposure analysis
 shown-developed = Developed in { $engine }
 view-info-developed-pending = { " · " }development in progress…
 action-core-develop-render = Develop the shown image (in the software of its development)
-action-plugin-darktable-develop = Develop in darktable (the shown image)
+action-plugin-darktable-develop = Develop in Darktable (the shown image)
 action-plugin-rapidraw-develop = Develop in RapidRAW (the shown image)
 action-core-develop-folder = Develop the whole folder in the background (each image in the software of its development)
 folder-menu-develop = Develop the whole folder…
-develop-batch-unavailable = darktable not found: setting [develop] darktable
+develop-batch-unavailable = Darktable not found: setting [develop] darktable
 develop-batch-busy = a folder is already being developed
 develop-batch-progress = developing "{ $name }" { $done }/{ $total }
 develop-batch-done = "{ $name }" developed: { $rendered } rendered, { $cached } already done, { $failed } failed
@@ -726,7 +726,7 @@ develop-batch-error = { " " }({ $error })
 develop-batch-cancelled = { " (interrupted)" }
 develop-batch-cancel = Interrupt the development
 view-info-developed-none = { " · " }not developed yet ({ $keys })
-develop-not-found = no development software found (darktable, RapidRAW: [develop] settings)
+develop-not-found = no development software found (Darktable, RapidRAW: [develop] settings)
 develop-not-installed = { $engine } is not installed (or not found: [develop] settings)
 grid-render-embedded = Camera JPEG
 grid-render-latest = Latest development

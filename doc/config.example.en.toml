@@ -72,7 +72,7 @@ exposure = true
 # (IMAGE.xmp, Lightroom, Capture One, Bridge; shared by the RAF and the JPG of a pair).
 # An existing sidecar is always reused, the most recent one if both exist.
 sidecar = "darktable"
-# Several colours per image (like darktable); false: only one, a new colour replaces the
+# Several colours per image (like Darktable); false: only one, a new colour replaces the
 # previous one (like Lightroom).
 multiple_colors = false
 
@@ -118,14 +118,14 @@ rapidraw = "auto"
 default = "auto"
 
 [export]
-# Export of images developed by darktable (Ctrl+E), with one preset per use. Nothing is
+# Export of images developed by Darktable (Ctrl+E), with one preset per use. Nothing is
 # overwritten (darktable appends _01…).
 # Export preset offered by default (identifier) for a RAW render, and for an already
 # developed image (camera render, JPEG…); within the session, the last one chosen wins.
 # Unknown or not applicable: the first in the list.
 default_raw = "edit"
 default_flat = "asis"
-# Selected RAW + JPEG pair: both are exported (the RAW rendered by darktable or LibRaw,
+# Selected RAW + JPEG pair: both are exported (the RAW rendered by Darktable or LibRaw,
 # the JPEG developed by the camera); the JPEG gets this suffix:
 # DSCF0001.jpg (RAW render) and DSCF0001-camera.jpg (camera JPEG).
 camera_suffix = "-camera"
@@ -137,7 +137,7 @@ report_max = 500
 # Output sharpening (the sharpen key of the presets), applied after downsizing, like
 # Lightroom: unsharp mask of radius radius (pixels of the written image), of strength amount
 # (1.0: the whole difference with the blurred image), above a threshold threshold (levels
-# out of 8 bits: below it, nothing, so as not to sharpen noise). With darktable, a
+# out of 8 bits: below it, nothing, so as not to sharpen noise). With Darktable, a
 # preset that sharpens goes through a temporary 16-bit TIFF (a single compression).
 screen_radius = 0.6
 screen_amount = 0.6
@@ -161,11 +161,11 @@ print_threshold = 3.0
 # suffix: appended to the file name ("-web": DSCF0001-web.jpg);
 # folder: folder of the files: "/…" absolute, "~/…" from the home folder, otherwise
 #   relative to each image's folder ("export": a subfolder next to the images,
-#   "" or ".": next to them); darktable variables allowed ($(YEAR)…).
+#   "" or ".": next to them); Darktable variables allowed ($(YEAR)…).
 # passthrough: JPEG without recompression when possible (original JPEG copied as is, camera
 #   render written as is; default); an image to downsize is re-encoded; no effect on
-#   a darktable or LibRaw render, nor outside JPEG;
-# applies_to: "all" (everywhere), "raw" (render of a RAW: darktable, LibRaw) or "flat"
+#   a Darktable or LibRaw render, nor outside JPEG;
+# applies_to: "all" (everywhere), "raw" (render of a RAW: Darktable, LibRaw) or "flat"
 #   (image already developed: camera render, JPEG, TIFF…); the export dialog only offers the
 #   presets that fit;
 # sharpen: output sharpening, "none", "screen" or "print", set
@@ -483,7 +483,7 @@ window_save_ms = 1000
 # shown at startup; Shift+N shows or hides it. Right-clicking an image opens
 # a dialog with the same controls.
 rating_bar = true
-# Top bar: application icon and name on the left, like darktable (hidden, like
+# Top bar: application icon and name on the left, like Darktable (hidden, like
 # everything else, in focus mode: F11 or Ctrl+Shift+F).
 title_bar = true
 # Size of the name in the top bar (points; the icon slightly larger), and duration of
@@ -787,7 +787,7 @@ blur_drop = "#6eaae6"
 # dark grey (an isolated photo is a one-image group).
 stack_band = "#383838"
 stack_band_alt = "#181818"
-# Neutral grey theme (theme = "neutral", tones taken from darktable): panels, central
+# Neutral grey theme (theme = "neutral", tones taken from Darktable): panels, central
 # background, grid cells, input fields, stack backgrounds (every other group,
 # the others).
 neutral_panel = "#2a2a2a"
@@ -796,7 +796,7 @@ neutral_cell = "#767676"
 neutral_field = "#3e3e3e"
 # Image names on the cells (dark: readable on the grey of the cells).
 neutral_cell_text = "#1e1e1e"
-# Selected cell, light grey like darktable (if selection is not given).
+# Selected cell, light grey like Darktable (if selection is not given).
 neutral_selection = "#b3b3b3"
 neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"

@@ -37,10 +37,10 @@ impl Engine {
         }
     }
 
-    /// Nom affiché.
+    /// Nom affiché (« Darktable » avec une majuscule : choix de l'utilisateur, 26/10/2026).
     pub fn name(self) -> &'static str {
         match self {
-            Engine::Darktable => "darktable",
+            Engine::Darktable => "Darktable",
             Engine::RapidRaw => "RapidRAW",
         }
     }

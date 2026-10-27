@@ -72,7 +72,7 @@ exposure = true
 # (IMAGE.xmp, Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire).
 # Un sidecar existant est toujours réutilisé, le plus récent si les deux existent.
 sidecar = "darktable"
-# Plusieurs couleurs par image (comme darktable) ; false : une seule, une nouvelle couleur
+# Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
 # remplace la précédente (comme Lightroom).
 multiple_colors = false
 
@@ -117,14 +117,14 @@ rapidraw = "auto"
 default = "auto"
 
 [export]
-# Export d'images développées par darktable (Ctrl+E), avec un préréglage par usage. Rien
+# Export d'images développées par Darktable (Ctrl+E), avec un préréglage par usage. Rien
 # n'est écrasé (darktable ajoute _01…).
 # Préréglage proposé par défaut (identifiant) pour un rendu de RAW, et pour une image déjà
 # développée (JPEG boîtier, JPEG…) ; dans la séance, le dernier choisi l'emporte. Inconnu
 # ou qui ne s'applique pas : le premier de la liste.
 default_raw = "edit"
 default_flat = "asis"
-# Paire RAW + JPEG sélectionnée : les deux sont exportés (le RAW rendu par darktable ou
+# Paire RAW + JPEG sélectionnée : les deux sont exportés (le RAW rendu par Darktable ou
 # LibRaw, le JPEG développé par l'appareil) ; le JPEG prend ce suffixe :
 # DSCF0001.jpg (rendu du RAW) et DSCF0001-camera.jpg (JPEG de l'appareil).
 camera_suffix = "-camera"
@@ -136,7 +136,7 @@ report_max = 500
 # Accentuation de sortie (clé sharpen des préréglages), appliquée après la réduction, comme
 # Lightroom : masque flou de rayon radius (pixels de l'image écrite), de force amount
 # (1,0 : toute la différence avec l'image floue), au-delà d'un seuil threshold (niveaux
-# sur 8 bits : en dessous, rien, pour ne pas accentuer le bruit). Avec darktable, un
+# sur 8 bits : en dessous, rien, pour ne pas accentuer le bruit). Avec Darktable, un
 # préréglage qui accentue passe par un TIFF 16 bits temporaire (une seule compression).
 screen_radius = 0.6
 screen_amount = 0.6
@@ -150,7 +150,7 @@ print_threshold = 3.0
 # name : nom affiché (vide : nom fourni traduit, sinon l'identifiant) ;
 # format : "jpeg", "tiff" ou "png" ; bits : 8 (JPEG), 8 ou 16 (PNG), 8, 16 ou 32 (TIFF) ;
 # quality : qualité JPEG (1 à 100) ;
-# color : "srgb", "adobergb", "rec709", "rec2020", "prophoto" (ceux de darktable ; les
+# color : "srgb", "adobergb", "rec709", "rec2020", "prophoto" (ceux de Darktable ; les
 #   trois derniers linéaires), "display-p3", le chemin d'un profil .icc, ou "" (celui
 #   du développement) ;
 # intent : "perceptual", "relative", "saturation", "absolute", ou "" (celle du
@@ -159,11 +159,11 @@ print_threshold = 3.0
 # suffix : ajouté au nom du fichier ("-web" : DSCF0001-web.jpg) ;
 # folder : dossier des fichiers : "/…" absolu, "~/…" depuis le dossier personnel, sinon
 #   relatif au dossier de chaque image ("export" : un sous-dossier à côté des images,
-#   "" ou "." : à côté d'elles) ; variables de darktable permises ($(YEAR)…).
+#   "" ou "." : à côté d'elles) ; variables de Darktable permises ($(YEAR)…).
 # passthrough : JPEG sans recompression si possible (JPEG d'origine copié tel quel, JPEG
 #   boîtier écrit tel quel ; défaut) ; une image à réduire est réencodée ; sans effet sur
-#   un rendu darktable ou LibRaw, ni hors JPEG ;
-# applies_to : "all" (partout), "raw" (rendu d'un RAW : darktable, LibRaw) ou "flat" (image
+#   un rendu Darktable ou LibRaw, ni hors JPEG ;
+# applies_to : "all" (partout), "raw" (rendu d'un RAW : Darktable, LibRaw) ou "flat" (image
 #   déjà développée : JPEG boîtier, JPEG, TIFF…) ; la boîte d'export ne propose que les
 #   préréglages qui conviennent ;
 # sharpen : accentuation de sortie, "none", "screen" (écran) ou "print" (tirage), réglée
@@ -481,7 +481,7 @@ window_save_ms = 1000
 # affiché au démarrage ; Maj+N l'affiche ou le masque. Le clic droit sur une image ouvre
 # une boîte avec les mêmes contrôles.
 rating_bar = true
-# Barre du haut : icône et nom de l'application à gauche, comme darktable (masquée, comme
+# Barre du haut : icône et nom de l'application à gauche, comme Darktable (masquée, comme
 # tout le reste, en mode concentration : F11 ou Ctrl+Maj+F).
 title_bar = true
 # Taille du nom dans la barre du haut (points ; l'icône un peu plus grande), et durée de
@@ -783,7 +783,7 @@ blur_drop = "#6eaae6"
 # (une photo isolée est un groupe d'une image).
 stack_band = "#383838"
 stack_band_alt = "#181818"
-# Thème gris neutre (theme = "neutral", tons relevés sur darktable) : panneaux, fond
+# Thème gris neutre (theme = "neutral", tons relevés sur Darktable) : panneaux, fond
 # central, cellules de la grille, champs de saisie, fonds des piles (un groupe sur
 # deux, l'autre).
 neutral_panel = "#2a2a2a"
@@ -792,7 +792,7 @@ neutral_cell = "#767676"
 neutral_field = "#3e3e3e"
 # Nom des images sur les cellules (sombre : lisible sur le gris des cellules).
 neutral_cell_text = "#1e1e1e"
-# Cellule sélectionnée, gris clair comme darktable (si selection n'est pas donnée).
+# Cellule sélectionnée, gris clair comme Darktable (si selection n'est pas donnée).
 neutral_selection = "#b3b3b3"
 neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"
