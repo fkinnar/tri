@@ -533,6 +533,8 @@ blur_badge = true
 # Largeur du curseur de sévérité du flou de la barre du bas du plein écran (avec la
 # carte de netteté). Dans le panneau de droite, les curseurs prennent sa largeur.
 blur_slider = 90.0
+# Largeur du curseur de taille des vignettes, en bas de la grille.
+size_slider = 90.0
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).

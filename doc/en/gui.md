@@ -444,7 +444,7 @@ system one ("cold" measurements, experiments).
   through the **settings** above the EXIF (section titles included), one at a time;
   **Space** / Enter use the pointed setting (check, choose, fold a section, slider to the
   centre, button); ← → / `h` `l` vary it (slider by a step, `[gui.metadata] slider_step`;
-  thumbnail size by a notch; list and radio buttons to the next choice; title: fold /
+  list and radio buttons to the next choice; title: fold /
   unfold); **Tab** / Shift+Tab (`)` / `(` in vim) go from one section title to the next,
   looping. The same keys go from section to section in the **folder panel** (first row of
   the section; in the middle of a section, Shift+Tab goes back to its start). Tab no longer
@@ -584,10 +584,10 @@ system one ("cold" measurements, experiments).
     the bar icons says where the settings are.
   - *Grid*: files shown, RAW and JPEG (two check boxes, one stays checked; in the filter
     bar until 2026-10-27), thumbnail render as radio buttons (instead of the list hidden in
-    the "…" menu of narrow windows, which is gone), order (list and direction), thumbnail
-    size (the slider leaves the bottom bar) and info, stacks (check box, similarity,
-    entering by the cover or the first photo, unfold / fold all, fine settings).
-  - Keys removed: `[gui.grid] stack_slider`, `clip_slider` and `size_slider` (the panel
+    the "…" menu of narrow windows, which is gone), order (list and direction), stacks (check box, similarity,
+    entering by the cover or the first photo, unfold / fold all, fine settings). Thumbnail
+    size and info stay in the bottom bar (the user's choice, 2026-10-27).
+  - Keys removed: `[gui.grid] stack_slider` and `clip_slider` (the panel
     sliders take its width); `blur_slider` is now only for the full screen bottom bar.
 - **Metadata panel** (2026-10-17), on the right, in the grid and in full screen
   (`Shift+M`, `[gui.metadata]`): file name as the first row (2026-10-22, rather than a

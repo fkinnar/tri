@@ -8,14 +8,11 @@
   search; their settings and the grid's move to the right panel, in sections titled like
   the folder panel's and folded with a click: Histogram, Filters (each filter's settings
   only while it is on; two sliders for exposure; development software as check boxes),
-  Grid (files shown, RAW and JPEG; thumbnail render, order, thumbnail size and info,
-  stacks), EXIF at the bottom. The folder panel's sections fold too; folded sections are
+  Grid (files shown, RAW and JPEG; thumbnail render, order, stacks), EXIF at the bottom. The folder panel's sections fold too; folded sections are
   remembered. Section titles in capitals, larger, in the accent colour, with a gap
-  between sections (`[gui.folders] section_scale`, `section_gap`). The thumbnail size
-  slider leaves the bottom bar. **From the keyboard** (leader then `l`): ↑ ↓ go through
+  between sections (`[gui.folders] section_scale`, `section_gap`). **From the keyboard** (leader then `l`): ↑ ↓ go through
   the settings too, Space uses them, ← → vary them, Tab / Shift+Tab (`)` / `(` in vim) go
-  from section to section, in the folder panel too. `[gui.grid] stack_slider`, `clip_slider` and
-  `size_slider` are gone: remove them from your configuration file if you set them.
+  from section to section, in the folder panel too. `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your configuration file if you set them.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
   `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,

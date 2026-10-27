@@ -434,6 +434,8 @@ pub struct GridSettings {
     /// carte de netteté (points). Dans le panneau de droite, les curseurs prennent sa
     /// largeur.
     pub blur_slider: f32,
+    /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
+    pub size_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -473,6 +475,7 @@ impl Default for GridSettings {
             marked_frame: 3.0,
             blur_badge: true,
             blur_slider: 90.0,
+            size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,

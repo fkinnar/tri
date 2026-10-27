@@ -535,6 +535,8 @@ blur_badge = true
 # Width of the blur strictness slider of the full screen bottom bar (with the sharpness
 # map). In the right panel, the sliders take its width.
 blur_slider = 90.0
+# Width of the thumbnail size slider at the bottom of the grid.
+size_slider = 90.0
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).

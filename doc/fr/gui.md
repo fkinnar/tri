@@ -466,7 +466,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   parcourent aussi les **réglages** au-dessus des EXIF (titres de section compris), un à
   la fois ; **Espace** / Entrée actionnent le réglage pointé (cocher, choisir, replier
   une section, curseur au centre, bouton) ; ← → / `h` `l` le font varier (curseur d'un
-  pas, `[gui.metadata] slider_step` ; taille des vignettes d'un palier ; liste et boutons
+  pas, `[gui.metadata] slider_step` ; liste et boutons
   radio au choix voisin ; titre : replier / déplier) ; **Tab** / Maj+Tab (`)` / `(` en
   vim) passent d'un titre de section à l'autre, en boucle. Les mêmes touches passent
   d'une section à l'autre dans le **panneau des dossiers** (première ligne de la
@@ -617,10 +617,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   - *Grille* : fichiers montrés, RAW et JPEG (deux cases, l'une reste cochée ; dans la
     barre des filtres jusqu'au 27/10/2026), rendu des vignettes en boutons radio (à la
     place de la liste cachée dans le menu « … » des fenêtres étroites, qui disparaît),
-    ordre (liste et sens), taille (le curseur quitte la barre du bas) et infos des
-    vignettes, piles (case, similarité, entrée par la couverture ou la première photo,
-    tout déplier / replier, réglages fins).
-  - Clés retirées : `[gui.grid] stack_slider`, `clip_slider` et `size_slider` (les
+    ordre (liste et sens), piles (case, similarité, entrée par la couverture ou la première photo,
+    tout déplier / replier, réglages fins). Taille et infos des vignettes restent dans
+    la barre du bas (choix de l'utilisateur, 27/10/2026).
+  - Clés retirées : `[gui.grid] stack_slider` et `clip_slider` (les
     curseurs du panneau prennent sa largeur) ; `blur_slider` ne sert plus qu'à la barre
     du bas du plein écran.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran

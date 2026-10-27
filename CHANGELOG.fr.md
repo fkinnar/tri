@@ -9,14 +9,12 @@
   droite, en sections titrées comme celles du panneau des dossiers et repliables d'un
   clic : Histogramme, Filtres (réglages d'un filtre seulement quand il est allumé ; deux
   curseurs pour l'exposition ; logiciels de développement en cases à cocher), Grille
-  (fichiers montrés, RAW et JPEG ; rendu, ordre, taille et infos des vignettes, piles),
+  (fichiers montrés, RAW et JPEG ; rendu, ordre, piles),
   EXIF en bas. Les sections du panneau des dossiers se replient aussi ; les sections
   repliées sont retenues. Titres des sections en majuscules, plus grands, à l'accent,
-  espacés (`[gui.folders] section_scale`, `section_gap`). Le curseur de taille des
-  vignettes quitte la barre du bas. **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
+  espacés (`[gui.folders] section_scale`, `section_gap`). **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
   aussi les réglages, Espace les actionne, ← → les font varier, Tab / Maj+Tab (`)` / `(`
-  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider`, `clip_slider` et
-  `size_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
+  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
   aviez réglés.
 - **Développements dans la grille** : après le développement, la grille peut montrer le
   développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`

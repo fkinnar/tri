@@ -1558,19 +1558,6 @@ impl TriApp {
                 clicked.push(Action::SortReverse);
             }
         });
-        // Vignettes : taille, infos.
-        subheading(ui, t!("panel-grid-thumbnails"));
-        let (item, pressed) = self.side_begin(false);
-        let slider = self.grid_size_slider(ui, panel_slider_width(ui), pressed);
-        self.side_end(ui, item, slider.rect, slider.drag_started());
-        let mut info = self.grid_info;
-        if self
-            .side_checkbox(ui, &mut info, t!("panel-grid-info"))
-            .on_hover_text(self.action_tip(Action::ToggleGridInfo))
-            .changed()
-        {
-            clicked.push(Action::ToggleGridInfo);
-        }
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
         subheading(ui, t!("panel-grid-stacks"));
         let mut stacking = self.stacking;
@@ -3153,24 +3140,12 @@ impl TriApp {
         slider
     }
 
-    /// Curseur de taille des vignettes (section Grille du panneau) ; double-clic : taille
+    /// Curseur de taille des vignettes (barre du bas, en grille) ; double-clic : taille
     /// de la configuration.
-    ///
-    /// `key` : touche du clavier (panneau de droite) : ← / → d'un palier (comme `-` / `+`),
-    /// Espace à la taille de la configuration.
-    fn grid_size_slider(
-        &mut self,
-        ui: &mut Ui,
-        width: f32,
-        key: Option<SideKey>,
-    ) -> egui::Response {
+    fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) {
         let g = self.gui.grid;
         ui.spacing_mut().slider_width = width;
-        let mut cell = match key {
-            Some(SideKey::Activate) => g.cell,
-            Some(k) => grid::step_cell(self.grid_cell, k == SideKey::Right, g.cell_min, g.cell_max),
-            None => self.grid_cell,
-        };
+        let mut cell = self.grid_cell;
         let keys = [Action::ZoomOut, Action::ZoomIn]
             .map(|a| self.keymap.keys_for(a).join(" / "))
             .join(" ; ");
@@ -3188,7 +3163,6 @@ impl TriApp {
             self.grid_cell = cell;
             self.reveal = Some(Reveal::Minimal);
         }
-        slider
     }
 
     /// Seuil de regroupement en vigueur : le centre du dossier à la sévérité choisie.
@@ -8613,10 +8587,9 @@ impl TriApp {
                         clicked = Some(action);
                     }
                 }
-                // Grille : infos des vignettes et tout à l'écran, à côté de ‹ › (demandé le
-                // 21/10/2026 ; la taille est dans le panneau de droite). Seulement s'il reste
-                // la place : sur une fenêtre étroite, ils recouvriraient les notes (le
-                // clavier reste).
+                // Grille : infos des vignettes, tout à l'écran et taille des vignettes, à
+                // côté de ‹ › (demandé le 21/10/2026). Seulement s'il reste la place : sur
+                // une fenêtre étroite, ils recouvriraient les notes (le clavier reste).
                 let spacing = ui.spacing().item_spacing.x;
                 let buttons = 2.0 * (icon + spacing) + 2.0 * spacing;
                 let room = ui.available_width() - self.gui.dialogs.spacing;
@@ -8641,6 +8614,9 @@ impl TriApp {
                     marks::grid_fit_icon(ui.painter(), rect.shrink(icon * 0.25), color);
                     if response.clicked() {
                         self.grid_fit_all();
+                    }
+                    if room >= buttons + self.gui.grid.size_slider + spacing {
+                        self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
@@ -11950,11 +11926,9 @@ mod tests {
         assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_some());
         press(&mut h, Key::D, Modifiers::SHIFT);
         press(&mut h, Key::M, Modifiers::SHIFT);
-        // La taille des vignettes n'est plus dans la barre du bas (27/10/2026 : déjà dans
-        // la section Grille du panneau de droite).
         assert_eq!(
             h.query_all_by_role(egui::accesskit::Role::Slider).count(),
-            0
+            1
         );
         let default = h.state().gui.grid.cell;
         assert!(h.state().grid_info);
