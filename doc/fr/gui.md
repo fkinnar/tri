@@ -614,12 +614,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     logiciels de développement en **cases à plat**. Sous chaque curseur, « plus souple »
     à gauche, « plus strict » à droite. La bulle des icônes de la barre dit où sont les
     réglages.
-  - *Grille* : fichiers montrés, RAW et JPEG (deux cases, l'une reste cochée ; dans la
-    barre des filtres jusqu'au 27/10/2026), rendu des vignettes en boutons radio (à la
-    place de la liste cachée dans le menu « … » des fenêtres étroites, qui disparaît),
-    ordre (liste et sens), piles (case, similarité, entrée par la couverture ou la première photo,
-    tout déplier / replier, réglages fins). Taille et infos des vignettes restent dans
-    la barre du bas (choix de l'utilisateur, 27/10/2026).
+  - *Grille* : ordre (liste et sens ; en tête de la section, retour du 27/10/2026),
+    fichiers montrés, RAW et JPEG (deux cases, l'une reste cochée ; dans la barre des
+    filtres jusqu'au 27/10/2026), rendu des vignettes en boutons radio (à la place de la
+    liste cachée dans le menu « … » des fenêtres étroites, qui disparaît), piles (case,
+    similarité, tout déplier / replier, réglages fins). Restent dans la barre du bas
+    (choix de l'utilisateur, 27/10/2026, pas de doublon) : taille et infos des
+    vignettes, entrée dans une pile par la couverture ou la première photo.
+  - Libellés **« NOTE »** (barre du bas) et **« FILTRE »** (barre du haut), au singulier
+    comme le titre « FILTRE » du panneau : majuscules un peu plus petites que le texte, à
+    l'accent (`bar_label`, `[gui.grid] bar_label_scale` ; retour du 27/10/2026).
   - Après un changement de filtre, le **nombre d'images** s'affiche un instant au milieu
     de la zone des images (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0 :
     jamais ; idée de l'utilisateur, 27/10/2026 : « JPEG » seul dans un dossier de RAW ne

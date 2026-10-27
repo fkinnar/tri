@@ -436,6 +436,9 @@ pub struct GridSettings {
     pub blur_slider: f32,
     /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
     pub size_slider: f32,
+    /// Libellés « NOTE » et « FILTRE » des barres du bas et du haut : taille par rapport
+    /// au texte.
+    pub bar_label_scale: f32,
     /// Bulle du nombre d'images au milieu de l'écran après un changement de filtre :
     /// durée (millisecondes ; 0 : jamais).
     pub filter_toast_ms: u64,
@@ -479,6 +482,7 @@ impl Default for GridSettings {
             blur_badge: true,
             blur_slider: 90.0,
             size_slider: 90.0,
+            bar_label_scale: 0.85,
             filter_toast_ms: 1500,
             stacks: false,
             search_width: 200.0,

@@ -16,7 +16,10 @@
   le nombre d'images s'affiche un instant au milieu de l'écran (`[gui.grid]
   filter_toast_ms`). **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
   aussi les réglages, Espace les actionne, ← → les font varier, Tab / Maj+Tab (`)` / `(`
-  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
+  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. La
+  section Grille commence par l'ordre ; le choix de l'entrée dans une pile ne reste que
+  dans la barre du bas. Libellés « NOTE » et « FILTRE » sur les barres du bas et du haut,
+  en petites majuscules à l'accent (`[gui.grid] bar_label_scale`). `[gui.grid] stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
   aviez réglés.
 - **Développements dans la grille** : après le développement, la grille peut montrer le
   développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`

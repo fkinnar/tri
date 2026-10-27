@@ -14,7 +14,10 @@
   the number of images shows a moment in the middle of the screen (`[gui.grid]
   filter_toast_ms`). **From the keyboard** (leader then `l`): ↑ ↓ go through
   the settings too, Space uses them, ← → vary them, Tab / Shift+Tab (`)` / `(` in vim) go
-  from section to section, in the folder panel too. `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your configuration file if you set them.
+  from section to section, in the folder panel too. The Grid section starts with the
+  order; the stack entering choice stays only in the bottom bar. "RATING" and "FILTER"
+  labels on the bottom and top bars, in small capitals in the accent colour
+  (`[gui.grid] bar_label_scale`). `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your configuration file if you set them.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
   `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,
