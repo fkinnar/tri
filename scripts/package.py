@@ -314,6 +314,13 @@ if [ "$action" = uninstall ]; then
   rm -rf "$dest" "$prefix/bin/tri-gui" "$prefix/bin/tri" \
     "$prefix/share/applications/tri.desktop" \
     "$prefix/share/icons/hicolor/256x256/apps/tri.png"
+  # Le cache d'icônes de ~/.local citerait encore tri.png : sans cette mise à jour, il
+  # masquerait l'icône d'un tri installé ailleurs (.deb dans /usr/share).
+  command -v update-desktop-database >/dev/null 2>&1 \
+    && update-desktop-database "$prefix/share/applications" || true
+  [ -f "$prefix/share/icons/hicolor/icon-theme.cache" ] \
+    && command -v gtk-update-icon-cache >/dev/null 2>&1 \
+    && gtk-update-icon-cache -q -f -t "$prefix/share/icons/hicolor" || true
   echo "tri retiré de $prefix"
   exit 0
 fi

@@ -113,8 +113,15 @@ tri-<version>-linux-<arch>/
   récentes. Pour des distributions plus anciennes : compiler sur une plus ancienne.
 - `install.sh` copie tout dans `~/.local/lib/tri` (ou `--prefix DOSSIER`), crée les liens
   `~/.local/bin/tri-gui` et `tri`, le lanceur (`tri.desktop`, dont `Exec` pointe vers
-  l'installation) et l'icône ; `install.sh --uninstall` retire le tout. Sans droits
-  administrateur. Les données de `tri` (réglages, cache) ne sont jamais touchées.
+  l'installation) et l'icône ; `install.sh --uninstall` retire le tout et met à jour le
+  cache d'icônes de `~/.local` (sinon il citerait encore l'icône retirée et masquerait
+  celle d'un `tri` installé ailleurs). Sans droits administrateur. Les données de `tri`
+  (réglages, cache) ne sont jamais touchées.
+- **Passer de l'archive au `.deb`** : d'abord `~/.local/lib/tri/install.sh --uninstall`,
+  sinon le lanceur de `~/.local` passe avant celui du paquet. Si l'icône a disparu après
+  une désinstallation par un `install.sh` plus ancien :
+  `gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor`, puis fermer et rouvrir la
+  session.
 - La fenêtre déclare l'identifiant d'application `tri` (Wayland), relié au lanceur
   `tri.desktop` pour l'icône et le nom.
 
