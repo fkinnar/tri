@@ -735,6 +735,7 @@ grid-render-libraw-short = LibRaw
 grid-render-badge = Développé dans { $engine }
 grid-render-badge-libraw = Rendu RAW (LibRaw) : pas de développement de ce logiciel
 grid-render-tip = Rendu des vignettes
+view-back-grid = Retour à la grille
 filter-developed-all = Développées ou non
 filter-developed-any = Un développement
 filter-developed-engine = Développées dans { $engine }

@@ -7926,6 +7926,9 @@ impl TriApp {
                 // (pile d'avant, d'après) à côté de ‹ ›.
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
                 if self.mode == Mode::View {
+                    // Retour à la grille à la souris, tout à droite (issue n° 193 : seul
+                    // Échap ramenait à la grille).
+                    actions.insert(0, Action::Back);
                     if self.stacking {
                         actions.extend([Action::NavDown, Action::NavUp]);
                     }
@@ -7945,8 +7948,16 @@ impl TriApp {
                 }
                 actions.push(Action::ToggleZoom);
                 for action in actions {
-                    let (rect, response) =
-                        marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
+                    let (name, tip) = if action == Action::Back {
+                        let keys = self.keymap.keys_for(Action::Back).join(" / ");
+                        (
+                            t!("view-back-grid"),
+                            format!("{} ({keys})", t!("view-back-grid")),
+                        )
+                    } else {
+                        (action.label(), self.action_tip(action))
+                    };
+                    let (rect, response) = marks::icon_button(ui, icon, &name, &tip);
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
@@ -8021,7 +8032,8 @@ impl TriApp {
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
             Some(
-                action @ (Action::NavPrev
+                action @ (Action::Back
+                | Action::NavPrev
                 | Action::NavNext
                 | Action::NavUp
                 | Action::NavDown
@@ -11389,6 +11401,20 @@ mod tests {
         app.selected = 0;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().source, Source::Raw);
+    }
+
+    #[test]
+    fn a_button_brings_full_screen_back_to_the_grid() {
+        // Issue n° 193 : à la souris, aucun bouton ne ramenait du plein écran à la grille.
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        h.run_steps(2);
+        h.get_by_label(&t!("view-back-grid")).click();
+        h.run_steps(2);
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]

@@ -736,6 +736,7 @@ grid-render-libraw-short = LibRaw
 grid-render-badge = Developed in { $engine }
 grid-render-badge-libraw = RAW render (LibRaw): no development from this software
 grid-render-tip = Thumbnail render
+view-back-grid = Back to the grid
 filter-developed-all = Developed or not
 filter-developed-any = Any development
 filter-developed-engine = Developed in { $engine }

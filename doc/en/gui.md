@@ -368,6 +368,8 @@ system one ("cold" measurements, experiments).
   on a short press), a square of `loupe_size` points under the pointer shows the image at
   `loupe_scale` (100 %); its 1:1 is loaded for the occasion, the enlarged preview shown
   while waiting ("loading 100 %…").
+- **Back to the grid with the mouse** (issue #193): in full screen, a grid icon at the
+  far right of the bottom bar (like Esc).
 - **"Expand all" button** next to the similarity slider (`Shift+S`).
 - **Stacks** (2026-10-18, `gui/src/stacks.rs`, engine `tri::similarity`, see
   `similarity.md`): similar neighbouring images (bursts, series) form stacks, collapsed
