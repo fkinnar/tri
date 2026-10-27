@@ -729,6 +729,7 @@ develop-batch-cancel = Interrupt the development
 view-info-developed-none = { " · " }not developed yet ({ $keys })
 develop-not-found = no development software found (Darktable, RapidRAW: [develop] settings)
 develop-not-installed = { $engine } is not installed (or not found: [develop] settings)
+view-back-grid = Back to the grid
 grid-render-embedded = Camera JPEG
 grid-render-latest = Latest development
 grid-render-libraw = RAW render (LibRaw)

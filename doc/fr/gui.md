@@ -368,6 +368,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   double-clic basculent ajusté / 100 % ; on peut **dézoomer sous l'ajusté** jusqu'à
   `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
   qu'à 100 %.
+- **Retour à la grille à la souris** (issue n° 193) : en plein écran, une icône de grille
+  tout à droite de la barre du bas (comme Échap).
   Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour
   du pointeur ; défiler déplace l'image zoomée. Au-delà de l'ajusté, c'est le 1:1 qui est
   affiché, réduit ou agrandi ; l'échelle s'affiche (« 200 % ») ; elle est gardée d'une

@@ -612,6 +612,8 @@ pub fn bar_icon_on(
                 color,
             );
         }
+        // Retour à la grille (issue n° 193) : la grille de neuf cases.
+        Action::Back => grid_fit_icon(painter, rect.shrink(w * 0.05), color),
         _ => {
             // Petite étoile à gauche, flèche à droite.
             let star_fill = if on {
