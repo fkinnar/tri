@@ -174,4 +174,6 @@ software only, as for display. LibRaw is not offered: it renders every image. En
 `develop::DevelopedRule` and `DevelopedFilter` (`Filter` trait), which read the sidecars
 (`Engine::sidecar`: non-empty darktable history, RapidRAW's `.rrdata`); a flat image has no
 development. It is a content filter: cleared by `f Esc`, invertible (`f i`: the images not
-developed yet).
+developed yet). Under "developed in" a software, the thumbnails show that software's
+development, even when another one is more recent (feedback of 2026-10-27), unless the grid
+shows the camera JPEG or LibRaw on purpose (`TriApp::shown_render`).
