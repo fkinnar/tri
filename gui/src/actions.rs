@@ -301,6 +301,23 @@ pub enum Action {
     MetaSelectDown,
     /// Panneau des métadonnées : copier tout le panneau.
     MetaCopyAll,
+    /// Panneau de droite : section suivante (Tab, `)` en vim).
+    PanelSectionNext,
+    /// Panneau de droite : section précédente (Maj+Tab, `(` en vim).
+    PanelSectionPrev,
+    /// Panneau de droite : actionner le réglage pointé (cocher, choisir, replier une
+    /// section, curseur au centre).
+    PanelActivate,
+    /// Panneau de droite : réglage pointé vers la gauche (curseur, liste ; replier une
+    /// section).
+    PanelLeft,
+    /// Panneau de droite : réglage pointé vers la droite (curseur, liste ; déplier une
+    /// section).
+    PanelRight,
+    /// Panneau des dossiers : première ligne de la section suivante.
+    FolderSectionNext,
+    /// Panneau des dossiers : première ligne de la section précédente.
+    FolderSectionPrev,
     /// Copier les images vers un dossier.
     FileCopy,
     /// Déplacer les images vers un dossier.
@@ -410,7 +427,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 170] = [
+    pub const ALL: [Action; 177] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -535,6 +552,13 @@ impl Action {
         Action::MetaSelectUp,
         Action::MetaSelectDown,
         Action::MetaCopyAll,
+        Action::PanelSectionNext,
+        Action::PanelSectionPrev,
+        Action::PanelActivate,
+        Action::PanelLeft,
+        Action::PanelRight,
+        Action::FolderSectionNext,
+        Action::FolderSectionPrev,
         Action::Search,
         Action::FocusMode,
         Action::Develop,
@@ -641,7 +665,9 @@ impl Action {
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
             | FolderFavoriteName | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
-            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll => Group::Panels,
+            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
+            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
+            | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
@@ -672,6 +698,8 @@ impl Action {
                 | MetaDown
                 | MetaSelectUp
                 | MetaSelectDown
+                | PanelLeft
+                | PanelRight
                 | CropMove(_)
                 | CropSize(_)
                 | SharpnessLenient
@@ -805,6 +833,13 @@ impl Action {
             Action::MetaSelectUp => "core.metadata.select_up",
             Action::MetaSelectDown => "core.metadata.select_down",
             Action::MetaCopyAll => "core.metadata.copy_all",
+            Action::PanelSectionNext => "core.metadata.section_next",
+            Action::PanelSectionPrev => "core.metadata.section_prev",
+            Action::PanelActivate => "core.metadata.activate",
+            Action::PanelLeft => "core.metadata.left",
+            Action::PanelRight => "core.metadata.right",
+            Action::FolderSectionNext => "core.folders.section_next",
+            Action::FolderSectionPrev => "core.folders.section_prev",
             Action::FileMove => "core.file.move",
             Action::FileDeleteStack => "core.file.delete_stack",
             Action::FileCopyStack => "core.file.copy_stack",
@@ -921,11 +956,11 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderCopy | FolderMove => {
-                Some(Scope::Folders)
-            }
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderCopy | FolderMove
+            | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
-            | MetaCopyAll => Some(Scope::Metadata),
+            | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
+            | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
             | CropPresetPrev => Some(Scope::Crop),
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
@@ -1083,6 +1118,14 @@ const CLASSIC: &[Binding] = {
         (&[shifted(Key::ArrowUp)], MetaSelectUp),
         (&[shifted(Key::ArrowDown)], MetaSelectDown),
         (&[ctrl_shift(Key::C)], MetaCopyAll),
+        // Réglages du panneau de droite : ← / → font varier le réglage pointé ; Tab /
+        // Maj+Tab passent d'une section à l'autre (aussi dans les dossiers).
+        (&[plain(Key::ArrowLeft)], PanelLeft),
+        (&[plain(Key::ArrowRight)], PanelRight),
+        (&[plain(Key::Tab)], PanelSectionNext),
+        (&[shifted(Key::Tab)], PanelSectionPrev),
+        (&[plain(Key::Tab)], FolderSectionNext),
+        (&[shifted(Key::Tab)], FolderSectionPrev),
     ]
 };
 
@@ -1142,6 +1185,15 @@ const VIM: &[Binding] = {
         (&[shifted(Key::K)], MetaSelectUp),
         (&[shifted(Key::J)], MetaSelectDown),
         (&[shifted(Key::Y)], MetaCopyAll),
+        // Réglages du panneau de droite : h / l font varier le réglage pointé ; `(` / `)`
+        // passent d'une section à l'autre, comme de phrase en phrase (aussi dans les
+        // dossiers).
+        (&[plain(Key::H)], PanelLeft),
+        (&[plain(Key::L)], PanelRight),
+        (&[Chord::char(')')], PanelSectionNext),
+        (&[Chord::char('(')], PanelSectionPrev),
+        (&[Chord::char(')')], FolderSectionNext),
+        (&[Chord::char('(')], FolderSectionPrev),
     ]
 };
 
@@ -1224,6 +1276,7 @@ const METADATA: &[Binding] = {
         // Comme partout ailleurs (Cmd+C sur macOS, voir `Chord::from_event`).
         (&[ctrl(Key::C)], MetaCopy),
         (&[plain(Key::Enter)], MetaOpen),
+        (&[plain(Key::Space)], PanelActivate),
     ]
 };
 

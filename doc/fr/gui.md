@@ -462,8 +462,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
   supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
   éjecter), raccourci au survol.
-  Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
-  (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`
+  **Panneau de droite** (27/10/2026, `TriApp::side_begin` / `side_end`) : ↑ ↓ / `j` `k`
+  parcourent aussi les **réglages** au-dessus des EXIF (titres de section compris), un à
+  la fois ; **Espace** / Entrée actionnent le réglage pointé (cocher, choisir, replier
+  une section, curseur au centre, bouton) ; ← → / `h` `l` le font varier (curseur d'un
+  pas, `[gui.metadata] slider_step` ; taille des vignettes d'un palier ; liste et boutons
+  radio au choix voisin ; titre : replier / déplier) ; **Tab** / Maj+Tab (`)` / `(` en
+  vim) passent d'un titre de section à l'autre, en boucle. Les mêmes touches passent
+  d'une section à l'autre dans le **panneau des dossiers** (première ligne de la
+  section ; au milieu d'une section, Maj+Tab revient à son début). Tab ne déplace plus
+  le focus d'egui dans un panneau qui a le clavier (comme dans le recadrage).
+  Lignes des EXIF : chaque ligne (netteté comprise) se pointe, Entrée ouvre
+  l'histogramme en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
   « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
   panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. Grand

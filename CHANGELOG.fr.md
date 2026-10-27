@@ -13,7 +13,9 @@
   EXIF en bas. Les sections du panneau des dossiers se replient aussi ; les sections
   repliées sont retenues. Titres des sections en majuscules, plus grands, à l'accent,
   espacés (`[gui.folders] section_scale`, `section_gap`). Le curseur de taille des
-  vignettes quitte la barre du bas. `[gui.grid] stack_slider`, `clip_slider` et
+  vignettes quitte la barre du bas. **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
+  aussi les réglages, Espace les actionne, ← → les font varier, Tab / Maj+Tab (`)` / `(`
+  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider`, `clip_slider` et
   `size_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
   aviez réglés.
 - **Développements dans la grille** : après le développement, la grille peut montrer le

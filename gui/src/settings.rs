@@ -863,6 +863,9 @@ pub struct MetadataSettings {
     pub histogram: bool,
     /// Hauteur de cet histogramme (points).
     pub histogram_height: f32,
+    /// Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h /
+    /// l), sur sa course de -1 à 1.
+    pub slider_step: f32,
 }
 
 impl Default for MetadataSettings {
@@ -872,6 +875,7 @@ impl Default for MetadataSettings {
             width: 280.0,
             histogram: true,
             histogram_height: 120.0,
+            slider_step: 0.1,
         }
     }
 }

@@ -12,7 +12,9 @@
   stacks), EXIF at the bottom. The folder panel's sections fold too; folded sections are
   remembered. Section titles in capitals, larger, in the accent colour, with a gap
   between sections (`[gui.folders] section_scale`, `section_gap`). The thumbnail size
-  slider leaves the bottom bar. `[gui.grid] stack_slider`, `clip_slider` and
+  slider leaves the bottom bar. **From the keyboard** (leader then `l`): ↑ ↓ go through
+  the settings too, Space uses them, ← → vary them, Tab / Shift+Tab (`)` / `(` in vim) go
+  from section to section, in the folder panel too. `[gui.grid] stack_slider`, `clip_slider` and
   `size_slider` are gone: remove them from your configuration file if you set them.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),

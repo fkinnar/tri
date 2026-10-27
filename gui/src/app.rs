@@ -532,6 +532,15 @@ pub struct TriApp {
     /// Début d'une sélection de plusieurs lignes (Maj + flèches, Maj+clic) ; `None` : la
     /// ligne pointée seule.
     meta_anchor: Option<usize>,
+    /// Réglages du panneau de droite au clavier (retour du 27/10/2026) : éléments
+    /// pointables dessinés (vrai : un titre de section), dans l'ordre, au-dessus des
+    /// lignes des EXIF.
+    side_items: Vec<bool>,
+    /// Élément pointé parmi [`TriApp::side_items`] ; `None` : une ligne des EXIF
+    /// ([`TriApp::meta_cursor`]).
+    side_cursor: Option<usize>,
+    /// Touche à appliquer à l'élément pointé, au prochain dessin.
+    side_key: Option<SideKey>,
     /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
     scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
@@ -883,6 +892,9 @@ impl TriApp {
             meta_rows: Vec::new(),
             meta_has_histogram: false,
             meta_anchor: None,
+            side_items: Vec::new(),
+            side_cursor: Some(0),
+            side_key: None,
             scroll_to_cursor: false,
             help_search: None,
             help_lines: None,
@@ -1196,6 +1208,7 @@ impl TriApp {
     /// métadonnées en bas, comme dans les autres logiciels.
     fn side_panel(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
+        self.side_items.clear();
         if self.gui.metadata.histogram && self.histogram && !self.files.is_empty() {
             if self.panel_section(ui, "histogram", t!("panel-section-histogram")) {
                 self.histogram_section(ui);
@@ -1214,7 +1227,89 @@ impl TriApp {
         }
         if self.panel_section(ui, "exif", t!("panel-section-exif")) {
             self.metadata_panel(ui);
+        } else {
+            // Rien à copier ni à pointer sous une section repliée.
+            self.meta_rows.clear();
         }
+        // Éléments disparus (section repliée, autre mode) : le curseur reste dedans.
+        if let Some(i) = self.side_cursor
+            && i >= self.side_items.len()
+        {
+            self.side_cursor = Some(self.side_items.len().saturating_sub(1));
+        }
+        self.side_key = None;
+    }
+
+    /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
+    /// son rang, et la touche à lui appliquer s'il est pointé.
+    fn side_begin(&mut self, title: bool) -> (usize, Option<SideKey>) {
+        let i = self.side_items.len();
+        self.side_items.push(title);
+        let here = self.focus == crate::actions::Scope::Metadata && self.side_cursor == Some(i);
+        (i, if here { self.side_key.take() } else { None })
+    }
+
+    /// Fin de l'élément `i` dessiné dans `rect` : un clic le pointe ; pointé, il prend la
+    /// bande du curseur (comme les lignes des EXIF et les dossiers).
+    fn side_end(&mut self, ui: &mut Ui, i: usize, rect: Rect, clicked: bool) {
+        if clicked {
+            self.side_cursor = Some(i);
+        }
+        if self.focus == crate::actions::Scope::Metadata && self.side_cursor == Some(i) {
+            cursor_row(ui, rect, self.gui.dialogs.cursor_tint);
+            if std::mem::take(&mut self.scroll_to_cursor) {
+                ui.scroll_to_rect(rect, Some(egui::Align::Center));
+            }
+        }
+    }
+
+    /// Case à cocher pointable du panneau : vrai si elle a changé (souris ou clavier).
+    fn side_checkbox(
+        &mut self,
+        ui: &mut Ui,
+        on: &mut bool,
+        text: impl Into<egui::WidgetText>,
+    ) -> egui::Response {
+        let (i, key) = self.side_begin(false);
+        let mut response = ui.checkbox(on, text);
+        if key == Some(SideKey::Activate) {
+            *on = !*on;
+            response.mark_changed();
+        }
+        let changed = response.changed();
+        self.side_end(ui, i, response.rect, changed);
+        response
+    }
+
+    /// Bouton radio pointable du panneau : choisit `choice` (souris ou clavier) ; ← / →
+    /// passent au choix précédent / suivant de `all`.
+    fn side_radio<T: PartialEq + Copy>(
+        &mut self,
+        ui: &mut Ui,
+        value: &mut T,
+        choice: T,
+        all: &[T],
+        text: impl Into<egui::WidgetText>,
+    ) -> egui::Response {
+        let (i, key) = self.side_begin(false);
+        let response = ui.radio_value(value, choice, text);
+        if let Some(key) = key {
+            let at = all.iter().position(|c| c == value).unwrap_or(0);
+            *value = match key {
+                SideKey::Activate => choice,
+                SideKey::Left => all[at.saturating_sub(1)],
+                SideKey::Right => all[(at + 1).min(all.len() - 1)],
+            };
+            // Le curseur suit le choix.
+            if key != SideKey::Activate {
+                let to = all.iter().position(|c| c == value).unwrap_or(0) as isize;
+                let me = all.iter().position(|&c| c == choice).unwrap_or(0) as isize;
+                self.side_cursor = Some((i as isize + to - me).max(0) as usize);
+            }
+        }
+        let clicked = response.clicked();
+        self.side_end(ui, i, response.rect, clicked);
+        response
     }
 
     /// Titre de section du panneau de droite, comme ceux du panneau des dossiers
@@ -1222,7 +1317,21 @@ impl TriApp {
     /// l'autre). Vrai si elle est dépliée.
     fn panel_section(&mut self, ui: &mut Ui, id: &str, title: String) -> bool {
         let open = !self.panel_folded.contains(id);
-        let clicked = section_title(ui, &title, open, &self.gui.folders);
+        let (i, key) = self.side_begin(true);
+        let top = ui.cursor().top();
+        let mut clicked = section_title(ui, &title, open, &self.gui.folders);
+        let rect = Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.min_rect().bottom());
+        let rect = Rect::from_min_max(
+            egui::pos2(rect.left(), top + self.gui.folders.section_gap),
+            rect.max,
+        );
+        self.side_end(ui, i, rect, clicked);
+        clicked |= match key {
+            Some(SideKey::Activate) => true,
+            Some(SideKey::Left) => open,
+            Some(SideKey::Right) => !open,
+            None => false,
+        };
         if clicked {
             if open {
                 self.panel_folded.insert(id.to_string());
@@ -1260,6 +1369,7 @@ impl TriApp {
                 _ => t!("panel-filter-developed"),
             };
             let tip = self.action_tip(action);
+            let (item, key) = self.side_begin(false);
             let row = ui.horizontal(|ui| {
                 let mut checked = on;
                 let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
@@ -1275,7 +1385,8 @@ impl TriApp {
                     .on_hover_text(&tip);
                 check.changed() || icon.clicked() || label.clicked()
             });
-            if row.inner {
+            self.side_end(ui, item, row.response.rect, row.inner);
+            if row.inner || key == Some(SideKey::Activate) {
                 clicked = Some(action);
             }
             if !on {
@@ -1285,12 +1396,16 @@ impl TriApp {
                 let width = panel_slider_width(ui);
                 match action {
                     Action::FilterBlurry => {
-                        self.blur_slider(ui, width);
+                        let (item, key) = self.side_begin(false);
+                        let slider = self.blur_slider(ui, width, key);
+                        self.side_end(ui, item, slider.rect, slider.drag_started());
                         slider_ends(ui, width);
                     }
                     Action::FilterWellExposed => {
                         for side in [tri::exposure::Clip::Over, tri::exposure::Clip::Under] {
-                            self.clip_slider(ui, side, width);
+                            let (item, key) = self.side_begin(false);
+                            let slider = self.clip_slider(ui, side, width, key);
+                            self.side_end(ui, item, slider.rect, slider.drag_started());
                         }
                         slider_ends(ui, width);
                     }
@@ -1315,8 +1430,8 @@ impl TriApp {
         listed.extend(checked.iter().filter(|e| !engines.contains(e)));
         for engine in listed {
             let mut on = checked.contains(&engine);
-            if ui
-                .checkbox(&mut on, engine.name())
+            if self
+                .side_checkbox(ui, &mut on, engine.name())
                 .on_hover_text(t!("filter-developed-tip"))
                 .changed()
             {
@@ -1357,10 +1472,16 @@ impl TriApp {
                 let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
                 let mut checked = on;
                 let alone = on && raw != jpeg;
-                let response = ui
+                let (item, key) = self.side_begin(false);
+                let mut response = ui
                     .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
                     .on_hover_text(&tip)
                     .on_disabled_hover_text(&tip);
+                if key == Some(SideKey::Activate) && !alone {
+                    checked = !checked;
+                    response.mark_changed();
+                }
+                self.side_end(ui, item, response.rect, response.changed());
                 if response.changed() {
                     let (raw, jpeg) = if is_raw {
                         (checked, jpeg)
@@ -1388,8 +1509,9 @@ impl TriApp {
             .on_hover_text(self.action_tip(Action::GridRenderNext));
         let engines = self.developers.engines();
         let mut render = self.grid_render;
-        for choice in crate::grid_render::GridRender::choices(&engines, render) {
-            ui.radio_value(&mut render, choice, choice.name());
+        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        for &choice in &choices {
+            self.side_radio(ui, &mut render, choice, &choices, choice.name());
         }
         if self.shown_render() != self.grid_render {
             ui.weak(t!("panel-grid-render-filtered"));
@@ -1398,7 +1520,17 @@ impl TriApp {
         subheading(ui, t!("panel-grid-sort"));
         let mut key = self.order.key;
         ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("sort")
+            // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
+            let (item, pressed) = self.side_begin(false);
+            let keys = tri::sort::SortKey::ALL;
+            let at = keys.iter().position(|&k| k == key).unwrap_or(0);
+            match pressed {
+                Some(SideKey::Left) => key = keys[at.saturating_sub(1)],
+                Some(SideKey::Right) => key = keys[(at + 1).min(keys.len() - 1)],
+                Some(SideKey::Activate) => key = keys[(at + 1) % keys.len()],
+                None => {}
+            }
+            let combo = egui::ComboBox::from_id_salt("sort")
                 .selected_text(sort_name(key))
                 .show_ui(ui, |ui| {
                     for k in tri::sort::SortKey::ALL {
@@ -1407,8 +1539,14 @@ impl TriApp {
                 })
                 .response
                 .on_hover_text(self.action_tip(Action::SortNext));
+            self.side_end(ui, item, combo.rect, combo.clicked());
+            let (item, pressed) = self.side_begin(false);
             let (rect, response) =
                 marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+            self.side_end(ui, item, rect, response.clicked());
+            if pressed == Some(SideKey::Activate) {
+                clicked.push(Action::SortReverse);
+            }
             let color = ui.style().interact(&response).fg_stroke.color;
             marks::sort_arrow(
                 ui.painter(),
@@ -1422,10 +1560,12 @@ impl TriApp {
         });
         // Vignettes : taille, infos.
         subheading(ui, t!("panel-grid-thumbnails"));
-        self.grid_size_slider(ui, panel_slider_width(ui));
+        let (item, pressed) = self.side_begin(false);
+        let slider = self.grid_size_slider(ui, panel_slider_width(ui), pressed);
+        self.side_end(ui, item, slider.rect, slider.drag_started());
         let mut info = self.grid_info;
-        if ui
-            .checkbox(&mut info, t!("panel-grid-info"))
+        if self
+            .side_checkbox(ui, &mut info, t!("panel-grid-info"))
             .on_hover_text(self.action_tip(Action::ToggleGridInfo))
             .changed()
         {
@@ -1434,8 +1574,8 @@ impl TriApp {
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
         subheading(ui, t!("panel-grid-stacks"));
         let mut stacking = self.stacking;
-        if ui
-            .checkbox(&mut stacking, t!("panel-grid-stacks-on"))
+        if self
+            .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
             .on_hover_text(self.action_tip(Action::StackMode))
             .changed()
         {
@@ -1447,6 +1587,7 @@ impl TriApp {
                 // Même logique que le flou (idée de l'utilisateur, 20/10/2026) : centre
                 // calculé d'après le dossier, à droite plus strict (petites piles).
                 ui.label(t!("panel-grid-similarity"));
+                let (item, pressed) = self.side_begin(false);
                 let (slider, t) = strictness_slider(
                     ui,
                     width,
@@ -1455,7 +1596,10 @@ impl TriApp {
                         "stack-slider-tip",
                         keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
                     ),
+                    pressed,
+                    self.gui.metadata.slider_step,
                 );
+                self.side_end(ui, item, slider.rect, slider.drag_started());
                 slider_ends(ui, width);
                 if t != self.group_strictness {
                     self.group_strictness = t;
@@ -1469,19 +1613,25 @@ impl TriApp {
                     self.grouping_preview = adjusting;
                     self.stacks_dirty = true;
                 }
-                if slider.drag_stopped() || slider.double_clicked_slider(ui) {
+                if slider.drag_stopped() || slider.double_clicked_slider(ui) || pressed.is_some() {
                     self.remember_group_strictness();
                 }
                 let mut enter = self.stack_enter;
                 ui.label(t!("panel-grid-stack-enter"));
-                ui.radio_value(
+                use crate::settings::StackEnter;
+                let choices = [StackEnter::Cover, StackEnter::First];
+                self.side_radio(
+                    ui,
                     &mut enter,
-                    crate::settings::StackEnter::Cover,
+                    StackEnter::Cover,
+                    &choices,
                     t!("panel-grid-stack-cover"),
                 );
-                ui.radio_value(
+                self.side_radio(
+                    ui,
                     &mut enter,
-                    crate::settings::StackEnter::First,
+                    StackEnter::First,
+                    &choices,
                     t!("panel-grid-stack-first"),
                 );
                 if enter != self.stack_enter {
@@ -1493,19 +1643,16 @@ impl TriApp {
                     } else {
                         t!("panel-grid-fold-all")
                     };
-                    if ui
-                        .button(all)
-                        .on_hover_text(self.action_tip(Action::StacksAll))
-                        .clicked()
-                    {
-                        clicked.push(Action::StacksAll);
-                    }
-                    if ui
-                        .button(t!("panel-grid-grouping"))
-                        .on_hover_text(self.action_tip(Action::GroupingWindow))
-                        .clicked()
-                    {
-                        clicked.push(Action::GroupingWindow);
+                    for (text, action) in [
+                        (all, Action::StacksAll),
+                        (t!("panel-grid-grouping"), Action::GroupingWindow),
+                    ] {
+                        let (item, pressed) = self.side_begin(false);
+                        let button = ui.button(text).on_hover_text(self.action_tip(action));
+                        self.side_end(ui, item, button.rect, button.clicked());
+                        if button.clicked() || pressed == Some(SideKey::Activate) {
+                            clicked.push(action);
+                        }
                     }
                 });
             });
@@ -1572,7 +1719,8 @@ impl TriApp {
             ui.weak(t!("panel-no-image"));
             return;
         };
-        let focused = self.focus == crate::actions::Scope::Metadata;
+        // La ligne pointée n'est montrée que si le curseur est dans les EXIF.
+        let focused = self.focus == crate::actions::Scope::Metadata && self.side_cursor.is_none();
         let read = self
             .meta
             .get_or_insert_with(|| MetaLoader::new(ui.ctx().clone()))
@@ -1661,6 +1809,7 @@ impl TriApp {
                 // Clic : pointe la ligne (et donne le clavier au panneau) ; Maj+clic : étend.
                 if let Some((i, shift)) = clicked {
                     self.focus = crate::actions::Scope::Metadata;
+                    self.side_cursor = None;
                     if shift {
                         self.meta_anchor.get_or_insert(self.meta_cursor);
                     } else {
@@ -2985,22 +3134,43 @@ impl TriApp {
     /// centre les seuils des réglages, à droite plus strict, à gauche plus souple ; effet
     /// en direct (badges, filtre), retenu pour le dossier au lâcher, double-clic : retour
     /// au centre (repère).
-    fn blur_slider(&mut self, ui: &mut Ui, width: f32) {
-        let (slider, t) = strictness_slider(ui, width, self.blur_strictness, t!("blur-slider-tip"));
+    fn blur_slider(&mut self, ui: &mut Ui, width: f32, key: Option<SideKey>) -> egui::Response {
+        let step = self.gui.metadata.slider_step;
+        let (slider, t) = strictness_slider(
+            ui,
+            width,
+            self.blur_strictness,
+            t!("blur-slider-tip"),
+            key,
+            step,
+        );
         if t != self.blur_strictness {
             self.set_blur_strictness(t);
         }
-        if slider.drag_stopped() || slider.double_clicked_slider(ui) {
+        if slider.drag_stopped() || slider.double_clicked_slider(ui) || key.is_some() {
             self.remember_strictness();
         }
+        slider
     }
 
     /// Curseur de taille des vignettes (section Grille du panneau) ; double-clic : taille
     /// de la configuration.
-    fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) {
+    ///
+    /// `key` : touche du clavier (panneau de droite) : ← / → d'un palier (comme `-` / `+`),
+    /// Espace à la taille de la configuration.
+    fn grid_size_slider(
+        &mut self,
+        ui: &mut Ui,
+        width: f32,
+        key: Option<SideKey>,
+    ) -> egui::Response {
         let g = self.gui.grid;
         ui.spacing_mut().slider_width = width;
-        let mut cell = self.grid_cell;
+        let mut cell = match key {
+            Some(SideKey::Activate) => g.cell,
+            Some(k) => grid::step_cell(self.grid_cell, k == SideKey::Right, g.cell_min, g.cell_max),
+            None => self.grid_cell,
+        };
         let keys = [Action::ZoomOut, Action::ZoomIn]
             .map(|a| self.keymap.keys_for(a).join(" / "))
             .join(" ; ");
@@ -3018,6 +3188,7 @@ impl TriApp {
             self.grid_cell = cell;
             self.reveal = Some(Reveal::Minimal);
         }
+        slider
     }
 
     /// Seuil de regroupement en vigueur : le centre du dossier à la sévérité choisie.
@@ -3057,7 +3228,13 @@ impl TriApp {
     /// noirs exclus), sous son nom et le badge d'écrêtage de la grille ; les deux à la fois
     /// dans le panneau de droite (réorganisation du 27/10/2026 : la place ne manque plus).
     /// Effet en direct, retenu pour le dossier au lâcher.
-    fn clip_slider(&mut self, ui: &mut Ui, side: tri::exposure::Clip, width: f32) {
+    fn clip_slider(
+        &mut self,
+        ui: &mut Ui,
+        side: tri::exposure::Clip,
+        width: f32,
+        key: Option<SideKey>,
+    ) -> egui::Response {
         use tri::exposure::Clip;
         let (name, tip, value) = match side {
             Clip::Over => (
@@ -3077,7 +3254,8 @@ impl TriApp {
             marks::clip_badge(ui.painter(), rect, side == Clip::Over);
             ui.label(name);
         });
-        let (slider, t) = strictness_slider(ui, width, value, tip);
+        let step = self.gui.metadata.slider_step;
+        let (slider, t) = strictness_slider(ui, width, value, tip, key, step);
         if t != value {
             match side {
                 Clip::Over => self.clip_strictness.0 = t,
@@ -3085,13 +3263,14 @@ impl TriApp {
             }
             self.refilter(Reveal::Minimal);
         }
-        if (slider.drag_stopped() || slider.double_clicked_slider(ui))
+        if (slider.drag_stopped() || slider.double_clicked_slider(ui) || key.is_some())
             && let Some(data) = self.settings.data_dir()
             && !self.folder.is_none()
         {
             let keep = (t != 0.0).then_some(t);
             let _ = tri::exposure::remember_strictness(&data, &self.folder.dir, side, keep);
         }
+        slider
     }
 
     /// Retient la sévérité du flou pour le dossier ouvert (oubliée au centre).
@@ -3844,6 +4023,75 @@ impl TriApp {
                     self.focus = crate::actions::Scope::Images;
                 }
             }
+            // Réglages du panneau de droite (au-dessus des EXIF) : un élément à la fois ;
+            // en haut des EXIF, ↑ remonte dans les réglages.
+            Action::MetaUp | Action::MetaDown if self.side_cursor.is_some() => {
+                let i = self.side_cursor.unwrap_or(0);
+                if action == Action::MetaUp {
+                    self.side_cursor = Some(i.saturating_sub(1));
+                } else if i + 1 < self.side_items.len() {
+                    self.side_cursor = Some(i + 1);
+                } else if !self.meta_rows.is_empty() {
+                    self.side_cursor = None;
+                    self.meta_cursor = 0;
+                    self.meta_anchor = None;
+                }
+                self.scroll_to_cursor = true;
+            }
+            Action::MetaUp if self.meta_cursor == 0 && !self.side_items.is_empty() => {
+                self.side_cursor = Some(self.side_items.len() - 1);
+                self.meta_anchor = None;
+                self.scroll_to_cursor = true;
+            }
+            Action::MetaSelectUp | Action::MetaSelectDown if self.side_cursor.is_some() => {}
+            Action::PanelSectionNext | Action::PanelSectionPrev => {
+                let titles: Vec<usize> = (0..self.side_items.len())
+                    .filter(|&i| self.side_items[i])
+                    .collect();
+                // Dans les EXIF : après tous les réglages.
+                let at = self.side_cursor.unwrap_or(self.side_items.len());
+                let to = if action == Action::PanelSectionNext {
+                    titles.iter().find(|&&t| t > at).or(titles.first())
+                } else {
+                    titles.iter().rev().find(|&&t| t < at).or(titles.last())
+                };
+                if let Some(&to) = to {
+                    self.side_cursor = Some(to);
+                    self.meta_anchor = None;
+                    self.scroll_to_cursor = true;
+                }
+            }
+            Action::PanelActivate | Action::PanelLeft | Action::PanelRight
+                if self.side_cursor.is_some() =>
+            {
+                self.side_key = Some(match action {
+                    Action::PanelLeft => SideKey::Left,
+                    Action::PanelRight => SideKey::Right,
+                    _ => SideKey::Activate,
+                });
+                ctx.request_repaint();
+            }
+            Action::MetaOpen if self.side_cursor.is_some() => {
+                self.side_key = Some(SideKey::Activate);
+                ctx.request_repaint();
+            }
+            Action::FolderSectionNext | Action::FolderSectionPrev => {
+                let rows = self.tree.rows();
+                let at = self.tree.cursor().unwrap_or(0);
+                let firsts: Vec<usize> = (0..rows.len())
+                    .filter(|&i| i == 0 || rows[i].section != rows[i - 1].section)
+                    .collect();
+                let to = if action == Action::FolderSectionNext {
+                    firsts.iter().find(|&&f| f > at).or(firsts.first())
+                } else {
+                    // Au milieu d'une section : son début ; à son début : la précédente.
+                    firsts.iter().rev().find(|&&f| f < at).or(firsts.last())
+                };
+                if let Some(&to) = to {
+                    self.tree.set_cursor(to);
+                    self.scroll_to_cursor = true;
+                }
+            }
             Action::MetaUp | Action::MetaSelectUp => {
                 if action == Action::MetaSelectUp {
                     self.meta_anchor.get_or_insert(self.meta_cursor);
@@ -3880,6 +4128,8 @@ impl TriApp {
                     self.transfer_folder(ctx, path, action == Action::FolderCopy, None);
                 }
             }
+            // Curseur dans les réglages : pas de ligne des EXIF à copier.
+            Action::MetaCopy if self.side_cursor.is_some() => {}
             Action::MetaCopy | Action::MetaCopyAll => {
                 let (lo, hi) = if action == Action::MetaCopyAll {
                     (0, usize::MAX)
@@ -8398,7 +8648,7 @@ impl TriApp {
                 // gauche).
                 if self.mode == Mode::View && self.peaking {
                     ui.separator();
-                    self.blur_slider(ui, self.gui.grid.blur_slider);
+                    self.blur_slider(ui, self.gui.grid.blur_slider, None);
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                     marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
                 }
@@ -10073,9 +10323,14 @@ impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
-        // Recadrage : Tab change de préréglage ; egui, lui, y déplacerait le focus vers un
-        // champ ou un bouton de la barre (rendu en fin d'image, sauf depuis un champ).
-        let crop_tab = self.crop.is_some()
+        // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
+        // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
+        // depuis un champ).
+        let crop_tab = (self.crop.is_some()
+            || matches!(
+                self.effective_focus(),
+                crate::actions::Scope::Folders | crate::actions::Scope::Metadata
+            ))
             && !ctx.egui_wants_keyboard_input()
             && ctx.input(|i| i.key_pressed(egui::Key::Tab));
         if self.engine.is_none() && self.error.is_none() {
@@ -10742,9 +10997,24 @@ fn slider_ends(ui: &mut Ui, width: f32) {
 /// Curseur de sévérité (-1 à 1, centre 0) de largeur `width`, avec un repère au
 /// centre ; un double-clic y revient. Rend la réponse du curseur et la nouvelle valeur. Flou et
 /// piles (même logique, idée de l'utilisateur du 20/10/2026) : à droite plus strict.
-fn strictness_slider(ui: &mut Ui, width: f32, value: f32, tip: String) -> (egui::Response, f32) {
+///
+/// `key` : touche du clavier (panneau de droite) : ← / → d'un pas (`step`), Espace au
+/// centre.
+fn strictness_slider(
+    ui: &mut Ui,
+    width: f32,
+    value: f32,
+    tip: String,
+    key: Option<SideKey>,
+    step: f32,
+) -> (egui::Response, f32) {
     ui.spacing_mut().slider_width = width;
-    let mut t = value;
+    let mut t = match key {
+        Some(SideKey::Left) => (value - step).max(-1.0),
+        Some(SideKey::Right) => (value + step).min(1.0),
+        Some(SideKey::Activate) => 0.0,
+        None => value,
+    };
     let slider = ui
         .add(egui::Slider::new(&mut t, -1.0..=1.0).show_value(false))
         .on_hover_text(tip);
@@ -10771,6 +11041,17 @@ fn folder_depth(subfolders: bool, gui: &GuiSettings) -> usize {
     } else {
         1
     }
+}
+
+/// Touche appliquée au réglage pointé du panneau de droite.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SideKey {
+    /// Espace, Entrée : cocher, choisir, replier ou déplier, curseur au centre.
+    Activate,
+    /// ← / h : curseur vers la gauche, choix précédent ; replier une section.
+    Left,
+    /// → / l : curseur vers la droite, choix suivant ; déplier une section.
+    Right,
 }
 
 /// Recherche d'une mise à jour ([`TriApp::check_update`]).
@@ -13227,6 +13508,57 @@ mod tests {
     }
 
     #[test]
+    fn the_right_panel_settings_work_from_the_keyboard() {
+        // Retour du 27/10/2026 : ↑ / ↓ parcourent aussi les réglages, Tab / Maj+Tab
+        // passent d'une section à l'autre, Espace actionne, ← / → font varier.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        h.set_size(vec2(1400.0, 1200.0));
+        h.run_steps(3);
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::L, Modifiers::NONE);
+        assert_eq!(h.state().focus, Scope::Metadata);
+        h.run_steps(2);
+        let titles: Vec<usize> = (0..h.state().side_items.len())
+            .filter(|&i| h.state().side_items[i])
+            .collect();
+        assert!(titles.len() >= 3, "{titles:?}");
+        let filters = titles[titles.len() - 3];
+        while h.state().side_cursor != Some(filters) {
+            press(&mut h, Key::Tab, Modifiers::NONE);
+        }
+        // Premier filtre (« nettes ») : Espace l'allume, son curseur apparaît dessous.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        let before = h.state().blur_rule.is_some();
+        press(&mut h, Key::Space, Modifiers::NONE);
+        h.run_steps(2);
+        assert_ne!(h.state().blur_rule.is_some(), before, "Espace coche");
+        assert_eq!(
+            h.state().focus,
+            Scope::Metadata,
+            "le clavier reste au panneau"
+        );
+        if h.state().blur_rule.is_some() {
+            press(&mut h, Key::ArrowDown, Modifiers::NONE);
+            let t = h.state().blur_strictness;
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(2);
+            let step = h.state().gui.metadata.slider_step;
+            assert!((h.state().blur_strictness - (t + step)).abs() < 1e-6);
+        }
+        // Maj+Tab : le titre de la section ; ← la replie, → la déplie.
+        press(&mut h, Key::Tab, Modifiers::SHIFT);
+        assert_eq!(h.state().side_cursor, Some(filters));
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().panel_folded.contains("filters"));
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().panel_folded.contains("filters"));
+    }
+
+    #[test]
     fn folder_sections_fold_and_stay_folded() {
         // Retour du 27/10/2026 : repliables comme celles du panneau de droite, retenues
         // d'une session à l'autre.
@@ -13245,6 +13577,14 @@ mod tests {
             false,
         );
         h.run_steps(2);
+        // Tab : d'une section à l'autre.
+        h.state_mut().tree.set_cursor(0);
+        h.state_mut().focus = crate::actions::Scope::Folders;
+        press(&mut h, Key::Tab, Modifiers::NONE);
+        assert_eq!(h.state().tree.cursor(), Some(1), "section Système");
+        press(&mut h, Key::Tab, Modifiers::SHIFT);
+        assert_eq!(h.state().tree.cursor(), Some(0));
+        h.state_mut().focus = crate::actions::Scope::Images;
         let title = t!("folders-section-personal").to_uppercase();
         h.get_by_label(&title).click();
         h.run_steps(2);
@@ -13705,11 +14045,17 @@ mod tests {
         for _ in 0..40 {
             press(&mut h, Key::K, Modifiers::NONE);
         }
+        assert_eq!(h.state().meta_cursor, 0, "première ligne des EXIF");
         assert_eq!(
-            h.state().meta_cursor,
-            0,
-            "première ligne, pas l'histogramme"
+            h.state().side_cursor,
+            Some(0),
+            "puis les réglages au-dessus (27/10/2026), jusqu'au premier titre"
         );
+        // Dans les EXIF, Entrée ouvre l'histogramme en grand.
+        press(&mut h, Key::J, Modifiers::NONE);
+        while h.state().side_cursor.is_some() {
+            press(&mut h, Key::J, Modifiers::NONE);
+        }
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(h.state().histogram_large, "Entrée : l'histogramme en grand");
         press(&mut h, Key::Escape, Modifiers::NONE);

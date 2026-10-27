@@ -440,8 +440,17 @@ system one ("cold" measurements, experiments).
   **right click** on a folder, menu of the same actions (new folder, rename, delete,
   favourite; offload a card here, or on a removable drive: offload, eject), shortcut on
   hover.
-  Metadata: the histogram at the top then each row (sharpness included) can be pointed at
-  (↑ ↓ / `j` `k`), Enter on the histogram opens it large; Shift + ↑ ↓ / Shift + `j` `k`
+  **Right panel** (2026-10-27, `TriApp::side_begin` / `side_end`): ↑ ↓ / `j` `k` also go
+  through the **settings** above the EXIF (section titles included), one at a time;
+  **Space** / Enter use the pointed setting (check, choose, fold a section, slider to the
+  centre, button); ← → / `h` `l` vary it (slider by a step, `[gui.metadata] slider_step`;
+  thumbnail size by a notch; list and radio buttons to the next choice; title: fold /
+  unfold); **Tab** / Shift+Tab (`)` / `(` in vim) go from one section title to the next,
+  looping. The same keys go from section to section in the **folder panel** (first row of
+  the section; in the middle of a section, Shift+Tab goes back to its start). Tab no longer
+  moves egui's focus in a panel that has the keyboard (as in cropping).
+  EXIF rows: each row (sharpness included) can be pointed at, Enter opens the histogram
+  large; Shift + ↑ ↓ / Shift + `j` `k`
   (or Shift+click) extend the selection, `y` copies it (one row: the value; several:
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
   click on a row points at it and gives the keyboard to the panel. Large histogram open:

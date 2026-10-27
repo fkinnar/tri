@@ -766,6 +766,9 @@ visible = true
 width = 280.0
 histogram = true
 histogram_height = 120.0
+# Step of a strictness slider of the panel from the keyboard (left / right arrows, h / l),
+# over its range from -1 to 1.
+slider_step = 0.1
 
 [gui.colors]
 # Colours "#rrggbb". Selection (click or keyboard) missing: theme colour. Example:
