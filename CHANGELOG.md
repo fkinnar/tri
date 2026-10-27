@@ -4,6 +4,59 @@
 
 ## Unreleased
 
+- **Developments in the grid**: after developing, the grid can show each RAW's
+  development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
+  `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,
+  kept between sessions. A RAW without the wanted development shows its LibRaw render,
+  computed in the background; missing developments are rendered in the background
+  (`[gui.grid] develop = "auto"`) or on request (`"manual"`). A chip under the thumbnail
+  names the software (issue #114).
+- **"Developed" filter**: a list in the filter bar and `f Shift+D`: any development, or
+  developed in a given software (installed ones only); invertible, to see the images not
+  developed yet.
+- **RapidRAW** as a second development software, next to darktable: `rapidraw export`
+  applies its `.rrdata` sidecar; found in the PATH, the usual places, as an AppImage or a
+  Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"` (latest development) or a
+  software. With RapidRAW's interface open, its export gave an all-black image: it is now
+  refused with a plain message (issue #114).
+- **Choosing the software**: `<leader> r` (the image's software), `<leader> d`
+  darktable, `<leader> p` RapidRAW; "Develop with" in the right-click dialog; a dialog to
+  develop a whole folder (each image in its own software, or all in one). In full screen,
+  `b` goes through the camera JPEG, the RAW render, then each development already
+  rendered, to compare them. Develop errors name their software. **Changed action ids**:
+  `core.develop.render`, `core.develop.folder` (and new `plugin.rapidraw.develop`,
+  `core.grid.render`, `core.filter.developed`): a `[keys]` section using the old ids must
+  be updated (issue #114).
+- **"Darktable"** with a capital D wherever the name is shown; identifiers, configuration
+  values and `darktable-cli` stay lowercase.
+- **Star filter**: at least, exactly or at most (`f =` or the ≥ / = / ≤ button before the
+  stars) (issue #165).
+- **Removable media** (Linux): plugged in but not mounted, they show greyed under a new
+  "Devices" section, mounted and opened with a click; arriving media are mounted by
+  themselves (`[places] auto_mount`, on by default); fixed drives get their own "Drives"
+  section (issue #113).
+- **Folder panel**: section titles larger than the folders, in bold (`[gui.folders]
+  section_scale`; issue #120).
+- **Panels**: a line at the top of the panel that has the keyboard (`[gui.dialogs]
+  focus_line`, `focus_line_width`; issue #77).
+- **Help and settings**: sequences starting with the panel prefix read `<leader> r`, the
+  leader being shown on its own (issue #175).
+- **Stacks**: the stack entry button is also in the grid bar, and its click works;
+  entering a folded stack from the grid honours it too (issue #62). Under `f c`, a stack
+  no longer splits in two (issue #163). With stacks on, `c` on a single photo compares
+  it (issue #167).
+- **Keys**: a held key repeats only moves (navigation, panning, zoom…), not one-shot
+  actions: holding `e` opened the editor over and over (issue #160).
+- **Windows**: external programs (eject, editor) no longer open a console window (issue
+  #159).
+- **Folders**: copying or moving a folder no longer takes its own `.tri-cache`; a click
+  clears a status bar message (issue #157).
+- **Background tasks**: folding back restores the panel's height (issue #158).
+- **Window under Wayland**: maximized again at launch when it was (issue #58).
+- **Narrow window**: in the "…" menu of the filter bar, the lists open as submenus (they
+  closed with the menu; issue #181).
+- **Linux**: `install.sh --uninstall` updates the icon cache; the app icon disappeared
+  after moving from the archive to the `.deb`.
 - **Several cards in a row**: the next card is also picked up after closing the
   offload summary or offloading in the background, and when it is mounted at the
   previous card's path (two cards of the same camera) (issue #37).
