@@ -112,8 +112,14 @@ tri-<version>-linux-<arch>/
   older distributions: build on an older one.
 - `install.sh` copies everything into `~/.local/lib/tri` (or `--prefix DOSSIER`), creates
   the links `~/.local/bin/tri-gui` and `tri`, the launcher (`tri.desktop`, whose `Exec`
-  points to the installation) and the icon; `install.sh --uninstall` removes it all. No
-  administrator rights needed. `tri`'s data (settings, cache) is never touched.
+  points to the installation) and the icon; `install.sh --uninstall` removes it all and
+  updates the icon cache in `~/.local` (otherwise it would still list the removed icon and
+  hide that of a `tri` installed elsewhere). No administrator rights needed. `tri`'s data
+  (settings, cache) is never touched.
+- **Moving from the archive to the `.deb`**: first `~/.local/lib/tri/install.sh
+  --uninstall`, otherwise the launcher in `~/.local` takes precedence over the package's.
+  If the icon is gone after an uninstall by an older `install.sh`:
+  `gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor`, then log out and back in.
 - The window declares the application id `tri` (Wayland), tied to the `tri.desktop`
   launcher for the icon and name.
 
