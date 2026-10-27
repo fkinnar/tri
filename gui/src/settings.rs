@@ -434,8 +434,6 @@ pub struct GridSettings {
     /// carte de netteté (points). Dans le panneau de droite, les curseurs prennent sa
     /// largeur.
     pub blur_slider: f32,
-    /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
-    pub size_slider: f32,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -475,7 +473,6 @@ impl Default for GridSettings {
             marked_frame: 3.0,
             blur_badge: true,
             blur_slider: 90.0,
-            size_slider: 90.0,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,
@@ -800,9 +797,11 @@ pub struct FolderSettings {
     /// Case « sous-dossiers » du panneau : niveaux de sous-dossiers dont les images
     /// s'affichent aussi dans la grille, au plus (en plus du dossier ouvert).
     pub subfolders_depth: usize,
-    /// Titres des sections (« Disques amovibles », « Favoris »…) : taille par rapport au
-    /// texte des dossiers.
+    /// Titres des sections (« Disques amovibles », « Favoris »… et celles du panneau de
+    /// droite) : taille par rapport au texte des dossiers.
     pub section_scale: f32,
+    /// Écart au-dessus du titre de chaque section des panneaux latéraux (points).
+    pub section_gap: f32,
 }
 
 impl Default for FolderSettings {
@@ -815,7 +814,8 @@ impl Default for FolderSettings {
             search_depth: 4,
             search_results: 200,
             subfolders_depth: 3,
-            section_scale: 1.15,
+            section_scale: 1.25,
+            section_gap: 6.0,
         }
     }
 }

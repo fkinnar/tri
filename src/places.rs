@@ -32,7 +32,7 @@ pub enum PlaceKind {
 
 /// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
 /// périphériques, disques, dossier personnel, favoris, puis seulement la racine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Section {
     /// Supports amovibles (cartes, clés, disques externes, appareils), montés ou non
     /// (#113, comme le gestionnaire de fichiers).
@@ -47,6 +47,30 @@ pub enum Section {
     Favorites,
     /// Racine du système de fichiers.
     System,
+}
+
+impl Section {
+    /// Toutes les sections, dans l'ordre d'affichage.
+    pub const ALL: [Section; 6] = [
+        Section::Devices,
+        Section::Drives,
+        Section::Network,
+        Section::Personal,
+        Section::Favorites,
+        Section::System,
+    ];
+
+    /// Identifiant stable de la section (repliée ou non, retenu d'une session à l'autre).
+    pub fn key(self) -> &'static str {
+        match self {
+            Section::Devices => "devices",
+            Section::Drives => "drives",
+            Section::Network => "network",
+            Section::Personal => "personal",
+            Section::Favorites => "favorites",
+            Section::System => "system",
+        }
+    }
 }
 
 impl PlaceKind {
@@ -1264,6 +1288,8 @@ pub struct Tree {
     present: Vec<PathBuf>,
     /// Noms donnés aux favoris ([`favorite_names`]).
     names: HashMap<PathBuf, String>,
+    /// Sections repliées : leurs lignes ne sont pas dans [`Tree::rows`].
+    folded: HashSet<Section>,
 }
 
 impl Tree {
@@ -1292,6 +1318,7 @@ impl Tree {
             favorites: Vec::new(),
             present: Vec::new(),
             names: HashMap::new(),
+            folded: HashSet::new(),
         }
     }
 
@@ -1529,6 +1556,35 @@ impl Tree {
     /// volumes, dossier personnel, favoris présents, racine ; sous chaque emplacement,
     /// s'il est déplié, ses sous-dossiers, récursivement.
     pub fn rows(&self) -> Vec<Row> {
+        let mut rows = self.all_rows();
+        rows.retain(|r| !self.folded.contains(&r.section));
+        rows
+    }
+
+    /// Sections qui ont des lignes, repliées comprises, dans l'ordre d'affichage : une
+    /// section repliée garde son titre (pour la déplier).
+    pub fn sections(&self) -> Vec<Section> {
+        let mut sections: Vec<Section> = self.all_rows().iter().map(|r| r.section).collect();
+        sections.dedup();
+        sections
+    }
+
+    /// Replie (`folded`) ou déplie la section `section`.
+    pub fn set_folded(&mut self, section: Section, folded: bool) {
+        if folded {
+            self.folded.insert(section);
+        } else {
+            self.folded.remove(&section);
+        }
+    }
+
+    /// Vrai si la section `section` est repliée.
+    pub fn is_folded(&self, section: Section) -> bool {
+        self.folded.contains(&section)
+    }
+
+    /// Toutes les lignes, sections repliées comprises.
+    fn all_rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
         let mut places: Vec<&Place> = self.places.iter().collect();
         // Tri stable : l'ordre des volumes entre eux est gardé.
@@ -1721,6 +1777,33 @@ mod tests {
         assert!(rows[1].ejectable, "un support pas monté s'éjecte aussi");
         assert!(!rows[2].ejectable);
         assert!(!rows[6].expanded, "racine repliée par défaut");
+    }
+
+    #[test]
+    fn a_folded_section_keeps_its_title_but_not_its_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let place = |name: &str, kind| Place {
+            name: name.into(),
+            path: dir.path().to_path_buf(),
+            kind,
+        };
+        let mut tree = Tree::with_places(
+            vec![
+                place("Perso", PlaceKind::Home),
+                place("Racine", PlaceKind::Root),
+            ],
+            false,
+        );
+        tree.set_cursor(1);
+        tree.set_folded(Section::Personal, true);
+        assert!(tree.is_folded(Section::Personal));
+        let names: Vec<String> = tree.rows().into_iter().map(|r| r.name).collect();
+        assert_eq!(names, ["Racine"]);
+        assert_eq!(tree.sections(), [Section::Personal, Section::System]);
+        assert_eq!(tree.cursor(), Some(0), "le curseur suit sa ligne");
+        tree.set_folded(Section::Personal, false);
+        assert_eq!(tree.rows().len(), 2);
+        assert_eq!(Section::ALL.map(Section::key)[4], "favorites");
     }
 
     #[test]

@@ -1088,6 +1088,11 @@ impl TriApp {
         }
         if let Some(folded) = &s.panel_folded {
             self.panel_folded = folded.iter().cloned().collect();
+            for section in tri::places::Section::ALL {
+                let key = format!("folders-{}", section.key());
+                self.tree
+                    .set_folded(section, self.panel_folded.contains(&key));
+            }
         }
         if let Some(ids) = &s.developed_engines {
             self.developed_checked = Some(
@@ -1212,33 +1217,12 @@ impl TriApp {
         }
     }
 
-    /// Titre de section du panneau de droite, à l'allure de ceux du panneau des dossiers
-    /// (gras, `[gui.folders] section_scale`), avec un triangle : un clic replie ou déplie
-    /// la section (retenu d'une session à l'autre). Vrai si elle est dépliée.
+    /// Titre de section du panneau de droite, comme ceux du panneau des dossiers
+    /// ([`section_title`]) : un clic replie ou déplie la section (retenu d'une session à
+    /// l'autre). Vrai si elle est dépliée.
     fn panel_section(&mut self, ui: &mut Ui, id: &str, title: String) -> bool {
         let open = !self.panel_folded.contains(id);
-        let tip = if open {
-            t!("folders-collapse")
-        } else {
-            t!("folders-expand")
-        };
-        let size = egui::TextStyle::Body.resolve(ui.style()).size * self.gui.folders.section_scale;
-        let clicked = ui
-            .horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
-                let side = ui.text_style_height(&egui::TextStyle::Body);
-                let (rect, triangle) = marks::clickable(ui, side, &tip);
-                marks::disclosure(ui.painter(), rect, open, ui.visuals().text_color());
-                let label = ui
-                    .add(
-                        egui::Label::new(egui::RichText::new(title).size(size).strong())
-                            .sense(Sense::click()),
-                    )
-                    .on_hover_text(&tip)
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                triangle.clicked() || label.clicked()
-            })
-            .inner;
+        let clicked = section_title(ui, &title, open, &self.gui.folders);
         if clicked {
             if open {
                 self.panel_folded.insert(id.to_string());
@@ -1357,6 +1341,48 @@ impl TriApp {
     fn grid_settings(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+        // Fichiers montrés, RAW et JPEG (retour du 21/10/2026 ; dans la barre des filtres
+        // jusqu'au 27/10/2026 : un réglage de la grille). Un des deux reste coché.
+        subheading(ui, t!("panel-grid-files"));
+        let (raw, jpeg) = match self.filter {
+            KindFilter::All => (true, true),
+            KindFilter::RawOnly => (true, false),
+            KindFilter::FlatOnly => (false, true),
+        };
+        ui.horizontal(|ui| {
+            for (is_raw, on, name, tip) in [
+                (true, raw, "RAW", t!("filter-bar-raw-tip")),
+                (false, jpeg, "JPEG", t!("filter-bar-flat-tip")),
+            ] {
+                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
+                let mut checked = on;
+                let alone = on && raw != jpeg;
+                let response = ui
+                    .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
+                    .on_hover_text(&tip)
+                    .on_disabled_hover_text(&tip);
+                if response.changed() {
+                    let (raw, jpeg) = if is_raw {
+                        (checked, jpeg)
+                    } else {
+                        (raw, checked)
+                    };
+                    let kind = match (raw, jpeg) {
+                        (true, false) => KindFilter::RawOnly,
+                        (false, true) => KindFilter::FlatOnly,
+                        _ => KindFilter::All,
+                    };
+                    // Le type tourne en boucle (même action que le clavier) : autant de crans
+                    // que nécessaire.
+                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
+                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
+                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
+                    for _ in 0..(to + 3 - from) % 3 {
+                        clicked.push(Action::FilterCycle);
+                    }
+                }
+            }
+        });
         // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
         subheading(ui, t!("panel-grid-render"))
             .on_hover_text(self.action_tip(Action::GridRenderNext));
@@ -1851,6 +1877,7 @@ impl TriApp {
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
+        let mut fold: Option<tri::places::Section> = None;
         drag_preview(ui.ctx());
         ui.horizontal(|ui| {
             ui.strong(t!("folders-title"));
@@ -1897,25 +1924,25 @@ impl TriApp {
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Une section par nature d'emplacement, chacune sous son titre (demandé le
             // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
+            // Repliables comme celles du panneau de droite (retour du 27/10/2026) : une
+            // section repliée garde son titre, sans ses lignes.
+            let mut titles = self.tree.sections().into_iter().peekable();
+            let mut first = true;
+            let mut title = |ui: &mut Ui, until: Option<tri::places::Section>| {
+                while let Some(s) = titles.next_if(|&s| until.is_none_or(|u| s <= u)) {
+                    if !std::mem::take(&mut first) {
+                        ui.separator();
+                    }
+                    if section_title(ui, &folder_section_name(s), !self.tree.is_folded(s), &f) {
+                        fold = Some(s);
+                    }
+                }
+            };
             let mut section = None;
             for (i, row) in self.tree.rows().into_iter().enumerate() {
                 if section != Some(row.section) {
-                    if section.is_some() {
-                        ui.separator();
-                    }
                     section = Some(row.section);
-                    let title = match row.section {
-                        tri::places::Section::Devices => t!("folders-section-devices"),
-                        tri::places::Section::Drives => t!("folders-section-drives"),
-                        tri::places::Section::Network => t!("folders-section-network"),
-                        tri::places::Section::Personal => t!("folders-section-personal"),
-                        tri::places::Section::Favorites => t!("folders-section-favorites"),
-                        tri::places::Section::System => t!("folders-section-system"),
-                    };
-                    // Plus grands que les dossiers, en gras (#120 : en petit et estompés,
-                    // ils se perdaient parmi eux).
-                    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
-                    ui.label(egui::RichText::new(title).size(size).strong());
+                    title(ui, section);
                 }
                 let line = ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
@@ -2130,7 +2157,19 @@ impl TriApp {
                     }
                 }
             }
+            // Sections repliées après la dernière ligne.
+            title(ui, None);
         });
+        if let Some(s) = fold {
+            let folded = !self.tree.is_folded(s);
+            self.tree.set_folded(s, folded);
+            let key = format!("folders-{}", s.key());
+            if folded {
+                self.panel_folded.insert(key);
+            } else {
+                self.panel_folded.remove(&key);
+            }
+        }
         // Par la ligne cliquée, pas par son dossier : un favori et le même dossier dans
         // l'arborescence se déplient chacun de leur côté.
         if let Some(i) = toggle {
@@ -2956,7 +2995,7 @@ impl TriApp {
         }
     }
 
-    /// Curseur de taille des vignettes (barre du bas, en grille) ; double-clic : taille
+    /// Curseur de taille des vignettes (section Grille du panneau) ; double-clic : taille
     /// de la configuration.
     fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) {
         let g = self.gui.grid;
@@ -8324,9 +8363,10 @@ impl TriApp {
                         clicked = Some(action);
                     }
                 }
-                // Grille : infos des vignettes, tout à l'écran et taille des vignettes, à
-                // côté de ‹ › (demandé le 21/10/2026). Seulement s'il reste la place : sur
-                // une fenêtre étroite, ils recouvriraient les notes (le clavier reste).
+                // Grille : infos des vignettes et tout à l'écran, à côté de ‹ › (demandé le
+                // 21/10/2026 ; la taille est dans le panneau de droite). Seulement s'il reste
+                // la place : sur une fenêtre étroite, ils recouvriraient les notes (le
+                // clavier reste).
                 let spacing = ui.spacing().item_spacing.x;
                 let buttons = 2.0 * (icon + spacing) + 2.0 * spacing;
                 let room = ui.available_width() - self.gui.dialogs.spacing;
@@ -8351,9 +8391,6 @@ impl TriApp {
                     marks::grid_fit_icon(ui.painter(), rect.shrink(icon * 0.25), color);
                     if response.clicked() {
                         self.grid_fit_all();
-                    }
-                    if room >= buttons + self.gui.grid.size_slider + spacing {
-                        self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
@@ -8458,62 +8495,6 @@ impl TriApp {
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
         // de portable, la barre débordait).
         ui.horizontal_wrapped(|ui| {
-            // Deux interrupteurs, RAW et JPEG (retour du 21/10/2026, à la place de « Tout »,
-            // « RAW », « Plates ») : allumé, ce type est montré ; un des deux reste allumé.
-            let (raw, jpeg) = match self.filter {
-                KindFilter::All => (true, true),
-                KindFilter::RawOnly => (true, false),
-                KindFilter::FlatOnly => (false, true),
-            };
-            let height = self.gui.grid.marks + 10.0;
-            for (is_raw, on, label, tip) in [
-                (true, raw, "RAW", t!("filter-bar-raw-tip")),
-                (false, jpeg, "JPG", t!("filter-bar-flat-tip")),
-            ] {
-                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
-                let (rect, response) =
-                    ui.allocate_exact_size(vec2(height * 1.3, height), Sense::click());
-                let name = if is_raw { "RAW" } else { "JPEG" };
-                response.widget_info(|| {
-                    egui::WidgetInfo::selected(egui::accesskit::Role::Button, true, on, name)
-                });
-                let response = response
-                    .on_hover_text(tip)
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                if response.hovered() {
-                    let fill = ui.visuals().widgets.hovered.weak_bg_fill;
-                    ui.painter().rect_filled(rect.expand(2.0), 4.0, fill);
-                }
-                // Allumé : le rectangle seul prend l'accent (retour du 21/10/2026 : pas de
-                // grand carré autour), texte de la sélection d'egui, lisible dessus.
-                let (color, back) = if on {
-                    (marks::accent(ui.ctx()), ui.visuals().selection.stroke.color)
-                } else {
-                    (ui.visuals().weak_text_color(), ui.visuals().panel_fill)
-                };
-                marks::file_type(ui.painter(), rect.shrink(1.0), label, color, back);
-                if response.clicked() {
-                    let (raw, jpeg) = if is_raw { (!raw, jpeg) } else { (raw, !jpeg) };
-                    let kind = match (raw, jpeg) {
-                        (true, true) => Some(KindFilter::All),
-                        (true, false) => Some(KindFilter::RawOnly),
-                        (false, true) => Some(KindFilter::FlatOnly),
-                        // Les deux éteints : rien à montrer, refusé.
-                        (false, false) => None,
-                    };
-                    if let Some(kind) = kind {
-                        // Le type tourne en boucle (même action que le clavier) : autant de
-                        // crans que nécessaire.
-                        let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
-                        let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
-                        let to = order.iter().position(|&k| k == kind).unwrap_or(0);
-                        for _ in 0..(to + 3 - from) % 3 {
-                            clicked.push(Action::FilterCycle);
-                        }
-                    }
-                }
-            }
-            ui.separator();
             let current = self.notes_rule.stars.map_or(0, |r| r.parts().1);
             let size = self.gui.grid.marks + 4.0;
             // Comparaison (≥, =, ≤) devant les étoiles ; un clic passe à la suivante.
@@ -10680,6 +10661,55 @@ fn panel_slider_width(ui: &Ui) -> f32 {
     (ui.available_width() - ui.spacing().interact_size.y).max(0.0)
 }
 
+/// Nom traduit d'une section du panneau des dossiers.
+fn folder_section_name(section: tri::places::Section) -> String {
+    use tri::places::Section;
+    match section {
+        Section::Devices => t!("folders-section-devices"),
+        Section::Drives => t!("folders-section-drives"),
+        Section::Network => t!("folders-section-network"),
+        Section::Personal => t!("folders-section-personal"),
+        Section::Favorites => t!("folders-section-favorites"),
+        Section::System => t!("folders-section-system"),
+    }
+}
+
+/// Titre d'une section repliable des panneaux latéraux (dossiers, panneau de droite),
+/// `open` si elle est dépliée : un triangle et le titre en majuscules, plus grand
+/// (`[gui.folders] section_scale`), en gras et à l'accent (retour du 27/10/2026 : on les
+/// distinguait mal du reste), précédé d'un écart (`section_gap`). Vrai au clic.
+fn section_title(
+    ui: &mut Ui,
+    title: &str,
+    open: bool,
+    f: &crate::settings::FolderSettings,
+) -> bool {
+    ui.add_space(f.section_gap);
+    let tip = if open {
+        t!("folders-collapse")
+    } else {
+        t!("folders-expand")
+    };
+    let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+    let color = marks::accent_mark(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let side = ui.text_style_height(&egui::TextStyle::Body);
+        let (rect, triangle) = marks::clickable(ui, side, &tip);
+        marks::disclosure(ui.painter(), rect, open, color);
+        let text = egui::RichText::new(title.to_uppercase())
+            .size(size)
+            .strong()
+            .color(color);
+        let label = ui
+            .add(egui::Label::new(text).sense(Sense::click()))
+            .on_hover_text(&tip)
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        triangle.clicked() || label.clicked()
+    })
+    .inner
+}
+
 /// Intertitre d'un groupe de réglages du panneau de droite (estompé, plus petit que le
 /// titre de section).
 fn subheading(ui: &mut Ui, text: String) -> egui::Response {
@@ -11613,7 +11643,8 @@ mod tests {
         assert!(h.state().stacking);
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
         // Replier « Grille ».
-        h.get_by_label(&t!("panel-section-grid")).click();
+        h.get_by_label(&t!("panel-section-grid").to_uppercase())
+            .click();
         h.run_steps(2);
         assert!(h.state().panel_folded.contains("grid"));
         assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_none());
@@ -11638,9 +11669,11 @@ mod tests {
         assert!(h.query_by_label(&Action::ToggleGridInfo.label()).is_some());
         press(&mut h, Key::D, Modifiers::SHIFT);
         press(&mut h, Key::M, Modifiers::SHIFT);
+        // La taille des vignettes n'est plus dans la barre du bas (27/10/2026 : déjà dans
+        // la section Grille du panneau de droite).
         assert_eq!(
             h.query_all_by_role(egui::accesskit::Role::Slider).count(),
-            1
+            0
         );
         let default = h.state().gui.grid.cell;
         assert!(h.state().grid_info);
@@ -13173,7 +13206,10 @@ mod tests {
         let ctx = h.ctx.clone();
         h.state_mut().set_volumes(&ctx, vec![card]);
         h.run_steps(2);
-        assert!(h.query_by_label(&t!("folders-section-devices")).is_some());
+        assert!(
+            h.query_by_label(&t!("folders-section-devices").to_uppercase())
+                .is_some()
+        );
         h.get_by_label("X-T4").click();
         h.run_steps(2);
         assert!(
@@ -13188,6 +13224,41 @@ mod tests {
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error, "{text}");
         assert!(text.contains("X-T4"), "{text}");
+    }
+
+    #[test]
+    fn folder_sections_fold_and_stay_folded() {
+        // Retour du 27/10/2026 : repliables comme celles du panneau de droite, retenues
+        // d'une session à l'autre.
+        let (mut h, dir) = harness();
+        h.state_mut().folder_panel = true;
+        let place = |name: &str, kind| tri::places::Place {
+            name: name.into(),
+            path: dir.path().to_path_buf(),
+            kind,
+        };
+        h.state_mut().tree = Tree::with_places(
+            vec![
+                place("Perso", tri::places::PlaceKind::Home),
+                place("Racine", tri::places::PlaceKind::Root),
+            ],
+            false,
+        );
+        h.run_steps(2);
+        let title = t!("folders-section-personal").to_uppercase();
+        h.get_by_label(&title).click();
+        h.run_steps(2);
+        assert!(h.query_by_label("Perso").is_none(), "lignes repliées");
+        assert!(h.query_by_label(&title).is_some(), "titre gardé");
+        let saved = h.state().display().panel_folded.unwrap();
+        assert_eq!(saved, ["folders-personal"]);
+        // Au lancement suivant : toujours repliée.
+        h.state_mut().save_display();
+        h.state_mut()
+            .tree
+            .set_folded(tri::places::Section::Personal, false);
+        h.state_mut().restore_display();
+        assert!(h.state().tree.is_folded(tri::places::Section::Personal));
     }
 
     #[test]
@@ -13507,6 +13578,8 @@ mod tests {
     fn panels_take_the_keyboard_like_tmux() {
         use crate::actions::Scope;
         let (mut h, dir) = harness();
+        // Section Grille repliée : les lignes des EXIF restent dans la fenêtre de test.
+        h.state_mut().panel_folded.insert("grid".to_string());
         h.run_steps(3);
         // Arborescence de test : le dossier temporaire et deux séances.
         for d in ["séance-1", "séance-2"] {

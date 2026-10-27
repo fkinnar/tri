@@ -557,24 +557,29 @@ system one ("cold" measurements, experiments).
   [offload.md](offload.md). The work is in the engine ([offload.md](offload.md)), the
   dialog (`offload.rs`) only displays.
 - **Right panel in sections** (reorganisation of 2026-10-27, the user's idea;
-  `TriApp::side_panel`): the filter bar keeps only what is set with a click (types, stars,
-  flags, sharp / well exposed / developed switches, colours) and the name search, with the
-  image count, invert and clear; the **settings** move to the right panel, in titled
-  sections like the folder panel's (bold, `[gui.folders] section_scale`), folded by a click
-  on the title (remembered, `gui-state.toml`, `panel_folded`), in the usual order of other
-  software (Lightroom): **Histogram** on top, **Filters** and **Grid** (in the grid only),
-  **Exif** at the bottom.
+  `TriApp::side_panel`): the filter bar keeps only what is set with a click (stars, flags,
+  sharp / well exposed / developed switches, colours) and the name search, with the image
+  count, invert and clear; the **settings** move to the right panel, in titled sections
+  like the folder panel's (`section_title`: capitals, bold, accent colour,
+  `[gui.folders] section_scale`, a `section_gap` above), folded by a click on the title, in
+  the usual order of other software (Lightroom): **Histogram** on top, **Filters** and
+  **Grid** (in the grid only), **EXIF** at the bottom. The **folder panel**'s sections fold
+  the same way (feedback of 2026-10-27, `Tree::set_folded`: a folded section keeps its
+  title, its rows leave `Tree::rows`, so the keyboard cursor too). Folded sections of both
+  panels are remembered across sessions (`gui-state.toml`, `panel_folded`: `grid`, `exif`,
+  `folders-personal`…).
   - *Filters*: each adjustable filter with a check box (like its bar icon), its settings
     only while it is on: blur strictness; **two sliders** for exposure (blown and crushed,
     instead of one slider and a switch); development software as **flat check boxes**.
     Under each slider, "more lenient" on the left, "stricter" on the right. The tooltip of
     the bar icons says where the settings are.
-  - *Grid*: thumbnail render as radio buttons (instead of the list hidden in the "…" menu
-    of narrow windows, which is gone), order (list and direction), thumbnail size and info,
-    stacks (check box, similarity, entering by the cover or the first photo, unfold / fold
-    all, fine settings).
-  - Keys removed: `[gui.grid] stack_slider` and `clip_slider` (the panel sliders take its
-    width); `blur_slider` is now only for the full screen bottom bar.
+  - *Grid*: files shown, RAW and JPEG (two check boxes, one stays checked; in the filter
+    bar until 2026-10-27), thumbnail render as radio buttons (instead of the list hidden in
+    the "…" menu of narrow windows, which is gone), order (list and direction), thumbnail
+    size (the slider leaves the bottom bar) and info, stacks (check box, similarity,
+    entering by the cover or the first photo, unfold / fold all, fine settings).
+  - Keys removed: `[gui.grid] stack_slider`, `clip_slider` and `size_slider` (the panel
+    sliders take its width); `blur_slider` is now only for the full screen bottom bar.
 - **Metadata panel** (2026-10-17), on the right, in the grid and in full screen
   (`Shift+M`, `[gui.metadata]`): file name as the first row (2026-10-22, rather than a
   title), then the engine rows (`Metadata::rows`, see

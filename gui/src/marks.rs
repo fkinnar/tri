@@ -778,22 +778,6 @@ pub fn star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
     colors.stars.map_or_else(|| accent_mark(ctx), Color32::from)
 }
 
-/// Étiquette de type de fichier dans `rect` : un rectangle arrondi plein où `label`
-/// (« RAW », « JPG ») s'écrit en creux, couleur `back` (filtre par type ; retour du
-/// 21/10/2026 : sans l'icône de page, à la taille des autres icônes).
-pub fn file_type(painter: &Painter, rect: Rect, label: &str, color: Color32, back: Color32) {
-    let h = rect.height();
-    let band = Rect::from_center_size(rect.center(), vec2(rect.width(), h * 0.62));
-    painter.rect_filled(band, h * 0.14, color);
-    painter.text(
-        band.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(band.height() * 0.78),
-        back,
-    );
-}
-
 /// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en
 /// éventail vers le bas à gauche.
 pub fn broom(painter: &Painter, rect: Rect, color: Color32) {
