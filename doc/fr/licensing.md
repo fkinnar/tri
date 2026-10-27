@@ -52,7 +52,9 @@ de configuration — sous MIT OR Apache-2.0, comme leurs dépendances `toml_pars
 `toml_datetime`, `serde_spanned`, sauf `winnow`, sous MIT ; `objc2-foundation` — macOS, emplacement d'un fichier mis à la corbeille pour
 l'annulation, déjà présent par `trash` — sous MIT ; `objc2` et `objc2-app-kit` — macOS,
 envoi par AirDrop (feuille de partage, `tri::send`), même projet (madsmtm/objc2, actif),
-déjà présents par winit — sous Zlib OR Apache-2.0 OR MIT ; `toml_edit` — fenêtre de
+déjà présents par winit — sous Zlib OR Apache-2.0 OR MIT ; `windows-sys` — Windows,
+éjection d'un volume (`places::eject`), Microsoft (microsoft/windows-rs, très actif),
+déjà présent par winit et d'autres — sous MIT OR Apache-2.0 ; `toml_edit` — fenêtre de
 réglages : modifier le fichier sans perdre commentaires ni mise en page, mêmes
 mainteneurs que `toml` (toml-rs), très actif, déjà présent en dépendance indirecte — sous
 MIT OR Apache-2.0, avec `indexmap` et `toml_writer` sous MIT OR Apache-2.0 ; `quick-xml` — sidecars XMP —

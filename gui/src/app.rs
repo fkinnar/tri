@@ -2025,8 +2025,9 @@ impl TriApp {
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = volume.clone();
+        let places = self.places.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(tri::places::eject(&target));
+            let _ = tx.send(tri::places::eject(&target, &places));
             repaint.request_repaint();
         });
         self.notice = Some((t!("ejecting", name = self.place_name(&volume)), false));

@@ -39,6 +39,11 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 objc2 = { version = "0.6.5", default-features = false, features = ["std"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSSharingService"] }
 
+# Windows : éjection d'un volume par l'API du système (`places::eject`, issue n° 192) ;
+# déjà présent par winit, std et d'autres (Microsoft, MIT / Apache-2.0).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl"] }
+
 [features]
 default = ["heif", "turbojpeg"]
 # HEIC/HEIF via libheif. HEVC est breveté : désactivable pour un binaire distribué
