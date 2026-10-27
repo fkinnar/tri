@@ -3253,7 +3253,7 @@ impl TriApp {
 
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let mut chords = ctx.input(|i| self.keymap.chords_repeated(&i.events));
+        let mut chords = ctx.input(|i| self.keymap.chords_repeated(&i.events, i.modifiers));
         // Saisie dans un champ de texte (nom de dossier, recherche) : les touches sont du
         // texte, pas des raccourcis ; seules les touches qui ne tapent rien (Échap, F1…)
         // agissent. Sans cela, taper « q » dans le nom d'un dossier quittait l'application.

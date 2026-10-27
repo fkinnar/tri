@@ -725,6 +725,12 @@ identifier (`core.nav.next`, `core.filter.cycle`…), as decided in `CLAUDE.md`.
 `[keys]` section of the configuration file binds keys to these identifiers (see below);
 the mouse triggers the same actions.
 
+Clipboard shortcuts do not arrive as keys: egui-winit replaces them with "cut", "copy",
+"paste" (Ctrl / Cmd + X, C, V, and on Windows Shift+Delete, Ctrl+Insert, Shift+Insert).
+`Keymap::chords_repeated` translates them back into keys from the modifiers held (issue
+#194: Shift+Delete did not delete the stack on Windows, Ctrl+C / Ctrl+X neither copied nor
+moved).
+
 Two shortcut sets are shipped, **to choose from** (`[gui] profile`: `"classic"` by
 default, `"vim"`, or `"both"` for both together, which do not overlap; drop-down list in
 the settings window). Decided on 2026-10-18: a user of classic tools has no use for vim
