@@ -621,9 +621,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     similarité, tout déplier / replier, réglages fins). Restent dans la barre du bas
     (choix de l'utilisateur, 27/10/2026, pas de doublon) : taille et infos des
     vignettes, entrée dans une pile par la couverture ou la première photo.
-  - Libellés **« NOTE »** (barre du bas) et **« FILTRE »** (barre du haut), au singulier
-    comme le titre « FILTRE » du panneau : majuscules un peu plus petites que le texte, à
-    l'accent (`bar_label`, `[gui.grid] bar_label_scale` ; retour du 27/10/2026).
+  - Libellés **« NOTE »** (barre du bas), **« FILTRE »** (barre du haut) et **« DOSSIERS
+    »** (panneau de gauche), « FILTRE » au singulier comme le titre « FILTRE » du panneau
+    : majuscules un peu plus petites que le texte, à l'accent (`bar_label`, `[gui.grid]
+    bar_label_scale` ; retour du 27/10/2026).
   - Après un changement de filtre, le **nombre d'images** s'affiche un instant au milieu
     de la zone des images (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0 :
     jamais ; idée de l'utilisateur, 27/10/2026 : « JPEG » seul dans un dossier de RAW ne

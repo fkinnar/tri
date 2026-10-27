@@ -2005,7 +2005,7 @@ impl TriApp {
         let mut fold: Option<tri::places::Section> = None;
         drag_preview(ui.ctx());
         ui.horizontal(|ui| {
-            ui.strong(t!("folders-title"));
+            bar_label(ui, &t!("folders-title"), self.gui.grid.bar_label_scale);
             // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
             let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
             let tip = format!(
@@ -10933,7 +10933,7 @@ fn panel_slider_width(ui: &Ui) -> f32 {
     (ui.available_width() - ui.spacing().interact_size.y).max(0.0)
 }
 
-/// Libellé d'une barre (notes en bas, filtres en haut) : en majuscules, un peu plus petit
+/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche) : en majuscules, un peu plus petit
 /// que le texte (`scale`), à l'accent, comme les titres des sections des panneaux (retour
 /// du 27/10/2026).
 fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
@@ -13424,7 +13424,7 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().folder.is_none());
         assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
-        assert!(h.query_by_label("Dossiers").is_some());
+        assert!(h.query_by_label("DOSSIERS").is_some());
     }
 
     #[test]

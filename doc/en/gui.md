@@ -589,9 +589,10 @@ system one ("cold" measurements, experiments).
     similarity, unfold / fold all, fine settings). Staying in the bottom bar (the user's
     choice, 2026-10-27, no duplicates): thumbnail size and info, entering a stack by the
     cover or the first photo.
-  - **"RATING"** (bottom bar) and **"FILTER"** (top bar) labels, singular like the panel's
-    "FILTER" title: capitals a bit smaller than the text, in the accent colour
-    (`bar_label`, `[gui.grid] bar_label_scale`; feedback of 2026-10-27).
+  - **"RATING"** (bottom bar), **"FILTER"** (top bar) and **"FOLDERS"** (left panel)
+    labels, "FILTER" singular like the panel's "FILTER" title: capitals a bit smaller than
+    the text, in the accent colour (`bar_label`, `[gui.grid] bar_label_scale`; feedback of
+    2026-10-27).
   - After a filter change, the **number of images** shows a moment in the middle of the
     images area (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0: never; the
     user's idea, 2026-10-27: "JPEG" alone in a folder of RAWs left nothing without it
