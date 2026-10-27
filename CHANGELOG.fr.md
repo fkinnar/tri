@@ -4,6 +4,63 @@
 
 ## À venir
 
+- **Développements dans la grille** : après le développement, la grille peut montrer le
+  développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`
+  (défaut), `latest`, `darktable`, `rapidraw` ou `libraw`, aussi une liste de la barre
+  des filtres et `f d`, retenu d'une session à l'autre. Un RAW sans le développement
+  voulu montre son rendu LibRaw, calculé en fond ; les développements manquants sont
+  rendus en fond (`[gui.grid] develop = "auto"`) ou à la demande (`"manual"`). Une
+  pastille sous la vignette nomme le logiciel (issue n° 114).
+- **Filtre « développées »** : une liste de la barre des filtres et `f Maj+D` : un
+  développement, ou développées dans un logiciel donné (installés seulement) ;
+  inversible, pour voir les images pas encore développées.
+- **RapidRAW**, deuxième logiciel de développement à côté de darktable : `rapidraw
+  export` applique son sidecar `.rrdata` ; trouvé dans le PATH, aux endroits habituels,
+  en AppImage ou en Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"`
+  (dernier développement) ou un logiciel. Interface de RapidRAW ouverte, son export
+  donnait une image noire : elle est maintenant refusée avec un message clair (issue
+  n° 114).
+- **Choix du logiciel** : `<leader> r` (le logiciel de l'image), `<leader> d` darktable,
+  `<leader> p` RapidRAW ; « Développer avec » dans la boîte du clic droit ; une boîte
+  pour développer tout un dossier (chaque image dans son logiciel, ou toutes dans un
+  seul). En plein écran, `b` passe par le JPEG boîtier, le rendu RAW, puis chaque
+  développement déjà rendu, pour les comparer. Les erreurs de développement nomment leur
+  logiciel. **Identifiants d'actions changés** : `core.develop.render`,
+  `core.develop.folder` (et nouveaux `plugin.rapidraw.develop`, `core.grid.render`,
+  `core.filter.developed`) : une section `[keys]` qui cite les anciens est à mettre à
+  jour (issue n° 114).
+- **« Darktable »** avec une majuscule partout où le nom s'affiche ; identifiants,
+  valeurs de configuration et `darktable-cli` restent en minuscules.
+- **Filtre des étoiles** : au moins, exactement ou au plus (`f =` ou le bouton ≥ / = / ≤
+  devant les étoiles) (issue n° 165).
+- **Supports amovibles** (Linux) : branchés mais pas montés, ils apparaissent grisés dans
+  une nouvelle section « Périphériques », montés et ouverts d'un clic ; ceux qui arrivent
+  sont montés d'eux-mêmes (`[places] auto_mount`, activé par défaut) ; les disques fixes
+  ont leur section « Disques » (issue n° 113).
+- **Panneau des dossiers** : titres de section plus grands que les dossiers, en gras
+  (`[gui.folders] section_scale` ; issue n° 120).
+- **Panneaux** : un trait en haut du panneau qui a le clavier (`[gui.dialogs]
+  focus_line`, `focus_line_width` ; issue n° 77).
+- **Aide et réglages** : les séquences qui commencent par le préfixe des panneaux
+  s'écrivent `<leader> r`, le leader étant indiqué à part (issue n° 175).
+- **Piles** : le bouton d'entrée dans les piles est aussi dans la barre de la grille, et
+  son clic fonctionne ; entrer dans une pile repliée depuis la grille le suit aussi
+  (issue n° 62). Sous `f c`, une pile ne se coupe plus en deux (issue n° 163). Piles
+  actives, `c` sur une photo seule la compare (issue n° 167).
+- **Touches** : une touche maintenue ne répète que les déplacements (navigation,
+  défilement, zoom…), pas les actions ponctuelles : maintenir `e` ouvrait l'éditeur en
+  boucle (issue n° 160).
+- **Windows** : les programmes externes (éjection, éditeur) n'ouvrent plus de fenêtre de
+  console (issue n° 159).
+- **Dossiers** : copier ou déplacer un dossier n'emporte plus son propre `.tri-cache` ;
+  un clic efface un message de la barre d'état (issue n° 157).
+- **Tâches de fond** : replier rend au panneau sa hauteur (issue n° 158).
+- **Fenêtre sous Wayland** : de nouveau agrandie au lancement quand elle l'était (issue
+  n° 58).
+- **Fenêtre étroite** : dans le menu « … » de la barre des filtres, les listes s'ouvrent
+  en sous-menus (elles se refermaient avec le menu ; issue n° 181).
+- **Linux** : `install.sh --uninstall` met à jour le cache d'icônes ; l'icône de
+  l'application disparaissait après le passage de l'archive au `.deb`.
 - **Plusieurs cartes à la suite** : la carte suivante est prise aussi après avoir
   refermé le bilan ou déchargé en arrière-plan, et quand elle est montée au même chemin
   que la précédente (deux cartes du même boîtier) (issue n° 37).
