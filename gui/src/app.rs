@@ -2414,6 +2414,18 @@ impl TriApp {
         {
             self.select(first);
         }
+        // Le plein écran s'ouvre sur ce que montre la vignette (retour du 27/10/2026 : sous
+        // « développées dans RapidRAW », il montrait un autre rendu). En JPEG boîtier, la
+        // source choisie au plein écran (`b`) reste.
+        if self.shown_render() != crate::grid_render::GridRender::Embedded
+            && let Some(source) = match self.grid_level(self.selected) {
+                Level::Developed(_) => Some(Source::Developed),
+                Level::Standard => Some(Source::Raw),
+                _ => None,
+            }
+        {
+            self.set_source(source);
+        }
         self.mode = Mode::View;
     }
 
@@ -4951,6 +4963,12 @@ impl TriApp {
             .develop_choice
             .get(path)
             .copied()
+            // Le développement que montre la grille (filtre « développées dans », rendu
+            // choisi), pour l'ouvrir en plein écran tel qu'on l'a vu.
+            .or_else(|| match self.grid_levels.get(path) {
+                Some(&Level::Developed(e)) => Some(e),
+                _ => None,
+            })
             .or_else(|| self.developers.resolve(path))
             .or_else(|| self.developers.engines().first().copied())
             .unwrap_or(tri::develop::Engine::Darktable);
@@ -11330,6 +11348,47 @@ mod tests {
         app.developed_rule = None;
         app.grid_render = GridRender::Embedded;
         assert_eq!(app.shown_render(), GridRender::Embedded);
+    }
+
+    #[test]
+    fn full_screen_opens_on_what_the_thumbnail_shows() {
+        // Retour du 27/10/2026 : sous « développées dans RapidRAW », Entrée ouvrait un autre
+        // rendu que celui de la vignette.
+        use crate::grid_render::GridRender;
+        use tri::develop::Engine;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
+        let path = h.state().files[0].path.clone();
+        let app = h.state_mut();
+        app.grid_render = GridRender::Engine(Engine::RapidRaw);
+        app.selected = 0;
+        // La vignette montre le développement RapidRAW (lu dans les sidecars en vrai).
+        app.grid_levels
+            .insert(path.clone(), Level::Developed(Engine::RapidRaw));
+        assert_eq!(app.source, Source::Embedded);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().source, Source::Developed);
+        assert_eq!(
+            h.state().developed_level(&path),
+            Level::Developed(Engine::RapidRaw)
+        );
+        // Rendu LibRaw dans la vignette : le rendu RAW en plein écran.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        let app = h.state_mut();
+        app.grid_levels.insert(path.clone(), Level::Standard);
+        app.selected = 0;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().source, Source::Raw);
+        // JPEG boîtier dans la grille : la source du plein écran reste.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        let app = h.state_mut();
+        app.grid_render = GridRender::Embedded;
+        app.grid_levels.insert(path, Level::Thumbnail);
+        app.selected = 0;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().source, Source::Raw);
     }
 
     #[test]
