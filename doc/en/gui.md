@@ -582,11 +582,17 @@ system one ("cold" measurements, experiments).
     instead of one slider and a switch); development software as **flat check boxes**.
     Under each slider, "more lenient" on the left, "stricter" on the right. The tooltip of
     the bar icons says where the settings are.
-  - *Grid*: files shown, RAW and JPEG (two check boxes, one stays checked; in the filter
-    bar until 2026-10-27), thumbnail render as radio buttons (instead of the list hidden in
-    the "…" menu of narrow windows, which is gone), order (list and direction), stacks (check box, similarity,
-    entering by the cover or the first photo, unfold / fold all, fine settings). Thumbnail
-    size and info stay in the bottom bar (the user's choice, 2026-10-27).
+  - *Grid*: order (list and direction; at the top of the section, feedback of
+    2026-10-27), files shown, RAW and JPEG (two check boxes, one stays checked; in the
+    filter bar until 2026-10-27), thumbnail render as radio buttons (instead of the list
+    hidden in the "…" menu of narrow windows, which is gone), stacks (check box,
+    similarity, unfold / fold all, fine settings). Staying in the bottom bar (the user's
+    choice, 2026-10-27, no duplicates): thumbnail size and info, entering a stack by the
+    cover or the first photo.
+  - **"RATING"** (bottom bar), **"FILTER"** (top bar) and **"FOLDERS"** (left panel)
+    labels, "FILTER" singular like the panel's "FILTER" title: capitals a bit smaller than
+    the text, in the accent colour (`bar_label`, `[gui.grid] bar_label_scale`; feedback of
+    2026-10-27).
   - After a filter change, the **number of images** shows a moment in the middle of the
     images area (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0: never; the
     user's idea, 2026-10-27: "JPEG" alone in a folder of RAWs left nothing without it

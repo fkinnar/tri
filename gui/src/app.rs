@@ -1465,6 +1465,48 @@ impl TriApp {
     fn grid_settings(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
         let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+        // Ordre : la clé, puis le sens ; en tête de la section (retour du 27/10/2026).
+        subheading(ui, t!("panel-grid-sort"));
+        let mut key = self.order.key;
+        ui.horizontal(|ui| {
+            // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
+            let (item, pressed) = self.side_begin(false);
+            let keys = tri::sort::SortKey::ALL;
+            let at = keys.iter().position(|&k| k == key).unwrap_or(0);
+            match pressed {
+                Some(SideKey::Left) => key = keys[at.saturating_sub(1)],
+                Some(SideKey::Right) => key = keys[(at + 1).min(keys.len() - 1)],
+                Some(SideKey::Activate) => key = keys[(at + 1) % keys.len()],
+                None => {}
+            }
+            let combo = egui::ComboBox::from_id_salt("sort")
+                .selected_text(sort_name(key))
+                .show_ui(ui, |ui| {
+                    for k in tri::sort::SortKey::ALL {
+                        ui.selectable_value(&mut key, k, sort_name(k));
+                    }
+                })
+                .response
+                .on_hover_text(self.action_tip(Action::SortNext));
+            self.side_end(ui, item, combo.rect, combo.clicked());
+            let (item, pressed) = self.side_begin(false);
+            let (rect, response) =
+                marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
+            self.side_end(ui, item, rect, response.clicked());
+            if pressed == Some(SideKey::Activate) {
+                clicked.push(Action::SortReverse);
+            }
+            let color = ui.style().interact(&response).fg_stroke.color;
+            marks::sort_arrow(
+                ui.painter(),
+                rect.shrink(size * 0.1),
+                self.order.descending,
+                color,
+            );
+            if response.clicked() {
+                clicked.push(Action::SortReverse);
+            }
+        });
         // Fichiers montrés, RAW et JPEG (retour du 21/10/2026 ; dans la barre des filtres
         // jusqu'au 27/10/2026 : un réglage de la grille). Un des deux reste coché.
         subheading(ui, t!("panel-grid-files"));
@@ -1525,48 +1567,6 @@ impl TriApp {
         if self.shown_render() != self.grid_render {
             ui.weak(t!("panel-grid-render-filtered"));
         }
-        // Ordre : la clé, puis le sens.
-        subheading(ui, t!("panel-grid-sort"));
-        let mut key = self.order.key;
-        ui.horizontal(|ui| {
-            // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
-            let (item, pressed) = self.side_begin(false);
-            let keys = tri::sort::SortKey::ALL;
-            let at = keys.iter().position(|&k| k == key).unwrap_or(0);
-            match pressed {
-                Some(SideKey::Left) => key = keys[at.saturating_sub(1)],
-                Some(SideKey::Right) => key = keys[(at + 1).min(keys.len() - 1)],
-                Some(SideKey::Activate) => key = keys[(at + 1) % keys.len()],
-                None => {}
-            }
-            let combo = egui::ComboBox::from_id_salt("sort")
-                .selected_text(sort_name(key))
-                .show_ui(ui, |ui| {
-                    for k in tri::sort::SortKey::ALL {
-                        ui.selectable_value(&mut key, k, sort_name(k));
-                    }
-                })
-                .response
-                .on_hover_text(self.action_tip(Action::SortNext));
-            self.side_end(ui, item, combo.rect, combo.clicked());
-            let (item, pressed) = self.side_begin(false);
-            let (rect, response) =
-                marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
-            self.side_end(ui, item, rect, response.clicked());
-            if pressed == Some(SideKey::Activate) {
-                clicked.push(Action::SortReverse);
-            }
-            let color = ui.style().interact(&response).fg_stroke.color;
-            marks::sort_arrow(
-                ui.painter(),
-                rect.shrink(size * 0.1),
-                self.order.descending,
-                color,
-            );
-            if response.clicked() {
-                clicked.push(Action::SortReverse);
-            }
-        });
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
         subheading(ui, t!("panel-grid-stacks"));
         let mut stacking = self.stacking;
@@ -1615,27 +1615,6 @@ impl TriApp {
                 }
                 if slider.drag_stopped() || slider.double_clicked_slider(ui) || pressed.is_some() {
                     self.remember_group_strictness();
-                }
-                let mut enter = self.stack_enter;
-                ui.label(t!("panel-grid-stack-enter"));
-                use crate::settings::StackEnter;
-                let choices = [StackEnter::Cover, StackEnter::First];
-                self.side_radio(
-                    ui,
-                    &mut enter,
-                    StackEnter::Cover,
-                    &choices,
-                    t!("panel-grid-stack-cover"),
-                );
-                self.side_radio(
-                    ui,
-                    &mut enter,
-                    StackEnter::First,
-                    &choices,
-                    t!("panel-grid-stack-first"),
-                );
-                if enter != self.stack_enter {
-                    clicked.push(Action::StackEnterToggle);
                 }
                 ui.horizontal_wrapped(|ui| {
                     let all = if self.expanded.is_empty() {
@@ -2034,7 +2013,7 @@ impl TriApp {
         let mut fold: Option<tri::places::Section> = None;
         drag_preview(ui.ctx());
         ui.horizontal(|ui| {
-            ui.strong(t!("folders-title"));
+            bar_label(ui, &t!("folders-title"), self.gui.grid.bar_label_scale);
             // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
             let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
             let tip = format!(
@@ -8476,7 +8455,7 @@ impl TriApp {
         // Fenêtre étroite (issue n° 71 : les boutons de droite recouvraient les couleurs) :
         // passage à la ligne avant eux ; leur largeur est mesurée à l'image précédente.
         ui.horizontal_wrapped(|ui| {
-            ui.label(t!("rating-bar-title"));
+            bar_label(ui, &t!("rating-bar-title"), self.gui.grid.bar_label_scale);
             clicked = marks::controls(ui, &notes, &colors, size, &|a| self.action_tip(a));
 
             // Versions : une liste sur la ligne des notes (issue n° 5 : sur une ligne à
@@ -8565,7 +8544,7 @@ impl TriApp {
             if wrap {
                 ui.end_row();
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            tail_visible(ui, |ui| {
                 let right = ui.max_rect().right();
                 let icon = self.gui.bar_icon_size;
                 // Le bouton 1:1 allumé à 100 % seulement (pas à 13 % ni à 200 %).
@@ -8819,6 +8798,7 @@ impl TriApp {
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
         // de portable, la barre débordait).
         ui.horizontal_wrapped(|ui| {
+            bar_label(ui, &t!("filter-bar-title"), self.gui.grid.bar_label_scale);
             let current = self.notes_rule.stars.map_or(0, |r| r.parts().1);
             let size = self.gui.grid.marks + 4.0;
             // Comparaison (≥, =, ≤) devant les étoiles ; un clic passe à la suivante.
@@ -8943,7 +8923,7 @@ impl TriApp {
             }
             // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
             // grisé sans filtre), et juste à sa gauche le nombre d'images.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            tail_visible(ui, |ui| {
                 let right = ui.max_rect().right();
                 let tip = self.action_tip(Action::FilterClear);
                 ui.add_enabled_ui(any, |ui| {
@@ -10989,6 +10969,32 @@ fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color
 /// déborde aux deux bouts du rail (sinon le curseur passe sous le bord du panneau).
 fn panel_slider_width(ui: &Ui) -> f32 {
     (ui.available_width() - ui.spacing().interact_size.y).max(0.0)
+}
+
+/// Fin d'une barre alignée à droite, sur la rangée en cours, bornée à la partie visible
+/// de `ui` : un panneau latéral plus large que prévu (son contenu l'élargit) recouvre le
+/// bord de la barre, et ce qui y était aligné (effacer les filtres) tombait dessous, sans
+/// plus se cliquer (CI Linux, 27/10/2026).
+fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let mut rect = ui.available_rect_before_wrap();
+    rect.max.x = rect.max.x.min(ui.clip_rect().max.x).max(rect.min.x);
+    // À la hauteur d'une rangée : sur toute la hauteur restante, centrée, elle
+    // descendait d'image en image.
+    rect.max.y = rect.min.y + ui.spacing().interact_size.y;
+    let layout = egui::Layout::right_to_left(egui::Align::Center);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
+}
+
+/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche) : en majuscules, un peu plus petit
+/// que le texte (`scale`), à l'accent, comme les titres des sections des panneaux (retour
+/// du 27/10/2026).
+fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
+    let size = egui::TextStyle::Body.resolve(ui.style()).size * scale;
+    ui.label(
+        egui::RichText::new(text.to_uppercase())
+            .size(size)
+            .color(marks::accent_mark(ui.ctx())),
+    );
 }
 
 /// Nom traduit d'une section du panneau des dossiers.
@@ -13470,7 +13476,7 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().folder.is_none());
         assert!(h.query_by_label_contains("Choisissez un dossier").is_some());
-        assert!(h.query_by_label("Dossiers").is_some());
+        assert!(h.query_by_label("DOSSIERS").is_some());
     }
 
     #[test]
@@ -13811,6 +13817,11 @@ mod tests {
     #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
+        // Fenêtre étroite, panneaux ouverts : la fin de la barre (effacer) reste dans la
+        // partie visible et se clique (CI Linux, 27/10/2026 : elle glissait sous le
+        // panneau de droite).
+        h.set_size(vec2(700.0, 700.0));
+        h.run_steps(3);
         assert!(
             h.query_by_label("Effacer").is_some(),
             "barre visible par défaut"

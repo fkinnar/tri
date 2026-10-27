@@ -11,13 +11,19 @@
   search; their settings and the grid's move to the right panel, in sections titled like
   the folder panel's and folded with a click: Histogram, Filters (each filter's settings
   only while it is on; two sliders for exposure; development software as check boxes),
-  Grid (files shown, RAW and JPEG; thumbnail render, order, stacks), EXIF at the bottom. The folder panel's sections fold too; folded sections are
-  remembered. Section titles in capitals, larger, in the accent colour, with a gap
-  between sections (`[gui.folders] section_scale`, `section_gap`). After a filter change,
-  the number of images shows a moment in the middle of the screen (`[gui.grid]
-  filter_toast_ms`). **From the keyboard** (leader then `l`): ↑ ↓ go through
-  the settings too, Space uses them, ← → vary them, Tab / Shift+Tab (`)` / `(` in vim) go
-  from section to section, in the folder panel too. `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your configuration file if you set them.
+  Grid (files shown, RAW and JPEG; thumbnail render, order, stacks), EXIF at the bottom.
+  The folder panel's sections fold too; folded sections are remembered. Section titles
+  in capitals, larger, in the accent colour, with a gap between sections (`[gui.folders]
+  section_scale`, `section_gap`). After a filter change, the number of images shows a
+  moment in the middle of the screen (`[gui.grid] filter_toast_ms`). **From the
+  keyboard** (leader then `l`): ↑ ↓ go through the settings too, Space uses them, ← →
+  vary them, Tab / Shift+Tab (`)` / `(` in vim) go from section to section, in the
+  folder panel too. The Grid section starts with the order; the stack entering choice
+  stays only in the bottom bar. "RATING", "FILTER" and "FOLDERS" labels on the bottom
+  and top bars and the folder panel, in small capitals in the accent colour (`[gui.grid]
+  bar_label_scale`). `[gui.grid] stack_slider` and `clip_slider` are gone: remove them
+  from your configuration file if you set them. In a narrow window, the end of the
+  filter and rating bars no longer slides under the right panel.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
   `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,
