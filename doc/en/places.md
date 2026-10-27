@@ -78,8 +78,12 @@ purpose afterwards stays unmounted).
 With the system tool (requested on 2026-10-17): `diskutil eject` (macOS); on Linux,
 `gio mount -e` (the desktop environment's tool, like the file manager), otherwise
 `udisksctl unmount` then `power-off` on the device read from `/proc/mounts`
-(`device_of`, spaces written `\040`); Windows: the Explorer "Eject" verb via PowerShell
-(**untested**). Blocking (from 0.4 s to a few seconds): the interface calls it in a
+(`device_of`, spaces written `\040`); Windows (issue #192: the Explorer "Eject" verb run
+through PowerShell failed silently): the system API, Microsoft's method (KB 165721) —
+open `\\.\E:`, lock it (refused while a file is open on it, retried for `[places]
+eject_lock_ms`, 5 s, then "volume in use" with the reason), dismount it, allow removal,
+eject the medium; a disk whose medium does not eject (USB hard drive) then goes through
+the "Eject" verb (**to be checked on Windows**). Blocking (from 0.4 s to a few seconds): the interface calls it in a
 separate thread. On refusal (internal disk, open file), the system's message is returned
 as is. A "fixed" USB disk (external hard drive) ejects like a card, as in the Finder.
 Checked on macOS with a disk image: ejected in 0.36 s; missing volume:

@@ -97,6 +97,10 @@ pub struct PlaceSettings {
     /// (Linux, #113 ; activé par défaut, choix de l'utilisateur ; sinon, il attend un clic
     /// dans la section des périphériques).
     pub auto_mount: bool,
+    /// Windows : attente maximale du verrouillage du volume avant l'éjection (ms), le
+    /// temps qu'un programme lâche ses fichiers ; au-delà, l'éjection est refusée avec la
+    /// raison (issue n° 192).
+    pub eject_lock_ms: u64,
 }
 
 impl Default for PlaceSettings {
@@ -107,6 +111,7 @@ impl Default for PlaceSettings {
             fixed: Vec::new(),
             watch_ms: 2000,
             auto_mount: true,
+            eject_lock_ms: 5000,
         }
     }
 }
@@ -687,11 +692,15 @@ impl Drop for Monitor {
 /// Éjecte le volume monté en `path` (carte SD, disque externe), avec l'outil du système :
 /// `diskutil eject` (macOS) ; `gio mount -e` (Linux, l'outil de l'environnement de
 /// bureau, comme le gestionnaire de fichiers), sinon `udisksctl unmount` puis
-/// `power-off` ; Windows : verbe « Éjecter » de l'explorateur, via PowerShell (non testé).
-/// Bloquant (une à quelques secondes) : à appeler hors du fil de l'interface. En cas de
-/// refus (disque interne, fichier ouvert sur le volume), le message du système est
+/// `power-off` ; Windows : l'API du système (verrouiller, démonter, éjecter le support),
+/// sinon le verbe « Éjecter » de l'explorateur pour un disque dont le support ne s'éjecte
+/// pas. Bloquant (une à quelques secondes) : à appeler hors du fil de l'interface. En cas
+/// de refus (disque interne, fichier ouvert sur le volume), le message du système est
 /// renvoyé.
-pub fn eject(path: &Path) -> Result<(), String> {
+pub fn eject(path: &Path, settings: &PlaceSettings) -> Result<(), String> {
+    // Seul Windows a un réglage d'éjection.
+    #[cfg(not(windows))]
+    let _ = settings;
     // Support pas monté ([`PlaceKind::Device`]) : il n'y a qu'à couper l'alimentation.
     if path.starts_with("/dev") {
         return run(
@@ -701,17 +710,11 @@ pub fn eject(path: &Path) -> Result<(), String> {
     }
     match std::env::consts::OS {
         "macos" => run("diskutil", &["eject".as_ref(), path.as_os_str()]),
-        "windows" => {
-            let drive = path.to_string_lossy();
-            let drive = drive.trim_end_matches('\\').replace('\'', "''");
-            let script = format!(
-                "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{drive}').InvokeVerb('Eject')"
-            );
-            run(
-                "powershell",
-                &["-NoProfile".as_ref(), "-Command".as_ref(), script.as_ref()],
-            )
-        }
+        #[cfg(windows)]
+        "windows" => windows::eject(
+            path,
+            std::time::Duration::from_millis(settings.eject_lock_ms),
+        ),
         _ => {
             let gio = run("gio", &["mount".as_ref(), "-e".as_ref(), path.as_os_str()]);
             if gio.is_ok() {
@@ -733,6 +736,134 @@ pub fn eject(path: &Path) -> Result<(), String> {
             );
             Ok(())
         }
+    }
+}
+
+/// Éjection sous Windows (issue n° 192 : le verbe « Éjecter » lancé par PowerShell
+/// échouait sans rien dire). Méthode de Microsoft (KB 165721) : ouvrir le volume
+/// (`\\.\E:`), le verrouiller (refusé tant qu'un fichier y est ouvert, réessayé pendant
+/// `lock_wait`), le démonter, autoriser le retrait puis éjecter le support (carte SD,
+/// clé). Un disque dont le support ne s'éjecte pas (disque dur USB) passe par le verbe
+/// « Éjecter » de l'explorateur, qui le retire en toute sécurité.
+#[cfg(windows)]
+mod windows {
+    use std::path::Path;
+    use std::time::Duration;
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{
+        FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, IOCTL_STORAGE_EJECT_MEDIA,
+        IOCTL_STORAGE_MEDIA_REMOVAL, PREVENT_MEDIA_REMOVAL,
+    };
+
+    /// Nombre d'essais de verrouillage pendant l'attente (comme l'exemple de Microsoft).
+    const LOCK_TRIES: u32 = 20;
+
+    /// Volume ouvert, refermé (et déverrouillé) en sortant.
+    struct Volume(HANDLE);
+
+    impl Drop for Volume {
+        fn drop(&mut self) {
+            // SAFETY : poignée ouverte par `CreateFileW`, refermée une seule fois.
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    impl Volume {
+        /// Commande `code` sur le volume, avec `input` ; l'erreur du système sinon.
+        fn control<T>(&self, code: u32, input: Option<&T>) -> Result<(), String> {
+            let (ptr, size) = match input {
+                Some(value) => (
+                    value as *const T as *const core::ffi::c_void,
+                    size_of::<T>() as u32,
+                ),
+                None => (std::ptr::null(), 0),
+            };
+            let mut returned = 0u32;
+            // SAFETY : poignée valide ; tampon d'entrée de `size` octets, pas de sortie.
+            let ok = unsafe {
+                DeviceIoControl(
+                    self.0,
+                    code,
+                    ptr,
+                    size,
+                    std::ptr::null_mut(),
+                    0,
+                    &mut returned,
+                    std::ptr::null_mut(),
+                )
+            };
+            if ok != 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error().to_string())
+            }
+        }
+    }
+
+    pub fn eject(path: &Path, lock_wait: Duration) -> Result<(), String> {
+        let letter = path
+            .to_string_lossy()
+            .chars()
+            .next()
+            .filter(|c| c.is_ascii_alphabetic())
+            .ok_or_else(|| crate::t!("eject-not-a-drive", path = path.display().to_string()))?;
+        let device: Vec<u16> = format!("\\\\.\\{letter}:")
+            .encode_utf16()
+            .chain([0])
+            .collect();
+        // SAFETY : nom terminé par un zéro ; pas d'attributs de sécurité ni de modèle.
+        let handle = unsafe {
+            CreateFileW(
+                device.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                0,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        let volume = Volume(handle);
+        let mut locked = volume.control::<()>(FSCTL_LOCK_VOLUME, None);
+        for _ in 1..LOCK_TRIES {
+            if locked.is_ok() {
+                break;
+            }
+            std::thread::sleep(lock_wait / LOCK_TRIES);
+            locked = volume.control::<()>(FSCTL_LOCK_VOLUME, None);
+        }
+        locked.map_err(|e| crate::t!("eject-busy", error = e))?;
+        volume.control::<()>(FSCTL_DISMOUNT_VOLUME, None)?;
+        // Certains lecteurs ne gèrent pas l'interdiction de retrait : sans importance.
+        let allow = PREVENT_MEDIA_REMOVAL {
+            PreventMediaRemoval: false,
+        };
+        let _ = volume.control(IOCTL_STORAGE_MEDIA_REMOVAL, Some(&allow));
+        if volume
+            .control::<()>(IOCTL_STORAGE_EJECT_MEDIA, None)
+            .is_ok()
+        {
+            return Ok(());
+        }
+        // Support qui ne s'éjecte pas (disque dur USB) : le volume, démonté, est refermé,
+        // puis l'explorateur retire le disque.
+        drop(volume);
+        let script = format!(
+            "(New-Object -comObject Shell.Application).Namespace(17).ParseName('{letter}:').InvokeVerb('Eject')"
+        );
+        super::run(
+            "powershell",
+            &["-NoProfile".as_ref(), "-Command".as_ref(), script.as_ref()],
+        )
     }
 }
 

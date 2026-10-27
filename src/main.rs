@@ -652,7 +652,7 @@ fn offload(settings: &EngineSettings, args: &Args, card: &std::path::Path) -> An
         }
     }
     if args.eject {
-        match tri::places::eject(card) {
+        match tri::places::eject(card, &settings.places) {
             Ok(()) => println!("{}", t!("cli-ejected")),
             Err(e) => eprintln!("{}", t!("cli-eject-failed", error = e)),
         }

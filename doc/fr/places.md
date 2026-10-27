@@ -80,8 +80,13 @@ support **qui arrive** (un support démonté exprès ensuite reste démonté).
 Avec l'outil du système (demandé le 17/10/2026) : `diskutil eject` (macOS) ; sous Linux,
 `gio mount -e` (l'outil de l'environnement de bureau, comme le gestionnaire de fichiers),
 sinon `udisksctl unmount` puis `power-off` sur le périphérique lu dans `/proc/mounts`
-(`device_of`, espaces écrits `\040`) ; Windows : verbe « Éjecter » de l'explorateur via
-PowerShell (**non testé**). Bloquant (de 0,4 s à quelques secondes) : l'interface l'appelle
+(`device_of`, espaces écrits `\040`) ; Windows (issue n° 192 : le verbe « Éjecter » de
+l'explorateur lancé par PowerShell échouait sans rien dire) : l'API du système, méthode
+de Microsoft (KB 165721) — ouvrir `\\.\E:`, le verrouiller (refusé tant qu'un fichier y
+est ouvert, réessayé pendant `[places] eject_lock_ms`, 5 s, puis « volume en cours
+d'utilisation » avec la raison), le démonter, autoriser le retrait, éjecter le support ;
+un disque dont le support ne s'éjecte pas (disque dur USB) passe ensuite par le verbe
+« Éjecter » (**à vérifier sous Windows**). Bloquant (de 0,4 s à quelques secondes) : l'interface l'appelle
 dans un fil à part. En cas de refus (disque interne, fichier ouvert), le message du
 système est renvoyé tel quel. Un disque USB « fixe » (disque dur externe) s'éjecte comme
 une carte, comme dans le Finder. Vérifié sur macOS avec une image disque : éjectée en

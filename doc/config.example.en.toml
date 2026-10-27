@@ -94,6 +94,9 @@ watch_ms = 2000
 # Mount by itself a removable device the system did not mount (Linux); otherwise it
 # shows greyed in the devices section, mounted with a click.
 auto_mount = true
+# Windows: longest wait for a volume's lock before ejecting it (ms), while a program lets
+# go of its files; beyond, the eject is refused with the reason.
+eject_lock_ms = 5000
 
 [develop]
 # See your developments in tri (Shift+B in full screen, then b: camera render, RAW

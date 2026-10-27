@@ -94,6 +94,9 @@ watch_ms = 2000
 # Monter de lui-même un support amovible que le système n'a pas monté (Linux) ; sinon,
 # il apparaît grisé dans la section des périphériques, monté d'un clic.
 auto_mount = true
+# Windows : attente maximale du verrouillage d'un volume avant de l'éjecter (ms), le temps
+# qu'un programme lâche ses fichiers ; au-delà, l'éjection est refusée avec la raison.
+eject_lock_ms = 5000
 
 [develop]
 # Voir ses développements dans tri (Maj+B en plein écran, puis b : JPEG boîtier, rendu
