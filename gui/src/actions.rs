@@ -1386,6 +1386,22 @@ const RATING: &[Binding] = {
     ]
 };
 
+/// Touche d'un événement du presse-papiers d'egui-winit (voir
+/// [`Keymap::chords_repeated`]) : Maj tenue, celle de Windows (Maj+Suppr pour couper,
+/// Maj+Inser pour coller) ; sinon X, C ou V avec Ctrl / Cmd.
+fn clipboard_key(event: &Event, modifiers: Modifiers) -> Option<Key> {
+    let shift = modifiers.shift && !modifiers.command;
+    Some(match event {
+        Event::Cut if shift => Key::Delete,
+        Event::Cut => Key::X,
+        Event::Copy if modifiers.command => Key::C,
+        Event::Copy => Key::Insert,
+        Event::Paste(_) if shift => Key::Insert,
+        Event::Paste(_) => Key::V,
+        _ => return None,
+    })
+}
+
 /// Filtres, communs aux deux profils : préfixe `f` (choix du 17/10/2026), suivi de la
 /// touche de notation correspondante ; `f f` change le type, `f Échap` efface tout.
 const FILTERS: &[Binding] = {
@@ -1584,7 +1600,12 @@ impl Keymap {
     ///
     /// Chacune avec vrai si elle vient de la répétition d'une touche tenue (un caractère
     /// suit la touche qui le produit).
-    pub fn chords_repeated(&self, events: &[Event]) -> Vec<(Chord, bool)> {
+    ///
+    /// egui-winit remplace les raccourcis du presse-papiers par `Cut`, `Copy` et `Paste`,
+    /// sans la touche : Ctrl / Cmd + X, C, V, et sous Windows Maj+Suppr, Ctrl+Inser,
+    /// Maj+Inser (issue n° 194 : Maj+Suppr ne supprimait pas la pile). Ils sont retraduits
+    /// en touches d'après `modifiers`, les modificateurs tenus.
+    pub fn chords_repeated(&self, events: &[Event], modifiers: Modifiers) -> Vec<(Chord, bool)> {
         let bound_char = |e: &Event| match e {
             Event::Text(text) => {
                 let mut chars = text.chars();
@@ -1623,6 +1644,9 @@ impl Keymap {
                     Chord::from_event(*key, *modifiers).map(|c| (c, *repeat))
                 }
                 Event::Text(_) => bound_char(e).map(|c| (Chord::char(c), repeated)),
+                Event::Cut | Event::Copy | Event::Paste(_) => clipboard_key(e, modifiers)
+                    .and_then(|k| Chord::from_event(k, modifiers))
+                    .map(|c| (c, false)),
                 _ => None,
             })
             .collect()
@@ -2689,10 +2713,39 @@ mod tests {
             Event::Text("°".into()),
         ];
         // La touche tenue suivie de son caractère : le caractère seul, répété lui aussi.
-        let chords = km.chords_repeated(&events);
+        let chords = km.chords_repeated(&events, Modifiers::NONE);
         assert_eq!(chords, [(plain(Key::E), false), (Chord::char('°'), true)]);
         assert!(Action::NavNext.repeats() && Action::PanLeft.repeats());
         assert!(!Action::FileEdit.repeats() && !Action::Develop.repeats());
+    }
+
+    #[test]
+    fn clipboard_events_come_back_as_their_keys() {
+        // Issue n° 194 : egui-winit livre Maj+Suppr (Windows), Ctrl+C, Ctrl+X comme
+        // couper / copier, sans la touche ; la pile n'était pas supprimée.
+        let km = Keymap::default();
+        let ctrl = Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let one = |e: Event, m: Modifiers| -> Vec<Chord> {
+            km.chords_repeated(&[e], m)
+                .into_iter()
+                .map(|(c, _)| c)
+                .collect()
+        };
+        assert_eq!(one(Event::Cut, Modifiers::SHIFT), [shifted(Key::Delete)]);
+        assert_eq!(
+            km.action(Key::Delete, Modifiers::SHIFT),
+            Some(Action::FileDeleteStack)
+        );
+        assert_eq!(one(Event::Cut, ctrl), [super::ctrl(Key::X)]);
+        assert_eq!(one(Event::Copy, ctrl), [super::ctrl(Key::C)]);
+        assert_eq!(
+            one(Event::Paste(String::new()), Modifiers::SHIFT),
+            [shifted(Key::Insert)]
+        );
     }
 
     #[test]
@@ -2708,7 +2761,7 @@ mod tests {
             key_event(Key::Minus, false, Modifiers::SHIFT),
         ];
         let chords: Vec<Chord> = km
-            .chords_repeated(&events)
+            .chords_repeated(&events, Modifiers::NONE)
             .into_iter()
             .map(|(c, _)| c)
             .collect();

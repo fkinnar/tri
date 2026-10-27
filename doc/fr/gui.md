@@ -755,6 +755,12 @@ un identifiant stable (`core.nav.next`, `core.filter.cycle`…), comme décidé 
 `CLAUDE.md`. La section `[keys]` du fichier de configuration associe des touches à ces
 identifiants (voir plus bas) ; la souris déclenche les mêmes actions.
 
+Les raccourcis du presse-papiers n'arrivent pas comme des touches : egui-winit les
+remplace par « couper », « copier », « coller » (Ctrl / Cmd + X, C, V, et sous Windows
+Maj+Suppr, Ctrl+Inser, Maj+Inser). `Keymap::chords_repeated` les retraduit en touches
+d'après les modificateurs tenus (issue n° 194 : Maj+Suppr ne supprimait pas la pile sous
+Windows, Ctrl+C / Ctrl+X ne copiaient ni ne déplaçaient).
+
 Deux jeux de raccourcis sont livrés, **au choix** (`[gui] profile` : `"classic"` par
 défaut, `"vim"`, ou `"both"` pour les deux ensemble, qui ne se recouvrent pas ; liste
 déroulante dans la fenêtre de réglages). Décidé le 18/10/2026 : un utilisateur d'outils
