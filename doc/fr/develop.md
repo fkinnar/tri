@@ -170,3 +170,13 @@ LibRaw, puis la vignette, en attendant. Les rendus du lot, faits hors du moteur,
 cherchés dans le cache au plus une fois par `render_poll_ms`. Le rendu, bien plus grand
 qu'une vignette, est décodé réduit (`jpeg::decode` à la taille des vignettes). Les images
 plates gardent leur vignette.
+
+## Filtrer les images développées (27/10/2026)
+
+Liste « Développées ou non » de la barre des filtres, `f Maj+D` pour le choix suivant :
+**un développement** (n'importe quel logiciel), ou **développées dans** un logiciel
+donné ; seulement les logiciels installés, comme pour l'affichage. LibRaw n'y est pas : il
+rend toutes les images. Moteur : `develop::DevelopedRule` et `DevelopedFilter` (trait
+`Filter`), qui lisent les sidecars (`Engine::sidecar` : historique darktable non vide,
+`.rrdata` de RapidRAW) ; une image plate n'a pas de développement. C'est un filtre sur le
+contenu : effacé par `f Échap`, inversible (`f i` : les images pas encore développées).

@@ -103,6 +103,7 @@ pub fn navigate(
         | Action::FilterWellExposed
         | Action::FilterStack
         | Action::FilterInvert
+        | Action::FilterDeveloped
         | Action::SortNext
         | Action::SortReverse
         | Action::GridRenderNext
