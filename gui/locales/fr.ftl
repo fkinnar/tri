@@ -262,6 +262,7 @@ versions-deleted = Version « { $name } » supprimée
 
 panel-no-image = Aucune image sélectionnée.
 histogram-enlarge = Agrandir ({ $keys })
+histogram-camera-legend = Trait clair : JPEG boîtier
 histogram-computing = histogramme en cours de calcul
 panel-name = Nom
 panel-reading = lecture…

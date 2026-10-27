@@ -743,6 +743,11 @@ stats_tail = 0.01
 channel_dot = 11.0
 analysis = false
 analysis_lighten = 0.06
+# RAW : courbe du JPEG boîtier en trait fin par-dessus celle des données du capteur
+# (couleur [gui.colors] hist_camera), pour voir ce que le boîtier a fait des hautes
+# lumières et des ombres ; épaisseur du trait.
+camera_jpeg = true
+camera_width = 1.5
 
 [gui.sharpness]
 # Carte de netteté (focus peaking), en vue ajustée comme en 1:1 : affichée au démarrage
@@ -829,6 +834,8 @@ purple = "#a555d2"
 hist_red = "#eb4646"
 hist_green = "#50c85a"
 hist_blue = "#5082f0"
+# Histogramme d'un RAW : courbe du JPEG boîtier ([gui.histogram] camera_jpeg).
+hist_camera = "#ebebeb"
 clip_over = "#ff28ff"
 clip_red = "#ff3232"
 clip_green = "#32e632"

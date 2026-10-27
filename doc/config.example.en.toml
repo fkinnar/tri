@@ -747,6 +747,11 @@ stats_tail = 0.01
 channel_dot = 11.0
 analysis = false
 analysis_lighten = 0.06
+# RAW: curve of the camera JPEG as a thin line over the sensor data's (colour
+# [gui.colors] hist_camera), to see what the camera did with the highlights and shadows;
+# line width.
+camera_jpeg = true
+camera_width = 1.5
 
 [gui.sharpness]
 # Sharpness map (focus peaking), in the fitted view as at 1:1: shown at startup
@@ -833,6 +838,8 @@ purple = "#a555d2"
 hist_red = "#eb4646"
 hist_green = "#50c85a"
 hist_blue = "#5082f0"
+# Histogram of a RAW: curve of the camera JPEG ([gui.histogram] camera_jpeg).
+hist_camera = "#ebebeb"
 clip_over = "#ff28ff"
 clip_red = "#ff3232"
 clip_green = "#32e632"

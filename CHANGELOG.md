@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Camera JPEG in the histogram**: for a RAW, the camera JPEG's curve is drawn as a
+  thin line over the sensor data's, to see what the camera did with the highlights and
+  shadows (`[gui.histogram] camera_jpeg`, `camera_width`, `[gui.colors] hist_camera`).
 - **Right panel in sections**: the filter bar keeps the one-click filters and the name
   search; their settings and the grid's move to the right panel, in sections titled like
   the folder panel's and folded with a click: Histogram, Filters (each filter's settings

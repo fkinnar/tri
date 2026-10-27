@@ -618,6 +618,14 @@ system one ("cold" measurements, experiments).
     default (`Shift+I`: linear), graduations, red / blue dots if pixels are saturated /
     blocked, and in plain words: RAW bit depth, headroom before saturation, saturated and
     blocked shares;
+  - **camera JPEG as a thin line** (2026-10-27, the user's idea): for a RAW, the curve of
+    the camera JPEG (all channels, or the chosen one) over the sensor's, at its own
+    height; it shows what the camera did with the highlights and shadows. In EV, each
+    below its own white (sensor saturation, the JPEG's 255), over the RAW's range.
+    Computed from the cached camera preview (`preview::camera_exposure`, a few tens of ms,
+    kept in memory) once it is ready. Legend in the large histogram and in the small one's
+    tooltip; `[gui.histogram] camera_jpeg`, `camera_width`, colour `[gui.colors]
+    hist_camera`;
   - **zones** overlaid on the image (`w`, "warnings"; `o` until 2026-10-19): engine mask as
     a texture (nearest-neighbour sampling), stretched over the image (also at 100 %).
     Saturated **per channel** (requested on 2026-10-17, like FastRawViewer): a single

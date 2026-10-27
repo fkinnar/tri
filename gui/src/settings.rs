@@ -972,6 +972,12 @@ pub struct HistogramSettings {
     /// Fond du bloc de l'image d'analyse : fond de la boîte éclairci de cette part vers
     /// le blanc (0 à 1).
     pub analysis_lighten: f32,
+    /// RAW : courbe du JPEG boîtier en trait fin par-dessus celle des données du capteur
+    /// (couleur `[gui.colors] hist_camera`), pour voir ce que le boîtier a fait des
+    /// hautes lumières et des ombres.
+    pub camera_jpeg: bool,
+    /// Épaisseur de ce trait (points).
+    pub camera_width: f32,
 }
 
 impl Default for HistogramSettings {
@@ -995,6 +1001,8 @@ impl Default for HistogramSettings {
             channel_dot: 11.0,
             analysis: false,
             analysis_lighten: 0.06,
+            camera_jpeg: true,
+            camera_width: 1.5,
         }
     }
 }
@@ -1077,6 +1085,8 @@ pub struct Colors {
     pub hist_green: Color,
     /// Histogramme : canal bleu.
     pub hist_blue: Color,
+    /// Histogramme d'un RAW : courbe du JPEG boîtier (`[gui.histogram] camera_jpeg`).
+    pub hist_camera: Color,
     /// Zones et badges : saturé dans les trois canaux (brûlé), ou dans un canal
     /// quelconque sans couleur par canal.
     pub clip_over: Color,
@@ -1136,6 +1146,7 @@ impl Default for Colors {
             hist_red: Color([235, 70, 70]),
             hist_green: Color([80, 200, 90]),
             hist_blue: Color([80, 130, 240]),
+            hist_camera: Color([235, 235, 235]),
             clip_over: Color([255, 40, 255]),
             clip_red: Color([255, 50, 50]),
             clip_green: Color([50, 230, 50]),

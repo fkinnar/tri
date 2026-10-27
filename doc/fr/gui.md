@@ -652,6 +652,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     saturation** par défaut (`Maj+I` : linéaire), graduations, pastilles rouge / bleue si
     des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant
     saturation, parts saturées et bouchées ;
+  - **JPEG boîtier en trait fin** (27/10/2026, idée de l'utilisateur) : pour un RAW, la
+    courbe du JPEG boîtier (tous canaux, ou le canal choisi) par-dessus celle du capteur,
+    à sa propre hauteur ; on voit ce que le boîtier a fait des hautes lumières et des
+    ombres. En IL, chacune sous son propre blanc (saturation du capteur, 255 du JPEG),
+    sur la plage du RAW. Calculée d'après l'aperçu boîtier en cache
+    (`preview::camera_exposure`, quelques dizaines de ms, gardée en mémoire), dès qu'il
+    est prêt. Légende dans le grand histogramme et la bulle d'aide du petit ;
+    `[gui.histogram] camera_jpeg`, `camera_width`, couleur `[gui.colors] hist_camera` ;
   - **zones** superposées à l'image (`w`, « warnings » ; `o` jusqu'au 19/10/2026) : masque du moteur en texture (échantillonnage au
     plus proche), étiré sur l'image (aussi à 100 %). Saturé **par canal** (demandé le
     17/10/2026, comme FastRawViewer) : un seul canal → sa couleur (`clip_red`,
