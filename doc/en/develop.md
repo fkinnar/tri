@@ -171,13 +171,19 @@ chosen in full screen (`b`) stays.
 
 ## Filtering the developed images (2026-10-27)
 
-"Developed or not" list in the filter bar, `f Shift+D` for the next choice: **any
-development** (whatever the software), or **developed in** a given software; installed
-software only, as for display. LibRaw is not offered: it renders every image. Engine:
-`develop::DevelopedRule` and `DevelopedFilter` (`Filter` trait), which read the sidecars
-(`Engine::sidecar`: non-empty darktable history, RapidRAW's `.rrdata`); a flat image has no
-development. It is a content filter: cleared by `f Esc`, invertible (`f i`: the images not
-developed yet). Under "developed in" a software, the thumbnails show that software's
-development, even when another one is more recent, whatever the render chosen for the grid
-(feedback of 2026-10-27); under "any development", the latest one, unless the grid already
-shows a software. Inverted, the filter leaves the grid its render (`TriApp::shown_render`).
+The user's idea: a **film reel** in the filter bar (`f Shift+D`), filtering when on; a
+list of the installed software then appears next to it, to **check**: the images
+developed in **one of the checked software**; **none checked**, the images **without
+development** (shown in their LibRaw render). Folded, the list names the software when it
+is alone, the abbreviations when there are several ("DT + RR", `Engine::short`), "LibRaw"
+when none is checked. The checked boxes are kept from one session to the next
+(`gui-state.toml`, `developed_engines`); at first launch, all the installed software.
+Engine: `develop::DevelopedRule` (checked software) and `DevelopedFilter` (`Filter`
+trait), which read the sidecars (`Engine::sidecar`: non-empty darktable history,
+RapidRAW's `.rrdata`); a flat image has no development. A content filter: cleared by
+`f Esc`, invertible (`f i`).
+
+Under the filter, the thumbnails show the checked software's development, whatever the
+render chosen for the grid (feedback of 2026-10-27): the most recent one when several are
+checked (`DevelopedRule::engine_for`), the LibRaw render when none is; full screen opens on
+it. Inverted, the filter leaves the grid its render (`TriApp::shown_render`).

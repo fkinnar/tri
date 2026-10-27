@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 const FILE: &str = "gui-state.toml";
 
 /// État d'affichage ; `None` : pas encore mémorisé (valeur de la configuration).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DisplayState {
     /// Collimateur de mise au point (`m`).
@@ -50,6 +50,8 @@ pub struct DisplayState {
     pub grid_cell: Option<f32>,
     /// Rendu des vignettes (barre des filtres, `f d`, #114).
     pub grid_render: Option<crate::grid_render::GridRender>,
+    /// Logiciels cochés du filtre « développées » (identifiants), 27/10/2026.
+    pub developed_engines: Option<Vec<String>>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
     pub window: Option<WindowState>,
 }
