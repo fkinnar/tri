@@ -45,6 +45,14 @@ impl Engine {
         }
     }
 
+    /// Sigle, pour la liste repliée du filtre quand plusieurs logiciels sont cochés.
+    pub fn short(self) -> &'static str {
+        match self {
+            Engine::Darktable => "DT",
+            Engine::RapidRaw => "RR",
+        }
+    }
+
     /// Logiciel d'identifiant `id`.
     pub fn from_id(id: &str) -> Option<Engine> {
         Engine::ALL.into_iter().find(|e| e.id() == id)
@@ -117,47 +125,40 @@ pub fn resolve(image: &Path, preference: Preference, available: &[Engine]) -> Op
         .map(|(e, _)| e)
 }
 
-/// Filtre « développées » (idée de l'utilisateur, 27/10/2026) : les images qu'un logiciel
-/// de développement a développées (n'importe lequel, ou celui choisi). LibRaw n'y est
-/// pas : il rend toutes les images.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DevelopedRule {
-    /// Un développement, quel que soit le logiciel.
-    Any,
-    /// Un développement de ce logiciel.
-    Engine(Engine),
+/// Filtre « développées » (idée de l'utilisateur, 27/10/2026) : les images qu'un des
+/// logiciels cochés a développées ; aucun coché, les images sans développement (montrées
+/// dans leur rendu LibRaw).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DevelopedRule {
+    /// Logiciels cochés ; vide : aucun développement.
+    pub engines: Vec<Engine>,
 }
 
 impl DevelopedRule {
-    /// Vrai si `image` a le développement voulu, parmi les logiciels de `available`
-    /// (installés, comme pour l'affichage).
-    pub fn accepts(self, image: &Path, available: &[Engine]) -> bool {
-        match self {
-            DevelopedRule::Any => available.iter().any(|e| e.sidecar(image).is_some()),
-            DevelopedRule::Engine(e) => available.contains(&e) && e.sidecar(image).is_some(),
-        }
+    /// Les logiciels cochés parmi `available` (installés, comme pour l'affichage).
+    pub fn wanted(&self, available: &[Engine]) -> Vec<Engine> {
+        available
+            .iter()
+            .copied()
+            .filter(|e| self.engines.contains(e))
+            .collect()
     }
 
-    /// Choix proposés : un développement, puis chaque logiciel installé ; la valeur en
-    /// place `current` reste visible (logiciel désinstallé depuis).
-    pub fn choices(available: &[Engine], current: Option<DevelopedRule>) -> Vec<DevelopedRule> {
-        let mut list = vec![DevelopedRule::Any];
-        list.extend(available.iter().map(|&e| DevelopedRule::Engine(e)));
-        if let Some(DevelopedRule::Engine(e)) = current
-            && !available.contains(&e)
-        {
-            list.push(DevelopedRule::Engine(e));
+    /// Vrai si `image` vérifie le filtre : un développement d'un logiciel coché, ou,
+    /// aucun coché, aucun développement des logiciels de `available`.
+    pub fn accepts(&self, image: &Path, available: &[Engine]) -> bool {
+        if self.engines.is_empty() {
+            return !available.iter().any(|e| e.sidecar(image).is_some());
         }
-        list
+        self.wanted(available)
+            .iter()
+            .any(|e| e.sidecar(image).is_some())
     }
 
-    /// Le filtre suivant de la liste, `None` (pas de filtre) compris, en boucle.
-    pub fn next(current: Option<DevelopedRule>, available: &[Engine]) -> Option<DevelopedRule> {
-        let list = DevelopedRule::choices(available, current);
-        match current.and_then(|c| list.iter().position(|&r| r == c)) {
-            None => list.first().copied(),
-            Some(at) => list.get(at + 1).copied(),
-        }
+    /// Logiciel du développement à montrer pour `image` : le plus récent des logiciels
+    /// cochés ; `None` : rendu LibRaw.
+    pub fn engine_for(&self, image: &Path, available: &[Engine]) -> Option<Engine> {
+        resolve(image, Preference::Auto, &self.wanted(available))
     }
 }
 
@@ -165,8 +166,8 @@ impl DevelopedRule {
 /// installés. Lit les sidecars ; les images plates n'ont pas de développement.
 #[derive(Clone, Copy, Debug)]
 pub struct DevelopedFilter<'a> {
-    /// Le développement voulu.
-    pub rule: DevelopedRule,
+    /// Les logiciels cochés.
+    pub rule: &'a DevelopedRule,
     /// Logiciels installés.
     pub available: &'a [Engine],
 }
@@ -1219,7 +1220,7 @@ mod tests {
     }
 
     #[test]
-    fn the_developed_filter_keeps_what_a_software_developed() {
+    fn the_developed_filter_keeps_what_the_checked_software_developed() {
         use crate::filter::{Filter, ungrouped};
         use crate::media::{MediaFile, MediaKind};
         let dir = tempfile::tempdir().unwrap();
@@ -1228,47 +1229,47 @@ mod tests {
             std::fs::write(&path, b"x").unwrap();
             MediaFile { path, kind }
         };
-        // a : darktable ; b : RapidRAW ; c : un sidecar de notes seulement ; d : JPEG.
+        // a : darktable ; b : RapidRAW puis darktable ; c : un sidecar de notes seulement ;
+        // d : JPEG.
         let a = file("a.RAF", MediaKind::Raw);
         let b = file("b.RAF", MediaKind::Raw);
         let c = file("c.RAF", MediaKind::Raw);
         let d = file("d.JPG", MediaKind::Flat);
         std::fs::write(dir.path().join("a.RAF.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(dir.path().join("b.RAF.rrdata"), b"{}").unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(dir.path().join("b.RAF.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(dir.path().join("c.RAF.xmp"), sidecar(0, &[])).unwrap();
-        let all = ungrouped(vec![a.clone(), b.clone(), c, d]);
+        let all = ungrouped(vec![a.clone(), b.clone(), c.clone(), d]);
         let both = [Engine::Darktable, Engine::RapidRaw];
-        let kept = |rule, available: &[Engine]| -> Vec<MediaFile> {
+        let rule = |engines: &[Engine]| DevelopedRule {
+            engines: engines.to_vec(),
+        };
+        let kept = |rule: &DevelopedRule, available: &[Engine]| -> Vec<MediaFile> {
             DevelopedFilter { rule, available }
                 .apply(all.clone())
                 .concat()
         };
-        assert_eq!(kept(DevelopedRule::Any, &both), [a.clone(), b.clone()]);
-        assert_eq!(kept(DevelopedRule::Engine(Engine::Darktable), &both), [a]);
-        assert_eq!(kept(DevelopedRule::Engine(Engine::RapidRaw), &both), [b]);
-        // Logiciel pas installé : ses développements ne comptent pas, comme à l'affichage.
-        assert!(
-            kept(
-                DevelopedRule::Engine(Engine::RapidRaw),
-                &[Engine::Darktable]
-            )
-            .is_empty()
-        );
-        // Liste et cycle : rien, un développement, chaque logiciel, rien.
-        let mut rule = None;
-        let mut seen = Vec::new();
-        for _ in 0..4 {
-            rule = DevelopedRule::next(rule, &both);
-            seen.push(rule);
-        }
+        let dt_rr = rule(&both);
+        assert_eq!(kept(&dt_rr, &both), [a.clone(), b.clone()]);
         assert_eq!(
-            seen,
-            [
-                Some(DevelopedRule::Any),
-                Some(DevelopedRule::Engine(Engine::Darktable)),
-                Some(DevelopedRule::Engine(Engine::RapidRaw)),
-                None
-            ]
+            kept(&rule(&[Engine::Darktable]), &both),
+            [a.clone(), b.clone()]
         );
+        assert_eq!(
+            kept(&rule(&[Engine::RapidRaw]), &both),
+            std::slice::from_ref(&b)
+        );
+        // Aucun coché : les RAW sans développement (rendu LibRaw).
+        assert_eq!(kept(&rule(&[]), &both), [c]);
+        // Logiciel pas installé : ses développements ne comptent pas, comme à l'affichage.
+        assert!(kept(&rule(&[Engine::RapidRaw]), &[Engine::Darktable]).is_empty());
+        // Montré : le plus récent des cochés.
+        assert_eq!(dt_rr.engine_for(&b.path, &both), Some(Engine::Darktable));
+        assert_eq!(
+            rule(&[Engine::RapidRaw]).engine_for(&b.path, &both),
+            Some(Engine::RapidRaw)
+        );
+        assert_eq!(rule(&[]).engine_for(&a.path, &both), None);
     }
 }

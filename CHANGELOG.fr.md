@@ -11,11 +11,11 @@
   voulu montre son rendu LibRaw, calculé en fond ; les développements manquants sont
   rendus en fond (`[gui.grid] develop = "auto"`) ou à la demande (`"manual"`). Une
   pastille sous la vignette nomme le logiciel (issue n° 114).
-- **Filtre « développées »** : une liste de la barre des filtres et `f Maj+D` : un
-  développement, ou développées dans un logiciel donné (installés seulement) ;
-  inversible, pour voir les images pas encore développées. La grille montre alors les
-  développements : sous « développées dans » un logiciel, le sien, quel que soit le rendu
-  de la grille.
+- **Filtre « développées »** : une bobine de film dans la barre des filtres (`f Maj+D`),
+  puis les logiciels installés à cocher : les images développées dans l'un d'eux,
+  montrées dans le plus récent, quel que soit le rendu de la grille ; aucun coché, les
+  images sans développement, en rendu LibRaw. Inversible ; les logiciels cochés sont
+  retenus. Le plein écran s'ouvre sur ce que montre la vignette.
 - **RapidRAW**, deuxième logiciel de développement à côté de darktable : `rapidraw
   export` applique son sidecar `.rrdata` ; trouvé dans le PATH, aux endroits habituels,
   en AppImage ou en Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"`

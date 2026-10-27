@@ -228,6 +228,23 @@ pub fn sun(painter: &Painter, rect: Rect, color: Color32) {
     }
 }
 
+/// Icône du filtre « développées » : une bobine de film (cercle, cinq trous autour de
+/// l'axe), avec la pellicule qui en part vers la droite.
+pub fn film_reel(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center() - vec2(s * 0.06, 0.0);
+    let r = s * 0.36;
+    let stroke = Stroke::new((s * 0.08).max(1.2), color);
+    painter.circle_stroke(c, r, stroke);
+    painter.circle_filled(c, s * 0.06, color);
+    for k in 0..5 {
+        let a = -FRAC_PI_2 + std::f32::consts::TAU * k as f32 / 5.0;
+        painter.circle_filled(c + vec2(a.cos(), a.sin()) * r * 0.55, s * 0.08, color);
+    }
+    // La pellicule, tangente au bas de la bobine.
+    painter.line_segment([c + vec2(0.0, r), c + vec2(s * 0.5, r)], stroke);
+}
+
 /// Icône « inverser les filtres » : un cercle à moitié plein (◐).
 pub fn invert_icon(painter: &Painter, rect: Rect, color: Color32) {
     let s = rect.width().min(rect.height());

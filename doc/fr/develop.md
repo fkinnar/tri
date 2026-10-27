@@ -176,14 +176,20 @@ grille, la source choisie au plein écran (`b`) reste.
 
 ## Filtrer les images développées (27/10/2026)
 
-Liste « Développées ou non » de la barre des filtres, `f Maj+D` pour le choix suivant :
-**un développement** (n'importe quel logiciel), ou **développées dans** un logiciel
-donné ; seulement les logiciels installés, comme pour l'affichage. LibRaw n'y est pas : il
-rend toutes les images. Moteur : `develop::DevelopedRule` et `DevelopedFilter` (trait
-`Filter`), qui lisent les sidecars (`Engine::sidecar` : historique darktable non vide,
-`.rrdata` de RapidRAW) ; une image plate n'a pas de développement. C'est un filtre sur le
-contenu : effacé par `f Échap`, inversible (`f i` : les images pas encore développées).
-Sous « développées dans » un logiciel, les vignettes montrent le développement de ce
-logiciel, même si un autre est plus récent, et quel que soit le rendu choisi pour la grille
-(retours du 27/10/2026) ; sous « un développement », le dernier, sauf si la grille montre
-déjà un logiciel. Inversé, le filtre laisse à la grille son rendu (`TriApp::shown_render`).
+Idée de l'utilisateur : une **bobine de film** dans la barre des filtres (`f Maj+D`),
+allumée elle filtre ; à côté apparaît alors une liste des logiciels installés, à
+**cocher** : les images développées dans **l'un des logiciels cochés** ; **aucun coché**,
+les images **sans développement** (montrées dans leur rendu LibRaw). Repliée, la liste
+nomme le logiciel s'il est seul, les sigles s'ils sont plusieurs (« DT + RR »,
+`Engine::short`), « LibRaw » si aucun n'est coché. Les cases cochées sont retenues d'une
+session à l'autre (`gui-state.toml`, `developed_engines`) ; au premier lancement, tous
+les logiciels installés. Moteur : `develop::DevelopedRule` (logiciels cochés) et
+`DevelopedFilter` (trait `Filter`), qui lisent les sidecars (`Engine::sidecar` :
+historique darktable non vide, `.rrdata` de RapidRAW) ; une image plate n'a pas de
+développement. Filtre sur le contenu : effacé par `f Échap`, inversible (`f i`).
+
+Sous le filtre, les vignettes montrent le développement des logiciels cochés, quel que
+soit le rendu choisi pour la grille (retours du 27/10/2026) : le plus récent s'ils sont
+plusieurs (`DevelopedRule::engine_for`), le rendu LibRaw si aucun n'est coché ; le plein
+écran s'ouvre dessus. Inversé, le filtre laisse à la grille son rendu
+(`TriApp::shown_render`).

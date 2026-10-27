@@ -253,8 +253,11 @@ pub struct TriApp {
     blur_refilter_pending: bool,
     /// Filtre « bien exposées » (ni brûlées ni bouchées, seuils des badges).
     well_exposed: bool,
-    /// Filtre « développées » : un développement, ou celui d'un logiciel (27/10/2026).
-    developed_rule: Option<tri::develop::DevelopedRule>,
+    /// Filtre « développées » allumé (icône de la barre des filtres, `f Maj+D`).
+    developed_on: bool,
+    /// Logiciels cochés du filtre « développées » ; `None` : tous les installés. Retenus
+    /// d'une session à l'autre.
+    developed_checked: Option<Vec<tri::develop::Engine>>,
     /// Filtres inversés : ce qu'ils retirent (notes, netteté, exposition).
     filter_inverted: bool,
     /// Ordre des images (`f s`, `f r`, liste de la barre des filtres).
@@ -365,9 +368,12 @@ pub struct TriApp {
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
     grid_render: crate::grid_render::GridRender,
-    /// Rendu des vignettes au dernier refiltrage ([`TriApp::shown_render`]) : un
-    /// changement relance le lot de la grille.
-    shown_render: crate::grid_render::GridRender,
+    /// Rendu des vignettes et filtre « développées » au dernier refiltrage
+    /// ([`TriApp::shown_render`]) : un changement relance le lot de la grille.
+    shown_render: (
+        crate::grid_render::GridRender,
+        Option<tri::develop::DevelopedRule>,
+    ),
     /// Niveau montré par chaque vignette (lu dans les sidecars, gardé jusqu'au refiltrage).
     grid_levels: HashMap<PathBuf, Level>,
     /// Niveau de la texture chargée de chaque vignette.
@@ -745,7 +751,8 @@ impl TriApp {
             blurry_applied: HashSet::new(),
             blur_refilter_pending: false,
             well_exposed: false,
-            developed_rule: None,
+            developed_on: false,
+            developed_checked: None,
             filter_inverted: false,
             order: tri::sort::Order {
                 key: gui.sort,
@@ -791,7 +798,7 @@ impl TriApp {
             develop_batch_auto: false,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
-            shown_render: gui.grid.render,
+            shown_render: (gui.grid.render, None),
             grid_levels: HashMap::new(),
             texture_levels: HashMap::new(),
             grid_found: HashSet::new(),
@@ -971,6 +978,10 @@ impl TriApp {
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
             grid_render: Some(self.grid_render),
+            developed_engines: self
+                .developed_checked
+                .as_ref()
+                .map(|v| v.iter().map(|e| e.id().to_string()).collect()),
             window: self.window_kept,
         }
     }
@@ -1068,6 +1079,13 @@ impl TriApp {
         }
         if let Some(render) = s.grid_render {
             self.grid_render = render;
+        }
+        if let Some(ids) = &s.developed_engines {
+            self.developed_checked = Some(
+                ids.iter()
+                    .filter_map(|id| tri::develop::Engine::from_id(id))
+                    .collect(),
+            );
         }
         self.display_saved = self.display();
     }
@@ -2505,7 +2523,7 @@ impl TriApp {
         } else {
             groups
         };
-        let groups = match self.developed_rule {
+        let groups = match &self.developed_rule() {
             Some(rule) => tri::develop::DevelopedFilter {
                 rule,
                 available: &self.developers.engines(),
@@ -2545,7 +2563,7 @@ impl TriApp {
         }
         // Sidecars peut-être changés (surveillance, renommage…) : niveaux des vignettes relus.
         // Rendu changé par le filtre « développées dans » : le lot de la grille le suit.
-        let shown = self.shown_render();
+        let shown = (self.shown_render(), self.developed_rule());
         if shown != self.shown_render {
             self.shown_render = shown;
             self.auto_develop_pending = true;
@@ -2761,7 +2779,7 @@ impl TriApp {
         !self.notes_rule.is_empty()
             || self.blur_rule.is_some()
             || self.well_exposed
-            || self.developed_rule.is_some()
+            || self.developed_on
     }
 
     /// Parts saturées / bouchées des images de la grille dont l'analyse est prête, lues
@@ -3963,7 +3981,7 @@ impl TriApp {
                 self.notes_rule = NotesRule::default();
                 self.blur_rule = None;
                 self.well_exposed = false;
-                self.developed_rule = None;
+                self.developed_on = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -4018,16 +4036,8 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::FilterDeveloped => {
-                let rule = tri::develop::DevelopedRule::next(
-                    self.developed_rule,
-                    &self.developers.engines(),
-                );
-                self.developed_rule = rule;
+                self.developed_on = !self.developed_on;
                 self.apply_filter();
-                self.notice = Some((
-                    format!("{} : {}", t!("filter-developed-tip"), developed_name(rule)),
-                    false,
-                ));
             }
             Action::GridRenderNext => {
                 let next = self.grid_render.next(&self.developers.engines());
@@ -6380,7 +6390,14 @@ impl TriApp {
         if let Some(&level) = self.grid_levels.get(&file.path) {
             return level;
         }
-        let level = self.shown_render().level(file, &self.developers.engines());
+        let engines = self.developers.engines();
+        let level = match self.developed_rule().filter(|_| !self.filter_inverted) {
+            // Filtre « développées » : le plus récent des logiciels cochés, sinon LibRaw.
+            Some(rule) if file.kind == MediaKind::Raw => rule
+                .engine_for(&file.path, &engines)
+                .map_or(Level::Standard, Level::Developed),
+            _ => self.shown_render().level(file, &engines),
+        };
         self.grid_levels.insert(file.path.clone(), level);
         level
     }
@@ -6454,25 +6471,32 @@ impl TriApp {
         }
     }
 
+    /// Le filtre « développées », s'il est allumé.
+    fn developed_rule(&self) -> Option<tri::develop::DevelopedRule> {
+        self.developed_on.then(|| tri::develop::DevelopedRule {
+            engines: self
+                .developed_checked
+                .clone()
+                .unwrap_or_else(|| self.developers.engines()),
+        })
+    }
+
     /// Rendu montré par les vignettes : celui choisi (`f d`), sauf sous le filtre
-    /// « développées dans » un logiciel, qui montre les développements de ce logiciel
-    /// (retour du 27/10/2026 : filtrées sur RapidRAW, les vignettes montraient le
-    /// développement darktable, plus récent), quel que soit le rendu choisi (second
-    /// retour : en JPEG boîtier, on attendait aussi le développement). Sous « un
-    /// développement », le dernier, sauf si la grille montre déjà un logiciel. Inversé, le
-    /// filtre montre les images sans ce développement : la grille garde son choix.
+    /// « développées », qui montre les développements des logiciels cochés quel que soit
+    /// le rendu choisi (retours du 27/10/2026 : filtrées sur RapidRAW, les vignettes
+    /// montraient le développement darktable, ou le JPEG boîtier) : un seul coché, ce
+    /// logiciel ; plusieurs, le plus récent (image par image, [`TriApp::grid_level`]) ;
+    /// aucun, LibRaw. Inversé, le filtre montre les images sans ces développements : la
+    /// grille garde son choix.
     fn shown_render(&self) -> crate::grid_render::GridRender {
         use crate::grid_render::GridRender;
-        use tri::develop::DevelopedRule;
-        if self.filter_inverted {
+        let Some(rule) = self.developed_rule().filter(|_| !self.filter_inverted) else {
             return self.grid_render;
-        }
-        match (self.grid_render, self.developed_rule) {
-            (_, Some(DevelopedRule::Engine(e))) => GridRender::Engine(e),
-            (GridRender::Embedded | GridRender::LibRaw, Some(DevelopedRule::Any)) => {
-                GridRender::Latest
-            }
-            (render, _) => render,
+        };
+        match rule.wanted(&self.developers.engines())[..] {
+            [] if rule.engines.is_empty() => GridRender::LibRaw,
+            [e] => GridRender::Engine(e),
+            _ => GridRender::Latest,
         }
     }
 
@@ -8079,8 +8103,8 @@ impl TriApp {
         if self.well_exposed {
             parts.push(t!("filter-bar-well-exposed"));
         }
-        if let Some(rule) = self.developed_rule {
-            parts.push(developed_name(Some(rule)));
+        if let Some(rule) = self.developed_rule() {
+            parts.push(developed_summary(&rule));
         }
         if let Some(only) = &self.stack_only {
             parts.push(t!("filter-summary-stack", n = only.len()));
@@ -8104,7 +8128,7 @@ impl TriApp {
         let mut refilter = false;
         let mut sort_choice: Option<tri::sort::SortKey> = None;
         let mut render_choice: Option<crate::grid_render::GridRender> = None;
-        let mut developed_choice: Option<Option<tri::develop::DevelopedRule>> = None;
+        let mut developed_choice: Option<Vec<tri::develop::Engine>> = None;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
         // Icônes et textes courts, détail au survol (retour du 17/10/2026 : sur un écran
@@ -8243,28 +8267,48 @@ impl TriApp {
                     self.clip_slider(ui, size);
                 }
             }
-            // Développées (27/10/2026) : seulement avec un logiciel de développement.
+            // Développées (idée de l'utilisateur, 27/10/2026) : une bobine qu'on allume,
+            // puis la liste des logiciels installés à cocher (aucun : sans développement).
             let engines = self.developers.engines();
-            if !engines.is_empty() || self.developed_rule.is_some() {
-                let mut rule = self.developed_rule;
-                let rules: Vec<_> = std::iter::once(None)
-                    .chain(
-                        tri::develop::DevelopedRule::choices(&engines, rule)
-                            .into_iter()
-                            .map(Some),
-                    )
-                    .map(|r| (r, developed_name(r)))
-                    .collect();
-                bar_choice(
-                    ui,
-                    "developed",
-                    false,
-                    &mut rule,
-                    &rules,
-                    &self.action_tip(Action::FilterDeveloped),
-                );
-                if rule != self.developed_rule {
-                    developed_choice = Some(rule);
+            if !engines.is_empty() || self.developed_on {
+                let tip = self.action_tip(Action::FilterDeveloped);
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                let color = if self.developed_on {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                marks::film_reel(ui.painter(), rect, color);
+                if response.clicked() {
+                    clicked.push(Action::FilterDeveloped);
+                }
+                if self.developed_on {
+                    let rule = self.developed_rule().unwrap_or_default();
+                    let mut checked = rule.engines.clone();
+                    // Un logiciel coché puis désinstallé reste visible.
+                    let mut listed = engines.clone();
+                    listed.extend(checked.iter().filter(|e| !engines.contains(e)));
+                    egui::ComboBox::from_id_salt("developed")
+                        .selected_text(developed_short(&rule))
+                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                        .show_ui(ui, |ui| {
+                            for engine in listed {
+                                let mut on = checked.contains(&engine);
+                                if ui.checkbox(&mut on, engine.name()).changed() {
+                                    if on {
+                                        checked.push(engine);
+                                    } else {
+                                        checked.retain(|&e| e != engine);
+                                    }
+                                }
+                            }
+                            ui.weak(t!("filter-developed-none-hint"));
+                        })
+                        .response
+                        .on_hover_text(t!("filter-developed-tip"));
+                    if checked != rule.engines {
+                        developed_choice = Some(checked);
+                    }
                 }
             }
             ui.separator();
@@ -8527,8 +8571,9 @@ impl TriApp {
         if let Some(render) = render_choice {
             self.set_grid_render(render);
         }
-        if let Some(rule) = developed_choice {
-            self.developed_rule = rule;
+        if let Some(mut checked) = developed_choice {
+            checked.sort();
+            self.developed_checked = Some(checked);
             self.apply_filter();
         }
         let ctx = ui.ctx().clone();
@@ -10325,14 +10370,26 @@ pub fn window_icon() -> egui::IconData {
     }
 }
 
-/// Nom d'un filtre « développées » (`None` : pas de filtre), pour la liste et le résumé.
-fn developed_name(rule: Option<tri::develop::DevelopedRule>) -> String {
-    match rule {
-        None => t!("filter-developed-all"),
-        Some(tri::develop::DevelopedRule::Any) => t!("filter-developed-any"),
-        Some(tri::develop::DevelopedRule::Engine(e)) => {
-            t!("filter-developed-engine", engine = e.name())
-        }
+/// Filtre « développées » replié dans la barre : le logiciel en toutes lettres s'il est
+/// seul, les sigles s'ils sont plusieurs (« DT + RR »), « LibRaw » si aucun n'est coché.
+fn developed_short(rule: &tri::develop::DevelopedRule) -> String {
+    match &rule.engines[..] {
+        [] => t!("grid-render-libraw-short"),
+        [e] => e.name().to_string(),
+        engines => engines
+            .iter()
+            .map(|e| e.short())
+            .collect::<Vec<_>>()
+            .join(" + "),
+    }
+}
+
+/// Filtre « développées » dans le résumé de la barre d'état.
+fn developed_summary(rule: &tri::develop::DevelopedRule) -> String {
+    if rule.engines.is_empty() {
+        t!("filter-developed-none")
+    } else {
+        t!("filter-developed-engine", engine = developed_short(rule))
     }
 }
 
@@ -11257,9 +11314,10 @@ mod tests {
 
     #[test]
     fn f_shift_d_keeps_the_developed_images() {
-        // 27/10/2026 : `f Maj+D` passe au filtre « développées » suivant (un développement,
-        // chaque logiciel installé, rien). Les images du dossier de test n'en ont aucun.
-        use tri::develop::{DevelopedRule, Engine};
+        // 27/10/2026 : `f Maj+D` allume ou éteint le filtre « développées » ; par défaut,
+        // tous les logiciels installés sont cochés. Les images du dossier de test n'ont
+        // aucun développement.
+        use tri::develop::Engine;
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
@@ -11270,33 +11328,41 @@ mod tests {
             press(h, Key::D, Modifiers::SHIFT);
         };
         f_shift_d(&mut h);
-        assert_eq!(h.state().developed_rule, Some(DevelopedRule::Any));
+        assert!(h.state().developed_on);
+        assert_eq!(
+            h.state().developed_rule().unwrap().engines,
+            [Engine::Darktable]
+        );
         assert!(h.state().files.is_empty());
         assert!(h.state().content_filtered());
-        f_shift_d(&mut h);
-        assert_eq!(
-            h.state().developed_rule,
-            Some(DevelopedRule::Engine(Engine::Darktable))
-        );
         // Inversé : les images sans développement.
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::I, Modifiers::NONE);
         assert_eq!(h.state().files.len(), all);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::I, Modifiers::NONE);
+        // Aucun coché : les RAW sans développement (les JPEG du dossier de test n'en sont
+        // pas) ; retenu.
+        h.state_mut().developed_checked = Some(Vec::new());
+        h.state_mut().apply_filter();
+        assert!(h.state().files.is_empty());
+        assert_eq!(h.state().display().developed_engines, Some(Vec::new()));
         f_shift_d(&mut h);
-        assert_eq!(h.state().developed_rule, None);
+        assert!(!h.state().developed_on);
         f_shift_d(&mut h);
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
-        assert_eq!(h.state().developed_rule, None);
+        assert!(!h.state().developed_on);
         assert_eq!(h.state().files.len(), all);
     }
 
     #[test]
-    fn developed_in_a_software_shows_its_development() {
-        // Retour du 27/10/2026 : sous « développées dans RapidRAW », une image développée
-        // dans les deux montrait le développement darktable (plus récent).
+    fn the_developed_filter_shows_the_checked_developments() {
+        // Retours du 27/10/2026 : sous le filtre, les vignettes montrent le développement
+        // des logiciels cochés (le plus récent s'ils sont plusieurs), quel que soit le
+        // rendu de la grille ; aucun coché, le rendu LibRaw.
         use crate::grid_render::GridRender;
-        use tri::develop::{DevelopedRule, Engine};
+        use tri::develop::Engine;
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
@@ -11310,44 +11376,45 @@ mod tests {
             r#"<rdf:Description darktable:history_end="3"/>"#,
         )
         .unwrap();
-        let file = MediaFile {
+        let app = h.state_mut();
+        app.files[0] = MediaFile {
             path: raw,
             kind: MediaKind::Raw,
         };
-        let engines = [Engine::Darktable, Engine::RapidRaw];
-        let app = h.state_mut();
-        app.grid_render = GridRender::Latest;
-        assert_eq!(
-            app.shown_render().level(&file, &engines),
-            Level::Developed(Engine::Darktable)
-        );
-        app.developed_rule = Some(DevelopedRule::Engine(Engine::RapidRaw));
-        assert_eq!(
-            app.shown_render().level(&file, &engines),
-            Level::Developed(Engine::RapidRaw)
-        );
+        let level = |app: &mut TriApp| {
+            app.grid_levels.clear();
+            app.grid_level(0)
+        };
+        app.grid_render = GridRender::Embedded;
+        assert_eq!(level(app), Level::Thumbnail);
+        app.developed_on = true;
+        // Tous cochés : le plus récent.
+        assert_eq!(level(app), Level::Developed(Engine::Darktable));
+        assert_eq!(app.shown_render(), GridRender::Latest);
+        app.developed_checked = Some(vec![Engine::RapidRaw]);
+        assert_eq!(level(app), Level::Developed(Engine::RapidRaw));
+        assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
         // Un logiciel choisi pour la grille cède aussi au filtre.
         app.grid_render = GridRender::Engine(Engine::Darktable);
-        assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
-        // JPEG boîtier ou LibRaw aussi (second retour du 27/10/2026) ; inversé, le filtre
-        // ne joue pas.
-        for render in [GridRender::Embedded, GridRender::LibRaw] {
-            app.grid_render = render;
-            assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
-        }
-        app.grid_render = GridRender::Embedded;
+        assert_eq!(level(app), Level::Developed(Engine::RapidRaw));
+        // Aucun coché : LibRaw.
+        app.developed_checked = Some(Vec::new());
+        assert_eq!(level(app), Level::Standard);
+        assert_eq!(app.shown_render(), GridRender::LibRaw);
+        // Inversé : le choix de la grille.
         app.filter_inverted = true;
-        assert_eq!(app.shown_render(), GridRender::Embedded);
-        // « Un développement » : le dernier, sauf un logiciel choisi pour la grille.
-        app.filter_inverted = false;
-        app.developed_rule = Some(DevelopedRule::Any);
-        assert_eq!(app.shown_render(), GridRender::Latest);
-        app.grid_render = GridRender::Engine(Engine::Darktable);
+        assert_eq!(level(app), Level::Developed(Engine::Darktable));
         assert_eq!(app.shown_render(), GridRender::Engine(Engine::Darktable));
-        // Sans filtre : le choix de la grille.
-        app.developed_rule = None;
-        app.grid_render = GridRender::Embedded;
-        assert_eq!(app.shown_render(), GridRender::Embedded);
+        // Repliée, la liste nomme le logiciel seul, ou les sigles.
+        let rule = |engines: &[Engine]| tri::develop::DevelopedRule {
+            engines: engines.to_vec(),
+        };
+        assert_eq!(developed_short(&rule(&[Engine::RapidRaw])), "RapidRAW");
+        assert_eq!(
+            developed_short(&rule(&[Engine::Darktable, Engine::RapidRaw])),
+            "DT + RR"
+        );
+        assert_eq!(developed_short(&rule(&[])), "LibRaw");
     }
 
     #[test]

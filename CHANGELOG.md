@@ -11,10 +11,11 @@
   computed in the background; missing developments are rendered in the background
   (`[gui.grid] develop = "auto"`) or on request (`"manual"`). A chip under the thumbnail
   names the software (issue #114).
-- **"Developed" filter**: a list in the filter bar and `f Shift+D`: any development, or
-  developed in a given software (installed ones only); invertible, to see the images not
-  developed yet. The grid then shows the developments: under "developed in" a
-  software, that software's one, whatever the grid's render.
+- **"Developed" filter**: a film reel in the filter bar (`f Shift+D`), then the installed
+  software to check: the images developed in one of them, shown in the most recent one,
+  whatever the grid's render; none checked, the images without development, in their
+  LibRaw render. Invertible; the checked software are remembered. Full screen opens on
+  what the thumbnail shows.
 - **RapidRAW** as a second development software, next to darktable: `rapidraw export`
   applies its `.rrdata` sidecar; found in the PATH, the usual places, as an AppImage or a
   Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"` (latest development) or a
