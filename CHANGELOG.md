@@ -19,7 +19,8 @@
   stays only in the bottom bar. "RATING", "FILTER" and "FOLDERS" labels on the bottom
   and top bars and the folder panel, in small capitals in the accent colour (`[gui.grid]
   bar_label_scale`). `[gui.grid] stack_slider` and `clip_slider` are gone: remove them
-  from your configuration file if you set them.
+  from your configuration file if you set them. In a narrow window, the end of the
+  filter and rating bars no longer slides under the right panel.
 - **Developments in the grid**: after developing, the grid can show each RAW's
   development instead of the camera JPEG: `[gui.grid] render` = `embedded` (default),
   `latest`, `darktable`, `rapidraw` or `libraw`, also a list in the filter bar and `f d`,

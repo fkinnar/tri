@@ -8506,7 +8506,7 @@ impl TriApp {
             if wrap {
                 ui.end_row();
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            tail_visible(ui, |ui| {
                 let right = ui.max_rect().right();
                 let icon = self.gui.bar_icon_size;
                 // Le bouton 1:1 allumé à 100 % seulement (pas à 13 % ni à 200 %).
@@ -8885,7 +8885,7 @@ impl TriApp {
             }
             // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
             // grisé sans filtre), et juste à sa gauche le nombre d'images.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            tail_visible(ui, |ui| {
                 let right = ui.max_rect().right();
                 let tip = self.action_tip(Action::FilterClear);
                 ui.add_enabled_ui(any, |ui| {
@@ -10931,6 +10931,20 @@ fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color
 /// déborde aux deux bouts du rail (sinon le curseur passe sous le bord du panneau).
 fn panel_slider_width(ui: &Ui) -> f32 {
     (ui.available_width() - ui.spacing().interact_size.y).max(0.0)
+}
+
+/// Fin d'une barre alignée à droite, sur la rangée en cours, bornée à la partie visible
+/// de `ui` : un panneau latéral plus large que prévu (son contenu l'élargit) recouvre le
+/// bord de la barre, et ce qui y était aligné (effacer les filtres) tombait dessous, sans
+/// plus se cliquer (CI Linux, 27/10/2026).
+fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let mut rect = ui.available_rect_before_wrap();
+    rect.max.x = rect.max.x.min(ui.clip_rect().max.x).max(rect.min.x);
+    // À la hauteur d'une rangée : sur toute la hauteur restante, centrée, elle
+    // descendait d'image en image.
+    rect.max.y = rect.min.y + ui.spacing().interact_size.y;
+    let layout = egui::Layout::right_to_left(egui::Align::Center);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
 }
 
 /// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche) : en majuscules, un peu plus petit
@@ -13765,6 +13779,11 @@ mod tests {
     #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
+        // Fenêtre étroite, panneaux ouverts : la fin de la barre (effacer) reste dans la
+        // partie visible et se clique (CI Linux, 27/10/2026 : elle glissait sous le
+        // panneau de droite).
+        h.set_size(vec2(700.0, 700.0));
+        h.run_steps(3);
         assert!(
             h.query_by_label("Effacer").is_some(),
             "barre visible par défaut"

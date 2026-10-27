@@ -21,7 +21,8 @@
   FILTRE » et « DOSSIERS » sur les barres du bas et du haut et le panneau des dossiers,
   en petites majuscules à l'accent (`[gui.grid] bar_label_scale`). `[gui.grid]
   stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de
-  configuration si vous les aviez réglés.
+  configuration si vous les aviez réglés. Dans une fenêtre étroite, la fin des barres
+  des filtres et des notes ne glisse plus sous le panneau de droite.
 - **Développements dans la grille** : après le développement, la grille peut montrer le
   développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`
   (défaut), `latest`, `darktable`, `rapidraw` ou `libraw`, aussi une liste de la barre
