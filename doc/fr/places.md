@@ -132,6 +132,10 @@ Triés par nom sans tenir compte de la casse ; dossiers cachés (`.xxx`) seuleme
   `System` (la racine, repliée tant qu'on ne l'ouvre pas) ; `PlaceKind::section`, et `Row::section` sur chaque ligne (les
   sous-dossiers prennent celle de leur emplacement) : l'interface dessine un titre et un
   trait à chaque changement de section ;
+- **sections repliées** (27/10/2026) : `set_folded(section, bool)`, `is_folded` ; les
+  lignes d'une section repliée quittent `rows()` (le curseur clavier les saute), son titre
+  reste (`sections()` : les sections qui ont des lignes, repliées comprises) ;
+  `Section::key()` donne un identifiant stable, pour retenir le repli ;
 - `reveal(path)` : déplie les dossiers parents de `path` sous l'emplacement le plus précis
   qui le contient (un volume avant la racine), pour montrer le dossier ouvert ;
 - `refresh()` : relit les emplacements (carte insérée) et les dossiers dépliés ;

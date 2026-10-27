@@ -430,14 +430,15 @@ pub struct GridSettings {
     pub marked_frame: f32,
     /// Goutte sous les vignettes des photos jugées floues (score de netteté).
     pub blur_badge: bool,
-    /// Largeur du curseur de similarité de la barre des filtres (points).
-    pub stack_slider: f32,
-    /// Largeur du curseur de sévérité du flou de la barre des filtres (points).
+    /// Largeur du curseur de sévérité du flou de la barre du bas du plein écran, avec la
+    /// carte de netteté (points). Dans le panneau de droite, les curseurs prennent sa
+    /// largeur.
     pub blur_slider: f32,
-    /// Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
-    pub clip_slider: f32,
     /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
     pub size_slider: f32,
+    /// Bulle du nombre d'images au milieu de l'écran après un changement de filtre :
+    /// durée (millisecondes ; 0 : jamais).
+    pub filter_toast_ms: u64,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -476,10 +477,9 @@ impl Default for GridSettings {
             hover_frame: 2.0,
             marked_frame: 3.0,
             blur_badge: true,
-            stack_slider: 90.0,
             blur_slider: 90.0,
-            clip_slider: 60.0,
             size_slider: 90.0,
+            filter_toast_ms: 1500,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,
@@ -804,9 +804,11 @@ pub struct FolderSettings {
     /// Case « sous-dossiers » du panneau : niveaux de sous-dossiers dont les images
     /// s'affichent aussi dans la grille, au plus (en plus du dossier ouvert).
     pub subfolders_depth: usize,
-    /// Titres des sections (« Disques amovibles », « Favoris »…) : taille par rapport au
-    /// texte des dossiers.
+    /// Titres des sections (« Disques amovibles », « Favoris »… et celles du panneau de
+    /// droite) : taille par rapport au texte des dossiers.
     pub section_scale: f32,
+    /// Écart au-dessus du titre de chaque section des panneaux latéraux (points).
+    pub section_gap: f32,
 }
 
 impl Default for FolderSettings {
@@ -819,7 +821,8 @@ impl Default for FolderSettings {
             search_depth: 4,
             search_results: 200,
             subfolders_depth: 3,
-            section_scale: 1.15,
+            section_scale: 1.25,
+            section_gap: 6.0,
         }
     }
 }
@@ -867,6 +870,9 @@ pub struct MetadataSettings {
     pub histogram: bool,
     /// Hauteur de cet histogramme (points).
     pub histogram_height: f32,
+    /// Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h /
+    /// l), sur sa course de -1 à 1.
+    pub slider_step: f32,
 }
 
 impl Default for MetadataSettings {
@@ -876,6 +882,7 @@ impl Default for MetadataSettings {
             width: 280.0,
             histogram: true,
             histogram_height: 120.0,
+            slider_step: 0.1,
         }
     }
 }

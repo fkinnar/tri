@@ -532,14 +532,14 @@ marked_frame = 3.0
 # Drop under the thumbnails of photos judged blurry (sharpness score, see
 # [sharpness]).
 blur_badge = true
-# Width of the similarity slider of the filter bar.
-stack_slider = 90.0
-# Width of the blur strictness slider of the filter bar.
+# Width of the blur strictness slider of the full screen bottom bar (with the sharpness
+# map). In the right panel, the sliders take its width.
 blur_slider = 90.0
-# Width of each of the "blown" / "crushed" sliders of the filter bar.
-clip_slider = 60.0
 # Width of the thumbnail size slider at the bottom of the grid.
 size_slider = 90.0
+# Bubble with the number of images in the middle of the screen after a filter change:
+# duration (milliseconds; 0: never).
+filter_toast_ms = 1500
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
@@ -694,9 +694,11 @@ search_results = 200
 # "Subfolders" checkbox of the panel (kept from one session to the next): the images of the
 # subfolders of the open folder are shown too, down to this number of levels at most.
 subfolders_depth = 3
-# Section titles ("Removable drives", "Favourites"…): size relative to the folder
-# text.
-section_scale = 1.15
+# Section titles ("Removable drives", "Favourites"… and those of the right panel): size
+# relative to the folder text.
+section_scale = 1.25
+# Gap above the title of each section of the side panels (points).
+section_gap = 6.0
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:
@@ -769,6 +771,9 @@ visible = true
 width = 280.0
 histogram = true
 histogram_height = 120.0
+# Step of a strictness slider of the panel from the keyboard (left / right arrows, h / l),
+# over its range from -1 to 1.
+slider_step = 0.1
 
 [gui.colors]
 # Colours "#rrggbb". Selection (click or keyboard) missing: theme colour. Example:

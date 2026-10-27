@@ -183,6 +183,13 @@ pub fn navigate(
         | Action::MetaSelectUp
         | Action::MetaSelectDown
         | Action::MetaCopyAll
+        | Action::PanelSectionNext
+        | Action::PanelSectionPrev
+        | Action::PanelActivate
+        | Action::PanelLeft
+        | Action::PanelRight
+        | Action::FolderSectionNext
+        | Action::FolderSectionPrev
         | Action::MetaUp
         | Action::MetaDown
         | Action::MetaCopy

@@ -128,6 +128,10 @@ folders followed; error if `dir` is unreadable.
   collapsed until opened); `PlaceKind::section`, and `Row::section` on each row
   (subfolders take the one of their place): the interface draws a title and a line at
   each section change;
+- **folded sections** (2026-10-27): `set_folded(section, bool)`, `is_folded`; the rows of a
+  folded section leave `rows()` (the keyboard cursor skips them), its title stays
+  (`sections()`: the sections that have rows, folded ones included); `Section::key()` gives
+  a stable id, to remember the folding;
 - `reveal(path)`: expands the parent folders of `path` under the most specific place
   that contains it (a volume before the root), to show the open folder;
 - `refresh()`: rereads the places (card inserted) and the expanded folders; `reload()`:

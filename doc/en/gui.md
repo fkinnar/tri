@@ -440,8 +440,17 @@ system one ("cold" measurements, experiments).
   **right click** on a folder, menu of the same actions (new folder, rename, delete,
   favourite; offload a card here, or on a removable drive: offload, eject), shortcut on
   hover.
-  Metadata: the histogram at the top then each row (sharpness included) can be pointed at
-  (↑ ↓ / `j` `k`), Enter on the histogram opens it large; Shift + ↑ ↓ / Shift + `j` `k`
+  **Right panel** (2026-10-27, `TriApp::side_begin` / `side_end`): ↑ ↓ / `j` `k` also go
+  through the **settings** above the EXIF (section titles included), one at a time;
+  **Space** / Enter use the pointed setting (check, choose, fold a section, slider to the
+  centre, button); ← → / `h` `l` vary it (slider by a step, `[gui.metadata] slider_step`;
+  list and radio buttons to the next choice; title: fold /
+  unfold); **Tab** / Shift+Tab (`)` / `(` in vim) go from one section title to the next,
+  looping. The same keys go from section to section in the **folder panel** (first row of
+  the section; in the middle of a section, Shift+Tab goes back to its start). Tab no longer
+  moves egui's focus in a panel that has the keyboard (as in cropping).
+  EXIF rows: each row (sharpness included) can be pointed at, Enter opens the histogram
+  large; Shift + ↑ ↓ / Shift + `j` `k`
   (or Shift+click) extend the selection, `y` copies it (one row: the value; several:
   "label: value" per row; `Ctrl+C` / `Cmd+C` too), Shift+`y` copies the whole panel; a
   click on a row points at it and gives the keyboard to the panel. Large histogram open:
@@ -556,6 +565,35 @@ system one ("cold" measurements, experiments).
   end, the session is offered ("Open the session") rather than opened automatically. See
   [offload.md](offload.md). The work is in the engine ([offload.md](offload.md)), the
   dialog (`offload.rs`) only displays.
+- **Right panel in sections** (reorganisation of 2026-10-27, the user's idea;
+  `TriApp::side_panel`): the filter bar keeps only what is set with a click (stars, flags,
+  sharp / well exposed / developed switches, colours) and the name search, with the image
+  count, invert and clear; the **settings** move to the right panel, in titled sections
+  like the folder panel's (`section_title`: capitals, bold, accent colour,
+  `[gui.folders] section_scale`, a `section_gap` above), folded by a click on the title, in
+  the usual order of other software (Lightroom): **Histogram** on top, **Filters** and
+  **Grid** (in the grid only), **EXIF** at the bottom. The **folder panel**'s sections fold
+  the same way (feedback of 2026-10-27, `Tree::set_folded`: a folded section keeps its
+  title, its rows leave `Tree::rows`, so the keyboard cursor too). Folded sections of both
+  panels are remembered across sessions (`gui-state.toml`, `panel_folded`: `grid`, `exif`,
+  `folders-personal`…).
+  - *Filters*: each adjustable filter with a check box (like its bar icon), its settings
+    only while it is on: blur strictness; **two sliders** for exposure (blown and crushed,
+    instead of one slider and a switch); development software as **flat check boxes**.
+    Under each slider, "more lenient" on the left, "stricter" on the right. The tooltip of
+    the bar icons says where the settings are.
+  - *Grid*: files shown, RAW and JPEG (two check boxes, one stays checked; in the filter
+    bar until 2026-10-27), thumbnail render as radio buttons (instead of the list hidden in
+    the "…" menu of narrow windows, which is gone), order (list and direction), stacks (check box, similarity,
+    entering by the cover or the first photo, unfold / fold all, fine settings). Thumbnail
+    size and info stay in the bottom bar (the user's choice, 2026-10-27).
+  - After a filter change, the **number of images** shows a moment in the middle of the
+    images area (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0: never; the
+    user's idea, 2026-10-27: "JPEG" alone in a folder of RAWs left nothing without it
+    being noticed). Not for the name search, whose field already shows the number, nor
+    when a folder opens.
+  - Keys removed: `[gui.grid] stack_slider` and `clip_slider` (the panel
+    sliders take its width); `blur_slider` is now only for the full screen bottom bar.
 - **Metadata panel** (2026-10-17), on the right, in the grid and in full screen
   (`Shift+M`, `[gui.metadata]`): file name as the first row (2026-10-22, rather than a
   title), then the engine rows (`Metadata::rows`, see

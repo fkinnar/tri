@@ -52,6 +52,8 @@ pub struct DisplayState {
     pub grid_render: Option<crate::grid_render::GridRender>,
     /// Logiciels cochés du filtre « développées » (identifiants), 27/10/2026.
     pub developed_engines: Option<Vec<String>>,
+    /// Sections repliées du panneau de droite (« filters », « grid »…), 27/10/2026.
+    pub panel_folded: Option<Vec<String>>,
     /// Fenêtre à la fermeture (issue n° 58), reprise au lancement suivant.
     pub window: Option<WindowState>,
 }

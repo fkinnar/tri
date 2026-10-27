@@ -4,6 +4,20 @@
 
 ## À venir
 
+- **Panneau de droite en sections** : la barre des filtres garde les filtres d'un clic
+  et la recherche par nom ; leurs réglages et ceux de la grille passent dans le panneau de
+  droite, en sections titrées comme celles du panneau des dossiers et repliables d'un
+  clic : Histogramme, Filtres (réglages d'un filtre seulement quand il est allumé ; deux
+  curseurs pour l'exposition ; logiciels de développement en cases à cocher), Grille
+  (fichiers montrés, RAW et JPEG ; rendu, ordre, piles),
+  EXIF en bas. Les sections du panneau des dossiers se replient aussi ; les sections
+  repliées sont retenues. Titres des sections en majuscules, plus grands, à l'accent,
+  espacés (`[gui.folders] section_scale`, `section_gap`). Après un changement de filtre,
+  le nombre d'images s'affiche un instant au milieu de l'écran (`[gui.grid]
+  filter_toast_ms`). **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
+  aussi les réglages, Espace les actionne, ← → les font varier, Tab / Maj+Tab (`)` / `(`
+  en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
+  aviez réglés.
 - **Développements dans la grille** : après le développement, la grille peut montrer le
   développement de chaque RAW au lieu du JPEG boîtier : `[gui.grid] render` = `embedded`
   (défaut), `latest`, `darktable`, `rapidraw` ou `libraw`, aussi une liste de la barre

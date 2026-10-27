@@ -462,8 +462,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   **clic droit** sur un dossier, menu des mêmes actions (nouveau dossier, renommer,
   supprimer, favori ; décharger une carte ici, ou sur un support amovible : décharger,
   éjecter), raccourci au survol.
-  Métadonnées : l'histogramme en tête puis chaque ligne (netteté comprise) se pointent
-  (↑ ↓ / `j` `k`), Entrée sur l'histogramme l'ouvre en grand ; Maj + ↑ ↓ / Maj + `j` `k`
+  **Panneau de droite** (27/10/2026, `TriApp::side_begin` / `side_end`) : ↑ ↓ / `j` `k`
+  parcourent aussi les **réglages** au-dessus des EXIF (titres de section compris), un à
+  la fois ; **Espace** / Entrée actionnent le réglage pointé (cocher, choisir, replier
+  une section, curseur au centre, bouton) ; ← → / `h` `l` le font varier (curseur d'un
+  pas, `[gui.metadata] slider_step` ; liste et boutons
+  radio au choix voisin ; titre : replier / déplier) ; **Tab** / Maj+Tab (`)` / `(` en
+  vim) passent d'un titre de section à l'autre, en boucle. Les mêmes touches passent
+  d'une section à l'autre dans le **panneau des dossiers** (première ligne de la
+  section ; au milieu d'une section, Maj+Tab revient à son début). Tab ne déplace plus
+  le focus d'egui dans un panneau qui a le clavier (comme dans le recadrage).
+  Lignes des EXIF : chaque ligne (netteté comprise) se pointe, Entrée ouvre
+  l'histogramme en grand ; Maj + ↑ ↓ / Maj + `j` `k`
   (ou Maj+clic) étendent la sélection, `y` la copie (une ligne : la valeur ; plusieurs :
   « libellé : valeur » par ligne ; `Ctrl+C` / `Cmd+C` aussi), Maj+`y` copie tout le
   panneau ; un clic sur une ligne la pointe et donne le clavier au panneau. Grand
@@ -584,6 +594,40 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la barre d'état ; à la fin, la séance est proposée (« Ouvrir la séance ») plutôt
   qu'ouverte d'office. Voir [offload.md](offload.md). Le travail est dans
   le moteur ([offload.md](offload.md)), la boîte (`offload.rs`) ne fait qu'afficher.
+- **Panneau de droite en sections** (réorganisation du 27/10/2026, idée de
+  l'utilisateur ; `TriApp::side_panel`) : la barre des filtres ne garde que ce qui se
+  règle d'un clic (étoiles, drapeaux, interrupteurs nettes / bien exposées /
+  développées, couleurs) et la recherche par nom, avec le nombre d'images, l'inversion
+  et l'effacement ; les **réglages** passent dans le panneau de droite, en sections
+  titrées comme celles du panneau des dossiers (`section_title` : majuscules, gras, à
+  l'accent, `[gui.folders] section_scale`, écart `section_gap` au-dessus), repliables
+  d'un clic sur le titre, dans l'ordre habituel des autres logiciels (Lightroom) :
+  **Histogramme** en haut, **Filtres** et **Grille** (en grille seulement), **EXIF** en
+  bas. Les sections du **panneau des dossiers** se replient de même (retour du
+  27/10/2026, `Tree::set_folded` : une section repliée garde son titre, ses lignes
+  quittent `Tree::rows`, donc aussi le curseur clavier). Sections repliées des deux
+  panneaux retenues d'une session à l'autre (`gui-state.toml`, `panel_folded` :
+  `grid`, `exif`, `folders-personal`…).
+  - *Filtres* : chaque filtre réglable avec une case (comme son icône de la barre), ses
+    réglages seulement quand il est allumé : sévérité du flou ; **deux curseurs** pour
+    l'exposition (brûlé et bouché, à la place d'un curseur et d'un interrupteur) ;
+    logiciels de développement en **cases à plat**. Sous chaque curseur, « plus souple »
+    à gauche, « plus strict » à droite. La bulle des icônes de la barre dit où sont les
+    réglages.
+  - *Grille* : fichiers montrés, RAW et JPEG (deux cases, l'une reste cochée ; dans la
+    barre des filtres jusqu'au 27/10/2026), rendu des vignettes en boutons radio (à la
+    place de la liste cachée dans le menu « … » des fenêtres étroites, qui disparaît),
+    ordre (liste et sens), piles (case, similarité, entrée par la couverture ou la première photo,
+    tout déplier / replier, réglages fins). Taille et infos des vignettes restent dans
+    la barre du bas (choix de l'utilisateur, 27/10/2026).
+  - Après un changement de filtre, le **nombre d'images** s'affiche un instant au milieu
+    de la zone des images (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0 :
+    jamais ; idée de l'utilisateur, 27/10/2026 : « JPEG » seul dans un dossier de RAW ne
+    laissait rien sans qu'on le remarque). Pas pour la recherche par nom, dont le champ
+    montre déjà le nombre, ni à l'ouverture d'un dossier.
+  - Clés retirées : `[gui.grid] stack_slider` et `clip_slider` (les
+    curseurs du panneau prennent sa largeur) ; `blur_slider` ne sert plus qu'à la barre
+    du bas du plein écran.
 - **Panneau des métadonnées** (17/10/2026), à droite, en grille et en plein écran
   (`Maj+M`, `[gui.metadata]`) : nom du fichier en première ligne (22/10/2026, plutôt
   qu'un titre), puis les lignes du moteur (`Metadata::rows`, voir

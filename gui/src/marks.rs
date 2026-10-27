@@ -520,12 +520,7 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
 }
 
 /// Icône du bandeau de notation dans `rect` : flèche (image précédente / suivante), ou
-/// étoile suivie d'une flèche (avance automatique : « après une note, on avance »).
-pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32, colors: &Colors) {
-    bar_icon_on(painter, rect, action, color, colors, false);
-}
-
-/// Comme [`bar_icon`] ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
+/// étoile suivie d'une flèche (avance automatique) ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
 /// automatique, à l'accent sinon, y prend la couleur du texte sélectionné (elle
 /// disparaissait dans le fond, issue n° 59).
 pub fn bar_icon_on(
@@ -781,22 +776,6 @@ pub fn chip_star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
 /// Couleur des étoiles : `[gui.colors] stars`, sinon l'accent du thème.
 pub fn star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
     colors.stars.map_or_else(|| accent_mark(ctx), Color32::from)
-}
-
-/// Étiquette de type de fichier dans `rect` : un rectangle arrondi plein où `label`
-/// (« RAW », « JPG ») s'écrit en creux, couleur `back` (filtre par type ; retour du
-/// 21/10/2026 : sans l'icône de page, à la taille des autres icônes).
-pub fn file_type(painter: &Painter, rect: Rect, label: &str, color: Color32, back: Color32) {
-    let h = rect.height();
-    let band = Rect::from_center_size(rect.center(), vec2(rect.width(), h * 0.62));
-    painter.rect_filled(band, h * 0.14, color);
-    painter.text(
-        band.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(band.height() * 0.78),
-        back,
-    );
 }
 
 /// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en

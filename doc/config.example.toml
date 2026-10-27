@@ -530,14 +530,14 @@ marked_frame = 3.0
 # Goutte sous les vignettes des photos jugées floues (score de netteté, voir
 # [sharpness]).
 blur_badge = true
-# Largeur du curseur de similarité de la barre des filtres.
-stack_slider = 90.0
-# Largeur du curseur de sévérité du flou de la barre des filtres.
+# Largeur du curseur de sévérité du flou de la barre du bas du plein écran (avec la
+# carte de netteté). Dans le panneau de droite, les curseurs prennent sa largeur.
 blur_slider = 90.0
-# Largeur de chacun des curseurs « brûlé » / « bouché » de la barre des filtres.
-clip_slider = 60.0
 # Largeur du curseur de taille des vignettes, en bas de la grille.
 size_slider = 90.0
+# Bulle du nombre d'images au milieu de l'écran après un changement de filtre : durée
+# (millisecondes ; 0 : jamais).
+filter_toast_ms = 1500
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).
@@ -690,9 +690,11 @@ search_results = 200
 # Case « Sous-dossiers » du panneau (gardée d'une session à l'autre) : les images des
 # sous-dossiers du dossier ouvert s'affichent aussi, sur ce nombre de niveaux au plus.
 subfolders_depth = 3
-# Titres des sections (« Disques amovibles », « Favoris »…) : taille par rapport au texte
-# des dossiers.
-section_scale = 1.15
+# Titres des sections (« Disques amovibles », « Favoris »… et celles du panneau de
+# droite) : taille par rapport au texte des dossiers.
+section_scale = 1.25
+# Écart au-dessus du titre de chaque section des panneaux latéraux (points).
+section_gap = 6.0
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :
@@ -765,6 +767,9 @@ visible = true
 width = 280.0
 histogram = true
 histogram_height = 120.0
+# Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h / l),
+# sur sa course de -1 à 1.
+slider_step = 0.1
 
 [gui.colors]
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
