@@ -181,5 +181,6 @@ rend toutes les images. Moteur : `develop::DevelopedRule` et `DevelopedFilter` (
 `.rrdata` de RapidRAW) ; une image plate n'a pas de développement. C'est un filtre sur le
 contenu : effacé par `f Échap`, inversible (`f i` : les images pas encore développées).
 Sous « développées dans » un logiciel, les vignettes montrent le développement de ce
-logiciel, même si un autre est plus récent (retour du 27/10/2026), sauf si la grille montre
-exprès le JPEG boîtier ou LibRaw (`TriApp::shown_render`).
+logiciel, même si un autre est plus récent, et quel que soit le rendu choisi pour la grille
+(retours du 27/10/2026) ; sous « un développement », le dernier, sauf si la grille montre
+déjà un logiciel. Inversé, le filtre laisse à la grille son rendu (`TriApp::shown_render`).

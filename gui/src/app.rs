@@ -2537,6 +2537,9 @@ impl TriApp {
         if shown != self.shown_render {
             self.shown_render = shown;
             self.auto_develop_pending = true;
+            if let Some(engine) = &self.engine {
+                engine.scheduler.set_raw_previews(self.raw_policy());
+            }
         }
         self.grid_levels.clear();
         self.grid_found.clear();
@@ -6426,7 +6429,7 @@ impl TriApp {
 
     /// Politique des rendus RAW de fond : tout le dossier quand la grille les montre.
     fn raw_policy(&self) -> RawPreviews {
-        if self.grid_render.needs_libraw() {
+        if self.shown_render().needs_libraw() {
             RawPreviews::Background
         } else {
             self.gui.raw_previews
@@ -6436,15 +6439,21 @@ impl TriApp {
     /// Rendu montré par les vignettes : celui choisi (`f d`), sauf sous le filtre
     /// « développées dans » un logiciel, qui montre les développements de ce logiciel
     /// (retour du 27/10/2026 : filtrées sur RapidRAW, les vignettes montraient le
-    /// développement darktable, plus récent). Le JPEG boîtier et LibRaw, choisis
-    /// exprès, restent ; inversé, le filtre montre les images sans ce développement.
+    /// développement darktable, plus récent), quel que soit le rendu choisi (second
+    /// retour : en JPEG boîtier, on attendait aussi le développement). Sous « un
+    /// développement », le dernier, sauf si la grille montre déjà un logiciel. Inversé, le
+    /// filtre montre les images sans ce développement : la grille garde son choix.
     fn shown_render(&self) -> crate::grid_render::GridRender {
         use crate::grid_render::GridRender;
+        use tri::develop::DevelopedRule;
+        if self.filter_inverted {
+            return self.grid_render;
+        }
         match (self.grid_render, self.developed_rule) {
-            (
-                GridRender::Latest | GridRender::Engine(_),
-                Some(tri::develop::DevelopedRule::Engine(e)),
-            ) if !self.filter_inverted => GridRender::Engine(e),
+            (_, Some(DevelopedRule::Engine(e))) => GridRender::Engine(e),
+            (GridRender::Embedded | GridRender::LibRaw, Some(DevelopedRule::Any)) => {
+                GridRender::Latest
+            }
             (render, _) => render,
         }
     }
@@ -11302,18 +11311,25 @@ mod tests {
         // Un logiciel choisi pour la grille cède aussi au filtre.
         app.grid_render = GridRender::Engine(Engine::Darktable);
         assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
-        // JPEG boîtier et LibRaw, choisis exprès, restent ; inversé, le filtre ne joue pas.
+        // JPEG boîtier ou LibRaw aussi (second retour du 27/10/2026) ; inversé, le filtre
+        // ne joue pas.
+        for render in [GridRender::Embedded, GridRender::LibRaw] {
+            app.grid_render = render;
+            assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
+        }
         app.grid_render = GridRender::Embedded;
-        assert_eq!(app.shown_render(), GridRender::Embedded);
-        app.grid_render = GridRender::LibRaw;
-        assert_eq!(app.shown_render(), GridRender::LibRaw);
-        app.grid_render = GridRender::Latest;
         app.filter_inverted = true;
-        assert_eq!(app.shown_render(), GridRender::Latest);
-        // « Un développement » : le choix de la grille.
+        assert_eq!(app.shown_render(), GridRender::Embedded);
+        // « Un développement » : le dernier, sauf un logiciel choisi pour la grille.
         app.filter_inverted = false;
         app.developed_rule = Some(DevelopedRule::Any);
         assert_eq!(app.shown_render(), GridRender::Latest);
+        app.grid_render = GridRender::Engine(Engine::Darktable);
+        assert_eq!(app.shown_render(), GridRender::Engine(Engine::Darktable));
+        // Sans filtre : le choix de la grille.
+        app.developed_rule = None;
+        app.grid_render = GridRender::Embedded;
+        assert_eq!(app.shown_render(), GridRender::Embedded);
     }
 
     #[test]

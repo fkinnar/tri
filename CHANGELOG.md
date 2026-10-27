@@ -13,8 +13,8 @@
   names the software (issue #114).
 - **"Developed" filter**: a list in the filter bar and `f Shift+D`: any development, or
   developed in a given software (installed ones only); invertible, to see the images not
-  developed yet. Under "developed in" a software, the grid shows that software's
-  development.
+  developed yet. The grid then shows the developments: under "developed in" a
+  software, that software's one, whatever the grid's render.
 - **RapidRAW** as a second development software, next to darktable: `rapidraw export`
   applies its `.rrdata` sidecar; found in the PATH, the usual places, as an AppImage or a
   Flatpak (`[develop] rapidraw`). `[develop] default` = `"auto"` (latest development) or a
