@@ -409,6 +409,11 @@ empty-folder-gone = Le dossier « { $name } » n'est plus là (disque débranch�
 empty-folder-gone-back = Il se rouvrira de lui-même quand le disque reviendra.
 empty-no-folder = Choisissez un dossier dans le panneau de gauche (Maj+D l'affiche).
 empty-folder = Aucune image dans ce dossier.
+filter-toast = { $n ->
+    [one] 1 image
+   *[other] { $n } images
+}
+filter-toast-none = Aucune image
 empty-filtered = Aucune image pour ces filtres (f puis Échap pour les effacer).
 color-red = rouge
 color-yellow = jaune
@@ -758,7 +763,8 @@ panel-grid-render-filtered = Pour l'instant, le filtre « Développées » chois
 panel-grid-sort = Ordre
 panel-grid-files = Fichiers montrés
 panel-grid-stacks = Piles
-panel-grid-stacks-on = Regrouper les photos semblables en piles
+panel-grid-stacks-on = Empiler automatiquement
+panel-grid-stacks-tip = Les photos semblables qui se suivent (rafale, même cadrage) forment une pile, repliée sous sa meilleure photo.
 panel-grid-similarity = Similarité
 panel-grid-stack-enter = En entrant dans une pile :
 panel-grid-stack-cover = sa couverture

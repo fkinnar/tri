@@ -436,6 +436,9 @@ pub struct GridSettings {
     pub blur_slider: f32,
     /// Largeur du curseur de taille des vignettes, en bas de la grille (points).
     pub size_slider: f32,
+    /// Bulle du nombre d'images au milieu de l'écran après un changement de filtre :
+    /// durée (millisecondes ; 0 : jamais).
+    pub filter_toast_ms: u64,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -476,6 +479,7 @@ impl Default for GridSettings {
             blur_badge: true,
             blur_slider: 90.0,
             size_slider: 90.0,
+            filter_toast_ms: 1500,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,

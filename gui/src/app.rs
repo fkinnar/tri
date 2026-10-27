@@ -541,6 +541,10 @@ pub struct TriApp {
     side_cursor: Option<usize>,
     /// Touche à appliquer à l'élément pointé, au prochain dessin.
     side_key: Option<SideKey>,
+    /// Dossier et filtres vus au dernier dessin : un changement de filtre montre le
+    /// nombre d'images ([`TriApp::filter_toast`]), depuis cet instant.
+    filter_seen: (PathBuf, String),
+    filter_toast_at: Option<Instant>,
     /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
     scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
@@ -895,6 +899,8 @@ impl TriApp {
             side_items: Vec::new(),
             side_cursor: Some(0),
             side_key: None,
+            filter_seen: Default::default(),
+            filter_toast_at: None,
             scroll_to_cursor: false,
             help_search: None,
             help_lines: None,
@@ -1563,7 +1569,11 @@ impl TriApp {
         let mut stacking = self.stacking;
         if self
             .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
-            .on_hover_text(self.action_tip(Action::StackMode))
+            .on_hover_text(format!(
+                "{}\n{}",
+                t!("panel-grid-stacks-tip"),
+                self.action_tip(Action::StackMode)
+            ))
             .changed()
         {
             clicked.push(Action::StackMode);
@@ -8666,6 +8676,56 @@ impl TriApp {
 
     /// Filtres actifs en clair (« RAW · 3 étoiles et plus · sans les rejetées »).
     fn filter_summary(&self) -> String {
+        self.filter_parts(true)
+    }
+
+    /// Bulle du nombre d'images au milieu de la zone des images, quelques instants après
+    /// un changement de filtre (idée de l'utilisateur, 27/10/2026 : le nombre de la barre
+    /// d'état passe inaperçu ; un filtre qui ne laisse rien, « JPEG » dans un dossier de
+    /// RAW, se voyait mal). La recherche par nom n'en fait pas : son champ montre déjà le
+    /// nombre, et chaque lettre tapée la relancerait. `[gui.grid] filter_toast_ms`.
+    fn filter_toast(&mut self, ui: &mut Ui) {
+        let seen = (self.folder.dir.clone(), self.filter_parts(false));
+        if seen != self.filter_seen {
+            // Pas au changement de dossier : seulement quand le filtre change.
+            if seen.0 == self.filter_seen.0 {
+                self.filter_toast_at = Some(Instant::now());
+            }
+            self.filter_seen = seen;
+        }
+        let Some(at) = self.filter_toast_at else {
+            return;
+        };
+        let total = Duration::from_millis(self.gui.grid.filter_toast_ms);
+        let elapsed = at.elapsed();
+        if elapsed >= total {
+            self.filter_toast_at = None;
+            return;
+        }
+        // Le dernier tiers s'efface.
+        let left = (total - elapsed).as_secs_f32() / total.as_secs_f32();
+        let alpha = (left * 3.0).min(1.0);
+        let text = if self.files.is_empty() {
+            t!("filter-toast-none")
+        } else {
+            t!("filter-toast", n = self.files.len())
+        };
+        let painter = ui.painter();
+        let galley = painter.layout_no_wrap(
+            text,
+            FontId::proportional(self.gui.dialogs.title_size * 1.5),
+            Color32::WHITE.gamma_multiply(alpha),
+        );
+        let pad = self.gui.dialogs.spacing * 2.0;
+        let rect =
+            Rect::from_center_size(ui.max_rect().center(), galley.size() + vec2(pad, pad) * 2.0);
+        painter.rect_filled(rect, pad, Color32::from_black_alpha((170.0 * alpha) as u8));
+        painter.galley(rect.min + vec2(pad, pad), galley, Color32::WHITE);
+        ui.ctx().request_repaint();
+    }
+
+    /// Parties du résumé des filtres ; `name` : avec la recherche par nom.
+    fn filter_parts(&self, name: bool) -> String {
         let mut parts: Vec<String> = Vec::new();
         if self.filter != KindFilter::All {
             parts.push(filter_name(self.filter));
@@ -8702,7 +8762,7 @@ impl TriApp {
         if self.filter_inverted && self.content_filtered() {
             parts.push(t!("filter-bar-inverted"));
         }
-        if !self.name_query.trim().is_empty() {
+        if name && !self.name_query.trim().is_empty() {
             parts.push(t!("filter-summary-name", query = self.name_query.trim()));
         }
         if parts.is_empty() {
@@ -10541,6 +10601,7 @@ impl eframe::App for TriApp {
             } else {
                 self.grid(ui);
             }
+            self.filter_toast(ui);
         });
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         if self.help {
@@ -13530,6 +13591,30 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         h.run_steps(2);
         assert!(!h.state().panel_folded.contains("filters"));
+    }
+
+    #[test]
+    fn a_filter_change_shows_the_image_count_for_a_moment() {
+        // Idée de l'utilisateur, 27/10/2026 : « JPEG » seul dans un dossier de RAW ne
+        // laissait rien, sans qu'on le remarque.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert!(h.state().filter_toast_at.is_none(), "pas à l'ouverture");
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::FilterCycle);
+        h.run_steps(2);
+        assert!(h.state().filter_toast_at.is_some());
+        // La recherche par nom n'en fait pas (son champ montre déjà le nombre).
+        h.state_mut().filter_toast_at = None;
+        h.state_mut().name_query = "x".into();
+        h.state_mut().apply_filter();
+        h.run_steps(2);
+        assert!(h.state().filter_toast_at.is_none());
+        // Elle s'en va d'elle-même.
+        h.state_mut().gui.grid.filter_toast_ms = 0;
+        h.state_mut().perform(&ctx, Action::FilterCycle);
+        h.run_steps(2);
+        assert!(h.state().filter_toast_at.is_none());
     }
 
     #[test]

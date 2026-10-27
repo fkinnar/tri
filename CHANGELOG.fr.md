@@ -12,7 +12,9 @@
   (fichiers montrés, RAW et JPEG ; rendu, ordre, piles),
   EXIF en bas. Les sections du panneau des dossiers se replient aussi ; les sections
   repliées sont retenues. Titres des sections en majuscules, plus grands, à l'accent,
-  espacés (`[gui.folders] section_scale`, `section_gap`). **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
+  espacés (`[gui.folders] section_scale`, `section_gap`). Après un changement de filtre,
+  le nombre d'images s'affiche un instant au milieu de l'écran (`[gui.grid]
+  filter_toast_ms`). **Au clavier** (leader puis `l`) : ↑ ↓ parcourent
   aussi les réglages, Espace les actionne, ← → les font varier, Tab / Maj+Tab (`)` / `(`
   en vim) passent d'une section à l'autre, dans le panneau des dossiers aussi. `[gui.grid] stack_slider` et `clip_slider` disparaissent : retirez-les de votre fichier de configuration si vous les
   aviez réglés.

@@ -10,7 +10,9 @@
   only while it is on; two sliders for exposure; development software as check boxes),
   Grid (files shown, RAW and JPEG; thumbnail render, order, stacks), EXIF at the bottom. The folder panel's sections fold too; folded sections are
   remembered. Section titles in capitals, larger, in the accent colour, with a gap
-  between sections (`[gui.folders] section_scale`, `section_gap`). **From the keyboard** (leader then `l`): ↑ ↓ go through
+  between sections (`[gui.folders] section_scale`, `section_gap`). After a filter change,
+  the number of images shows a moment in the middle of the screen (`[gui.grid]
+  filter_toast_ms`). **From the keyboard** (leader then `l`): ↑ ↓ go through
   the settings too, Space uses them, ← → vary them, Tab / Shift+Tab (`)` / `(` in vim) go
   from section to section, in the folder panel too. `[gui.grid] stack_slider` and `clip_slider` are gone: remove them from your configuration file if you set them.
 - **Developments in the grid**: after developing, the grid can show each RAW's

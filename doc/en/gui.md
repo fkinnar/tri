@@ -587,6 +587,11 @@ system one ("cold" measurements, experiments).
     the "…" menu of narrow windows, which is gone), order (list and direction), stacks (check box, similarity,
     entering by the cover or the first photo, unfold / fold all, fine settings). Thumbnail
     size and info stay in the bottom bar (the user's choice, 2026-10-27).
+  - After a filter change, the **number of images** shows a moment in the middle of the
+    images area (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0: never; the
+    user's idea, 2026-10-27: "JPEG" alone in a folder of RAWs left nothing without it
+    being noticed). Not for the name search, whose field already shows the number, nor
+    when a folder opens.
   - Keys removed: `[gui.grid] stack_slider` and `clip_slider` (the panel
     sliders take its width); `blur_slider` is now only for the full screen bottom bar.
 - **Metadata panel** (2026-10-17), on the right, in the grid and in full screen

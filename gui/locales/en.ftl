@@ -407,6 +407,11 @@ empty-folder-gone = The folder "{ $name }" is no longer there (drive unplugged?)
 empty-folder-gone-back = It will open again by itself when the drive is back.
 empty-no-folder = Choose a folder in the left panel (Shift+D shows it).
 empty-folder = No image in this folder.
+filter-toast = { $n ->
+    [one] 1 image
+   *[other] { $n } images
+}
+filter-toast-none = No images
 empty-filtered = No image for these filters (f then Esc to clear them).
 color-red = red
 color-yellow = yellow
@@ -759,7 +764,8 @@ panel-grid-render-filtered = For now, the "Developed" filter chooses the render.
 panel-grid-sort = Order
 panel-grid-files = Files shown
 panel-grid-stacks = Stacks
-panel-grid-stacks-on = Group similar photos into stacks
+panel-grid-stacks-on = Stack automatically
+panel-grid-stacks-tip = Similar photos in a row (burst, same framing) form a stack, folded under its best photo.
 panel-grid-similarity = Similarity
 panel-grid-stack-enter = Entering a stack:
 panel-grid-stack-cover = its cover

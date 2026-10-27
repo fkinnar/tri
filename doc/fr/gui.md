@@ -620,6 +620,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     ordre (liste et sens), piles (case, similarité, entrée par la couverture ou la première photo,
     tout déplier / replier, réglages fins). Taille et infos des vignettes restent dans
     la barre du bas (choix de l'utilisateur, 27/10/2026).
+  - Après un changement de filtre, le **nombre d'images** s'affiche un instant au milieu
+    de la zone des images (`TriApp::filter_toast`, `[gui.grid] filter_toast_ms`, 0 :
+    jamais ; idée de l'utilisateur, 27/10/2026 : « JPEG » seul dans un dossier de RAW ne
+    laissait rien sans qu'on le remarque). Pas pour la recherche par nom, dont le champ
+    montre déjà le nombre, ni à l'ouverture d'un dossier.
   - Clés retirées : `[gui.grid] stack_slider` et `clip_slider` (les
     curseurs du panneau prennent sa largeur) ; `blur_slider` ne sert plus qu'à la barre
     du bas du plein écran.

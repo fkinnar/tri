@@ -537,6 +537,9 @@ blur_badge = true
 blur_slider = 90.0
 # Width of the thumbnail size slider at the bottom of the grid.
 size_slider = 90.0
+# Bubble with the number of images in the middle of the screen after a filter change:
+# duration (milliseconds; 0: never).
+filter_toast_ms = 1500
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
