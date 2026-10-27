@@ -15584,6 +15584,8 @@ mod tests {
         h.run_steps(3);
         // RapidRAW pas installé : on le dit.
         h.state_mut().developers = fake_darktable();
+        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        h.state_mut().filter_bar = false;
         let lead = |h: &mut Harness<'_, TriApp>| press(h, Key::B, Modifiers::CTRL);
         lead(&mut h);
         press(&mut h, Key::P, Modifiers::NONE);
@@ -15700,6 +15702,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
+        // Une seule liste déroulante, celle de la boîte (la barre des filtres a la sienne).
+        h.state_mut().filter_bar = false;
         let img0 = h.state().files[0].path.clone();
         std::fs::write(
             img0.with_file_name("img0.jpg.xmp"),
