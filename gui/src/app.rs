@@ -14551,7 +14551,18 @@ mod tests {
         press(&mut h, Key::L, Modifiers::NONE);
         assert_eq!(h.state().focus, Scope::Metadata);
         // Jusqu'à la dernière ligne (netteté comprise) ; le curseur ne passe que par les
-        // lignes (#77), Entrée ouvre l'histogramme en grand.
+        // lignes (#77), Entrée ouvre l'histogramme en grand. L'exposition de l'image est
+        // donnée ici plutôt qu'attendue du calcul en fond : sous forte charge (llvm-cov,
+        // compilation à côté), elle dépassait le délai (revue du 28/10/2026), et ce test
+        // porte sur le clavier, pas sur le calcul.
+        let shown = h.state().files[h.state().selected].path.clone();
+        let image = tri::bitmap::Bitmap {
+            width: 8,
+            height: 8,
+            data: vec![10; 8 * 8 * 3],
+        };
+        let exposure = Exposure::from_bitmap(&image, &Default::default());
+        h.state_mut().exposures.insert(shown, Arc::new(exposure));
         run_until(&mut h, |app| {
             app.meta_has_histogram && !app.meta_rows.is_empty()
         });
