@@ -204,3 +204,56 @@ Under the filter, the thumbnails show the checked software's development, whatev
 render chosen for the grid (feedback of 2026-10-27): the most recent one when several are
 checked (`DevelopedRule::engine_for`), the LibRaw render when none is; full screen opens on
 it. Inverted, the filter leaves the grid its render (`TriApp::shown_render`).
+
+## Other development software (research of 2026-10-28)
+
+What each program allows from the command line: a render without interface (what a
+render plugin needs), opening a folder ("Open in…"), and where it keeps the edits (to
+know an image was developed). From docs and man pages; what only comes from forums is
+marked.
+
+| Software | Render without interface | Open a folder | Edits | Linux |
+|---|---|---|---|---|
+| darktable | `darktable-cli` (integrated) | `darktable <folder>` (integrated) | `photo.raw.xmp` | yes |
+| RapidRAW | `rapidraw export` (integrated) | no: one image only | `photo.raw.rrdata` | yes |
+| RawTherapee | `rawtherapee-cli` | `rawtherapee <folder>` | `photo.raw.pp3` | yes |
+| ART | `ART-cli` | `ART <folder>` | `photo.raw.arp` | yes |
+| vkdt | `vkdt-cli` (GPU) | unverified | `photo.raw.cfg` (forum) | yes |
+| digiKam / showFoto | no | `showfoto <folder>` | XMP | yes |
+| Lightroom Classic | no | files as arguments → import dialog | catalog, XMP `crs:` optional | no |
+| Lightroom (cloud) | no | no | in the cloud | no |
+| Capture One | no (AppleScript on macOS) | no (forum) | `CaptureOne/Settings…/*.cos` (sessions) | no |
+| DxO PhotoLab / PureRAW | no | no | `photo.raw.dop` (forum) | no |
+| ON1 Photo RAW | no | no | database, optional `.on1` | no |
+| Photomator | no | no | sidecars in Pictures / iCloud | no |
+| Luminar Neo | no | no | catalog | no |
+| Exposure X7 | no | no | `.exposurex7` in a subfolder | no |
+| NX Studio | no | no | `NKSC_PARAM/*.nksc` | no |
+
+- **RawTherapee and ART** are the only candidates for a plugin like darktable's: render
+  with `rawtherapee-cli -o out.jpg -s -j92 -Y -c photo.raf` (`-s`: the sidecar; `-c`
+  last), the same for `ART-cli` with the `.arp`. No size option: it would have to come
+  from a profile (`-p`). Opening a folder is documented; the behaviour with an instance
+  already open is not (to try, given darktable on macOS). The user's decision: later,
+  not urgent.
+- **vkdt**: `vkdt-cli -g photo.raf.cfg --filename out --format o-jpg --width 2560
+  --height 2560`, on the graphics card (Vulkan); Windows not mentioned.
+- **Commercial software**: none can be driven from the command line for a render. At
+  best, recognise their sidecars to mark "developed in…", without showing their render.
+  Lightroom Classic takes files as arguments (import dialog, broken when it is already
+  open according to FastRawViewer); Capture One has an AppleScript dictionary, said to
+  be incomplete.
+- "Open in…" therefore stays with darktable (and one day RawTherapee / ART).
+
+Sources: [RawTherapee](https://rawpedia.rawtherapee.com/Command-Line_Options),
+[ART](https://manpages.opensuse.org/Tumbleweed/ART/ART.1.en.html),
+[vkdt](https://github.com/hanatos/vkdt),
+[showFoto](https://dyn.manpages.debian.org/trixie/showfoto/showfoto.1.en.html),
+[darktable](https://www.mankier.com/1/darktable),
+[Lightroom Classic, XMP and ACR](https://helpx.adobe.com/au/lightroom-classic/desktop/organize-photos-in-lightroom-classic/create-xmp-acr-files.html),
+[Lightroom Classic started by FastRawViewer](https://fastrawviewer.com/node/855),
+[Capture One, AppleScript](https://support.captureone.com/hc/en-us/articles/360002681418),
+[DxO (forum)](https://forum.dxo.com/t/automation-using-cli/36444),
+[Exposure](https://support.exposure.software/hc/en-us/articles/360005225913-How-large-are-Exposure-s-sidecar-files),
+[NX Studio](https://nikonimglib.com/nxstdo/onlinehelp/en/save_80.html),
+[Photomator](https://support.pixelmator.com/faq-photomator/advanced-workflows/save-photomator-linked-files-to-an-alternate-location-on-mac).

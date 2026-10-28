@@ -211,3 +211,56 @@ soit le rendu choisi pour la grille (retours du 27/10/2026) : le plus récent s'
 plusieurs (`DevelopedRule::engine_for`), le rendu LibRaw si aucun n'est coché ; le plein
 écran s'ouvre dessus. Inversé, le filtre laisse à la grille son rendu
 (`TriApp::shown_render`).
+
+## Autres logiciels de développement (recherche du 28/10/2026)
+
+Ce que chaque logiciel permet depuis la ligne de commande : un rendu sans interface (ce
+dont a besoin un plugin de rendu), l'ouverture d'un dossier (« Ouvrir dans… »), et
+l'endroit où il range les retouches (pour savoir qu'une image a été développée).
+D'après les docs et pages de manuel ; ce qui ne vient que de forums est signalé.
+
+| Logiciel | Rendu sans interface | Ouvrir un dossier | Retouches | Linux |
+|---|---|---|---|---|
+| darktable | `darktable-cli` (intégré) | `darktable <dossier>` (intégré) | `photo.raw.xmp` | oui |
+| RapidRAW | `rapidraw export` (intégré) | non : une image seulement | `photo.raw.rrdata` | oui |
+| RawTherapee | `rawtherapee-cli` | `rawtherapee <dossier>` | `photo.raw.pp3` | oui |
+| ART | `ART-cli` | `ART <dossier>` | `photo.raw.arp` | oui |
+| vkdt | `vkdt-cli` (GPU) | non vérifié | `photo.raw.cfg` (forum) | oui |
+| digiKam / showFoto | non | `showfoto <dossier>` | XMP | oui |
+| Lightroom Classic | non | fichiers en argument → boîte d'import | catalogue, XMP `crs:` en option | non |
+| Lightroom (cloud) | non | non | dans le nuage | non |
+| Capture One | non (AppleScript sous macOS) | non (forum) | `CaptureOne/Settings…/*.cos` (sessions) | non |
+| DxO PhotoLab / PureRAW | non | non | `photo.raw.dop` (forum) | non |
+| ON1 Photo RAW | non | non | base, `.on1` en option | non |
+| Photomator | non | non | sidecars dans Images / iCloud | non |
+| Luminar Neo | non | non | catalogue | non |
+| Exposure X7 | non | non | `.exposurex7` dans un sous-dossier | non |
+| NX Studio | non | non | `NKSC_PARAM/*.nksc` | non |
+
+- **RawTherapee et ART** sont les seuls candidats à un plugin comme darktable : rendu
+  `rawtherapee-cli -o sortie.jpg -s -j92 -Y -c photo.raf` (`-s` : le sidecar ; `-c` en
+  dernier), même chose pour `ART-cli` avec le `.arp`. Pas d'option de taille : il
+  faudrait la donner par un profil (`-p`). Ouverture d'un dossier documentée ; le
+  comportement avec une instance déjà ouverte n'est pas documenté (à essayer, vu
+  darktable sous macOS). Décision de l'utilisateur : plus tard, pas urgent.
+- **vkdt** : `vkdt-cli -g photo.raf.cfg --filename sortie --format o-jpg --width 2560
+  --height 2560`, sur la carte graphique (Vulkan) ; Windows non mentionné.
+- **Logiciels commerciaux** : aucun ne se pilote en ligne de commande pour un rendu.
+  Au mieux, reconnaître leurs sidecars pour marquer « développé dans… », sans afficher
+  leur rendu. Lightroom Classic accepte des fichiers en argument (boîte d'import, cassé
+  quand il est déjà ouvert selon FastRawViewer) ; Capture One a un dictionnaire
+  AppleScript, réputé incomplet.
+- « Ouvrir dans… » reste donc à darktable (et un jour RawTherapee / ART).
+
+Sources : [RawTherapee](https://rawpedia.rawtherapee.com/Command-Line_Options),
+[ART](https://manpages.opensuse.org/Tumbleweed/ART/ART.1.en.html),
+[vkdt](https://github.com/hanatos/vkdt),
+[showFoto](https://dyn.manpages.debian.org/trixie/showfoto/showfoto.1.en.html),
+[darktable](https://www.mankier.com/1/darktable),
+[Lightroom Classic, XMP et ACR](https://helpx.adobe.com/au/lightroom-classic/desktop/organize-photos-in-lightroom-classic/create-xmp-acr-files.html),
+[Lightroom Classic lancé par FastRawViewer](https://fastrawviewer.com/node/855),
+[Capture One, AppleScript](https://support.captureone.com/hc/en-us/articles/360002681418),
+[DxO (forum)](https://forum.dxo.com/t/automation-using-cli/36444),
+[Exposure](https://support.exposure.software/hc/en-us/articles/360005225913-How-large-are-Exposure-s-sidecar-files),
+[NX Studio](https://nikonimglib.com/nxstdo/onlinehelp/en/save_80.html),
+[Photomator](https://support.pixelmator.com/faq-photomator/advanced-workflows/save-photomator-linked-files-to-an-alternate-location-on-mac).
