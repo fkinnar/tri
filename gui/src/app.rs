@@ -167,6 +167,8 @@ pub struct TriApp {
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Recherche d'une mise à jour (sur demande) : en cours, ou son résultat affiché.
     update: Option<UpdateCheck>,
+    /// Recherche du paquet à télécharger (boutons de l'aide), dans un fil à part.
+    download: Option<std::thread::JoinHandle<Result<tri::update::Download, String>>>,
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -722,6 +724,7 @@ impl TriApp {
             eject_failed: None,
             eject_dialog: None,
             update: None,
+            download: None,
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
@@ -2424,6 +2427,48 @@ impl TriApp {
             result
         });
         self.update = Some(UpdateCheck::Running(handle));
+    }
+
+    /// Cherche le paquet de `track` pour ce système dans un fil à part (liste des
+    /// versions, quelques secondes au plus) ; le navigateur le télécharge ensuite
+    /// ([`TriApp::finish_download`]).
+    fn start_download(&mut self, ctx: &egui::Context, track: tri::update::Track) {
+        if self.download.is_some() {
+            return;
+        }
+        let settings = self.settings.update.clone();
+        let repaint = ctx.clone();
+        self.download = Some(std::thread::spawn(move || {
+            let result = tri::update::download(track, &settings).map_err(|e| e.to_string());
+            repaint.request_repaint();
+            result
+        }));
+        self.notice = Some((t!("download-searching"), false));
+    }
+
+    /// Fin de [`TriApp::start_download`] : le navigateur ouvre le paquet (ou la page de
+    /// la version) ; une erreur va dans la barre d'état.
+    fn finish_download(&mut self, ctx: &egui::Context) {
+        if !self.download.as_ref().is_some_and(|h| h.is_finished()) {
+            if self.download.is_some() {
+                ctx.request_repaint_after(Duration::from_millis(100));
+            }
+            return;
+        }
+        let Some(handle) = self.download.take() else {
+            return;
+        };
+        match handle.join().unwrap_or_else(|_| Err("?".to_string())) {
+            Ok(download) => {
+                ctx.open_url(egui::OpenUrl::new_tab(&download.url));
+                let text = match &download.name {
+                    Some(name) => t!("download-started", name = name.as_str()),
+                    None => t!("download-page", version = download.version.as_str()),
+                };
+                self.notice = Some((text, false));
+            }
+            Err(e) => self.notice = Some((e, true)),
+        }
     }
 
     /// Boîte de la recherche d'une mise à jour : en cours, dernière version, ou version
@@ -10253,6 +10298,7 @@ impl TriApp {
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
         let mut check_update = false;
+        let mut download = None;
         let mut report = false;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
@@ -10309,8 +10355,8 @@ impl TriApp {
                 ui.set_width(width);
                 // Version (en évidence et copiable, issue n° 7 : on la recopie dans un
                 // signalement), recherche d'une mise à jour (sur demande seulement) et
-                // formulaire de signalement prérempli.
-                ui.horizontal(|ui| {
+                // formulaire de signalement prérempli ; à la ligne dans une fenêtre étroite.
+                ui.horizontal_wrapped(|ui| {
                     ui.label(egui::RichText::new(format!("tri {}", self.build.label())).strong());
                     let (rect, copy) = crate::marks::clickable(ui, 14.0, &t!("help-copy-version"));
                     let back = ui.visuals().panel_fill;
@@ -10326,6 +10372,29 @@ impl TriApp {
                         .clicked()
                     {
                         check_update = true;
+                    }
+                    // Télécharger (retour du 28/10/2026, pour les testeurs) : le build de
+                    // nuit ou la dernière version publiée, le paquet de ce système.
+                    let stage = tri::update::stage(&self.build.version);
+                    for (track, text, tip) in [
+                        (
+                            tri::update::Track::Nightly,
+                            t!("download-nightly"),
+                            t!("download-nightly-tip"),
+                        ),
+                        (
+                            tri::update::Track::Release,
+                            t!("download-release", stage = stage),
+                            t!("download-release-tip", stage = stage),
+                        ),
+                    ] {
+                        if ui
+                            .add_enabled(self.download.is_none(), egui::Button::new(text).small())
+                            .on_hover_text(tip)
+                            .clicked()
+                        {
+                            download = Some(track);
+                        }
                     }
                     let keys = self.keymap.keys_for(Action::ReportIssue).join(", ");
                     if ui
@@ -10422,6 +10491,9 @@ impl TriApp {
         self.help_lines = Some(lines);
         self.help_search = Some(query);
         self.help = open;
+        if let Some(track) = download {
+            self.start_download(ctx, track);
+        }
         if check_update {
             self.check_update(ctx);
         }
@@ -10747,6 +10819,7 @@ impl eframe::App for TriApp {
         self.poll_export();
         self.eject_dialog(&ctx);
         self.update_dialog(&ctx);
+        self.finish_download(&ctx);
         self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
@@ -13983,6 +14056,22 @@ mod tests {
         press(&mut h, Key::Num2, Modifiers::NONE);
         assert!(h.state().note_error.is_some());
         assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), "<pas du xml");
+    }
+
+    #[test]
+    fn the_help_offers_the_nightly_and_the_latest_version() {
+        // Retour du 28/10/2026 : deux boutons, le build de nuit et la dernière alpha (le
+        // nom suit le stade de la version), avec une bulle qui explique la différence.
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::F1, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.query_by_label("Télécharger le build de nuit").is_some());
+        let stage = match tri::update::stage(env!("CARGO_PKG_VERSION")) {
+            "alpha" => "Télécharger la dernière alpha",
+            "beta" => "Télécharger la dernière bêta",
+            _ => "Télécharger la dernière version",
+        };
+        assert!(h.query_by_label(stage).is_some(), "{stage}");
     }
 
     #[test]

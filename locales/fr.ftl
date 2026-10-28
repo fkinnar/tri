@@ -285,3 +285,4 @@ update-build-behind = { $count ->
    *[other] La branche main a { $count } commits de plus : git pull, puis recompiler.
 }
 update-build-unknown = Impossible de comparer avec la branche main (commit inconnu, ou pas encore poussé).
+update-nothing-published = rien de publié pour ce système

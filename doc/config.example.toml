@@ -247,6 +247,10 @@ timeout_s = 10
 # Bouton « Signaler un problème » de l'aide : formulaire de GitHub, prérempli avec la
 # version et le système.
 issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
+# Boutons « Télécharger » de l'aide (build de nuit, dernière version) : formats de
+# paquet préférés, dans l'ordre ; le premier publié pour ce système l'emporte, sinon la
+# page de la version s'ouvre.
+formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
 [watch]
 # Surveillance du dossier ouvert (ms) : images ajoutées, retirées ou modifiées, notes XMP

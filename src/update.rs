@@ -26,6 +26,9 @@ pub struct UpdateSettings {
     /// Formulaire de signalement d'un problème (issue n° 7) : version et système y sont
     /// ajoutés en paramètres, qui préremplissent les champs du même nom.
     pub issue_url: String,
+    /// Boutons « Télécharger » de l'aide : formats de paquet préférés, dans l'ordre (le
+    /// premier publié pour ce système l'emporte).
+    pub formats: Vec<String>,
 }
 
 impl Default for UpdateSettings {
@@ -35,6 +38,9 @@ impl Default for UpdateSettings {
             compare_url: "https://api.github.com/repos/fkinnar/tri/compare/{commit}...main".into(),
             timeout_s: 10,
             issue_url: "https://github.com/fkinnar/tri/issues/new?template=bug.yml".into(),
+            formats: ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
+                .map(String::from)
+                .to_vec(),
         }
     }
 }
@@ -48,6 +54,106 @@ pub struct Release {
     pub url: String,
     /// Notes de la version (Markdown).
     pub notes: String,
+    /// Fichiers publiés (paquets de chaque système).
+    pub assets: Vec<Asset>,
+}
+
+/// Un fichier d'une version publiée.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Asset {
+    /// Nom (« tri-1.0.0-alpha.7-macos-arm64.dmg »).
+    pub name: String,
+    /// Adresse de téléchargement.
+    pub url: String,
+}
+
+/// Tag de la Release des builds de nuit (remplacée chaque nuit par la CI).
+pub const NIGHTLY_TAG: &str = "nightly";
+
+/// Ce qu'on télécharge (boutons de l'aide, retour du 28/10/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Track {
+    /// Le build de nuit : le dernier état de `main`, testé par la CI mais pas publié.
+    Nightly,
+    /// La dernière version publiée (alpha, bêta ou finale).
+    Release,
+}
+
+/// Le fichier à télécharger : nom et adresse, ou la page de la version si aucun paquet
+/// ne convient à ce système.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Download {
+    /// Version (« 1.0.0-alpha.7 », « nightly »).
+    pub version: String,
+    /// Nom du fichier, `None` pour la page de la version.
+    pub name: Option<String>,
+    /// Adresse à ouvrir dans le navigateur.
+    pub url: String,
+}
+
+/// Stade de la version `version` : « alpha », « beta », ou « final » (sans préversion),
+/// pour nommer le bouton « dernière alpha ».
+pub fn stage(version: &str) -> &'static str {
+    let pre = version.split_once('-').map_or("", |(_, pre)| pre);
+    if pre.starts_with("alpha") {
+        "alpha"
+    } else if pre.starts_with("beta") {
+        "beta"
+    } else {
+        "final"
+    }
+}
+
+/// Plateforme de ce binaire telle qu'elle apparaît dans le nom des paquets de la CI
+/// (`macos-arm64`, `windows-x64`, `linux-x86_64`).
+pub fn platform() -> String {
+    platform_of(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn platform_of(os: &str, arch: &str) -> String {
+    let arch = match (os, arch) {
+        ("macos", "aarch64") => "arm64",
+        ("windows", "x86_64") => "x64",
+        (_, arch) => arch,
+    };
+    format!("{os}-{arch}")
+}
+
+/// Le fichier de `track` parmi `releases` pour `platform`, au premier format de
+/// `formats` publié ; la page de la version sinon. `None` : rien de publié.
+pub fn pick_download(
+    releases: &[Release],
+    track: Track,
+    platform: &str,
+    formats: &[String],
+) -> Option<Download> {
+    let release = match track {
+        Track::Nightly => releases.iter().find(|r| r.version == NIGHTLY_TAG)?,
+        Track::Release => releases
+            .iter()
+            .filter_map(|r| Version::parse(&r.version).map(|v| (v, r)))
+            .max_by(|(a, _), (b, _)| a.cmp(b))
+            .map(|(_, r)| r)?,
+    };
+    let asset = formats.iter().find_map(|format| {
+        release.assets.iter().find(|a| {
+            a.name.contains(&format!("-{platform}"))
+                && a.name
+                    .to_lowercase()
+                    .ends_with(&format!(".{}", format.to_lowercase()))
+        })
+    });
+    Some(Download {
+        version: release.version.clone(),
+        name: asset.map(|a| a.name.clone()),
+        url: asset.map_or_else(|| release.url.clone(), |a| a.url.clone()),
+    })
+}
+
+/// Cherche le fichier de `track` pour ce système (liste des versions par `curl`).
+pub fn download(track: Track, settings: &UpdateSettings) -> Result<Download, UpdateError> {
+    let releases = fetch(settings)?;
+    pick_download(&releases, track, &platform(), &settings.formats).ok_or(UpdateError::Nothing)
 }
 
 /// Marque, dans les notes d'une Release, le début de la partie française (22/10/2026) :
@@ -233,6 +339,8 @@ pub enum UpdateError {
     Request(String),
     /// Réponse illisible.
     Format(String),
+    /// Rien de publié pour ce qu'on veut télécharger.
+    Nothing,
 }
 
 impl fmt::Display for UpdateError {
@@ -241,6 +349,7 @@ impl fmt::Display for UpdateError {
             Self::NoCurl(e) => write!(f, "{}", crate::t!("update-no-curl", error = e.to_string())),
             Self::Request(m) => write!(f, "{}", crate::t!("update-request-failed", error = m)),
             Self::Format(m) => write!(f, "{}", crate::t!("update-bad-answer", error = m)),
+            Self::Nothing => write!(f, "{}", crate::t!("update-nothing-published")),
         }
     }
 }
@@ -314,6 +423,13 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, UpdateError> {
         body: Option<String>,
         #[serde(default)]
         draft: bool,
+        #[serde(default)]
+        assets: Vec<Item2>,
+    }
+    #[derive(Deserialize)]
+    struct Item2 {
+        name: String,
+        browser_download_url: String,
     }
     let items: Vec<Item> =
         serde_json::from_str(json).map_err(|e| UpdateError::Format(e.to_string()))?;
@@ -324,6 +440,14 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, UpdateError> {
             version: i.tag_name.trim_start_matches('v').to_string(),
             url: i.html_url,
             notes: i.body.unwrap_or_default(),
+            assets: i
+                .assets
+                .into_iter()
+                .map(|a| Asset {
+                    name: a.name,
+                    url: a.browser_download_url,
+                })
+                .collect(),
         })
         .collect())
 }
@@ -440,11 +564,68 @@ mod tests {
     }
 
     #[test]
+    fn the_download_is_the_package_of_this_system() {
+        let json = r#"[
+          {"tag_name": "nightly", "html_url": "https://g/nightly", "draft": false, "assets": [
+            {"name": "tri-1.0.0-alpha.7-nightly-20261028-9190669-linux-x86_64.AppImage",
+             "browser_download_url": "https://g/n.AppImage"},
+            {"name": "tri-1.0.0-alpha.7-nightly-20261028-9190669-linux-x86_64.tar.gz",
+             "browser_download_url": "https://g/n.tar.gz"},
+            {"name": "tri-1.0.0-alpha.7-nightly-20261028-9190669-macos-arm64.dmg",
+             "browser_download_url": "https://g/n.dmg"}]},
+          {"tag_name": "v1.0.0-alpha.7", "html_url": "https://g/a7", "assets": [
+            {"name": "tri-1.0.0-alpha.7-linux-x86_64.tar.gz",
+             "browser_download_url": "https://g/a7.tar.gz"},
+            {"name": "tri-1.0.0-alpha.7-windows-x64.zip", "browser_download_url": "https://g/a7.zip"},
+            {"name": "tri-1.0.0-alpha.7-windows-x64.msi", "browser_download_url": "https://g/a7.msi"}]},
+          {"tag_name": "v1.0.0-alpha.6", "html_url": "https://g/a6", "assets": []}
+        ]"#;
+        let releases = parse_releases(json).unwrap();
+        let formats = UpdateSettings::default().formats;
+        let pick = |track, platform: &str| pick_download(&releases, track, platform, &formats);
+        // Nuit sous Linux : l'AppImage avant l'archive ; sous macOS, le .dmg.
+        let n = pick(Track::Nightly, "linux-x86_64").unwrap();
+        assert_eq!(n.url, "https://g/n.AppImage");
+        assert_eq!(
+            pick(Track::Nightly, "macos-arm64").unwrap().url,
+            "https://g/n.dmg"
+        );
+        // Dernière version (alpha.7, pas alpha.6 ni la nuit) : le .msi avant le .zip.
+        let a = pick(Track::Release, "windows-x64").unwrap();
+        assert_eq!(
+            (a.version.as_str(), a.url.as_str()),
+            ("1.0.0-alpha.7", "https://g/a7.msi")
+        );
+        assert_eq!(
+            pick(Track::Release, "linux-x86_64").unwrap().url,
+            "https://g/a7.tar.gz"
+        );
+        // Aucun paquet pour ce système : la page de la version.
+        let none = pick(Track::Release, "macos-arm64").unwrap();
+        assert_eq!((none.name, none.url.as_str()), (None, "https://g/a7"));
+        assert_eq!(
+            pick_download(&[], Track::Nightly, "linux-x86_64", &formats),
+            None
+        );
+    }
+
+    #[test]
+    fn the_platform_is_spelled_like_the_packages() {
+        assert_eq!(platform_of("macos", "aarch64"), "macos-arm64");
+        assert_eq!(platform_of("windows", "x86_64"), "windows-x64");
+        assert_eq!(platform_of("linux", "x86_64"), "linux-x86_64");
+        assert_eq!(stage("1.0.0-alpha.7"), "alpha");
+        assert_eq!(stage("1.0.0-beta.1"), "beta");
+        assert_eq!(stage("1.0.0"), "final");
+    }
+
+    #[test]
     fn release_notes_follow_the_language() {
         let release = |notes: &str| Release {
             version: "1.0.0".into(),
             url: String::new(),
             notes: notes.into(),
+            assets: Vec::new(),
         };
         let both = release(
             "- **Crop**: fixed\n\n<!-- tri:fr -->\n<details><summary>Français</summary>\n\n- **Recadrage** : corrigé\n\n</details>\n",
