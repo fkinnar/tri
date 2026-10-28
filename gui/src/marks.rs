@@ -827,6 +827,40 @@ pub fn refresh(painter: &Painter, rect: Rect, color: Color32) {
     painter.add(Shape::convex_polygon(head, color, Stroke::NONE));
 }
 
+/// Sous-dossiers dans `rect` : un dossier en haut, relié par une arborescence à trois
+/// dossiers plus petits en dessous.
+pub fn subfolders(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.07).max(1.0), color);
+    // Un dossier plein (onglet et corps), coin haut gauche (x, y), largeur `s` et hauteur
+    // `t` (en fraction de `rect`).
+    let folder = |x: f32, y: f32, s: f32, t: f32| {
+        painter.add(Shape::convex_polygon(
+            vec![
+                p(x, y),
+                p(x + s * 0.4, y),
+                p(x + s * 0.5, y + t * 0.2),
+                p(x + s, y + t * 0.2),
+                p(x + s, y + t),
+                p(x, y + t),
+            ],
+            color,
+            Stroke::NONE,
+        ));
+    };
+    folder(0.25, 0.0, 0.5, 0.38);
+    for x in [0.0, 0.36, 0.72] {
+        folder(x, 0.74, 0.28, 0.26);
+    }
+    // Tige sous le parent, barre, et une descente vers chaque petit dossier.
+    painter.line_segment([p(0.5, 0.38), p(0.5, 0.74)], stroke);
+    painter.add(Shape::line(
+        vec![p(0.14, 0.74), p(0.14, 0.56), p(0.86, 0.56), p(0.86, 0.74)],
+        stroke,
+    ));
+}
+
 /// Triangle d'une branche d'arborescence, dans `rect` : vers le bas si `open`, sinon vers
 /// la droite (dessiné : « ▶ » manque dans la police d'egui).
 pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {

@@ -57,8 +57,8 @@ system one ("cold" measurements, experiments).
   external drives, mounted or not: an unmounted one is greyed, a click or `o` mounts
   then opens it, right click "Mount" / "Eject", 2026-10-26, #113), fixed drives,
   network, personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
-  then only the system (root, collapsed); **Subfolders** checkbox (2026-10-20,
-  remembered): images of subfolders are shown too (`[gui.folders] subfolders_depth`
+  then only the system (root, collapsed); **Subfolders** icon next to the title (2026-10-20,
+  remembered; a checkbox until 2026-10-28, Refresh moved to the right edge): images of subfolders are shown too (`[gui.folders] subfolders_depth`
   levels), read on demand by the engine (`places::Tree`, see [places.md](places.md)). The
   triangle expands or collapses (double-clicking the name too), a click on the name opens
   the folder without restarting (`folder::Folder`, see [folder.md](folder.md)): the
