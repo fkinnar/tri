@@ -14194,27 +14194,27 @@ mod tests {
         press(&mut h, Key::F, Modifiers::SHIFT);
         // Deux interrupteurs : JPEG éteint, les RAW seuls ; rallumé, tout ; RAW éteint,
         // les JPEG seuls ; le dernier allumé ne s'éteint pas.
-        h.get_by_label("JPEG").click();
+        click_settled(&mut h, "JPEG");
         h.run_steps(3);
         assert_eq!(
             h.state().filter,
             KindFilter::RawOnly,
             "clic : même action que le clavier"
         );
-        h.get_by_label("JPEG").click();
+        click_settled(&mut h, "JPEG");
         h.run_steps(3);
         assert_eq!(h.state().filter, KindFilter::All);
-        h.get_by_label("RAW").click();
+        click_settled(&mut h, "RAW");
         h.run_steps(3);
         assert_eq!(h.state().filter, KindFilter::FlatOnly);
-        h.get_by_label("JPEG").click();
+        click_settled(&mut h, "JPEG");
         h.run_steps(3);
         assert_eq!(
             h.state().filter,
             KindFilter::FlatOnly,
             "un des deux reste allumé"
         );
-        h.get_by_label("Effacer").click();
+        click_settled(&mut h, "Effacer");
         h.run_steps(3);
         assert_eq!(h.state().filter, KindFilter::All);
     }
@@ -15712,6 +15712,27 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// Clique l'élément de libellé `label` une fois sa place stable (même rectangle sur
+    /// plusieurs images de suite) : un résultat de fond arrivé entre la lecture de la
+    /// place et le clic décalait la mise en page, et le clic tombait à côté (CI Windows,
+    /// 28/10/2026, deux fois).
+    #[track_caller]
+    fn click_settled(h: &mut Harness<'_, TriApp>, label: &str) {
+        const STABLE: usize = 5;
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut last = h.get_by_label(label).rect();
+        let mut same = 0;
+        while same < STABLE {
+            assert!(Instant::now() < deadline, "« {label} » ne se stabilise pas");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+            let rect = h.get_by_label(label).rect();
+            same = if rect == last { same + 1 } else { 0 };
+            last = rect;
+        }
+        h.get_by_label(label).click();
     }
 
     /// Attend qu'un élément de libellé `label` soit affiché (une fenêtre egui peut demander
