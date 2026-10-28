@@ -114,6 +114,26 @@ pub fn photo_button(rect: Rect, dot: f32) -> Rect {
     scale.translate(vec2(-(scale.width() + dot * 0.6), 0.0))
 }
 
+/// Bouton de la courbe du JPEG boîtier : à gauche du bouton de la photo, même taille.
+pub fn camera_button(rect: Rect, dot: f32) -> Rect {
+    let photo = photo_button(rect, dot);
+    photo.translate(vec2(-(photo.width() + dot * 0.6), 0.0))
+}
+
+/// Icône d'un appareil photo (boîtier, viseur, objectif) dans `rect`.
+pub fn camera_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.12);
+    let stroke = Stroke::new((rect.width() * 0.08).max(1.2), color);
+    let body = Rect::from_min_max(pos2(r.left(), r.top() + r.height() * 0.25), r.max);
+    painter.rect_stroke(body, 2.0, stroke, egui::StrokeKind::Middle);
+    let hump = Rect::from_min_max(
+        pos2(r.left() + r.width() * 0.3, r.top() + r.height() * 0.08),
+        pos2(r.left() + r.width() * 0.62, body.top()),
+    );
+    painter.rect_stroke(hump, 1.0, stroke, egui::StrokeKind::Middle);
+    painter.circle_stroke(body.center(), body.height() * 0.28, stroke);
+}
+
 /// Icône d'une photo (cadre, montagne, soleil) dans `rect`.
 pub fn photo_icon(painter: &Painter, rect: Rect, color: Color32) {
     let r = rect.shrink(rect.width() * 0.12);
@@ -203,7 +223,8 @@ pub fn draw(
         source = source,
         headroom = decimal(e.headroom_ev() as f64, 2)
     );
-    let dots = 4.0 * settings.channel_dot * 1.6 + 6.0;
+    // Place des pastilles et des boutons, à droite de la ligne des indicateurs.
+    let dots = rect.max.x - camera_button(rect, settings.channel_dot).min.x + 6.0;
     let galley = painter.layout(
         text,
         FontId::proportional(11.0),
@@ -319,20 +340,12 @@ pub fn draw(
             .enumerate()
             .map(|(i, &v)| pos2(graph.min.x + (i as f32 + 0.5) * class_w, y(v)))
             .collect();
+        // Légende : une ligne sous les canaux dans le grand histogramme, la bulle d'aide
+        // en petit.
         painter.add(eframe::egui::Shape::line(
             points,
             Stroke::new(settings.camera_width, Color32::from(colors.hist_camera)),
         ));
-        // Légende, dans le grand histogramme (en petit, la bulle d'aide le dit).
-        if details {
-            painter.text(
-                graph.left_top() + vec2(4.0, 2.0),
-                Align2::LEFT_TOP,
-                t!("histogram-camera-legend"),
-                FontId::proportional(11.0),
-                Color32::from(colors.hist_camera),
-            );
-        }
     }
     // Graduations.
     let grid = Stroke::new(1.0, Color32::from_white_alpha(40));

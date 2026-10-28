@@ -608,15 +608,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   quittent `Tree::rows`, donc aussi le curseur clavier). Sections repliées des deux
   panneaux retenues d'une session à l'autre (`gui-state.toml`, `panel_folded` :
   `grid`, `exif`, `folders-personal`…).
-  - *Filtres* : chaque filtre réglable avec une case (comme son icône de la barre), ses
+  - *Filtres* : d'abord les fichiers montrés, RAW et JPEG (deux cases sans titre, l'une
+    reste cochée ; dans la barre des filtres jusqu'au 27/10/2026, puis une journée dans
+    la section Grille ; retour du 28/10/2026), puis chaque filtre réglable avec une case (comme son icône de la barre), ses
     réglages seulement quand il est allumé : sévérité du flou ; **deux curseurs** pour
     l'exposition (brûlé et bouché, à la place d'un curseur et d'un interrupteur) ;
     logiciels de développement en **cases à plat**. Sous chaque curseur, « plus souple »
     à gauche, « plus strict » à droite. La bulle des icônes de la barre dit où sont les
     réglages.
-  - *Grille* : ordre (liste et sens ; en tête de la section, retour du 27/10/2026),
-    fichiers montrés, RAW et JPEG (deux cases, l'une reste cochée ; dans la barre des
-    filtres jusqu'au 27/10/2026), rendu des vignettes en boutons radio (à la place de la
+  - *Grille* : tri (liste et sens ; en tête de la section, retour du 27/10/2026 ; titre
+    « Ordre » jusqu'au 28/10/2026), rendu des vignettes en boutons radio (à la place de la
     liste cachée dans le menu « … » des fenêtres étroites, qui disparaît), piles (case,
     similarité, tout déplier / replier, réglages fins). Restent dans la barre du bas
     (choix de l'utilisateur, 27/10/2026, pas de doublon) : taille et infos des
@@ -657,14 +658,19 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     saturation** par défaut (`Maj+I` : linéaire), graduations, pastilles rouge / bleue si
     des pixels sont saturés / bouchés, et en clair : profondeur du RAW, marge avant
     saturation, parts saturées et bouchées ;
-  - **JPEG boîtier en trait fin** (27/10/2026, idée de l'utilisateur) : pour un RAW, la
+  - **JPEG boîtier en trait fin gris** (27/10/2026, idée de l'utilisateur) : pour un RAW, la
     courbe du JPEG boîtier (tous canaux, ou le canal choisi) par-dessus celle du capteur,
     à sa propre hauteur ; on voit ce que le boîtier a fait des hautes lumières et des
     ombres. En IL, chacune sous son propre blanc (saturation du capteur, 255 du JPEG),
     sur la plage du RAW. Calculée d'après l'aperçu boîtier en cache
     (`preview::camera_exposure`, quelques dizaines de ms, gardée en mémoire), dès qu'il
-    est prêt. Légende dans le grand histogramme et la bulle d'aide du petit ;
-    `[gui.histogram] camera_jpeg`, `camera_width`, couleur `[gui.colors] hist_camera` ;
+    est prêt. Gris discret (28/10/2026 : en blanc, il attirait l'œil). Légende dans le
+    grand histogramme : une ligne « JPEG boîtier » sous Rouge, Vert, Bleu, avec ses
+    chiffres sous son propre blanc (canal choisi, sinon le vert) ; bulle d'aide du petit.
+    Bouton (appareil photo, à gauche de la photo d'analyse) et `j` dans le grand
+    histogramme pour la montrer ou la masquer, retenu d'une session à l'autre ;
+    `[gui.histogram] camera_jpeg` (valeur au premier lancement), `camera_width`, couleur
+    `[gui.colors] hist_camera` ;
   - **zones** superposées à l'image (`w`, « warnings » ; `o` jusqu'au 19/10/2026) : masque du moteur en texture (échantillonnage au
     plus proche), étiré sur l'image (aussi à 100 %). Saturé **par canal** (demandé le
     17/10/2026, comme FastRawViewer) : un seul canal → sa couleur (`clip_red`,

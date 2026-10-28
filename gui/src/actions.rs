@@ -387,6 +387,8 @@ pub enum Action {
     HistogramAll,
     /// Grand histogramme ouvert : afficher / masquer la photo d'analyse à sa droite.
     HistogramPhoto,
+    /// Grand histogramme : courbe du JPEG boîtier d'un RAW, montrée / masquée (28/10/2026).
+    HistogramCamera,
     /// Plein écran : afficher / masquer les zones saturées / bouchées.
     ToggleClipping,
     /// Afficher / masquer le panneau des métadonnées.
@@ -427,7 +429,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 177] = [
+    pub const ALL: [Action; 178] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -576,6 +578,7 @@ impl Action {
         Action::HistogramBlue,
         Action::HistogramAll,
         Action::HistogramPhoto,
+        Action::HistogramCamera,
         Action::ToggleClipping,
         Action::ToggleMetadata,
         Action::Open,
@@ -645,9 +648,9 @@ impl Action {
             ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramPhoto | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
-            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
-            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            | HistogramPhoto | HistogramCamera | ToggleClipping | TogglePeaking | PeakingColor
+            | SharpnessLenient | SharpnessStrict | ToggleFocusPoint | OverlayNext
+            | OverlayOrient | FocusMode | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -863,6 +866,7 @@ impl Action {
             Action::HistogramBlue => "core.histogram.blue",
             Action::HistogramAll => "core.histogram.all",
             Action::HistogramPhoto => "core.histogram.photo",
+            Action::HistogramCamera => "core.histogram.camera",
             Action::ToggleClipping => "core.view.clipping",
             Action::ToggleMetadata => "core.view.metadata",
             Action::Open => "core.view.open",
@@ -963,9 +967,8 @@ impl Action {
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
             | CropPresetPrev => Some(Scope::Crop),
-            HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto => {
-                Some(Scope::Histogram)
-            }
+            HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramPhoto
+            | HistogramCamera => Some(Scope::Histogram),
             _ => None,
         }
     }
@@ -1290,6 +1293,8 @@ const HISTOGRAM: &[Binding] = {
         (&[plain(Key::A)], HistogramAll),
         // p : la photo d'analyse (zones sur l'image en gris), à droite de l'histogramme.
         (&[plain(Key::P)], HistogramPhoto),
+        // j : la courbe du JPEG boîtier, par-dessus les données RAW.
+        (&[plain(Key::J)], HistogramCamera),
     ]
 };
 

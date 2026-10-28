@@ -978,7 +978,8 @@ pub struct HistogramSettings {
     pub analysis_lighten: f32,
     /// RAW : courbe du JPEG boîtier en trait fin par-dessus celle des données du capteur
     /// (couleur `[gui.colors] hist_camera`), pour voir ce que le boîtier a fait des
-    /// hautes lumières et des ombres.
+    /// hautes lumières et des ombres. Valeur au premier lancement : ensuite, `j` ou le
+    /// bouton du grand histogramme la montre ou la masque, et c'est retenu.
     pub camera_jpeg: bool,
     /// Épaisseur de ce trait (points).
     pub camera_width: f32,
@@ -1150,7 +1151,7 @@ impl Default for Colors {
             hist_red: Color([235, 70, 70]),
             hist_green: Color([80, 200, 90]),
             hist_blue: Color([80, 130, 240]),
-            hist_camera: Color([235, 235, 235]),
+            hist_camera: Color([128, 128, 128]),
             clip_over: Color([255, 40, 255]),
             clip_red: Color([255, 50, 50]),
             clip_green: Color([50, 230, 50]),

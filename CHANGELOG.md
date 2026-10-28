@@ -5,20 +5,24 @@
 ## Unreleased
 
 - **Camera JPEG in the histogram**: for a RAW, the camera JPEG's curve is drawn as a
-  thin line over the sensor data's, to see what the camera did with the highlights and
-  shadows (`[gui.histogram] camera_jpeg`, `camera_width`, `[gui.colors] hist_camera`).
+  thin grey line over the sensor data's, to see what the camera did with the highlights
+  and shadows. In the large histogram, a "Camera JPEG" row under Red, Green, Blue is its
+  legend, with its figures (median, mean, range, spread, saturated, blocked); a button
+  and `j` show or hide it, and that is remembered (`[gui.histogram] camera_jpeg`,
+  `camera_width`, `[gui.colors] hist_camera`).
 - **Right panel in sections**: the filter bar keeps the one-click filters and the name
   search; their settings and the grid's move to the right panel, in sections titled like
   the folder panel's and folded with a click: Histogram, Filters (each filter's settings
   only while it is on; two sliders for exposure; development software as check boxes),
-  Grid (files shown, RAW and JPEG; thumbnail render, order, stacks), EXIF at the bottom.
+  Grid (sort, thumbnail render, stacks), EXIF at the bottom; the RAW and JPEG boxes open
+  the Filters section.
   The folder panel's sections fold too; folded sections are remembered. Section titles
   in capitals, larger, in the accent colour, with a gap between sections (`[gui.folders]
   section_scale`, `section_gap`). After a filter change, the number of images shows a
   moment in the middle of the screen (`[gui.grid] filter_toast_ms`). **From the
   keyboard** (leader then `l`): ↑ ↓ go through the settings too, Space uses them, ← →
   vary them, Tab / Shift+Tab (`)` / `(` in vim) go from section to section, in the
-  folder panel too. The Grid section starts with the order; the stack entering choice
+  folder panel too. The Grid section starts with the sort; the stack entering choice
   stays only in the bottom bar. "RATING", "FILTER" and "FOLDERS" labels on the bottom
   and top bars and the folder panel, in small capitals in the accent colour (`[gui.grid]
   bar_label_scale`). `[gui.grid] stack_slider` and `clip_slider` are gone: remove them

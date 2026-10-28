@@ -448,6 +448,8 @@ pub struct TriApp {
     histogram_large: bool,
     /// Grand histogramme : photo d'analyse affichée à sa droite (`p`).
     histogram_photo: bool,
+    /// Courbe du JPEG boîtier d'un RAW sur l'histogramme (`j` en grand, retenue).
+    histogram_camera: bool,
     /// Échelle de l'histogramme.
     histogram_scale: HistogramScale,
     /// Grand histogramme : un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : tous.
@@ -851,6 +853,7 @@ impl TriApp {
             histogram: gui.histogram.visible,
             histogram_large: false,
             histogram_photo: gui.histogram.analysis,
+            histogram_camera: gui.histogram.camera_jpeg,
             histogram_scale: gui.histogram.scale,
             histogram_channel: None,
             analysis_texture: None,
@@ -988,6 +991,7 @@ impl TriApp {
             peaking: Some(self.peaking),
             clipping: Some(self.clipping),
             histogram: Some(self.histogram),
+            histogram_camera: Some(self.histogram_camera),
             folder_panel: Some(self.folder_panel),
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
@@ -1078,6 +1082,7 @@ impl TriApp {
             (&mut self.peaking, s.peaking),
             (&mut self.clipping, s.clipping),
             (&mut self.histogram, s.histogram),
+            (&mut self.histogram_camera, s.histogram_camera),
             (&mut self.folder_panel, s.folder_panel),
             (&mut self.metadata_panel, s.metadata_panel),
             (&mut self.filter_bar, s.filter_bar),
@@ -1370,6 +1375,54 @@ impl TriApp {
     /// manquant plus, deux curseurs pour l'exposition et les logiciels en cases à plat.
     fn filter_settings(&mut self, ui: &mut Ui) {
         let mut clicked = None;
+        let mut cycles = 0;
+        // Fichiers montrés, RAW et JPEG, en tête et sans titre (retour du 28/10/2026 :
+        // assez explicite ; dans la barre des filtres jusqu'au 27/10/2026, puis une journée
+        // dans la section « Grille »). Un des deux reste coché.
+        let (raw, jpeg) = match self.filter {
+            KindFilter::All => (true, true),
+            KindFilter::RawOnly => (true, false),
+            KindFilter::FlatOnly => (false, true),
+        };
+        ui.horizontal(|ui| {
+            for (is_raw, on, name, tip) in [
+                (true, raw, "RAW", t!("filter-bar-raw-tip")),
+                (false, jpeg, "JPEG", t!("filter-bar-flat-tip")),
+            ] {
+                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
+                let mut checked = on;
+                let alone = on && raw != jpeg;
+                let (item, key) = self.side_begin(false);
+                let mut response = ui
+                    .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
+                    .on_hover_text(&tip)
+                    .on_disabled_hover_text(&tip);
+                if key == Some(SideKey::Activate) && !alone {
+                    checked = !checked;
+                    response.mark_changed();
+                }
+                self.side_end(ui, item, response.rect, response.changed());
+                if response.changed() {
+                    let (raw, jpeg) = if is_raw {
+                        (checked, jpeg)
+                    } else {
+                        (raw, checked)
+                    };
+                    let kind = match (raw, jpeg) {
+                        (true, false) => KindFilter::RawOnly,
+                        (false, true) => KindFilter::FlatOnly,
+                        _ => KindFilter::All,
+                    };
+                    // Le type tourne en boucle (même action que le clavier) : autant de crans
+                    // que nécessaire.
+                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
+                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
+                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
+                    cycles = (to + 3 - from) % 3;
+                }
+            }
+        });
+        ui.add_space(self.gui.dialogs.spacing);
         let size = self.gui.grid.marks + 4.0;
         for (action, on) in self.content_toggles() {
             let name = match action {
@@ -1423,8 +1476,11 @@ impl TriApp {
             });
             ui.add_space(self.gui.dialogs.spacing);
         }
+        let ctx = ui.ctx().clone();
+        for _ in 0..cycles {
+            self.perform(&ctx, Action::FilterCycle);
+        }
         if let Some(action) = clicked {
-            let ctx = ui.ctx().clone();
             self.perform(&ctx, action);
         }
     }
@@ -1505,54 +1561,6 @@ impl TriApp {
             );
             if response.clicked() {
                 clicked.push(Action::SortReverse);
-            }
-        });
-        // Fichiers montrés, RAW et JPEG (retour du 21/10/2026 ; dans la barre des filtres
-        // jusqu'au 27/10/2026 : un réglage de la grille). Un des deux reste coché.
-        subheading(ui, t!("panel-grid-files"));
-        let (raw, jpeg) = match self.filter {
-            KindFilter::All => (true, true),
-            KindFilter::RawOnly => (true, false),
-            KindFilter::FlatOnly => (false, true),
-        };
-        ui.horizontal(|ui| {
-            for (is_raw, on, name, tip) in [
-                (true, raw, "RAW", t!("filter-bar-raw-tip")),
-                (false, jpeg, "JPEG", t!("filter-bar-flat-tip")),
-            ] {
-                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
-                let mut checked = on;
-                let alone = on && raw != jpeg;
-                let (item, key) = self.side_begin(false);
-                let mut response = ui
-                    .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
-                    .on_hover_text(&tip)
-                    .on_disabled_hover_text(&tip);
-                if key == Some(SideKey::Activate) && !alone {
-                    checked = !checked;
-                    response.mark_changed();
-                }
-                self.side_end(ui, item, response.rect, response.changed());
-                if response.changed() {
-                    let (raw, jpeg) = if is_raw {
-                        (checked, jpeg)
-                    } else {
-                        (raw, checked)
-                    };
-                    let kind = match (raw, jpeg) {
-                        (true, false) => KindFilter::RawOnly,
-                        (false, true) => KindFilter::FlatOnly,
-                        _ => KindFilter::All,
-                    };
-                    // Le type tourne en boucle (même action que le clavier) : autant de crans
-                    // que nécessaire.
-                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
-                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
-                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
-                    for _ in 0..(to + 3 - from) % 3 {
-                        clicked.push(Action::FilterCycle);
-                    }
-                }
             }
         });
         // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
@@ -1666,7 +1674,7 @@ impl TriApp {
                     keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
                 );
                 if camera.is_some() {
-                    tip = format!("{tip}\n{}", t!("histogram-camera-legend"));
+                    tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
                 }
                 if response
                     .on_hover_cursor(egui::CursorIcon::ZoomIn)
@@ -3892,7 +3900,8 @@ impl TriApp {
                     | Action::HistogramGreen
                     | Action::HistogramBlue
                     | Action::HistogramAll
-                    | Action::HistogramPhoto => self.perform(ctx, action),
+                    | Action::HistogramPhoto
+                    | Action::HistogramCamera => self.perform(ctx, action),
                     // Se déplacer d'image en image sous la boîte (retour du 19/10/2026) :
                     // l'histogramme suit l'image courante.
                     Action::NavPrev
@@ -4649,6 +4658,7 @@ impl TriApp {
             Action::HistogramBlue => self.histogram_channel = Some(2),
             Action::HistogramAll => self.histogram_channel = None,
             Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
+            Action::HistogramCamera => self.histogram_camera = !self.histogram_camera,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
@@ -6871,10 +6881,11 @@ impl TriApp {
     }
 
     /// Exposition du JPEG boîtier du RAW `index`, à superposer à son histogramme
-    /// (`[gui.histogram] camera_jpeg`) : calculée une fois l'aperçu boîtier prêt, gardée
-    /// en mémoire ; `None` pour une image plate.
+    /// (`[gui.histogram] camera_jpeg` au départ, puis `j` dans le grand histogramme) :
+    /// calculée une fois l'aperçu boîtier prêt, gardée en mémoire ; `None` pour une image
+    /// plate, ou la courbe masquée.
     fn camera_exposure_of(&mut self, index: usize) -> Option<Arc<Exposure>> {
-        if !self.gui.histogram.camera_jpeg {
+        if !self.histogram_camera {
             return None;
         }
         let file = self.files.get(index)?;
@@ -7589,7 +7600,7 @@ impl TriApp {
     /// Statistiques par canal du grand histogramme (`tri::exposure::ChannelStats`), en IL
     /// sous la saturation.
     /// Un seul canal choisi : sa ligne seulement.
-    fn histogram_stats(&self, ui: &mut Ui, e: &Exposure) {
+    fn histogram_stats(&self, ui: &mut Ui, e: &Exposure, camera: Option<&Exposure>) {
         let tail = self.gui.histogram.stats_tail;
         let ev = |v: f32| t!("stats-ev", value = tri::i18n::decimal(v as f64, 1));
         let percent = |v: f64| t!("stats-percent", value = tri::i18n::decimal(v * 100.0, 2));
@@ -7628,6 +7639,26 @@ impl TriApp {
                         continue;
                     };
                     ui.colored_label(Color32::from(color), name);
+                    ui.label(ev(s.median));
+                    ui.label(ev(s.mean));
+                    ui.label(t!("stats-range-value", low = ev(s.low), high = ev(s.high)));
+                    ui.label(ev(s.std_dev));
+                    ui.label(percent(s.over));
+                    ui.label(percent(s.under));
+                    ui.end_row();
+                }
+                // JPEG boîtier, sous les canaux du capteur : légende de la courbe grise et
+                // ses chiffres, mesurés sous son propre blanc (255). Tous les canaux : le
+                // vert, qui porte l'essentiel de la luminance (28/10/2026).
+                let channel = self.histogram_channel.unwrap_or(1);
+                if let Some(s) = camera.and_then(|j| j.channel_stats(channel, tail)) {
+                    let names = [t!("stats-red"), t!("stats-green"), t!("stats-blue")];
+                    let tip = t!(
+                        "histogram-camera-row-tip",
+                        channel = names[channel.min(2)].clone()
+                    );
+                    ui.colored_label(Color32::from(c.hist_camera), t!("histogram-camera-row"))
+                        .on_hover_text(tip);
                     ui.label(ev(s.median));
                     ui.label(ev(s.mean));
                     ui.label(t!("stats-range-value", low = ev(s.low), high = ev(s.high)));
@@ -7710,6 +7741,10 @@ impl TriApp {
         }
         let exposure = self.exposure_of(self.selected);
         let camera = self.camera_exposure_of(self.selected);
+        let is_raw = self
+            .files
+            .get(self.selected)
+            .is_some_and(|f| f.kind == MediaKind::Raw);
         let analysis = self.analysis_texture(ctx, self.selected);
         let name = self
             .files
@@ -7724,7 +7759,7 @@ impl TriApp {
         // centre et à sa propre largeur.
         let at = ctx.content_rect().center() - size / 2.0 - vec2(20.0, 40.0);
         let dialog = modal_at("histogram_dialog", at).title(name).free_width();
-        let mut toggle_photo = false;
+        let (mut toggle_photo, mut toggle_camera) = (false, false);
         let modal = dialog.show(ctx, |ui| {
             // Photo d'analyse à droite de l'histogramme, à sa hauteur (retour du
             // 19/10/2026 : boîte plus compacte) ; sans elle, l'histogramme prend toute la
@@ -7815,6 +7850,32 @@ impl TriApp {
                         if response.clicked() {
                             toggle_photo = true;
                         }
+                        // Courbe du JPEG boîtier (RAW seulement) : à gauche de la photo, en
+                        // couleur d'accent quand elle est montrée (28/10/2026).
+                        if is_raw {
+                            let button =
+                                histogram::camera_button(rect, self.gui.histogram.channel_dot);
+                            let key = self.keymap.keys_for(Action::HistogramCamera).join(" / ");
+                            let response = ui
+                                .interact(
+                                    button,
+                                    egui::Id::unique("histogram_camera"),
+                                    Sense::click(),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .on_hover_text(t!("histogram-camera-button-tip", keys = key));
+                            let color = if self.histogram_camera {
+                                ui.visuals().selection.stroke.color
+                            } else if response.hovered() {
+                                ui.visuals().strong_text_color()
+                            } else {
+                                ui.visuals().text_color()
+                            };
+                            histogram::camera_icon(ui.painter(), button, color);
+                            if response.clicked() {
+                                toggle_camera = true;
+                            }
+                        }
                         for (i, (dot, name)) in dots.into_iter().zip(names).enumerate() {
                             let tip = t!(
                                 "histogram-channel-tip",
@@ -7854,7 +7915,7 @@ impl TriApp {
             let _ = row;
             if let Some(e) = &exposure {
                 // Statistiques sous l'histogramme, sur toute la largeur.
-                self.histogram_stats(ui, e);
+                self.histogram_stats(ui, e, camera.as_deref());
             }
             ui.horizontal(|ui| {
                 // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
@@ -7880,6 +7941,9 @@ impl TriApp {
         }
         if toggle_photo {
             self.histogram_photo = !self.histogram_photo;
+        }
+        if toggle_camera {
+            self.histogram_camera = !self.histogram_camera;
         }
         if modal.should_close() {
             self.histogram_large = false;
@@ -13607,7 +13671,18 @@ mod tests {
         while h.state().side_cursor != Some(filters) {
             press(&mut h, Key::Tab, Modifiers::NONE);
         }
-        // Premier filtre (« nettes ») : Espace l'allume, son curseur apparaît dessous.
+        // En tête des filtres, RAW et JPEG (retour du 28/10/2026) : Espace décoche RAW,
+        // puis le recoche.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().filter, KindFilter::FlatOnly, "RAW décoché");
+        press(&mut h, Key::Space, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().filter, KindFilter::All, "RAW recoché");
+        // Puis le premier filtre (« nettes ») : Espace l'allume, son curseur apparaît
+        // dessous.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         let before = h.state().blur_rule.is_some();
         press(&mut h, Key::Space, Modifiers::NONE);
@@ -15993,6 +16068,13 @@ mod tests {
         assert!(h.state().histogram_photo, "p la montre");
         press(&mut h, Key::P, Modifiers::NONE);
         assert!(!h.state().histogram_photo, "p la masque");
+        // j : la courbe du JPEG boîtier (28/10/2026), retenue d'une session à l'autre.
+        assert!(h.state().histogram_camera, "montrée par défaut");
+        press(&mut h, Key::J, Modifiers::NONE);
+        assert!(!h.state().histogram_camera, "j la masque");
+        assert_eq!(h.state().display().histogram_camera, Some(false));
+        press(&mut h, Key::J, Modifiers::NONE);
+        assert!(h.state().histogram_camera, "j la remontre");
         press(&mut h, Key::I, Modifiers::SHIFT);
         assert_eq!(
             h.state().histogram_scale,
