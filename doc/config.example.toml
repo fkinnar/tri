@@ -248,8 +248,8 @@ timeout_s = 10
 # version et le système.
 issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 # Boutons « Télécharger » de l'aide (build de nuit, dernière version) : formats de
-# paquet préférés, dans l'ordre ; le premier publié pour ce système l'emporte, sinon la
-# page de la version s'ouvre.
+# paquet, dans l'ordre où ils sont proposés (plusieurs pour ce système : une boîte de
+# choix ; aucun : la page de la version).
 formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
 [watch]

@@ -383,6 +383,18 @@ download-release-tip = { $stage ->
 download-searching = Looking for the package to download…
 download-started = Downloading in the browser: { $name }
 download-page = No package for this system: page of version { $version } opened
+download-title = Download tri { $version }
+download-choose = Several packages for this system:
+download = Download
+download-format = { $format ->
+    [appimage] A single file to run, no installation, for every distribution
+    [deb] Debian, Ubuntu, Linux Mint package: installed by the system
+    [targz] Archive with its install script (install.sh)
+    [msi] Windows installer
+    [zip] Archive to unpack, no installation
+    [dmg] Disk image: drag tri into Applications
+   *[other] Package for this system
+}
 rating-bar-title = Rating
 filter-bar-title = Filter
 rating-bar-applies = ratings apply to the { $n } selected images

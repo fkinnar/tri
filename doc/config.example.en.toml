@@ -251,8 +251,8 @@ timeout_s = 10
 # system.
 issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
 # "Download" buttons of the help (nightly build, latest version): preferred package
-# formats, in order; the first one published for this system wins, otherwise the
-# version's page opens.
+# formats, in the order they are offered (several for this system: a choice dialog;
+# none: the version's page).
 formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
 [watch]

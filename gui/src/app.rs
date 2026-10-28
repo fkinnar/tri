@@ -167,8 +167,10 @@ pub struct TriApp {
     eject_dialog: Option<(PathBuf, egui::Pos2)>,
     /// Recherche d'une mise à jour (sur demande) : en cours, ou son résultat affiché.
     update: Option<UpdateCheck>,
-    /// Recherche du paquet à télécharger (boutons de l'aide), dans un fil à part.
-    download: Option<std::thread::JoinHandle<Result<tri::update::Download, String>>>,
+    /// Téléchargement depuis l'aide : recherche des paquets, puis choix du format.
+    download: Option<DownloadState>,
+    /// Dernier format de paquet choisi (« AppImage »…), proposé d'abord la fois suivante.
+    download_format: Option<String>,
     /// Ce binaire : version distribuée ou build personnel (et son commit).
     build: tri::update::Build,
     /// Éjection en cours (dans un fil à part) : volume, et réponse du système à venir.
@@ -730,6 +732,7 @@ impl TriApp {
             eject_dialog: None,
             update: None,
             download: None,
+            download_format: None,
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
@@ -1001,6 +1004,7 @@ impl TriApp {
             clipping: Some(self.clipping),
             histogram: Some(self.histogram),
             histogram_camera: Some(self.histogram_camera),
+            download_format: self.download_format.clone(),
             folder_panel: Some(self.folder_panel),
             metadata_panel: Some(self.metadata_panel),
             filter_bar: Some(self.filter_bar),
@@ -1111,6 +1115,9 @@ impl TriApp {
         }
         if let Some(order) = s.sort {
             self.order = order;
+        }
+        if s.download_format.is_some() {
+            self.download_format = s.download_format.clone();
         }
         self.window_kept = s.window;
         self.maximize_pending = s.window.is_some_and(|w| w.maximized);
@@ -2460,44 +2467,107 @@ impl TriApp {
 
     /// Cherche le paquet de `track` pour ce système dans un fil à part (liste des
     /// versions, quelques secondes au plus) ; le navigateur le télécharge ensuite
-    /// ([`TriApp::finish_download`]).
+    /// ([`TriApp::download_dialog`]).
     fn start_download(&mut self, ctx: &egui::Context, track: tri::update::Track) {
         if self.download.is_some() {
             return;
         }
         let settings = self.settings.update.clone();
         let repaint = ctx.clone();
-        self.download = Some(std::thread::spawn(move || {
+        self.download = Some(DownloadState::Running(std::thread::spawn(move || {
             let result = tri::update::download(track, &settings).map_err(|e| e.to_string());
             repaint.request_repaint();
             result
-        }));
+        })));
         self.notice = Some((t!("download-searching"), false));
     }
 
-    /// Fin de [`TriApp::start_download`] : le navigateur ouvre le paquet (ou la page de
-    /// la version) ; une erreur va dans la barre d'état.
-    fn finish_download(&mut self, ctx: &egui::Context) {
-        if !self.download.as_ref().is_some_and(|h| h.is_finished()) {
-            if self.download.is_some() {
+    /// Suite de [`TriApp::start_download`] : un seul paquet pour ce système, le
+    /// navigateur le télécharge ; plusieurs (Linux : AppImage, .deb, archive ; Windows :
+    /// .msi, .zip), une boîte les propose, le dernier format choisi d'abord (retour du
+    /// 28/10/2026) ; aucun, la page de la version. Une erreur va dans la barre d'état.
+    fn download_dialog(&mut self, ctx: &egui::Context) {
+        if let Some(DownloadState::Running(handle)) = &self.download {
+            if !handle.is_finished() {
                 ctx.request_repaint_after(Duration::from_millis(100));
+                return;
+            }
+            let Some(DownloadState::Running(handle)) = self.download.take() else {
+                return;
+            };
+            match handle.join().unwrap_or_else(|_| Err("?".to_string())) {
+                Ok(download) if download.files.len() > 1 => {
+                    let chosen = self
+                        .download_format
+                        .as_ref()
+                        .and_then(|f| download.files.iter().position(|(g, _)| g == f))
+                        .unwrap_or(0);
+                    self.notice = None;
+                    self.download = Some(DownloadState::Choose { download, chosen });
+                }
+                Ok(download) => {
+                    let file = download.files.first().map(|(_, a)| a.clone());
+                    self.open_download(ctx, &download, file);
+                }
+                Err(e) => self.notice = Some((e, true)),
             }
             return;
         }
-        let Some(handle) = self.download.take() else {
+        let Some(DownloadState::Choose { download, chosen }) = &mut self.download else {
             return;
         };
-        match handle.join().unwrap_or_else(|_| Err("?".to_string())) {
-            Ok(download) => {
-                ctx.open_url(egui::OpenUrl::new_tab(&download.url));
-                let text = match &download.name {
-                    Some(name) => t!("download-started", name = name.as_str()),
-                    None => t!("download-page", version = download.version.as_str()),
-                };
-                self.notice = Some((text, false));
-            }
-            Err(e) => self.notice = Some((e, true)),
+        let (mut go, mut cancel) = (false, false);
+        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let title = t!("download-title", version = download.version.as_str());
+        let modal = modal_at("download_dialog", at)
+            .title(title)
+            .show(ctx, |ui| {
+                ui.label(t!("download-choose"));
+                ui.add_space(4.0);
+                for (i, (format, asset)) in download.files.iter().enumerate() {
+                    ui.radio_value(chosen, i, format.as_str())
+                        .on_hover_text(&asset.name);
+                    ui.indent(format.as_str(), |ui| {
+                        ui.weak(t!("download-format", format = format_id(format)));
+                    });
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    go = ui.button(t!("download")).clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if go {
+            let (format, asset) = download.files[*chosen].clone();
+            let download = download.clone();
+            self.download_format = Some(format);
+            self.download = None;
+            self.open_download(ctx, &download, Some(asset));
+            self.save_display();
+        } else if cancel || modal.should_close() {
+            self.download = None;
         }
+    }
+
+    /// Ouvre `file` de `download` dans le navigateur (qui le télécharge), ou la page de la
+    /// version sans paquet pour ce système.
+    fn open_download(
+        &mut self,
+        ctx: &egui::Context,
+        download: &tri::update::Download,
+        file: Option<tri::update::Asset>,
+    ) {
+        let text = match &file {
+            Some(asset) => {
+                ctx.open_url(egui::OpenUrl::new_tab(&asset.url));
+                t!("download-started", name = asset.name.as_str())
+            }
+            None => {
+                ctx.open_url(egui::OpenUrl::new_tab(&download.page));
+                t!("download-page", version = download.version.as_str())
+            }
+        };
+        self.notice = Some((text, false));
     }
 
     /// Boîte de la recherche d'une mise à jour : en cours, dernière version, ou version
@@ -10871,7 +10941,7 @@ impl eframe::App for TriApp {
         self.poll_export();
         self.eject_dialog(&ctx);
         self.update_dialog(&ctx);
-        self.finish_download(&ctx);
+        self.download_dialog(&ctx);
         self.histogram_dialog(&ctx);
         self.offload_dialog(&ctx);
         // Clavier en cours d'usage : pointeur masqué (dernier mot sur l'icône de l'image).
@@ -11362,6 +11432,22 @@ enum SideKey {
     Left,
     /// → / l : curseur vers la droite, choix suivant ; déplier une section.
     Right,
+}
+
+/// Téléchargement depuis l'aide ([`TriApp::start_download`]).
+enum DownloadState {
+    /// Recherche des paquets, dans un fil à part.
+    Running(std::thread::JoinHandle<Result<tri::update::Download, String>>),
+    /// Plusieurs paquets pour ce système : la boîte de choix, et celui coché.
+    Choose {
+        download: tri::update::Download,
+        chosen: usize,
+    },
+}
+
+/// Identifiant Fluent d'un format de paquet (« tar.gz » → « targz ») pour sa description.
+fn format_id(format: &str) -> String {
+    format.to_lowercase().replace('.', "")
 }
 
 /// Recherche d'une mise à jour ([`TriApp::check_update`]).
@@ -14124,6 +14210,47 @@ mod tests {
             _ => "Télécharger la dernière version",
         };
         assert!(h.query_by_label(stage).is_some(), "{stage}");
+    }
+
+    #[test]
+    fn several_packages_are_offered_and_the_choice_is_remembered() {
+        // Retour du 28/10/2026 : sous Linux, AppImage ou archive au choix ; le format
+        // choisi est proposé d'abord la fois suivante.
+        let (mut h, _dir) = harness();
+        let asset = |name: &str| tri::update::Asset {
+            name: name.into(),
+            url: format!("https://g/{name}"),
+        };
+        let download = tri::update::Download {
+            version: "nightly".into(),
+            page: "https://g/nightly".into(),
+            files: vec![
+                ("AppImage".into(), asset("tri-linux-x86_64.AppImage")),
+                ("tar.gz".into(), asset("tri-linux-x86_64.tar.gz")),
+            ],
+        };
+        h.state_mut().download = Some(DownloadState::Choose {
+            download,
+            chosen: 0,
+        });
+        h.run_steps(2);
+        assert!(h.query_by_label("AppImage").is_some());
+        h.get_by_label("tar.gz").click();
+        h.run_steps(2);
+        h.get_by_label("Télécharger").click();
+        h.run_steps(2);
+        assert!(h.state().download.is_none(), "boîte fermée");
+        assert_eq!(h.state().download_format.as_deref(), Some("tar.gz"));
+        assert_eq!(
+            h.state().display().download_format.as_deref(),
+            Some("tar.gz")
+        );
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(n, _)| n.contains("tri-linux-x86_64.tar.gz"))
+        );
     }
 
     #[test]

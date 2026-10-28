@@ -28,6 +28,8 @@ pub struct DisplayState {
     pub histogram: Option<bool>,
     /// Courbe du JPEG boîtier sur l'histogramme d'un RAW (`j` en grand), 28/10/2026.
     pub histogram_camera: Option<bool>,
+    /// Dernier format de paquet téléchargé depuis l'aide (« AppImage »…), 28/10/2026.
+    pub download_format: Option<String>,
     /// Panneau des dossiers (`Maj+D`).
     pub folder_panel: Option<bool>,
     /// Panneau des métadonnées (`Maj+M`).
