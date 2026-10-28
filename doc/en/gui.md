@@ -577,14 +577,15 @@ system one ("cold" measurements, experiments).
   title, its rows leave `Tree::rows`, so the keyboard cursor too). Folded sections of both
   panels are remembered across sessions (`gui-state.toml`, `panel_folded`: `grid`, `exif`,
   `folders-personal`…).
-  - *Filters*: each adjustable filter with a check box (like its bar icon), its settings
+  - *Filters*: first the files shown, RAW and JPEG (two check boxes without a title, one
+    stays checked; in the filter bar until 2026-10-27, then a day in the Grid section;
+    feedback of 2026-10-28), then each adjustable filter with a check box (like its bar icon), its settings
     only while it is on: blur strictness; **two sliders** for exposure (blown and crushed,
     instead of one slider and a switch); development software as **flat check boxes**.
     Under each slider, "more lenient" on the left, "stricter" on the right. The tooltip of
     the bar icons says where the settings are.
-  - *Grid*: order (list and direction; at the top of the section, feedback of
-    2026-10-27), files shown, RAW and JPEG (two check boxes, one stays checked; in the
-    filter bar until 2026-10-27), thumbnail render as radio buttons (instead of the list
+  - *Grid*: sort (list and direction; at the top of the section, feedback of
+    2026-10-27; titled "Order" until 2026-10-28), thumbnail render as radio buttons (instead of the list
     hidden in the "…" menu of narrow windows, which is gone), stacks (check box,
     similarity, unfold / fold all, fine settings). Staying in the bottom bar (the user's
     choice, 2026-10-27, no duplicates): thumbnail size and info, entering a stack by the
@@ -624,13 +625,17 @@ system one ("cold" measurements, experiments).
     default (`Shift+I`: linear), graduations, red / blue dots if pixels are saturated /
     blocked, and in plain words: RAW bit depth, headroom before saturation, saturated and
     blocked shares;
-  - **camera JPEG as a thin line** (2026-10-27, the user's idea): for a RAW, the curve of
+  - **camera JPEG as a thin grey line** (2026-10-27, the user's idea): for a RAW, the curve of
     the camera JPEG (all channels, or the chosen one) over the sensor's, at its own
     height; it shows what the camera did with the highlights and shadows. In EV, each
     below its own white (sensor saturation, the JPEG's 255), over the RAW's range.
     Computed from the cached camera preview (`preview::camera_exposure`, a few tens of ms,
-    kept in memory) once it is ready. Legend in the large histogram and in the small one's
-    tooltip; `[gui.histogram] camera_jpeg`, `camera_width`, colour `[gui.colors]
+    kept in memory) once it is ready. A discreet grey (2026-10-28: in white it drew the
+    eye). Legend in the large histogram: a "Camera JPEG" row under Red, Green, Blue, with
+    its figures below its own white (the chosen channel, otherwise green); tooltip of the
+    small one. A button (a camera, left of the analysis photo's) and `j` in the large
+    histogram show or hide it, remembered between sessions; `[gui.histogram]
+    camera_jpeg` (value at the first launch), `camera_width`, colour `[gui.colors]
     hist_camera`;
   - **zones** overlaid on the image (`w`, "warnings"; `o` until 2026-10-19): engine mask as
     a texture (nearest-neighbour sampling), stretched over the image (also at 100 %).

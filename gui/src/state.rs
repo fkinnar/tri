@@ -26,6 +26,8 @@ pub struct DisplayState {
     pub clipping: Option<bool>,
     /// Histogramme (`i`).
     pub histogram: Option<bool>,
+    /// Courbe du JPEG boîtier sur l'histogramme d'un RAW (`j` en grand), 28/10/2026.
+    pub histogram_camera: Option<bool>,
     /// Panneau des dossiers (`Maj+D`).
     pub folder_panel: Option<bool>,
     /// Panneau des métadonnées (`Maj+M`).

@@ -5,22 +5,25 @@
 ## À venir
 
 - **JPEG boîtier dans l'histogramme** : pour un RAW, la courbe du JPEG boîtier se
-  dessine en trait fin par-dessus celle des données du capteur, pour voir ce que le
-  boîtier a fait des hautes lumières et des ombres (`[gui.histogram] camera_jpeg`,
-  `camera_width`, `[gui.colors] hist_camera`).
+  dessine en trait fin gris par-dessus celle des données du capteur, pour voir ce que le
+  boîtier a fait des hautes lumières et des ombres. Dans le grand histogramme, une ligne
+  « JPEG boîtier » sous Rouge, Vert, Bleu lui sert de légende, avec ses chiffres
+  (médiane, moyenne, plage, étalement, saturés, bouchés) ; un bouton et `j` la montrent
+  ou la masquent, et c'est retenu (`[gui.histogram] camera_jpeg`, `camera_width`,
+  `[gui.colors] hist_camera`).
 - **Panneau de droite en sections** : la barre des filtres garde les filtres d'un clic
   et la recherche par nom ; leurs réglages et ceux de la grille passent dans le panneau
   de droite, en sections titrées comme celles du panneau des dossiers et repliables d'un
   clic : Histogramme, Filtres (réglages d'un filtre seulement quand il est allumé ; deux
   curseurs pour l'exposition ; logiciels de développement en cases à cocher), Grille
-  (fichiers montrés, RAW et JPEG ; rendu, ordre, piles), EXIF en bas. Les sections du
+  (tri, rendu, piles), EXIF en bas ; les cases RAW et JPEG ouvrent la section Filtres. Les sections du
   panneau des dossiers se replient aussi ; les sections repliées sont retenues. Titres
   des sections en majuscules, plus grands, à l'accent, espacés (`[gui.folders]
   section_scale`, `section_gap`). Après un changement de filtre, le nombre d'images
   s'affiche un instant au milieu de l'écran (`[gui.grid] filter_toast_ms`). **Au
   clavier** (leader puis `l`) : ↑ ↓ parcourent aussi les réglages, Espace les actionne,
   ← → les font varier, Tab / Maj+Tab (`)` / `(` en vim) passent d'une section à l'autre,
-  dans le panneau des dossiers aussi. La section Grille commence par l'ordre ; le choix
+  dans le panneau des dossiers aussi. La section Grille commence par le tri ; le choix
   de l'entrée dans une pile ne reste que dans la barre du bas. Libellés « NOTE », «
   FILTRE » et « DOSSIERS » sur les barres du bas et du haut et le panneau des dossiers,
   en petites majuscules à l'accent (`[gui.grid] bar_label_scale`). `[gui.grid]

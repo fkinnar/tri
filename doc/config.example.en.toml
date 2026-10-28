@@ -751,7 +751,8 @@ analysis = false
 analysis_lighten = 0.06
 # RAW: curve of the camera JPEG as a thin line over the sensor data's (colour
 # [gui.colors] hist_camera), to see what the camera did with the highlights and shadows;
-# line width.
+# line width. Value at the first launch: then j or the large histogram's button shows
+# or hides it, and that is remembered.
 camera_jpeg = true
 camera_width = 1.5
 
@@ -841,7 +842,7 @@ hist_red = "#eb4646"
 hist_green = "#50c85a"
 hist_blue = "#5082f0"
 # Histogram of a RAW: curve of the camera JPEG ([gui.histogram] camera_jpeg).
-hist_camera = "#ebebeb"
+hist_camera = "#808080"
 clip_over = "#ff28ff"
 clip_red = "#ff3232"
 clip_green = "#32e632"
