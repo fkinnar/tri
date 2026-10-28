@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- **Fixes from the review of 2026-10-28**:
+  - rating an image developed in Darktable no longer redoes its render: only the
+    sidecar's development counts, no longer its date (`tri` also writes the ratings
+    there); renders already cached are redone once;
+  - the LibRaw export follows the `[render]` settings, like the display;
+  - the `[gui.colors] error` colour applies to every error message;
+  - new settings `[gui.dialogs] poll_ms`, `max_errors`, `completions` (values that were
+    hard-coded);
+  - the tests type shortcuts as the real window delivers them (egui-winit's cut / copy /
+    paste, #194), for every shortcut of every profile.
 - **Download the latest version**: at the top of the help (F1), two buttons, the
   nightly build and the latest alpha, with a tooltip explaining the difference. This
   system's package downloads in the browser; when there are several (Linux: AppImage,

@@ -1076,6 +1076,9 @@ pub struct Request<'a> {
     /// JPEG de paires dont le RAW est aussi exporté, et le suffixe ajouté à leur nom
     /// (`DSCF0001-camera.jpg` à côté de `DSCF0001.jpg`, rendu du RAW).
     pub paired: Option<(&'a HashSet<PathBuf>, &'a str)>,
+    /// Rendu LibRaw (`[render]`) : le même qu'à l'écran, « on exporte ce qu'on regarde »
+    /// (revue du 28/10/2026 : l'export prenait les valeurs par défaut).
+    pub render: crate::raw::RenderOptions,
 }
 
 impl<'a> Request<'a> {
@@ -1087,6 +1090,18 @@ impl<'a> Request<'a> {
             cut: None,
             sharpening: Sharpening::default(),
             paired: None,
+            render: crate::raw::RenderOptions::default(),
+        }
+    }
+
+    /// Rendu LibRaw `render` (à pleine résolution, quoi qu'il en dise).
+    pub fn render(self, render: crate::raw::RenderOptions) -> Request<'a> {
+        Request {
+            render: crate::raw::RenderOptions {
+                half_size: false,
+                ..render
+            },
+            ..self
         }
     }
 
@@ -1314,7 +1329,7 @@ fn export_one(
         let (space, target) = libraw_space(&profile.color).expect("vérifié");
         let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
         let pixels = raw
-            .render_deep(&crate::raw::RenderOptions::default(), space, cancel)
+            .render_deep(&req.render, space, cancel)
             .map_err(|e| match e {
                 crate::raw::RawError::Cancelled => DevelopError::Cancelled,
                 e => failed(&e),
@@ -1598,6 +1613,26 @@ fn exported_path(line: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_export_renders_like_the_screen() {
+        // Revue du 28/10/2026 : l'export LibRaw prenait le rendu par défaut, pas `[render]`.
+        let profiles = Profiles::default();
+        let profile = profiles.get("web").unwrap();
+        let settings = crate::settings::RenderSection {
+            camera_wb: false,
+            bright: 1.4,
+            auto_bright: false,
+        };
+        let wanted = crate::raw::RenderOptions {
+            half_size: true,
+            ..settings.options()
+        };
+        let req = Request::new(profile, "out").render(wanted);
+        assert_eq!(req.render.bright, 1.4);
+        assert!(!req.render.camera_wb);
+        assert!(!req.render.half_size, "toujours à pleine résolution");
+    }
 
     fn args(profile: &Profile) -> Vec<String> {
         let (mut a, c) = profile.darktable_args().unwrap();

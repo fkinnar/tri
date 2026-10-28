@@ -303,9 +303,16 @@ pub enum Theme {
 
 impl Theme {
     /// Applique le thème à `ctx` : le gris neutre retouche les fonds du thème sombre
-    /// d'egui ; les autres thèmes les remettent d'origine (rien d'autre n'est touché).
+    /// d'egui ; les autres thèmes les remettent d'origine. Les messages d'erreur d'egui
+    /// prennent `[gui.colors] error`, dans les deux thèmes (revue du 28/10/2026 : certains
+    /// gardaient un rouge codé en dur).
     pub fn apply(self, ctx: &egui::Context, colors: &Colors) {
         ctx.set_theme(self);
+        for theme in [egui::Theme::Dark, egui::Theme::Light] {
+            ctx.style_mut_of(theme, |style| {
+                style.visuals.error_fg_color = colors.error.into();
+            });
+        }
         let dark = egui::Visuals::dark();
         ctx.style_mut_of(egui::Theme::Dark, |style| {
             let v = &mut style.visuals;
@@ -530,6 +537,13 @@ pub struct DialogSettings {
     pub help_width: f32,
     /// Défilement de l'aide par flèche haut / bas (points).
     pub help_scroll_line: f32,
+    /// Pendant une attente (copie, recherche sur le réseau, touche de séquence…),
+    /// intervalle entre deux images pour voir où elle en est (ms).
+    pub poll_ms: u64,
+    /// Fichiers en erreur listés à la fin d'un déchargement.
+    pub max_errors: usize,
+    /// Dossiers proposés sous un champ de chemin, après Tab.
+    pub completions: usize,
 }
 
 impl Default for DialogSettings {
@@ -549,6 +563,9 @@ impl Default for DialogSettings {
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,
+            poll_ms: 100,
+            max_errors: 5,
+            completions: 12,
         }
     }
 }
@@ -1371,6 +1388,21 @@ mod tests {
             AppSettings::default().keymap().1.is_empty(),
             "défauts sans conflit"
         );
+    }
+
+    #[test]
+    fn error_messages_take_the_configured_colour_in_every_theme() {
+        // Revue du 28/10/2026 : des messages d'erreur gardaient un rouge codé en dur.
+        let ctx = egui::Context::default();
+        let colors = Colors {
+            error: Color([1, 2, 3]),
+            ..Colors::default()
+        };
+        Theme::Dark.apply(&ctx, &colors);
+        for theme in [egui::Theme::Dark, egui::Theme::Light] {
+            let style = ctx.style_of(theme);
+            assert_eq!(style.visuals.error_fg_color, Color32::from_rgb(1, 2, 3));
+        }
     }
 
     #[test]

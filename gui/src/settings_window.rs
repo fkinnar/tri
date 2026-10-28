@@ -17,7 +17,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Color32, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
+use eframe::egui::{self, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
 
 use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys};
 use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
@@ -1117,7 +1117,7 @@ impl SettingsWindow {
                 *last = now;
             }
         }
-        ctx.request_repaint_after(Duration::from_millis(100));
+        ctx.request_repaint_after(crate::app::poll_interval(ctx));
         if chords.is_empty() || now.duration_since(*last) < self.sequence_timeout {
             return None;
         }
@@ -1261,7 +1261,7 @@ impl SettingsWindow {
             ui.colored_label(ui.visuals().warn_fg_color, warning);
         }
         if let Some(e) = self.errors.get(&id) {
-            ui.colored_label(Color32::from_rgb(230, 90, 90), e);
+            ui.colored_label(ui.visuals().error_fg_color, e);
         }
         if reset {
             return self.commit("keys", action.id(), None);
@@ -1458,7 +1458,7 @@ impl SettingsWindow {
             }
         });
         if let Some(e) = self.errors.get(&id) {
-            ui.colored_label(Color32::from_rgb(230, 90, 90), e);
+            ui.colored_label(ui.visuals().error_fg_color, e);
         }
         if reset {
             self.drafts.remove(&id);

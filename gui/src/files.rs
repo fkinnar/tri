@@ -625,7 +625,7 @@ fn deleting(
                 )),
             );
         });
-    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    ctx.request_repaint_after(crate::app::poll_interval(ctx));
     Outcome::Open
 }
 
@@ -1028,7 +1028,7 @@ impl Transfer {
                 _ => Outcome::Failed(t!("transfer-failed", error = "?")),
             };
         }
-        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        ctx.request_repaint_after(crate::app::poll_interval(ctx));
         if self.hidden {
             return Outcome::Open;
         }

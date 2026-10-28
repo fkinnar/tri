@@ -106,8 +106,11 @@ l'attendre).
 
 Niveau `Level::Developed(engine)`, un par logiciel (dossier `developed` pour darktable,
 inchangé : son cache reste valable) : le JPEG du logiciel, à la taille de l'aperçu standard,
-rangé **tel quel** dans le cache. Sa clé comprend l'empreinte du sidecar (taille, date) :
-modifier le développement dans darktable refait le rendu. Dans l'interface, un développé
+rangé **tel quel** dans le cache. Sa clé comprend l'empreinte du **développement** décrit
+par le sidecar (`develop::render_stamp` : les champs `darktable:…` sans
+`darktable:colorlabels`, ou tout le `.rrdata`) : modifier le développement dans darktable
+refait le rendu, noter l'image dans `tri` (qui écrit dans le même `IMAGE.RAF.xmp`) non.
+Jusqu'au 28/10/2026, la taille et la date du fichier : chaque note refaisait le rendu. Dans l'interface, un développé
 déjà affiché dont le sidecar a changé (surveillance du dossier, ou au moment de `b` /
 `Maj+B`) est oublié : `b` revient au rendu de base et `Maj+B` le refait (retour du
 19/10/2026 : un recadrage modifié n'était pas vu). Calcul **sur demande

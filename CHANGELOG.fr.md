@@ -4,6 +4,16 @@
 
 ## À venir
 
+- **Corrections de la revue du 28/10/2026** :
+  - noter une image développée dans Darktable ne refait plus son rendu : seul le
+    développement du sidecar compte, plus sa date (`tri` y écrit aussi les notes) ; les
+    rendus déjà en cache sont refaits une fois ;
+  - l'export par LibRaw suit les réglages `[render]`, comme l'affichage ;
+  - la couleur `[gui.colors] error` vaut pour tous les messages d'erreur ;
+  - nouveaux réglages `[gui.dialogs] poll_ms`, `max_errors`, `completions` (valeurs
+    jusque-là codées en dur) ;
+  - les tests tapent les raccourcis comme la vraie fenêtre les livre (couper / copier /
+    coller d'egui-winit, #194), pour chaque raccourci de chaque profil.
 - **Télécharger la dernière version** : en haut de l'aide (F1), deux boutons, le build
   de nuit et la dernière alpha, avec une bulle qui explique la différence. Le paquet de
   ce système se télécharge dans le navigateur ; s'il y en a plusieurs (Linux : AppImage,

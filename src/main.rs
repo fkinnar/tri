@@ -1068,8 +1068,9 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     if args.dry_run {
         return Ok(());
     }
-    let request =
-        tri::export::Request::new(profile, &folder).sharpening(settings.export.sharpening);
+    let request = tri::export::Request::new(profile, &folder)
+        .sharpening(settings.export.sharpening)
+        .render(settings.render.options());
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let progress = |done: usize, total: usize, path: &std::path::Path| {
         eprintln!("{done}/{total} {}", path.display());

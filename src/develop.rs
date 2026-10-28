@@ -753,6 +753,94 @@ pub fn stamp(sidecar: &Path) -> String {
     }
 }
 
+/// Empreinte du **développement** décrit par un sidecar, pour la clé de cache du rendu
+/// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans
+/// `darktable:colorlabels` ; autre format (`.rrdata`), tout le contenu. Avant (revue du
+/// 28/10/2026), la taille et la date du fichier : noter une image dans `tri`, qui écrit
+/// dans le même `IMAGE.RAF.xmp` (convention darktable), refaisait le rendu (~10 s).
+/// Mémorisée par fichier, taille et date : le sidecar n'est relu que s'il a changé.
+pub fn render_stamp(sidecar: &Path) -> String {
+    use std::sync::{Mutex, OnceLock};
+    type Memo = std::collections::HashMap<PathBuf, (String, String)>;
+    static MEMO: OnceLock<Mutex<Memo>> = OnceLock::new();
+    let quick = stamp(sidecar);
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some((known, fingerprint)) = memo.lock().ok().and_then(|m| m.get(sidecar).cloned())
+        && known == quick
+    {
+        return fingerprint;
+    }
+    let Ok(bytes) = std::fs::read(sidecar) else {
+        return "absent".into();
+    };
+    let is_xmp = sidecar
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("xmp"));
+    let content = if is_xmp {
+        String::from_utf8(bytes.clone())
+            .ok()
+            .and_then(|text| darktable_content(&text))
+            .unwrap_or(bytes)
+    } else {
+        bytes
+    };
+    let fingerprint = blake3::hash(&content).to_hex()[..16].to_string();
+    if let Ok(mut m) = memo.lock() {
+        m.insert(sidecar.to_path_buf(), (quick, fingerprint.clone()));
+    }
+    fingerprint
+}
+
+/// Champs de darktable d'un sidecar XMP, à la suite (attributs, éléments et leur texte),
+/// sans `darktable:colorlabels` (écrit par `tri` avec les notes). `None` : XML illisible.
+fn darktable_content(xmp: &str) -> Option<Vec<u8>> {
+    use quick_xml::events::Event;
+    let ours = |name: &str| name.starts_with("darktable:") && name != "darktable:colorlabels";
+    let mut reader = quick_xml::Reader::from_str(xmp);
+    let mut out = Vec::new();
+    // Profondeur dans un élément de darktable (`darktable:history`…) : tout son contenu
+    // compte, attributs des `rdf:li` compris.
+    let mut inside = 0usize;
+    loop {
+        let (element, start) = match reader.read_event().ok()? {
+            Event::Start(e) => (e, true),
+            Event::Empty(e) => (e, false),
+            Event::End(_) => {
+                if inside > 0 {
+                    inside -= 1;
+                    out.push(b'>');
+                }
+                continue;
+            }
+            Event::Text(t) => {
+                if inside > 0 {
+                    out.extend_from_slice(t[..].as_bytes());
+                }
+                continue;
+            }
+            Event::Eof => break,
+            _ => continue,
+        };
+        let counted = inside > 0 || ours(element.name().as_ref());
+        if counted {
+            out.extend_from_slice(element.name().as_ref().as_bytes());
+            out.push(b'<');
+        }
+        for attr in element.attributes().flatten() {
+            if counted || ours(attr.key.as_ref()) {
+                out.extend_from_slice(attr.key.as_ref().as_bytes());
+                out.push(b'=');
+                out.extend_from_slice(attr.value.as_bytes());
+                out.push(b';');
+            }
+        }
+        if start && counted {
+            inside += 1;
+        }
+    }
+    Some(out)
+}
+
 /// Erreur d'un rendu.
 #[derive(Debug)]
 pub enum DevelopError {
@@ -1175,6 +1263,50 @@ mod tests {
         std::thread::sleep(Duration::from_millis(10));
         std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="28"/>"#).unwrap();
         assert_ne!(stamp(&sidecar), before, "modifié : autre empreinte");
+    }
+
+    #[test]
+    fn rating_an_image_does_not_redo_its_darktable_render() {
+        // Revue du 28/10/2026 : `tri` écrit les notes dans le sidecar de darktable ; seuls
+        // les champs de darktable comptent pour le rendu, pas les notes ni les couleurs.
+        let dir = tempfile::tempdir().unwrap();
+        let sidecar = dir.path().join("DSCF0001.RAF.xmp");
+        let xmp = |rating: u8, label: u8, exposure: &str| {
+            format!(
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description
+ xmp:Rating="{rating}" darktable:history_end="2" darktable:xmp_version="5">
+ <darktable:colorlabels><rdf:Seq><rdf:li>{label}</rdf:li></rdf:Seq></darktable:colorlabels>
+ <darktable:history><rdf:Seq>
+  <rdf:li darktable:num="0" darktable:operation="exposure" darktable:params="{exposure}"/>
+ </rdf:Seq></darktable:history></rdf:Description></rdf:RDF></x:xmpmeta>"#
+            )
+        };
+        let write = |text: String| {
+            std::fs::write(&sidecar, text).unwrap();
+            // Une autre date : la mémoire de l'empreinte ne doit pas suffire.
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        write(xmp(0, 0, "aa"));
+        let developed = render_stamp(&sidecar);
+        write(xmp(4, 2, "aa"));
+        assert_eq!(
+            render_stamp(&sidecar),
+            developed,
+            "étoiles et couleur : même rendu"
+        );
+        write(xmp(4, 2, "bb"));
+        assert_ne!(
+            render_stamp(&sidecar),
+            developed,
+            "exposition changée : autre rendu"
+        );
+        // Un autre format (RapidRAW) : tout le contenu.
+        let rr = dir.path().join("DSCF0001.RAF.rrdata");
+        std::fs::write(&rr, "{\"exposure\": 1}").unwrap();
+        let before = render_stamp(&rr);
+        std::thread::sleep(Duration::from_millis(10));
+        std::fs::write(&rr, "{\"exposure\": 2}").unwrap();
+        assert_ne!(render_stamp(&rr), before);
     }
 
     #[test]

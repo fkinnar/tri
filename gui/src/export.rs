@@ -493,6 +493,8 @@ pub struct Order {
     pub cut: Option<tri::export::Cut>,
     /// Paramètres de l'accentuation de sortie.
     pub sharpening: tri::export::Sharpening,
+    /// Rendu LibRaw (`[render]`), le même qu'à l'écran.
+    pub render: tri::raw::RenderOptions,
     /// Suffixe du JPEG d'une paire exporté avec son RAW.
     pub pair_suffix: String,
 }
@@ -524,6 +526,7 @@ impl Job {
             folder,
             cut,
             sharpening,
+            render,
             pair_suffix,
         } = order;
         // Dossier montré : celui de la première image (relatif : un par dossier d'images).
@@ -545,7 +548,8 @@ impl Job {
                 };
                 let req = tri::export::Request::new(&profile, &folder)
                     .cut(cut.as_ref())
-                    .sharpening(sharpening);
+                    .sharpening(sharpening)
+                    .render(render);
                 let embedded = local == tri::export::Local::Embedded && dt.is_none();
                 let batch = tri::export::Batch::new(&images, embedded);
                 let renderer = match &dt {

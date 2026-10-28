@@ -127,12 +127,19 @@ couleurs du thème. Une liste de profils de raccourcis vide revient aux profils 
 
 ## Pas encore réglable
 
-- Les priorités du scheduler (classes 0 à 5) : c'est l'algorithme, pas un potard.
-- Les tailles de police et quelques marges du texte en surimpression du plein écran.
-- La taille maximale du cache des 1:1 (éviction) : la fonction existe (`Cache::evict`),
-  pas encore son déclenchement.
-- Le fichier de raccourcis personnalisés (touche → action) : seuls les profils livrés sont
-  sélectionnables pour l'instant.
+Mis à jour à la revue du 28/10/2026 (l'éviction du cache 1:1, `[cache] zoom_max_mb`, et
+les raccourcis, `[keys]`, sont réglables depuis longtemps).
+
+- Les priorités du scheduler (classes 0 à 5) : c'est l'algorithme, pas un potard. De même
+  les poids de la recherche floue (`fuzzy`) et le nombre d'essais de verrouillage d'un
+  volume à éjecter sous Windows (`places`, d'après l'exemple de Microsoft).
+- L'intervalle de surveillance d'un programme externe qui travaille (`darktable-cli`,
+  RapidRAW : 50 ms, puis 20 ms pour ses dernières lignes) : à régler seulement s'il
+  pesait, ce qui n'est pas le cas.
+- Le dessin de l'interface : tailles de police, marges, espacements, épaisseurs de trait
+  et une partie des couleurs (fonds et textes en surimpression, histogramme, poignées du
+  recadrage, icônes). Ils relèveront d'un futur système de thèmes plutôt que d'une clé
+  par endroit (voir le rapport de revue du 28/10/2026).
 
 ## État d'affichage (`gui-state.toml`)
 
