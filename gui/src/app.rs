@@ -13896,6 +13896,9 @@ mod tests {
         // partie visible et se clique (CI Linux, 27/10/2026 : elle glissait sous le
         // panneau de droite).
         h.set_size(vec2(700.0, 700.0));
+        // Histogramme du panneau de droite d'abord : en arrivant, il pousse les cases RAW
+        // et JPEG vers le bas, et le clic tombait à côté (CI Windows, 28/10/2026).
+        run_until(&mut h, |app| app.meta_has_histogram);
         h.run_steps(3);
         assert!(
             h.query_by_label("Effacer").is_some(),
