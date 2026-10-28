@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Télécharger la dernière version** : en haut de l'aide (F1), deux boutons, le build
+  de nuit et la dernière alpha, avec une bulle qui explique la différence. Le paquet de
+  ce système (`.dmg`, `.msi`, AppImage…) se télécharge dans le navigateur (`[update]
+  formats`).
 - **Ouvrir un dossier dans Darktable** : clic droit sur un dossier, « Ouvrir dans
   Darktable », ou `d` dans le panneau des dossiers. Darktable s'ouvre sur ce dossier
   (importé au besoin), avec sa propre bibliothèque ; une instance déjà ouverte le reçoit

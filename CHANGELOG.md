@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Download the latest version**: at the top of the help (F1), two buttons, the
+  nightly build and the latest alpha, with a tooltip explaining the difference. This
+  system's package (`.dmg`, `.msi`, AppImage…) downloads in the browser (`[update]
+  formats`).
 - **Open a folder in Darktable**: right click on a folder, "Open in Darktable", or `d`
   in the folder panel. Darktable opens on that folder (imported if needed), with its own
   library; an instance already open receives it on Linux. RapidRAW can only open an

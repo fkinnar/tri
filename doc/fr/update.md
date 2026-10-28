@@ -46,6 +46,7 @@ récente sans aller sur GitHub.
 | `build_text(build, behind)` | les deux lignes affichées pour un build de nuit ou personnel |
 | `Release::notes_in(langue)` | notes de la version dans la langue de l'interface, mises en forme par `gui/src/markdown.rs` (titres, listes, gras, code ; issue n° 3) |
 | `report_line(build)` / `issue_url(build, settings)` | version et système en une ligne (copiés depuis l'aide) ; formulaire de signalement prérempli (`[update] issue_url`, champs `version`, `system`, `system-details` du modèle `bug.yml`) |
+| `Track`, `download(track, settings)` / `pick_download` | boutons « Télécharger » de l'aide (28/10/2026) : le build de nuit (Release `nightly`) ou la dernière version publiée (SemVer, préversions comprises), le paquet de ce système (`platform()` : `macos-arm64`, `windows-x64`, `linux-x86_64`) au premier format de `[update] formats` publié, sinon la page de la version ; le navigateur télécharge. `stage(version)` nomme le bouton (« dernière alpha ») |
 
 Dans l'interface, la requête tourne dans un fil à part (`TriApp::check_update`) ;
 la boîte (`update_dialog`) montre « recherche en cours », puis le résultat ; Échap ferme.

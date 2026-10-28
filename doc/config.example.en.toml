@@ -250,6 +250,10 @@ timeout_s = 10
 # "Report a problem" button in the help: GitHub form, prefilled with the version and the
 # system.
 issue_url = "https://github.com/fkinnar/tri/issues/new?template=bug.yml"
+# "Download" buttons of the help (nightly build, latest version): preferred package
+# formats, in order; the first one published for this system wins, otherwise the
+# version's page opens.
+formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 
 [watch]
 # Monitoring of the open folder (ms): images added, removed or modified, XMP ratings

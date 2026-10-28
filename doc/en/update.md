@@ -45,6 +45,7 @@ going to GitHub.
 | `build_text(build, behind)` | the two lines shown for a nightly or personal build |
 | `Release::notes_in(language)` | the version's notes in the interface language, formatted by `gui/src/markdown.rs` (headings, lists, bold, code; issue #3) |
 | `report_line(build)` / `issue_url(build, settings)` | version and system on one line (copied from the help); prefilled report form (`[update] issue_url`, fields `version`, `system`, `system-details` of the `bug.yml` template) |
+| `Track`, `download(track, settings)` / `pick_download` | the help's "Download" buttons (2026-10-28): the nightly build (`nightly` Release) or the latest published version (SemVer, pre-releases included), this system's package (`platform()`: `macos-arm64`, `windows-x64`, `linux-x86_64`) in the first format of `[update] formats` that is published, otherwise the version's page; the browser downloads it. `stage(version)` names the button ("latest alpha") |
 
 In the interface, the request runs in a separate thread (`TriApp::check_update`); the
 dialog (`update_dialog`) shows "checking", then the result; Escape closes it. Also at

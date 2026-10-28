@@ -368,6 +368,21 @@ update-checking = Checking…
 update-latest = You have the latest version ({ $version }).
 update-available = Version { $version } available (you have { $current }).
 update-open-page = Open the download page
+download-nightly = Download the nightly build
+download-nightly-tip = The nightly build: today's state, with the latest fixes and features, tested automatically but not published yet. To try what just arrived.
+download-release = { $stage ->
+    [alpha] Download the latest alpha
+    [beta] Download the latest beta
+   *[other] Download the latest version
+}
+download-release-tip = { $stage ->
+    [alpha] The latest published alpha: a numbered version, with its notes, steadier than the nightly build but less recent.
+    [beta] The latest published beta: a numbered version, with its notes, steadier than the nightly build but less recent.
+   *[other] The latest published version, with its notes: steadier than the nightly build, but less recent.
+}
+download-searching = Looking for the package to download…
+download-started = Downloading in the browser: { $name }
+download-page = No package for this system: page of version { $version } opened
 rating-bar-title = Rating
 filter-bar-title = Filter
 rating-bar-applies = ratings apply to the { $n } selected images
