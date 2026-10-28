@@ -983,7 +983,7 @@ impl TriApp {
         };
         let Some(loaded) = loading.try_take() else {
             // Progression dans la barre d'état.
-            ctx.request_repaint_after(Duration::from_millis(100));
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
             return;
         };
         self.loading = None;
@@ -2489,7 +2489,7 @@ impl TriApp {
     fn download_dialog(&mut self, ctx: &egui::Context) {
         if let Some(DownloadState::Running(handle)) = &self.download {
             if !handle.is_finished() {
-                ctx.request_repaint_after(Duration::from_millis(100));
+                ctx.request_repaint_after(crate::app::poll_interval(ctx));
                 return;
             }
             let Some(DownloadState::Running(handle)) = self.download.take() else {
@@ -2632,7 +2632,7 @@ impl TriApp {
                 }
             });
         if matches!(self.update, Some(UpdateCheck::Running(_))) {
-            ctx.request_repaint_after(Duration::from_millis(100));
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
         }
         if close || modal.should_close() {
             self.update = None;
@@ -6698,7 +6698,7 @@ impl TriApp {
                 Align2::LEFT_TOP,
                 &t!("view-loupe-loading"),
             );
-            ctx.request_repaint_after(Duration::from_millis(100));
+            ctx.request_repaint_after(crate::app::poll_interval(ctx));
         }
     }
 
@@ -8473,6 +8473,7 @@ impl TriApp {
             folder,
             cut,
             sharpening: self.settings.export.sharpening,
+            render: self.settings.render.options(),
             pair_suffix: self.settings.export.camera_suffix.clone(),
         };
         self.export_job = Some(crate::export::Job::start(dt, local, order, ctx));
@@ -10667,7 +10668,7 @@ impl TriApp {
                 repaint.request_repaint();
             });
         }
-        ctx.request_repaint_after(Duration::from_millis(100));
+        ctx.request_repaint_after(crate::app::poll_interval(ctx));
     }
 }
 
@@ -11772,6 +11773,18 @@ pub(crate) fn dialog_settings_id() -> egui::Id {
     egui::Id::unique("tri-dialog-settings")
 }
 
+/// Réglages des boîtes (`[gui.dialogs]`) déposés dans le contexte à chaque image.
+pub(crate) fn dialog_settings(ctx: &egui::Context) -> crate::settings::DialogSettings {
+    ctx.data(|data| data.get_temp(dialog_settings_id()))
+        .unwrap_or_default()
+}
+
+/// Pendant une attente, délai avant l'image suivante (`[gui.dialogs] poll_ms`, déposé
+/// dans le contexte comme les autres réglages des boîtes).
+pub(crate) fn poll_interval(ctx: &egui::Context) -> Duration {
+    Duration::from_millis(dialog_settings(ctx).poll_ms)
+}
+
 /// Nom d'une couleur de notation.
 fn color_name(color: Color) -> String {
     match color {
@@ -12074,8 +12087,29 @@ mod tests {
         (harness, dir)
     }
 
+    /// Tape `key` avec `modifiers` comme la vraie fenêtre la livre (revue du 28/10/2026,
+    /// après #194) : egui-winit remplace Ctrl+X / C / V (et sous Windows Maj+Suppr,
+    /// Ctrl+Inser, Maj+Inser) par couper / copier / coller ; `egui_kittest`, lui, enverrait
+    /// la touche elle-même, et un raccourci cassé passerait les tests.
     fn press(h: &mut Harness<'_, TriApp>, key: Key, modifiers: Modifiers) {
-        h.key_press_modifiers(modifiers, key);
+        // Ailleurs que sur macOS, « commande » est Ctrl.
+        let modifiers = Modifiers {
+            command: modifiers.command || (modifiers.ctrl && !cfg!(target_os = "macos")),
+            ..modifiers
+        };
+        let events = crate::actions::winit_events(key, modifiers, cfg!(windows));
+        if matches!(events.as_slice(), [UiEvent::Key { .. }, ..]) {
+            h.key_press_modifiers(modifiers, key);
+        } else {
+            // Modificateurs tenus pendant l'image de l'événement, relâchés à la suivante
+            // (comme au clavier : `event_modifiers` les relâcherait dans la même image).
+            h.event(UiEvent::ModifiersChanged(modifiers));
+            for event in events {
+                h.event(event);
+            }
+            h.run_steps(1);
+            h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
+        }
         h.run_steps(3);
     }
 

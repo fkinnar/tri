@@ -659,6 +659,13 @@ help_width = 620.0
 # Défilement de l'aide au clavier : par flèche haut / bas, en points (pages : Page préc. /
 # suiv., Ctrl+U / Ctrl+D).
 help_scroll_line = 40.0
+# Pendant une attente (copie, recherche sur le réseau, touche de séquence…), intervalle
+# entre deux images pour voir où elle en est, en millisecondes.
+poll_ms = 100
+# Fichiers en erreur listés à la fin d'un déchargement ; dossiers proposés sous un champ de
+# chemin, après Tab.
+max_errors = 5
+completions = 12
 
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,

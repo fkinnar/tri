@@ -216,12 +216,12 @@ pub fn params(level: Level, settings: &Settings) -> String {
 /// Clé de cache de `file` au niveau `level`.
 pub fn key(file: &MediaFile, level: Level, settings: &Settings) -> io::Result<Key> {
     let mut params = params(level, settings);
-    // Développé : le sidecar aussi (un développement modifié dans le logiciel refait le
-    // rendu).
+    // Développé : le développement du sidecar aussi (modifié dans le logiciel : le rendu
+    // est refait ; une note posée par `tri` dans le même fichier ne compte pas).
     if let Level::Developed(engine) = level {
         let stamp = engine
             .sidecar(&file.path)
-            .map_or_else(|| "aucun".to_string(), |s| crate::develop::stamp(&s));
+            .map_or_else(|| "aucun".to_string(), |s| crate::develop::render_stamp(&s));
         params.push_str(&format!(";xmp={stamp}"));
     }
     Key::new(&file.path, level, &params)

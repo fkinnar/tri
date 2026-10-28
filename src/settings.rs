@@ -185,6 +185,18 @@ pub struct RenderSection {
     pub auto_bright: bool,
 }
 
+impl RenderSection {
+    /// Options de rendu LibRaw à pleine résolution (aperçus, 1:1, export).
+    pub fn options(&self) -> RenderOptions {
+        RenderOptions {
+            camera_wb: self.camera_wb,
+            half_size: false,
+            bright: self.bright,
+            auto_bright: self.auto_bright,
+        }
+    }
+}
+
 impl Default for RenderSection {
     fn default() -> Self {
         let d = RenderOptions::default();
@@ -271,12 +283,7 @@ impl EngineSettings {
                     .standard
                     .resolve(|| screen_side.unwrap_or(p.auto_fallback)),
             },
-            render: RenderOptions {
-                camera_wb: r.camera_wb,
-                half_size: false,
-                bright: r.bright,
-                auto_bright: r.auto_bright,
-            },
+            render: r.options(),
             half_size_margin: p.half_size_margin,
             embedded_min_ratio: p.embedded_min_ratio,
             min_embedded_full: p.min_embedded_full,

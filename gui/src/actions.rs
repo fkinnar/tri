@@ -1463,6 +1463,37 @@ const RATING: &[Binding] = {
     ]
 };
 
+/// Événements qu'egui-winit livre pour la touche `key` tenue avec `modifiers` (pour les
+/// tests : `egui_kittest` envoie toujours la touche elle-même). Comme `egui-winit` 0.37
+/// (`is_cut_command`…) : Ctrl / Cmd seuls + X, C, V deviennent couper, copier, coller,
+/// sans la touche ; sous Windows aussi Maj+Suppr, Ctrl+Inser, Maj+Inser. Coller suppose un
+/// presse-papiers non vide (vide, egui-winit n'envoie rien).
+#[cfg(test)]
+pub(crate) fn winit_events(key: Key, modifiers: Modifiers, windows: bool) -> Vec<Event> {
+    let command_only = modifiers.command && !modifiers.alt && !modifiers.shift;
+    let event = if (command_only && key == Key::X)
+        || (windows && modifiers.shift && key == Key::Delete)
+    {
+        Event::Cut
+    } else if (command_only && key == Key::C) || (windows && modifiers.ctrl && key == Key::Insert) {
+        Event::Copy
+    } else if (command_only && key == Key::V) || (windows && modifiers.shift && key == Key::Insert)
+    {
+        Event::Paste("texte".into())
+    } else {
+        return [true, false]
+            .map(|pressed| Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers,
+            })
+            .to_vec();
+    };
+    vec![event]
+}
+
 /// Touche d'un événement du presse-papiers d'egui-winit (voir
 /// [`Keymap::chords_repeated`]) : Maj tenue, celle de Windows (Maj+Suppr pour couper,
 /// Maj+Inser pour coller) ; sinon X, C ou V avec Ctrl / Cmd.
@@ -2794,6 +2825,44 @@ mod tests {
         assert_eq!(chords, [(plain(Key::E), false), (Chord::char('°'), true)]);
         assert!(Action::NavNext.repeats() && Action::PanLeft.repeats());
         assert!(!Action::FileEdit.repeats() && !Action::Develop.repeats());
+    }
+
+    #[test]
+    fn every_shortcut_survives_what_the_system_delivers() {
+        // Revue du 28/10/2026, après #194 : les tests tapaient les touches telles quelles,
+        // alors qu'egui-winit en remplace certaines par couper / copier / coller. Chaque
+        // raccourci de chaque profil passe ici par les événements de la vraie fenêtre,
+        // sous Linux, Windows et macOS (Ctrl physique), et doit revenir intact.
+        let km = Keymap::default();
+        for profile in [Profile::Classic, Profile::Vim] {
+            for (chords, action) in profile.bindings() {
+                for chord in chords.iter() {
+                    let Trigger::Key(key) = chord.trigger else {
+                        continue;
+                    };
+                    for os in ["linux", "windows", "macos"] {
+                        let modifiers = Modifiers {
+                            shift: chord.shift,
+                            ctrl: chord.ctrl,
+                            // Ailleurs que sur macOS, « commande » est Ctrl.
+                            command: chord.ctrl && os != "macos",
+                            ..Default::default()
+                        };
+                        let events = winit_events(key, modifiers, os == "windows");
+                        let got: Vec<Chord> = km
+                            .chords_repeated(&events, modifiers)
+                            .into_iter()
+                            .map(|(c, _)| c)
+                            .collect();
+                        assert_eq!(
+                            got,
+                            [*chord],
+                            "{profile:?} {os} : {chord:?} ({action:?}) perdu en route"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

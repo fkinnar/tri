@@ -555,7 +555,7 @@ impl OffloadDialog {
                             ui.weak(t!("offload-destination", path = dest.display().to_string()));
                         }
                         if let Some(e) = error {
-                            ui.colored_label(egui::Color32::from_rgb(230, 90, 90), e.as_str());
+                            ui.colored_label(ui.visuals().error_fg_color, e.as_str());
                         }
                         // Choix faits avant la copie, enchaînés à la fin (retour du
                         // 17/10/2026 : ouvrir *et* éjecter, pas l'un ou l'autre).
@@ -641,9 +641,10 @@ impl OffloadDialog {
                             "offload-destination",
                             path = report.destination.display().to_string()
                         ));
-                        for (file, e) in report.errors.iter().take(5) {
+                        let shown = crate::app::dialog_settings(ui.ctx()).max_errors;
+                        for (file, e) in report.errors.iter().take(shown) {
                             ui.colored_label(
-                                egui::Color32::from_rgb(230, 90, 90),
+                                ui.visuals().error_fg_color,
                                 format!("{} : {e}", file_name(file)),
                             );
                         }

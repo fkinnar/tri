@@ -128,12 +128,19 @@ theme colors. An empty list of shortcut profiles falls back to the default profi
 
 ## Not yet configurable
 
-- The scheduler priorities (classes 0 to 5): that is the algorithm, not a knob.
-- Font sizes and a few margins of the text overlaid in full screen.
-- The maximum size of the 1:1 cache (eviction): the function exists (`Cache::evict`),
-  not yet its trigger.
-- The custom shortcut file (key → action): only the shipped profiles can be selected for
-  now.
+Updated at the review of 2026-10-28 (the 1:1 cache eviction, `[cache] zoom_max_mb`, and
+the shortcuts, `[keys]`, have been configurable for a long time).
+
+- The scheduler priorities (classes 0 to 5): that is the algorithm, not a knob. Likewise
+  the weights of the fuzzy search (`fuzzy`) and the number of lock attempts on a volume
+  to eject on Windows (`places`, after Microsoft's sample).
+- The polling interval of an external program at work (`darktable-cli`, RapidRAW: 50 ms,
+  then 20 ms for its last lines): to make configurable only if it weighed, which it does
+  not.
+- The drawing of the interface: font sizes, margins, spacing, stroke widths and part of
+  the colours (overlay backgrounds and texts, histogram, crop handles, icons). They will
+  belong to a future theme system rather than one key per place (see the review report of
+  2026-10-28).
 
 ## Display state (`gui-state.toml`)
 

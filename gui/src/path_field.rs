@@ -68,7 +68,8 @@ impl PathField {
         if field.changed() {
             self.candidates.clear();
         }
-        for candidate in self.candidates.iter().take(12) {
+        let shown = crate::app::dialog_settings(&ctx).completions;
+        for candidate in self.candidates.iter().take(shown) {
             ui.weak(candidate);
         }
         field
