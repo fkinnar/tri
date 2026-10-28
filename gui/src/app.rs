@@ -14638,9 +14638,9 @@ mod tests {
                 self.open
             }
         }
-        let fake = |open: bool, gui: PathBuf| {
+        fn fake(open: bool, gui: PathBuf) -> tri::develop::Developers {
             tri::develop::Developers::none().with(Arc::new(FakeDarktable { open, gui }))
-        };
+        }
         // Déjà ouvert : rien n'est lancé, la barre d'état explique (darktable planterait).
         h.state_mut().developers = fake(true, PathBuf::new());
         press(&mut h, Key::D, Modifiers::NONE);
