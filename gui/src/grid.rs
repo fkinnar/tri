@@ -177,6 +177,8 @@ pub fn navigate(
         | Action::FolderDelete
         | Action::FolderFavorite
         | Action::FolderFavoriteName
+        | Action::FolderConnect
+        | Action::FolderForget
         | Action::FolderOpenIn(_)
         | Action::FolderCopy
         | Action::FolderMove

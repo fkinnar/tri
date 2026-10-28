@@ -128,6 +128,10 @@ places-pictures = Images
 places-root = Racine (/)
 places-device = Support de { $size } Go
 places-mount-unsupported = monter un support n'est possible que sous Linux et macOS
+servers-unreachable = partage injoignable : { $error }
+servers-tool-missing = outil du système introuvable : { $error }
+servers-refused = le système a refusé la connexion : { $error }
+servers-not-found = connecté, mais « { $name } » n'apparaît pas parmi les partages montés
 settings-defaults-used = { $warning } ; réglages par défaut utilisés
 settings-file-error = configuration { $path } : { $error }
 

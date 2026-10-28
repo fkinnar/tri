@@ -283,6 +283,11 @@ pub enum Action {
     FolderFavorite,
     /// Panneau des dossiers : nommer le favori pointé (vide : nom du dossier).
     FolderFavoriteName,
+    /// Panneau des dossiers : se connecter à un partage réseau (`\\nas\photo`,
+    /// `smb://nas/photo`), tapé dans le champ de recherche (28/10/2026).
+    FolderConnect,
+    /// Panneau des dossiers : oublier le partage réseau mémorisé pointé.
+    FolderForget,
     /// Panneau des dossiers : ouvrir le dossier pointé dans un logiciel de
     /// développement (darktable, 28/10/2026).
     FolderOpenIn(tri::develop::Engine),
@@ -434,7 +439,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 180] = [
+    pub const ALL: [Action; 182] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -550,6 +555,8 @@ impl Action {
         Action::FolderDelete,
         Action::FolderFavorite,
         Action::FolderFavoriteName,
+        Action::FolderConnect,
+        Action::FolderForget,
         Action::FolderOpenIn(tri::develop::Engine::Darktable),
         Action::FolderCopy,
         Action::FolderMove,
@@ -675,10 +682,12 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderFavoriteName | FolderOpenIn(_) | FolderCopy | FolderMove | MetaUp
-            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
-            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
-            | FolderSectionNext | FolderSectionPrev => Group::Panels,
+            | FolderFavoriteName | FolderConnect | FolderForget | FolderOpenIn(_) | FolderCopy
+            | FolderMove | MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp
+            | MetaSelectDown | MetaCopyAll | PanelSectionNext | PanelSectionPrev
+            | PanelActivate | PanelLeft | PanelRight | FolderSectionNext | FolderSectionPrev => {
+                Group::Panels
+            }
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
@@ -835,6 +844,8 @@ impl Action {
             Action::FolderDelete => "core.folders.delete",
             Action::FolderFavorite => "core.folders.favorite",
             Action::FolderFavoriteName => "core.folders.favorite_name",
+            Action::FolderConnect => "core.folders.connect",
+            Action::FolderForget => "core.folders.forget",
             Action::FolderOpenIn(tri::develop::Engine::Darktable) => "plugin.darktable.open_folder",
             Action::FolderOpenIn(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.open_folder",
             Action::FolderCopy => "core.folders.copy",
@@ -971,8 +982,10 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderOpenIn(_) | FolderCopy
-            | FolderMove | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderConnect | FolderForget
+            | FolderOpenIn(_) | FolderCopy | FolderMove | FolderSectionNext | FolderSectionPrev => {
+                Some(Scope::Folders)
+            }
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),
@@ -1277,6 +1290,9 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::M)], FolderFavorite),
         // Nommer le favori : `n`.
         (&[plain(Key::N)], FolderFavoriteName),
+        // Se connecter à un partage réseau : `c` (« connect ») ; l'oublier : Maj+C.
+        (&[plain(Key::C)], FolderConnect),
+        (&[shifted(Key::C)], FolderForget),
         // Ouvrir le dossier dans darktable : `d`, comme le développement des images.
         (
             &[plain(Key::D)],

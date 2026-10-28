@@ -56,7 +56,9 @@ system one ("cold" measurements, experiments).
   folders since 2026-10-26, `[gui.folders] section_scale`, #120): devices (cards, keys,
   external drives, mounted or not: an unmounted one is greyed, a click or `o` mounts
   then opens it, right click "Mount" / "Eject", 2026-10-26, #113), fixed drives,
-  network, personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
+  network (with the remembered shares; "server" icon of the header or `c`: connect to a
+  share by its address, `\\nas\photo` or `smb://nas/photo`, Shift+C or right click
+  forgets it, 2026-10-28, see [servers.md](servers.md)), personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
   then only the system (root, collapsed); **Subfolders** icon next to the title (2026-10-20,
   remembered; a checkbox until 2026-10-28, Refresh moved to the right edge): images of subfolders are shown too (`[gui.folders] subfolders_depth`
   levels), read on demand by the engine (`places::Tree`, see [places.md](places.md)). The

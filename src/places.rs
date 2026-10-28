@@ -28,6 +28,10 @@ pub enum PlaceKind {
     /// chemin est celui du périphérique (`/dev/sdb1`), à monter ([`mount`]) avant d'en
     /// lire les dossiers.
     Device,
+    /// Partage réseau mémorisé pas monté (macOS, Linux : [`crate::servers`]) ; son chemin
+    /// est son adresse (`smb://nas/photo`), à rejoindre ([`crate::servers::Server::connect`])
+    /// avant d'en lire les dossiers.
+    Server,
 }
 
 /// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
@@ -39,7 +43,7 @@ pub enum Section {
     Devices,
     /// Disques fixés ([`PlaceSettings::fixed`]) : toujours branchés, jamais éjectés.
     Drives,
-    /// Partages réseau montés.
+    /// Partages réseau montés, et ceux mémorisés ([`crate::servers`]).
     Network,
     /// Dossier personnel et ses dossiers habituels.
     Personal,
@@ -78,7 +82,7 @@ impl PlaceKind {
     pub fn section(self) -> Section {
         match self {
             PlaceKind::Volume | PlaceKind::Device => Section::Devices,
-            PlaceKind::Network => Section::Network,
+            PlaceKind::Network | PlaceKind::Server => Section::Network,
             PlaceKind::Home => Section::Personal,
             PlaceKind::Favorite => Section::Favorites,
             PlaceKind::Root => Section::System,
@@ -467,17 +471,38 @@ fn volumes_in(dirs: &[PathBuf]) -> Vec<Place> {
     volumes
 }
 
-/// Lettres de lecteur présentes (`C:\`...), sous Windows.
+/// Lettres de lecteur présentes (`C:\`...), sous Windows ; un lecteur réseau (`Z:`
+/// attribué à un partage) va dans la section « Réseau » (28/10/2026).
 fn windows_drives() -> Vec<Place> {
     (b'A'..=b'Z')
         .map(|letter| format!("{}:\\", letter as char))
         .filter(|root| Path::new(root).is_dir())
         .map(|root| Place {
             name: root.clone(),
+            kind: if is_remote_drive(&root) {
+                PlaceKind::Network
+            } else {
+                PlaceKind::Volume
+            },
             path: PathBuf::from(root),
-            kind: PlaceKind::Volume,
         })
         .collect()
+}
+
+/// Vrai si la lettre de lecteur `root` (`Z:\`) est un lecteur réseau (Windows).
+#[cfg(windows)]
+fn is_remote_drive(root: &str) -> bool {
+    use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
+    // DRIVE_REMOTE (WinBase.h).
+    const DRIVE_REMOTE: u32 = 4;
+    let wide: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY : chaîne terminée par un zéro, lue seulement pendant l'appel.
+    unsafe { GetDriveTypeW(wide.as_ptr()) == DRIVE_REMOTE }
+}
+
+#[cfg(not(windows))]
+fn is_remote_drive(_root: &str) -> bool {
+    false
 }
 
 /// Fichier des favoris, dans le dossier de données : un chemin par ligne, dans l'ordre
@@ -1290,6 +1315,9 @@ pub struct Tree {
     names: HashMap<PathBuf, String>,
     /// Sections repliées : leurs lignes ne sont pas dans [`Tree::rows`].
     folded: HashSet<Section>,
+    /// Partages réseau mémorisés ([`crate::servers::remembered`]), ajoutés aux
+    /// emplacements quand ils n'y sont pas déjà (montés).
+    servers: Vec<crate::servers::Server>,
 }
 
 impl Tree {
@@ -1319,6 +1347,44 @@ impl Tree {
             present: Vec::new(),
             names: HashMap::new(),
             folded: HashSet::new(),
+            servers: Vec::new(),
+        }
+    }
+
+    /// Remplace les partages réseau mémorisés, proposés dans la section « Réseau » : sous
+    /// Windows, leur chemin UNC ; ailleurs, à rejoindre tant qu'ils ne sont pas montés.
+    pub fn set_servers(&mut self, servers: Vec<crate::servers::Server>) {
+        // Les emplacements des partages d'avant : à rejoindre (macOS, Linux) ou chemin UNC
+        // (Windows, `PlaceKind::Network` : un partage oublié y restait, CI du 28/10/2026).
+        let os = std::env::consts::OS;
+        let old: Vec<PathBuf> = self.servers.iter().map(|s| s.place(os).path).collect();
+        self.places
+            .retain(|p| p.kind != PlaceKind::Server && !old.contains(&p.path));
+        self.servers = servers;
+        self.add_servers();
+    }
+
+    /// Partages réseau mémorisés.
+    pub fn servers(&self) -> &[crate::servers::Server] {
+        &self.servers
+    }
+
+    /// Ajoute aux emplacements les partages mémorisés qui n'y sont pas déjà (montés, ou
+    /// même chemin UNC).
+    fn add_servers(&mut self) {
+        if self.servers.is_empty() {
+            return;
+        }
+        let os = std::env::consts::OS;
+        let mounts = crate::servers::Mounts::read(os);
+        for server in &self.servers {
+            if os != "windows" && server.mounted_in(&mounts).is_some() {
+                continue;
+            }
+            let place = server.place(os);
+            if !self.places.iter().any(|p| p.path == place.path) && !self.filter.hides(&place) {
+                self.places.push(place);
+            }
         }
     }
 
@@ -1449,12 +1515,14 @@ impl Tree {
     /// le reste.
     pub fn set_places(&mut self, places: Vec<Place>) {
         self.places = places;
+        self.add_servers();
         self.check_favorites();
     }
 
     /// Relit les emplacements (carte SD insérée entre-temps) et les dossiers dépliés.
     pub fn refresh(&mut self) {
         self.places = places_filtered(&self.filter);
+        self.add_servers();
         self.check_favorites();
         self.reload();
     }

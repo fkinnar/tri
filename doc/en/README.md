@@ -40,6 +40,7 @@ exists.
 | [send.md](send.md) | Module `tri::send`: send plugins (AirDrop) |
 | [update.md](update.md) | Module `tri::update`: checking for a new version, on demand |
 | [watch.md](watch.md) | Module `tri::watch`: watching the open folder (images added, XMP modified elsewhere) |
+| [servers.md](servers.md) | Module `tri::servers`: network shares joined by their address (`\\nas\photo`, `smb://`) |
 | [places.md](places.md) | Module `tri::places`: places (volumes, home folder, root) and tree |
 | [process.md](process.md) | Module `tri::process`: external programs, without a console window on Windows |
 | [metadata.md](metadata.md) | Module `tri::metadata`: capture metadata (LibRaw, EXIF), lines to display |

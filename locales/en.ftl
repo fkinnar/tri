@@ -127,6 +127,10 @@ places-pictures = Pictures
 places-root = Root (/)
 places-device = { $size } GB media
 places-mount-unsupported = mounting a device only works on Linux and macOS
+servers-unreachable = share unreachable: { $error }
+servers-tool-missing = system tool not found: { $error }
+servers-refused = the system refused the connection: { $error }
+servers-not-found = connected, but "{ $name }" is not among the mounted shares
 settings-defaults-used = { $warning }; default settings used
 settings-file-error = configuration { $path }: { $error }
 

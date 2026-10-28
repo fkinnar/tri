@@ -56,7 +56,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   les dossiers depuis le 26/10/2026, `[gui.folders] section_scale`, #120) :
   périphériques (cartes, clés, disques externes, montés ou non : un support pas monté
   est grisé, un clic ou `o` le monte puis l'ouvre, clic droit « Monter » / « Éjecter »,
-  26/10/2026, #113), disques fixés, réseau, dossiers personnels (avec Bureau, Documents,
+  26/10/2026, #113), disques fixés, réseau (avec les partages mémorisés ; icône
+  « serveur » de l'en-tête ou `c` : se connecter à un partage par son adresse,
+  `\\nas\photo` ou `smb://nas/photo`, Maj+C ou clic droit l'oublie, 28/10/2026, voir
+  [servers.md](servers.md)), dossiers personnels (avec Bureau, Documents,
   Téléchargements, Images), favoris, puis seulement le système (racine, repliée) ; icône
   **Sous-dossiers** à côté du titre (20/10/2026, gardée ; une case jusqu'au 28/10/2026,
   Actualiser passé au bord droit) : les images des sous-dossiers s'affichent aussi
