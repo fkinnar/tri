@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Luminance in the large histogram**: one more dot (a half-light disc) and `l` show
+  the luminance alone, and the table gains a Luminance row. On a RAW, it is computed on
+  the sensor data, per block of the mosaic (2 × 2 in Bayer, 3 × 3 in X-Trans), with the
+  shot's white balance; green no longer stands in for it. Colour `[gui.colors]
+  hist_luminance`. Cached exposure analyses are recomputed once.
 - **Camera JPEG in the histogram**: for a RAW, the camera JPEG's curve is drawn as a
   thin grey line over the sensor data's, to see what the camera did with the highlights
   and shadows. In the large histogram, a "Camera JPEG" row under Red, Green, Blue is its

@@ -169,11 +169,13 @@ system one ("cold" measurements, experiments).
   the large one: median, mean, range from shadows to highlights (percentiles
   `stats_tail`, 1 % and 99 %), standard deviation, saturated, blocked, in EV below
   saturation (`Exposure::channel_stats`, computed in the engine from the EV histogram
-  already cached). No luminance on RAW data (a photosite measures only one colour): green
-  stands in for it, and this is stated.
+  already cached), and a **Luminance** row (2026-10-28; on a RAW, computed per block of
+  the mosaic, which is stated: see `exposure.md`).
   **Analysis tool** (user's idea, 2026-10-18): four dots at the bottom right of the large
-  histogram (red, green, blue, white = all; `Shift+C` cycles through them and opens the
-  large histogram) show only one channel, its single statistics row and its zones. To the
+  histogram (red, green, blue, luminance — a half-light disc, `l`, 2026-10-28, colour
+  `[gui.colors] hist_luminance` —, white = all; `Shift+C` cycles through them and opens
+  the large histogram) show only one channel, its single statistics row and its zones
+  (luminance: those of all channels, the mask being per channel). To the
   right of the table, a **small analysis image**: the thumbnail in grey, saturated zones
   in yellow and blocked ones in blue (`analysis_over`, `analysis_under`), from the
   engine's exposure mask (bits per channel, `tri::exposure::mask`); all channels:
@@ -632,7 +634,7 @@ system one ("cold" measurements, experiments).
     Computed from the cached camera preview (`preview::camera_exposure`, a few tens of ms,
     kept in memory) once it is ready. A discreet grey (2026-10-28: in white it drew the
     eye). Legend in the large histogram: a "Camera JPEG" row under Red, Green, Blue, with
-    its figures below its own white (the chosen channel, otherwise green); tooltip of the
+    its figures below its own white (the chosen channel, otherwise the luminance); tooltip of the
     small one. A button (a camera, left of the analysis photo's) and `j` in the large
     histogram show or hide it, remembered between sessions; `[gui.histogram]
     camera_jpeg` (value at the first launch), `camera_width`, colour `[gui.colors]

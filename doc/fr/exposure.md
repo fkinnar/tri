@@ -98,9 +98,31 @@ Tirées de l'histogramme en IL (1/8 d'IL par case par défaut), sans relire l'im
 médiane et centiles (interpolés dans la case où le cumul franchit le seuil), moyenne et
 écart-type (centres des cases), parts saturée et bouchée du canal. En IL sous la
 saturation : la moyenne est celle des tons, pas de la lumière. Montrées dans le grand
-histogramme de l'interface. Pas de luminance pour un RAW (chaque photosite ne mesure
-qu'une couleur) ; pour une image plate, une vraie luminance demanderait un histogramme de
-plus dans l'analyse (non fait).
+histogramme de l'interface, aussi pour la luminance (`channel_stats(LUMINANCE)`).
+
+## Luminance (28/10/2026, demandée par l'utilisateur)
+
+Une quatrième série après les trois canaux, à l'indice `LUMINANCE` des tableaux
+d'`Exposure` (`SERIES` = 4) : histogrammes linéaire et en IL, `total`, `over`, `under`,
+`high`. Elle n'entre ni dans le masque des zones (par canal) ni dans `over_fraction` /
+`under_fraction` / `headroom_ev` (badges et alertes inchangés).
+
+- **Image plate** : par pixel, en lumière linéaire, pondération de Rec. 709 (0,2126 R +
+  0,7152 V + 0,0722 B), réencodée en sRGB pour tomber dans les mêmes cases que les
+  canaux (table de la lumière de chaque valeur, recherche par dichotomie).
+- **RAW** : un photosite ne mesure qu'une couleur ; pas de dématriçage pour autant. La
+  mosaïque est découpée en blocs qui portent chacun les trois couleurs
+  (`Sensor::luma_block` : le plus petit côté qui convient, 2 en Bayer, 3 en X-Trans) ;
+  une valeur par bloc, somme des moyennes de chaque couleur pondérées par
+  `Sensor::luma_weights` : balance des blancs de la prise de vue (`cam_mul`, sinon
+  `pre_mul`), ramenée au vert, puis la matrice `rgb_cam` de LibRaw (couleurs du capteur
+  vers sRGB) et Rec. 709. Un gris neutre garde la valeur de son vert. Les blocs
+  incomplets du bord sont laissés ; `total[LUMINANCE]` compte des blocs, pas des
+  photosites. La luminance sature quand elle atteint le blanc du capteur : un bloc dont
+  un seul canal est saturé ne l'est pas forcément (c'est le sens de la luminance).
+
+Format du cache `TRIEXP03` et `VERSION` 6 : les analyses en cache sont recalculées une
+fois.
 
 ## Bouché par canal (18/10/2026)
 

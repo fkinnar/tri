@@ -172,12 +172,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   statistiques** par canal ne sont que dans le grand : médiane, moyenne, plage des ombres
   aux hautes lumières (centiles `stats_tail`, 1 % et 99 %), écart-type, saturés, bouchés,
   en IL sous la saturation (`Exposure::channel_stats`, calculé dans le moteur à partir
-  de l'histogramme en IL déjà en cache). Pas de luminance sur des données RAW (un
-  photosite ne mesure qu'une couleur) : le vert en tient lieu, c'est indiqué.
+  de l'histogramme en IL déjà en cache), et une ligne **Luminance** (28/10/2026 ; sur un
+  RAW, calculée par bloc de la mosaïque, c'est indiqué : voir `exposure.md`).
   **Outil d'analyse** (idée de l'utilisateur, 18/10/2026) : quatre pastilles en bas à
-  droite du grand histogramme (rouge, vert, bleu, blanc = tous ; `Maj+C` les fait tourner
-  et ouvre le grand histogramme) n'affichent qu'un canal, sa seule ligne de statistiques
-  et ses zones. À droite du tableau, une **petite image d'analyse** : la vignette en gris,
+  droite du grand histogramme (rouge, vert, bleu, luminance — un disque à moitié clair,
+  `l`, 28/10/2026, couleur `[gui.colors] hist_luminance` —, blanc = tous ; `Maj+C` les
+  fait tourner et ouvre le grand histogramme) n'affichent qu'un canal, sa seule ligne de
+  statistiques et ses zones (luminance : celles de tous les canaux, le masque étant par
+  canal). À droite du tableau, une **petite image d'analyse** : la vignette en gris,
   zones saturées en jaune et bouchées en bleu (`analysis_over`, `analysis_under`), d'après
   le masque d'exposition du moteur (bits par canal, `tri::exposure::mask`) ; tous canaux :
   saturé dans un canal quelconque, bouché dans l'ensemble des canaux
@@ -666,7 +668,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     (`preview::camera_exposure`, quelques dizaines de ms, gardée en mémoire), dès qu'il
     est prêt. Gris discret (28/10/2026 : en blanc, il attirait l'œil). Légende dans le
     grand histogramme : une ligne « JPEG boîtier » sous Rouge, Vert, Bleu, avec ses
-    chiffres sous son propre blanc (canal choisi, sinon le vert) ; bulle d'aide du petit.
+    chiffres sous son propre blanc (canal choisi, sinon la luminance) ; bulle d'aide du petit.
     Bouton (appareil photo, à gauche de la photo d'analyse) et `j` dans le grand
     histogramme pour la montrer ou la masquer, retenu d'une session à l'autre ;
     `[gui.histogram] camera_jpeg` (valeur au premier lancement), `camera_width`, couleur

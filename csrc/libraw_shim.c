@@ -1,6 +1,7 @@
 /* Accès aux champs de libraw_data_t.params qui n'ont pas de setter dans l'API C.
  * Compilé avec le vrai libraw.h : le layout de la struct est toujours le bon. */
 #include <libraw/libraw.h>
+#include <string.h>
 
 void tri_libraw_set_use_camera_wb(libraw_data_t *lr, int value) {
     lr->params.use_camera_wb = value;
@@ -33,6 +34,9 @@ typedef struct {
                                dimensions du motif de noir, [6..] le motif (Fuji : 6 × 6) */
     unsigned cblack_len;
     unsigned filters; /* 0 : pas de mosaïque ; 9 : X-Trans ; sinon motif Bayer */
+    float cam_mul[4]; /* balance des blancs de la prise de vue (0 : inconnue) */
+    float pre_mul[4]; /* balance des blancs « lumière du jour » du boîtier */
+    float rgb_cam[3][4]; /* couleurs du capteur (balance faite) vers sRGB linéaire */
 } tri_raw_info;
 
 void tri_libraw_raw_info(libraw_data_t *lr, tri_raw_info *out) {
@@ -49,6 +53,9 @@ void tri_libraw_raw_info(libraw_data_t *lr, tri_raw_info *out) {
     out->cblack_len = LIBRAW_CBLACK_SIZE;
     out->maximum = lr->rawdata.color.maximum;
     out->filters = lr->idata.filters;
+    memcpy(out->cam_mul, lr->color.cam_mul, sizeof(out->cam_mul));
+    memcpy(out->pre_mul, lr->color.pre_mul, sizeof(out->pre_mul));
+    memcpy(out->rgb_cam, lr->color.rgb_cam, sizeof(out->rgb_cam));
 }
 
 /* Métadonnées de prise de vue lues par LibRaw (open_file suffit, pas d'unpack). La date
@@ -60,7 +67,6 @@ typedef struct {
     int width, height; /* zone visible, avant rotation */
 } tri_metadata;
 
-#include <string.h>
 #include <time.h>
 
 /* Copie bornée d'une chaîne, toujours terminée par un zéro. Pas strncpy : il ne garantit
