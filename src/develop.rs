@@ -196,6 +196,12 @@ pub trait Developer: Send + Sync + std::fmt::Debug {
         side: u32,
         cancel: &AtomicBool,
     ) -> Result<(), DevelopError>;
+
+    /// Commande qui ouvre le dossier `dir` dans l'interface du logiciel, si elle existe
+    /// (darktable : oui ; RapidRAW n'ouvre qu'une image).
+    fn open_folder(&self, _dir: &Path) -> Option<Command> {
+        None
+    }
 }
 
 /// Les logiciels de développement trouvés sur la machine, et la préférence.
@@ -259,6 +265,24 @@ impl Developers {
     /// Le logiciel `engine`, s'il est installé.
     pub fn get(&self, engine: Engine) -> Option<&Arc<dyn Developer>> {
         self.tools.iter().find(|t| t.engine() == engine)
+    }
+
+    /// Logiciels installés qui savent ouvrir un dossier ([`Developer::open_folder`]).
+    pub fn folder_openers(&self) -> Vec<Engine> {
+        let probe = Path::new(".");
+        let mut engines: Vec<Engine> = self
+            .tools
+            .iter()
+            .filter(|t| t.open_folder(probe).is_some())
+            .map(|t| t.engine())
+            .collect();
+        engines.sort();
+        engines
+    }
+
+    /// Commande qui ouvre `dir` dans `engine`, s'il est installé et le sait.
+    pub fn open_folder(&self, engine: Engine, dir: &Path) -> Option<Command> {
+        self.get(engine)?.open_folder(dir)
     }
 
     /// Logiciel du rendu développé de `image` (voir [`resolve`]).
@@ -407,6 +431,38 @@ pub fn find_darktable(setting: &str) -> Option<Cli> {
     appimage(home.as_deref(), "darktable")
         .map(cli_for)
         .or_else(flatpak)
+}
+
+/// L'interface de darktable, d'après `darktable-cli` : le programme `darktable` à côté
+/// (paquet, `.app`, installeur Windows), l'AppImage sans commande (elle lance l'interface
+/// par défaut), ou le Flatpak sans `--command`. `None` si le programme manque.
+pub fn darktable_gui(cli: &Cli) -> Option<Cli> {
+    if cli.program == Path::new("flatpak") {
+        let args = cli
+            .args
+            .iter()
+            .filter(|a| !a.starts_with("--command="))
+            .cloned()
+            .collect();
+        return Some(Cli {
+            program: cli.program.clone(),
+            args,
+        });
+    }
+    if is_appimage(&cli.program) {
+        return Some(Cli::native(cli.program.clone()));
+    }
+    let exe = if cli
+        .program
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+    {
+        "darktable.exe"
+    } else {
+        "darktable"
+    };
+    let gui = cli.program.with_file_name(exe);
+    gui.is_file().then(|| Cli::native(gui))
 }
 
 /// Un exécutable donné : AppImage de darktable (le binaire `darktable-cli` qu'elle
@@ -719,6 +775,15 @@ impl Developer for Darktable {
         Engine::Darktable
     }
 
+    /// L'interface de darktable sur `dir` : la table lumineuse s'ouvre avec ce dossier
+    /// comme collection (importé au besoin) ; une instance déjà ouverte le reçoit par
+    /// D-Bus (Linux). Avec la configuration de l'utilisateur, pas celle de `tri`.
+    fn open_folder(&self, dir: &Path) -> Option<Command> {
+        let mut command = darktable_gui(&self.cli)?.command();
+        command.arg(dir);
+        Some(command)
+    }
+
     /// Bibliothèque en mémoire, sidecars jamais écrits.
     fn render(
         &self,
@@ -907,6 +972,67 @@ fn shrink(from: &Path, to: &Path, side: u32) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_darktable_interface_is_found_next_to_its_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        let cli = dir.path().join("darktable-cli");
+        std::fs::write(&cli, "").unwrap();
+        assert_eq!(
+            darktable_gui(&Cli::native(cli.clone())),
+            None,
+            "pas d'interface"
+        );
+        std::fs::write(dir.path().join("darktable"), "").unwrap();
+        let gui = darktable_gui(&Cli::native(cli)).unwrap();
+        assert_eq!(gui.program, dir.path().join("darktable"));
+        // AppImage : elle-même, sans la commande `darktable-cli`.
+        let image = PathBuf::from("/home/u/AppImages/darktable.appimage");
+        let gui = darktable_gui(&cli_for(image.clone())).unwrap();
+        assert_eq!((gui.program, gui.args), (image, Vec::<String>::new()));
+        // Flatpak : l'application, sans `--command`.
+        let flatpak = Cli {
+            program: PathBuf::from("flatpak"),
+            args: vec![
+                "run".into(),
+                "--command=darktable-cli".into(),
+                FLATPAK_APP.into(),
+            ],
+        };
+        assert_eq!(
+            darktable_gui(&flatpak).unwrap().args,
+            ["run".to_string(), FLATPAK_APP.into()]
+        );
+    }
+
+    #[test]
+    fn darktable_opens_a_folder_and_rapidraw_does_not() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["darktable-cli", "darktable", "rapidraw"] {
+            std::fs::write(dir.path().join(name), "").unwrap();
+        }
+        let developers = Developers::none()
+            .with(Arc::new(Darktable {
+                cli: Cli::native(dir.path().join("darktable-cli")),
+                config_dir: dir.path().join("config"),
+                high_quality: false,
+            }))
+            .with(Arc::new(RapidRaw {
+                cli: Cli::native(dir.path().join("rapidraw")),
+                work_dir: dir.path().join("work"),
+            }));
+        assert_eq!(developers.folder_openers(), [Engine::Darktable]);
+        let session = Path::new("/photos/2026-10-28_Jade");
+        let command = developers.open_folder(Engine::Darktable, session).unwrap();
+        assert_eq!(command.get_program(), dir.path().join("darktable"));
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(
+            args,
+            [session.as_os_str()],
+            "la configuration de l'utilisateur"
+        );
+        assert!(developers.open_folder(Engine::RapidRaw, session).is_none());
+    }
 
     /// Sidecar darktable minimal : `history_end`, puis les entrées `(num, opération,
     /// active, paramètres)`.

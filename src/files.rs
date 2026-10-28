@@ -1135,6 +1135,13 @@ pub fn open_with(editor: &[String], files: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
+/// Lance `command` (un logiciel ouvert sur un dossier…) sans l'attendre, entrée et
+/// sorties fermées.
+pub fn launch(mut command: Command) -> Result<()> {
+    let name = command.get_program().to_string_lossy().into_owned();
+    spawn(&mut command, &name)
+}
+
 /// Lance `command` sans l'attendre ; un fil récupère sa fin (pas de processus zombie).
 /// Entrée et sorties fermées : le programme lancé (éditeur, visionneuse Qt…) écrivait ses
 /// traces dans le terminal de `tri` (retour du 24/10/2026, sous Mint).
