@@ -26,8 +26,8 @@ pub struct UpdateSettings {
     /// Formulaire de signalement d'un problème (issue n° 7) : version et système y sont
     /// ajoutés en paramètres, qui préremplissent les champs du même nom.
     pub issue_url: String,
-    /// Boutons « Télécharger » de l'aide : formats de paquet préférés, dans l'ordre (le
-    /// premier publié pour ce système l'emporte).
+    /// Boutons « Télécharger » de l'aide : formats de paquet, dans l'ordre où ils sont
+    /// proposés (plusieurs pour ce système : une boîte de choix).
     pub formats: Vec<String>,
 }
 
@@ -79,16 +79,16 @@ pub enum Track {
     Release,
 }
 
-/// Le fichier à télécharger : nom et adresse, ou la page de la version si aucun paquet
-/// ne convient à ce système.
+/// Ce qu'on peut télécharger d'une version pour ce système : ses paquets, dans l'ordre
+/// des formats préférés, et sa page (quand aucun paquet ne convient).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Download {
     /// Version (« 1.0.0-alpha.7 », « nightly »).
     pub version: String,
-    /// Nom du fichier, `None` pour la page de la version.
-    pub name: Option<String>,
-    /// Adresse à ouvrir dans le navigateur.
-    pub url: String,
+    /// Page de la version.
+    pub page: String,
+    /// Paquets de ce système, avec leur format (« AppImage », « tar.gz »…).
+    pub files: Vec<(String, Asset)>,
 }
 
 /// Stade de la version `version` : « alpha », « beta », ou « final » (sans préversion),
@@ -119,8 +119,8 @@ fn platform_of(os: &str, arch: &str) -> String {
     format!("{os}-{arch}")
 }
 
-/// Le fichier de `track` parmi `releases` pour `platform`, au premier format de
-/// `formats` publié ; la page de la version sinon. `None` : rien de publié.
+/// Les paquets de `track` parmi `releases` pour `platform`, aux formats de `formats`
+/// (dans cet ordre : le premier est proposé d'abord). `None` : rien de publié.
 pub fn pick_download(
     releases: &[Release],
     track: Track,
@@ -135,18 +135,25 @@ pub fn pick_download(
             .max_by(|(a, _), (b, _)| a.cmp(b))
             .map(|(_, r)| r)?,
     };
-    let asset = formats.iter().find_map(|format| {
-        release.assets.iter().find(|a| {
-            a.name.contains(&format!("-{platform}"))
-                && a.name
-                    .to_lowercase()
-                    .ends_with(&format!(".{}", format.to_lowercase()))
+    let files = formats
+        .iter()
+        .filter_map(|format| {
+            release
+                .assets
+                .iter()
+                .find(|a| {
+                    a.name.contains(&format!("-{platform}"))
+                        && a.name
+                            .to_lowercase()
+                            .ends_with(&format!(".{}", format.to_lowercase()))
+                })
+                .map(|a| (format.clone(), a.clone()))
         })
-    });
+        .collect();
     Some(Download {
         version: release.version.clone(),
-        name: asset.map(|a| a.name.clone()),
-        url: asset.map_or_else(|| release.url.clone(), |a| a.url.clone()),
+        page: release.url.clone(),
+        files,
     })
 }
 
@@ -583,26 +590,21 @@ mod tests {
         let releases = parse_releases(json).unwrap();
         let formats = UpdateSettings::default().formats;
         let pick = |track, platform: &str| pick_download(&releases, track, platform, &formats);
-        // Nuit sous Linux : l'AppImage avant l'archive ; sous macOS, le .dmg.
-        let n = pick(Track::Nightly, "linux-x86_64").unwrap();
-        assert_eq!(n.url, "https://g/n.AppImage");
+        let names = |d: Download| d.files.into_iter().map(|(f, _)| f).collect::<Vec<_>>();
+        // Nuit sous Linux : l'AppImage puis l'archive, au choix ; sous macOS, le .dmg.
         assert_eq!(
-            pick(Track::Nightly, "macos-arm64").unwrap().url,
-            "https://g/n.dmg"
+            names(pick(Track::Nightly, "linux-x86_64").unwrap()),
+            ["AppImage", "tar.gz"]
         );
+        let mac = pick(Track::Nightly, "macos-arm64").unwrap();
+        assert_eq!(mac.files[0].1.url, "https://g/n.dmg");
         // Dernière version (alpha.7, pas alpha.6 ni la nuit) : le .msi avant le .zip.
         let a = pick(Track::Release, "windows-x64").unwrap();
-        assert_eq!(
-            (a.version.as_str(), a.url.as_str()),
-            ("1.0.0-alpha.7", "https://g/a7.msi")
-        );
-        assert_eq!(
-            pick(Track::Release, "linux-x86_64").unwrap().url,
-            "https://g/a7.tar.gz"
-        );
-        // Aucun paquet pour ce système : la page de la version.
+        assert_eq!(a.version, "1.0.0-alpha.7");
+        assert_eq!(names(a), ["msi", "zip"]);
+        // Aucun paquet pour ce système : la page seule.
         let none = pick(Track::Release, "macos-arm64").unwrap();
-        assert_eq!((none.name, none.url.as_str()), (None, "https://g/a7"));
+        assert_eq!((none.files.len(), none.page.as_str()), (0, "https://g/a7"));
         assert_eq!(
             pick_download(&[], Track::Nightly, "linux-x86_64", &formats),
             None

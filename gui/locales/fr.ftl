@@ -385,6 +385,18 @@ download-release-tip = { $stage ->
 download-searching = Recherche du paquet à télécharger…
 download-started = Téléchargement dans le navigateur : { $name }
 download-page = Pas de paquet pour ce système : page de la version { $version } ouverte
+download-title = Télécharger tri { $version }
+download-choose = Plusieurs paquets pour ce système :
+download = Télécharger
+download-format = { $format ->
+    [appimage] Un seul fichier à lancer, sans installation, pour toutes les distributions
+    [deb] Paquet Debian, Ubuntu, Linux Mint : installé par le système
+    [targz] Archive avec son script d'installation (install.sh)
+    [msi] Installeur Windows
+    [zip] Archive à décompresser, sans installation
+    [dmg] Image disque : glisser tri dans Applications
+   *[other] Paquet de ce système
+}
 rating-bar-title = Note
 filter-bar-title = Filtre
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
