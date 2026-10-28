@@ -51,6 +51,9 @@ pub struct RawInfo {
     pub cblack: *const c_uint,
     pub cblack_len: c_uint,
     pub filters: c_uint,
+    pub cam_mul: [c_float; 4],
+    pub pre_mul: [c_float; 4],
+    pub rgb_cam: [[c_float; 4]; 3],
 }
 
 /// Équivalent de `tri_metadata` (shim) : métadonnées de prise de vue.

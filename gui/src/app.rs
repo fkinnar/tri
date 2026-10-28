@@ -3900,6 +3900,7 @@ impl TriApp {
                     | Action::HistogramGreen
                     | Action::HistogramBlue
                     | Action::HistogramAll
+                    | Action::HistogramLuminance
                     | Action::HistogramPhoto
                     | Action::HistogramCamera => self.perform(ctx, action),
                     // Se déplacer d'image en image sous la boîte (retour du 19/10/2026) :
@@ -4657,12 +4658,13 @@ impl TriApp {
             Action::HistogramGreen => self.histogram_channel = Some(1),
             Action::HistogramBlue => self.histogram_channel = Some(2),
             Action::HistogramAll => self.histogram_channel = None,
+            Action::HistogramLuminance => self.histogram_channel = Some(tri::exposure::LUMINANCE),
             Action::HistogramPhoto => self.histogram_photo = !self.histogram_photo,
             Action::HistogramCamera => self.histogram_camera = !self.histogram_camera,
             Action::HistogramChannel => {
                 self.histogram_channel = match self.histogram_channel {
                     None => Some(0),
-                    Some(c) if c + 1 < tri::exposure::CHANNELS => Some(c + 1),
+                    Some(c) if c + 1 < tri::exposure::SERIES => Some(c + 1),
                     Some(_) => None,
                 };
                 self.histogram_large = true;
@@ -7609,6 +7611,7 @@ impl TriApp {
             (t!("stats-red"), c.hist_red),
             (t!("stats-green"), c.hist_green),
             (t!("stats-blue"), c.hist_blue),
+            (t!("stats-luminance"), c.hist_luminance),
         ];
         let range_title = t!(
             "stats-range",
@@ -7631,6 +7634,7 @@ impl TriApp {
                     ui.weak(title);
                 }
                 ui.end_row();
+                // Tous : les trois canaux et la luminance ; sinon la série choisie.
                 for (channel, (name, color)) in channels.into_iter().enumerate() {
                     if self.histogram_channel.is_some_and(|c| c != channel) {
                         continue;
@@ -7648,14 +7652,19 @@ impl TriApp {
                     ui.end_row();
                 }
                 // JPEG boîtier, sous les canaux du capteur : légende de la courbe grise et
-                // ses chiffres, mesurés sous son propre blanc (255). Tous les canaux : le
-                // vert, qui porte l'essentiel de la luminance (28/10/2026).
-                let channel = self.histogram_channel.unwrap_or(1);
+                // ses chiffres, mesurés sous son propre blanc (255) : la série choisie, la
+                // luminance pour tous les canaux (28/10/2026).
+                let channel = self.histogram_channel.unwrap_or(tri::exposure::LUMINANCE);
                 if let Some(s) = camera.and_then(|j| j.channel_stats(channel, tail)) {
-                    let names = [t!("stats-red"), t!("stats-green"), t!("stats-blue")];
+                    let names = [
+                        t!("stats-red"),
+                        t!("stats-green"),
+                        t!("stats-blue"),
+                        t!("stats-luminance"),
+                    ];
                     let tip = t!(
                         "histogram-camera-row-tip",
-                        channel = names[channel.min(2)].clone()
+                        channel = names[channel.min(names.len() - 1)].clone()
                     );
                     ui.colored_label(Color32::from(c.hist_camera), t!("histogram-camera-row"))
                         .on_hover_text(tip);
@@ -7788,11 +7797,12 @@ impl TriApp {
                             &self.gui.histogram,
                             &self.gui.colors,
                         );
-                        // Pastilles : rouge, vert, bleu, blanc (tous les canaux).
+                        // Pastilles : rouge, vert, bleu, luminance, blanc (tous les canaux).
                         let names = [
                             t!("stats-red"),
                             t!("stats-green"),
                             t!("stats-blue"),
+                            t!("stats-luminance"),
                             t!("stats-all"),
                         ];
                         let dots = histogram::channel_dots(rect, self.gui.histogram.channel_dot);
@@ -7800,6 +7810,7 @@ impl TriApp {
                             Action::HistogramRed,
                             Action::HistogramGreen,
                             Action::HistogramBlue,
+                            Action::HistogramLuminance,
                             Action::HistogramAll,
                         ];
                         // Échelle : icône à gauche des pastilles, qui montre celle en cours.
@@ -7893,7 +7904,7 @@ impl TriApp {
                                 .on_hover_text(tip)
                                 .clicked()
                             {
-                                channel = Some((i < 3).then_some(i));
+                                channel = Some(histogram::dot_channel(i));
                             }
                         }
                     }
@@ -7918,10 +7929,10 @@ impl TriApp {
                 self.histogram_stats(ui, e, camera.as_deref());
             }
             ui.horizontal(|ui| {
-                // Sur des données RAW, pas de luminance : chaque photosite ne mesure qu'une
-                // couleur ; le vert, qui en porte l'essentiel, en tient lieu. Sur la ligne de
-                // « Fermer », à droite (retour du 19/10/2026) : sous le tableau, elle
-                // changeait la hauteur de la boîte en passant d'un RAW à une image plate.
+                // Sur des données RAW, la luminance est calculée par bloc de la mosaïque
+                // (28/10/2026 ; avant, le vert en tenait lieu). Sur la ligne de « Fermer », à
+                // droite (retour du 19/10/2026) : sous le tableau, elle changeait la hauteur
+                // de la boîte en passant d'un RAW à une image plate.
                 if exposure
                     .as_ref()
                     .is_some_and(|e| matches!(e.source, tri::exposure::Source::Raw { .. }))
@@ -15394,7 +15405,7 @@ mod tests {
         // Masque calculé en fond : deux images ne suffisaient pas toujours (CI Windows).
         run_until(&mut h, |app| app.mask_textures.contains(&white_path));
         // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
-        // vert, bleu, tous ; Échap ferme.
+        // vert, bleu, luminance, tous ; Échap ferme.
         press(&mut h, Key::C, Modifiers::SHIFT);
         assert!(
             h.state().histogram_large,
@@ -15412,7 +15423,8 @@ mod tests {
             h.state().analysis_texture.as_ref().unwrap().0,
             (white_path.clone(), Some(0))
         );
-        for expected in [Some(1), Some(2), None] {
+        let luminance = Some(tri::exposure::LUMINANCE);
+        for expected in [Some(1), Some(2), luminance, None] {
             press(&mut h, Key::C, Modifiers::SHIFT);
             assert_eq!(h.state().histogram_channel, expected);
         }
@@ -16078,6 +16090,11 @@ mod tests {
         assert_eq!(h.state().display().histogram_camera, Some(false));
         press(&mut h, Key::J, Modifiers::NONE);
         assert!(h.state().histogram_camera, "j la remontre");
+        // l : la luminance seule (28/10/2026) ; a revient aux trois canaux.
+        press(&mut h, Key::L, Modifiers::NONE);
+        assert_eq!(h.state().histogram_channel, Some(tri::exposure::LUMINANCE));
+        press(&mut h, Key::A, Modifiers::NONE);
+        assert_eq!(h.state().histogram_channel, None);
         press(&mut h, Key::I, Modifiers::SHIFT);
         assert_eq!(
             h.state().histogram_scale,

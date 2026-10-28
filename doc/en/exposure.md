@@ -100,9 +100,30 @@ Taken from the EV histogram (1/8 EV per bin by default), without rereading the i
 median and percentiles (interpolated within the bin where the cumulative count crosses
 the threshold), mean and standard deviation (bin centers), clipped and crushed shares of
 the channel. In EV below saturation: the mean is that of the tones, not of the light.
-Shown in the interface's large histogram. No luminance for a RAW (each photosite only
-measures one color); for a flat image, a real luminance would require one more histogram
-in the analysis (not done).
+Shown in the interface's large histogram, also for the luminance
+(`channel_stats(LUMINANCE)`).
+
+## Luminance (2026-10-28, requested by the user)
+
+A fourth series after the three channels, at index `LUMINANCE` of `Exposure`'s arrays
+(`SERIES` = 4): linear and EV histograms, `total`, `over`, `under`, `high`. It enters
+neither the zone mask (per channel) nor `over_fraction` / `under_fraction` /
+`headroom_ev` (badges and alerts unchanged).
+
+- **Flat image**: per pixel, in linear light, Rec. 709 weights (0.2126 R + 0.7152 G +
+  0.0722 B), re-encoded in sRGB to fall into the same bins as the channels (table of each
+  value's light, binary search).
+- **RAW**: a photosite measures only one colour; still no demosaicing. The mosaic is cut
+  into blocks that each hold all three colours (`Sensor::luma_block`: the smallest side
+  that works, 2 in Bayer, 3 in X-Trans); one value per block, the sum of each colour's
+  mean weighted by `Sensor::luma_weights`: the shot's white balance (`cam_mul`, otherwise
+  `pre_mul`), relative to green, then LibRaw's `rgb_cam` matrix (sensor colours to sRGB)
+  and Rec. 709. A neutral grey keeps its green value. Incomplete blocks at the edge are
+  left out; `total[LUMINANCE]` counts blocks, not photosites. The luminance saturates when
+  it reaches the sensor's white: a block with a single saturated channel is not
+  necessarily saturated (that is what luminance means).
+
+Cache format `TRIEXP03` and `VERSION` 6: cached analyses are recomputed once.
 
 ## Crushed per channel (2026-10-18)
 

@@ -6,19 +6,20 @@ use eframe::egui::{
     self, Align2, Color32, ColorImage, FontId, Mesh, Painter, Rect, Stroke, pos2, vec2,
 };
 use tri::bitmap::Bitmap;
-use tri::exposure::{CHANNELS, Exposure, Mask, Source, mask};
+use tri::exposure::{CHANNELS, Exposure, LUMINANCE, Mask, SERIES, Source, mask};
 use tri::i18n::decimal;
 
 use crate::settings::{Colors, HistogramScale, HistogramSettings};
 
-/// Valeurs de l'histogramme regroupées en `columns` colonnes, par canal, selon l'échelle.
+/// Valeurs de l'histogramme regroupées en `columns` colonnes, par canal puis pour la
+/// luminance, selon l'échelle.
 /// En IL : de `-ev_shown` à 0 ; ce qui est plus sombre va dans la première colonne.
 pub fn columns(
     e: &Exposure,
     scale: HistogramScale,
     ev_shown: f32,
     columns: usize,
-) -> Vec<[u64; CHANNELS]> {
+) -> Vec<[u64; SERIES]> {
     columns_over(e, scale, shown_stops(e, ev_shown), columns)
 }
 
@@ -29,9 +30,9 @@ fn columns_over(
     scale: HistogramScale,
     shown: f32,
     columns: usize,
-) -> Vec<[u64; CHANNELS]> {
+) -> Vec<[u64; SERIES]> {
     let columns = columns.max(1);
-    let mut out = vec![[0u64; CHANNELS]; columns];
+    let mut out = vec![[0u64; SERIES]; columns];
     match scale {
         HistogramScale::Linear => {
             for (c, channel) in e.linear.iter().enumerate() {
@@ -81,19 +82,28 @@ pub struct Look {
     /// canal) et pastilles de canal sous le graphe : dans le grand histogramme seulement (retour du 18/10/2026 : pas
     /// indispensable en petit).
     pub details: bool,
-    /// Un seul canal (0 rouge, 1 vert, 2 bleu) ; `None` : les trois.
+    /// Un seul canal (0 rouge, 1 vert, 2 bleu) ou la luminance ([`LUMINANCE`]) ;
+    /// `None` : les trois canaux.
     pub channel: Option<usize>,
 }
 
 /// Pastilles de choix du canal, en bas à droite de `rect` (sur la ligne d'indicateurs) :
-/// rouge, vert, bleu, puis blanc (tous les canaux). `size` : diamètre.
-pub fn channel_dots(rect: Rect, size: f32) -> [Rect; 4] {
+/// rouge, vert, bleu, luminance, puis blanc (tous les canaux). `size` : diamètre.
+pub fn channel_dots(rect: Rect, size: f32) -> [Rect; DOTS] {
     let gap = size * 0.6;
     let y = rect.max.y - 6.0 - size / 2.0;
     std::array::from_fn(|i| {
-        let x = rect.max.x - 6.0 - size / 2.0 - (3 - i) as f32 * (size + gap);
+        let x = rect.max.x - 6.0 - size / 2.0 - (DOTS - 1 - i) as f32 * (size + gap);
         Rect::from_center_size(pos2(x, y), vec2(size, size))
     })
+}
+
+/// Pastilles du grand histogramme : les trois canaux, la luminance, tous les canaux.
+pub const DOTS: usize = SERIES + 1;
+
+/// Canal de la pastille `i` ([`channel_dots`]) : `None` pour la dernière (tous).
+pub fn dot_channel(i: usize) -> Option<usize> {
+    (i < SERIES).then_some(i)
 }
 
 /// Bouton d'échelle du grand histogramme : à gauche des pastilles de canal, un peu plus
@@ -181,7 +191,7 @@ pub fn scale_icon(painter: &Painter, rect: Rect, scale: HistogramScale, color: C
 }
 
 /// Part des pixels saturés / bouchés : canal le plus touché, ou le canal `channel`.
-fn clipped(e: &Exposure, channel: Option<usize>, counts: &[u64; CHANNELS]) -> f64 {
+fn clipped(e: &Exposure, channel: Option<usize>, counts: &[u64; SERIES]) -> f64 {
     match channel {
         Some(c) => counts[c] as f64 / e.total[c].max(1) as f64,
         None => (0..CHANNELS)
@@ -254,7 +264,7 @@ pub fn draw(
     // qui donnaient un « peigne ». Pas d'échelle verticale : seule la forme compte.
     let count = settings.classes.clamp(8, graph.width().max(8.0) as usize);
     let cols = columns(e, scale, settings.ev_shown, count);
-    let curves: Vec<Vec<f32>> = (0..CHANNELS)
+    let curves: Vec<Vec<f32>> = (0..SERIES)
         .map(|c| {
             let raw: Vec<f32> = cols.iter().map(|v| v[c] as f32).collect();
             smooth(&raw, settings.smoothing)
@@ -262,7 +272,8 @@ pub fn draw(
         .collect();
     // Échelle verticale : le plus haut pic, sans les classes extrêmes (noir pur, blanc
     // saturé), qui écraseraient le reste ; elles sont signalées à part.
-    let shown = |c: usize| channel.is_none_or(|only| only == c);
+    // Tous : les trois canaux, sans la luminance ; sinon la série choisie.
+    let shown = |c: usize| channel.map_or(c < CHANNELS, |only| only == c);
     let peak = curves
         .iter()
         .enumerate()
@@ -271,7 +282,12 @@ pub fn draw(
         .flat_map(|v| v.iter().skip(1).take(v.len().saturating_sub(2)).copied())
         .fold(0.0f32, f32::max)
         .max(1e-6);
-    let channel_colors = [colors.hist_red, colors.hist_green, colors.hist_blue];
+    let channel_colors = [
+        colors.hist_red,
+        colors.hist_green,
+        colors.hist_blue,
+        colors.hist_luminance,
+    ];
     let class_w = graph.width() / count as f32;
     for (c, curve) in curves.iter().enumerate().filter(|(c, _)| shown(*c)) {
         let base = Color32::from(channel_colors[c]);
@@ -319,12 +335,7 @@ pub fn draw(
         let cols = columns_over(j, scale, shown_ev, count);
         let raw: Vec<f32> = cols
             .iter()
-            .map(|v| {
-                (0..CHANNELS)
-                    .filter(|&c| shown(c))
-                    .map(|c| v[c] as f32)
-                    .sum()
-            })
+            .map(|v| (0..SERIES).filter(|&c| shown(c)).map(|c| v[c] as f32).sum())
             .collect();
         let curve = smooth(&raw, settings.smoothing);
         let peak = curve
@@ -401,32 +412,54 @@ pub fn draw(
             Color32::from(colors.hist_red),
             Color32::from(colors.hist_green),
             Color32::from(colors.hist_blue),
+            Color32::from(colors.hist_luminance),
             Color32::from_gray(235),
         ];
-        let chosen = channel.unwrap_or(3);
         for (i, (dot, fill)) in channel_dots(rect, settings.channel_dot)
             .iter()
             .zip(fills)
             .enumerate()
         {
-            let r = dot.width() / 2.0;
-            if i == chosen {
+            let chosen = dot_channel(i) == channel;
+            let (r, fill) = if chosen {
+                (dot.width() / 2.0, fill)
+            } else {
+                (dot.width() / 2.0 * 0.8, fill.gamma_multiply(0.6))
+            };
+            if i == LUMINANCE {
+                // Luminance : un disque à moitié clair, comme un réglage de contraste.
+                luminance_dot(painter, dot.center(), r, fill);
+            } else {
                 painter.circle_filled(dot.center(), r, fill);
+            }
+            if chosen {
                 painter.circle_stroke(
                     dot.center(),
-                    r + 2.0,
+                    dot.width() / 2.0 + 2.0,
                     Stroke::new(1.5, Color32::from_gray(235)),
                 );
-            } else {
-                painter.circle_filled(dot.center(), r * 0.8, fill.gamma_multiply(0.6));
             }
         }
     }
 }
 
+/// Pastille de la luminance : cercle de couleur `fill`, moitié gauche pleine.
+fn luminance_dot(painter: &Painter, center: egui::Pos2, r: f32, fill: Color32) {
+    let steps = 16;
+    let mut half = vec![center + vec2(0.0, -r)];
+    for k in 1..steps {
+        let a = std::f32::consts::PI * k as f32 / steps as f32;
+        half.push(center + vec2(-r * a.sin(), -r * a.cos()));
+    }
+    half.push(center + vec2(0.0, r));
+    painter.add(egui::Shape::convex_polygon(half, fill, Stroke::NONE));
+    painter.circle_stroke(center, r - 0.6, Stroke::new(1.2, fill));
+}
+
 /// Petite image d'analyse du grand histogramme : `thumb` (vignette, déjà orientée) en
 /// niveaux de gris, zones saturées en `over` et bouchées en `under` d'après le masque,
-/// tous canaux confondus ou pour le seul canal `channel`. Gris et couleurs franches : les
+/// tous canaux confondus ou pour le seul canal `channel` (la luminance : tous, le masque
+/// est par canal). Gris et couleurs franches : les
 /// zones ressortent quelle que soit l'image (idée de l'utilisateur, 18/10/2026).
 pub fn analysis_image(
     thumb: &Bitmap,
@@ -437,8 +470,8 @@ pub fn analysis_image(
 ) -> ColorImage {
     let (w, h) = (thumb.width as usize, thumb.height as usize);
     let (over_bits, under_bits) = match channel {
-        Some(c) => (mask::over(c), mask::under(c)),
-        None => (mask::OVER, mask::UNDER),
+        Some(c) if c < CHANNELS => (mask::over(c), mask::under(c)),
+        _ => (mask::OVER, mask::UNDER),
     };
     let mut pixels = Vec::with_capacity(w * h);
     for y in 0..h {
@@ -660,6 +693,9 @@ mod tests {
         assert_eq!(blue.pixels[7], under);
         let red = analysis_image(&thumb, &m, Some(0), over, under);
         assert_eq!(red.pixels[4], over);
+        // Luminance : le masque est par canal, ses zones sont celles de tous les canaux.
+        let luminance = analysis_image(&thumb, &m, Some(LUMINANCE), over, under);
+        assert_eq!(luminance.pixels, all.pixels);
     }
 
     #[test]
@@ -667,7 +703,9 @@ mod tests {
         let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 200.0));
         let dots = channel_dots(rect, 10.0);
         assert!(dots.windows(2).all(|w| w[0].max.x < w[1].min.x));
-        assert!(dots[3].max.x <= rect.max.x && dots[0].center().y > 180.0);
+        assert!(dots[DOTS - 1].max.x <= rect.max.x && dots[0].center().y > 180.0);
+        assert_eq!(dot_channel(LUMINANCE), Some(LUMINANCE));
+        assert_eq!(dot_channel(DOTS - 1), None, "la dernière : tous les canaux");
     }
 
     #[test]

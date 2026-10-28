@@ -841,6 +841,8 @@ purple = "#a555d2"
 hist_red = "#eb4646"
 hist_green = "#50c85a"
 hist_blue = "#5082f0"
+# Histogram: luminance (large histogram, l).
+hist_luminance = "#c8c8c8"
 # Histogram of a RAW: curve of the camera JPEG ([gui.histogram] camera_jpeg).
 hist_camera = "#808080"
 clip_over = "#ff28ff"

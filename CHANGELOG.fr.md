@@ -4,6 +4,12 @@
 
 ## À venir
 
+- **Luminance dans le grand histogramme** : une pastille de plus (un disque à moitié
+  clair) et `l` montrent la luminance seule, et le tableau gagne une ligne Luminance.
+  Sur un RAW, elle est calculée sur les données du capteur, par bloc de la mosaïque
+  (2 × 2 en Bayer, 3 × 3 en X-Trans), avec la balance des blancs de la prise de vue ;
+  le vert n'en tient plus lieu. Couleur `[gui.colors] hist_luminance`. Les analyses
+  d'exposition en cache sont recalculées une fois.
 - **JPEG boîtier dans l'histogramme** : pour un RAW, la courbe du JPEG boîtier se
   dessine en trait fin gris par-dessus celle des données du capteur, pour voir ce que le
   boîtier a fait des hautes lumières et des ombres. Dans le grand histogramme, une ligne

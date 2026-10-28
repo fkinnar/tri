@@ -398,7 +398,10 @@ impl RawFile {
                 };
             }
         }
+        let luma_block = luma_block(&channels);
         Ok(Sensor {
+            luma_weights: luma_weights(&info),
+            luma_block,
             pixels,
             pitch,
             left: info.left_margin as usize,
@@ -559,6 +562,95 @@ pub struct Sensor<'a> {
     pub white: u16,
     channels: [[u8; PATTERN]; PATTERN],
     blacks: [[u16; PATTERN]; PATTERN],
+    /// Poids de la luminance par canal (rouge, vert, bleu), sur les valeurs brutes (noir
+    /// soustrait) : balance des blancs de la prise de vue, puis couleurs du capteur vers
+    /// sRGB et pondération de Rec. 709. Un gris neutre de valeur `v` donne `v`.
+    pub luma_weights: [f32; 3],
+    /// Côté des blocs de la mosaïque qui portent chacun les trois couleurs (2 en Bayer,
+    /// 3 en X-Trans) : une valeur de luminance par bloc, sans dématriçage.
+    pub luma_block: usize,
+}
+
+/// Poids de Rec. 709 (sRGB) de la luminance.
+pub const REC709: [f32; 3] = [0.2126, 0.7152, 0.0722];
+
+/// Poids de [`Sensor::luma_weights`] : balance des blancs de la prise de vue (sinon
+/// « lumière du jour », sinon aucune), ramenée au vert, et matrice `rgb_cam` de LibRaw
+/// (identité si elle manque).
+fn luma_weights(info: &ffi::RawInfo) -> [f32; 3] {
+    let usable = |m: &[f32; 4]| m[0] > 0.0 && m[1] > 0.0 && m[2] > 0.0;
+    let wb = if usable(&info.cam_mul) {
+        info.cam_mul
+    } else if usable(&info.pre_mul) {
+        info.pre_mul
+    } else {
+        [1.0; 4]
+    };
+    let identity = info.rgb_cam.iter().flatten().all(|&v| v == 0.0);
+    let matrix = |row: usize, c: usize| {
+        if identity {
+            f32::from(row == c)
+        } else {
+            info.rgb_cam[row][c]
+        }
+    };
+    let mixed: [f32; 3] = std::array::from_fn(|c| (0..3).map(|i| REC709[i] * matrix(i, c)).sum());
+    // Les lignes de rgb_cam somment à 1 : un gris neutre reste à sa valeur ; ramené à 1
+    // au cas où.
+    let sum: f32 = mixed.iter().sum();
+    let sum = if sum.abs() > 1e-6 { sum } else { 1.0 };
+    std::array::from_fn(|c| wb[c] / wb[1] * mixed[c] / sum)
+}
+
+/// Plus petit côté de bloc (diviseur de la période) dont chaque bloc aligné contient les
+/// trois couleurs ; la période entière au pire.
+fn luma_block(channels: &[[u8; PATTERN]; PATTERN]) -> usize {
+    let complete = |b: usize| {
+        (0..PATTERN).step_by(b).all(|r| {
+            (0..PATTERN).step_by(b).all(|c| {
+                let mut seen = [false; 3];
+                for row in &channels[r..r + b] {
+                    for &ch in &row[c..c + b] {
+                        seen[ch as usize] = true;
+                    }
+                }
+                seen.iter().all(|&s| s)
+            })
+        })
+    };
+    [2, 3, 4, 6, 8, 12]
+        .into_iter()
+        .find(|&b| complete(b))
+        .unwrap_or(PATTERN)
+}
+
+impl<'a> Sensor<'a> {
+    /// Mosaïque synthétique pour les tests : `pixels` en `width` × `height`, couleur du
+    /// filtre donnée par `color(row, col)` (motif de période divisant 24), noir nul.
+    #[cfg(test)]
+    pub(crate) fn synthetic(
+        pixels: &'a [u16],
+        width: usize,
+        height: usize,
+        white: u16,
+        color: impl Fn(usize, usize) -> u8,
+        luma_weights: [f32; 3],
+    ) -> Sensor<'a> {
+        let channels = std::array::from_fn(|r| std::array::from_fn(|c| color(r, c)));
+        Sensor {
+            pixels,
+            pitch: width,
+            left: 0,
+            top: 0,
+            width,
+            height,
+            white,
+            luma_block: luma_block(&channels),
+            channels,
+            blacks: [[0; PATTERN]; PATTERN],
+            luma_weights,
+        }
+    }
 }
 
 impl Sensor<'_> {
@@ -599,6 +691,41 @@ impl Sensor<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Motif X-Trans des Fujifilm (6 × 6) : 0 rouge, 1 vert, 2 bleu.
+    pub(crate) const XTRANS: [[u8; 6]; 6] = [
+        [1, 1, 0, 1, 1, 2],
+        [1, 1, 2, 1, 1, 0],
+        [2, 0, 1, 0, 2, 1],
+        [1, 1, 2, 1, 1, 0],
+        [1, 1, 0, 1, 1, 2],
+        [0, 2, 1, 2, 0, 1],
+    ];
+
+    #[test]
+    fn luminance_blocks_hold_the_three_colours() {
+        let bayer = |r: usize, c: usize| [[0, 1], [1, 2]][r % 2][c % 2];
+        let table = std::array::from_fn(|r| std::array::from_fn(|c| bayer(r, c)));
+        assert_eq!(luma_block(&table), 2, "Bayer : 2 × 2");
+        let table = std::array::from_fn(|r| std::array::from_fn(|c| XTRANS[r % 6][c % 6]));
+        assert_eq!(luma_block(&table), 3, "X-Trans : 3 × 3");
+    }
+
+    #[test]
+    fn luminance_weights_follow_the_white_balance_and_the_matrix() {
+        let mut info: ffi::RawInfo = unsafe { std::mem::zeroed() };
+        // Sans balance ni matrice : Rec. 709 tel quel.
+        let w = luma_weights(&info);
+        assert!((w[0] - 0.2126).abs() < 1e-6 && (w[1] - 0.7152).abs() < 1e-6);
+        // Balance de la prise de vue : le rouge compte double, le bleu une fois et demie.
+        info.cam_mul = [2.0, 1.0, 1.5, 1.0];
+        let w = luma_weights(&info);
+        assert!((w[0] - 2.0 * 0.2126).abs() < 1e-6);
+        assert!((w[2] - 1.5 * 0.0722).abs() < 1e-6);
+        // Un gris neutre, une fois la balance faite, garde sa valeur.
+        let grey = w[0] / 2.0 + w[1] + w[2] / 1.5;
+        assert!((grey - 1.0).abs() < 1e-5, "{grey}");
+    }
 
     fn header(kind: c_int, width: u16, height: u16, colors: u16, bits: u16) -> ffi::ProcessedImage {
         ffi::ProcessedImage {

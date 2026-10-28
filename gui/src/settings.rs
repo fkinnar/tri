@@ -1090,6 +1090,8 @@ pub struct Colors {
     pub hist_green: Color,
     /// Histogramme : canal bleu.
     pub hist_blue: Color,
+    /// Histogramme : luminance (grand histogramme, `l`).
+    pub hist_luminance: Color,
     /// Histogramme d'un RAW : courbe du JPEG boîtier (`[gui.histogram] camera_jpeg`).
     pub hist_camera: Color,
     /// Zones et badges : saturé dans les trois canaux (brûlé), ou dans un canal
@@ -1151,6 +1153,7 @@ impl Default for Colors {
             hist_red: Color([235, 70, 70]),
             hist_green: Color([80, 200, 90]),
             hist_blue: Color([80, 130, 240]),
+            hist_luminance: Color([200, 200, 200]),
             hist_camera: Color([128, 128, 128]),
             clip_over: Color([255, 40, 255]),
             clip_red: Color([255, 50, 50]),

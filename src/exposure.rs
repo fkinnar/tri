@@ -19,11 +19,17 @@ use crate::raw::{RawFile, Sensor};
 /// Canaux : rouge, vert, bleu.
 pub const CHANNELS: usize = 3;
 
+/// Indice de la luminance, après les trois canaux, dans les tableaux de [`Exposure`].
+pub const LUMINANCE: usize = 3;
+
+/// Séries d'un histogramme : les trois canaux, puis la luminance.
+pub const SERIES: usize = 4;
+
 /// Version de l'algorithme, dans la clé du cache d'analyse : à incrémenter quand le calcul
 /// change sans que les réglages changent (2 : zones bouchées à la majorité des pixels ;
 /// 3 : images plates en lumière linéaire, plage utile ; 4 : TIFF / PNG 16 bits à leur
-/// profondeur).
-pub const VERSION: u32 = 5;
+/// profondeur ; 6 : luminance).
+pub const VERSION: u32 = 6;
 
 /// Réglages du calcul (section `[exposure]` du fichier de configuration).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -196,26 +202,28 @@ pub struct Exposure {
     pub source: Source,
     /// Plage utile : du noir (0) au blanc (`range`), noir soustrait.
     pub range: u32,
-    /// Histogramme linéaire par canal, de 0 à `range`.
-    pub linear: [Vec<u32>; CHANNELS],
-    /// Histogramme en IL par canal, de `-ev_range` à 0 (saturation), `ev_bins_per_stop`
-    /// cases par IL ; ce qui est plus sombre (et le noir pur) est dans la première case.
-    pub ev: [Vec<u32>; CHANNELS],
+    /// Histogramme linéaire par canal, puis de la luminance ([`LUMINANCE`]), de 0 à
+    /// `range`.
+    pub linear: [Vec<u32>; SERIES],
+    /// Histogramme en IL par canal puis de la luminance, de `-ev_range` à 0
+    /// (saturation), `ev_bins_per_stop` cases par IL ; ce qui est plus sombre (et le noir
+    /// pur) est dans la première case.
+    pub ev: [Vec<u32>; SERIES],
     /// Étendue de l'histogramme en IL.
     pub ev_range: f32,
     /// Plage utile des données, en IL sous le blanc : log₂ de la plage d'un RAW (13,9 en
     /// 14 bits, 11,8 en 12 bits) ; ~11,7 pour une image 8 bits sRGB (plus petite valeur
     /// non nulle, ramenée en lumière linéaire). L'histogramme en IL montre cette plage.
     pub stops: f32,
-    /// Pixels par canal.
-    pub total: [u64; CHANNELS],
-    /// Pixels saturés par canal.
-    pub over: [u64; CHANNELS],
+    /// Pixels par canal ; pour la luminance d'un RAW, blocs de la mosaïque.
+    pub total: [u64; SERIES],
+    /// Pixels saturés par canal (luminance : au blanc du capteur).
+    pub over: [u64; SERIES],
     /// Pixels bouchés par canal.
-    pub under: [u64; CHANNELS],
+    pub under: [u64; SERIES],
     /// Valeur exacte au 99,9e centile par canal (noir soustrait) : les hautes lumières
     /// utiles, sans quelques pixels isolés (reflets, pixels chauds).
-    pub high: [u32; CHANNELS],
+    pub high: [u32; SERIES],
     /// Zones saturées / bouchées.
     pub mask: Mask,
 }
@@ -294,7 +302,7 @@ struct Accumulator {
     range: u32,
     transfer: Transfer,
     over_level: u32,
-    full: [Vec<u32>; CHANNELS],
+    full: [Vec<u32>; SERIES],
     mask_w: usize,
     mask_h: usize,
     over_cells: Vec<u8>,
@@ -369,16 +377,22 @@ impl Accumulator {
         }
     }
 
+    /// Une valeur de luminance (hors du masque des zones, qui reste par canal).
+    #[inline]
+    fn add_luma(&mut self, value: u32) {
+        self.full[LUMINANCE][value.min(self.range) as usize] += 1;
+    }
+
     fn finish(self, source: Source, rotation: Rotation, settings: &ExposureSettings) -> Exposure {
         let range = self.range;
         let under_level = self.under_level;
         let lin_bins = settings.linear_bins.max(1) as usize;
         let per_stop = settings.ev_bins_per_stop.max(1);
         let ev_bins = ((settings.ev_range.max(1.0) * per_stop as f32).ceil() as usize).max(1);
-        let mut linear: [Vec<u32>; CHANNELS] = std::array::from_fn(|_| vec![0; lin_bins]);
-        let mut ev: [Vec<u32>; CHANNELS] = std::array::from_fn(|_| vec![0; ev_bins]);
-        let (mut total, mut over, mut under) = ([0u64; 3], [0u64; 3], [0u64; 3]);
-        let mut high = [0u32; CHANNELS];
+        let mut linear: [Vec<u32>; SERIES] = std::array::from_fn(|_| vec![0; lin_bins]);
+        let mut ev: [Vec<u32>; SERIES] = std::array::from_fn(|_| vec![0; ev_bins]);
+        let (mut total, mut over, mut under) = ([0u64; SERIES], [0u64; SERIES], [0u64; SERIES]);
+        let mut high = [0u32; SERIES];
         // Case en IL de chaque valeur : une seule fois par valeur, pas par pixel.
         let transfer = self.transfer;
         let ev_bin = |v: u32| -> usize {
@@ -388,7 +402,7 @@ impl Accumulator {
             let stops = transfer.light(v, range).log2() as f32 + settings.ev_range;
             ((stops * per_stop as f32).floor().max(0.0) as usize).min(ev_bins - 1)
         };
-        for c in 0..CHANNELS {
+        for c in 0..SERIES {
             for (v, &n) in self.full[c].iter().enumerate() {
                 if n == 0 {
                     continue;
@@ -482,13 +496,36 @@ impl Exposure {
         let range = s.white.saturating_sub(black).max(1) as u32;
         let mut acc = Accumulator::new(range, Transfer::Linear, s.width, s.height, settings);
         let cols = acc.column_cells(s.width);
+        // Luminance par bloc de la mosaïque (chacun porte les trois couleurs) : moyenne de
+        // chaque couleur du bloc, pondérée ([`Sensor::luma_weights`]) ; une bande de
+        // blocs à la fois. Les blocs incomplets du bord sont laissés.
+        let b = s.luma_block.max(1);
+        let blocks = s.width.div_ceil(b);
+        let mut sums = vec![[0u32; CHANNELS]; blocks];
+        let mut counts = vec![[0u16; CHANNELS]; blocks];
+        let w = s.luma_weights;
         for row in 0..s.height {
             let base = row * acc.mask_h / s.height * acc.mask_w;
             let (channels, blacks) = s.pattern(row);
             for (col, &v) in s.row(row).iter().enumerate() {
                 let i = col % channels.len();
                 let value = v.saturating_sub(blacks[i]) as u32;
-                acc.add(channels[i] as usize, value, base + cols[col]);
+                let c = channels[i] as usize;
+                acc.add(c, value, base + cols[col]);
+                sums[col / b][c] += value;
+                counts[col / b][c] += 1;
+            }
+            if row % b == b - 1 || row + 1 == s.height {
+                for (sum, count) in sums.iter_mut().zip(counts.iter_mut()) {
+                    if count.iter().all(|&n| n > 0) {
+                        let y: f32 = (0..CHANNELS)
+                            .map(|c| w[c] * sum[c] as f32 / count[c] as f32)
+                            .sum();
+                        acc.add_luma(y.round().max(0.0) as u32);
+                    }
+                    *sum = [0; CHANNELS];
+                    *count = [0; CHANNELS];
+                }
             }
         }
         let source = Source::Raw {
@@ -529,18 +566,28 @@ impl Exposure {
         let range = (1u32 << bits) - 1;
         let mut acc = Accumulator::new(range, Transfer::Srgb, w, h, settings);
         let cols = acc.column_cells(w);
+        // Luminance : en lumière linéaire (Rec. 709), réencodée en sRGB pour tomber dans
+        // les mêmes cases que les canaux ; lumière de chaque valeur calculée une fois.
+        let light: Vec<f64> = (0..=range)
+            .map(|v| Transfer::Srgb.light(v, range))
+            .collect();
+        let weights = crate::raw::REC709.map(f64::from);
         for (row, line) in data.chunks_exact(w * 3).enumerate() {
             let base = row * acc.mask_h / h * acc.mask_w;
             for (col, px) in line.as_chunks::<3>().0.iter().enumerate() {
+                let mut y = 0.0;
                 for (c, &v) in px.iter().enumerate() {
-                    acc.add(c, v.into(), base + cols[col]);
+                    let v: u32 = v.into();
+                    acc.add(c, v, base + cols[col]);
+                    y += weights[c] * light[v.min(range) as usize];
                 }
+                acc.add_luma(light.partition_point(|&l| l < y - 1e-12) as u32);
             }
         }
         acc.finish(Source::Flat { bits }, Rotation::None, settings)
     }
 
-    /// Statistiques du canal `channel` (0 rouge, 1 vert, 2 bleu), tirées de l'histogramme
+    /// Statistiques du canal `channel` (0 rouge, 1 vert, 2 bleu, [`LUMINANCE`]), tirées de l'histogramme
     /// en IL ; `tail` : part de pixels laissée de chaque côté pour la plage (0,01 : centiles
     /// 1 % et 99 %). `None` pour un canal vide.
     pub fn channel_stats(&self, channel: usize, tail: f32) -> Option<ChannelStats> {
@@ -605,7 +652,7 @@ impl Exposure {
     /// Marge avant saturation, en IL, du canal le plus exposé : position de son 99,9e
     /// centile sous le blanc (0 : déjà au blanc ; indication « exposer à droite »).
     pub fn headroom_ev(&self) -> f32 {
-        let top = self.high.iter().copied().max().unwrap_or(0);
+        let top = self.high[..CHANNELS].iter().copied().max().unwrap_or(0);
         if top == 0 {
             return -self.ev_range;
         }
@@ -617,7 +664,8 @@ impl Exposure {
     }
 }
 
-fn fraction(counts: &[u64; CHANNELS], total: &[u64; CHANNELS]) -> f64 {
+/// Plus grande part parmi les trois canaux (pas la luminance : badges et alertes).
+fn fraction(counts: &[u64; SERIES], total: &[u64; SERIES]) -> f64 {
     (0..CHANNELS)
         .filter(|&c| total[c] > 0)
         .map(|c| counts[c] as f64 / total[c] as f64)
@@ -626,7 +674,7 @@ fn fraction(counts: &[u64; CHANNELS], total: &[u64; CHANNELS]) -> f64 {
 
 // Format binaire du cache d'analyse : petit-boutiste, entête versionné, masque compressé
 // par plages (il est presque toujours vide). Changer le format = changer `MAGIC`.
-const MAGIC: &[u8; 8] = b"TRIEXP02";
+const MAGIC: &[u8; 8] = b"TRIEXP03";
 
 impl Exposure {
     /// Sérialise pour le cache d'analyse (quelques Ko).
@@ -644,7 +692,7 @@ impl Exposure {
         put_u32(&mut out, self.range);
         out.extend_from_slice(&self.ev_range.to_le_bytes());
         out.extend_from_slice(&self.stops.to_le_bytes());
-        for c in 0..CHANNELS {
+        for c in 0..SERIES {
             put_vec(&mut out, &self.linear[c]);
             put_vec(&mut out, &self.ev[c]);
             for n in [self.total[c], self.over[c], self.under[c]] {
@@ -686,11 +734,11 @@ impl Exposure {
         let range = r.u32()?;
         let ev_range = f32::from_le_bytes(r.take(4)?.try_into().unwrap());
         let stops = f32::from_le_bytes(r.take(4)?.try_into().unwrap());
-        let mut linear: [Vec<u32>; CHANNELS] = Default::default();
-        let mut ev: [Vec<u32>; CHANNELS] = Default::default();
-        let (mut total, mut over, mut under) = ([0u64; 3], [0u64; 3], [0u64; 3]);
-        let mut high = [0u32; CHANNELS];
-        for c in 0..CHANNELS {
+        let mut linear: [Vec<u32>; SERIES] = Default::default();
+        let mut ev: [Vec<u32>; SERIES] = Default::default();
+        let (mut total, mut over, mut under) = ([0u64; SERIES], [0u64; SERIES], [0u64; SERIES]);
+        let mut high = [0u32; SERIES];
+        for c in 0..SERIES {
             linear[c] = r.vec()?;
             ev[c] = r.vec()?;
             total[c] = r.u64()?;
@@ -896,9 +944,9 @@ mod tests {
         let e = Exposure::from_bitmap(&sample(), &settings());
         assert_eq!(e.source, Source::Flat { bits: 8 });
         assert_eq!(e.range, 255);
-        assert_eq!(e.total, [8, 8, 8]);
-        assert_eq!(e.over, [1, 1, 1]);
-        assert_eq!(e.under, [1, 1, 1], "-10 IL sous 255 : seul 0 est bouché");
+        assert_eq!(e.total, [8, 8, 8, 8]);
+        assert_eq!(e.over, [1, 1, 1, 1]);
+        assert_eq!(e.under, [1, 1, 1, 1], "-10 IL sous 255 : seul 0 est bouché");
         assert_eq!((e.mask.width, e.mask.height), (4, 2));
         assert_eq!(e.mask.get(0, 0), mask::OVER);
         assert_eq!(
@@ -951,12 +999,18 @@ mod tests {
             ..settings()
         };
         // 128 en sRGB = -2,21 IL : saturé avec une marge de 2,5 IL, pas de 2 IL.
-        assert_eq!(Exposure::from_bitmap(&sample(), &loose).over, [7, 7, 7]);
+        assert_eq!(
+            Exposure::from_bitmap(&sample(), &loose).over[..CHANNELS],
+            [7, 7, 7]
+        );
         let two = ExposureSettings {
             over_ev: -2.0,
             ..settings()
         };
-        assert_eq!(Exposure::from_bitmap(&sample(), &two).over, [1, 1, 1]);
+        assert_eq!(
+            Exposure::from_bitmap(&sample(), &two).over[..CHANNELS],
+            [1, 1, 1]
+        );
     }
 
     #[test]
@@ -1011,6 +1065,51 @@ mod tests {
     }
 
     #[test]
+    fn the_luminance_of_a_flat_image_is_in_linear_light() {
+        // Un gris reste à sa valeur ; du rouge pur à 255 donne 21 % de la lumière
+        // (Rec. 709), soit ~128 en sRGB (-2,2 IL).
+        let image = Bitmap {
+            width: 2,
+            height: 1,
+            data: vec![64, 64, 64, 255, 0, 0],
+        };
+        let e = Exposure::from_bitmap(&image, &settings());
+        let bins = e.linear[LUMINANCE].len();
+        let values: Vec<usize> = (0..bins)
+            .filter(|&i| e.linear[LUMINANCE][i] > 0)
+            .map(|i| i * 256 / bins)
+            .collect();
+        assert_eq!(e.total[LUMINANCE], 2);
+        assert_eq!(values.len(), 2, "{values:?}");
+        assert_eq!(values[0], 64, "le gris");
+        assert!((127..=128).contains(&values[1]), "le rouge : {values:?}");
+        assert_eq!(
+            e.over[LUMINANCE], 0,
+            "le rouge sature son canal, pas la luminance"
+        );
+        assert!(e.over[0] == 1 && (e.over_fraction() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_luminance_of_a_raw_comes_from_each_block_of_the_mosaic() {
+        // Bayer 4 × 2 : deux blocs 2 × 2. Balance du boîtier : rouge × 2, bleu × 1,5 ;
+        // le premier bloc est un gris neutre (vert 1000), le second sans lumière.
+        let (r, g, b) = (500u16, 1000u16, 667u16);
+        let pixels = [r, g, 0, 0, g, b, 0, 0];
+        let color = |row: usize, col: usize| [[0, 1], [1, 2]][row % 2][col % 2];
+        let weights = [2.0 * 0.2126, 0.7152, 1.5 * 0.0722];
+        let sensor = crate::raw::Sensor::synthetic(&pixels, 4, 2, 4000, color, weights);
+        assert_eq!(sensor.luma_block, 2);
+        let e = Exposure::from_sensor(&sensor, Rotation::None, &settings());
+        assert_eq!(e.total[LUMINANCE], 2, "un point par bloc");
+        assert_eq!(e.total[1], 4, "les canaux comptent leurs photosites");
+        let bins = e.linear[LUMINANCE].len();
+        let at = |v: usize| e.linear[LUMINANCE][v * bins / 4001];
+        assert_eq!(at(1000), 1, "le gris neutre garde la valeur du vert");
+        assert_eq!(at(0), 1);
+    }
+
+    #[test]
     fn channel_stats_from_the_ev_histogram() {
         // Histogramme synthétique : 100 pixels à -4 IL, 100 à -2 IL (cases de 1/8 d'IL).
         let mut e = Exposure::from_bitmap(&sample(), &settings());
@@ -1019,10 +1118,10 @@ mod tests {
         let case = |ev_value: f32| ((ev_value + e.ev_range) * 8.0) as usize;
         ev[case(-4.0)] = 100;
         ev[case(-2.0)] = 100;
-        e.ev = [ev.clone(), ev.clone(), ev];
-        e.total = [200, 200, 200];
-        e.over = [10, 0, 0];
-        e.under = [0, 0, 0];
+        e.ev = [ev.clone(), ev.clone(), ev.clone(), ev];
+        e.total = [200; SERIES];
+        e.over = [10, 0, 0, 0];
+        e.under = [0; SERIES];
         let s = e.channel_stats(0, 0.01).unwrap();
         // Deux groupes égaux : toute valeur entre eux est une médiane.
         assert!((-4.0..=-2.0).contains(&s.median), "médiane : {}", s.median);

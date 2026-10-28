@@ -208,6 +208,7 @@ pub fn navigate(
         | Action::HistogramGreen
         | Action::HistogramBlue
         | Action::HistogramAll
+        | Action::HistogramLuminance
         | Action::HistogramPhoto
         | Action::HistogramCamera
         | Action::ToggleClipping

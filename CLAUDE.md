@@ -902,9 +902,9 @@ explicitement par l'utilisateur comme important.
 - [x] Histogramme des TIFF / PNG 16 bits à leur profondeur (`flat::decode_deep`, fait
       le 17/10/2026 ; HEIC 10 bits encore en 8 bits).
 - [ ] Analyse d'exposition produite au passage par le rendu RAW (même décompression).
-- [ ] Histogramme de **luminance** pour les images plates (un histogramme de plus dans
-      l'analyse, version du cache à incrémenter) ; pour un RAW, le vert en tient lieu
-      (statistiques du grand histogramme, 18/10/2026).
+- [x] Histogramme de **luminance** (fait le 28/10/2026, `l` dans le grand histogramme) :
+      images plates par pixel ; RAW par bloc de la mosaïque, avec la balance des blancs
+      de la prise de vue et `rgb_cam` (choix de l'utilisateur, plutôt que le vert seul).
 
 ### Affichage
 - [x] **Zoom continu** : `+` `-` `*` `/`, pince au pavé tactile, au-delà de 100 % (fait
