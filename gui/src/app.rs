@@ -7634,9 +7634,13 @@ impl TriApp {
                     ui.weak(title);
                 }
                 ui.end_row();
-                // Tous : les trois canaux et la luminance ; sinon la série choisie.
+                // Tous : les trois canaux, comme le graphique (sans la luminance, retour du
+                // 28/10/2026) ; sinon la série choisie.
                 for (channel, (name, color)) in channels.into_iter().enumerate() {
-                    if self.histogram_channel.is_some_and(|c| c != channel) {
+                    let shown = self
+                        .histogram_channel
+                        .map_or(channel < tri::exposure::CHANNELS, |c| c == channel);
+                    if !shown {
                         continue;
                     }
                     let Some(s) = e.channel_stats(channel, tail) else {
@@ -15441,6 +15445,15 @@ mod tests {
         }
         assert_eq!(h.state().source, source);
         assert!(h.state().histogram_large, "reste ouvert");
+        // Tableau : la ligne Luminance seulement quand la luminance est choisie, comme
+        // sa courbe (retour du 28/10/2026).
+        h.run_steps(2);
+        assert!(h.query_by_label("Rouge").is_some());
+        assert!(h.query_by_label("Luminance").is_none(), "tous les canaux");
+        press(&mut h, Key::L, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.query_by_label("Luminance").is_some(), "l");
+        assert!(h.query_by_label("Rouge").is_none());
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large);
     }

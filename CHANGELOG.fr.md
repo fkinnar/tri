@@ -5,7 +5,7 @@
 ## À venir
 
 - **Luminance dans le grand histogramme** : une pastille de plus (un disque à moitié
-  clair) et `l` montrent la luminance seule, et le tableau gagne une ligne Luminance.
+  clair) et `l` montrent la luminance seule, avec sa ligne dans le tableau.
   Sur un RAW, elle est calculée sur les données du capteur, par bloc de la mosaïque
   (2 × 2 en Bayer, 3 × 3 en X-Trans), avec la balance des blancs de la prise de vue ;
   le vert n'en tient plus lieu. Couleur `[gui.colors] hist_luminance`. Les analyses

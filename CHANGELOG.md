@@ -5,7 +5,7 @@
 ## Unreleased
 
 - **Luminance in the large histogram**: one more dot (a half-light disc) and `l` show
-  the luminance alone, and the table gains a Luminance row. On a RAW, it is computed on
+  the luminance alone, with its row in the table. On a RAW, it is computed on
   the sensor data, per block of the mosaic (2 × 2 in Bayer, 3 × 3 in X-Trans), with the
   shot's white balance; green no longer stands in for it. Colour `[gui.colors]
   hist_luminance`. Cached exposure analyses are recomputed once.

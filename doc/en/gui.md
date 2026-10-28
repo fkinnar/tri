@@ -169,9 +169,9 @@ system one ("cold" measurements, experiments).
   the large one: median, mean, range from shadows to highlights (percentiles
   `stats_tail`, 1 % and 99 %), standard deviation, saturated, blocked, in EV below
   saturation (`Exposure::channel_stats`, computed in the engine from the EV histogram
-  already cached), and a **Luminance** row (2026-10-28; on a RAW, computed per block of
-  the mosaic, which is stated: see `exposure.md`).
-  **Analysis tool** (user's idea, 2026-10-18): four dots at the bottom right of the large
+  already cached), and a **Luminance** row when it is chosen, like its curve (2026-10-28;
+  on a RAW, computed per block of the mosaic, which is stated: see `exposure.md`).
+  **Analysis tool** (user's idea, 2026-10-18): five dots at the bottom right of the large
   histogram (red, green, blue, luminance — a half-light disc, `l`, 2026-10-28, colour
   `[gui.colors] hist_luminance` —, white = all; `Shift+C` cycles through them and opens
   the large histogram) show only one channel, its single statistics row and its zones

@@ -172,9 +172,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   statistiques** par canal ne sont que dans le grand : médiane, moyenne, plage des ombres
   aux hautes lumières (centiles `stats_tail`, 1 % et 99 %), écart-type, saturés, bouchés,
   en IL sous la saturation (`Exposure::channel_stats`, calculé dans le moteur à partir
-  de l'histogramme en IL déjà en cache), et une ligne **Luminance** (28/10/2026 ; sur un
-  RAW, calculée par bloc de la mosaïque, c'est indiqué : voir `exposure.md`).
-  **Outil d'analyse** (idée de l'utilisateur, 18/10/2026) : quatre pastilles en bas à
+  de l'histogramme en IL déjà en cache), et une ligne **Luminance** quand elle est
+  choisie, comme sa courbe (28/10/2026 ; sur un RAW, calculée par bloc de la mosaïque,
+  c'est indiqué : voir `exposure.md`).
+  **Outil d'analyse** (idée de l'utilisateur, 18/10/2026) : cinq pastilles en bas à
   droite du grand histogramme (rouge, vert, bleu, luminance — un disque à moitié clair,
   `l`, 28/10/2026, couleur `[gui.colors] hist_luminance` —, blanc = tous ; `Maj+C` les
   fait tourner et ouvre le grand histogramme) n'affichent qu'un canal, sa seule ligne de
