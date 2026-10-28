@@ -813,6 +813,9 @@ pub struct FolderSettings {
     pub section_scale: f32,
     /// Écart au-dessus du titre de chaque section des panneaux latéraux (points).
     pub section_gap: f32,
+    /// « Ouvrir dans Darktable » : délai (ms) pendant lequel on se fie à la dernière
+    /// vérification « déjà ouvert » (Windows ; le menu se redessine à chaque image).
+    pub running_check_ms: u64,
 }
 
 impl Default for FolderSettings {
@@ -827,6 +830,7 @@ impl Default for FolderSettings {
             subfolders_depth: 3,
             section_scale: 1.25,
             section_gap: 6.0,
+            running_check_ms: 1000,
         }
     }
 }

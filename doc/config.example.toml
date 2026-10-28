@@ -702,6 +702,10 @@ subfolders_depth = 3
 section_scale = 1.25
 # Écart au-dessus du titre de chaque section des panneaux latéraux (points).
 section_gap = 6.0
+# « Ouvrir dans Darktable » : délai (ms) pendant lequel on se fie à la dernière
+# vérification « déjà ouvert » (sous Windows, où l'on ne peut pas passer un dossier à
+# un Darktable déjà ouvert).
+running_check_ms = 1000
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

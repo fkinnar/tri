@@ -202,6 +202,12 @@ pub trait Developer: Send + Sync + std::fmt::Debug {
     fn open_folder(&self, _dir: &Path) -> Option<Command> {
         None
     }
+
+    /// Vrai si le logiciel ne peut pas recevoir un dossier maintenant : déjà ouvert, sans
+    /// moyen de le passer à l'instance ouverte (une seconde instance plante).
+    fn open_blocked(&self) -> bool {
+        false
+    }
 }
 
 /// Les logiciels de développement trouvés sur la machine, et la préférence.
@@ -278,6 +284,12 @@ impl Developers {
             .collect();
         engines.sort();
         engines
+    }
+
+    /// Vrai si `engine` ne peut pas recevoir un dossier maintenant
+    /// ([`Developer::open_blocked`]).
+    pub fn open_blocked(&self, engine: Engine) -> bool {
+        self.get(engine).is_some_and(|t| t.open_blocked())
     }
 
     /// Commande qui ouvre `dir` dans `engine`, s'il est installé et le sait.
@@ -434,9 +446,17 @@ pub fn find_darktable(setting: &str) -> Option<Cli> {
 }
 
 /// L'interface de darktable, d'après `darktable-cli` : le programme `darktable` à côté
-/// (paquet, `.app`, installeur Windows), l'AppImage sans commande (elle lance l'interface
-/// par défaut), ou le Flatpak sans `--command`. `None` si le programme manque.
+/// (paquet, installeur Windows), l'AppImage sans commande (elle lance l'interface par
+/// défaut), ou le Flatpak sans `--command`. `None` si le programme manque. Sous macOS,
+/// l'application par `open -a darktable.app` : le système passe le dossier à l'instance
+/// déjà ouverte (darktable le reçoit, `_osx_openfile_callback`) ; lancer le programme du
+/// `.app` en démarrait une seconde, qui plantait.
 pub fn darktable_gui(cli: &Cli) -> Option<Cli> {
+    darktable_gui_on(cli, std::env::consts::OS)
+}
+
+/// [`darktable_gui`] pour le système `os`.
+fn darktable_gui_on(cli: &Cli, os: &str) -> Option<Cli> {
     if cli.program == Path::new("flatpak") {
         let args = cli
             .args
@@ -462,7 +482,22 @@ pub fn darktable_gui(cli: &Cli) -> Option<Cli> {
         "darktable"
     };
     let gui = cli.program.with_file_name(exe);
-    gui.is_file().then(|| Cli::native(gui))
+    if !gui.is_file() {
+        return None;
+    }
+    // …/darktable.app/Contents/MacOS/darktable : l'application elle-même.
+    let bundle = gui
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .filter(|app| app.extension().is_some_and(|e| e == "app"));
+    match bundle {
+        Some(app) if os == "macos" => Some(Cli {
+            program: PathBuf::from("open"),
+            args: vec!["-a".into(), app.to_string_lossy().into_owned()],
+        }),
+        _ => Some(Cli::native(gui)),
+    }
 }
 
 /// Un exécutable donné : AppImage de darktable (le binaire `darktable-cli` qu'elle
@@ -776,12 +811,21 @@ impl Developer for Darktable {
     }
 
     /// L'interface de darktable sur `dir` : la table lumineuse s'ouvre avec ce dossier
-    /// comme collection (importé au besoin) ; une instance déjà ouverte le reçoit par
-    /// D-Bus (Linux). Avec la configuration de l'utilisateur, pas celle de `tri`.
+    /// comme collection (importé au besoin) ; une instance déjà ouverte le reçoit, par
+    /// D-Bus sous Linux, par le système sous macOS (`open -a`, voir [`darktable_gui`]).
+    /// Avec la configuration de l'utilisateur, pas celle de `tri`.
     fn open_folder(&self, dir: &Path) -> Option<Command> {
         let mut command = darktable_gui(&self.cli)?.command();
         command.arg(dir);
         Some(command)
+    }
+
+    /// Sous Windows seulement (ni D-Bus ni `open -a`) : darktable déjà ouvert. Sous
+    /// macOS, le lancer directement alors le faisait planter (28/10/2026) ; `open -a`
+    /// passe le dossier à l'instance ouverte. Les rendus de `tri` passent par
+    /// `darktable-cli`, qui ne compte pas.
+    fn open_blocked(&self) -> bool {
+        cfg!(windows) && crate::process::running("darktable")
     }
 
     /// Bibliothèque en mémoire, sidecars jamais écrits.
@@ -986,6 +1030,22 @@ mod tests {
         std::fs::write(dir.path().join("darktable"), "").unwrap();
         let gui = darktable_gui(&Cli::native(cli)).unwrap();
         assert_eq!(gui.program, dir.path().join("darktable"));
+        // macOS : l'application par `open -a`, qui passe le dossier à l'instance ouverte.
+        let macos = dir.path().join("darktable.app/Contents/MacOS");
+        std::fs::create_dir_all(&macos).unwrap();
+        for name in ["darktable-cli", "darktable"] {
+            std::fs::write(macos.join(name), "").unwrap();
+        }
+        let app = Cli::native(macos.join("darktable-cli"));
+        let gui = darktable_gui_on(&app, "macos").unwrap();
+        let bundle = dir.path().join("darktable.app");
+        assert_eq!(gui.program, PathBuf::from("open"));
+        assert_eq!(gui.args, ["-a".to_string(), bundle.display().to_string()]);
+        assert_eq!(
+            darktable_gui_on(&app, "linux").unwrap().program,
+            macos.join("darktable"),
+            "hors de macOS, le programme"
+        );
         // AppImage : elle-même, sans la commande `darktable-cli`.
         let image = PathBuf::from("/home/u/AppImages/darktable.appimage");
         let gui = darktable_gui(&cli_for(image.clone())).unwrap();

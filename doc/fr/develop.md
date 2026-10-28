@@ -87,7 +87,12 @@ logiciel ; `Developers::folder_openers` liste les logiciels installés qui le sa
 l'attendre).
 
 - **darktable** : `darktable <dossier>` ouvre la table lumineuse avec ce dossier comme
-  collection, importé au besoin ; une instance déjà ouverte le reçoit par D-Bus (Linux).
+  collection, importé au besoin. Une instance déjà ouverte le reçoit : par D-Bus sous
+  Linux ; sous macOS, par `open -a darktable.app <dossier>` (le système le lui passe,
+  `_osx_openfile_callback` de darktable). Lancer le programme du `.app` démarrait une
+  seconde instance, qui plantait (retour du 28/10/2026). Sous Windows, rien de tel :
+  darktable déjà ouvert (`process::running`, `tasklist`), l'entrée est grisée
+  (`Developer::open_blocked`).
   Cette fois avec la configuration et la bibliothèque de l'utilisateur, pas celles de
   `tri` : c'est lui qui travaille. L'interface est trouvée d'après `darktable-cli`
   (`develop::darktable_gui`) : le programme `darktable` à côté (paquet, `.app`,

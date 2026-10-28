@@ -756,6 +756,7 @@ action-core-develop-folder = Développer tout le dossier en fond (chaque image d
 folder-menu-develop = Développer tout le dossier…
 folder-menu-open-in = Ouvrir dans { $name }
 folder-open-in-missing = { $name } ne sait pas ouvrir un dossier, ou n'est pas installé
+folder-open-in-running = { $name } est déjà ouvert : fermez-le d'abord (sous Windows, on ne peut pas lui passer un dossier alors)
 develop-batch-unavailable = Darktable introuvable : réglage [develop] darktable
 develop-batch-busy = un dossier est déjà en cours de développement
 develop-batch-progress = développement de « { $name } » { $done }/{ $total }

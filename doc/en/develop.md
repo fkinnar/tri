@@ -86,8 +86,12 @@ interface; `Developers::folder_openers` lists the installed software that can,
 for it).
 
 - **darktable**: `darktable <folder>` opens the lighttable with that folder as the
-  collection, imported if needed; an instance already open receives it through D-Bus
-  (Linux). This time with the user's configuration and library, not `tri`'s: the user is
+  collection, imported if needed. An instance already open receives it: through D-Bus on
+  Linux; on macOS, through `open -a darktable.app <folder>` (the system passes it,
+  darktable's `_osx_openfile_callback`). Starting the `.app`'s program started a second
+  instance, which crashed (feedback of 2026-10-28). On Windows, nothing of the kind:
+  with darktable already open (`process::running`, `tasklist`), the entry is greyed
+  (`Developer::open_blocked`). This time with the user's configuration and library, not `tri`'s: the user is
   the one working. The interface is found from `darktable-cli`
   (`develop::darktable_gui`): the `darktable` program next to it (package, `.app`,
   Windows installer), the AppImage without the `darktable-cli` command, or the Flatpak
