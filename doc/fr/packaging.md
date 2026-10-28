@@ -124,6 +124,12 @@ tri-<version>-linux-<arch>/
   session.
 - La fenêtre déclare l'identifiant d'application `tri` (Wayland), relié au lanceur
   `tri.desktop` pour l'icône et le nom.
+- **Une roue dentée au lieu de l'icône** (constaté sous Linux Mint le 28/10/2026, après
+  avoir désinstallé le `.deb`) : Cinnamon garde en mémoire le lanceur retiré et ne trouve
+  plus son image ; `Ctrl+Alt+Échap` recharge le panneau sans rien fermer, et l'icône
+  revient (build personnel, AppImage). Sinon, les caches du système :
+  `sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor` et
+  `sudo update-desktop-database /usr/share/applications`.
 
 ### `.deb` et AppImage (25/10/2026)
 
