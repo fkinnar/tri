@@ -2039,7 +2039,7 @@ impl TriApp {
         ui.horizontal(|ui| {
             // Titre à la taille des sections dessous (retour du 28/10/2026).
             let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
-            ui.label(
+            let title = ui.label(
                 egui::RichText::new(t!("folders-title").to_uppercase())
                     .size(size)
                     .strong()
@@ -2057,13 +2057,18 @@ impl TriApp {
                     n = self.gui.folders.subfolders_depth
                 )
             );
-            let (rect, response) = marks::icon_button(ui, size, &t!("folders-subfolders"), &tip);
-            if self.subfolders {
-                ui.painter()
-                    .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
-            }
-            let color = ui.style().interact(&response).fg_stroke.color;
-            marks::subfolders(ui.painter(), rect.shrink(size * 0.2), color);
+            // Comme les interrupteurs de la barre des filtres (retour du 28/10/2026) : sans
+            // fond, gris éteinte, à l'accent allumée ; de la hauteur du titre, alignée sur
+            // lui.
+            let side = title.rect.height();
+            let (rect, response) =
+                marks::clickable_named(ui, side, &t!("folders-subfolders"), &tip);
+            let color = if self.subfolders {
+                marks::accent_mark(ui.ctx())
+            } else {
+                ui.visuals().weak_text_color()
+            };
+            marks::subfolders(ui.painter(), rect.shrink(side * 0.15), color);
             if response.clicked() {
                 self.set_subfolders(!self.subfolders);
             }
