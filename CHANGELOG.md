@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Folders panel**: "Subfolders" becomes an icon (a folder tree), lit when the option
+  is on, right after the title; Refresh moves to the right edge of the panel, and the "Folders" title takes the size of the sections below.
 - **Fixes from the review of 2026-10-28**:
   - rating an image developed in Darktable no longer redoes its render: only the
     sidecar's development counts, no longer its date (`tri` also writes the ratings

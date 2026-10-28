@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Panneau des dossiers** : « Sous-dossiers » devient une icône (arborescence),
+  allumée quand l'option est active, juste après le titre ; Actualiser passe au bord
+  droit du panneau, et le titre « Dossiers » prend la taille des sections dessous.
 - **Corrections de la revue du 28/10/2026** :
   - noter une image développée dans Darktable ne refait plus son rendu : seul le
     développement du sidecar compte, plus sa date (`tri` y écrit aussi les notes) ; les

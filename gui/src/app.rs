@@ -2037,34 +2037,51 @@ impl TriApp {
         let mut fold: Option<tri::places::Section> = None;
         drag_preview(ui.ctx());
         ui.horizontal(|ui| {
-            bar_label(ui, &t!("folders-title"), self.gui.grid.bar_label_scale);
-            // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
+            // Titre à la taille des sections dessous (retour du 28/10/2026).
+            let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
+            ui.label(
+                egui::RichText::new(t!("folders-title").to_uppercase())
+                    .size(size)
+                    .strong()
+                    .color(marks::accent_mark(ui.ctx())),
+            );
             let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            // Descendre dans les sous-dossiers (demandé le 20/10/2026) : leurs images dans
+            // la grille aussi ; choix gardé d'une session à l'autre. Icône allumée plutôt
+            // qu'une case à cocher (retour du 28/10/2026 : le libellé attirait trop l'œil).
             let tip = format!(
                 "{}\n{}",
-                self.action_tip(Action::RefreshFolders),
-                t!("folders-refresh-tip")
+                t!("folders-subfolders"),
+                t!(
+                    "folders-subfolders-tip",
+                    n = self.gui.folders.subfolders_depth
+                )
             );
-            let (rect, response) = marks::icon_button(ui, size, &t!("folders-refresh"), &tip);
+            let (rect, response) = marks::icon_button(ui, size, &t!("folders-subfolders"), &tip);
+            if self.subfolders {
+                ui.painter()
+                    .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+            }
             let color = ui.style().interact(&response).fg_stroke.color;
-            marks::refresh(ui.painter(), rect.shrink(size * 0.2), color);
+            marks::subfolders(ui.painter(), rect.shrink(size * 0.2), color);
             if response.clicked() {
-                self.tree.refresh();
+                self.set_subfolders(!self.subfolders);
             }
-            // Descendre dans les sous-dossiers (demandé le 20/10/2026) : leurs images dans
-            // la grille aussi ; choix gardé d'une session à l'autre.
-            let mut on = self.subfolders;
-            let tip = t!(
-                "folders-subfolders-tip",
-                n = self.gui.folders.subfolders_depth
-            );
-            if ui
-                .checkbox(&mut on, t!("folders-subfolders"))
-                .on_hover_text(tip)
-                .changed()
-            {
-                self.set_subfolders(on);
-            }
+            // Actualiser au bord droit du panneau (retour du 28/10/2026).
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Icône (retour du 17/10/2026), libellé, raccourci et explication au survol.
+                let tip = format!(
+                    "{}\n{}",
+                    self.action_tip(Action::RefreshFolders),
+                    t!("folders-refresh-tip")
+                );
+                let (rect, response) = marks::icon_button(ui, size, &t!("folders-refresh"), &tip);
+                let color = ui.style().interact(&response).fg_stroke.color;
+                marks::refresh(ui.painter(), rect.shrink(size * 0.2), color);
+                if response.clicked() {
+                    self.tree.refresh();
+                }
+            });
         });
         // Recherche de dossiers (retour du 19/10/2026) : sous le titre ; pendant la
         // recherche, les résultats remplacent l'arborescence.
