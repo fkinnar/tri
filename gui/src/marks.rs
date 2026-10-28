@@ -861,6 +861,24 @@ pub fn subfolders(painter: &Painter, rect: Rect, color: Color32) {
     ));
 }
 
+/// Serveur réseau dans `rect` : deux tiroirs d'un boîtier, chacun avec son voyant.
+pub fn server(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let stroke = Stroke::new((w * 0.08).max(1.2), color);
+    for top in [0.08, 0.54] {
+        let drawer = Rect::from_min_size(
+            pos2(rect.left() + w * 0.05, rect.top() + h * top),
+            vec2(w * 0.9, h * 0.38),
+        );
+        painter.rect_stroke(drawer, 2.0, stroke, egui::StrokeKind::Inside);
+        painter.circle_filled(
+            pos2(drawer.right() - w * 0.2, drawer.center().y),
+            w * 0.07,
+            color,
+        );
+    }
+}
+
 /// Triangle d'une branche d'arborescence, dans `rect` : vers le bas si `open`, sinon vers
 /// la droite (dessiné : « ▶ » manque dans la police d'egui).
 pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {

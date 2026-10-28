@@ -178,6 +178,8 @@ pub struct TriApp {
     /// Montage en cours d'un support pas monté (#113) : périphérique, et dossier où il
     /// est monté à venir.
     mounting: Option<(PathBuf, Receiver<Result<PathBuf, String>>)>,
+    /// Partage réseau en cours de connexion (par `mounting`), mémorisé une fois rejoint.
+    connecting: Option<tri::servers::Server>,
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
@@ -692,6 +694,7 @@ impl TriApp {
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
             tree.set_favorite_names(tri::places::favorite_names(data));
+            tree.set_servers(tri::servers::remembered(data));
         }
         if !folder.is_none() {
             tree.reveal(&folder.dir);
@@ -736,6 +739,7 @@ impl TriApp {
             build: tri::update::Build::current(),
             ejecting: None,
             mounting: None,
+            connecting: None,
             cache_jobs: Vec::new(),
             notice: None,
             settings: settings.engine(),
@@ -2036,6 +2040,7 @@ impl TriApp {
         let mut dropped: Option<(Dragged, PathBuf)> = None;
         let mut fold: Option<tri::places::Section> = None;
         drag_preview(ui.ctx());
+        let mut connect = false;
         ui.horizontal(|ui| {
             // Titre à la taille des sections dessous (retour du 28/10/2026).
             let size = egui::TextStyle::Body.resolve(ui.style()).size * f.section_scale;
@@ -2086,8 +2091,25 @@ impl TriApp {
                 if response.clicked() {
                     self.tree.refresh();
                 }
+                // Se connecter à un partage réseau (28/10/2026), à gauche d'Actualiser.
+                let tip = format!(
+                    "{}\n{}",
+                    self.action_tip(Action::FolderConnect),
+                    t!("folders-connect-tip")
+                );
+                let (rect, response) =
+                    marks::icon_button(ui, size, &Action::FolderConnect.label(), &tip);
+                let color = ui.style().interact(&response).fg_stroke.color;
+                marks::server(ui.painter(), rect.shrink(size * 0.22), color);
+                if response.clicked() {
+                    connect = true;
+                }
             });
         });
+        if connect {
+            let ctx = ui.ctx().clone();
+            self.start_server_search(&ctx);
+        }
         // Recherche de dossiers (retour du 19/10/2026) : sous le titre ; pendant la
         // recherche, les résultats remplacent l'arborescence.
         if self.folder_search_ui(ui) {
@@ -2135,7 +2157,10 @@ impl TriApp {
                     // Support pas monté (#113) : grisé, sans dossiers à déplier ; un clic
                     // le monte.
                     let device = row.kind == Some(PlaceKind::Device);
-                    if device {
+                    // Partage réseau mémorisé pas monté (28/10/2026) : de même, un clic le
+                    // rejoint.
+                    let server = row.kind == Some(PlaceKind::Server);
+                    if device || server {
                         ui.add_space(size + ui.spacing().item_spacing.x);
                     } else {
                         let (rect, response) = marks::clickable(ui, size, &tip);
@@ -2147,9 +2172,17 @@ impl TriApp {
                         }
                     }
                     let current = row.path == self.folder.dir;
-                    let label = if device {
+                    let label = if device || server {
+                        let tip = if server {
+                            t!(
+                                "folders-server-tip",
+                                address = row.path.display().to_string()
+                            )
+                        } else {
+                            t!("folders-device-tip")
+                        };
                         ui.selectable_label(false, egui::RichText::new(&row.name).weak())
-                            .on_hover_text(t!("folders-device-tip"))
+                            .on_hover_text(tip)
                     } else {
                         ui.selectable_label(current, &row.name)
                     };
@@ -2214,6 +2247,22 @@ impl TriApp {
                             entry(ui, Action::FolderOpen, t!("folder-menu-mount"));
                             entry(ui, Action::FolderEject, t!("folder-menu-eject"));
                             return;
+                        }
+                        let remembered = row.depth == 0
+                            && tri::servers::of_place(
+                                self.tree.servers(),
+                                &row.path,
+                                std::env::consts::OS,
+                            )
+                            .is_some();
+                        if server {
+                            entry(ui, Action::FolderOpen, t!("folder-menu-connect"));
+                            entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                            return;
+                        }
+                        if remembered {
+                            entry(ui, Action::FolderForget, t!("folder-menu-forget"));
+                            ui.separator();
                         }
                         entry(ui, Action::FolderCreate, t!("folder-menu-new"));
                         if row.depth > 0 {
@@ -2414,6 +2463,7 @@ impl TriApp {
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
+                Action::FolderForget => self.forget_server(&path),
                 Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
@@ -3030,18 +3080,26 @@ impl TriApp {
             .map_or_else(|| folder_name(path), |p| p.name.clone())
     }
 
-    /// Vrai si `path` est un support pas monté (#113).
+    /// Vrai si `path` est un support pas monté (#113) ou un partage réseau mémorisé pas
+    /// monté : à monter avant de l'ouvrir ([`TriApp::start_mount`]).
     fn is_device(&self, path: &Path) -> bool {
         self.tree
             .places()
             .iter()
-            .any(|p| p.path == path && p.kind == PlaceKind::Device)
+            .any(|p| p.path == path && matches!(p.kind, PlaceKind::Device | PlaceKind::Server))
     }
 
     /// Monte le support `device` dans un fil à part (une seconde ou deux) ; une fois
-    /// monté, son dossier s'ouvre (`poll_mount`).
+    /// monté, son dossier s'ouvre (`poll_mount`). Un partage réseau mémorisé est rejoint
+    /// ([`TriApp::start_connect`]).
     fn start_mount(&mut self, ctx: &egui::Context, device: PathBuf) {
         if self.mounting.is_some() {
+            return;
+        }
+        if let Some(server) =
+            tri::servers::of_place(self.tree.servers(), &device, std::env::consts::OS).cloned()
+        {
+            self.start_connect(ctx, server);
             return;
         }
         let (tx, rx) = mpsc::channel();
@@ -3055,6 +3113,43 @@ impl TriApp {
         self.mounting = Some((device, rx));
     }
 
+    /// Rejoint le partage réseau `server` dans un fil à part (le système peut demander le
+    /// mot de passe) ; une fois rejoint, il est mémorisé et son dossier s'ouvre
+    /// (`poll_mount`).
+    fn start_connect(&mut self, ctx: &egui::Context, server: tri::servers::Server) {
+        if self.mounting.is_some() {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        let target = server.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(target.connect(std::env::consts::OS));
+            repaint.request_repaint();
+        });
+        self.notice = Some((t!("connecting", name = server.name()), false));
+        self.mounting = Some((PathBuf::from(server.address()), rx));
+        self.connecting = Some(server);
+    }
+
+    /// Oublie le partage réseau mémorisé dont `path` est l'emplacement.
+    fn forget_server(&mut self, path: &Path) {
+        let os = std::env::consts::OS;
+        let Some(server) = tri::servers::of_place(self.tree.servers(), path, os).cloned() else {
+            return;
+        };
+        let Some(data) = self.data_dir.clone() else {
+            return;
+        };
+        match tri::servers::forget(&data, &server) {
+            Ok(list) => {
+                self.tree.set_servers(list);
+                self.notice = Some((t!("server-forgotten", name = server.name()), false));
+            }
+            Err(e) => self.notice = Some((e.to_string(), true)),
+        }
+    }
+
     /// Fin d'un montage : le dossier monté s'ouvre, ou le refus du système s'affiche.
     fn poll_mount(&mut self) {
         let Some((device, rx)) = &self.mounting else {
@@ -3065,6 +3160,26 @@ impl TriApp {
         };
         let name = self.place_name(device);
         self.mounting = None;
+        if let Some(server) = self.connecting.take() {
+            let name = server.name();
+            match result {
+                Ok(dir) => {
+                    if let Some(data) = self.data_dir.clone()
+                        && let Ok(list) = tri::servers::remember(&data, &server)
+                    {
+                        self.tree.set_servers(list);
+                    }
+                    self.notice = Some((t!("connected", name = &name), false));
+                    self.tree.refresh();
+                    self.tree.reveal(&dir);
+                    self.tree.point_at(&dir);
+                    self.reveal_folder = true;
+                    self.open_folder(&dir);
+                }
+                Err(e) => self.notice = Some((t!("connect-failed", name = &name, error = e), true)),
+            }
+            return;
+        }
         match result {
             Ok(dir) => {
                 self.notice = Some((t!("mounted", name = &name), false));
@@ -4279,6 +4394,12 @@ impl TriApp {
             }
             Action::FolderFavorite => self.toggle_favorite(),
             Action::FolderFavoriteName => self.name_favorite(ctx),
+            Action::FolderConnect => self.start_server_search(ctx),
+            Action::FolderForget => {
+                if let Some(path) = self.tree.cursor_path() {
+                    self.forget_server(&path);
+                }
+            }
             Action::FolderOpenIn(engine) => {
                 if let Some(i) = self.tree.cursor() {
                     let path = self.tree.rows()[i].path.clone();
@@ -5472,6 +5593,17 @@ impl TriApp {
         keys.join(", ")
     }
 
+    /// « Se connecter à un serveur » : le champ de recherche du panneau des dossiers, avec
+    /// le début d'une adresse (`\\` sous Windows, `smb://` ailleurs) ; Entrée rejoint le
+    /// partage tapé.
+    fn start_server_search(&mut self, ctx: &egui::Context) {
+        self.folder_panel = true;
+        self.focus = crate::actions::Scope::Folders;
+        self.folder_query = if cfg!(windows) { r"\\" } else { "smb://" }.to_string();
+        self.restart_folder_search(ctx);
+        self.focus_request = Some(folder_search_id());
+    }
+
     /// Ouvre la recherche : dans le panneau des dossiers s'il a le clavier, sinon celle de
     /// la grille (barre des filtres montrée, retour à la grille depuis le plein écran).
     fn start_search(&mut self) {
@@ -5562,6 +5694,10 @@ impl TriApp {
     /// remplacent l'arborescence.
     fn folder_search_ui(&mut self, ui: &mut Ui) -> bool {
         let focused_search = ui.memory(|m| m.has_focus(folder_search_id()));
+        // Une adresse de partage réseau tapée (`\\nas\photo`, `smb://nas/photo`,
+        // 28/10/2026) : une ligne « Se connecter » en tête, avant les résultats.
+        let server = tri::servers::Server::parse(&self.folder_query);
+        let first = usize::from(server.is_some());
         if focused_search {
             let (up, down) = ui.input_mut(|i| {
                 (
@@ -5569,7 +5705,7 @@ impl TriApp {
                     i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
                 )
             });
-            let last = self.folder_results.len().saturating_sub(1);
+            let last = (self.folder_results.len() + first).saturating_sub(1);
             if up {
                 self.folder_result = self.folder_result.saturating_sub(1);
             }
@@ -5600,6 +5736,7 @@ impl TriApp {
         let Some(search) = self.folder_search.as_ref() else {
             return false;
         };
+        let ctx = ui.ctx().clone();
         let new = search.take();
         let base = search.query().base.clone();
         let running = !search.is_done();
@@ -5612,18 +5749,47 @@ impl TriApp {
             });
         }
         ui.separator();
-        ui.weak(t!("search-folder-in", base = base.display().to_string()));
-        if running {
-            ui.weak(t!("search-folder-running"));
-        } else if self.folder_results.is_empty() {
-            ui.weak(t!("search-folder-none"));
+        // Le début d'une adresse de partage (`smb://`, `\\`) : le format attendu plutôt
+        // qu'une recherche sans résultat dans le dossier pointé.
+        let address = tri::servers::looks_like_address(&self.folder_query);
+        if address && self.folder_results.is_empty() {
+            if server.is_none() {
+                ui.weak(t!("search-folder-address"));
+            }
+        } else {
+            ui.weak(t!("search-folder-in", base = base.display().to_string()));
+            if running {
+                ui.weak(t!("search-folder-running"));
+            } else if self.folder_results.is_empty() && server.is_none() {
+                ui.weak(t!("search-folder-none"));
+            }
         }
         let mut open = None;
-        if enter && let Some((path, _)) = self.folder_results.get(self.folder_result) {
+        let mut connect = enter && server.is_some() && self.folder_result == 0;
+        if enter
+            && let Some((path, _)) = self
+                .folder_results
+                .get(self.folder_result.wrapping_sub(first))
+        {
             open = Some(path.clone());
         }
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+            if let Some(server) = &server {
+                let label = ui
+                    .selectable_label(
+                        self.folder_result == 0,
+                        t!("search-folder-connect", name = server.name()),
+                    )
+                    .on_hover_text(server.address());
+                if self.folder_result == 0 {
+                    cursor_row(ui, label.rect, self.gui.dialogs.cursor_tint);
+                }
+                if label.clicked() {
+                    connect = true;
+                }
+            }
             for (i, (path, _)) in self.folder_results.iter().enumerate() {
+                let i = i + first;
                 let relative = path.strip_prefix(&base).unwrap_or(path);
                 let label =
                     ui.selectable_label(i == self.folder_result, relative.display().to_string());
@@ -5638,7 +5804,11 @@ impl TriApp {
                 }
             }
         });
-        if let Some(path) = open {
+        if connect && let Some(server) = server {
+            self.close_folder_search();
+            self.focus = crate::actions::Scope::Images;
+            self.start_connect(&ctx, server);
+        } else if let Some(path) = open {
             self.open_found_folder(path);
         }
         true
@@ -14798,6 +14968,76 @@ mod tests {
         assert!(h.state().folder_search.is_some());
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().folder_search.is_none() && h.state().folder_query.is_empty());
+    }
+
+    #[test]
+    fn a_network_share_is_offered_from_the_folder_search() {
+        // Retour du 28/10/2026 (WinBoat) : un partage `\\truc\machin` tapé dans la
+        // recherche des dossiers ; `c` ouvre le champ avec le début d'une adresse. (La
+        // connexion elle-même n'est pas lancée : elle ouvrirait la boîte du système.)
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(
+            h.ctx.memory(|m| m.has_focus(folder_search_id())),
+            "champ des dossiers"
+        );
+        let (prefix, rest) = if cfg!(windows) {
+            (r"\\", r"truc\machin")
+        } else {
+            ("smb://", "truc/machin")
+        };
+        assert_eq!(h.state().folder_query, prefix);
+        // Rien encore à rejoindre : le format attendu.
+        wait_for_label(
+            &mut h,
+            r"adresse d'un partage : \\serveur\partage ou smb://serveur/partage",
+        );
+        h.state_mut().folder_query.push_str(rest);
+        h.run_steps(3);
+        wait_for_label(&mut h, "Se connecter à « machin (truc) »");
+        // Un chemin ordinaire n'est pas une adresse de partage.
+        h.state_mut().folder_query = "machin".into();
+        h.run_steps(3);
+        assert!(
+            h.query_by_label("Se connecter à « machin (truc) »")
+                .is_none(),
+            "plus d'adresse"
+        );
+    }
+
+    #[test]
+    fn a_remembered_share_is_listed_under_network_and_can_be_forgotten() {
+        let (mut h, dir) = harness();
+        let data = dir.path().join("data");
+        let share = tri::servers::Server::parse(r"\\tri-test-nas\photos").unwrap();
+        let list = tri::servers::remember(&data, &share).unwrap();
+        h.state_mut().tree.set_servers(list);
+        h.run_steps(3);
+        wait_for_label(&mut h, "photos (tri-test-nas)");
+        let place = share.place(std::env::consts::OS);
+        let row = h
+            .state()
+            .tree
+            .rows()
+            .into_iter()
+            .find(|r| r.path == place.path)
+            .expect("ligne du partage");
+        assert_eq!(row.section, tri::places::Section::Network);
+        if !cfg!(windows) {
+            // Pas monté : à rejoindre d'un clic, comme un support pas monté.
+            assert_eq!(row.kind, Some(PlaceKind::Server));
+            assert!(h.state().is_device(&place.path));
+        }
+        h.state_mut().forget_server(&place.path);
+        h.run_steps(3);
+        assert!(
+            h.query_by_label("photos (tri-test-nas)").is_none(),
+            "oublié"
+        );
+        assert!(tri::servers::remembered(&data).is_empty());
     }
 
     #[test]

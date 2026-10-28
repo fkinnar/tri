@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Network shares**: connect to a share by its address, `\\nas\photo` or
+  `smb://nas/photo` (the "server" icon of the folders panel, `c`, or the address typed in
+  the folder search). The system mounts and asks for the password; the share is then
+  kept in the "Network" section (right click or Shift+C to forget it). On Windows,
+  network drives (`Z:`) go under "Network".
 - **Folders panel**: "Subfolders" becomes an icon (a folder tree), grey, in the accent
   colour when the option is on (like the filters), right after the title; Refresh moves
   to the right edge of the panel, and the "Folders" title takes the size of the sections

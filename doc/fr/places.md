@@ -110,8 +110,14 @@ sauvegarde) ; `PlaceSettings::ejectable`, et `Tree::can_eject` à vérifier avan
   section, les autres (`/etc/fstab`, `~/nas`) s'ajoutent. Sous Linux aussi les montages
   **GVFS** du gestionnaire de fichiers (`/run/user/<uid>/gvfs` : `smb-share:server=nas,
   share=photo` devient « photo (nas) ») ; un téléphone (`mtp`) ou un appareil photo
-  (`gphoto2`) y est un volume. Pas d'éjection proposée pour un partage ; rien sous
-  Windows (lecteurs réseau : lettres de lecteur).
+  (`gphoto2`) y est un volume. Pas d'éjection proposée pour un partage. Sous Windows,
+  un lecteur réseau (lettre attribuée à un partage, `GetDriveTypeW` = `DRIVE_REMOTE`) va
+  dans « Réseau » (28/10/2026).
+- **Partages mémorisés** (28/10/2026, [servers.md](servers.md)) : `Tree::set_servers`
+  ajoute ceux qui ne sont pas déjà là, à chaque relecture des emplacements ; sous
+  Windows, leur chemin UNC (`\\nas\photo`, `PlaceKind::Network`) ; ailleurs, tant qu'ils
+  ne sont pas montés, une ligne `PlaceKind::Server` (chemin = adresse `smb://`), grisée,
+  qu'un clic rejoint, comme un support pas monté.
 
 ## Sous-dossiers (`subfolders(dir, hidden)`)
 

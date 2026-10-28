@@ -107,7 +107,13 @@ does so when confirming).
   others (`/etc/fstab`, `~/nas`) are added. On Linux, also the file manager's **GVFS**
   mounts (`/run/user/<uid>/gvfs`: `smb-share:server=nas,share=photo` becomes
   "photo (nas)"); a phone (`mtp`) or a camera (`gphoto2`) there is a volume. No ejection
-  offered for a share; nothing on Windows (network drives: drive letters).
+  offered for a share. On Windows, a network drive (a letter mapped to a share,
+  `GetDriveTypeW` = `DRIVE_REMOTE`) goes under "Network" (2026-10-28).
+- **Remembered shares** (2026-10-28, [servers.md](servers.md)): `Tree::set_servers` adds
+  those not already there, each time the places are read again; on Windows, their UNC
+  path (`\\nas\photo`, `PlaceKind::Network`); elsewhere, while they are not mounted, a
+  `PlaceKind::Server` row (path = `smb://` address), greyed, that a click joins, like an
+  unmounted device.
 
 ## Subfolders (`subfolders(dir, hidden)`)
 
