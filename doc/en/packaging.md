@@ -122,6 +122,12 @@ tri-<version>-linux-<arch>/
   `gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor`, then log out and back in.
 - The window declares the application id `tri` (Wayland), tied to the `tri.desktop`
   launcher for the icon and name.
+- **A cog instead of the icon** (seen on Linux Mint on 2026-10-28, after uninstalling the
+  `.deb`): Cinnamon keeps the removed launcher in memory and no longer finds its image;
+  `Ctrl+Alt+Esc` reloads the panel without closing anything, and the icon comes back (own
+  build, AppImage). Otherwise, the system caches:
+  `sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor` and
+  `sudo update-desktop-database /usr/share/applications`.
 
 ### `.deb` and AppImage (2026-10-25)
 
