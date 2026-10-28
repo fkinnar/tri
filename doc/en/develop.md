@@ -78,6 +78,23 @@ configuration nor its library is touched, and darktable can stay open (no lock).
 `write_sidecar_files=never`: the sidecar is never rewritten, whatever the configuration;
 a test checks this on a real render (on a copy).
 
+## Opening a folder in the software (2026-10-28)
+
+`Developer::open_folder` gives the command that opens a folder in the software's
+interface; `Developers::folder_openers` lists the installed software that can,
+`Developers::open_folder` gives the command (started by `files::launch`, without waiting
+for it).
+
+- **darktable**: `darktable <folder>` opens the lighttable with that folder as the
+  collection, imported if needed; an instance already open receives it through D-Bus
+  (Linux). This time with the user's configuration and library, not `tri`'s: the user is
+  the one working. The interface is found from `darktable-cli`
+  (`develop::darktable_gui`): the `darktable` program next to it (package, `.app`,
+  Windows installer), the AppImage without the `darktable-cli` command, or the Flatpak
+  without `--command`.
+- **RapidRAW**: no folder opening; as an argument, it only opens an image in its editor
+  (RapidRAW's `launch_request.rs`: a path = `OpenFile`, checked on 2026-10-28).
+
 ## Cache and computation
 
 Level `Level::Developed(engine)`, one per software (folder `developed` for darktable,

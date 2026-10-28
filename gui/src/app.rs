@@ -2226,6 +2226,15 @@ impl TriApp {
                         if !self.developers.is_empty() {
                             entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
                         }
+                        // Ouvrir le dossier dans un logiciel installé qui le sait
+                        // (darktable ; demandé le 28/10/2026).
+                        for engine in self.developers.folder_openers() {
+                            entry(
+                                ui,
+                                Action::FolderOpenIn(engine),
+                                t!("folder-menu-open-in", name = engine.name()),
+                            );
+                        }
                         ui.separator();
                         if removable {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload"));
@@ -2344,6 +2353,7 @@ impl TriApp {
                 // de `folder_edit_action`), corrigé le 20/10/2026.
                 Action::FolderFavorite => self.toggle_favorite(),
                 Action::FolderFavoriteName => self.name_favorite(&ctx),
+                Action::FolderOpenIn(engine) => self.open_folder_in(engine, &path),
                 Action::FolderCopy | Action::FolderMove => {
                     self.transfer_folder(&ctx, path, action == Action::FolderCopy, None)
                 }
@@ -4103,6 +4113,12 @@ impl TriApp {
             }
             Action::FolderFavorite => self.toggle_favorite(),
             Action::FolderFavoriteName => self.name_favorite(ctx),
+            Action::FolderOpenIn(engine) => {
+                if let Some(i) = self.tree.cursor() {
+                    let path = self.tree.rows()[i].path.clone();
+                    self.open_folder_in(engine, &path);
+                }
+            }
             Action::FolderCopy | Action::FolderMove => {
                 if let Some(i) = self.tree.cursor() {
                     let path = self.tree.rows()[i].path.clone();
@@ -7963,6 +7979,15 @@ impl TriApp {
         if modal.should_close() {
             self.histogram_large = false;
         }
+    }
+
+    /// Ouvre le dossier `dir` dans `engine` (darktable), sans l'attendre ; un logiciel
+    /// absent ou qui ne sait pas ouvrir un dossier est signalé dans la barre d'état.
+    fn open_folder_in(&mut self, engine: tri::develop::Engine, dir: &Path) {
+        self.file_error = match self.developers.open_folder(engine, dir) {
+            Some(command) => tri::files::launch(command).err().map(|e| e.to_string()),
+            None => Some(t!("folder-open-in-missing", name = engine.name())),
+        };
     }
 
     /// Action sur les fichiers `paths` (renommer, afficher : le premier) ; `at` : position
@@ -14500,6 +14525,67 @@ mod tests {
             "avis des notes modifiées ailleurs, vu : {:?}",
             h.state().notice
         );
+    }
+
+    #[test]
+    fn a_folder_opens_in_darktable_from_the_panel() {
+        // Demandé le 28/10/2026 : `d` sur le dossier pointé. Un faux darktable note ce
+        // qu'il reçoit ; sans darktable, la barre d'état le dit.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let seance = dir.path().join("séance");
+        std::fs::create_dir(&seance).unwrap();
+        let place = tri::places::Place {
+            name: "Test".into(),
+            path: dir.path().to_path_buf(),
+            kind: tri::places::PlaceKind::Home,
+        };
+        h.state_mut().tree = Tree::with_places(vec![place], false);
+        h.state_mut().tree.expand(dir.path());
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        h.state_mut().tree.point_at(&seance);
+        h.state_mut().developers = tri::develop::Developers::none();
+        press(&mut h, Key::D, Modifiers::NONE);
+        assert!(
+            h.state()
+                .file_error
+                .as_deref()
+                .is_some_and(|e| e.contains("Darktable")),
+            "{:?}",
+            h.state().file_error
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let bin = dir.path().join("bin");
+            std::fs::create_dir(&bin).unwrap();
+            let got = dir.path().join("reçu.txt");
+            let gui = bin.join("darktable");
+            // Écrit à côté puis renommé : le test ne lit jamais un fichier à moitié écrit.
+            let script = format!(
+                "#!/bin/sh\necho \"$@\" > '{0}.part' && mv '{0}.part' '{0}'\n",
+                got.display()
+            );
+            std::fs::write(&gui, script).unwrap();
+            std::fs::set_permissions(&gui, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::write(bin.join("darktable-cli"), "").unwrap();
+            h.state_mut().developers =
+                tri::develop::Developers::none().with(Arc::new(tri::develop::Darktable {
+                    cli: tri::develop::Cli::native(bin.join("darktable-cli")),
+                    config_dir: dir.path().join("dt"),
+                    high_quality: false,
+                }));
+            press(&mut h, Key::D, Modifiers::NONE);
+            assert_eq!(h.state().file_error, None);
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !got.is_file() {
+                assert!(Instant::now() < deadline, "darktable jamais lancé");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            let text = std::fs::read_to_string(&got).unwrap();
+            assert_eq!(text.trim(), seance.display().to_string());
+        }
     }
 
     #[test]

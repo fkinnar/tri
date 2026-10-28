@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Ouvrir un dossier dans Darktable** : clic droit sur un dossier, « Ouvrir dans
+  Darktable », ou `d` dans le panneau des dossiers. Darktable s'ouvre sur ce dossier
+  (importé au besoin), avec sa propre bibliothèque ; une instance déjà ouverte le reçoit
+  sous Linux. RapidRAW ne sait ouvrir qu'une image, pas un dossier.
 - **Luminance dans le grand histogramme** : une pastille de plus (un disque à moitié
   clair) et `l` montrent la luminance seule, avec sa ligne dans le tableau.
   Sur un RAW, elle est calculée sur les données du capteur, par bloc de la mosaïque

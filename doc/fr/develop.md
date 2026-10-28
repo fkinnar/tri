@@ -79,6 +79,24 @@ configuration ni la bibliothèque de darktable ne sont touchées, et darktable p
 ouvert (pas de verrou). `write_sidecar_files=never` : le sidecar n'est jamais réécrit,
 quelle que soit la configuration ; un test le vérifie sur un vrai rendu (sur une copie).
 
+## Ouvrir un dossier dans le logiciel (28/10/2026)
+
+`Developer::open_folder` donne la commande qui ouvre un dossier dans l'interface du
+logiciel ; `Developers::folder_openers` liste les logiciels installés qui le savent,
+`Developers::open_folder` donne la commande (lancée par `files::launch`, sans
+l'attendre).
+
+- **darktable** : `darktable <dossier>` ouvre la table lumineuse avec ce dossier comme
+  collection, importé au besoin ; une instance déjà ouverte le reçoit par D-Bus (Linux).
+  Cette fois avec la configuration et la bibliothèque de l'utilisateur, pas celles de
+  `tri` : c'est lui qui travaille. L'interface est trouvée d'après `darktable-cli`
+  (`develop::darktable_gui`) : le programme `darktable` à côté (paquet, `.app`,
+  installeur Windows), l'AppImage sans la commande `darktable-cli`, ou le Flatpak sans
+  `--command`.
+- **RapidRAW** : pas d'ouverture de dossier ; en argument, il n'ouvre qu'une image dans
+  son éditeur (`launch_request.rs` de RapidRAW : un chemin = `OpenFile`, vérifié le
+  28/10/2026).
+
 ## Cache et calcul
 
 Niveau `Level::Developed(engine)`, un par logiciel (dossier `developed` pour darktable,

@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Open a folder in Darktable**: right click on a folder, "Open in Darktable", or `d`
+  in the folder panel. Darktable opens on that folder (imported if needed), with its own
+  library; an instance already open receives it on Linux. RapidRAW can only open an
+  image, not a folder.
 - **Luminance in the large histogram**: one more dot (a half-light disc) and `l` show
   the luminance alone, with its row in the table. On a RAW, it is computed on
   the sensor data, per block of the mosaic (2 × 2 in Bayer, 3 × 3 in X-Trans), with the

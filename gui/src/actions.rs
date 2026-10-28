@@ -283,6 +283,9 @@ pub enum Action {
     FolderFavorite,
     /// Panneau des dossiers : nommer le favori pointé (vide : nom du dossier).
     FolderFavoriteName,
+    /// Panneau des dossiers : ouvrir le dossier pointé dans un logiciel de
+    /// développement (darktable, 28/10/2026).
+    FolderOpenIn(tri::develop::Engine),
     /// Panneau des dossiers : copier le dossier pointé vers… (une boîte confirme).
     FolderCopy,
     /// Panneau des dossiers : déplacer le dossier pointé vers… (une boîte confirme).
@@ -431,7 +434,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 179] = [
+    pub const ALL: [Action; 180] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -547,6 +550,7 @@ impl Action {
         Action::FolderDelete,
         Action::FolderFavorite,
         Action::FolderFavoriteName,
+        Action::FolderOpenIn(tri::develop::Engine::Darktable),
         Action::FolderCopy,
         Action::FolderMove,
         Action::MetaUp,
@@ -671,10 +675,10 @@ impl Action {
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
-            | FolderFavoriteName | FolderCopy | FolderMove | MetaUp | MetaDown | MetaCopy
-            | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll | PanelSectionNext
-            | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight | FolderSectionNext
-            | FolderSectionPrev => Group::Panels,
+            | FolderFavoriteName | FolderOpenIn(_) | FolderCopy | FolderMove | MetaUp
+            | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown | MetaCopyAll
+            | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft | PanelRight
+            | FolderSectionNext | FolderSectionPrev => Group::Panels,
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
             Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
@@ -831,6 +835,8 @@ impl Action {
             Action::FolderDelete => "core.folders.delete",
             Action::FolderFavorite => "core.folders.favorite",
             Action::FolderFavoriteName => "core.folders.favorite_name",
+            Action::FolderOpenIn(tri::develop::Engine::Darktable) => "plugin.darktable.open_folder",
+            Action::FolderOpenIn(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.open_folder",
             Action::FolderCopy => "core.folders.copy",
             Action::FolderMove => "core.folders.move",
             Action::MetaUp => "core.metadata.up",
@@ -965,8 +971,8 @@ impl Action {
         match self {
             FolderUp | FolderDown | FolderExpand | FolderCollapse | FolderOpen | FolderFirst
             | FolderLast | FolderOffload | FolderEject | FolderCreate | FolderRename
-            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderCopy | FolderMove
-            | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
+            | FolderDelete | FolderFavorite | FolderFavoriteName | FolderOpenIn(_) | FolderCopy
+            | FolderMove | FolderSectionNext | FolderSectionPrev => Some(Scope::Folders),
             MetaUp | MetaDown | MetaCopy | MetaOpen | MetaSelectUp | MetaSelectDown
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),
@@ -1271,6 +1277,11 @@ const FOLDERS: &[Binding] = {
         (&[plain(Key::M)], FolderFavorite),
         // Nommer le favori : `n`.
         (&[plain(Key::N)], FolderFavoriteName),
+        // Ouvrir le dossier dans darktable : `d`, comme le développement des images.
+        (
+            &[plain(Key::D)],
+            FolderOpenIn(tri::develop::Engine::Darktable),
+        ),
         // Copier / déplacer le dossier vers… : comme pour les images (`Ctrl+C` / `y`,
         // `Ctrl+X`), la boîte permet de passer de l'un à l'autre.
         (&[ctrl(Key::X)], FolderMove),
