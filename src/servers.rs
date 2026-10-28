@@ -480,24 +480,28 @@ mod tests {
             server("nas", "photo", &[]).mounted_in(&Mounts::from_proc_mounts(proc)),
             Some(PathBuf::from("/mnt/nas photo"))
         );
-        let gvfs = tempfile::tempdir().unwrap();
-        for d in [
-            "smb-share:server=nas.local,share=photo,user=moi",
-            "mtp:host=telephone",
-        ] {
-            fs::create_dir(gvfs.path().join(d)).unwrap();
+        // GVFS : Linux seulement (« : » interdit dans un nom de fichier sous Windows).
+        #[cfg(unix)]
+        {
+            let gvfs = tempfile::tempdir().unwrap();
+            for d in [
+                "smb-share:server=nas.local,share=photo,user=moi",
+                "mtp:host=telephone",
+            ] {
+                fs::create_dir(gvfs.path().join(d)).unwrap();
+            }
+            assert_eq!(
+                server("NAS", "Photo", &[]).mounted_in(&Mounts::from_gvfs(gvfs.path())),
+                Some(
+                    gvfs.path()
+                        .join("smb-share:server=nas.local,share=photo,user=moi")
+                )
+            );
+            assert_eq!(
+                server("nas", "autre", &[]).mounted_in(&Mounts::from_gvfs(gvfs.path())),
+                None
+            );
         }
-        assert_eq!(
-            server("NAS", "Photo", &[]).mounted_in(&Mounts::from_gvfs(gvfs.path())),
-            Some(
-                gvfs.path()
-                    .join("smb-share:server=nas.local,share=photo,user=moi")
-            )
-        );
-        assert_eq!(
-            server("nas", "autre", &[]).mounted_in(&Mounts::from_gvfs(gvfs.path())),
-            None
-        );
     }
 
     #[test]

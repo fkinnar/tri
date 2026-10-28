@@ -1354,8 +1354,13 @@ impl Tree {
     /// Remplace les partages réseau mémorisés, proposés dans la section « Réseau » : sous
     /// Windows, leur chemin UNC ; ailleurs, à rejoindre tant qu'ils ne sont pas montés.
     pub fn set_servers(&mut self, servers: Vec<crate::servers::Server>) {
+        // Les emplacements des partages d'avant : à rejoindre (macOS, Linux) ou chemin UNC
+        // (Windows, `PlaceKind::Network` : un partage oublié y restait, CI du 28/10/2026).
+        let os = std::env::consts::OS;
+        let old: Vec<PathBuf> = self.servers.iter().map(|s| s.place(os).path).collect();
+        self.places
+            .retain(|p| p.kind != PlaceKind::Server && !old.contains(&p.path));
         self.servers = servers;
-        self.places.retain(|p| p.kind != PlaceKind::Server);
         self.add_servers();
     }
 
