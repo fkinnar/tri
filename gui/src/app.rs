@@ -460,6 +460,11 @@ pub struct TriApp {
     clipping: bool,
     /// Analyses d'exposition lues dans le cache (images affichées récemment).
     exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Logiciels de développement qui ne peuvent pas recevoir un dossier (déjà ouverts,
+    /// Windows), vérifiés au plus une fois par `[gui.folders] running_check_ms`
+    /// ([`TriApp::engine_blocked`]).
+    engines_blocked:
+        std::cell::RefCell<std::collections::HashMap<tri::develop::Engine, (Instant, bool)>>,
     /// Expositions du JPEG boîtier des RAW ([`TriApp::camera_exposure_of`]).
     camera_exposures: Lru<PathBuf, Arc<Exposure>>,
     /// Masques des zones, en textures.
@@ -854,6 +859,7 @@ impl TriApp {
             histogram_large: false,
             histogram_photo: gui.histogram.analysis,
             histogram_camera: gui.histogram.camera_jpeg,
+            engines_blocked: Default::default(),
             histogram_scale: gui.histogram.scale,
             histogram_channel: None,
             analysis_texture: None,
@@ -2160,6 +2166,7 @@ impl TriApp {
                     // Clic droit : les actions du clavier (retour du 18/10/2026), raccourci au
                     // survol.
                     let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
+                    let mut open_in = None;
                     label.context_menu(|ui| {
                         let mut entry = |ui: &mut Ui, action: Action, text: String| {
                             if ui
@@ -2228,12 +2235,31 @@ impl TriApp {
                         }
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
+                        // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
+                        // Windows (une seconde instance plantait sous macOS avant `open -a`,
+                        // retour du 28/10/2026).
                         for engine in self.developers.folder_openers() {
-                            entry(
-                                ui,
-                                Action::FolderOpenIn(engine),
-                                t!("folder-menu-open-in", name = engine.name()),
-                            );
+                            let action = Action::FolderOpenIn(engine);
+                            let open = self.engine_blocked(engine);
+                            let tip = if open {
+                                t!("folder-open-in-running", name = engine.name())
+                            } else {
+                                self.action_tip(action)
+                            };
+                            let button = ui
+                                .add_enabled(
+                                    !open,
+                                    egui::Button::new(t!(
+                                        "folder-menu-open-in",
+                                        name = engine.name()
+                                    )),
+                                )
+                                .on_hover_text(&tip)
+                                .on_disabled_hover_text(&tip);
+                            if button.clicked() {
+                                open_in = Some((row.path.clone(), action));
+                                ui.close();
+                            }
                         }
                         ui.separator();
                         if removable {
@@ -2243,6 +2269,9 @@ impl TriApp {
                             entry(ui, Action::FolderOffload, t!("folder-menu-offload-here"));
                         }
                     });
+                    if open_in.is_some() {
+                        menu = open_in;
+                    }
                     if current && reveal {
                         reveal = false;
                         label.scroll_to_me(Some(egui::Align::Center));
@@ -7984,10 +8013,33 @@ impl TriApp {
     /// Ouvre le dossier `dir` dans `engine` (darktable), sans l'attendre ; un logiciel
     /// absent ou qui ne sait pas ouvrir un dossier est signalé dans la barre d'état.
     fn open_folder_in(&mut self, engine: tri::develop::Engine, dir: &Path) {
+        // Vérifié à nouveau au moment de lancer : le menu peut dater d'une seconde.
+        self.engines_blocked.borrow_mut().remove(&engine);
+        if self.engine_blocked(engine) {
+            self.file_error = Some(t!("folder-open-in-running", name = engine.name()));
+            return;
+        }
         self.file_error = match self.developers.open_folder(engine, dir) {
             Some(command) => tri::files::launch(command).err().map(|e| e.to_string()),
             None => Some(t!("folder-open-in-missing", name = engine.name())),
         };
+    }
+
+    /// Vrai si `engine` ne peut pas recevoir un dossier maintenant
+    /// ([`tri::develop::Developers::open_blocked`]) ; la réponse sert
+    /// `[gui.folders] running_check_ms` (le menu se redessine à chaque image).
+    fn engine_blocked(&self, engine: tri::develop::Engine) -> bool {
+        let now = Instant::now();
+        let fresh = Duration::from_millis(self.gui.folders.running_check_ms);
+        let mut cache = self.engines_blocked.borrow_mut();
+        match cache.get(&engine) {
+            Some(&(at, open)) if now.duration_since(at) < fresh => open,
+            _ => {
+                let open = self.developers.open_blocked(engine);
+                cache.insert(engine, (now, open));
+                open
+            }
+        }
     }
 
     /// Action sur les fichiers `paths` (renommer, afficher : le premier) ; `at` : position
@@ -14555,13 +14607,56 @@ mod tests {
             "{:?}",
             h.state().file_error
         );
+        // Un faux darktable : ouvert ou non, et le programme qu'il lancerait (le vrai
+        // dépend de la machine : celui de l'utilisateur peut être ouvert).
+        #[derive(Debug)]
+        struct FakeDarktable {
+            open: bool,
+            gui: PathBuf,
+        }
+        impl tri::develop::Developer for FakeDarktable {
+            fn engine(&self) -> tri::develop::Engine {
+                tri::develop::Engine::Darktable
+            }
+            fn render(
+                &self,
+                _: &Path,
+                _: &Path,
+                _: &Path,
+                _: u32,
+                _: &std::sync::atomic::AtomicBool,
+            ) -> Result<(), tri::develop::DevelopError> {
+                unreachable!()
+            }
+            fn open_folder(&self, dir: &Path) -> Option<std::process::Command> {
+                assert!(!self.open, "lancé alors qu'il est déjà ouvert");
+                let mut command = std::process::Command::new(&self.gui);
+                command.arg(dir);
+                Some(command)
+            }
+            fn open_blocked(&self) -> bool {
+                self.open
+            }
+        }
+        let fake = |open: bool, gui: PathBuf| {
+            tri::develop::Developers::none().with(Arc::new(FakeDarktable { open, gui }))
+        };
+        // Déjà ouvert : rien n'est lancé, la barre d'état explique (darktable planterait).
+        h.state_mut().developers = fake(true, PathBuf::new());
+        press(&mut h, Key::D, Modifiers::NONE);
+        assert!(
+            h.state()
+                .file_error
+                .as_deref()
+                .is_some_and(|e| e.contains("déjà ouvert")),
+            "{:?}",
+            h.state().file_error
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let bin = dir.path().join("bin");
-            std::fs::create_dir(&bin).unwrap();
             let got = dir.path().join("reçu.txt");
-            let gui = bin.join("darktable");
+            let gui = dir.path().join("darktable");
             // Écrit à côté puis renommé : le test ne lit jamais un fichier à moitié écrit.
             let script = format!(
                 "#!/bin/sh\necho \"$@\" > '{0}.part' && mv '{0}.part' '{0}'\n",
@@ -14569,13 +14664,7 @@ mod tests {
             );
             std::fs::write(&gui, script).unwrap();
             std::fs::set_permissions(&gui, std::fs::Permissions::from_mode(0o755)).unwrap();
-            std::fs::write(bin.join("darktable-cli"), "").unwrap();
-            h.state_mut().developers =
-                tri::develop::Developers::none().with(Arc::new(tri::develop::Darktable {
-                    cli: tri::develop::Cli::native(bin.join("darktable-cli")),
-                    config_dir: dir.path().join("dt"),
-                    high_quality: false,
-                }));
+            h.state_mut().developers = fake(false, gui);
             press(&mut h, Key::D, Modifiers::NONE);
             assert_eq!(h.state().file_error, None);
             let deadline = Instant::now() + Duration::from_secs(10);

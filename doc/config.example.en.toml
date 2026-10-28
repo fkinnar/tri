@@ -701,6 +701,9 @@ subfolders_depth = 3
 section_scale = 1.25
 # Gap above the title of each section of the side panels (points).
 section_gap = 6.0
+# "Open in Darktable": delay (ms) during which the last "already open" check is trusted
+# (on Windows, where a folder cannot be passed to a Darktable already open).
+running_check_ms = 1000
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:

@@ -742,6 +742,7 @@ action-core-develop-folder = Develop the whole folder in the background (each im
 folder-menu-develop = Develop the whole folder…
 folder-menu-open-in = Open in { $name }
 folder-open-in-missing = { $name } cannot open a folder, or is not installed
+folder-open-in-running = { $name } is already open: close it first (on Windows, a folder cannot be passed to it then)
 develop-batch-unavailable = Darktable not found: setting [develop] darktable
 develop-batch-busy = a folder is already being developed
 develop-batch-progress = developing "{ $name }" { $done }/{ $total }
