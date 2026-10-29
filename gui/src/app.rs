@@ -174,6 +174,9 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// Versions d'une image lues en fond pour la grille.
+type VersionsRead = (PathBuf, tri::versions::Versions);
+
 /// Relevés des fichiers différés le temps du dessin de la grille
 /// ([`tri::cache::defer_stamps`]), rétablis à la fin, quelle que soit la sortie.
 struct DeferStamps;
@@ -450,10 +453,7 @@ pub struct TriApp {
     /// Versions lues en fond pour la grille ([`TriApp::grid_versions`]) : en cours, et
     /// leur arrivée.
     versions_pending: HashSet<PathBuf>,
-    versions_read: (
-        mpsc::Sender<(PathBuf, tri::versions::Versions)>,
-        Receiver<(PathBuf, tri::versions::Versions)>,
-    ),
+    versions_read: (mpsc::Sender<VersionsRead>, Receiver<VersionsRead>),
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<String>; 2],
