@@ -174,6 +174,9 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// Exposition du JPEG boîtier d'une image, calculée en fond.
+type CameraRead = (PathBuf, Option<Arc<Exposure>>);
+
 /// Versions d'une image lues en fond pour la grille.
 type VersionsRead = (PathBuf, tri::versions::Versions);
 
@@ -615,6 +618,9 @@ pub struct TriApp {
         std::cell::RefCell<std::collections::HashMap<tri::develop::Engine, (Instant, bool)>>,
     /// Expositions du JPEG boîtier des RAW ([`TriApp::camera_exposure_of`]).
     camera_exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
+    camera_pending: HashSet<PathBuf>,
+    camera_read: (mpsc::Sender<CameraRead>, Receiver<CameraRead>),
     /// Masques des zones, en textures.
     mask_textures: Lru<PathBuf, TextureHandle>,
     /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
@@ -1031,6 +1037,8 @@ impl TriApp {
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
             camera_exposures: Lru::new(gui.view.textures),
+            camera_pending: HashSet::new(),
+            camera_read: mpsc::channel(),
             mask_textures: Lru::new(gui.view.textures),
             clip_summary: std::collections::HashMap::new(),
             selected,
@@ -8053,20 +8061,34 @@ impl TriApp {
             return None;
         }
         let path = file.path.clone();
+        // Un échec (aperçu illisible) reste marqué en cours : pas recalculé à chaque image.
+        while let Ok((done, e)) = self.camera_read.1.try_recv() {
+            if let Some(e) = e {
+                self.camera_pending.remove(&done);
+                self.camera_exposures.insert(done, e);
+            }
+        }
         if let Some(e) = self.camera_exposures.get(&path) {
             return Some(e.clone());
         }
-        if !self.ready(index, Level::Embedded) {
+        if !self.ready(index, Level::Embedded) || !self.camera_pending.insert(path.clone()) {
             return None;
         }
+        // Calculée en fond : décoder l'aperçu boîtier et compter ses pixels prenait jusqu'à
+        // 1,7 s dans le fil de l'interface, à chaque image (retour du 29/10/2026). La courbe
+        // du boîtier arrive un instant après celle du RAW.
         let engine = self.engine.as_ref()?;
-        let e = Arc::new(preview::camera_exposure(
-            &engine.cache,
-            &self.files[index],
-            &engine.preview,
-        )?);
-        self.camera_exposures.insert(path, e.clone());
-        Some(e)
+        let (cache, settings, file) = (engine.cache.clone(), engine.preview, file.clone());
+        let tx = self.camera_read.0.clone();
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            let e = preview::camera_exposure(&cache, &file, &settings).map(Arc::new);
+            let _ = tx.send((file.path, e));
+            if let Some(ctx) = repaint {
+                ctx.request_repaint();
+            }
+        });
+        None
     }
 
     /// Masque des zones de l'image `index`, en texture (créée à la première demande).

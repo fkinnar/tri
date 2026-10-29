@@ -21,7 +21,8 @@
   les vignettes visibles passent avant celles déjà dépassées). Un sidecar est cherché sous
   son nom exact avant de relire tout le dossier (plein écran, d'une image à l'autre). Le
   moteur vérifie d'abord les vignettes à l'écran, puis les autres par distance (à
-  l'ascenseur, plus d'attente de toutes les rangées du dessus).
+  l'ascenseur, plus d'attente de toutes les rangées du dessus). En plein écran,
+  l'histogramme du JPEG boîtier se calcule en fond.
 - **Boîte de connexion réseau** : un serveur qui demande un compte que le système ne
   demande pas lui-même (Linux, Windows ; macOS garde sa boîte) ouvre une boîte :
   utilisateur, domaine (SMB), mot de passe, « Retenir le mot de passe » (gestionnaire

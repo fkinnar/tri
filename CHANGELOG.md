@@ -20,7 +20,8 @@
   first (scrolling fast, the visible thumbnails come before those already passed). A
   sidecar is looked up by its exact name before the whole folder is listed (full screen,
   from one image to the next). The engine checks the thumbnails on screen first, then the
-  others by distance (dragging the scroll bar no longer waits for every row above).
+  others by distance (dragging the scroll bar no longer waits for every row above). In
+  full screen, the camera JPEG histogram is computed in the background.
 - **Network login box**: a server asking for an account that the system does not ask
   for itself (Linux, Windows; macOS keeps its own dialog) opens a box: user, domain
   (SMB), password, "Remember the password" (Windows Credential Manager, desktop keyring on
