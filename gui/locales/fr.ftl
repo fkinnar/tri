@@ -311,6 +311,14 @@ folders-connect-tip = Taper l'adresse d'un serveur (\\nas\photo, smb://nas/photo
 connecting = Connexion à « { $name } »…
 connected = Connecté à « { $name } ».
 connect-failed = Connexion à « { $name } » impossible : { $error }
+folder-opening = Ouverture de « { $name } »…
+folder-opening-found = { $count ->
+    [0] Aucune image trouvée pour l'instant
+    [one] 1 image trouvée
+   *[other] { $count } images trouvées
+}
+folder-opening-why = Dossier lent (réseau, disque) : sa liste se lit en fond.
+folder-open-cancelled = Ouverture de « { $name } » annulée.
 login-title = Se connecter à « { $name } »
 login-why = Le serveur { $address } demande un compte.
 login-refused = Utilisateur ou mot de passe refusé : vérifiez-les et réessayez.

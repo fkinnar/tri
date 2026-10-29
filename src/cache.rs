@@ -15,6 +15,7 @@
 //! fichier (le dossier est dans le rangement). Branché sur un autre ordinateur, monté
 //! ailleurs, le disque garde son cache.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs::{self, File};
@@ -138,24 +139,202 @@ pub struct Key {
     hash: String,
 }
 
+/// Taille et date de modification (ns) des fichiers sources, relevées une fois puis
+/// retenues ; `None` : fichier absent.
+type Stamps = HashMap<PathBuf, Option<(u64, u128)>>;
+
+fn stamps() -> &'static Mutex<Stamps> {
+    static STAMPS: std::sync::OnceLock<Mutex<Stamps>> = std::sync::OnceLock::new();
+    STAMPS.get_or_init(Default::default)
+}
+
+/// Taille et date de modification (ns) de `path`, ou `None` s'il n'existe pas : relevées
+/// une fois, puis retenues (retour du 29/10/2026 : sur un NAS, chaque relevé attendait
+/// derrière les RAW lus par le moteur, et l'interface en faisait des milliers ; 37 s
+/// figée). Un fichier changé ailleurs est à oublier ([`forget_stamps`]) : la surveillance
+/// du dossier le fait, et l'ouverture d'un dossier oublie les siens.
+pub fn stamp(path: &Path) -> Option<(u64, u128)> {
+    lookup_stamp(path).unwrap_or(None)
+}
+
+/// Comme [`stamp`], sans jamais attendre le disque dans un fil où les relevés sont
+/// différés ([`defer_stamps`]) : `None` tant que le relevé n'est pas connu (il est
+/// demandé en fond, puis [`on_stamps_read`] est prévenu) ; sinon `Some` du relevé.
+pub fn lookup_stamp(path: &Path) -> Option<Option<(u64, u128)>> {
+    if let Some(known) = stamps().lock().unwrap_or_else(|e| e.into_inner()).get(path) {
+        return Some(*known);
+    }
+    if deferring() {
+        read_in_background(path);
+        return None;
+    }
+    Some(read_stamp(path))
+}
+
+thread_local! {
+    /// Relevés différés dans ce fil ([`defer_stamps`]).
+    static DEFERRED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Diffère (`on`) les relevés manquants dans ce fil : le fil de l'interface ne doit
+/// jamais attendre un NAS (retour du 29/10/2026 : encore 0,4 à 3 s par image, pour les
+/// premiers relevés de chaque vignette).
+pub fn defer_stamps(on: bool) {
+    DEFERRED.with(|d| d.set(on));
+}
+
+/// Fonction appelée quand des relevés différés sont arrivés (redessiner l'interface).
+pub fn on_stamps_read(notify: impl Fn() + Send + Sync + 'static) {
+    let _ = NOTIFY.set(Box::new(notify));
+}
+
+static NOTIFY: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// Relevé demandé au fil des relevés différés (une fois par fichier en attente).
+fn read_in_background(path: &Path) {
+    let path = path.to_path_buf();
+    defer_job(format!("stamp:{}", path.display()), move || {
+        read_stamp(&path);
+    });
+}
+
+/// Vrai si les accès au disque sont différés dans ce fil ([`defer_stamps`]).
+pub fn deferring() -> bool {
+    DEFERRED.with(Cell::get)
+}
+
+/// Nombre d'accès différés dans ce fil depuis son début : une réponse calculée pendant
+/// qu'il a augmenté est provisoire (à ne pas retenir).
+pub fn deferred_misses() -> u64 {
+    MISSES.with(Cell::get)
+}
+
+thread_local! {
+    static MISSES: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Fait `job` (une lecture du disque) dans le fil des accès différés, une seule fois tant
+/// que la même (`id`) est en attente ; [`on_stamps_read`] est prévenu à la fin. Compte
+/// comme un accès différé ([`deferred_misses`]).
+pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
+    use std::sync::{Condvar, OnceLock};
+    type Job = (String, Box<dyn FnOnce() + Send>);
+    /// Lectures en attente, la plus récente au bout (servie d'abord : en défilant vite,
+    /// les vignettes visibles passent avant celles déjà dépassées, retour du 29/10/2026),
+    /// et celles en attente ou en cours, pour ne rien lire deux fois.
+    #[derive(Default)]
+    struct Queue {
+        stack: Vec<Job>,
+        pending: std::collections::HashSet<String>,
+    }
+    static QUEUE: OnceLock<(Mutex<Queue>, Condvar)> = OnceLock::new();
+    MISSES.with(|m| m.set(m.get() + 1));
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    let (queue, wake) = QUEUE.get_or_init(Default::default);
+    // Fil lancé une fois la file en place.
+    STARTED.call_once(|| {
+        let _ = std::thread::Builder::new()
+            .name("tri-stamps".into())
+            .spawn(move || {
+                loop {
+                    let (id, job) = {
+                        let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+                        loop {
+                            if let Some(job) = q.stack.pop() {
+                                break job;
+                            }
+                            q = wake.wait(q).unwrap_or_else(|e| e.into_inner());
+                        }
+                    };
+                    job();
+                    queue
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .pending
+                        .remove(&id);
+                    if let Some(notify) = NOTIFY.get() {
+                        notify();
+                    }
+                }
+            });
+    });
+    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+    if q.pending.contains(&id) {
+        // Redemandée (de nouveau visible) : remontée en tête si elle attend encore.
+        if let Some(at) = q.stack.iter().position(|(i, _)| *i == id) {
+            let again = q.stack.remove(at);
+            q.stack.push(again);
+        }
+        return;
+    }
+    q.pending.insert(id.clone());
+    q.stack.push((id, Box::new(job)));
+    drop(q);
+    wake.notify_one();
+}
+
+/// Relève `path` sur le disque et le retient.
+fn read_stamp(path: &Path) -> Option<(u64, u128)> {
+    let read = fs::metadata(path).ok().map(|meta| {
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        (meta.len(), modified)
+    });
+    stamps()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(path.to_path_buf(), read);
+    read
+}
+
+/// Oublie les relevés de `paths` ([`stamp`]) : fichiers changés, ajoutés ou retirés.
+pub fn forget_stamps<'a>(paths: impl IntoIterator<Item = &'a Path>) {
+    let mut known = stamps().lock().unwrap_or_else(|e| e.into_inner());
+    for path in paths {
+        known.remove(path);
+    }
+}
+
+/// Oublie les relevés des fichiers sous `dir` (dossier ouvert ou rouvert).
+pub fn forget_stamps_under(dir: &Path) {
+    stamps()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|path, _| !path.starts_with(dir));
+}
+
 impl Key {
     /// Clé pour l'image `source` au niveau `level`, calculée avec les paramètres `params`
     /// (description libre et stable, ex. `"half=1;side=2560"`).
     ///
-    /// Lit les métadonnées du fichier (taille, date de modification) : erreur si `source`
-    /// n'existe pas. Le chemin est rendu absolu, pour qu'un même fichier ait la même clé quel
-    /// que soit le répertoire courant.
+    /// D'après la taille et la date de modification du fichier ([`stamp`], relevées une
+    /// fois) : erreur si `source` n'existe pas. Le chemin est rendu absolu, pour qu'un même
+    /// fichier ait la même clé quel que soit le répertoire courant.
     pub fn new(source: &Path, level: Level, params: &str) -> io::Result<Key> {
         let path = std::path::absolute(source)?;
-        let meta = fs::metadata(&path)?;
-        let modified = meta
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let (len, modified) = match lookup_stamp(&path) {
+            Some(Some(stamp)) => stamp,
+            Some(None) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{} introuvable", path.display()),
+                ));
+            }
+            // Fil de l'interface : relevé demandé en fond, clé à redemander.
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("{} pas encore relevé", path.display()),
+                ));
+            }
+        };
         Ok(Key::from_parts(
             path.as_os_str(),
-            meta.len(),
+            len,
             modified,
             level,
             params,
@@ -811,6 +990,48 @@ mod tests {
         );
         assert_eq!(default_dir_for("linux", env(&[])), None);
         assert_eq!(default_dir_for("windows", env(&[("HOME", "/h")])), None);
+    }
+
+    #[test]
+    fn a_stamp_is_read_once_until_forgotten() {
+        // Retour du 29/10/2026 (NAS) : un relevé par fichier, retenu, jamais un accès
+        // réseau à chaque image de l'interface.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.RAF");
+        assert_eq!(stamp(&file), None, "absent, retenu aussi");
+        fs::write(&file, b"raw").unwrap();
+        assert_eq!(stamp(&file), None, "pas relu de lui-même");
+        forget_stamps([file.as_path()]);
+        assert_eq!(stamp(&file).map(|(len, _)| len), Some(3));
+        let before = Key::new(&file, Level::Thumbnail, "").unwrap();
+        fs::write(&file, b"raw, edited").unwrap();
+        assert_eq!(Key::new(&file, Level::Thumbnail, "").unwrap(), before);
+        forget_stamps_under(dir.path());
+        assert_ne!(
+            Key::new(&file, Level::Thumbnail, "").unwrap(),
+            before,
+            "fichier changé : nouvelle clé une fois oublié"
+        );
+    }
+
+    #[test]
+    fn a_deferred_stamp_is_read_in_the_background() {
+        // Le fil de l'interface n'attend jamais le disque : relevé demandé en fond.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("b.RAF");
+        fs::write(&file, b"raw").unwrap();
+        defer_stamps(true);
+        let first = lookup_stamp(&file);
+        defer_stamps(false);
+        assert_eq!(first, None, "pas encore relevé");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        defer_stamps(true);
+        while lookup_stamp(&file).is_none() {
+            assert!(std::time::Instant::now() < deadline, "relevé en fond");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        defer_stamps(false);
+        assert_eq!(stamp(&file).map(|(len, _)| len), Some(3));
     }
 
     #[test]

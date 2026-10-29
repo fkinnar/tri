@@ -312,6 +312,14 @@ folders-connect-tip = Type the address of a server (\\nas\photo, smb://nas/photo
 connecting = Connecting to "{ $name }"…
 connected = Connected to "{ $name }".
 connect-failed = Could not connect to "{ $name }": { $error }
+folder-opening = Opening "{ $name }"…
+folder-opening-found = { $count ->
+    [0] No image found yet
+    [one] 1 image found
+   *[other] { $count } images found
+}
+folder-opening-why = Slow folder (network, disk): its list is read in the background.
+folder-open-cancelled = Opening "{ $name }" cancelled.
 login-title = Connect to "{ $name }"
 login-why = The server { $address } asks for an account.
 login-refused = User name or password refused: check them and try again.

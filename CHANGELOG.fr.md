@@ -8,6 +8,21 @@
   renommer ou supprimer une image emporte aussi ses clones darktable (`IMG_01.RAF.xmp`…)
   et les réglages de RawTherapee (`.pp3`), d'ART (`.arp`) et de Capture One
   (`CaptureOne/Settings…/IMG.RAF.cos`, gardé dans son sous-dossier). Ils restaient derrière.
+- **Dossiers lents (NAS, disque lent)** : un dossier dont la liste prend du temps s'ouvre
+  en fond, avec une boîte qui montre combien d'images sont déjà trouvées et un bouton
+  Annuler (ou Échap) ; le dossier d'avant reste affiché en attendant. Quitter n'attend
+  plus les vignettes en cours. `TRI_GUI_TRACE=1` trace aussi les images lentes de
+  l'interface, étape par étape (`[gui] trace_slow_ms`). La grille ne relit plus la
+  taille et la date de chaque fichier source à chaque image (jusqu'à 37 s figée sur un
+  NAS) : elles sont relevées une fois, et oubliées quand la surveillance du dossier voit
+  un fichier changer ; pendant le dessin de la grille, un relevé manquant se fait en fond
+  au lieu de retenir la page, comme les sidecars dont elle a besoin (développement
+  darktable, badges des versions), la demande la plus récente d'abord (en défilant vite,
+  les vignettes visibles passent avant celles déjà dépassées). Un sidecar est cherché sous
+  son nom exact avant de relire tout le dossier (plein écran, d'une image à l'autre). Le
+  moteur vérifie d'abord les vignettes à l'écran, puis les autres par distance (à
+  l'ascenseur, plus d'attente de toutes les rangées du dessus). En plein écran,
+  l'histogramme du JPEG boîtier se calcule en fond.
 - **Boîte de connexion réseau** : un serveur qui demande un compte que le système ne
   demande pas lui-même (Linux, Windows ; macOS garde sa boîte) ouvre une boîte :
   utilisateur, domaine (SMB), mot de passe, « Retenir le mot de passe » (gestionnaire

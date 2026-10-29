@@ -108,6 +108,19 @@ impl Loader {
     }
 }
 
+impl Loader {
+    /// Arrête le chargement sans l'attendre (fermeture de l'application).
+    pub fn detach(&mut self) {
+        self.shared
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .shutdown = true;
+        self.shared.wake.notify_one();
+        self.thread = None;
+    }
+}
+
 impl Drop for Loader {
     fn drop(&mut self) {
         self.shared

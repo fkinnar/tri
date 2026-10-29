@@ -420,17 +420,49 @@ fn index_for(image: &Path) -> SidecarIndex {
     SidecarIndex::new(image.parent().unwrap_or(Path::new(".")))
 }
 
+/// Sidecars de `image` sous leur nom exact (`IMG.RAF.xmp`, `IMG.xmp`), s'il y en a :
+/// deux accès au disque, au lieu de relire tout le dossier (retour du 29/10/2026 : sur un
+/// NAS, des milliers d'entrées relues à chaque image en plein écran). Sans eux, la casse
+/// peut différer (`IMG.XMP` sous Linux) : voir [`SidecarIndex`].
+fn exact_sidecars(image: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for convention in [Convention::Darktable, Convention::Adobe] {
+        let path = convention.sidecar(image);
+        if path.is_file() && !found.contains(&path) {
+            found.push(path);
+        }
+    }
+    found
+}
+
 /// Sidecars existants de `image`, des deux conventions, quelle que soit la casse de leur
-/// nom. Relit le dossier : pour tout un dossier, préférer [`SidecarIndex`].
+/// nom. Cherchés d'abord sous leur nom exact ; sinon relit le dossier : pour tout un
+/// dossier, préférer [`SidecarIndex`].
 pub fn existing_sidecars(image: &Path) -> Vec<PathBuf> {
-    index_for(image).sidecars(image)
+    let exact = exact_sidecars(image);
+    if exact.is_empty() {
+        index_for(image).sidecars(image)
+    } else {
+        exact
+    }
 }
 
 /// Le sidecar à lire et à écrire : le plus récent des sidecars existants, sinon celui de la
-/// convention `default`. Relit le dossier : pour tout un dossier, préférer
-/// [`SidecarIndex`].
+/// convention `default`. Cherché d'abord sous son nom exact ; sinon relit le dossier :
+/// pour tout un dossier, préférer [`SidecarIndex`].
 pub fn sidecar_path(image: &Path, default: Convention) -> PathBuf {
-    index_for(image).sidecar_path(image, default)
+    let mut exact = exact_sidecars(image);
+    if exact.is_empty() {
+        return index_for(image).sidecar_path(image, default);
+    }
+    if exact.len() > 1 {
+        exact.sort_by_key(|p| {
+            fs::metadata(p)
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+        });
+    }
+    exact.pop().unwrap_or_else(|| default.sidecar(image))
 }
 
 /// Notes de `image`, lues dans son sidecar le plus récent ; notes vides sans sidecar.

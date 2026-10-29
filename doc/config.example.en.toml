@@ -451,6 +451,9 @@ key_sequence_timeout_ms = 1000
 # Key that is both a shortcut and the start of another (y copies, y w copies the stack):
 # how long to wait for the rest (ms) before acting alone.
 key_ambiguous_timeout_ms = 300
+# Diagnostics (TRI_GUI_TRACE=1): a frame of the interface slower than this delay (ms) is
+# traced with the duration of its steps.
+trace_slow_ms = 100
 # Initial window size (points).
 window = [1400.0, 900.0]
 # RAW renders: "on-demand" (displayed image and neighbours, in RAW mode only) or
@@ -725,6 +728,10 @@ section_gap = 6.0
 # "Open in Darktable": delay (ms) during which the last "already open" check is trusted
 # (on Windows, where a folder cannot be passed to a Darktable already open).
 running_check_ms = 1000
+# Opening a folder: delay (ms) during which the interface waits for its list of images;
+# beyond it (NAS, slow disk), the list is read in the background, with progress and a way
+# to cancel.
+open_wait_ms = 150
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:

@@ -15,6 +15,12 @@ manipule quand on « ouvre un dossier ».
   l'état du dossier pour sa surveillance (`watch::Snapshot`, un accès disque par fichier,
   autant le faire là). `try_take()` rend `Loaded { notes, snapshot }` une fois fini ;
   l'interface reprend les notes par `NoteBook::adopt` ;
+- `Folder::scan_counting(dir, profondeur, convention, stop, trouvées)` (29/10/2026) :
+  `scan` interruptible, qui compte les images trouvées (`media::scan_counting`). Sur un
+  NAS, même la liste peut prendre du temps : l'interface la lit dans un fil, l'attend
+  `[gui.folders] open_wait_ms` (150 ms : un disque local ne voit rien changer), puis la
+  laisse finir en fond avec une boîte au centre (« Ouverture de « séance »… 340 images
+  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant ;
 - `Folder::filtered(type, règle)` : filtre par type puis filtre sur les notes, combinés ici
   une fois pour toutes (avant : dans l'interface) ;
 - `Folder::default()` / `is_none()` : aucun dossier ouvert (interface lancée sans dossier).

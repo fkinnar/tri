@@ -449,6 +449,9 @@ key_sequence_timeout_ms = 1000
 # Touche qui est un raccourci et le début d'un autre (y copie, y w copie la pile) : délai
 # d'attente de la suite (ms) avant d'agir seule.
 key_ambiguous_timeout_ms = 300
+# Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
+# tracée avec la durée de ses étapes.
+trace_slow_ms = 100
 # Taille initiale de la fenêtre (points).
 window = [1400.0, 900.0]
 # Rendus RAW : "on-demand" (image affichée et voisines, en mode RAW seulement) ou
@@ -724,6 +727,9 @@ section_gap = 6.0
 # vérification « déjà ouvert » (sous Windows, où l'on ne peut pas passer un dossier à
 # un Darktable déjà ouvert).
 running_check_ms = 1000
+# Ouverture d'un dossier : délai (ms) pendant lequel l'interface attend sa liste d'images ;
+# au-delà (NAS, disque lent), elle la lit en fond, avec la progression et de quoi annuler.
+open_wait_ms = 150
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

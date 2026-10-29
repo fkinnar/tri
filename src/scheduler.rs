@@ -334,14 +334,19 @@ fn priority(job: Job, focus: Option<usize>) -> (u8, usize) {
     let group = focus
         .map(|f| default_group(f, usize::MAX))
         .unwrap_or_default();
-    priority_in(job, focus, &group)
+    priority_in(job, focus, &group, None)
 }
 
 /// [`priority`] pour le groupe d'images affichées `group` (voir [`default_group`]).
-fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u8, usize) {
+fn priority_in(
+    (index, level): Job,
+    focus: Option<usize>,
+    group: &[usize],
+    visible: Option<(usize, usize)>,
+) -> (u8, usize) {
     // Étape pour l'image affichée et ses voisines : ajusté (0), analyse (1), 1:1 (2).
     let (stage, background_class) = match level {
-        Level::Thumbnail => return (3, index),
+        Level::Thumbnail => return (3, thumbnail_rank(index, visible)),
         Level::Embedded => (0, EMBEDDED_BACKGROUND),
         Level::Standard => (0, STANDARD_BACKGROUND),
         Level::Exposure | Level::Sharpness => (1, EXPOSURE_BACKGROUND),
@@ -367,6 +372,25 @@ fn priority_in((index, level): Job, focus: Option<usize>, group: &[usize]) -> (u
     }
 }
 
+/// Rang d'une vignette : celles des rangées visibles d'abord (dans l'ordre), puis les
+/// autres par distance aux rangées visibles, en avant d'abord à distance égale (retour du
+/// 29/10/2026 : descendu à l'ascenseur sur un NAS, on attendait toutes les vignettes du
+/// dessus) ; sans rangées connues, l'ordre du dossier.
+fn thumbnail_rank(index: usize, visible: Option<(usize, usize)>) -> usize {
+    match visible {
+        None => index,
+        Some((first, last)) if (first..=last).contains(&index) => index - first,
+        Some((first, last)) => {
+            let shown = last - first + 1;
+            if index > last {
+                shown + (index - last) * 2
+            } else {
+                shown + (first - index) * 2 + 1
+            }
+        }
+    }
+}
+
 struct Running {
     job: Job,
     generation: u64,
@@ -388,6 +412,8 @@ struct State {
     focus: Option<usize>,
     /// Images affichées, `focus` en tête (voir [`default_group`]).
     group: Vec<usize>,
+    /// Vignettes visibles dans la grille (première, dernière), servies d'abord.
+    visible: Option<(usize, usize)>,
     pending: HashSet<Job>,
     running: Vec<Running>,
     progress: [Progress; 6],
@@ -415,7 +441,7 @@ impl State {
         if self.paused {
             return None;
         }
-        let (focus, group) = (self.focus, &self.group);
+        let (focus, group, visible) = (self.focus, &self.group, self.visible);
         // Travail de fond du plus rapide au plus lent : la grille d'abord, puis les aperçus
         // boîtier ; pas de rendu LibRaw de fond (qui occupe tous les cœurs) avant.
         let left = |level: Level| {
@@ -433,8 +459,8 @@ impl State {
             .pending
             .iter()
             .filter(|(i, l)| is_heavy(self.files[*i].kind, *l) == heavy)
-            .filter(|job| !blocked(priority_in(**job, focus, group).0))
-            .min_by_key(|job| (priority_in(**job, focus, group), job.0))?;
+            .filter(|job| !blocked(priority_in(**job, focus, group, visible).0))
+            .min_by_key(|job| (priority_in(**job, focus, group, visible), job.0))?;
         self.pending.remove(&job);
         let cancel = Arc::new(AtomicBool::new(false));
         self.running.push(Running {
@@ -543,6 +569,7 @@ impl Scheduler {
         s.generation += 1;
         s.focus = None;
         s.group.clear();
+        s.visible = None;
         s.pending = (0..files.len())
             .flat_map(|i| {
                 s.background_levels(files[i].kind)
@@ -630,6 +657,12 @@ impl Scheduler {
         drop(s);
         self.shared.work.notify_all();
         deliver(&self.shared);
+    }
+
+    /// Indique les vignettes visibles dans la grille (`first` à `last`, positions
+    /// comprises) : leurs vignettes sont vérifiées et calculées avant les autres.
+    pub fn set_visible(&self, first: usize, last: usize) {
+        self.shared.lock().visible = Some((first.min(last), first.max(last)));
     }
 
     /// Indique l'image affichée : son aperçu passe en tête, puis ses voisines. Les demandes
@@ -746,6 +779,21 @@ impl Scheduler {
                 .0;
         }
         true
+    }
+}
+
+impl Scheduler {
+    /// Arrête les workers sans les attendre (fermeture de l'application : un calcul en
+    /// cours sur un NAS lent peut durer, retour du 29/10/2026). Ils finissent leur fichier
+    /// en fond ou disparaissent avec le processus ; les entrées du cache s'écrivent sous
+    /// un nom temporaire puis sont renommées, jamais à moitié.
+    pub fn detach(&mut self) {
+        let mut s = self.shared.lock();
+        s.shutdown = true;
+        s.cancel_running(|_| false);
+        drop(s);
+        self.shared.work.notify_all();
+        self.threads.clear();
     }
 }
 
@@ -893,6 +941,25 @@ fn finish(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visible_thumbnails_come_first_then_by_distance() {
+        // Retour du 29/10/2026 : descendu à l'ascenseur, les vignettes du dessus passaient
+        // avant celles de l'écran.
+        assert_eq!(
+            thumbnail_rank(5, None),
+            5,
+            "sans rangées connues : l'ordre du dossier"
+        );
+        let visible = Some((40, 43));
+        let mut order: Vec<usize> = (36..48).collect();
+        order.sort_by_key(|&i| thumbnail_rank(i, visible));
+        assert_eq!(order, [40, 41, 42, 43, 44, 39, 45, 38, 46, 37, 47, 36]);
+        assert!(
+            priority_in((40, Level::Thumbnail), None, &[], visible)
+                < priority_in((0, Level::Thumbnail), None, &[], visible)
+        );
+    }
 
     #[test]
     fn priority_order_around_focus() {

@@ -193,6 +193,15 @@ impl FolderWatch {
                             changes
                         };
                         if !changes.is_empty() {
+                            // Relevés retenus des fichiers changés : à refaire (les rendus
+                            // d'une image développée ailleurs se recalculent).
+                            crate::cache::forget_stamps(
+                                changes
+                                    .images
+                                    .iter()
+                                    .chain(&changes.sidecars)
+                                    .map(PathBuf::as_path),
+                            );
                             on_change(changes);
                         }
                     }
@@ -223,6 +232,17 @@ impl FolderWatch {
     pub fn sync(&self) {
         if let Ok(now) = Snapshot::of_depth(&self.dir, self.depth) {
             *self.known.lock().unwrap() = now;
+        }
+    }
+}
+
+impl FolderWatch {
+    /// Arrête la surveillance sans attendre la fin d'un relevé en cours (fermeture de
+    /// l'application).
+    pub fn detach(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            thread.thread().unpark();
         }
     }
 }

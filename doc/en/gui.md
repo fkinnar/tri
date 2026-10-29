@@ -984,7 +984,15 @@ during a window's opening fade showed it half transparent.
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen
   on macOS) and of each step of image loading (request to the engine, image ready,
   dropped, reading and decoding, image displayed) on standard error. This is what made it
-  possible to measure the delays above.
+  possible to measure the delays above. Since 2026-10-29 (interface frozen on a NAS), a
+  frame of the interface slower than `[gui] trace_slow_ms` (100 ms) is traced with the
+  duration of its steps ("image lente : 850 ms (événements 2, chargements 3, centre
+  840)"): a way to find a disk access left in the interface thread.
+
+**Closing**: background work (engine, image loading, folder and volume watches) stops
+without being waited for (`detach`); a thumbnail in progress on a NAS no longer holds the
+window open. The cache is written under a temporary name then renamed: nothing stays
+half-written in it.
 
 **Screenshots for the testers' manual** (`doc/manuel.md`, `doc/manual.md`):
 `scripts/manual-screenshots.sh <dossier de photos> [--lang fr|en]` copies the photos to a

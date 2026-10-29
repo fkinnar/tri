@@ -5,6 +5,7 @@
 use std::cmp::Ordering;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 
 use walkdir::WalkDir;
 
@@ -63,6 +64,18 @@ pub fn kind_of(path: &Path) -> Option<MediaKind> {
 /// Erreur si `root` n'est pas un dossier lisible ; les entrées illisibles à l'intérieur sont
 /// ignorées.
 pub fn scan(root: impl AsRef<Path>, depth: usize) -> io::Result<Vec<MediaFile>> {
+    scan_counting(root, depth, &AtomicBool::new(false), &AtomicUsize::new(0))
+}
+
+/// Comme [`scan`], pour un dossier lent (NAS, disque lent, beaucoup de sous-dossiers) :
+/// `found` compte les images trouvées au fil du parcours, et `stop` l'interrompt (erreur
+/// `Interrupted`).
+pub fn scan_counting(
+    root: impl AsRef<Path>,
+    depth: usize,
+    stop: &AtomicBool,
+    found: &AtomicUsize,
+) -> io::Result<Vec<MediaFile>> {
     let root = root.as_ref();
     if !root.metadata()?.is_dir() {
         return Err(io::Error::new(
@@ -74,22 +87,29 @@ pub fn scan(root: impl AsRef<Path>, depth: usize) -> io::Result<Vec<MediaFile>> 
         // walkdir inverserait min_depth (1) et max_depth (0) : on traite le cas à part.
         return Ok(Vec::new());
     }
-    let mut files: Vec<MediaFile> = WalkDir::new(root)
+    let mut files: Vec<MediaFile> = Vec::new();
+    let walk = WalkDir::new(root)
         .min_depth(1)
         .max_depth(depth)
         .into_iter()
         // Sous-dossiers cachés (`.thumbnails`, `.dtrash`…) écartés.
-        .filter_entry(|e| e.depth() == 0 || !is_hidden_dir(e))
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-        .filter_map(|e| {
-            let kind = kind_of(e.path())?;
-            Some(MediaFile {
-                path: e.into_path(),
+        .filter_entry(|e| e.depth() == 0 || !is_hidden_dir(e));
+    for entry in walk {
+        if stop.load(AtomicOrdering::Relaxed) {
+            return Err(io::ErrorKind::Interrupted.into());
+        }
+        let Ok(entry) = entry else { continue };
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        if let Some(kind) = kind_of(entry.path()) {
+            files.push(MediaFile {
+                path: entry.into_path(),
                 kind,
-            })
-        })
-        .collect();
+            });
+            found.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
     files.sort_by(compare);
     Ok(files)
 }
@@ -112,6 +132,20 @@ pub fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_counting_scan_counts_images_and_stops_when_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["a.RAF", "a.JPG", "notes.txt"] {
+            std::fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        let found = AtomicUsize::new(0);
+        let files = scan_counting(dir.path(), 1, &AtomicBool::new(false), &found).unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(found.load(AtomicOrdering::Relaxed), 2);
+        let stopped = scan_counting(dir.path(), 1, &AtomicBool::new(true), &found);
+        assert_eq!(stopped.unwrap_err().kind(), io::ErrorKind::Interrupted);
+    }
 
     fn kind(name: &str) -> Option<MediaKind> {
         kind_of(Path::new(name))

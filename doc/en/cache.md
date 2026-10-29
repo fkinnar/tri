@@ -100,7 +100,19 @@ A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
 
 Consequences:
 
-- **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation;
+- **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation; size and
+  date are read **once** per file then kept (`cache::stamp`, 2026-10-29: on a NAS, each
+  read waited behind the RAWs read by the engine, and the interface did thousands of
+  them, frozen up to 37 s); the folder watch forgets the stamps of changed files
+  (`forget_stamps`), opening a folder those of its files (`forget_stamps_under`). The same
+  goes for the sidecars of development software (`develop::stamp`, `darktable_sidecar`).
+  While the grid is drawn, missing stamps are **deferred** (`defer_stamps`,
+  `lookup_stamp`): read by a separate thread, the interface redrawn when they arrive
+  (`on_stamps_read`); the thumbnail arrives one frame later instead of freezing the page
+  (still 0.4 to 3 s per page on a NAS). The same goes for reading darktable sidecars
+  (developed or not, render fingerprint: `deferring`, `defer_job`): a thumbnail level
+  worked out while a read was deferred is not kept (`deferred_misses`). Actions keep exact
+  stamps;
 - **settings changed** (preview size, white balance…) ⇒ same, provided the caller
   includes them in `params`;
 - **folder moved or renamed** ⇒ the cache is no longer found, unless it follows

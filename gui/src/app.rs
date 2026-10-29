@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -174,6 +174,39 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// Exposition du JPEG boîtier d'une image, calculée en fond.
+type CameraRead = (PathBuf, Option<Arc<Exposure>>);
+
+/// Versions d'une image lues en fond pour la grille.
+type VersionsRead = (PathBuf, tri::versions::Versions);
+
+/// Relevés des fichiers différés le temps du dessin de la grille
+/// ([`tri::cache::defer_stamps`]), rétablis à la fin, quelle que soit la sortie.
+struct DeferStamps;
+
+impl DeferStamps {
+    fn start() -> DeferStamps {
+        tri::cache::defer_stamps(true);
+        DeferStamps
+    }
+}
+
+impl Drop for DeferStamps {
+    fn drop(&mut self) {
+        tri::cache::defer_stamps(false);
+    }
+}
+
+/// Ouverture d'un dossier lent ([`TriApp::open_folder`]) : sa liste lue en fond.
+struct Opening {
+    dir: PathBuf,
+    result: Receiver<std::io::Result<Folder>>,
+    /// Interrompt la lecture.
+    stop: Arc<AtomicBool>,
+    /// Images trouvées jusqu'ici.
+    found: Arc<AtomicUsize>,
+}
+
 struct Engine {
     scheduler: Scheduler,
     events: Receiver<Event>,
@@ -420,6 +453,10 @@ pub struct TriApp {
     version_shown: Option<(PathBuf, usize)>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
     versions: HashMap<PathBuf, tri::versions::Versions>,
+    /// Versions lues en fond pour la grille ([`TriApp::grid_versions`]) : en cours, et
+    /// leur arrivée.
+    versions_pending: HashSet<PathBuf>,
+    versions_read: (mpsc::Sender<VersionsRead>, Receiver<VersionsRead>),
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<String>; 2],
@@ -442,6 +479,16 @@ pub struct TriApp {
     status: Vec<Status>,
     progress: [Progress; 6],
     engine: Option<Engine>,
+    /// Ouverture d'un dossier lent en cours.
+    opening: Option<Opening>,
+    /// Vignettes visibles déjà signalées au moteur ([`Scheduler::set_visible`]).
+    visible_sent: Option<(usize, usize)>,
+    /// Attente de la liste d'un dossier avant de la lire en fond : `[gui.folders]
+    /// open_wait_ms`, sauf si remplacée (tests : longue, pour ne pas dépendre de la
+    /// vitesse de la machine ; un test la met à zéro).
+    open_wait_override: Option<Duration>,
+    /// De quoi redessiner depuis un fil (connu dès la première image).
+    repaint: Option<egui::Context>,
     error: Option<String>,
     keymap: Keymap,
     /// Séquences de touches en cours (`g g`).
@@ -571,6 +618,9 @@ pub struct TriApp {
         std::cell::RefCell<std::collections::HashMap<tri::develop::Engine, (Instant, bool)>>,
     /// Expositions du JPEG boîtier des RAW ([`TriApp::camera_exposure_of`]).
     camera_exposures: Lru<PathBuf, Arc<Exposure>>,
+    /// Expositions du JPEG boîtier en calcul (en fond), et leur arrivée.
+    camera_pending: HashSet<PathBuf>,
+    camera_read: (mpsc::Sender<CameraRead>, Receiver<CameraRead>),
     /// Masques des zones, en textures.
     mask_textures: Lru<PathBuf, TextureHandle>,
     /// Parts de pixels saturés / bouchés par image, pour les badges de la grille.
@@ -872,6 +922,8 @@ impl TriApp {
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
+            versions_pending: HashSet::new(),
+            versions_read: mpsc::channel(),
             export_choice: [None, None],
             export_job: None,
             export_log: data
@@ -923,6 +975,10 @@ impl TriApp {
             status: Vec::new(),
             progress: [Progress::default(); 6],
             engine: None,
+            opening: None,
+            visible_sent: None,
+            open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
+            repaint: None,
             error,
             keymap,
             sequencer: gui.sequencer(),
@@ -981,6 +1037,8 @@ impl TriApp {
             clipping: gui.histogram.clipping,
             exposures: Lru::new(gui.view.textures),
             camera_exposures: Lru::new(gui.view.textures),
+            camera_pending: HashSet::new(),
+            camera_read: mpsc::channel(),
             mask_textures: Lru::new(gui.view.textures),
             clip_summary: std::collections::HashMap::new(),
             selected,
@@ -1082,6 +1140,21 @@ impl TriApp {
             self.folder_depth(),
             watching,
         ));
+    }
+
+    /// Fermeture : les calculs en fond s'arrêtent sans être attendus (retour du
+    /// 29/10/2026 : sur un NAS, quitter attendait la fin de chaque vignette en cours).
+    fn stop_background(&mut self) {
+        if let Some(engine) = &mut self.engine {
+            engine.scheduler.detach();
+            engine.loader.detach();
+        }
+        if let Some((watch, _, _)) = &mut self.watch {
+            watch.detach();
+        }
+        if let Some((monitor, _)) = &mut self.volumes {
+            monitor.detach();
+        }
     }
 
     /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
@@ -1279,7 +1352,123 @@ impl TriApp {
     fn open_folder(&mut self, dir: &Path) {
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
-        match Folder::scan(dir, self.folder_depth(), self.settings.xmp.sidecar) {
+        // Ses fichiers ont pu changer depuis (développés ailleurs) : relevés refaits.
+        if let Ok(absolute) = std::path::absolute(dir) {
+            tri::cache::forget_stamps_under(&absolute);
+        }
+        // Une ouverture en cours (dossier lent) cède la place.
+        if let Some(opening) = self.opening.take() {
+            opening.stop.store(true, Ordering::Relaxed);
+        }
+        // Liste lue dans un fil : attendue un instant (disque local : comme avant), puis
+        // en fond, avec la progression et l'annulation (retour du 29/10/2026 : sur un
+        // NAS, l'interface restait figée sans rien dire).
+        let (tx, rx) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let found = Arc::new(AtomicUsize::new(0));
+        let (target, depth, convention) = (
+            dir.to_path_buf(),
+            self.folder_depth(),
+            self.settings.xmp.sidecar,
+        );
+        let (stop_scan, found_scan) = (stop.clone(), found.clone());
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            let result = Folder::scan_counting(&target, depth, convention, &stop_scan, &found_scan);
+            let _ = tx.send(result);
+            if let Some(ctx) = repaint {
+                ctx.request_repaint();
+            }
+        });
+        // Attente nulle : toujours en fond (même un petit dossier déjà lu).
+        let wait = self.open_wait();
+        let ready = if wait.is_zero() {
+            None
+        } else {
+            rx.recv_timeout(wait).ok()
+        };
+        match ready {
+            Some(result) => self.install_folder(dir, result),
+            None => {
+                trace(|| format!("dossier lent, lu en fond : {}", dir.display()));
+                self.opening = Some(Opening {
+                    dir: dir.to_path_buf(),
+                    result: rx,
+                    stop,
+                    found,
+                });
+            }
+        }
+    }
+
+    /// Attente de la liste d'un dossier avant de la lire en fond.
+    fn open_wait(&self) -> Duration {
+        self.open_wait_override
+            .unwrap_or(Duration::from_millis(self.gui.folders.open_wait_ms))
+    }
+
+    /// Liste d'un dossier lent arrivée : il s'ouvre.
+    fn poll_opening(&mut self) {
+        let Some(opening) = &self.opening else {
+            return;
+        };
+        match opening.result.try_recv() {
+            Ok(result) => {
+                let dir = opening.dir.clone();
+                self.opening = None;
+                self.install_folder(&dir, result);
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => self.opening = None,
+        }
+    }
+
+    /// Abandonne l'ouverture d'un dossier lent : le dossier d'avant reste affiché.
+    fn cancel_opening(&mut self) {
+        if let Some(opening) = self.opening.take() {
+            opening.stop.store(true, Ordering::Relaxed);
+            self.notice = Some((
+                t!("folder-open-cancelled", name = folder_name(&opening.dir)),
+                false,
+            ));
+        }
+    }
+
+    /// Ouverture d'un dossier lent : son nom, les images trouvées, et « Annuler », au
+    /// centre de la grille.
+    fn opening_box(&mut self, ctx: &egui::Context) {
+        let Some(opening) = &self.opening else {
+            return;
+        };
+        let (name, found) = (
+            folder_name(&opening.dir),
+            opening.found.load(Ordering::Relaxed),
+        );
+        let mut cancel = false;
+        egui::Area::new(egui::Id::unique("opening_box"))
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.strong(t!("folder-opening", name = &name));
+                    });
+                    ui.label(t!("folder-opening-found", count = found));
+                    ui.weak(t!("folder-opening-why"));
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if cancel {
+            self.cancel_opening();
+        }
+        // Le compte avance : redessiné de temps en temps.
+        ctx.request_repaint_after(crate::app::poll_interval(ctx));
+    }
+
+    /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
+    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Folder>) {
+        match result {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
@@ -2112,6 +2301,7 @@ impl TriApp {
             }
             // Versions peut-être changées ailleurs : relues à la demande.
             self.versions.clear();
+            self.forget_grid_versions();
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
             if !changed.is_empty() {
@@ -3848,6 +4038,8 @@ impl TriApp {
         self.grid_looked.clear();
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
+            // Nouvelle liste : les vignettes visibles sont à redire.
+            self.visible_sent = None;
         }
         self.stacks_dirty = true;
         self.tell_shown();
@@ -4382,6 +4574,7 @@ impl TriApp {
             repaint.request_repaint();
         });
         let generation = scheduler.set_folder(self.files.clone());
+        self.visible_sent = None;
         scheduler.set_focus(self.selected);
         let max_texture = ctx.input(|i| i.max_texture_side);
         let loader = Loader::new(cache.clone(), preview, max_texture, ctx.clone());
@@ -4630,6 +4823,12 @@ impl TriApp {
                 if action == Action::Back {
                     self.update = None;
                 }
+                continue;
+            }
+            // Ouverture d'un dossier lent : Échap l'annule ; le reste agit sur le dossier
+            // encore affiché.
+            if self.opening.is_some() && action == Action::Back {
+                self.cancel_opening();
                 continue;
             }
             // Boîte de connexion : seule la fermeture.
@@ -6539,8 +6738,14 @@ impl TriApp {
         let Some(engine) = &self.engine else {
             return false;
         };
-        let current = tri::preview::key(file, level, &engine.preview)
-            .is_ok_and(|key| engine.cache.contains(&key));
+        let current = match tri::preview::key(file, level, &engine.preview) {
+            Ok(key) => engine.cache.contains(&key),
+            // Relevé du fichier pas encore fait (en fond) : rien de changé pour l'instant.
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                return self.status[index].developed == Avail::Ready;
+            }
+            Err(_) => false,
+        };
         if !current && self.status[index].developed == Avail::Ready {
             let path = file.path.clone();
             trace(|| format!("développé périmé : {}", path.display()));
@@ -6678,6 +6883,35 @@ impl TriApp {
     }
 
     /// Versions de `path` (lues dans son sidecar à la première demande).
+    /// Nombre de versions de `path` pour son badge dans la grille, sans jamais attendre le
+    /// disque : lues en fond la première fois (retour du 29/10/2026 : chaque vignette
+    /// relisait la liste du dossier sur le NAS, une image lente à chaque rangée), 0 en
+    /// attendant.
+    fn grid_versions(&mut self, path: &Path) -> usize {
+        while let Ok((read, versions)) = self.versions_read.1.try_recv() {
+            self.versions_pending.remove(&read);
+            self.versions.entry(read).or_insert(versions);
+        }
+        if let Some(versions) = self.versions.get(path) {
+            return versions.list.len();
+        }
+        if self.versions_pending.insert(path.to_path_buf()) {
+            let (tx, target) = (self.versions_read.0.clone(), path.to_path_buf());
+            tri::cache::defer_job(format!("versions:{}", target.display()), move || {
+                let versions = tri::versions::read(&target).unwrap_or_default();
+                let _ = tx.send((target, versions));
+            });
+        }
+        0
+    }
+
+    /// Lectures de versions en cours abandonnées (dossier changé, versions relues) : une
+    /// lecture ancienne arrivée après coup ne remplace rien.
+    fn forget_grid_versions(&mut self) {
+        self.versions_pending.clear();
+        self.versions_read = mpsc::channel();
+    }
+
     fn versions_of(&mut self, path: &Path) -> &tri::versions::Versions {
         self.versions
             .entry(path.to_path_buf())
@@ -7827,20 +8061,34 @@ impl TriApp {
             return None;
         }
         let path = file.path.clone();
+        // Un échec (aperçu illisible) reste marqué en cours : pas recalculé à chaque image.
+        while let Ok((done, e)) = self.camera_read.1.try_recv() {
+            if let Some(e) = e {
+                self.camera_pending.remove(&done);
+                self.camera_exposures.insert(done, e);
+            }
+        }
         if let Some(e) = self.camera_exposures.get(&path) {
             return Some(e.clone());
         }
-        if !self.ready(index, Level::Embedded) {
+        if !self.ready(index, Level::Embedded) || !self.camera_pending.insert(path.clone()) {
             return None;
         }
+        // Calculée en fond : décoder l'aperçu boîtier et compter ses pixels prenait jusqu'à
+        // 1,7 s dans le fil de l'interface, à chaque image (retour du 29/10/2026). La courbe
+        // du boîtier arrive un instant après celle du RAW.
         let engine = self.engine.as_ref()?;
-        let e = Arc::new(preview::camera_exposure(
-            &engine.cache,
-            &self.files[index],
-            &engine.preview,
-        )?);
-        self.camera_exposures.insert(path, e.clone());
-        Some(e)
+        let (cache, settings, file) = (engine.cache.clone(), engine.preview, file.clone());
+        let tx = self.camera_read.0.clone();
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            let e = preview::camera_exposure(&cache, &file, &settings).map(Arc::new);
+            let _ = tx.send((file.path, e));
+            if let Some(ctx) = repaint {
+                ctx.request_repaint();
+            }
+        });
+        None
     }
 
     /// Masque des zones de l'image `index`, en texture (créée à la première demande).
@@ -7939,6 +8187,7 @@ impl TriApp {
             return level;
         }
         let engines = self.developers.engines();
+        let misses = tri::cache::deferred_misses();
         let level = match self.developed_rule().filter(|_| !self.filter_inverted) {
             // Filtre « développées » : le plus récent des logiciels cochés, sinon LibRaw.
             Some(rule) if file.kind == MediaKind::Raw => rule
@@ -7946,7 +8195,10 @@ impl TriApp {
                 .map_or(Level::Standard, Level::Developed),
             _ => self.shown_render().level(file, &engines),
         };
-        self.grid_levels.insert(file.path.clone(), level);
+        // Un sidecar encore en lecture (en fond) : niveau provisoire, pas retenu.
+        if tri::cache::deferred_misses() == misses {
+            self.grid_levels.insert(file.path.clone(), level);
+        }
         level
     }
 
@@ -9319,6 +9571,7 @@ impl TriApp {
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
+        self.forget_grid_versions();
         match Folder::scan(
             &self.folder.dir,
             self.folder_depth(),
@@ -10106,6 +10359,7 @@ impl TriApp {
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
         let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
+        let mut drawn: Option<(usize, usize)> = None;
         let output = area.show_rows(ui, cell, rows, |ui, visible| {
             for row in visible {
                 ui.horizontal(|ui| {
@@ -10113,11 +10367,23 @@ impl TriApp {
                     let start = row * self.layout.columns;
                     let end = (start + self.layout.columns).min(shown.len());
                     for &index in &shown[start..end] {
+                        drawn = Some(
+                            drawn.map_or((index, index), |(a, b)| (a.min(index), b.max(index))),
+                        );
                         self.cell(ui, &ctx, index, deadline);
                     }
                 });
             }
         });
+        // Vignettes à l'écran : le moteur les sert d'abord (descendu à l'ascenseur, sans
+        // déplacer la sélection).
+        if let Some(range) = drawn
+            && self.visible_sent != Some(range)
+            && let Some(engine) = &self.engine
+        {
+            engine.scheduler.set_visible(range.0, range.1);
+            self.visible_sent = Some(range);
+        }
         self.scroll_offset = output.state.clamped_offset().y;
         self.view_height = output.inner_rect.height();
         if self.grid_fit_pending {
@@ -10367,7 +10633,7 @@ impl TriApp {
         }
         // Versions (recadrages) dans la légende, sans fond (retour du 21/10/2026) : icône
         // de recadrage et leur nombre ; un clic passe en recadrage.
-        let versions = self.versions_of(&file.path).list.len();
+        let versions = self.grid_versions(&file.path);
         if versions > 0 {
             let side = badge_rect.height();
             let painter = ui.painter();
@@ -10842,6 +11108,7 @@ impl TriApp {
     ) {
         // Versions peut-être changées : relues.
         self.versions.clear();
+        self.forget_grid_versions();
         self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
             self.after_folder_change(None, None);
@@ -11447,6 +11714,15 @@ impl TriApp {
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let mut steps = crate::trace::Steps::start();
+        if self.repaint.is_none() {
+            self.repaint = Some(ctx.clone());
+            let repaint = ctx.clone();
+            tri::cache::on_stamps_read(move || repaint.request_repaint());
+        }
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.stop_background();
+        }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
         // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
         // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
@@ -11464,6 +11740,7 @@ impl eframe::App for TriApp {
             trace(|| "moteur démarré".into());
         }
         self.drain_events();
+        steps.mark("événements");
         // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder
         // sur la liste (filtre changé, image renommée…).
         // Retour à la grille depuis une image cachée d'une pile (mode pile) : sa couverture.
@@ -11474,7 +11751,9 @@ impl eframe::App for TriApp {
         if hidden || self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
             self.regroup();
         }
+        steps.mark("piles");
         self.watch_volumes(&ctx);
+        self.poll_opening();
         self.poll_loading(&ctx);
         if self.engine_backlog {
             ctx.request_repaint();
@@ -11490,10 +11769,13 @@ impl eframe::App for TriApp {
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
         }
+        steps.mark("fonds");
         self.handle_keys(&ctx);
+        steps.mark("touches");
         // Les champs de recherche dessinés dans cette image disent s'ils ont le clavier.
         self.search_focused = None;
         self.update_loads(&ctx);
+        steps.mark("chargements");
 
         self.focus_mode_hint(&ctx);
         // Barre du haut : icône et nom, à gauche (comme darktable).
@@ -11503,6 +11785,7 @@ impl eframe::App for TriApp {
         let status_click = if self.focus_mode {
             None
         } else {
+            steps.mark("titre");
             egui::Panel::bottom("status")
                 .show(ui, |ui| self.status_bar(ui))
                 .inner
@@ -11597,6 +11880,7 @@ impl eframe::App for TriApp {
                 .resizable(true)
                 .default_size(self.gui.folders.width)
                 .show(ui, |ui| self.folder_panel(ui));
+            steps.mark("dossiers");
             folders_rect = Some(panel.response.rect);
         }
         // Recadrage : sa barre, à la place du bandeau de notation.
@@ -11647,6 +11931,7 @@ impl eframe::App for TriApp {
         }
         // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
         // plein écran).
+        steps.mark("panneaux");
         let mut central = egui::CentralPanel::default();
         if let Some(fill) = self
             .background
@@ -11689,6 +11974,11 @@ impl eframe::App for TriApp {
             } else if self.mode == Mode::Compare {
                 self.compare_view(ui);
             } else {
+                // Jamais d'attente du disque en dessinant la grille : un relevé manquant
+                // (taille, date d'un fichier) est fait en fond, la vignette arrive à
+                // l'image suivante (retour du 29/10/2026 : à chaque page sur un NAS, une
+                // image lente). Les actions, elles, gardent des relevés exacts.
+                let _deferred = DeferStamps::start();
                 self.grid(ui);
             }
             self.filter_toast(ui);
@@ -11705,6 +11995,8 @@ impl eframe::App for TriApp {
                 self.help_lines = Some(HelpLines::new(&self.keymap, ""));
             }
         }
+        steps.mark("centre");
+        self.opening_box(&ctx);
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
@@ -11734,6 +12026,8 @@ impl eframe::App for TriApp {
         self.track_window(&ctx);
         self.save_display();
         self.handle_screenshot(&ctx);
+        steps.mark("boîtes");
+        steps.finish(self.gui.trace_slow_ms);
     }
 }
 
@@ -16844,6 +17138,63 @@ mod tests {
     }
 
     #[test]
+    fn a_slow_folder_opens_in_the_background_and_can_be_cancelled() {
+        // Retour du 29/10/2026 (NAS) : l'interface restait figée pendant la lecture du
+        // dossier, sans rien dire ni moyen d'annuler. Attente nulle : la liste se lit
+        // toujours en fond ici.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = h.state().folder.dir.clone();
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::from_pixel(8, 8, image::Rgb([9, 9, 9]))
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.state_mut().open_wait_override = Some(Duration::ZERO);
+        // Annulée tout de suite : le dossier d'avant reste.
+        h.state_mut().open_folder(&other);
+        assert!(h.state().opening.is_some(), "lue en fond");
+        h.state_mut().cancel_opening();
+        h.run_steps(5);
+        assert_eq!(h.state().folder.dir, photos);
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(n, _)| n == "Ouverture de « autre » annulée.")
+        );
+        // Laissée finir : le dossier s'ouvre.
+        h.state_mut().open_folder(&other);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while h.state().opening.is_some() {
+            assert!(Instant::now() < deadline, "ouverture en fond");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.state().folder.dir, std::path::absolute(&other).unwrap());
+        assert_eq!(h.state().files.len(), 1);
+        // La boîte d'attente, et Échap qui annule (liste qui n'arrive jamais).
+        let (_tx, rx) = mpsc::channel();
+        h.state_mut().opening = Some(Opening {
+            dir: photos.clone(),
+            result: rx,
+            stop: Arc::new(AtomicBool::new(false)),
+            found: Arc::new(AtomicUsize::new(12)),
+        });
+        h.run_steps(2);
+        wait_for_label(&mut h, "Ouverture de « photos »…");
+        wait_for_label(&mut h, "12 images trouvées");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().opening.is_none());
+        assert_eq!(
+            h.state().files.len(),
+            1,
+            "le dossier affiché n'a pas changé"
+        );
+    }
+
+    #[test]
     fn histogram_zones_and_badges() {
         let (mut h, dir) = harness();
         // Une image entièrement blanche : saturée, donc badge et zones.
@@ -18262,11 +18613,10 @@ mod tests {
         h.state_mut().filter_bar = false;
         h.state_mut().metadata_panel = false;
         let img0 = h.state().files[0].path.clone();
-        std::fs::write(
-            img0.with_file_name("img0.jpg.xmp"),
-            r#"<rdf:Description darktable:history_end="3"/>"#,
-        )
-        .unwrap();
+        let sidecar = img0.with_file_name("img0.jpg.xmp");
+        std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="3"/>"#).unwrap();
+        // Comme la surveillance du dossier : le relevé du sidecar est à refaire.
+        tri::cache::forget_stamps([sidecar.as_path()]);
         let folder = h.state().folder.dir.clone();
         h.state_mut().develop_folder_dialog = Some((folder, pos2(200.0, 200.0), None));
         h.run_steps(2);

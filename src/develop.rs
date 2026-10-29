@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 /// Logiciel de développement dont `tri` sait afficher le rendu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -106,11 +106,11 @@ impl<'de> serde::Deserialize<'de> for Preference {
 /// (installés) : celui de `preference` s'il a développé l'image, sinon le développement
 /// le plus récent. `None` : aucun développement (l'image garde le rendu LibRaw).
 pub fn resolve(image: &Path, preference: Preference, available: &[Engine]) -> Option<Engine> {
-    let developed: Vec<(Engine, SystemTime)> = available
+    let developed: Vec<(Engine, u128)> = available
         .iter()
         .filter_map(|&e| {
             let sidecar = e.sidecar(image)?;
-            let modified = std::fs::metadata(sidecar).and_then(|m| m.modified()).ok()?;
+            let (_, modified) = crate::cache::stamp(&sidecar)?;
             Some((e, modified))
         })
         .collect();
@@ -607,16 +607,42 @@ pub fn rapidraw_sidecar(image: &Path) -> Option<PathBuf> {
     let mut name = image.file_name()?.to_os_string();
     name.push(".rrdata");
     let sidecar = image.with_file_name(name);
-    sidecar.is_file().then_some(sidecar)
+    crate::cache::stamp(&sidecar).is_some().then_some(sidecar)
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il porte un vrai développement : un
 /// historique non vide (`darktable:history_end` > 0). Un sidecar écrit par `tri` seul
 /// (notes) ou par un autre logiciel n'en a pas.
 pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
+    use std::sync::{Mutex, OnceLock};
+    type Memo = std::collections::HashMap<PathBuf, ((u64, u128), bool)>;
+    static MEMO: OnceLock<Mutex<Memo>> = OnceLock::new();
     let sidecar = darktable_sidecar_path(image)?;
-    let text = std::fs::read_to_string(&sidecar).ok()?;
-    (history_end(&text)? > 0).then_some(sidecar)
+    // Relu seulement s'il a changé : demandé à chaque image affichée (NAS : un accès
+    // réseau à chaque fois, 29/10/2026).
+    let now = crate::cache::stamp(&sidecar)?;
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some((known, developed)) = memo.lock().ok().and_then(|m| m.get(&sidecar).copied())
+        && known == now
+    {
+        return developed.then_some(sidecar);
+    }
+    // Pendant le dessin de la grille : lu en fond, pas encore développé en attendant.
+    if crate::cache::deferring() {
+        let image = image.to_path_buf();
+        crate::cache::defer_job(format!("darktable:{}", sidecar.display()), move || {
+            darktable_sidecar(&image);
+        });
+        return None;
+    }
+    let developed = std::fs::read_to_string(&sidecar)
+        .ok()
+        .and_then(|text| history_end(&text))
+        .is_some_and(|end| end > 0);
+    if let Ok(mut m) = memo.lock() {
+        m.insert(sidecar.clone(), (now, developed));
+    }
+    developed.then_some(sidecar)
 }
 
 /// Chemin du sidecar darktable de `image` (`IMAGE.RAF.xmp`), qu'il existe ou non.
@@ -739,19 +765,16 @@ fn floats(params: &str, n: usize) -> Option<Vec<f32>> {
 /// Empreinte d'un sidecar (taille, date) : dans la clé de cache, pour qu'un développement
 /// modifié dans darktable refasse le rendu.
 pub fn stamp(sidecar: &Path) -> String {
-    match std::fs::metadata(sidecar) {
-        Ok(meta) => {
-            let modified = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_nanos())
-                .unwrap_or_default();
-            format!("{}:{modified}", meta.len())
-        }
-        Err(_) => "absent".into(),
+    match crate::cache::lookup_stamp(sidecar) {
+        Some(Some((len, modified))) => format!("{len}:{modified}"),
+        Some(None) => "absent".into(),
+        // Relevé demandé en fond (fil de l'interface) : rien à lire pour l'instant.
+        None => PENDING.into(),
     }
 }
+
+/// Empreinte d'un sidecar pas encore relevé ([`stamp`]).
+const PENDING: &str = "pending";
 
 /// Empreinte du **développement** décrit par un sidecar, pour la clé de cache du rendu
 /// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans
@@ -764,11 +787,22 @@ pub fn render_stamp(sidecar: &Path) -> String {
     type Memo = std::collections::HashMap<PathBuf, (String, String)>;
     static MEMO: OnceLock<Mutex<Memo>> = OnceLock::new();
     let quick = stamp(sidecar);
+    if quick == PENDING {
+        return quick;
+    }
     let memo = MEMO.get_or_init(Default::default);
     if let Some((known, fingerprint)) = memo.lock().ok().and_then(|m| m.get(sidecar).cloned())
         && known == quick
     {
         return fingerprint;
+    }
+    // Pendant le dessin de la grille : lu en fond.
+    if crate::cache::deferring() {
+        let path = sidecar.to_path_buf();
+        crate::cache::defer_job(format!("render:{}", path.display()), move || {
+            render_stamp(&path);
+        });
+        return PENDING.into();
     }
     let Ok(bytes) = std::fs::read(sidecar) else {
         return "absent".into();
@@ -1239,21 +1273,29 @@ mod tests {
         assert_eq!(developed_size(&xmp, size), None);
     }
 
+    /// Écrit un fichier et oublie son relevé, comme la surveillance du dossier quand un
+    /// sidecar change ailleurs ([`crate::cache::forget_stamps`]).
+    fn written(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path.as_ref(), contents)?;
+        crate::cache::forget_stamps([path.as_ref()]);
+        Ok(())
+    }
+
     #[test]
     fn only_sidecars_with_a_history_count() {
         let dir = tempfile::tempdir().unwrap();
         let image = dir.path().join("DSCF0001.RAF");
-        std::fs::write(&image, b"raw").unwrap();
+        written(&image, b"raw").unwrap();
         assert_eq!(darktable_sidecar(&image), None, "pas de sidecar");
         let sidecar = dir.path().join("DSCF0001.RAF.xmp");
         // Écrit par tri seul (notes) : pas de développement.
-        std::fs::write(&sidecar, r#"<x:xmpmeta xmp:Rating="3"/>"#).unwrap();
+        written(&sidecar, r#"<x:xmpmeta xmp:Rating="3"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), None);
-        std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="0"/>"#).unwrap();
+        written(&sidecar, r#"<rdf:Description darktable:history_end="0"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), None, "historique vide");
-        std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="27"/>"#).unwrap();
+        written(&sidecar, r#"<rdf:Description darktable:history_end="27"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), Some(sidecar.clone()));
-        std::fs::write(&sidecar, "<darktable:history_end>4</darktable:history_end>").unwrap();
+        written(&sidecar, "<darktable:history_end>4</darktable:history_end>").unwrap();
         assert_eq!(
             darktable_sidecar(&image),
             Some(sidecar.clone()),
@@ -1261,7 +1303,7 @@ mod tests {
         );
         let before = stamp(&sidecar);
         std::thread::sleep(Duration::from_millis(10));
-        std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="28"/>"#).unwrap();
+        written(&sidecar, r#"<rdf:Description darktable:history_end="28"/>"#).unwrap();
         assert_ne!(stamp(&sidecar), before, "modifié : autre empreinte");
     }
 
@@ -1282,7 +1324,7 @@ mod tests {
             )
         };
         let write = |text: String| {
-            std::fs::write(&sidecar, text).unwrap();
+            written(&sidecar, text).unwrap();
             // Une autre date : la mémoire de l'empreinte ne doit pas suffire.
             std::thread::sleep(Duration::from_millis(10));
         };
@@ -1302,10 +1344,10 @@ mod tests {
         );
         // Un autre format (RapidRAW) : tout le contenu.
         let rr = dir.path().join("DSCF0001.RAF.rrdata");
-        std::fs::write(&rr, "{\"exposure\": 1}").unwrap();
+        written(&rr, "{\"exposure\": 1}").unwrap();
         let before = render_stamp(&rr);
         std::thread::sleep(Duration::from_millis(10));
-        std::fs::write(&rr, "{\"exposure\": 2}").unwrap();
+        written(&rr, "{\"exposure\": 2}").unwrap();
         assert_ne!(render_stamp(&rr), before);
     }
 
@@ -1313,11 +1355,11 @@ mod tests {
     fn the_developed_engine_follows_the_preference_then_the_latest() {
         let dir = tempfile::tempdir().unwrap();
         let image = dir.path().join("DSCF0001.RAF");
-        std::fs::write(&image, b"raw").unwrap();
+        written(&image, b"raw").unwrap();
         let all = [Engine::Darktable];
         // Sans développement : rien (l'image garde le rendu LibRaw).
         assert_eq!(resolve(&image, Preference::Auto, &all), None);
-        std::fs::write(
+        written(
             dir.path().join("DSCF0001.RAF.xmp"),
             r#"<rdf:Description darktable:history_end="3"/>"#,
         )
@@ -1351,20 +1393,20 @@ mod tests {
     fn rapidraw_sidecars_and_executable() {
         let dir = tempfile::tempdir().unwrap();
         let image = dir.path().join("DSCF0001.RAF");
-        std::fs::write(&image, b"raw").unwrap();
+        written(&image, b"raw").unwrap();
         assert_eq!(rapidraw_sidecar(&image), None);
         // Copie virtuelle seule : pas lue.
-        std::fs::write(dir.path().join("DSCF0001.RAF.a1b2.rrdata"), b"{}").unwrap();
+        written(dir.path().join("DSCF0001.RAF.a1b2.rrdata"), b"{}").unwrap();
         assert_eq!(rapidraw_sidecar(&image), None);
         let sidecar = dir.path().join("DSCF0001.RAF.rrdata");
-        std::fs::write(&sidecar, b"{}").unwrap();
+        written(&sidecar, b"{}").unwrap();
         assert_eq!(rapidraw_sidecar(&image), Some(sidecar));
         assert_eq!(Engine::RapidRaw.sidecar(&image), rapidraw_sidecar(&image));
         assert_eq!(find_rapidraw(""), None, "désactivé");
         assert_eq!(find_rapidraw("/nulle/part/rapidraw"), None);
         let _ = find_rapidraw("auto"); // trouvé seulement s'il est installé
         let found = dir.path().join("RapidRAW.AppImage");
-        std::fs::write(&found, b"").unwrap();
+        written(&found, b"").unwrap();
         let cli = find_rapidraw(found.to_str().unwrap()).unwrap();
         assert!(
             cli.args.is_empty(),
