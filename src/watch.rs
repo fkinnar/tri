@@ -20,11 +20,56 @@ use std::time::{Duration, SystemTime};
 pub struct WatchSettings {
     /// Intervalle de scrutation du dossier ouvert (ms) ; 0 : pas de surveillance.
     pub interval_ms: u64,
+    /// Part du temps (en %) que la surveillance peut passer à relever le dossier : un
+    /// relevé lent (NAS, partage GVFS) espace les suivants d'autant.
+    pub max_share: u64,
 }
 
 impl Default for WatchSettings {
     fn default() -> Self {
-        Self { interval_ms: 1000 }
+        Self {
+            interval_ms: 1000,
+            max_share: 10,
+        }
+    }
+}
+
+impl WatchSettings {
+    /// Rythme de la surveillance.
+    pub fn pace(&self) -> Pace {
+        Pace {
+            interval: Duration::from_millis(self.interval_ms),
+            max_share: self.max_share,
+        }
+    }
+}
+
+/// Rythme de la surveillance : un relevé toutes les `interval` au moins, et jamais plus
+/// de `max_share` % du temps à relever (retour du 29/10/2026 : sur un partage GVFS, un
+/// relevé prenait des minutes et le suivant repartait aussitôt, le réseau saturé).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Pace {
+    /// Intervalle minimal entre deux relevés.
+    pub interval: Duration,
+    /// Part du temps (en %) passée à relever, au plus (100 : pas d'espacement).
+    pub max_share: u64,
+}
+
+impl From<Duration> for Pace {
+    fn from(interval: Duration) -> Pace {
+        Pace {
+            interval,
+            max_share: 100,
+        }
+    }
+}
+
+impl Pace {
+    /// Attente avant le relevé suivant, après un relevé qui a duré `took`.
+    pub fn wait_after(&self, took: Duration) -> Duration {
+        let share = self.max_share.clamp(1, 100) as u32;
+        let spaced = (took * 100 / share).saturating_sub(took);
+        self.interval.max(spaced)
     }
 }
 
@@ -135,7 +180,7 @@ impl FolderWatch {
     /// dernier signal. Un dossier illisible (carte retirée) ne signale rien.
     pub fn start(
         dir: &Path,
-        interval: Duration,
+        interval: impl Into<Pace>,
         on_change: impl Fn(Changes) + Send + 'static,
     ) -> FolderWatch {
         FolderWatch::start_depth(dir, 1, interval, on_change)
@@ -146,7 +191,7 @@ impl FolderWatch {
     pub fn start_depth(
         dir: &Path,
         depth: usize,
-        interval: Duration,
+        interval: impl Into<Pace>,
         on_change: impl Fn(Changes) + Send + 'static,
     ) -> FolderWatch {
         let known = Snapshot::of_depth(dir, depth).unwrap_or_default();
@@ -159,10 +204,11 @@ impl FolderWatch {
     pub fn start_from(
         dir: &Path,
         depth: usize,
-        interval: Duration,
+        interval: impl Into<Pace>,
         known: Snapshot,
         on_change: impl Fn(Changes) + Send + 'static,
     ) -> FolderWatch {
+        let pace = interval.into();
         let stop = Arc::new(AtomicBool::new(false));
         let known = Arc::new(Mutex::new(known));
         let thread = {
@@ -172,12 +218,16 @@ impl FolderWatch {
                 .spawn(move || {
                     // Dernier état vu, pour juger de la stabilité.
                     let mut last: Option<Snapshot> = None;
+                    let mut wait = pace.interval;
                     while !stop.load(Ordering::Relaxed) {
-                        std::thread::park_timeout(interval);
+                        std::thread::park_timeout(wait);
                         if stop.load(Ordering::Relaxed) {
                             break;
                         }
-                        let Ok(now) = Snapshot::of_depth(&dir, depth) else {
+                        let started = std::time::Instant::now();
+                        let read = Snapshot::of_depth(&dir, depth);
+                        wait = pace.wait_after(started.elapsed());
+                        let Ok(now) = read else {
                             last = None;
                             continue;
                         };
@@ -260,6 +310,28 @@ impl Drop for FolderWatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_slow_read_spaces_the_next_ones() {
+        let pace = WatchSettings::default().pace();
+        let ms = Duration::from_millis;
+        assert_eq!(
+            pace.wait_after(ms(5)),
+            ms(1000),
+            "dossier local : l'intervalle"
+        );
+        assert_eq!(
+            pace.wait_after(ms(3000)),
+            ms(27_000),
+            "10 % du temps au plus"
+        );
+        let flat = Pace::from(ms(20));
+        assert_eq!(
+            flat.wait_after(ms(3000)),
+            ms(20),
+            "100 % : pas d'espacement"
+        );
+    }
     use std::sync::mpsc;
 
     #[test]

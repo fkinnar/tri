@@ -7,7 +7,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 
-use walkdir::WalkDir;
+use std::fs;
 
 /// Extensions RAW reconnues (formats photo gérés par LibRaw), en minuscules.
 pub const RAW_EXTENSIONS: &[&str] = &[
@@ -83,35 +83,69 @@ pub fn scan_counting(
             format!("{} n'est pas un dossier", root.display()),
         ));
     }
-    if depth == 0 {
-        // walkdir inverserait min_depth (1) et max_depth (0) : on traite le cas à part.
-        return Ok(Vec::new());
-    }
     let mut files: Vec<MediaFile> = Vec::new();
-    let walk = WalkDir::new(root)
-        .min_depth(1)
-        .max_depth(depth)
-        .into_iter()
-        // Sous-dossiers cachés (`.thumbnails`, `.dtrash`…) écartés.
-        .filter_entry(|e| e.depth() == 0 || !is_hidden_dir(e));
-    for entry in walk {
+    walk(root, depth, stop, found, &mut files)?;
+    files.sort_by(compare);
+    Ok(files)
+}
+
+/// Extensions de fichiers qui accompagnent les images (sidecars, réglages) : jamais des
+/// dossiers, inutile de le demander au système.
+const COMPANIONS: &[&str] = &["xmp", "pp3", "arp", "cos", "rrdata", "dop", "json", "txt"];
+
+/// Images de `dir` sur `depth` niveaux, ajoutées à `files`. Le type d'une entrée n'est
+/// demandé au système que s'il le faut : une image se reconnaît à son extension, un
+/// sidecar n'est jamais un dossier, et sans sous-dossiers rien d'autre ne compte (retour
+/// du 29/10/2026 : sur un partage monté par GVFS sous Linux, le système ne donne pas le
+/// type des entrées ; le demander coûtait un aller-retour réseau par fichier, 1 à 2
+/// images par seconde).
+fn walk(
+    dir: &Path,
+    depth: usize,
+    stop: &AtomicBool,
+    found: &AtomicUsize,
+    files: &mut Vec<MediaFile>,
+) -> io::Result<()> {
+    if depth == 0 {
+        return Ok(());
+    }
+    let mut subdirs = Vec::new();
+    for entry in fs::read_dir(dir)? {
         if stop.load(AtomicOrdering::Relaxed) {
             return Err(io::ErrorKind::Interrupted.into());
         }
         let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_file() {
+        let path = entry.path();
+        if let Some(kind) = kind_of(&path) {
+            files.push(MediaFile { path, kind });
+            found.fetch_add(1, AtomicOrdering::Relaxed);
             continue;
         }
-        if let Some(kind) = kind_of(entry.path()) {
-            files.push(MediaFile {
-                path: entry.into_path(),
-                kind,
-            });
-            found.fetch_add(1, AtomicOrdering::Relaxed);
+        if depth == 1 {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        // Sous-dossiers cachés (`.thumbnails`, `.dtrash`…) écartés, sidecars passés.
+        let companion = path
+            .extension()
+            .is_some_and(|e| COMPANIONS.iter().any(|c| e.eq_ignore_ascii_case(c)));
+        if name.starts_with('.') || companion {
+            continue;
+        }
+        // Liens symboliques pas suivis (comme avant).
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            subdirs.push(path);
         }
     }
-    files.sort_by(compare);
-    Ok(files)
+    for sub in subdirs {
+        // Un sous-dossier illisible est ignoré, comme une entrée illisible.
+        match walk(&sub, depth - 1, stop, found, files) {
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => return Err(e),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Vrai pour un dossier caché (nom commençant par « . ») : ses images ne sont pas
@@ -132,6 +166,41 @@ pub fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subfolders_are_walked_without_hidden_ones_or_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        for sub in ["2026", "2026/séance", ".thumbnails"] {
+            std::fs::create_dir_all(d.join(sub)).unwrap();
+        }
+        for name in [
+            "a.RAF",
+            "a.RAF.xmp",
+            "2026/b.jpg",
+            "2026/séance/c.NEF",
+            ".thumbnails/x.jpg",
+        ] {
+            std::fs::write(d.join(name), b"x").unwrap();
+        }
+        let names = |depth| -> Vec<String> {
+            let mut list: Vec<String> = scan(d, depth)
+                .unwrap()
+                .iter()
+                .map(|f| {
+                    // Barres obliques partout (Windows compris).
+                    let relative = f.path.strip_prefix(d).unwrap();
+                    relative.to_string_lossy().replace('\\', "/")
+                })
+                .collect();
+            list.sort();
+            list
+        };
+        assert_eq!(names(1), ["a.RAF"]);
+        assert_eq!(names(2), ["2026/b.jpg", "a.RAF"]);
+        assert_eq!(names(3), ["2026/b.jpg", "2026/séance/c.NEF", "a.RAF"]);
+        assert!(names(0).is_empty());
+    }
 
     #[test]
     fn a_counting_scan_counts_images_and_stops_when_asked() {

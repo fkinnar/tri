@@ -261,6 +261,10 @@ formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 # been stable for this interval (a copy in progress only reloads once, at the
 # end). 0: no monitoring.
 interval_ms = 1000
+# Share of the time (in %) the monitoring may spend reading the folder: a slow read (NAS,
+# GVFS share on Linux) spaces the next ones out accordingly (10: a 3 s read waits 27 s
+# before the next one). 100: no spacing.
+max_share = 10
 
 [exposure]
 # Histogram and exposure warnings, computed on the sensor data for a RAW.

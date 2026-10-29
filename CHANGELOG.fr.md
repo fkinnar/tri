@@ -8,6 +8,10 @@
   (darktable) ont changé, un bandeau en haut dit combien de rendus sont refaits, avec une
   barre de progression, puis qu'ils sont faits ; il s'efface de lui-même (`[gui.grid]
   develop_toast_ms`).
+- **Partages réseau sous Linux (GVFS)** : lister un dossier ne demande plus le type de
+  chaque fichier par le réseau (1 à 2 images par seconde sur un partage ouvert par
+  Nemo) ; la surveillance du dossier espace ses relevés quand ils sont lents
+  (`[watch] max_share`, 10 % du temps au plus) au lieu d'occuper le réseau.
 - **Les clones et les réglages des autres logiciels suivent l'image** : déplacer, copier,
   renommer ou supprimer une image emporte aussi ses clones darktable (`IMG_01.RAF.xmp`…)
   et les réglages de RawTherapee (`.pp3`), d'ART (`.arp`) et de Capture One

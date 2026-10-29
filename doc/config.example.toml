@@ -258,6 +258,10 @@ formats = ["dmg", "msi", "AppImage", "deb", "tar.gz", "zip"]
 # dossier stable pendant cet intervalle (une copie en cours ne recharge qu'une fois, à la
 # fin). 0 : pas de surveillance.
 interval_ms = 1000
+# Part du temps (en %) que la surveillance peut passer à relever le dossier : un relevé
+# lent (NAS, partage GVFS sous Linux) espace les suivants d'autant (10 : un relevé de 3 s
+# attend 27 s avant le suivant). 100 : pas d'espacement.
+max_share = 10
 
 [exposure]
 # Histogramme et alertes d'exposition, calculés sur les données du capteur pour un RAW.

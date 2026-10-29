@@ -13,7 +13,10 @@ défaut, 0 : pas de surveillance), dans un fil à part. Choix assumé plutôt qu
 local, une carte SD ou un partage réseau, où les notifications du système manquent
 souvent. Même principe que la surveillance des volumes (`places::Monitor`). Coût : une
 lecture du dossier par seconde (quelques millisecondes pour quelques milliers de
-fichiers en local).
+fichiers en local). Sur un partage lent, une lecture peut prendre des minutes (GVFS sous
+Linux, un aller-retour réseau par fichier) : la suivante attend alors d'autant, pour ne
+jamais passer plus de `[watch] max_share` % du temps à relire (10 % : une lecture de
+3 s attend 27 s ; `Pace::wait_after`, 29/10/2026).
 
 Dossier ouvert avec ses sous-dossiers (case du panneau, 20/10/2026) :
 `FolderWatch::start_depth` / `Snapshot::of_depth` regardent les mêmes niveaux que la

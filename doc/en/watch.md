@@ -12,7 +12,10 @@ default, 0: no watching), in a separate thread. A deliberate choice over the `no
 crate (FSEvents, inotify…): no dependency, and the same behaviour on a local disk, an SD
 card or a network share, where system notifications are often missing. Same principle as
 volume watching (`places::Monitor`). Cost: one folder read per second (a few milliseconds
-for a few thousand local files).
+for a few thousand local files). On a slow share, one read can take minutes (GVFS on
+Linux, one network round trip per file): the next one then waits accordingly, so that no
+more than `[watch] max_share` % of the time is spent reading (10 %: a 3 s read waits
+27 s; `Pace::wait_after`, 2026-10-29).
 
 Folder opened with its subfolders (panel checkbox, 2026-10-20):
 `FolderWatch::start_depth` / `Snapshot::of_depth` look at the same levels as the grid,

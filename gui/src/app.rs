@@ -2257,21 +2257,18 @@ impl TriApp {
                 let _ = tx.send(changes);
                 repaint.request_repaint();
             };
-            let interval_d = Duration::from_millis(interval);
+            let pace = self.settings.watch.pace();
             let watch = match self.watch_snapshot.take() {
                 Some(known) => tri::watch::FolderWatch::start_from(
                     &self.folder.dir,
                     depth,
-                    interval_d,
+                    pace,
                     known,
                     on_change,
                 ),
-                None => tri::watch::FolderWatch::start_depth(
-                    &self.folder.dir,
-                    depth,
-                    interval_d,
-                    on_change,
-                ),
+                None => {
+                    tri::watch::FolderWatch::start_depth(&self.folder.dir, depth, pace, on_change)
+                }
             };
             self.watch = Some((watch, rx, interval));
         }

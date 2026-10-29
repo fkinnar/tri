@@ -7,6 +7,10 @@
 - **Developments to redo announced**: when photos developed elsewhere (darktable) have
   changed, a banner at the top says how many renders are redone, with a progress bar,
   then that they are done; it fades by itself (`[gui.grid] develop_toast_ms`).
+- **Network shares on Linux (GVFS)**: listing a folder no longer asks the type of each
+  file over the network (1 to 2 images per second on a share opened by Nemo); the folder
+  watch spaces its reads out when they are slow (`[watch] max_share`, 10 % of the time at
+  most) instead of keeping the network busy.
 - **Clones and settings of other software follow the image**: moving, copying, renaming
   or deleting an image also takes its darktable clones (`IMG_01.RAF.xmp`…) and the
   settings of RawTherapee (`.pp3`), ART (`.arp`) and Capture One
