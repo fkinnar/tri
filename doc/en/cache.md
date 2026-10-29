@@ -105,7 +105,11 @@ Consequences:
   read waited behind the RAWs read by the engine, and the interface did thousands of
   them, frozen up to 37 s); the folder watch forgets the stamps of changed files
   (`forget_stamps`), opening a folder those of its files (`forget_stamps_under`). The same
-  goes for the sidecars of development software (`develop::stamp`, `darktable_sidecar`);
+  goes for the sidecars of development software (`develop::stamp`, `darktable_sidecar`).
+  While the grid is drawn, missing stamps are **deferred** (`defer_stamps`,
+  `lookup_stamp`): read by a separate thread, the interface redrawn when they arrive
+  (`on_stamps_read`); the thumbnail arrives one frame later instead of freezing the page
+  (still 0.4 to 3 s per page on a NAS). Actions keep exact stamps;
 - **settings changed** (preview size, white balance…) ⇒ same, provided the caller
   includes them in `params`;
 - **folder moved or renamed** ⇒ the cache is no longer found, unless it follows

@@ -757,11 +757,16 @@ fn floats(params: &str, n: usize) -> Option<Vec<f32>> {
 /// Empreinte d'un sidecar (taille, date) : dans la clé de cache, pour qu'un développement
 /// modifié dans darktable refasse le rendu.
 pub fn stamp(sidecar: &Path) -> String {
-    match crate::cache::stamp(sidecar) {
-        Some((len, modified)) => format!("{len}:{modified}"),
-        None => "absent".into(),
+    match crate::cache::lookup_stamp(sidecar) {
+        Some(Some((len, modified))) => format!("{len}:{modified}"),
+        Some(None) => "absent".into(),
+        // Relevé demandé en fond (fil de l'interface) : rien à lire pour l'instant.
+        None => PENDING.into(),
     }
 }
+
+/// Empreinte d'un sidecar pas encore relevé ([`stamp`]).
+const PENDING: &str = "pending";
 
 /// Empreinte du **développement** décrit par un sidecar, pour la clé de cache du rendu
 /// développé : sous `xmp`, seulement les champs de darktable (`darktable:…`), sans
@@ -774,6 +779,9 @@ pub fn render_stamp(sidecar: &Path) -> String {
     type Memo = std::collections::HashMap<PathBuf, (String, String)>;
     static MEMO: OnceLock<Mutex<Memo>> = OnceLock::new();
     let quick = stamp(sidecar);
+    if quick == PENDING {
+        return quick;
+    }
     let memo = MEMO.get_or_init(Default::default);
     if let Some((known, fingerprint)) = memo.lock().ok().and_then(|m| m.get(sidecar).cloned())
         && known == quick

@@ -15,6 +15,7 @@
 //! fichier (le dossier est dans le rangement). Branché sur un autre ordinateur, monté
 //! ailleurs, le disque garde son cache.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs::{self, File};
@@ -153,9 +154,82 @@ fn stamps() -> &'static Mutex<Stamps> {
 /// figée). Un fichier changé ailleurs est à oublier ([`forget_stamps`]) : la surveillance
 /// du dossier le fait, et l'ouverture d'un dossier oublie les siens.
 pub fn stamp(path: &Path) -> Option<(u64, u128)> {
+    lookup_stamp(path).unwrap_or(None)
+}
+
+/// Comme [`stamp`], sans jamais attendre le disque dans un fil où les relevés sont
+/// différés ([`defer_stamps`]) : `None` tant que le relevé n'est pas connu (il est
+/// demandé en fond, puis [`on_stamps_read`] est prévenu) ; sinon `Some` du relevé.
+pub fn lookup_stamp(path: &Path) -> Option<Option<(u64, u128)>> {
     if let Some(known) = stamps().lock().unwrap_or_else(|e| e.into_inner()).get(path) {
-        return *known;
+        return Some(*known);
     }
+    if DEFERRED.with(Cell::get) {
+        read_in_background(path);
+        return None;
+    }
+    Some(read_stamp(path))
+}
+
+thread_local! {
+    /// Relevés différés dans ce fil ([`defer_stamps`]).
+    static DEFERRED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Diffère (`on`) les relevés manquants dans ce fil : le fil de l'interface ne doit
+/// jamais attendre un NAS (retour du 29/10/2026 : encore 0,4 à 3 s par image, pour les
+/// premiers relevés de chaque vignette).
+pub fn defer_stamps(on: bool) {
+    DEFERRED.with(|d| d.set(on));
+}
+
+/// Fonction appelée quand des relevés différés sont arrivés (redessiner l'interface).
+pub fn on_stamps_read(notify: impl Fn() + Send + Sync + 'static) {
+    let _ = NOTIFY.set(Box::new(notify));
+}
+
+static NOTIFY: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// Relevé demandé au fil des relevés différés (une fois par fichier en attente).
+fn read_in_background(path: &Path) {
+    use std::sync::OnceLock;
+    use std::sync::mpsc::{self, Sender};
+    static PENDING: OnceLock<Mutex<std::collections::HashSet<PathBuf>>> = OnceLock::new();
+    static QUEUE: OnceLock<Mutex<Sender<PathBuf>>> = OnceLock::new();
+    let pending = PENDING.get_or_init(Default::default);
+    if !pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(path.to_path_buf())
+    {
+        return;
+    }
+    let queue = QUEUE.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<PathBuf>();
+        let _ = std::thread::Builder::new()
+            .name("tri-stamps".into())
+            .spawn(move || {
+                while let Ok(path) = rx.recv() {
+                    read_stamp(&path);
+                    pending
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .remove(&path);
+                    if let Some(notify) = NOTIFY.get() {
+                        notify();
+                    }
+                }
+            });
+        Mutex::new(tx)
+    });
+    let _ = queue
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .send(path.to_path_buf());
+}
+
+/// Relève `path` sur le disque et le retient.
+fn read_stamp(path: &Path) -> Option<(u64, u128)> {
     let read = fs::metadata(path).ok().map(|meta| {
         let modified = meta
             .modified()
@@ -197,12 +271,22 @@ impl Key {
     /// fichier ait la même clé quel que soit le répertoire courant.
     pub fn new(source: &Path, level: Level, params: &str) -> io::Result<Key> {
         let path = std::path::absolute(source)?;
-        let (len, modified) = stamp(&path).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("{} introuvable", path.display()),
-            )
-        })?;
+        let (len, modified) = match lookup_stamp(&path) {
+            Some(Some(stamp)) => stamp,
+            Some(None) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{} introuvable", path.display()),
+                ));
+            }
+            // Fil de l'interface : relevé demandé en fond, clé à redemander.
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("{} pas encore relevé", path.display()),
+                ));
+            }
+        };
         Ok(Key::from_parts(
             path.as_os_str(),
             len,
@@ -883,6 +967,26 @@ mod tests {
             before,
             "fichier changé : nouvelle clé une fois oublié"
         );
+    }
+
+    #[test]
+    fn a_deferred_stamp_is_read_in_the_background() {
+        // Le fil de l'interface n'attend jamais le disque : relevé demandé en fond.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("b.RAF");
+        fs::write(&file, b"raw").unwrap();
+        defer_stamps(true);
+        let first = lookup_stamp(&file);
+        defer_stamps(false);
+        assert_eq!(first, None, "pas encore relevé");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        defer_stamps(true);
+        while lookup_stamp(&file).is_none() {
+            assert!(std::time::Instant::now() < deadline, "relevé en fond");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        defer_stamps(false);
+        assert_eq!(stamp(&file).map(|(len, _)| len), Some(3));
     }
 
     #[test]

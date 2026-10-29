@@ -107,7 +107,11 @@ Conséquences :
   et l'interface en faisait des milliers, jusqu'à 37 s figée) ; la surveillance du
   dossier oublie les relevés des fichiers changés (`forget_stamps`), l'ouverture d'un
   dossier ceux de ses fichiers (`forget_stamps_under`). Même chose pour les sidecars des
-  logiciels de développement (`develop::stamp`, `darktable_sidecar`) ;
+  logiciels de développement (`develop::stamp`, `darktable_sidecar`). Pendant le dessin
+  de la grille, les relevés manquants sont **différés** (`defer_stamps`, `lookup_stamp`) :
+  faits par un fil à part, l'interface redessinée à leur arrivée (`on_stamps_read`) ; la
+  vignette arrive une image plus tard au lieu de figer la page (encore 0,4 à 3 s à chaque
+  page sur un NAS). Les actions, elles, gardent des relevés exacts ;
 - **réglages changés** (taille d'aperçu, balance des blancs…) ⇒ idem, à condition que
   l'appelant les inclue dans `params` ;
 - **dossier déplacé ou renommé** ⇒ le cache n'est plus retrouvé, sauf s'il le suit

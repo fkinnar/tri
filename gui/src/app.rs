@@ -174,6 +174,23 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// Relevés des fichiers différés le temps du dessin de la grille
+/// ([`tri::cache::defer_stamps`]), rétablis à la fin, quelle que soit la sortie.
+struct DeferStamps;
+
+impl DeferStamps {
+    fn start() -> DeferStamps {
+        tri::cache::defer_stamps(true);
+        DeferStamps
+    }
+}
+
+impl Drop for DeferStamps {
+    fn drop(&mut self) {
+        tri::cache::defer_stamps(false);
+    }
+}
+
 /// Ouverture d'un dossier lent ([`TriApp::open_folder`]) : sa liste lue en fond.
 struct Opening {
     dir: PathBuf,
@@ -6690,8 +6707,14 @@ impl TriApp {
         let Some(engine) = &self.engine else {
             return false;
         };
-        let current = tri::preview::key(file, level, &engine.preview)
-            .is_ok_and(|key| engine.cache.contains(&key));
+        let current = match tri::preview::key(file, level, &engine.preview) {
+            Ok(key) => engine.cache.contains(&key),
+            // Relevé du fichier pas encore fait (en fond) : rien de changé pour l'instant.
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                return self.status[index].developed == Avail::Ready;
+            }
+            Err(_) => false,
+        };
         if !current && self.status[index].developed == Avail::Ready {
             let path = file.path.clone();
             trace(|| format!("développé périmé : {}", path.display()));
@@ -11601,6 +11624,8 @@ impl eframe::App for TriApp {
         let mut steps = crate::trace::Steps::start();
         if self.repaint.is_none() {
             self.repaint = Some(ctx.clone());
+            let repaint = ctx.clone();
+            tri::cache::on_stamps_read(move || repaint.request_repaint());
         }
         if ctx.input(|i| i.viewport().close_requested()) {
             self.stop_background();
@@ -11856,6 +11881,11 @@ impl eframe::App for TriApp {
             } else if self.mode == Mode::Compare {
                 self.compare_view(ui);
             } else {
+                // Jamais d'attente du disque en dessinant la grille : un relevé manquant
+                // (taille, date d'un fichier) est fait en fond, la vignette arrive à
+                // l'image suivante (retour du 29/10/2026 : à chaque page sur un NAS, une
+                // image lente). Les actions, elles, gardent des relevés exacts.
+                let _deferred = DeferStamps::start();
                 self.grid(ui);
             }
             self.filter_toast(ui);
@@ -18490,11 +18520,10 @@ mod tests {
         h.state_mut().filter_bar = false;
         h.state_mut().metadata_panel = false;
         let img0 = h.state().files[0].path.clone();
-        std::fs::write(
-            img0.with_file_name("img0.jpg.xmp"),
-            r#"<rdf:Description darktable:history_end="3"/>"#,
-        )
-        .unwrap();
+        let sidecar = img0.with_file_name("img0.jpg.xmp");
+        std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="3"/>"#).unwrap();
+        // Comme la surveillance du dossier : le relevé du sidecar est à refaire.
+        tri::cache::forget_stamps([sidecar.as_path()]);
         let folder = h.state().folder.dir.clone();
         h.state_mut().develop_folder_dialog = Some((folder, pos2(200.0, 200.0), None));
         h.run_steps(2);

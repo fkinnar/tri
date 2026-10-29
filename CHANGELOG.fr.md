@@ -15,7 +15,8 @@
   l'interface, étape par étape (`[gui] trace_slow_ms`). La grille ne relit plus la
   taille et la date de chaque fichier source à chaque image (jusqu'à 37 s figée sur un
   NAS) : elles sont relevées une fois, et oubliées quand la surveillance du dossier voit
-  un fichier changer.
+  un fichier changer ; pendant le dessin de la grille, un relevé manquant se fait en fond
+  au lieu de retenir la page.
 - **Boîte de connexion réseau** : un serveur qui demande un compte que le système ne
   demande pas lui-même (Linux, Windows ; macOS garde sa boîte) ouvre une boîte :
   utilisateur, domaine (SMB), mot de passe, « Retenir le mot de passe » (gestionnaire
