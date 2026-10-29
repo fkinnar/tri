@@ -12660,9 +12660,9 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().stacking);
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
-        // Replier « Grille ».
-        h.get_by_label(&t!("panel-section-grid").to_uppercase())
-            .click();
+        // Replier « Grille » (la section vient de grandir : clic une fois sa place
+        // arrêtée, sinon il tombe à côté, vu sur la CI Ubuntu le 29/10/2026).
+        click_settled(&mut h, &t!("panel-section-grid").to_uppercase());
         h.run_steps(2);
         assert!(h.state().panel_folded.contains("grid"));
         assert!(h.query_by_label(&t!("panel-grid-stacks-on")).is_none());
@@ -12672,7 +12672,7 @@ mod tests {
         );
         // Les réglages d'un filtre n'apparaissent qu'avec lui.
         assert!(h.query_by_label(&t!("panel-clip-over")).is_none());
-        h.get_by_label(&t!("panel-filter-exposed")).click();
+        click_settled(&mut h, &t!("panel-filter-exposed"));
         h.run_steps(2);
         assert!(h.state().well_exposed);
         assert!(h.query_by_label(&t!("panel-clip-over")).is_some());
