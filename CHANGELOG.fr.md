@@ -8,7 +8,9 @@
   `smb://nas/photo` (icône « serveur » du panneau des dossiers, `c`, ou l'adresse tapée
   dans la recherche des dossiers). Le système monte et demande le mot de passe ; le
   partage est ensuite gardé dans la section « Réseau » (clic droit ou Maj+C pour
-  l'oublier). Sous Windows, les lecteurs réseau (`Z:`) sont rangés dans « Réseau ».
+  l'oublier). Sous Windows, les lecteurs réseau (`Z:`) sont rangés dans « Réseau ». Un
+  serveur seul (`smb://nas.local/`) liste ses partages, au choix ; un partage déjà monté
+  en AFP (Nemo) est reconnu.
 - **Panneau des dossiers** : « Sous-dossiers » devient une icône (arborescence), grise,
   à l'accent quand l'option est active (comme les filtres), juste après le titre ;
   Actualiser passe au bord droit du panneau, et le titre « Dossiers » prend la taille

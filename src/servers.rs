@@ -32,37 +32,25 @@ impl Server {
     /// (caractères encodés `%20` décodés). `None` si ce n'est pas une adresse de partage
     /// (il faut au moins un serveur et un partage).
     pub fn parse(text: &str) -> Option<Server> {
-        let text = text.trim();
-        let (rest, url) = if let Some(rest) = text.strip_prefix(r"\\") {
-            (rest, false)
-        } else if text.len() > 6 && text[..6].eq_ignore_ascii_case("smb://") {
-            (&text[6..], true)
-        } else {
-            return None;
-        };
-        let mut parts = rest.split(['\\', '/']).filter(|p| !p.is_empty()).map(|p| {
-            if url {
-                percent_decode(p)
-            } else {
-                p.to_string()
-            }
-        });
-        let host = parts.next()?;
-        let (user, host) = match host.rsplit_once('@') {
-            Some((user, host)) if url && !user.is_empty() => (Some(user.to_string()), host),
-            _ => (None, host.as_str()),
-        };
-        let host = host.to_string();
-        let share = parts.next()?;
-        if host.is_empty() || host.contains('@') {
+        let (user, host, mut parts, _) = split_address(text)?;
+        if parts.is_empty() {
             return None;
         }
+        let share = parts.remove(0);
         Some(Server {
             user,
             host,
             share,
-            folders: parts.collect(),
+            folders: parts,
         })
+    }
+
+    /// Le serveur de ce partage.
+    pub fn server(&self) -> Host {
+        Host {
+            user: self.user.clone(),
+            host: self.host.clone(),
+        }
     }
 
     /// Le partage seul, sans les dossiers dedans (ce qu'on mémorise).
@@ -182,6 +170,213 @@ impl Server {
     }
 }
 
+/// Découpe une adresse `\\serveur\partage\…` ou `smb://[utilisateur@]serveur/…` :
+/// utilisateur, serveur, éléments du chemin (décodés pour une adresse `smb://`), et vrai si
+/// une barre suit le serveur.
+#[allow(clippy::type_complexity)]
+fn split_address(text: &str) -> Option<(Option<String>, String, Vec<String>, bool)> {
+    let text = text.trim();
+    let (rest, url) = if let Some(rest) = text.strip_prefix(r"\\") {
+        (rest, false)
+    } else if text.len() > 6 && text[..6].eq_ignore_ascii_case("smb://") {
+        (&text[6..], true)
+    } else {
+        return None;
+    };
+    let separated = rest.contains(['\\', '/']);
+    let mut parts = rest.split(['\\', '/']).filter(|p| !p.is_empty()).map(|p| {
+        if url {
+            percent_decode(p)
+        } else {
+            p.to_string()
+        }
+    });
+    let host = parts.next()?;
+    let (user, host) = match host.rsplit_once('@') {
+        Some((user, host)) if url && !user.is_empty() => (Some(user.to_string()), host),
+        _ => (None, host.as_str()),
+    };
+    let host = host.to_string();
+    if host.is_empty() || host.contains('@') {
+        return None;
+    }
+    Some((user, host, parts.collect(), separated))
+}
+
+/// Un serveur SMB, sans partage : celui dont on liste les partages (`smb://nas/`,
+/// `\\nas\`), comme « Partages Windows sur nas » de Nemo (retour du 29/10/2026 :
+/// `smb://nas.local/` suivi d'Entrée ne faisait rien).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Host {
+    /// Utilisateur donné dans l'adresse (`smb://moi@nas/`).
+    pub user: Option<String>,
+    /// Nom ou adresse du serveur.
+    pub host: String,
+}
+
+impl Host {
+    /// Le serveur d'une adresse tapée, dès qu'une barre suit son nom (`smb://nas/`,
+    /// `\\nas\`, `smb://nas/pho`) : avant, le nom est sans doute encore en cours de
+    /// frappe, inutile d'interroger le réseau.
+    pub fn parse(text: &str) -> Option<Host> {
+        let (user, host, _, separated) = split_address(text)?;
+        separated.then_some(Host { user, host })
+    }
+
+    /// Adresse `smb://[utilisateur@]serveur/`.
+    pub fn address(&self) -> String {
+        let user = self
+            .user
+            .as_ref()
+            .map(|u| format!("{}@", percent_encode(u)))
+            .unwrap_or_default();
+        format!("smb://{user}{}/", percent_encode(&self.host))
+    }
+
+    /// Le partage `share` de ce serveur.
+    pub fn share(&self, share: &str) -> Server {
+        Server {
+            user: self.user.clone(),
+            host: self.host.clone(),
+            share: share.to_string(),
+            folders: Vec::new(),
+        }
+    }
+
+    /// Les partages de dossiers de ce serveur, par ordre alphabétique (partages cachés
+    /// `…$` et imprimantes écartés), demandés au système `os` : `NetShareEnum` sous
+    /// Windows, `smbutil view` sous macOS, `gio list` sous Linux (GVFS, comme Nemo). Peut
+    /// prendre plusieurs secondes : à appeler dans un fil à part.
+    pub fn shares(&self, os: &str) -> Result<Vec<String>, String> {
+        let mut shares = match os {
+            "windows" => windows_shares(&self.host)?,
+            "macos" => {
+                let address = format!("//{}", self.address().trim_start_matches("smb://"));
+                let address = address.trim_end_matches('/');
+                // Identifiants du trousseau d'abord (`-N` : sans rien demander), puis en
+                // invité.
+                let text = run(&["/usr/bin/smbutil", "view", "-N", address])
+                    .or_else(|_| run(&["/usr/bin/smbutil", "view", "-g", address]))?;
+                shares_from_smbutil(&text)
+            }
+            _ => {
+                // Le voisinage d'un serveur se monte d'abord (anonyme, sans rien demander)
+                // ; déjà monté, l'échec est sans importance.
+                let address = self.address();
+                let _ = run(&["gio", "mount", &address]);
+                shares_from_gio_list(&run(&["gio", "list", &address])?)
+            }
+        };
+        shares.retain(|s| !s.ends_with('$'));
+        shares.sort_by_key(|s| s.to_lowercase());
+        shares.dedup();
+        Ok(shares)
+    }
+}
+
+/// Lance `args` sans entrée (aucune question possible) ; sa sortie, ou son erreur.
+fn run(args: &[&str]) -> Result<String, String> {
+    let output = crate::process::command(args[0])
+        .args(&args[1..])
+        .env("LC_ALL", "C")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(stderr.trim().to_string())
+    }
+}
+
+/// Sortie de `gio list smb://nas/` : un partage par ligne.
+fn shares_from_gio_list(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Sortie de `smbutil view` : un tableau « Share / Type / Comments » sous une ligne de
+/// tirets, jusqu'à « N shares listed » ; seuls les partages `Disk` comptent.
+fn shares_from_smbutil(text: &str) -> Vec<String> {
+    let mut lines = text.lines();
+    let Some(header) = lines.next() else {
+        return Vec::new();
+    };
+    let Some(column) = header.find("Type") else {
+        return Vec::new();
+    };
+    lines
+        .skip_while(|l| !l.trim_start().starts_with('-'))
+        .skip(1)
+        .take_while(|l| !l.contains("shares listed"))
+        .filter_map(|line| {
+            let (name, kind) = line.split_at_checked(column)?;
+            (kind.split_whitespace().next() == Some("Disk")).then(|| name.trim().to_string())
+        })
+        .filter(|n| !n.is_empty())
+        .collect()
+}
+
+/// Partages de dossiers du serveur `host`, par `NetShareEnum` (niveau 1) : pas de sortie
+/// de `net view` à lire, traduite selon la langue de Windows.
+#[cfg(windows)]
+fn windows_shares(host: &str) -> Result<Vec<String>, String> {
+    use windows_sys::Win32::NetworkManagement::NetManagement::{
+        MAX_PREFERRED_LENGTH, NetApiBufferFree,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{NetShareEnum, SHARE_INFO_1, STYPE_DISKTREE};
+    let server: Vec<u16> = format!(r"\\{host}")
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut buffer: *mut u8 = std::ptr::null_mut();
+    let (mut read, mut total) = (0u32, 0u32);
+    // SAFETY : `server` finit par un zéro ; le tampon rendu est libéré plus bas.
+    let status = unsafe {
+        NetShareEnum(
+            server.as_ptr(),
+            1,
+            &mut buffer,
+            MAX_PREFERRED_LENGTH,
+            &mut read,
+            &mut total,
+            std::ptr::null_mut(),
+        )
+    };
+    if status != 0 {
+        return Err(io::Error::from_raw_os_error(status as i32).to_string());
+    }
+    let mut shares = Vec::new();
+    if !buffer.is_null() {
+        // SAFETY : `read` entrées `SHARE_INFO_1` à la suite, noms terminés par un zéro.
+        let infos =
+            unsafe { std::slice::from_raw_parts(buffer as *const SHARE_INFO_1, read as usize) };
+        for info in infos {
+            if info.shi1_type & 0xff != STYPE_DISKTREE || info.shi1_netname.is_null() {
+                continue;
+            }
+            let name = unsafe {
+                let len = (0..)
+                    .take_while(|&i| *info.shi1_netname.add(i) != 0)
+                    .count();
+                String::from_utf16_lossy(std::slice::from_raw_parts(info.shi1_netname, len))
+            };
+            shares.push(name);
+        }
+        unsafe { NetApiBufferFree(buffer as _) };
+    }
+    Ok(shares)
+}
+
+#[cfg(not(windows))]
+fn windows_shares(_host: &str) -> Result<Vec<String>, String> {
+    Ok(Vec::new())
+}
+
 /// Vrai si `text` commence comme une adresse de partage (`\\…`, `smb://…`), complète ou
 /// pas encore.
 pub fn looks_like_address(text: &str) -> bool {
@@ -267,11 +462,11 @@ impl Mounts {
     }
 
     /// Sortie de `mount` (macOS) : `//moi@nas._smb._tcp.local/photo on /Volumes/photo
-    /// (smbfs, …)`.
+    /// (smbfs, …)`, ou le même partage monté en AFP (`afpfs`).
     pub fn from_mount_output(text: &str) -> Mounts {
         let shares = text
             .lines()
-            .filter(|l| l.contains("(smbfs"))
+            .filter(|l| l.contains("(smbfs") || l.contains("(afpfs"))
             .filter_map(|line| {
                 let (source, rest) = line.split_once(" on ")?;
                 let (point, _) = rest.rsplit_once(" (")?;
@@ -302,7 +497,9 @@ impl Mounts {
     }
 
     /// Montages GVFS dans `dir` (`/run/user/<uid>/gvfs`) :
-    /// `smb-share:server=nas.local,share=photo[,user=moi]`.
+    /// `smb-share:server=nas.local,share=photo[,user=moi]`, ou le même partage monté en
+    /// AFP, `afp-volume:host=Nas.local,user=moi,volume=photo` (retour du 29/10/2026 : Nemo
+    /// choisit AFP quand le NAS annonce les deux, et le partage n'était pas reconnu).
     pub fn from_gvfs(dir: &Path) -> Mounts {
         let shares = fs::read_dir(dir)
             .into_iter()
@@ -310,7 +507,11 @@ impl Mounts {
             .flatten()
             .filter_map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let fields = name.strip_prefix("smb-share:")?;
+                let (fields, host, share) = if let Some(f) = name.strip_prefix("smb-share:") {
+                    (f, "server", "share")
+                } else {
+                    (name.strip_prefix("afp-volume:")?, "host", "volume")
+                };
                 let field = |key: &str| {
                     fields
                         .split(',')
@@ -319,8 +520,8 @@ impl Mounts {
                 };
                 let server = Server {
                     user: field("user"),
-                    host: field("server")?,
-                    share: field("share")?,
+                    host: field(host)?,
+                    share: field(share)?,
                     folders: Vec::new(),
                 };
                 Some((server, entry.path()))
@@ -486,6 +687,7 @@ mod tests {
             let gvfs = tempfile::tempdir().unwrap();
             for d in [
                 "smb-share:server=nas.local,share=photo,user=moi",
+                "afp-volume:host=Nas.local,user=Fabrice,volume=kphoto",
                 "mtp:host=telephone",
             ] {
                 fs::create_dir(gvfs.path().join(d)).unwrap();
@@ -497,11 +699,65 @@ mod tests {
                         .join("smb-share:server=nas.local,share=photo,user=moi")
                 )
             );
+            // Le même partage monté en AFP par Nemo (29/10/2026).
+            assert_eq!(
+                server("nas.local", "kphoto", &["2026"])
+                    .mounted_in(&Mounts::from_gvfs(gvfs.path())),
+                Some(
+                    gvfs.path()
+                        .join("afp-volume:host=Nas.local,user=Fabrice,volume=kphoto/2026")
+                )
+            );
             assert_eq!(
                 server("nas", "autre", &[]).mounted_in(&Mounts::from_gvfs(gvfs.path())),
                 None
             );
         }
+        let afp = "//Fabrice@Nas._afpovertcp._tcp.local/kphoto on /Volumes/kphoto (afpfs, nodev, nosuid, mounted by fabrice)\n";
+        assert_eq!(
+            server("nas.local", "kphoto", &[]).mounted_in(&Mounts::from_mount_output(afp)),
+            Some(PathBuf::from("/Volumes/kphoto"))
+        );
+    }
+
+    #[test]
+    fn a_server_is_read_once_a_separator_follows_its_name() {
+        let nas = Host {
+            user: None,
+            host: "nas.local".into(),
+        };
+        assert_eq!(Host::parse("smb://nas.local/"), Some(nas.clone()));
+        assert_eq!(Host::parse(r"\\nas.local\"), Some(nas.clone()));
+        assert_eq!(Host::parse("smb://nas.local/kph"), Some(nas.clone()));
+        assert_eq!(Host::parse("smb://nas.loc"), None, "nom en cours de frappe");
+        assert_eq!(Host::parse(r"\\nas"), None);
+        assert_eq!(Host::parse("smb://"), None);
+        assert_eq!(Host::parse("/home/moi"), None);
+        let moi = Host::parse("smb://moi@nas/").unwrap();
+        assert_eq!(moi.address(), "smb://moi@nas/");
+        assert_eq!(moi.share("photo").address(), "smb://moi@nas/photo");
+        assert_eq!(
+            Server::parse("smb://moi@nas/photo/x").unwrap().server(),
+            moi
+        );
+    }
+
+    #[test]
+    fn shares_are_read_from_the_system_tools() {
+        assert_eq!(
+            shares_from_gio_list("3d\nhome\nkphoto\n\nweb_packages\n"),
+            ["3d", "home", "kphoto", "web_packages"]
+        );
+        let smbutil = "Share                                           Type    Comments\n\
+                       -------------------------------\n\
+                       kphoto                                          Disk    \n\
+                       Mes photos                                      Disk    Photos de famille\n\
+                       IPC$                                            Pipe    IPC Service\n\
+                       imprimante                                      Printer \n\
+                       \n\
+                       4 shares listed\n";
+        assert_eq!(shares_from_smbutil(smbutil), ["kphoto", "Mes photos"]);
+        assert!(shares_from_smbutil("").is_empty());
     }
 
     #[test]

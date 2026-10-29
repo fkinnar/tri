@@ -63,6 +63,14 @@ struct Big {
     sensor_ratio: Option<f32>,
 }
 
+/// Partages d'un serveur, demandés au système dans un fil à part.
+enum ShareList {
+    /// Liste à venir.
+    Pending(Receiver<Result<Vec<String>, String>>),
+    /// Liste reçue, ou le refus du système.
+    Done(Result<Vec<String>, String>),
+}
+
 /// Défilement demandé. Résolu au dessin de la grille, quand la largeur (donc le nombre de
 /// colonnes) est connue : la calculer avant donnait une mauvaise ligne.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,6 +188,14 @@ pub struct TriApp {
     mounting: Option<(PathBuf, Receiver<Result<PathBuf, String>>)>,
     /// Partage réseau en cours de connexion (par `mounting`), mémorisé une fois rejoint.
     connecting: Option<tri::servers::Server>,
+    /// Rejoint un partage (`Server::connect` ; remplacé dans les tests, qui ne touchent
+    /// pas au réseau).
+    connector: fn(&tri::servers::Server) -> Result<PathBuf, String>,
+    /// Liste les partages d'un serveur (`Host::shares` ; remplacé dans les tests).
+    share_lister: fn(&tri::servers::Host) -> Result<Vec<String>, String>,
+    /// Partages du serveur tapé dans la recherche des dossiers (`smb://nas/`) : serveur,
+    /// et liste à venir (fil à part) ou reçue.
+    shares: Option<(tri::servers::Host, ShareList)>,
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
@@ -740,6 +756,9 @@ impl TriApp {
             ejecting: None,
             mounting: None,
             connecting: None,
+            connector: |server| server.connect(std::env::consts::OS),
+            share_lister: |host| host.shares(std::env::consts::OS),
+            shares: None,
             cache_jobs: Vec::new(),
             notice: None,
             settings: settings.engine(),
@@ -3123,8 +3142,9 @@ impl TriApp {
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = server.clone();
+        let connector = self.connector;
         std::thread::spawn(move || {
-            let _ = tx.send(target.connect(std::env::consts::OS));
+            let _ = tx.send(connector(&target));
             repaint.request_repaint();
         });
         self.notice = Some((t!("connecting", name = server.name()), false));
@@ -5646,6 +5666,7 @@ impl TriApp {
     /// Referme la recherche de dossiers (l'arborescence revient).
     fn close_folder_search(&mut self) {
         self.folder_query.clear();
+        self.shares = None;
         self.folder_search = None;
         self.folder_results.clear();
         self.folder_result = 0;
@@ -5689,6 +5710,51 @@ impl TriApp {
         self.focus = crate::actions::Scope::Images;
     }
 
+    /// Les partages à rejoindre d'après l'adresse tapée dans la recherche des dossiers :
+    /// celui tapé (`smb://nas/photo`), puis ceux du serveur dont le nom commence pareil
+    /// (`smb://nas/` : tous). La liste du serveur est demandée une fois, en fond.
+    fn connect_rows(&mut self, ctx: &egui::Context) -> Vec<tri::servers::Server> {
+        let typed = tri::servers::Server::parse(&self.folder_query);
+        let host = tri::servers::Host::parse(&self.folder_query);
+        let Some(host) = host else {
+            self.shares = None;
+            return typed.into_iter().collect();
+        };
+        if self.shares.as_ref().is_none_or(|(h, _)| *h != host) {
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            let lister = self.share_lister;
+            let target = host.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(lister(&target));
+                repaint.request_repaint();
+            });
+            self.shares = Some((host.clone(), ShareList::Pending(rx)));
+        }
+        if let Some((_, list)) = &mut self.shares
+            && let ShareList::Pending(rx) = list
+            && let Ok(result) = rx.try_recv()
+        {
+            *list = ShareList::Done(result);
+        }
+        let prefix = typed
+            .as_ref()
+            .map_or(String::new(), |s| s.share.to_lowercase());
+        let mut rows: Vec<_> = typed.iter().cloned().collect();
+        if let Some((_, ShareList::Done(Ok(names)))) = &self.shares {
+            rows.extend(
+                names
+                    .iter()
+                    .filter(|n| {
+                        let n = n.to_lowercase();
+                        n.starts_with(&prefix) && n != prefix
+                    })
+                    .map(|n| host.share(n)),
+            );
+        }
+        rows
+    }
+
     /// Champ de recherche du panneau des dossiers et, pendant une recherche, ses
     /// résultats (↑ / ↓ choisissent, Entrée ou un clic ouvre). Vrai si les résultats
     /// remplacent l'arborescence.
@@ -5696,8 +5762,10 @@ impl TriApp {
         let focused_search = ui.memory(|m| m.has_focus(folder_search_id()));
         // Une adresse de partage réseau tapée (`\\nas\photo`, `smb://nas/photo`,
         // 28/10/2026) : une ligne « Se connecter » en tête, avant les résultats.
-        let server = tri::servers::Server::parse(&self.folder_query);
-        let first = usize::from(server.is_some());
+        // Un serveur seul (`smb://nas/`, 29/10/2026) : ses partages, comme Nemo ; une
+        // ligne « Se connecter » par partage.
+        let servers = self.connect_rows(ui.ctx());
+        let first = servers.len();
         if focused_search {
             let (up, down) = ui.input_mut(|i| {
                 (
@@ -5753,19 +5821,40 @@ impl TriApp {
         // qu'une recherche sans résultat dans le dossier pointé.
         let address = tri::servers::looks_like_address(&self.folder_query);
         if address && self.folder_results.is_empty() {
-            if server.is_none() {
-                ui.weak(t!("search-folder-address"));
+            match &self.shares {
+                Some((host, ShareList::Pending(_))) => {
+                    ui.weak(t!(
+                        "search-folder-shares-running",
+                        host = host.host.as_str()
+                    ));
+                }
+                Some((host, ShareList::Done(Err(e)))) if servers.is_empty() => {
+                    ui.weak(t!(
+                        "search-folder-shares-failed",
+                        host = host.host.as_str(),
+                        error = e.as_str()
+                    ));
+                }
+                Some((host, ShareList::Done(Ok(_)))) if servers.is_empty() => {
+                    ui.weak(t!("search-folder-shares-none", host = host.host.as_str()));
+                }
+                _ if servers.is_empty() => {
+                    ui.weak(t!("search-folder-address"));
+                }
+                _ => {}
             }
         } else {
             ui.weak(t!("search-folder-in", base = base.display().to_string()));
             if running {
                 ui.weak(t!("search-folder-running"));
-            } else if self.folder_results.is_empty() && server.is_none() {
+            } else if self.folder_results.is_empty() && servers.is_empty() {
                 ui.weak(t!("search-folder-none"));
             }
         }
         let mut open = None;
-        let mut connect = enter && server.is_some() && self.folder_result == 0;
+        let mut connect = enter
+            .then(|| servers.get(self.folder_result).cloned())
+            .flatten();
         if enter
             && let Some((path, _)) = self
                 .folder_results
@@ -5774,18 +5863,21 @@ impl TriApp {
             open = Some(path.clone());
         }
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-            if let Some(server) = &server {
+            for (i, server) in servers.iter().enumerate() {
                 let label = ui
                     .selectable_label(
-                        self.folder_result == 0,
+                        self.folder_result == i,
                         t!("search-folder-connect", name = server.name()),
                     )
                     .on_hover_text(server.address());
-                if self.folder_result == 0 {
+                if self.folder_result == i {
                     cursor_row(ui, label.rect, self.gui.dialogs.cursor_tint);
+                    if focused_search {
+                        label.scroll_to_me(None);
+                    }
                 }
                 if label.clicked() {
-                    connect = true;
+                    connect = Some(server.clone());
                 }
             }
             for (i, (path, _)) in self.folder_results.iter().enumerate() {
@@ -5804,7 +5896,7 @@ impl TriApp {
                 }
             }
         });
-        if connect && let Some(server) = server {
+        if let Some(server) = connect {
             self.close_folder_search();
             self.focus = crate::actions::Scope::Images;
             self.start_connect(&ctx, server);
@@ -15006,6 +15098,72 @@ mod tests {
                 .is_none(),
             "plus d'adresse"
         );
+    }
+
+    #[test]
+    fn enter_joins_a_typed_share_or_one_listed_on_the_server() {
+        // Retour du 29/10/2026 (Mint) : `smb://nas.local/` suivi d'Entrée ne faisait rien.
+        // Les partages du serveur sont listés ; Entrée rejoint celui sous le curseur. Faux
+        // réseau : rien n'est vraiment demandé au système.
+        let (mut h, _dir) = harness();
+        h.state_mut().share_lister = |host| {
+            assert_eq!(host.host, "nas.local");
+            Ok(vec!["home".into(), "kphoto".into()])
+        };
+        h.state_mut().connector = |server| Err(format!("refus de test ({})", server.share));
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        h.state_mut().folder_query = "smb://nas.local/".into();
+        h.run_steps(3);
+        wait_for_label(&mut h, "Se connecter à « home (nas.local) »");
+        wait_for_label(&mut h, "Se connecter à « kphoto (nas.local) »");
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !h
+            .state()
+            .notice
+            .as_ref()
+            .is_some_and(|(n, _)| n.contains("refus de test (kphoto)"))
+        {
+            assert!(
+                Instant::now() < deadline,
+                "connexion lancée : {:?}",
+                h.state().notice
+            );
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Une adresse complète tapée : Entrée la rejoint directement.
+        press(&mut h, Key::B, Modifiers::CTRL);
+        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(
+            h.ctx.memory(|m| m.has_focus(folder_search_id())),
+            "champ des dossiers"
+        );
+        h.state_mut().folder_query = "smb://nas.local/home/2026".into();
+        h.run_steps(3);
+        wait_for_label(&mut h, "Se connecter à « home (nas.local) »");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !h
+            .state()
+            .notice
+            .as_ref()
+            .is_some_and(|(n, _)| n.contains("refus de test (home)"))
+        {
+            assert!(
+                Instant::now() < deadline,
+                "connexion lancée : {:?}",
+                h.state().notice
+            );
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
