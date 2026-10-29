@@ -33,8 +33,8 @@ qu'on monte) :
 | `nfs://` | tout le chemin (l'export) | ✅ | ✅ | ❌ |
 
 `[utilisateur@]` et `:port` partout (`ftp://moi@nas:2121/`). Les cas ❌ donnent un message
-clair (`Protocol::mountable`) ; une **copie en local** (avec confirmation, la taille
-annoncée d'abord) est l'étape suivante. Un montage est reconnu s'il couvre le début du
+clair (`Protocol::mountable`), sauf FTP et SFTP : **copie en local**, confirmée d'abord
+(nombre d'images et taille annoncés, voir [remote.md](remote.md)). Un montage est reconnu s'il couvre le début du
 chemin voulu (`sftp://nas/home/moi/photo` dans un montage de `sftp://nas/`), en SMB comme
 en AFP pour un même partage, en WebDAV chiffré ou pas.
 

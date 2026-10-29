@@ -58,6 +58,8 @@ pub struct AppSettings {
     pub i18n: tri::i18n::I18nSettings,
     /// `[update]` (moteur) : recherche d'une nouvelle version.
     pub update: tri::update::UpdateSettings,
+    /// `[remote]`.
+    pub remote: tri::remote::RemoteSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -87,6 +89,7 @@ impl AppSettings {
             similarity: self.similarity,
             i18n: self.i18n,
             update: self.update.clone(),
+            remote: self.remote.clone(),
         }
     }
 

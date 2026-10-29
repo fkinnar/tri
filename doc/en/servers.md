@@ -31,8 +31,8 @@ protocol; what follows the server depends on it (`Server::share`, what gets moun
 | `nfs://` | the whole path (the export) | ✅ | ✅ | ❌ |
 
 `[user@]` and `:port` everywhere (`ftp://me@nas:2121/`). The ❌ cases give a clear message
-(`Protocol::mountable`); a **local copy** (confirmed, with the size announced first) is the
-next step. A mount is recognised if it covers the start of the wanted path
+(`Protocol::mountable`), except FTP and SFTP: **local copy**, confirmed first (number of
+images and size announced, see [remote.md](remote.md)). A mount is recognised if it covers the start of the wanted path
 (`sftp://nas/home/me/photo` in a mount of `sftp://nas/`), over SMB or AFP for the same
 share, over WebDAV encrypted or not.
 

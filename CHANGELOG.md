@@ -6,8 +6,10 @@
 
 - **Network servers, other protocols**: besides SMB, `afp://`, `ftp://`, `sftp://`,
   `dav://` / `davs://` (WebDAV) and `nfs://` addresses, mounted by the system where it
-  can (all on Linux, all but SFTP on macOS, SMB and WebDAV on Windows); elsewhere, a
-  clear message.
+  can (all on Linux, all but SFTP on macOS, SMB and WebDAV on Windows). Elsewhere, FTP
+  and SFTP are copied locally (`curl`, OpenSSH `sftp`: no new dependency), after a box
+  announcing the number of images and the size, with the destination to choose
+  (`[remote]`).
 - **Network shares**: connect to a share by its address, `\\nas\photo` or
   `smb://nas/photo` (the "server" icon of the folders panel, `c`, or the address typed in
   the folder search). The system mounts and asks for the password; the share is then

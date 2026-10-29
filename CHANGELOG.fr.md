@@ -7,7 +7,9 @@
 - **Serveurs réseau, autres protocoles** : en plus de SMB, les adresses `afp://`,
   `ftp://`, `sftp://`, `dav://` / `davs://` (WebDAV) et `nfs://`, montées par le système
   quand il le sait (tout sous Linux, tout sauf SFTP sous macOS, SMB et WebDAV sous
-  Windows) ; ailleurs, un message clair.
+  Windows). Ailleurs, FTP et SFTP sont copiés en local (`curl`, `sftp` d'OpenSSH : pas de
+  nouvelle dépendance), après une boîte qui annonce le nombre d'images et la taille, la
+  destination au choix (`[remote]`).
 - **Partages réseau** : se connecter à un partage par son adresse, `\\nas\photo` ou
   `smb://nas/photo` (icône « serveur » du panneau des dossiers, `c`, ou l'adresse tapée
   dans la recherche des dossiers). Le système monte et demande le mot de passe ; le

@@ -411,6 +411,17 @@ max_gap_s = 60.0
 # l'anglais si elle n'est pas disponible), "fr" ou "en".
 language = "auto"
 
+[remote]
+# Copie en local d'un serveur que le système ne sait pas monter (FTP et SFTP sous
+# Windows, SFTP sous macOS) : dossier où les copies sont rangées (~ accepté), sous
+# serveur/dossier.
+destination = "~/Pictures"
+# Profondeur des sous-dossiers parcourus sous le dossier demandé.
+depth = 8
+# Fichiers demandés par lancement de sftp (une connexion SSH chacun) : plus grand, moins
+# de connexions ; plus petit, une progression plus fine et une annulation plus rapide.
+batch = 20
+
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

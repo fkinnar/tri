@@ -63,6 +63,46 @@ struct Big {
     sensor_ratio: Option<f32>,
 }
 
+/// Copie en local d'un serveur que le système ne sait pas monter (FTP, SFTP : retour du
+/// 29/10/2026), en trois temps : lecture du dossier, confirmation (nombre d'images, taille,
+/// destination), copie en fond.
+struct RemoteCopy {
+    /// Le dossier du serveur.
+    server: tri::servers::Server,
+    /// Annulation (lecture ou copie).
+    cancel: Arc<AtomicBool>,
+    /// Où en est la copie.
+    stage: RemoteStage,
+    /// Dossier local (champ de la boîte, complétion par Tab).
+    destination: String,
+    /// Complétion du champ.
+    field: crate::path_field::PathField,
+    /// Boîte montrée (sinon, la copie continue en fond, progression dans la barre d'état).
+    shown: bool,
+}
+
+enum RemoteStage {
+    /// Lecture du dossier du serveur.
+    Scanning(Receiver<Result<tri::remote::Listing, String>>),
+    /// Ce qui sera copié, à confirmer.
+    Confirm(tri::remote::Listing),
+    /// Copie en cours : progression (fichiers, octets) et fin.
+    Copying {
+        listing: tri::remote::Listing,
+        rx: Receiver<RemoteEvent>,
+        done: (usize, u64),
+        to: PathBuf,
+    },
+}
+
+/// Message du fil de la copie en local.
+enum RemoteEvent {
+    /// Fichiers et octets faits.
+    Progress(usize, u64),
+    /// Fin, ou l'erreur.
+    Done(Result<(), String>),
+}
+
 /// Partages d'un serveur, demandés au système dans un fil à part.
 enum ShareList {
     /// Liste à venir.
@@ -196,6 +236,11 @@ pub struct TriApp {
     /// Partages du serveur tapé dans la recherche des dossiers (`smb://nas/`) : serveur,
     /// et liste à venir (fil à part) ou reçue.
     shares: Option<(tri::servers::Host, ShareList)>,
+    /// Copie en local en cours d'un serveur que le système ne sait pas monter.
+    remote: Option<RemoteCopy>,
+    /// Lit le dossier d'un serveur à copier (`remote::scan` ; remplacé dans les tests).
+    remote_scanner:
+        fn(&tri::servers::Server, usize, &AtomicBool) -> Result<tri::remote::Listing, String>,
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
@@ -759,6 +804,8 @@ impl TriApp {
             connector: |server| server.connect(std::env::consts::OS),
             share_lister: |host| host.shares(std::env::consts::OS),
             shares: None,
+            remote: None,
+            remote_scanner: tri::remote::scan,
             cache_jobs: Vec::new(),
             notice: None,
             settings: settings.engine(),
@@ -3139,6 +3186,14 @@ impl TriApp {
         if self.mounting.is_some() {
             return;
         }
+        // Le système ne sait pas le monter (FTP, SFTP sous Windows…) : copie en local,
+        // confirmée d'abord.
+        if !server.protocol.mountable(std::env::consts::OS)
+            && tri::remote::supported(server.protocol)
+        {
+            self.start_remote(ctx, server);
+            return;
+        }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = server.clone();
@@ -3150,6 +3205,190 @@ impl TriApp {
         self.notice = Some((t!("connecting", name = server.name()), false));
         self.mounting = Some((PathBuf::from(server.address()), rx));
         self.connecting = Some(server);
+    }
+
+    /// Copie en local de `server` : lecture de son dossier dans un fil à part, puis la
+    /// boîte de confirmation ([`TriApp::remote_dialog`]).
+    fn start_remote(&mut self, ctx: &egui::Context, server: tri::servers::Server) {
+        if let Some(remote) = &mut self.remote {
+            remote.shown = true;
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let repaint = ctx.clone();
+        let (target, stop) = (server.clone(), cancel.clone());
+        let (scanner, depth) = (self.remote_scanner, self.settings.remote.depth);
+        std::thread::spawn(move || {
+            let _ = tx.send(scanner(&target, depth, &stop));
+            repaint.request_repaint();
+        });
+        let destination = tri::remote::default_destination(&self.settings.remote, &server);
+        self.remote = Some(RemoteCopy {
+            server,
+            cancel,
+            stage: RemoteStage::Scanning(rx),
+            destination: crate::files::tilde(&destination),
+            field: Default::default(),
+            shown: true,
+        });
+    }
+
+    /// Fin de la lecture ou progression de la copie en local ; à la fin, le dossier copié
+    /// s'ouvre.
+    fn poll_remote(&mut self) {
+        let Some(remote) = &mut self.remote else {
+            return;
+        };
+        let name = remote.server.name();
+        match &mut remote.stage {
+            RemoteStage::Scanning(rx) => match rx.try_recv() {
+                Ok(Ok(listing)) => remote.stage = RemoteStage::Confirm(listing),
+                Ok(Err(e)) => {
+                    self.notice = Some((t!("remote-scan-failed", name = &name, error = e), true));
+                    self.remote = None;
+                }
+                Err(_) => {}
+            },
+            RemoteStage::Confirm(_) => {}
+            RemoteStage::Copying {
+                listing,
+                rx,
+                done,
+                to,
+            } => {
+                let mut finished = None;
+                while let Ok(event) = rx.try_recv() {
+                    match event {
+                        RemoteEvent::Progress(files, bytes) => *done = (files, bytes),
+                        RemoteEvent::Done(result) => finished = Some(result),
+                    }
+                }
+                let progress = t!(
+                    "remote-progress",
+                    name = &name,
+                    done = done.0,
+                    total = listing.files.len(),
+                    size = size_label(done.1),
+                    total_size = size_label(listing.bytes())
+                );
+                match finished {
+                    None => self.notice = Some((progress, false)),
+                    Some(Ok(())) => {
+                        let dir = to.clone();
+                        self.remote = None;
+                        self.notice = Some((t!("remote-done", name = &name), false));
+                        self.tree.reveal(&dir);
+                        self.tree.point_at(&dir);
+                        self.reveal_folder = true;
+                        self.open_folder(&dir);
+                    }
+                    Some(Err(e)) => {
+                        self.remote = None;
+                        self.notice =
+                            Some((t!("remote-copy-failed", name = &name, error = e), true));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Boîte de la copie en local : lecture en cours, puis ce qui sera copié (nombre
+    /// d'images, taille, destination) à confirmer, puis la progression (« En
+    /// arrière-plan » la referme, la copie continue).
+    fn remote_dialog(&mut self, ctx: &egui::Context) {
+        let Some(remote) = self.remote.as_mut().filter(|r| r.shown) else {
+            return;
+        };
+        let at = ctx.content_rect().center() - vec2(200.0, 120.0);
+        let title = t!("remote-title", name = remote.server.name());
+        let (mut start, mut cancel, mut hide) = (false, false, false);
+        let modal = modal_at("remote_dialog", at).title(title).show(ctx, |ui| {
+            ui.label(t!(
+                "remote-why",
+                protocol = remote.server.protocol.label(),
+                address = remote.server.address()
+            ));
+            ui.add_space(6.0);
+            match &remote.stage {
+                RemoteStage::Scanning(_) => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(t!("remote-scanning"));
+                    });
+                    cancel = ui.button(t!("cancel")).clicked();
+                }
+                RemoteStage::Confirm(listing) => {
+                    ui.strong(t!(
+                        "remote-summary",
+                        images = listing.images(),
+                        size = size_label(listing.bytes())
+                    ));
+                    ui.label(t!("remote-destination"));
+                    let id = ui.scope_id().with("remote_destination");
+                    remote.field.show(ui, id, &mut remote.destination, 360.0);
+                    ui.weak(t!("remote-notes-local"));
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        start = ui
+                            .add_enabled(
+                                !listing.files.is_empty(),
+                                egui::Button::new(t!("remote-start")),
+                            )
+                            .clicked();
+                        cancel = ui.button(t!("cancel")).clicked();
+                    });
+                }
+                RemoteStage::Copying { listing, done, .. } => {
+                    let total = listing.bytes().max(1);
+                    ui.add(
+                        egui::ProgressBar::new(done.1 as f32 / total as f32).text(t!(
+                            "remote-progress-short",
+                            done = done.0,
+                            total = listing.files.len(),
+                            size = size_label(done.1),
+                            total_size = size_label(listing.bytes())
+                        )),
+                    );
+                    ui.horizontal(|ui| {
+                        hide = ui.button(t!("remote-background")).clicked();
+                        cancel = ui.button(t!("cancel")).clicked();
+                    });
+                }
+            }
+        });
+        let copying = matches!(remote.stage, RemoteStage::Copying { .. });
+        if start && let RemoteStage::Confirm(listing) = &remote.stage {
+            let listing = listing.clone();
+            let to = tri::settings::expand_home(remote.destination.trim());
+            let (tx, rx) = mpsc::channel();
+            let repaint = ctx.clone();
+            let (server, stop) = (remote.server.clone(), remote.cancel.clone());
+            let (list, dest, batch) = (listing.clone(), to.clone(), self.settings.remote.batch);
+            std::thread::spawn(move || {
+                let progress_tx = tx.clone();
+                let progress_repaint = repaint.clone();
+                let result = tri::remote::download(&server, &list, &dest, batch, &stop, |f, b| {
+                    let _ = progress_tx.send(RemoteEvent::Progress(f, b));
+                    progress_repaint.request_repaint();
+                });
+                let _ = tx.send(RemoteEvent::Done(result));
+                repaint.request_repaint();
+            });
+            remote.stage = RemoteStage::Copying {
+                listing,
+                rx,
+                done: (0, 0),
+                to,
+            };
+        } else if cancel || (!copying && modal.should_close()) {
+            remote.cancel.store(true, Ordering::Relaxed);
+            if !copying {
+                self.remote = None;
+            }
+        } else if hide || (copying && modal.should_close()) {
+            remote.shown = false;
+        }
     }
 
     /// Oublie le partage réseau mémorisé dont `path` est l'emplacement.
@@ -11017,6 +11256,7 @@ impl eframe::App for TriApp {
         self.watch_folder(&ctx);
         self.poll_eject();
         self.poll_mount();
+        self.poll_remote();
         self.poll_cache_jobs();
         self.poll_develop_batch();
         self.auto_develop(&ctx);
@@ -11248,6 +11488,7 @@ impl eframe::App for TriApp {
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
+        self.remote_dialog(&ctx);
         self.update_dialog(&ctx);
         self.download_dialog(&ctx);
         self.histogram_dialog(&ctx);
@@ -11484,6 +11725,22 @@ fn file_name(path: &Path) -> String {
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     )
+}
+
+/// Taille lisible : « 812 Mo », « 38,2 Go », « 60,0 To » (unités et virgule selon la
+/// langue).
+fn size_label(bytes: u64) -> String {
+    const MB: f64 = 1_000_000.0;
+    let mb = bytes as f64 / MB;
+    let (value, unit) = if mb < 1000.0 {
+        (format!("{mb:.0}"), "size-mb")
+    } else if mb < 1_000_000.0 {
+        (format!("{:.1}", mb / 1000.0), "size-gb")
+    } else {
+        (format!("{:.1}", mb / 1_000_000.0), "size-tb")
+    };
+    let value = value.replace('.', &t!("decimal-separator"));
+    t!(unit, value = value)
 }
 
 fn folder_name(path: &Path) -> String {
@@ -15203,6 +15460,51 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn a_server_the_system_cannot_mount_is_copied_after_a_confirmation() {
+        // Choix du 29/10/2026 : FTP / SFTP sans montage du système (Windows, SFTP sous
+        // macOS) sont copiés en local, mais le nombre d'images et la taille d'abord,
+        // « avant de télécharger 60 To ». Faux serveur : rien n'est demandé au réseau.
+        let (mut h, dir) = harness();
+        h.state_mut().settings.remote.destination = dir.path().join("copies").display().to_string();
+        h.state_mut().remote_scanner = |server, _, _| {
+            assert_eq!(server.host, "tri-test-host");
+            Ok(tri::remote::Listing {
+                files: vec![
+                    tri::remote::Entry {
+                        path: vec!["a.RAF".into()],
+                        size: 30_000_000,
+                    },
+                    tri::remote::Entry {
+                        path: vec!["a.RAF.xmp".into()],
+                        size: 2_000,
+                    },
+                    tri::remote::Entry {
+                        path: vec!["2026".into(), "b.jpg".into()],
+                        size: 8_000_000_000,
+                    },
+                ],
+            })
+        };
+        let server = tri::servers::Server::parse("sftp://tri-test-host/photo/Séance").unwrap();
+        let ctx = h.ctx.clone();
+        h.state_mut().start_remote(&ctx, server);
+        h.run_steps(3);
+        wait_for_label(&mut h, "2 images, 8,0 Go à copier");
+        let destination = h.state().remote.as_ref().unwrap().destination.clone();
+        assert!(
+            destination.ends_with(&format!("tri-test-host{}Séance", std::path::MAIN_SEPARATOR)),
+            "{destination}"
+        );
+        assert!(h.query_by_label("Copier").is_some());
+        h.get_by_label("Annuler").click();
+        h.run_steps(3);
+        assert!(h.state().remote.is_none(), "annulé avant toute copie");
+        assert!(!dir.path().join("copies").exists(), "rien de téléchargé");
+        assert_eq!(size_label(812_000_000), "812 Mo");
+        assert_eq!(size_label(60_000_000_000_000), "60,0 To");
     }
 
     #[test]
