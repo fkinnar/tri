@@ -30,10 +30,28 @@ Pas de client SMB dans `tri` : le système monte, et demande lui-même le mot de
 
 Un partage déjà monté n'est pas remonté : son dossier est retrouvé dans les montages
 (`Mounts` : sortie de `mount` sur macOS, `/proc/mounts` pour CIFS et les montages GVFS
-sous Linux). Sous Linux, `gio mount` ne peut pas demander de mot de passe sans terminal :
+sous Linux), **en SMB comme en AFP** (retour du 29/10/2026 : un NAS qui annonce les deux
+est souvent monté en AFP par Nemo, `afp-volume:host=…,volume=…`, et n'était pas
+reconnu). Sous Linux, `gio mount` ne peut pas demander de mot de passe sans terminal :
 un partage protégé se rejoint une fois depuis le gestionnaire de fichiers (« Se
 connecter à un serveur », mot de passe retenu), ensuite `tri` le rejoint seul. La
 connexion peut prendre plusieurs secondes : l'interface l'attend dans un fil à part.
+
+## Partages d'un serveur (`Host`)
+
+Une adresse sans partage, suivie d'une barre (`smb://nas.local/`, `\\nas\`) : `tri`
+demande au système les partages de dossiers du serveur (`Host::shares`, partages cachés
+`…$` écartés), comme « Partages Windows sur nas » de Nemo (retour du 29/10/2026 :
+`smb://nas.local/` suivi d'Entrée ne faisait rien). Pas avant la barre : le nom est
+sans doute encore en cours de frappe ; Entrée sur un serveur seul (`\\host.lan`,
+retour du même jour sous WinBoat) ajoute la barre et lance la liste, ce qu'indique la
+ligne « Entrée : partages de host.lan » sous le champ.
+
+| Système | Comment |
+| --- | --- |
+| Windows | `NetShareEnum` (pas de sortie de `net view` à lire, traduite selon la langue) |
+| macOS | `smbutil view -N` (identifiants du trousseau, sans rien demander), sinon `-g` (invité) |
+| Linux | `gio mount smb://nas/` (voisinage anonyme) puis `gio list smb://nas/` |
 
 ## Partages mémorisés
 
@@ -52,6 +70,9 @@ la section « Réseau » (`Server::place`) :
   `smb://` ; tant que l'adresse est incomplète, il montre le format attendu.
 - Une adresse complète tapée dans la recherche (y compris sans passer par l'icône) :
   première ligne « Se connecter à « photo (nas) » », Entrée ou clic.
+- Un serveur seul (`smb://nas.local/`) : une ligne « Se connecter » par partage (liste
+  demandée en fond, « recherche des partages… » en attendant) ; taper le début d'un nom
+  (`smb://nas.local/kp`) resserre la liste. ↑ / ↓ et Entrée, ou un clic.
 - Clic droit sur un partage mémorisé : « Se connecter » (s'il ne l'est pas), « Oublier ce
   partage » (`core.folders.forget`, Maj+C).
 - Sous Windows, une lettre de lecteur attribuée à un partage (`Z:`) est rangée dans
@@ -59,5 +80,6 @@ la section « Réseau » (`Server::place`) :
 
 ## Plus tard
 
-Un vrai voisinage réseau (découverte des serveurs, Bonjour / mDNS, et liste des partages
-d'un serveur : `net view`, `smbutil view`, `smbclient -L`) : après la bêta.
+Un vrai voisinage réseau (découverte des serveurs, Bonjour / mDNS) : après la bêta. Sous
+Linux, un partage protégé pas encore monté ni enregistré dans le trousseau : une boîte de
+`tri` pour l'utilisateur et le mot de passe, transmis à `gio mount` sans être gardés.

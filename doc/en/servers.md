@@ -29,10 +29,27 @@ store on our side).
 
 A share already mounted is not mounted again: its folder is found among the mounts
 (`Mounts`: output of `mount` on macOS, `/proc/mounts` for CIFS and the GVFS mounts on
-Linux). On Linux, `gio mount` cannot ask for a password without a terminal: join a
+Linux), **over SMB as well as AFP** (feedback of 2026-10-29: a NAS that advertises both is
+often mounted over AFP by Nemo, `afp-volume:host=…,volume=…`, and was not recognised). On Linux, `gio mount` cannot ask for a password without a terminal: join a
 protected share once from the file manager ("Connect to Server", password remembered),
 then `tri` joins it by itself. Connecting can take several seconds: the interface waits
 for it in a separate thread.
+
+## Shares of a server (`Host`)
+
+An address without a share, followed by a slash (`smb://nas.local/`, `\\nas\`): `tri`
+asks the system for the server's folder shares (`Host::shares`, hidden `…$` shares left
+out), like Nemo's "Windows shares on nas" (feedback of 2026-10-29: `smb://nas.local/`
+followed by Enter did nothing). Not before the slash: the name is probably still being
+typed; Enter on a server alone (`\\host.lan`, feedback of the same day in WinBoat)
+adds the slash and starts the listing, as the "Enter: shares of host.lan" line under the
+field says.
+
+| System | How |
+| --- | --- |
+| Windows | `NetShareEnum` (no `net view` output to read, translated in Windows' language) |
+| macOS | `smbutil view -N` (keychain credentials, asking nothing), otherwise `-g` (guest) |
+| Linux | `gio mount smb://nas/` (anonymous browsing) then `gio list smb://nas/` |
 
 ## Remembered shares
 
@@ -51,11 +68,15 @@ File `servers` in the data folder (`[data] dir`): one `smb://` address per line
   the address is incomplete, it shows the expected format.
 - A complete address typed in the search (also without the icon): first row "Connect to
   "photo (nas)"", Enter or click.
+- A server alone (`smb://nas.local/`): one "Connect" row per share (list asked in the
+  background, "looking for the shares…" meanwhile); typing the start of a name
+  (`smb://nas.local/kp`) narrows the list. ↑ / ↓ and Enter, or a click.
 - Right click on a remembered share: "Connect" (if it is not), "Forget this share"
   (`core.folders.forget`, Shift+C).
 - On Windows, a drive letter mapped to a share (`Z:`) goes under "Network".
 
 ## Later
 
-A real network neighbourhood (discovering servers, Bonjour / mDNS, and listing the shares
-of a server: `net view`, `smbutil view`, `smbclient -L`): after the beta.
+A real network neighbourhood (discovering servers, Bonjour / mDNS): after the beta. On
+Linux, a protected share neither mounted nor saved in the keyring: a `tri` box for the
+user and password, passed to `gio mount` without being kept.
