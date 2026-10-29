@@ -36,24 +36,36 @@ images and size announced, see [remote.md](remote.md)). A mount is recognised if
 (`sftp://nas/home/me/photo` in a mount of `sftp://nas/`), over SMB or AFP for the same
 share, over WebDAV encrypted or not.
 
-## Connecting (`Server::connect`): the system does it
+## Connecting (`Server::connect`): the system mounts, `tri` asks for the account
 
-No SMB client in `tri`: the system mounts, and asks for the password itself (nothing to
-store on our side).
+No SMB client in `tri`: the system mounts. When the server asks for an account that the
+system does not ask for itself, `connect` returns `ConnectError::NeedsLogin` and the
+interface opens its **login box** (2026-10-29): user, domain (SMB), password, "Remember
+the password"; then `connect` is called again with the `Login`.
 
-| System | How | Password |
+| System | How | Account |
 | --- | --- | --- |
-| Windows | UNC path read directly (`\\nas\photo`) | Windows credentials (those saved by Explorer) |
-| macOS | `osascript -e 'mount volume "smb://…"'`, mounted in `/Volumes` | system dialog, keychain |
-| Linux | `gio mount smb://…` (GVFS, like Nemo and Nautilus) | GNOME keyring if already saved |
+| Windows | UNC path read directly (`\\nas\photo`); access refused (codes 5, 86, 1326, 1244): the box, then `WNetAddConnection2` | Windows credentials; "Remember": Credential Manager (`CredWrite`, like `cmdkey /add`) |
+| macOS | `osascript -e 'mount volume "smb://…"'`, mounted in `/Volumes` | system dialog, keychain (no `tri` box) |
+| Linux | `gio mount smb://…` (GVFS, like Nemo and Nautilus), its questions answered by `tri` | GNOME keyring if already saved; otherwise the box; "Remember": `secret-tool` (desktop keyring, attributes read by GVFS; best effort) |
+
+On Linux, `gio mount` asks its questions on its output (`User [fabrice]: `,
+`Domain [WORKGROUP]: `, `Password: `, `LC_ALL=C`); `tri` reads them as they come and
+answers with the account typed. Without an account, the first question opens the box; a
+question after the password means a refusal: the box comes back with "user name or
+password refused". A multiple-choice question (unknown SFTP host key…) stops with its
+text: connect once from the file manager. The password never goes on a command line and
+is never written by `tri` (only by the system, when "Remember" is ticked).
+
+Errors are explained by cause: server unreachable (name, network), share unknown (type
+the server alone to see its shares), already connected under another account (Windows,
+`net use`), account refused.
 
 A share already mounted is not mounted again: its folder is found among the mounts
 (`Mounts`: output of `mount` on macOS — `smbfs`, `afpfs`, `ftp`, `webdav`, `nfs` —,
 `/proc/mounts` for CIFS, NFS, sshfs and davfs, and the GVFS mounts on Linux), **over SMB as well as AFP** (feedback of 2026-10-29: a NAS that advertises both is
-often mounted over AFP by Nemo, `afp-volume:host=…,volume=…`, and was not recognised). On Linux, `gio mount` cannot ask for a password without a terminal: join a
-protected share once from the file manager ("Connect to Server", password remembered),
-then `tri` joins it by itself. Connecting can take several seconds: the interface waits
-for it in a separate thread.
+often mounted over AFP by Nemo, `afp-volume:host=…,volume=…`, and was not recognised).
+Connecting can take several seconds: the interface waits for it in a separate thread.
 
 ## Shares of a server (`Host`)
 
@@ -97,6 +109,6 @@ File `servers` in the data folder (`[data] dir`): one `smb://` address per line
 
 ## Later
 
-A real network neighbourhood (discovering servers, Bonjour / mDNS): after the beta. On
-Linux, a protected share neither mounted nor saved in the keyring: a `tri` box for the
-user and password, passed to `gio mount` without being kept.
+A real network neighbourhood (discovering servers, Bonjour / mDNS): next step. The login
+box has not been tried against real servers yet (Windows, Mint); "Remember" on Linux
+depends on the desktop keyring.

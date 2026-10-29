@@ -136,6 +136,15 @@ remote-failed = copy failed: { $error }
 servers-unsupported = { $system } cannot mount a { $protocol } server
 servers-no-listing = { $system } cannot list the shares of a { $protocol } server: type the share name
 servers-not-found = connected, but "{ $name }" is not among the mounted shares
+servers-login-needed = the server asks for an account
+servers-login-refused = user name or password refused
+servers-host-unreachable = server unreachable: check its name, that it is on and on the same network
+servers-share-missing = this share does not exist on the server: type the server name alone to see its shares
+servers-other-account = Windows is already connected to this server with another account: disconnect it first (net use)
+servers-question = the server asks a question: { $question }; connect once from the file manager first
+remote-missing = folder not found or refused on the server
+remote-sftp-keys = SFTP: SSH key login only (ssh-copy-id, or a key in ~/.ssh)
+remote-sftp-host-key = SFTP: unknown server; connect once with ssh to accept its key
 settings-defaults-used = { $warning }; default settings used
 settings-file-error = configuration { $path }: { $error }
 

@@ -14,9 +14,11 @@ The tools shipped with Windows 10+ and macOS:
 | FTP | `curl` | `curl ftp://server/folder/` (`ls -l` format, or IIS's DOS format) | one `curl -o` per file |
 | SFTP | `sftp` (OpenSSH) | `ls -l` in batch mode (`-b -`) | `get`s in batches (`[remote] batch`, one connection each) |
 
-`sftp` runs with `BatchMode=yes`: the user's SSH keys (agent included), nothing is asked.
-`curl` gets the user of the address, with an empty password. The login box (password) is
-the next step.
+`sftp` runs with `BatchMode=yes`: the user's SSH keys (agent included), nothing is asked;
+a refused key or an unknown host key gives an explained message (`ssh-copy-id`, connect
+once with `ssh`). FTP: `curl` gets the user of the address, with an empty password; a
+server that refuses (exit code 67) opens the **login box**, and the account typed is passed
+to `curl` on its input (`-K -`), never on the command line, for the listing and the copy.
 
 ## Flow (`scan`, `download`)
 

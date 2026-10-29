@@ -251,23 +251,23 @@ crop-name = Name
 crop-profile = Export
 crop-profile-none = None
 crop-save = Save
-crop-saved = Version “{ $name }” saved
+crop-saved = Version "{ $name }" saved
 crop-name-taken = This name is taken (another version, or “Original”: the uncropped image)
 crop-name-original-ratio = Crop
-crop-name-taken-notice = Version not saved: the name “{ $name }” is taken
+crop-name-taken-notice = Version not saved: the name "{ $name }" is taken
 crop-failed = Version not saved: { $error }
 crop-preset-none = Preset
 crop-preset-tip = Crop preset: ratio, name and export preset (p: next)
 crop-preset-save = Save as crop preset
 crop-preset-save-tip = Save as crop preset: ratio, name and export of the current frame, kept in the settings
-crop-preset-saved = Preset “{ $name }” saved
+crop-preset-saved = Preset "{ $name }" saved
 preset-story = Story
 preset-post = Post
 versions-current = Versions: { $name }
 versions-original = Original
 versions-edit = Edit
 versions-delete = Delete
-versions-deleted = Version “{ $name }” deleted
+versions-deleted = Version "{ $name }" deleted
 
 ## Panels, ejection, ratings
 
@@ -308,10 +308,21 @@ mounted = "{ $name }" mounted.
 mount-failed = "{ $name }" could not be mounted: { $error }
 folders-device-tip = Not mounted: click to mount it.
 folders-server-tip = Remembered network share, not connected ({ $address }): click to connect.
-folders-connect-tip = Type the address of a server (\\nas\photo, smb://nas/photo, ftp://nas…); the system asks for the password if needed, and the server then stays under "Network".
+folders-connect-tip = Type the address of a server (\\nas\photo, smb://nas/photo, ftp://nas…); the password is asked for if needed, and the server then stays under "Network".
 connecting = Connecting to "{ $name }"…
 connected = Connected to "{ $name }".
 connect-failed = Could not connect to "{ $name }": { $error }
+login-title = Connect to "{ $name }"
+login-why = The server { $address } asks for an account.
+login-refused = User name or password refused: check them and try again.
+login-user = User
+login-domain = Domain
+login-domain-hint = WORKGROUP (most often)
+login-password = Password
+login-remember = Remember the password
+login-connect = Connect
+login-cancelled = Connection to "{ $name }" given up.
+connected-not-saved = Connected to "{ $name }", but the password could not be remembered: { $error }
 server-forgotten = Share "{ $name }" forgotten.
 eject-failed = "{ $name }" not ejected: { $error }
 cache-unavailable = cache unavailable: { $error }
@@ -484,7 +495,7 @@ export-title = { $n ->
     [one] Export 1 image
    *[other] Export { $n } images
 }
-export-title-version = Export the “{ $name }” version
+export-title-version = Export the "{ $name }" version
 export-contents-darktable = { $n ->
     [one] 1 RAW, developed by Darktable
    *[other] { $n } RAW, developed by Darktable
@@ -538,7 +549,7 @@ export-progress = Export “{ $profile }” { $done }/{ $total }
 export-cancel = Stop the export
 export-report-title = Export report
 export-report-empty = No export yet.
-export-report-version = version “{ $name }”
+export-report-version = version "{ $name }"
 export-report-summary = { $total ->
     [one] { $written } file from 1 image
    *[other] { $written } files from { $total } images
@@ -594,7 +605,7 @@ transfer-status = copying to "{ $name }" { $done }/{ $total }
 transfer-done = Copy / move done
 status-show-transfer = Show the copy
 transfer-failed = copy / move failed: { $error }
-transfer-folder-title = Folder “{ $name }” to…
+transfer-folder-title = Folder "{ $name }" to…
 drag-images = { $n } images
 drag-move = move (⌥: copy)
 drag-move-ctrl = move (Ctrl: copy)
@@ -622,7 +633,7 @@ focus-metadata = keyboard: metadata (Esc: images)
 metadata-copied = { $label } copied to the clipboard
 metadata-copied-lines = { $n } lines copied to the clipboard
 metadata-copy-line = { $label }: { $value }
-folders-not-removable = “{ $name }” is not a removable drive
+folders-not-removable = "{ $name }" is not a removable drive
 offload-source = Card:
 folders-no-removable = no removable drive to offload
 settings-title = Settings
@@ -711,11 +722,11 @@ delete-permanently-question = { $n ->
 delete-kept-shared = { $name } kept (shared with the pair)
 delete-irreversible = Cannot be undone.
 delete-failed = cannot delete: { $error }
-folder-new-title = New folder in “{ $name }”
+folder-new-title = New folder in "{ $name }"
 folder-new-button = Create
-folder-rename-title = Rename the folder “{ $name }”
-folder-delete-trash = Move the folder “{ $name }” to the trash?
-folder-delete-permanently = Permanently delete the folder “{ $name }”?
+folder-rename-title = Rename the folder "{ $name }"
+folder-delete-trash = Move the folder "{ $name }" to the trash?
+folder-delete-permanently = Permanently delete the folder "{ $name }"?
 folder-contents = { $files ->
     [0] Empty folder
     [one] 1 file
@@ -726,7 +737,7 @@ folder-contents = { $files ->
    *[other] , { $dirs } subfolders
 }, everything included.
 folder-failed = { $error }
-folders-place-root = “{ $name }” is a place: it cannot be renamed, moved or deleted
+folders-place-root = "{ $name }" is a place: it cannot be renamed, moved or deleted
 folder-menu-new = New folder…
 folder-menu-rename = Rename…
 folder-menu-move = Move to…
@@ -757,13 +768,13 @@ watch-notes = { $count ->
 folder-menu-favorite-add = Add to favourites
 folder-menu-favorite-remove = Remove from favourites
 folder-menu-favorite-name = Name the favourite…
-favorite-name-title = Name of the favourite “{ $name }”
+favorite-name-title = Name of the favourite "{ $name }"
 favorite-name-button = Name
-favorite-named = Favourite named “{ $name }”
-favorite-not-favorite = “{ $name }” is not a favourite (m to add it)
+favorite-named = Favourite named "{ $name }"
+favorite-not-favorite = "{ $name }" is not a favourite (m to add it)
 folders-favorite = Favourite
-folders-favorite-added = “{ $name }” added to favourites
-folders-favorite-removed = “{ $name }” removed from favourites
+folders-favorite-added = "{ $name }" added to favourites
+folders-favorite-removed = "{ $name }" removed from favourites
 folders-favorite-error = Favourites not saved: { $error }
 
 ## What is shown

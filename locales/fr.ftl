@@ -137,6 +137,15 @@ remote-failed = échec de la copie : { $error }
 servers-unsupported = { $system } ne sait pas monter un serveur { $protocol }
 servers-no-listing = { $system } ne sait pas lister les partages d'un serveur { $protocol } : tapez le nom du partage
 servers-not-found = connecté, mais « { $name } » n'apparaît pas parmi les partages montés
+servers-login-needed = le serveur demande un compte
+servers-login-refused = utilisateur ou mot de passe refusé
+servers-host-unreachable = serveur injoignable : vérifiez son nom, qu'il est allumé et sur le même réseau
+servers-share-missing = ce partage n'existe pas sur le serveur : tapez le nom du serveur seul pour voir ses partages
+servers-other-account = Windows est déjà connecté à ce serveur sous un autre compte : déconnectez-le d'abord (net use)
+servers-question = le serveur pose une question : { $question } ; connectez-vous une première fois depuis le gestionnaire de fichiers
+remote-missing = dossier introuvable ou refusé sur le serveur
+remote-sftp-keys = SFTP : connexion par clé SSH seulement (ssh-copy-id, ou une clé dans ~/.ssh)
+remote-sftp-host-key = SFTP : serveur inconnu ; connectez-vous une première fois par ssh pour accepter sa clé
 settings-defaults-used = { $warning } ; réglages par défaut utilisés
 settings-file-error = configuration { $path } : { $error }
 

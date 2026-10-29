@@ -16,8 +16,11 @@ Les outils livrés avec Windows 10+ et macOS :
 | SFTP | `sftp` (OpenSSH) | `ls -l` en mode lot (`-b -`) | des `get` par lots (`[remote] batch`, une connexion chacun) |
 
 `sftp` tourne avec `BatchMode=yes` : les clés SSH de l'utilisateur (agent compris), rien
-n'est demandé. `curl` reçoit l'utilisateur de l'adresse, mot de passe vide. La boîte de
-connexion (mot de passe) est l'étape suivante.
+n'est demandé ; une clé refusée ou une clé de serveur inconnue donne un message expliqué
+(`ssh-copy-id`, se connecter une fois par `ssh`). FTP : `curl` reçoit l'utilisateur de
+l'adresse, mot de passe vide ; un serveur qui refuse (code de sortie 67) ouvre la **boîte
+de connexion**, et le compte saisi passe à `curl` par son entrée (`-K -`), jamais dans la
+ligne de commande, pour la lecture comme pour la copie.
 
 ## Déroulé (`scan`, `download`)
 

@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Deserialize;
 
-use crate::servers::{Protocol, Server};
+use crate::servers::{ConnectError, Login, Protocol, Server};
 
 /// Section `[remote]` : copie en local d'un serveur que le système ne sait pas monter.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -157,9 +157,13 @@ fn remote_path(segments: &[String]) -> String {
 }
 
 /// Lit la liste du dossier `dir` (éléments sous la racine du serveur).
-fn list_dir(server: &Server, dir: &[String]) -> Result<Vec<Line>, String> {
+fn list_dir(
+    server: &Server,
+    login: Option<&Login>,
+    dir: &[String],
+) -> Result<Vec<Line>, ConnectError> {
     let text = match server.protocol {
-        Protocol::Ftp => run(curl(server).arg(ftp_url(server, dir, true)))?,
+        Protocol::Ftp => curl(server, login, &[ftp_url(server, dir, true).into()])?,
         _ => sftp(server, &format!("ls -l \"{}\"\n", quote(&remote_path(dir))))?,
     };
     Ok(text
@@ -170,24 +174,31 @@ fn list_dir(server: &Server, dir: &[String]) -> Result<Vec<Line>, String> {
 }
 
 /// Liste, sous-dossiers compris (jusqu'à `depth`), les images et sidecars du dossier de
-/// `server`. Annulable (`cancel`) entre deux dossiers. Peut être long sur un gros
-/// serveur : à appeler dans un fil à part.
-pub fn scan(server: &Server, depth: usize, cancel: &AtomicBool) -> Result<Listing, String> {
+/// `server`, avec le compte `login` (FTP ; SFTP : clés SSH seulement). Annulable
+/// (`cancel`) entre deux dossiers. Un serveur FTP qui demande un compte donne
+/// [`ConnectError::NeedsLogin`]. Peut être long sur un gros serveur : à appeler dans un
+/// fil à part.
+pub fn scan(
+    server: &Server,
+    login: Option<&Login>,
+    depth: usize,
+    cancel: &AtomicBool,
+) -> Result<Listing, ConnectError> {
     if !supported(server.protocol) {
-        return Err(crate::t!(
+        return Err(ConnectError::Failed(crate::t!(
             "remote-unsupported",
             protocol = server.protocol.label()
-        ));
+        )));
     }
     let root = server.folders.clone();
     let mut files = Vec::new();
     let mut pending = vec![(Vec::<String>::new(), 0)];
     while let Some((relative, level)) = pending.pop() {
         if cancel.load(Ordering::Relaxed) {
-            return Err(crate::t!("remote-cancelled"));
+            return Err(ConnectError::Failed(crate::t!("remote-cancelled")));
         }
         let dir: Vec<String> = root.iter().chain(&relative).cloned().collect();
-        for line in list_dir(server, &dir)? {
+        for line in list_dir(server, login, &dir)? {
             let mut path = relative.clone();
             path.push(line.name.clone());
             if line.dir {
@@ -206,12 +217,14 @@ pub fn scan(server: &Server, depth: usize, cancel: &AtomicBool) -> Result<Listin
     Ok(Listing { files })
 }
 
-/// Copie `listing` (de [`scan`]) dans `destination`, en gardant les sous-dossiers ; un
+/// Copie `listing` (de [`scan`], même compte `login`) dans `destination`, en gardant les
+/// sous-dossiers ; un
 /// fichier déjà là, à la même taille, est sauté (reprise d'une copie interrompue).
 /// `progress(fichiers faits, octets faits)` après chaque fichier ou lot. Annulable
 /// (`cancel`) entre deux fichiers ou lots.
 pub fn download(
     server: &Server,
+    login: Option<&Login>,
     listing: &Listing,
     destination: &Path,
     batch: usize,
@@ -251,10 +264,16 @@ pub fn download(
                 let entry = chunk[0];
                 let remote: Vec<String> =
                     server.folders.iter().chain(&entry.path).cloned().collect();
-                run(curl(server)
-                    .arg("-o")
-                    .arg(local_path(destination, entry))
-                    .arg(ftp_url(server, &remote, false)))?;
+                curl(
+                    server,
+                    login,
+                    &[
+                        "-o".into(),
+                        local_path(destination, entry).into(),
+                        ftp_url(server, &remote, false).into(),
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
             }
             _ => {
                 let script: String = chunk
@@ -269,7 +288,7 @@ pub fn download(
                         )
                     })
                     .collect();
-                sftp(server, &script)?;
+                sftp(server, &script).map_err(|e| e.to_string())?;
             }
         }
         done += chunk.len();
@@ -291,15 +310,72 @@ fn quote(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-/// `curl` silencieux, erreurs affichées, sans rien demander ; l'utilisateur de l'adresse
-/// (mot de passe vide : la boîte de connexion viendra ensuite).
-fn curl(server: &Server) -> std::process::Command {
+/// Lance `curl` (silencieux, erreurs affichées, sans rien demander) avec `args` ; sa
+/// sortie. Le compte passe par l'entrée (`-K -`), jamais dans la ligne de commande
+/// (visible des autres processus) ; sans compte, l'utilisateur de l'adresse, mot de
+/// passe vide.
+fn curl(
+    server: &Server,
+    login: Option<&Login>,
+    args: &[std::ffi::OsString],
+) -> Result<String, ConnectError> {
     let mut c = crate::process::command("curl");
-    c.args(["--silent", "--show-error", "--fail"]);
-    if let Some(user) = &server.user {
-        c.arg("--user").arg(format!("{user}:"));
+    c.args(["--silent", "--show-error", "--fail", "-K", "-"])
+        .args(args);
+    let config = curl_config(server, login);
+    let mut child = c
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            ConnectError::Failed(crate::t!("servers-tool-missing", error = e.to_string()))
+        })?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(config.as_bytes())
+            .map_err(|e| ConnectError::Failed(e.to_string()))?;
     }
-    c
+    let output = child
+        .wait_with_output()
+        .map_err(|e| ConnectError::Failed(e.to_string()))?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(curl_error(output.status.code(), stderr, server, login))
+}
+
+/// Configuration de `curl` lue sur son entrée : le compte, guillemets protégés.
+fn curl_config(server: &Server, login: Option<&Login>) -> String {
+    let user = match (login, &server.user) {
+        (Some(login), _) => format!("{}:{}", login.user, login.password),
+        (None, Some(user)) => format!("{user}:"),
+        (None, None) => return String::new(),
+    };
+    format!("user = \"{}\"\n", quote(&user))
+}
+
+/// Une erreur de `curl` (code de sortie `code`) en cause expliquée.
+fn curl_error(
+    code: Option<i32>,
+    stderr: String,
+    server: &Server,
+    login: Option<&Login>,
+) -> ConnectError {
+    match code {
+        // Connexion refusée par le serveur (compte demandé ou refusé).
+        Some(67) => ConnectError::NeedsLogin {
+            user: login.map(|l| l.user.clone()).or(server.user.clone()),
+            domain: None,
+            refused: login.is_some(),
+        },
+        // Nom introuvable, connexion impossible, délai dépassé.
+        Some(6 | 7 | 28) => ConnectError::Failed(crate::t!("servers-host-unreachable")),
+        // Dossier ou fichier refusé, introuvable.
+        Some(9 | 78) => ConnectError::Failed(crate::t!("remote-missing")),
+        _ => ConnectError::Failed(crate::t!("remote-failed", error = stderr)),
+    }
 }
 
 /// URL FTP du dossier ou fichier `segments` (barre finale pour lister un dossier).
@@ -319,7 +395,7 @@ fn ftp_url(server: &Server, segments: &[String], dir: bool) -> String {
 }
 
 /// Lance `sftp` en mode lot sur `server`, commandes `script` sur son entrée ; sa sortie.
-fn sftp(server: &Server, script: &str) -> Result<String, String> {
+fn sftp(server: &Server, script: &str) -> Result<String, ConnectError> {
     let mut c = crate::process::command("sftp");
     c.args(["-q", "-b", "-", "-o", "BatchMode=yes"]);
     if let Some(port) = server.port {
@@ -335,29 +411,43 @@ fn sftp(server: &Server, script: &str) -> Result<String, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
+        .map_err(|e| {
+            ConnectError::Failed(crate::t!("servers-tool-missing", error = e.to_string()))
+        })?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(script.as_bytes())
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| ConnectError::Failed(e.to_string()))?;
     }
-    finish(child.wait_with_output().map_err(|e| e.to_string())?)
-}
-
-fn run(command: &mut std::process::Command) -> Result<String, String> {
-    let output = command
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
-    finish(output)
-}
-
-fn finish(output: std::process::Output) -> Result<String, String> {
+    let output = child
+        .wait_with_output()
+        .map_err(|e| ConnectError::Failed(e.to_string()))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(crate::t!(
+        Err(sftp_error(&String::from_utf8_lossy(&output.stderr)))
+    }
+}
+
+/// Une erreur de `sftp` en cause expliquée (`BatchMode` : rien ne se demande).
+fn sftp_error(stderr: &str) -> ConnectError {
+    let has = |words: &[&str]| words.iter().any(|w| stderr.contains(w));
+    if has(&["Host key verification failed"]) {
+        ConnectError::Failed(crate::t!("remote-sftp-host-key"))
+    } else if has(&["Permission denied"]) {
+        ConnectError::Failed(crate::t!("remote-sftp-keys"))
+    } else if has(&[
+        "Could not resolve",
+        "Connection refused",
+        "timed out",
+        "No route to host",
+        "Network is unreachable",
+    ]) {
+        ConnectError::Failed(crate::t!("servers-host-unreachable"))
+    } else if has(&["No such file", "not found"]) {
+        ConnectError::Failed(crate::t!("remote-missing"))
+    } else {
+        ConnectError::Failed(crate::t!(
             "remote-failed",
             error = stderr.trim().to_string()
         ))
@@ -455,6 +545,58 @@ mod tests {
     }
 
     #[test]
+    fn the_ftp_account_goes_through_the_input_of_curl_and_errors_are_explained() {
+        let server = Server::parse("ftp://fab@nas/photo").unwrap();
+        let login = Login {
+            user: "moi".into(),
+            password: r#"mot "de" \passe"#.into(),
+            ..Login::default()
+        };
+        assert_eq!(
+            curl_config(&server, Some(&login)),
+            "user = \"moi:mot \\\"de\\\" \\\\passe\"\n"
+        );
+        assert_eq!(curl_config(&server, None), "user = \"fab:\"\n");
+        assert_eq!(
+            curl_config(&Server::parse("ftp://nas/x").unwrap(), None),
+            ""
+        );
+        assert_eq!(
+            curl_error(Some(67), String::new(), &server, None),
+            ConnectError::NeedsLogin {
+                user: Some("fab".into()),
+                domain: None,
+                refused: false
+            }
+        );
+        assert!(matches!(
+            curl_error(Some(67), String::new(), &server, Some(&login)),
+            ConnectError::NeedsLogin { refused: true, .. }
+        ));
+        let failed = |key: &str| ConnectError::Failed(crate::t!(key));
+        assert_eq!(
+            curl_error(Some(6), String::new(), &server, None),
+            failed("servers-host-unreachable")
+        );
+        assert_eq!(
+            curl_error(Some(78), String::new(), &server, None),
+            failed("remote-missing")
+        );
+        assert_eq!(
+            sftp_error("moi@nas: Permission denied (publickey)."),
+            failed("remote-sftp-keys")
+        );
+        assert_eq!(
+            sftp_error("Host key verification failed."),
+            failed("remote-sftp-host-key")
+        );
+        assert_eq!(
+            sftp_error("ssh: Could not resolve hostname nax"),
+            failed("servers-host-unreachable")
+        );
+    }
+
+    #[test]
     fn a_file_already_copied_at_the_same_size_is_skipped() {
         // Rien n'est demandé au réseau : tout est déjà là.
         let dir = tempfile::tempdir().unwrap();
@@ -470,6 +612,7 @@ mod tests {
         let mut seen = Vec::new();
         download(
             &server,
+            None,
             &listing,
             dir.path(),
             20,
