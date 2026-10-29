@@ -447,6 +447,13 @@ pub struct TriApp {
     version_shown: Option<(PathBuf, usize)>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
     versions: HashMap<PathBuf, tri::versions::Versions>,
+    /// Versions lues en fond pour la grille ([`TriApp::grid_versions`]) : en cours, et
+    /// leur arrivée.
+    versions_pending: HashSet<PathBuf>,
+    versions_read: (
+        mpsc::Sender<(PathBuf, tri::versions::Versions)>,
+        Receiver<(PathBuf, tri::versions::Versions)>,
+    ),
     /// Profil d'export choisi la dernière fois (session) : pour un rendu (RAW), et pour un
     /// JPEG (boîtier ou d'origine), retenus à part.
     export_choice: [Option<String>; 2],
@@ -907,6 +914,8 @@ impl TriApp {
             crop: None,
             version_shown: None,
             versions: HashMap::new(),
+            versions_pending: HashSet::new(),
+            versions_read: mpsc::channel(),
             export_choice: [None, None],
             export_job: None,
             export_log: data
@@ -2281,6 +2290,7 @@ impl TriApp {
             }
             // Versions peut-être changées ailleurs : relues à la demande.
             self.versions.clear();
+            self.forget_grid_versions();
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
             if !changed.is_empty() {
@@ -6859,6 +6869,35 @@ impl TriApp {
     }
 
     /// Versions de `path` (lues dans son sidecar à la première demande).
+    /// Nombre de versions de `path` pour son badge dans la grille, sans jamais attendre le
+    /// disque : lues en fond la première fois (retour du 29/10/2026 : chaque vignette
+    /// relisait la liste du dossier sur le NAS, une image lente à chaque rangée), 0 en
+    /// attendant.
+    fn grid_versions(&mut self, path: &Path) -> usize {
+        while let Ok((read, versions)) = self.versions_read.1.try_recv() {
+            self.versions_pending.remove(&read);
+            self.versions.entry(read).or_insert(versions);
+        }
+        if let Some(versions) = self.versions.get(path) {
+            return versions.list.len();
+        }
+        if self.versions_pending.insert(path.to_path_buf()) {
+            let (tx, target) = (self.versions_read.0.clone(), path.to_path_buf());
+            tri::cache::defer_job(format!("versions:{}", target.display()), move || {
+                let versions = tri::versions::read(&target).unwrap_or_default();
+                let _ = tx.send((target, versions));
+            });
+        }
+        0
+    }
+
+    /// Lectures de versions en cours abandonnées (dossier changé, versions relues) : une
+    /// lecture ancienne arrivée après coup ne remplace rien.
+    fn forget_grid_versions(&mut self) {
+        self.versions_pending.clear();
+        self.versions_read = mpsc::channel();
+    }
+
     fn versions_of(&mut self, path: &Path) -> &tri::versions::Versions {
         self.versions
             .entry(path.to_path_buf())
@@ -9504,6 +9543,7 @@ impl TriApp {
     /// sélection garde sa place (l'image suivante, après une suppression).
     fn reload_folder(&mut self, select: Option<PathBuf>) {
         self.versions.clear();
+        self.forget_grid_versions();
         match Folder::scan(
             &self.folder.dir,
             self.folder_depth(),
@@ -10552,7 +10592,7 @@ impl TriApp {
         }
         // Versions (recadrages) dans la légende, sans fond (retour du 21/10/2026) : icône
         // de recadrage et leur nombre ; un clic passe en recadrage.
-        let versions = self.versions_of(&file.path).list.len();
+        let versions = self.grid_versions(&file.path);
         if versions > 0 {
             let side = badge_rect.height();
             let painter = ui.painter();
@@ -11027,6 +11067,7 @@ impl TriApp {
     ) {
         // Versions peut-être changées : relues.
         self.versions.clear();
+        self.forget_grid_versions();
         self.version_shown = None;
         if applied.iter().any(|a| a.files_changed) {
             self.after_folder_change(None, None);
