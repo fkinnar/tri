@@ -17,6 +17,27 @@ Deux adresses désignent le même partage si leurs premiers noms de serveur et l
 sont égaux, casse ignorée (`NAS` = `nas.local` = `nas._smb._tcp.local`, nom donné par
 Bonjour ; une adresse IP est comparée entière).
 
+## Protocoles (`Protocol`, 29/10/2026)
+
+Demandé par l'utilisateur : « les protocoles les plus classiques, y compris le FTP ».
+L'adresse donne le protocole ; ce qui suit le serveur dépend de lui (`Server::share`, ce
+qu'on monte) :
+
+| Adresse | Ce qu'on monte | Linux | macOS | Windows |
+| --- | --- | --- | --- | --- |
+| `smb://`, `\\` | le partage (1er dossier) | ✅ GVFS | ✅ | ✅ UNC |
+| `afp://` | le partage | ✅ | ✅ | ❌ |
+| `ftp://` | tout le serveur | ✅ | ✅ (lecture seule) | ❌ |
+| `sftp://` | tout le serveur | ✅ | ❌ | ❌ |
+| `dav://`, `davs://` (`webdav(s)://`) | tout le chemin | ✅ | ✅ (`http(s)://`) | ✅ UNC `\\nas@SSL\…` (service WebClient) |
+| `nfs://` | tout le chemin (l'export) | ✅ | ✅ | ❌ |
+
+`[utilisateur@]` et `:port` partout (`ftp://moi@nas:2121/`). Les cas ❌ donnent un message
+clair (`Protocol::mountable`), sauf FTP et SFTP : **copie en local**, confirmée d'abord
+(nombre d'images et taille annoncés, voir [remote.md](remote.md)). Un montage est reconnu s'il couvre le début du
+chemin voulu (`sftp://nas/home/moi/photo` dans un montage de `sftp://nas/`), en SMB comme
+en AFP pour un même partage, en WebDAV chiffré ou pas.
+
 ## Connexion (`Server::connect`) : le système s'en charge
 
 Pas de client SMB dans `tri` : le système monte, et demande lui-même le mot de passe
@@ -29,8 +50,8 @@ Pas de client SMB dans `tri` : le système monte, et demande lui-même le mot de
 | Linux | `gio mount smb://…` (GVFS, comme Nemo et Nautilus) | trousseau GNOME s'il est déjà enregistré |
 
 Un partage déjà monté n'est pas remonté : son dossier est retrouvé dans les montages
-(`Mounts` : sortie de `mount` sur macOS, `/proc/mounts` pour CIFS et les montages GVFS
-sous Linux), **en SMB comme en AFP** (retour du 29/10/2026 : un NAS qui annonce les deux
+(`Mounts` : sortie de `mount` sur macOS — `smbfs`, `afpfs`, `ftp`, `webdav`, `nfs` —,
+`/proc/mounts` pour CIFS, NFS, sshfs et davfs, et les montages GVFS sous Linux), **en SMB comme en AFP** (retour du 29/10/2026 : un NAS qui annonce les deux
 est souvent monté en AFP par Nemo, `afp-volume:host=…,volume=…`, et n'était pas
 reconnu). Sous Linux, `gio mount` ne peut pas demander de mot de passe sans terminal :
 un partage protégé se rejoint une fois depuis le gestionnaire de fichiers (« Se

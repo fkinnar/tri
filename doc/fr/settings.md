@@ -38,6 +38,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |
 | `[exposure]` | Seuils de saturation et d'ombres bouchées (IL), cases des histogrammes, taille du masque | moteur |
 | `[offload]` | Déchargement des cartes : racine, vérification, fichiers déjà déchargés, historique | moteur |
+| `[remote]` | Copie en local d'un serveur que le système ne sait pas monter (FTP, SFTP) : destination, profondeur, lots | moteur |
 | `[i18n]` | Langue des textes : `auto` (système), `fr`, `en` (`i18n.md`) | moteur |
 | `[sharpness]` | Carte de netteté : seuil, épaississement, points isolés (`sharpness.md`) | moteur |
 | `[files]` | Actions sur les fichiers : paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |

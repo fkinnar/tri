@@ -1,11 +1,13 @@
-//! Partages réseau (SMB) qu'on rejoint par leur adresse : `\\nas\photo` (Windows) ou
-//! `smb://nas/photo` (partout), comme « Se connecter au serveur » du Finder (demandé le
-//! 28/10/2026 : sous Windows, rien ne permettait d'atteindre un partage pas attribué à une
-//! lettre de lecteur). Le montage est laissé au système, qui demande lui-même le mot de
-//! passe : Windows ouvre le chemin UNC directement, macOS monte par `mount volume`
-//! (trousseau, boîte du système), Linux par `gio mount` (GVFS, comme Nemo ou Nautilus).
-//! Les partages rejoints sont mémorisés (fichier `servers` du dossier de données) et
-//! proposés dans la section « Réseau » du panneau des dossiers. Voir `doc/en/servers.md`.
+//! Serveurs réseau qu'on rejoint par leur adresse, comme « Se connecter au serveur » du
+//! Finder : partages SMB (`\\nas\photo`, `smb://nas/photo`, demandé le 28/10/2026 : sous
+//! Windows, rien ne permettait d'atteindre un partage pas attribué à une lettre de
+//! lecteur), et les autres protocoles courants (29/10/2026) : AFP, FTP, SFTP, WebDAV, NFS.
+//! Le montage est laissé au système, qui demande lui-même le mot de passe : Windows ouvre
+//! le chemin UNC directement (SMB, WebDAV), macOS monte par `mount volume` (trousseau,
+//! boîte du système), Linux par `gio mount` (GVFS, comme Nemo ou Nautilus, tous les
+//! protocoles). Les serveurs rejoints sont mémorisés (fichier `servers` du dossier de
+//! données) et proposés dans la section « Réseau » du panneau des dossiers. Voir
+//! `doc/en/servers.md`.
 
 use std::fs;
 use std::io;
@@ -13,47 +15,162 @@ use std::path::{Path, PathBuf};
 
 use crate::places::{Place, PlaceKind};
 
-/// Un partage SMB : serveur, partage et, éventuellement, un dossier dedans.
+/// Protocole d'un serveur réseau.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Protocol {
+    /// Partages Windows, Samba (`smb://`, `\\serveur\partage`).
+    Smb,
+    /// Apple Filing Protocol (`afp://`), encore annoncé par bien des NAS.
+    Afp,
+    /// `ftp://`.
+    Ftp,
+    /// Fichiers par SSH (`sftp://`).
+    Sftp,
+    /// WebDAV (`dav://`, ou `webdav://`).
+    Dav,
+    /// WebDAV chiffré (`davs://`, `webdavs://`).
+    Davs,
+    /// `nfs://serveur/export`.
+    Nfs,
+}
+
+impl Protocol {
+    /// Tous les protocoles, dans l'ordre où le format attendu les cite.
+    pub const ALL: [Protocol; 7] = [
+        Protocol::Smb,
+        Protocol::Afp,
+        Protocol::Ftp,
+        Protocol::Sftp,
+        Protocol::Dav,
+        Protocol::Davs,
+        Protocol::Nfs,
+    ];
+
+    /// Préfixe des adresses (`smb`, sans `://`).
+    pub fn scheme(self) -> &'static str {
+        match self {
+            Protocol::Smb => "smb",
+            Protocol::Afp => "afp",
+            Protocol::Ftp => "ftp",
+            Protocol::Sftp => "sftp",
+            Protocol::Dav => "dav",
+            Protocol::Davs => "davs",
+            Protocol::Nfs => "nfs",
+        }
+    }
+
+    /// Nom affiché (« SMB », « WebDAV »).
+    pub fn label(self) -> &'static str {
+        match self {
+            Protocol::Smb => "SMB",
+            Protocol::Afp => "AFP",
+            Protocol::Ftp => "FTP",
+            Protocol::Sftp => "SFTP",
+            Protocol::Dav | Protocol::Davs => "WebDAV",
+            Protocol::Nfs => "NFS",
+        }
+    }
+
+    fn from_scheme(scheme: &str) -> Option<Protocol> {
+        let scheme = scheme.to_ascii_lowercase();
+        match scheme.as_str() {
+            "webdav" => Some(Protocol::Dav),
+            "webdavs" => Some(Protocol::Davs),
+            _ => Protocol::ALL.into_iter().find(|p| p.scheme() == scheme),
+        }
+    }
+
+    /// Le premier dossier de l'adresse est un partage, ce qu'on monte (SMB, AFP), dont le
+    /// serveur sait donner la liste.
+    pub fn has_shares(self) -> bool {
+        matches!(self, Protocol::Smb | Protocol::Afp)
+    }
+
+    /// Ce qu'on monte, après le serveur : le partage (SMB, AFP), rien (FTP, SFTP : tout le
+    /// serveur), ou tout le chemin tapé (WebDAV, NFS : un export, un dossier du serveur).
+    fn root_len(self, parts: usize) -> usize {
+        match self {
+            Protocol::Smb | Protocol::Afp => 1.min(parts),
+            Protocol::Ftp | Protocol::Sftp => 0,
+            Protocol::Dav | Protocol::Davs | Protocol::Nfs => parts,
+        }
+    }
+
+    /// Même famille : un partage SMB et le même monté en AFP (Nemo choisit AFP quand le
+    /// NAS annonce les deux, retour du 29/10/2026) ; WebDAV chiffré ou pas.
+    fn family(self) -> Protocol {
+        match self {
+            Protocol::Afp => Protocol::Smb,
+            Protocol::Davs => Protocol::Dav,
+            p => p,
+        }
+    }
+
+    /// Le système `os` sait le monter lui-même : tout sous Linux (GVFS) ; tout sauf SFTP
+    /// sous macOS ; SMB et WebDAV (chemins UNC) sous Windows.
+    pub fn mountable(self, os: &str) -> bool {
+        match os {
+            "windows" => matches!(self, Protocol::Smb | Protocol::Dav | Protocol::Davs),
+            "macos" => self != Protocol::Sftp,
+            _ => true,
+        }
+    }
+}
+
+/// Un dossier d'un serveur réseau : protocole, serveur, ce qu'on monte (`share`) et,
+/// éventuellement, des dossiers dedans.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Server {
+    /// Protocole.
+    pub protocol: Protocol,
     /// Utilisateur donné dans l'adresse (`smb://moi@nas/photo`), proposé par le système.
     pub user: Option<String>,
     /// Nom ou adresse du serveur (`nas`, `nas.local`, `192.168.1.10`).
     pub host: String,
-    /// Nom du partage (`photo`).
+    /// Port donné dans l'adresse (`ftp://nas:2121`).
+    pub port: Option<u16>,
+    /// Ce qu'on monte, après le serveur ([`Protocol::root_len`]) : le partage (`photo`),
+    /// rien (FTP, SFTP) ou un chemin (`volume1/photo`, WebDAV, NFS).
     pub share: String,
-    /// Dossiers sous le partage (`2026/séance`), à ouvrir une fois connecté.
+    /// Dossiers dedans (`2026/séance`), à ouvrir une fois connecté.
     pub folders: Vec<String>,
 }
 
 impl Server {
-    /// Lit une adresse tapée : `\\serveur\partage[\dossiers]` (barres obliques acceptées
-    /// aussi : `\\nas/photo`) ou `smb://[utilisateur@]serveur/partage[/dossiers]`
-    /// (caractères encodés `%20` décodés). `None` si ce n'est pas une adresse de partage
-    /// (il faut au moins un serveur et un partage).
+    /// Lit une adresse tapée : `\\serveur\partage[\dossiers]` (SMB ; barres obliques
+    /// acceptées aussi : `\\nas/photo`) ou `protocole://[utilisateur@]serveur[:port]/…`
+    /// (`smb`, `afp`, `ftp`, `sftp`, `dav`, `davs`, `nfs` ; caractères encodés `%20`
+    /// décodés). `None` si ce n'est pas une adresse (il faut au moins un serveur, et un
+    /// partage pour SMB et AFP).
     pub fn parse(text: &str) -> Option<Server> {
-        let (user, host, mut parts, _) = split_address(text)?;
-        if parts.is_empty() {
+        let address = split_address(text)?;
+        let root = address.protocol.root_len(address.parts.len());
+        if address.protocol.has_shares() && root == 0 {
             return None;
         }
-        let share = parts.remove(0);
+        let mut parts = address.parts;
+        let folders = parts.split_off(root);
         Some(Server {
-            user,
-            host,
-            share,
-            folders: parts,
+            protocol: address.protocol,
+            user: address.user,
+            host: address.host,
+            port: address.port,
+            share: parts.join("/"),
+            folders,
         })
     }
 
     /// Le serveur de ce partage.
     pub fn server(&self) -> Host {
         Host {
+            protocol: self.protocol,
             user: self.user.clone(),
             host: self.host.clone(),
+            port: self.port,
         }
     }
 
-    /// Le partage seul, sans les dossiers dedans (ce qu'on mémorise).
+    /// Ce qu'on monte, sans les dossiers dedans (ce qu'on mémorise).
     pub fn root(&self) -> Server {
         Server {
             folders: Vec::new(),
@@ -61,49 +178,79 @@ impl Server {
         }
     }
 
-    /// Adresse `smb://[utilisateur@]serveur/partage[/dossiers]`, caractères spéciaux
-    /// encodés.
+    /// Le chemin sous le serveur, élément par élément : ce qu'on monte, puis les dossiers.
+    fn segments(&self) -> Vec<String> {
+        self.share
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .chain(self.folders.iter().cloned())
+            .collect()
+    }
+
+    /// Adresse `protocole://[utilisateur@]serveur[:port]/…`, caractères spéciaux encodés.
     pub fn address(&self) -> String {
-        let user = self
-            .user
-            .as_ref()
-            .map(|u| format!("{}@", percent_encode(u)))
-            .unwrap_or_default();
-        let mut address = format!(
-            "smb://{user}{}/{}",
-            percent_encode(&self.host),
-            percent_encode(&self.share)
+        let mut address = self.server().address();
+        address.push_str(
+            &self
+                .segments()
+                .iter()
+                .map(|s| percent_encode(s))
+                .collect::<Vec<_>>()
+                .join("/"),
         );
-        for folder in &self.folders {
-            address.push('/');
-            address.push_str(&percent_encode(folder));
-        }
         address
     }
 
-    /// Chemin UNC du partage (`\\nas\photo`), sans les dossiers dedans.
+    /// Chemin UNC de ce qu'on monte, sans les dossiers dedans : `\\nas\photo` (SMB),
+    /// `\\nas@SSL@8443\DavWWWRoot\dossier` (WebDAV, service WebClient de Windows).
     pub fn unc(&self) -> PathBuf {
-        PathBuf::from(format!(r"\\{}\{}", self.host, self.share))
+        let path = self.share.replace('/', r"\");
+        match self.protocol {
+            Protocol::Dav | Protocol::Davs => {
+                let ssl = if self.protocol == Protocol::Davs {
+                    "@SSL"
+                } else {
+                    ""
+                };
+                let port = self.port.map(|p| format!("@{p}")).unwrap_or_default();
+                let path = if path.is_empty() {
+                    "DavWWWRoot".to_string()
+                } else {
+                    path
+                };
+                PathBuf::from(format!(r"\\{}{ssl}{port}\{path}", self.host))
+            }
+            _ => PathBuf::from(format!(r"\\{}\{path}", self.host)),
+        }
     }
 
-    /// Nom affiché : « partage (serveur) », comme les partages montés par GVFS.
+    /// Nom affiché : « partage (serveur) », comme les partages montés par GVFS ;
+    /// « serveur (FTP) » pour un serveur entier.
     pub fn name(&self) -> String {
-        format!("{} ({})", self.share, self.host)
+        match self.share.rsplit('/').find(|s| !s.is_empty()) {
+            Some(last) => format!("{last} ({})", self.host),
+            None => format!("{} ({})", self.host, self.protocol.label()),
+        }
     }
 
-    /// Vrai si `other` désigne le même partage (casse ignorée, comme SMB ; le serveur
-    /// comparé à son premier nom : `nas` = `nas.local` = `nas._smb._tcp.local`).
+    /// Vrai si `other` désigne le même endroit monté (même famille de protocole, même
+    /// serveur comparé à son premier nom : `nas` = `nas.local` = `nas._smb._tcp.local`,
+    /// même `share`, casse ignorée pour SMB et AFP).
     pub fn same_share(&self, other: &Server) -> bool {
-        same_host(&self.host, &other.host) && self.share.eq_ignore_ascii_case(&other.share)
+        self.protocol.family() == other.protocol.family()
+            && same_host(&self.host, &other.host)
+            && (self.port.is_none() || other.port.is_none() || self.port == other.port)
+            && same_path(self.protocol, &self.share, &other.share)
     }
 
-    /// L'emplacement du panneau des dossiers pour ce partage mémorisé, sous le système
-    /// `os` : sous Windows, son chemin UNC, un dossier comme un autre ; ailleurs, un
-    /// partage à rejoindre ([`PlaceKind::Server`], chemin = son adresse), tant qu'il n'est
-    /// pas monté.
+    /// L'emplacement du panneau des dossiers pour ce serveur mémorisé, sous le système
+    /// `os` : sous Windows, son chemin UNC (SMB, WebDAV), un dossier comme un autre ;
+    /// ailleurs, un serveur à rejoindre ([`PlaceKind::Server`], chemin = son adresse), tant
+    /// qu'il n'est pas monté.
     pub fn place(&self, os: &str) -> Place {
         let root = self.root();
-        if os == "windows" {
+        if os == "windows" && self.protocol.mountable(os) {
             Place {
                 name: root.name(),
                 path: root.unc(),
@@ -118,21 +265,52 @@ impl Server {
         }
     }
 
-    /// Le dossier où ce partage est monté (`/Volumes/photo`, GVFS, CIFS), d'après les
-    /// montages `mounts` ; ses dossiers ajoutés.
+    /// Le dossier de ce serveur d'après les montages `mounts` (`/Volumes/photo`, GVFS,
+    /// CIFS…) : un montage du même serveur dont le chemin est le début du nôtre, le reste
+    /// ajouté (`sftp://nas/home/moi/photo` dans un montage de `sftp://nas/`).
     pub fn mounted_in(&self, mounts: &Mounts) -> Option<PathBuf> {
-        let point = mounts
-            .shares
-            .iter()
-            .find(|(share, _)| share.same_share(self))
-            .map(|(_, point)| point.clone())?;
-        Some(self.folders.iter().fold(point, |p, f| p.join(f)))
+        let wanted = self.segments();
+        mounts.shares.iter().find_map(|(mount, point)| {
+            let host = Server {
+                share: String::new(),
+                ..mount.clone()
+            };
+            let probe = Server {
+                share: String::new(),
+                folders: Vec::new(),
+                ..self.clone()
+            };
+            if !probe.same_share(&host) {
+                return None;
+            }
+            let root = mount.segments();
+            if root.len() > wanted.len()
+                || !root
+                    .iter()
+                    .zip(&wanted)
+                    .all(|(a, b)| same_path(self.protocol, a, b))
+            {
+                return None;
+            }
+            Some(
+                wanted[root.len()..]
+                    .iter()
+                    .fold(point.clone(), |p, f| p.join(f)),
+            )
+        })
     }
 
-    /// Rejoint le partage sous le système `os` et renvoie son dossier (dossiers compris).
+    /// Rejoint le serveur sous le système `os` et renvoie son dossier (dossiers compris).
     /// Peut prendre plusieurs secondes (serveur lent, boîte du mot de passe) : à appeler
     /// dans un fil à part.
     pub fn connect(&self, os: &str) -> Result<PathBuf, String> {
+        if !self.protocol.mountable(os) {
+            return Err(crate::t!(
+                "servers-unsupported",
+                protocol = self.protocol.label(),
+                system = os_name(os)
+            ));
+        }
         if os == "windows" {
             let root = self.unc();
             fs::read_dir(&root)
@@ -145,7 +323,13 @@ impl Server {
         let address = self.root().address();
         let mut command = if os == "macos" {
             // Boîte du système (utilisateur, mot de passe, trousseau) ; l'adresse est
-            // encodée, sans guillemet qui couperait la chaîne AppleScript.
+            // encodée, sans guillemet qui couperait la chaîne AppleScript. WebDAV : le
+            // Finder attend `http(s)://`.
+            let address = match self.protocol {
+                Protocol::Dav => address.replacen("dav://", "http://", 1),
+                Protocol::Davs => address.replacen("davs://", "https://", 1),
+                _ => address,
+            };
             let mut c = crate::process::command("osascript");
             c.args(["-e", &format!("mount volume \"{address}\"")]);
             c
@@ -170,82 +354,161 @@ impl Server {
     }
 }
 
-/// Découpe une adresse `\\serveur\partage\…` ou `smb://[utilisateur@]serveur/…` :
-/// utilisateur, serveur, éléments du chemin (décodés pour une adresse `smb://`), et vrai si
-/// une barre suit le serveur.
-#[allow(clippy::type_complexity)]
-fn split_address(text: &str) -> Option<(Option<String>, String, Vec<String>, bool)> {
+/// Nom du système `os` pour les messages.
+fn os_name(os: &str) -> &str {
+    match os {
+        "macos" => "macOS",
+        "windows" => "Windows",
+        "linux" => "Linux",
+        other => other,
+    }
+}
+
+/// Deux chemins égaux, élément par élément ; casse ignorée pour SMB et AFP.
+fn same_path(protocol: Protocol, a: &str, b: &str) -> bool {
+    let parts = |s: &str| {
+        s.split('/')
+            .filter(|p| !p.is_empty())
+            .map(|p| {
+                if protocol.has_shares() {
+                    p.to_lowercase()
+                } else {
+                    p.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    parts(a) == parts(b)
+}
+
+/// Une adresse découpée par [`split_address`].
+struct Address {
+    protocol: Protocol,
+    user: Option<String>,
+    host: String,
+    port: Option<u16>,
+    /// Éléments du chemin, décodés pour une adresse `protocole://`.
+    parts: Vec<String>,
+    /// Une barre suit le serveur.
+    separated: bool,
+}
+
+/// Découpe une adresse `\\serveur\partage\…` (SMB) ou
+/// `protocole://[utilisateur@]serveur[:port]/…`.
+fn split_address(text: &str) -> Option<Address> {
     let text = text.trim();
-    let (rest, url) = if let Some(rest) = text.strip_prefix(r"\\") {
-        (rest, false)
-    } else if text.len() > 6 && text[..6].eq_ignore_ascii_case("smb://") {
-        (&text[6..], true)
+    let (protocol, rest, url) = if let Some(rest) = text.strip_prefix(r"\\") {
+        (Protocol::Smb, rest, false)
     } else {
-        return None;
+        let (scheme, rest) = text.split_once("://")?;
+        (Protocol::from_scheme(scheme)?, rest, true)
     };
     let separated = rest.contains(['\\', '/']);
-    let mut parts = rest.split(['\\', '/']).filter(|p| !p.is_empty()).map(|p| {
-        if url {
-            percent_decode(p)
-        } else {
-            p.to_string()
-        }
-    });
-    let host = parts.next()?;
-    let (user, host) = match host.rsplit_once('@') {
-        Some((user, host)) if url && !user.is_empty() => (Some(user.to_string()), host),
-        _ => (None, host.as_str()),
+    let mut parts = rest.split(['\\', '/']).filter(|p| !p.is_empty());
+    let authority = parts.next()?;
+    let (user, host) = match authority.rsplit_once('@') {
+        Some((user, host)) if url && !user.is_empty() => (Some(percent_decode(user)), host),
+        _ => (None, authority),
     };
-    let host = host.to_string();
+    // Port : `nas:2121`, `[::1]:21` ; une adresse IPv6 garde ses deux-points.
+    let (host, port) = match host.rsplit_once(':') {
+        Some((h, p)) if url && !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
+            (h, Some(p.parse().ok()?))
+        }
+        _ => (host, None),
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let host = if url {
+        percent_decode(host)
+    } else {
+        host.to_string()
+    };
     if host.is_empty() || host.contains('@') {
         return None;
     }
-    Some((user, host, parts.collect(), separated))
+    let parts = parts
+        .map(|p| {
+            if url {
+                percent_decode(p)
+            } else {
+                p.to_string()
+            }
+        })
+        .collect();
+    Some(Address {
+        protocol,
+        user,
+        host,
+        port,
+        parts,
+        separated,
+    })
 }
 
-/// Un serveur SMB, sans partage : celui dont on liste les partages (`smb://nas/`,
-/// `\\nas\`), comme « Partages Windows sur nas » de Nemo (retour du 29/10/2026 :
-/// `smb://nas.local/` suivi d'Entrée ne faisait rien).
+/// Un serveur, sans chemin : celui dont on liste les partages (`smb://nas/`, `\\nas\`),
+/// comme « Partages Windows sur nas » de Nemo (retour du 29/10/2026 : `smb://nas.local/`
+/// suivi d'Entrée ne faisait rien).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Host {
+    /// Protocole.
+    pub protocol: Protocol,
     /// Utilisateur donné dans l'adresse (`smb://moi@nas/`).
     pub user: Option<String>,
     /// Nom ou adresse du serveur.
     pub host: String,
+    /// Port donné dans l'adresse.
+    pub port: Option<u16>,
 }
 
 impl Host {
-    /// Le serveur d'une adresse tapée, dès qu'une barre suit son nom (`smb://nas/`,
-    /// `\\nas\`, `smb://nas/pho`) : avant, le nom est sans doute encore en cours de
-    /// frappe, inutile d'interroger le réseau.
+    /// Le serveur à partages (SMB, AFP) d'une adresse tapée, dès qu'une barre suit son
+    /// nom (`smb://nas/`, `\\nas\`, `smb://nas/pho`) : avant, le nom est sans doute encore
+    /// en cours de frappe, inutile d'interroger le réseau.
     pub fn parse(text: &str) -> Option<Host> {
-        let (user, host, _, separated) = split_address(text)?;
-        separated.then_some(Host { user, host })
+        Host::parse_typed_any(text).filter(|_| split_address(text).is_some_and(|a| a.separated))
     }
 
-    /// Le serveur d'une adresse tapée, barre ou pas après son nom (`\\host.lan`) : pour
-    /// proposer de lister ses partages (retour du 29/10/2026, WinBoat : `\\host.lan`
-    /// suivi d'Entrée ne faisait rien).
+    /// Le serveur à partages d'une adresse tapée sans partage, barre ou pas après son nom
+    /// (`\\host.lan`) : pour proposer de lister ses partages (retour du 29/10/2026,
+    /// WinBoat : `\\host.lan` suivi d'Entrée ne faisait rien).
     pub fn parse_typed(text: &str) -> Option<Host> {
-        let (user, host, parts, _) = split_address(text)?;
-        parts.is_empty().then_some(Host { user, host })
+        Host::parse_typed_any(text)
+            .filter(|_| split_address(text).is_some_and(|a| a.parts.is_empty()))
     }
 
-    /// Adresse `smb://[utilisateur@]serveur/`.
+    fn parse_typed_any(text: &str) -> Option<Host> {
+        let a = split_address(text)?;
+        a.protocol.has_shares().then_some(Host {
+            protocol: a.protocol,
+            user: a.user,
+            host: a.host,
+            port: a.port,
+        })
+    }
+
+    /// Adresse `protocole://[utilisateur@]serveur[:port]/`.
     pub fn address(&self) -> String {
         let user = self
             .user
             .as_ref()
             .map(|u| format!("{}@", percent_encode(u)))
             .unwrap_or_default();
-        format!("smb://{user}{}/", percent_encode(&self.host))
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            percent_encode(&self.host)
+        };
+        let port = self.port.map(|p| format!(":{p}")).unwrap_or_default();
+        format!("{}://{user}{host}{port}/", self.protocol.scheme())
     }
 
     /// Le partage `share` de ce serveur.
     pub fn share(&self, share: &str) -> Server {
         Server {
+            protocol: self.protocol,
             user: self.user.clone(),
             host: self.host.clone(),
+            port: self.port,
             share: share.to_string(),
             folders: Vec::new(),
         }
@@ -253,12 +516,27 @@ impl Host {
 
     /// Les partages de dossiers de ce serveur, par ordre alphabétique (partages cachés
     /// `…$` et imprimantes écartés), demandés au système `os` : `NetShareEnum` sous
-    /// Windows, `smbutil view` sous macOS, `gio list` sous Linux (GVFS, comme Nemo). Peut
-    /// prendre plusieurs secondes : à appeler dans un fil à part.
+    /// Windows, `smbutil view` sous macOS, `gio list` sous Linux (GVFS, comme Nemo ; AFP
+    /// aussi). Peut prendre plusieurs secondes : à appeler dans un fil à part.
     pub fn shares(&self, os: &str) -> Result<Vec<String>, String> {
         let mut shares = match os {
+            _ if os != "linux" && os != "macos" && os != "windows" => Vec::new(),
+            "linux" => {
+                // Le voisinage d'un serveur se monte d'abord (anonyme, sans rien demander)
+                // ; déjà monté, l'échec est sans importance.
+                let address = self.address();
+                let _ = run(&["gio", "mount", &address]);
+                shares_from_gio_list(&run(&["gio", "list", &address])?)
+            }
+            _ if self.protocol != Protocol::Smb => {
+                return Err(crate::t!(
+                    "servers-no-listing",
+                    protocol = self.protocol.label(),
+                    system = os_name(os)
+                ));
+            }
             "windows" => windows_shares(&self.host)?,
-            "macos" => {
+            _ => {
                 let address = format!("//{}", self.address().trim_start_matches("smb://"));
                 let address = address.trim_end_matches('/');
                 // Identifiants du trousseau d'abord (`-N` : sans rien demander), puis en
@@ -266,13 +544,6 @@ impl Host {
                 let text = run(&["/usr/bin/smbutil", "view", "-N", address])
                     .or_else(|_| run(&["/usr/bin/smbutil", "view", "-g", address]))?;
                 shares_from_smbutil(&text)
-            }
-            _ => {
-                // Le voisinage d'un serveur se monte d'abord (anonyme, sans rien demander)
-                // ; déjà monté, l'échec est sans importance.
-                let address = self.address();
-                let _ = run(&["gio", "mount", &address]);
-                shares_from_gio_list(&run(&["gio", "list", &address])?)
             }
         };
         shares.retain(|s| !s.ends_with('$'));
@@ -385,14 +656,14 @@ fn windows_shares(_host: &str) -> Result<Vec<String>, String> {
     Ok(Vec::new())
 }
 
-/// Vrai si `text` commence comme une adresse de partage (`\\…`, `smb://…`), complète ou
-/// pas encore.
+/// Vrai si `text` commence comme une adresse de serveur (`\\…`, `smb://…`, `ftp://…`),
+/// complète ou pas encore.
 pub fn looks_like_address(text: &str) -> bool {
     let text = text.trim_start();
     text.starts_with(r"\\")
         || text
-            .get(..6)
-            .is_some_and(|start| start.eq_ignore_ascii_case("smb://"))
+            .split_once("://")
+            .is_some_and(|(scheme, _)| Protocol::from_scheme(scheme).is_some())
 }
 
 /// Même serveur : premiers noms égaux, casse ignorée (`NAS` = `nas.local`). Une adresse
@@ -441,15 +712,63 @@ fn percent_encode(text: &str) -> String {
         .collect()
 }
 
-/// Partages SMB montés sur cette machine, avec leur dossier.
+/// Serveurs réseau montés sur cette machine, avec leur dossier.
 #[derive(Clone, Debug, Default)]
 pub struct Mounts {
     shares: Vec<(Server, PathBuf)>,
 }
 
+/// Un serveur monté, `share` = le chemin monté.
+fn mounted(
+    protocol: Protocol,
+    user: Option<String>,
+    host: String,
+    port: Option<u16>,
+    path: &str,
+) -> Server {
+    Server {
+        protocol,
+        user,
+        host,
+        port,
+        share: path.trim_matches('/').to_string(),
+        folders: Vec::new(),
+    }
+}
+
+/// `serveur:/chemin` (NFS, sshfs `utilisateur@serveur:/chemin`).
+fn host_colon_path(protocol: Protocol, source: &str) -> Option<Server> {
+    let (authority, path) = source.split_once(":/")?;
+    let (user, host) = match authority.rsplit_once('@') {
+        Some((u, h)) => (Some(u.to_string()), h),
+        None => (None, authority),
+    };
+    Some(mounted(protocol, user, host.to_string(), None, path))
+}
+
+/// Une URL montée (`ftp://nas/`, `https://nas/dav`) ; `http(s)` = WebDAV.
+fn mounted_url(source: &str) -> Option<Server> {
+    let source = if let Some(rest) = source.strip_prefix("https://") {
+        format!("davs://{rest}")
+    } else if let Some(rest) = source.strip_prefix("http://") {
+        format!("dav://{rest}")
+    } else {
+        source.to_string()
+    };
+    let a = split_address(&source)?;
+    Some(mounted(
+        a.protocol,
+        a.user,
+        a.host,
+        a.port,
+        &a.parts.join("/"),
+    ))
+}
+
 impl Mounts {
     /// Lit les montages du système `os` : sortie de `mount` (macOS) ; `/proc/mounts`
-    /// (CIFS) et les montages GVFS (Linux). Rien sous Windows (chemins UNC).
+    /// (CIFS, NFS, sshfs, davfs) et les montages GVFS (Linux). Rien sous Windows (chemins
+    /// UNC).
     pub fn read(os: &str) -> Mounts {
         match os {
             "macos" => crate::process::command("/sbin/mount")
@@ -470,22 +789,31 @@ impl Mounts {
     }
 
     /// Sortie de `mount` (macOS) : `//moi@nas._smb._tcp.local/photo on /Volumes/photo
-    /// (smbfs, …)`, ou le même partage monté en AFP (`afpfs`).
+    /// (smbfs, …)` ; de même `afpfs`, `ftp` et `webdav` (une URL), `nfs`
+    /// (`nas:/volume1/photo`).
     pub fn from_mount_output(text: &str) -> Mounts {
         let shares = text
             .lines()
-            .filter(|l| l.contains("(smbfs") || l.contains("(afpfs"))
             .filter_map(|line| {
                 let (source, rest) = line.split_once(" on ")?;
-                let (point, _) = rest.rsplit_once(" (")?;
-                let server = Server::parse(&format!("smb:{source}"))?;
+                let (point, options) = rest.rsplit_once(" (")?;
+                let kind = options.split([',', ')']).next()?.trim();
+                let server = match kind {
+                    "smbfs" => mounted_url(&format!("smb:{source}"))?,
+                    "afpfs" => mounted_url(&format!("afp:{source}"))?,
+                    "ftp" | "webdav" => mounted_url(source)?,
+                    "nfs" => host_colon_path(Protocol::Nfs, source)?,
+                    _ => return None,
+                };
                 Some((server, PathBuf::from(point)))
             })
             .collect();
         Mounts { shares }
     }
 
-    /// Contenu de `/proc/mounts` (Linux) : `//nas/photo /mnt/nas\040photo cifs …`.
+    /// Contenu de `/proc/mounts` (Linux) : `//nas/photo /mnt/nas\040photo cifs …` ; de même
+    /// `nfs` / `nfs4` (`nas:/export`), `fuse.sshfs` (`moi@nas:/home/moi`), `davfs` (une
+    /// URL).
     pub fn from_proc_mounts(text: &str) -> Mounts {
         let shares = text
             .lines()
@@ -493,11 +821,15 @@ impl Mounts {
                 let mut fields = line.split_whitespace();
                 let source = fields.next()?.replace("\\040", " ");
                 let point = fields.next()?.replace("\\040", " ");
-                let kind = fields.next()?;
-                if !matches!(kind, "cifs" | "smb3" | "smbfs") {
-                    return None;
-                }
-                let server = Server::parse(&format!("smb:{}", source.replace('\\', "/")))?;
+                let server = match fields.next()? {
+                    "cifs" | "smb3" | "smbfs" => {
+                        mounted_url(&format!("smb:{}", source.replace('\\', "/")))?
+                    }
+                    "nfs" | "nfs4" => host_colon_path(Protocol::Nfs, &source)?,
+                    "fuse.sshfs" => host_colon_path(Protocol::Sftp, &source)?,
+                    "davfs" | "fuse.davfs2" => mounted_url(&source)?,
+                    _ => return None,
+                };
                 Some((server, PathBuf::from(point)))
             })
             .collect();
@@ -505,9 +837,11 @@ impl Mounts {
     }
 
     /// Montages GVFS dans `dir` (`/run/user/<uid>/gvfs`) :
-    /// `smb-share:server=nas.local,share=photo[,user=moi]`, ou le même partage monté en
-    /// AFP, `afp-volume:host=Nas.local,user=moi,volume=photo` (retour du 29/10/2026 : Nemo
-    /// choisit AFP quand le NAS annonce les deux, et le partage n'était pas reconnu).
+    /// `smb-share:server=nas.local,share=photo[,user=moi]`, le même partage monté en AFP,
+    /// `afp-volume:host=Nas.local,user=moi,volume=photo` (retour du 29/10/2026 : Nemo
+    /// choisit AFP quand le NAS annonce les deux, et le partage n'était pas reconnu),
+    /// `ftp:host=…[,port=…]`, `sftp:host=…[,user=…]`, `dav:host=…,ssl=true,prefix=%2Fdav`,
+    /// `nfs:host=…,prefix=%2Fexport`.
     pub fn from_gvfs(dir: &Path) -> Mounts {
         let shares = fs::read_dir(dir)
             .into_iter()
@@ -515,24 +849,39 @@ impl Mounts {
             .flatten()
             .filter_map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let (fields, host, share) = if let Some(f) = name.strip_prefix("smb-share:") {
-                    (f, "server", "share")
-                } else {
-                    (name.strip_prefix("afp-volume:")?, "host", "volume")
-                };
+                let (kind, fields) = name.split_once(':')?;
                 let field = |key: &str| {
                     fields
                         .split(',')
                         .find_map(|f| f.strip_prefix(&format!("{key}=")))
                         .map(percent_decode)
                 };
-                let server = Server {
-                    user: field("user"),
-                    host: field(host)?,
-                    share: field(share)?,
-                    folders: Vec::new(),
+                let port = field("port").and_then(|p| p.parse().ok());
+                let (protocol, host, path) = match kind {
+                    "smb-share" => (Protocol::Smb, field("server")?, field("share")?),
+                    "afp-volume" => (Protocol::Afp, field("host")?, field("volume")?),
+                    "ftp" => (Protocol::Ftp, field("host")?, String::new()),
+                    "sftp" => (Protocol::Sftp, field("host")?, String::new()),
+                    "dav" => {
+                        let ssl = field("ssl").is_some_and(|s| s == "true");
+                        let protocol = if ssl { Protocol::Davs } else { Protocol::Dav };
+                        (
+                            protocol,
+                            field("host")?,
+                            field("prefix").unwrap_or_default(),
+                        )
+                    }
+                    "nfs" => (
+                        Protocol::Nfs,
+                        field("host")?,
+                        field("prefix").unwrap_or_default(),
+                    ),
+                    _ => return None,
                 };
-                Some((server, entry.path()))
+                Some((
+                    mounted(protocol, field("user"), host, port, &path),
+                    entry.path(),
+                ))
             })
             .collect();
         Mounts { shares }
@@ -601,8 +950,10 @@ mod tests {
 
     fn server(host: &str, share: &str, folders: &[&str]) -> Server {
         Server {
+            protocol: Protocol::Smb,
             user: None,
             host: host.into(),
+            port: None,
             share: share.into(),
             folders: folders.iter().map(|f| f.to_string()).collect(),
         }
@@ -731,8 +1082,10 @@ mod tests {
     #[test]
     fn a_server_is_read_once_a_separator_follows_its_name() {
         let nas = Host {
+            protocol: Protocol::Smb,
             user: None,
             host: "nas.local".into(),
+            port: None,
         };
         assert_eq!(Host::parse("smb://nas.local/"), Some(nas.clone()));
         assert_eq!(Host::parse(r"\\nas.local\"), Some(nas.clone()));
@@ -752,6 +1105,156 @@ mod tests {
         assert_eq!(
             Server::parse("smb://moi@nas/photo/x").unwrap().server(),
             moi
+        );
+    }
+
+    #[test]
+    fn the_other_protocols_are_read_with_what_they_mount() {
+        let ftp = Server::parse("ftp://moi@nas.local:2121/photo/2026").unwrap();
+        assert_eq!(ftp.protocol, Protocol::Ftp);
+        assert_eq!((ftp.user.as_deref(), ftp.port), (Some("moi"), Some(2121)));
+        assert_eq!(ftp.share, "", "FTP : tout le serveur");
+        assert_eq!(ftp.folders, ["photo", "2026"]);
+        assert_eq!(ftp.address(), "ftp://moi@nas.local:2121/photo/2026");
+        assert_eq!(ftp.root().address(), "ftp://moi@nas.local:2121/");
+        assert_eq!(ftp.name(), "nas.local (FTP)");
+        let sftp = Server::parse("SFTP://nas/home/moi").unwrap();
+        assert_eq!((sftp.protocol, sftp.share.as_str()), (Protocol::Sftp, ""));
+        let dav = Server::parse("davs://cloud.example.org/remote.php/webdav").unwrap();
+        assert_eq!(dav.share, "remote.php/webdav", "WebDAV : tout le chemin");
+        assert!(dav.folders.is_empty());
+        assert_eq!(dav.name(), "webdav (cloud.example.org)");
+        assert_eq!(
+            dav.unc(),
+            PathBuf::from(r"\\cloud.example.org@SSL\remote.php\webdav")
+        );
+        assert_eq!(
+            Server::parse("webdav://nas:8080/").unwrap().unc(),
+            PathBuf::from(r"\\nas@8080\DavWWWRoot")
+        );
+        let nfs = Server::parse("nfs://nas/volume1/photo").unwrap();
+        assert_eq!(
+            (nfs.protocol, nfs.share.as_str()),
+            (Protocol::Nfs, "volume1/photo")
+        );
+        assert_eq!(
+            Server::parse("afp://nas/").map(|s| s.share),
+            None,
+            "AFP : un partage"
+        );
+        assert_eq!(Server::parse("gopher://nas/x"), None);
+        assert!(looks_like_address("sftp://"));
+        assert!(!looks_like_address("https://example.org"));
+        // Ce que chaque système sait monter lui-même.
+        assert!(Protocol::ALL.iter().all(|p| p.mountable("linux")));
+        assert!(!Protocol::Sftp.mountable("macos") && Protocol::Ftp.mountable("macos"));
+        assert!(!Protocol::Ftp.mountable("windows") && Protocol::Davs.mountable("windows"));
+        assert!(
+            Server::parse("ftp://nas/")
+                .unwrap()
+                .connect("windows")
+                .is_err()
+        );
+        assert_eq!(
+            Server::parse("ftp://nas/").unwrap().place("windows").kind,
+            PlaceKind::Server
+        );
+    }
+
+    #[test]
+    fn mounts_of_the_other_protocols_are_found() {
+        let mac = "ftp://nas.local/ on /Volumes/nas.local (ftp, nodev, nosuid, read-only)\n\
+                   https://cloud.example.org/remote.php/webdav on /Volumes/webdav (webdav, nodev)\n\
+                   nas:/volume1/photo on /Volumes/photo (nfs, nodev, nosuid)\n";
+        let mounts = Mounts::from_mount_output(mac);
+        let found = |address: &str| Server::parse(address).unwrap().mounted_in(&mounts);
+        assert_eq!(
+            found("ftp://nas/photo/2026"),
+            Some(PathBuf::from("/Volumes/nas.local/photo/2026"))
+        );
+        assert_eq!(
+            found("davs://cloud.example.org/remote.php/webdav/Photos"),
+            Some(PathBuf::from("/Volumes/webdav/Photos")),
+            "un dossier sous le chemin monté"
+        );
+        assert_eq!(found("dav://cloud.example.org/autre"), None);
+        assert_eq!(
+            found("nfs://nas/volume1/photo"),
+            Some(PathBuf::from("/Volumes/photo"))
+        );
+        assert_eq!(found("smb://nas/photo"), None, "un autre protocole");
+        let proc = "nas:/volume1/photo /mnt/photo nfs4 rw 0 0\n\
+                    moi@nas:/home/moi /mnt/ssh fuse.sshfs rw 0 0\n";
+        let mounts = Mounts::from_proc_mounts(proc);
+        assert_eq!(
+            Server::parse("sftp://nas/home/moi/photo")
+                .unwrap()
+                .mounted_in(&mounts),
+            Some(PathBuf::from("/mnt/ssh/photo"))
+        );
+        assert_eq!(
+            Server::parse("nfs://nas/volume1/photo/2026")
+                .unwrap()
+                .mounted_in(&mounts),
+            Some(PathBuf::from("/mnt/photo/2026"))
+        );
+        #[cfg(unix)]
+        {
+            let gvfs = tempfile::tempdir().unwrap();
+            for d in [
+                "ftp:host=nas.local",
+                "sftp:host=nas,user=moi",
+                "dav:host=cloud.example.org,ssl=true,prefix=%2Fremote.php%2Fwebdav",
+            ] {
+                fs::create_dir(gvfs.path().join(d)).unwrap();
+            }
+            let mounts = Mounts::from_gvfs(gvfs.path());
+            let found = |address: &str| Server::parse(address).unwrap().mounted_in(&mounts);
+            assert_eq!(
+                found("ftp://nas/photo"),
+                Some(gvfs.path().join("ftp:host=nas.local/photo"))
+            );
+            assert_eq!(
+                found("sftp://nas/home"),
+                Some(gvfs.path().join("sftp:host=nas,user=moi/home"))
+            );
+            assert_eq!(
+                found("davs://cloud.example.org/remote.php/webdav/2026"),
+                Some(gvfs.path().join(
+                    "dav:host=cloud.example.org,ssl=true,prefix=%2Fremote.php%2Fwebdav/2026"
+                ))
+            );
+            assert_eq!(
+                found("dav://cloud.example.org/remote.php/webdav"),
+                Some(
+                    gvfs.path()
+                        .join("dav:host=cloud.example.org,ssl=true,prefix=%2Fremote.php%2Fwebdav")
+                ),
+                "WebDAV chiffré ou pas : le même serveur"
+            );
+        }
+    }
+
+    #[test]
+    fn only_servers_with_shares_are_listed() {
+        assert_eq!(
+            Host::parse("afp://nas/").map(|h| h.protocol),
+            Some(Protocol::Afp)
+        );
+        assert_eq!(
+            Host::parse("ftp://nas/"),
+            None,
+            "FTP : le serveur se rejoint"
+        );
+        let afp = Host::parse("afp://nas/").unwrap();
+        assert!(
+            afp.shares("windows").is_err(),
+            "pas de liste AFP sous Windows"
+        );
+        assert_eq!(afp.address(), "afp://nas/");
+        assert_eq!(
+            Host::parse("smb://[fe80::1]:445/").unwrap().address(),
+            "smb://[fe80::1]:445/"
         );
     }
 

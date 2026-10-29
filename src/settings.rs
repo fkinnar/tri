@@ -121,6 +121,8 @@ pub struct EngineSettings {
     pub i18n: crate::i18n::I18nSettings,
     /// Recherche d'une nouvelle version (sur demande).
     pub update: crate::update::UpdateSettings,
+    /// Copie en local d'un serveur que le système ne sait pas monter.
+    pub remote: crate::remote::RemoteSettings,
     /// Dossier des données.
     pub data: DataSection,
 }

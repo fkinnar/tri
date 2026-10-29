@@ -46,6 +46,7 @@ pub mod places;
 pub mod preview;
 pub mod process;
 pub mod raw;
+pub mod remote;
 pub mod scheduler;
 pub mod selection;
 pub mod send;

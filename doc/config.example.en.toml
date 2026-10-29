@@ -414,6 +414,16 @@ max_gap_s = 60.0
 # English if it is not available), "fr" or "en".
 language = "auto"
 
+[remote]
+# Local copy of a server the system cannot mount (FTP and SFTP on Windows, SFTP on
+# macOS): folder where the copies go (~ accepted), under server/folder.
+destination = "~/Pictures"
+# Depth of the subfolders walked under the requested folder.
+depth = 8
+# Files asked per run of sftp (one SSH connection each): larger, fewer connections;
+# smaller, finer progress and quicker cancelling.
+batch = 20
+
 [data]
 # Data folder (offload history, last folder opened). Missing:
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

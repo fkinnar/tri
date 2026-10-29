@@ -38,6 +38,7 @@ cannot change without updating its documentation.
 | `[places]` | Places in the folders panel: hide Time Machine, patterns to exclude, fixed volumes (no ejection), volume monitoring interval | engine |
 | `[exposure]` | Saturation and crushed-shadow thresholds (EV), histogram bins, mask size | engine |
 | `[offload]` | Card offloading: root, verification, already offloaded files, history | engine |
+| `[remote]` | Local copy of a server the system cannot mount (FTP, SFTP): destination, depth, batches | engine |
 | `[i18n]` | Text language: `auto` (system), `fr`, `en` (`i18n.md`) | engine |
 | `[sharpness]` | Sharpness map: threshold, thickening, isolated points (`sharpness.md`) | engine |
 | `[files]` | File actions: pairs that follow, trash or permanent deletion, external editor (`files.md`) | engine |
