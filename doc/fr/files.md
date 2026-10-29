@@ -9,6 +9,14 @@ commande offre les mêmes actions.
 
 - Ses **sidecars XMP** la suivent toujours : sans eux, ses notes seraient perdues, ou
   attribuées plus tard à une autre image du même nom.
+- Ses **clones** et les **réglages des logiciels de développement** la suivent aussi
+  (29/10/2026 : un clone darktable restait derrière l'image déplacée) : clones darktable
+  `IMG_01.RAF.xmp`, `IMG_02.RAF.xmp`… (un sidecar d'une vraie image `IMG_01.RAF` reste à
+  elle), RawTherapee `IMG.RAF.pp3`, ART `IMG.RAF.arp`, Capture One
+  `CaptureOne/Settings…/IMG.RAF.cos` (copié ou déplacé dans le même sous-dossier de la
+  destination, renommé à sa place). `xmp::SidecarIndex::companions` les rassemble ; les
+  notes, elles, ne lisent que les sidecars de l'image. Les copies virtuelles de Lightroom
+  ne vivent que dans son catalogue : rien à faire suivre.
 - L'autre image de sa **paire RAW+JPEG** (même nom à l'extension près, sans tenir compte de
   la casse) la suit aussi, par défaut (`[files] pairs = true`), comme pour les notes : on
   rejette une photo, pas un fichier. Les boîtes **Supprimer** et **Copier / déplacer
@@ -28,7 +36,7 @@ et pour que les erreurs prévisibles arrivent avant la première modification.
 | Fonction | Rôle |
 |---|---|
 | `adds_pairs(images) -> bool` | les paires ajoutent-elles des fichiers (l'autre image pas choisie) ? |
-| `group(images, pairs) -> Group` | images (paires comprises), sidecars à elles seules (`sidecars`), sidecars partagés laissés (`shared`) |
+| `group(images, pairs) -> Group` | images (paires comprises), sidecars, clones et réglages à elles seules (`sidecars`), sidecars partagés laissés (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | nouveaux chemins (`moves`) et copies de sidecars partagés (`copies`) ; refuse un nom vide, avec `/` ou `\`, `.` / `..` (`InvalidName`) ou déjà pris (`Exists`) ; changer seulement la casse est permis |
 | `rename(&Rename)` | exécute ; jamais d'écrasement (revérifié juste avant chaque fichier) ; sur une erreur, ce qui a été renommé est remis en place et les copies effacées |
 | `plan_delete(images, settings) -> Group` | fichiers à supprimer |

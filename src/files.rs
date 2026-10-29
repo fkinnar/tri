@@ -121,7 +121,8 @@ pub type Result<T> = std::result::Result<T, FileError>;
 pub struct Group {
     /// Les images, paires comprises (`[files] pairs`), dans l'ordre de la demande.
     pub images: Vec<PathBuf>,
-    /// Leurs sidecars XMP qui ne servent qu'à elles.
+    /// Leurs sidecars XMP, clones darktable et réglages d'autres logiciels qui ne servent
+    /// qu'à elles ([`SidecarIndex::companions`]).
     pub sidecars: Vec<PathBuf>,
     /// Sidecars partagés avec une image qui reste (`IMAGE.xmp` d'une paire dont une seule
     /// image est touchée) : laissés en place.
@@ -187,14 +188,14 @@ pub fn group(images: &[PathBuf], pairs: bool) -> Group {
     let mut sidecars_seen = HashSet::new();
     for image in &group.images {
         let index = SidecarIndex::new(image.parent().unwrap_or(Path::new(".")));
-        for sidecar in index.sidecars(image) {
+        for sidecar in index.companions(image) {
             if !sidecars_seen.insert(sidecar.clone()) {
                 continue;
             }
             // Propriétaires du sidecar : les images de même nom qui le reconnaissent.
             let owners: Vec<PathBuf> = same_stem(image)
                 .into_iter()
-                .filter(|other| index.sidecars(other).contains(&sidecar))
+                .filter(|other| index.companions(other).contains(&sidecar))
                 .collect();
             if owners.iter().all(|o| chosen.contains(o)) {
                 group.sidecars.push(sidecar);
@@ -632,7 +633,7 @@ pub fn plan_transfer(
         return Err(FileError::NotADirectory(dest.to_path_buf()));
     }
     let group = group(images, settings.pairs);
-    let target = |from: &PathBuf| dest.join(from.file_name().unwrap_or_default());
+    let target = |from: &PathBuf| dest.join(name_in_folder(from));
     let mut plan = Transfer {
         mode,
         dest: dest.to_path_buf(),
@@ -655,6 +656,39 @@ pub fn plan_transfer(
     }
     plan.files.dedup();
     Ok(plan)
+}
+
+/// Nom de `file` sous le dossier de son image : son nom, ou `CaptureOne/Settings…/nom`
+/// pour les réglages de Capture One (gardés à leur place dans la destination).
+fn name_in_folder(file: &Path) -> PathBuf {
+    let name = PathBuf::from(file.file_name().unwrap_or_default());
+    let settings = file.parent();
+    let capture_one = settings.and_then(Path::parent);
+    match (
+        settings.and_then(Path::file_name),
+        capture_one.and_then(Path::file_name),
+    ) {
+        (Some(settings), Some(dir)) if dir.eq_ignore_ascii_case("CaptureOne") => {
+            PathBuf::from(dir).join(settings).join(name)
+        }
+        _ => name,
+    }
+}
+
+/// Crée les dossiers manquants au-dessus de `to` (réglages de Capture One), ajoutés à
+/// `made` pour les retirer si la copie est défaite.
+fn make_parents(to: &Path, made: &mut Vec<PathBuf>) -> Result<()> {
+    let mut missing = Vec::new();
+    let mut dir = to.parent();
+    while let Some(d) = dir.filter(|d| !d.exists()) {
+        missing.push(d.to_path_buf());
+        dir = d.parent();
+    }
+    for d in missing.into_iter().rev() {
+        std::fs::create_dir(&d).map_err(|e| FileError::Io(d.clone(), e))?;
+        made.push(d);
+    }
+    Ok(())
 }
 
 /// Copie `from` en `to` sans écraser, vérifiée : écrite sous un nom temporaire, relue et
@@ -710,12 +744,20 @@ pub fn transfer(plan: &Transfer, mut progress: impl FnMut(usize, usize)) -> Resu
     let mut done = 0;
     let mut created: Vec<&PathBuf> = Vec::new();
     let mut renamed: Vec<(&PathBuf, &PathBuf)> = Vec::new();
+    // Dossiers des réglages de Capture One, créés dans la destination.
+    let mut made = Vec::new();
+    for (_, to) in plan.shared.iter().chain(&plan.files) {
+        make_parents(to, &mut made)?;
+    }
     let undo = |created: &[&PathBuf], renamed: &[(&PathBuf, &PathBuf)]| {
         for to in created {
             let _ = std::fs::remove_file(to);
         }
         for (from, to) in renamed.iter().rev() {
             let _ = std::fs::rename(to, from);
+        }
+        for dir in made.iter().rev() {
+            let _ = std::fs::remove_dir(dir);
         }
     };
     let mut step = |result: Result<()>,
@@ -1188,6 +1230,138 @@ mod tests {
         sidecars.sort();
         assert_eq!(sidecars, ["IMG.RAF.xmp", "IMG.xmp"]);
         assert!(g.shared.is_empty());
+    }
+
+    /// Une séance avec des clones darktable et les réglages d'autres logiciels.
+    fn developed(d: &Path) {
+        touch(
+            d,
+            &[
+                "IMG.RAF",
+                "IMG.RAF.xmp",
+                "IMG_01.RAF.xmp",
+                "IMG_12.RAF.xmp",
+                "IMG.RAF.pp3",
+                "IMG.RAF.arp",
+                // Une vraie image nommée comme un clone : son sidecar est à elle.
+                "IMG_02.RAF",
+                "IMG_02.RAF.xmp",
+                // Pas des clones : autre extension, suffixe pas numérique.
+                "IMG_01.JPG.xmp",
+                "IMG_ab.RAF.xmp",
+            ],
+        );
+        let settings = d.join("CaptureOne").join("Settings153");
+        std::fs::create_dir_all(&settings).unwrap();
+        touch(&settings, &["IMG.RAF.cos", "IMG_02.RAF.cos"]);
+    }
+
+    #[test]
+    fn clones_and_the_settings_of_other_software_follow_the_image() {
+        // Retour du 29/10/2026 : un clone darktable (`IMG_01.RAF.xmp`) restait derrière
+        // l'image déplacée ; de même les réglages de RawTherapee, ART et Capture One.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        developed(d);
+        let g = group(&[d.join("IMG.RAF")], true);
+        assert_eq!(names(&g.images), ["IMG.RAF"]);
+        let mut sidecars = names(&g.sidecars);
+        sidecars.sort();
+        assert_eq!(
+            sidecars,
+            [
+                "IMG.RAF.arp",
+                "IMG.RAF.cos",
+                "IMG.RAF.pp3",
+                "IMG.RAF.xmp",
+                "IMG_01.RAF.xmp",
+                "IMG_12.RAF.xmp"
+            ]
+        );
+        let index = SidecarIndex::new(d);
+        assert_eq!(
+            index
+                .clones(&d.join("IMG.RAF"))
+                .iter()
+                .map(|(n, _)| *n)
+                .collect::<Vec<_>>(),
+            [1, 12]
+        );
+        assert!(index.clones(&d.join("IMG_02.RAF")).is_empty());
+        let other = group(&[d.join("IMG_02.RAF")], true);
+        let mut sidecars = names(&other.sidecars);
+        sidecars.sort();
+        assert_eq!(sidecars, ["IMG_02.RAF.cos", "IMG_02.RAF.xmp"]);
+        // Les notes, elles, ne lisent toujours que les sidecars de l'image.
+        assert_eq!(names(&index.sidecars(&d.join("IMG.RAF"))), ["IMG.RAF.xmp"]);
+    }
+
+    #[test]
+    fn a_renamed_image_takes_its_clones_and_settings_along() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        developed(d);
+        let plan = plan_rename(&d.join("IMG.RAF"), "Mer", &FileSettings::default()).unwrap();
+        rename(&plan).unwrap();
+        for name in [
+            "Mer.RAF",
+            "Mer.RAF.xmp",
+            "Mer_01.RAF.xmp",
+            "Mer_12.RAF.xmp",
+            "Mer.RAF.pp3",
+            "Mer.RAF.arp",
+        ] {
+            assert!(d.join(name).exists(), "{name}");
+        }
+        let settings = d.join("CaptureOne").join("Settings153");
+        assert!(
+            settings.join("Mer.RAF.cos").exists(),
+            "Capture One, à sa place"
+        );
+        assert!(!d.join("IMG_01.RAF.xmp").exists());
+        assert!(
+            d.join("IMG_02.RAF.xmp").exists(),
+            "l'autre image n'a pas bougé"
+        );
+    }
+
+    #[test]
+    fn a_copied_image_keeps_the_capture_one_folders_of_its_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dest) = (dir.path().join("src"), dir.path().join("dest"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        developed(&src);
+        let s = FileSettings::default();
+        let plan = plan_transfer(&[src.join("IMG.RAF")], &dest, TransferMode::Move, &s).unwrap();
+        assert_eq!(plan.len(), 7);
+        transfer(&plan, |_, _| {}).unwrap();
+        for name in [
+            "IMG.RAF",
+            "IMG_01.RAF.xmp",
+            "IMG_12.RAF.xmp",
+            "IMG.RAF.pp3",
+            "IMG.RAF.arp",
+        ] {
+            assert!(
+                dest.join(name).exists() && !src.join(name).exists(),
+                "{name}"
+            );
+        }
+        let cos = Path::new("CaptureOne")
+            .join("Settings153")
+            .join("IMG.RAF.cos");
+        assert!(dest.join(&cos).exists() && !src.join(&cos).exists());
+        assert!(
+            src.join("CaptureOne/Settings153/IMG_02.RAF.cos").exists(),
+            "ceux des autres images restent"
+        );
+        // Annulé à mi-chemin (nom déjà pris) : rien de créé, dossiers compris.
+        let other = dir.path().join("autre");
+        std::fs::create_dir_all(&other).unwrap();
+        touch(&other, &["IMG_02.RAF.xmp"]);
+        assert!(plan_transfer(&[src.join("IMG_02.RAF")], &other, TransferMode::Copy, &s).is_err());
+        assert!(!other.join("CaptureOne").exists());
     }
 
     #[test]

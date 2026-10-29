@@ -256,23 +256,123 @@ impl Convention {
 /// Fichiers `.xmp` d'un dossier, indexés par nom en minuscules : une seule lecture du
 /// dossier pour tout un dossier d'images, et les vrais noms du disque, quelle que soit la
 /// casse (sur macOS, `IMG.XMP` et `IMG.xmp` désignent le même fichier ; sur Linux, deux).
+/// Aussi les réglages des autres logiciels de développement, qui suivent l'image
+/// ([`SidecarIndex::companions`]).
 #[derive(Clone, Debug, Default)]
 pub struct SidecarIndex {
     by_lowercase: std::collections::HashMap<String, Vec<PathBuf>>,
+    /// Réglages des autres logiciels (`.pp3`, `.arp`, `.cos` de Capture One), par nom en
+    /// minuscules.
+    others: std::collections::HashMap<String, Vec<PathBuf>>,
 }
+
+/// Extensions des réglages d'autres logiciels, ajoutées au nom complet de l'image
+/// (`IMG.RAF.pp3`) : RawTherapee, ART, et Capture One (dans `CaptureOne/Settings…/`).
+const OTHER_SETTINGS: &[&str] = &[".pp3", ".arp", ".cos"];
+
+/// Dossier des réglages de Capture One (session) à côté des images.
+const CAPTURE_ONE_DIR: &str = "CaptureOne";
 
 impl SidecarIndex {
     /// Index des sidecars du dossier `dir` (vide si illisible).
     pub fn new(dir: &Path) -> SidecarIndex {
         let mut by_lowercase: std::collections::HashMap<String, Vec<PathBuf>> =
             std::collections::HashMap::new();
+        let mut others: std::collections::HashMap<String, Vec<PathBuf>> =
+            std::collections::HashMap::new();
+        let mut capture_one = Vec::new();
         for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
             let name = entry.file_name().to_string_lossy().to_lowercase();
             if name.ends_with(".xmp") {
                 by_lowercase.entry(name).or_default().push(entry.path());
+            } else if OTHER_SETTINGS.iter().any(|e| name.ends_with(e)) {
+                others.entry(name).or_default().push(entry.path());
+            } else if name == CAPTURE_ONE_DIR.to_lowercase() {
+                capture_one.push(entry.path());
             }
         }
-        SidecarIndex { by_lowercase }
+        // Capture One : `CaptureOne/Settings153/IMG.RAF.cos` (un dossier par version).
+        for settings in capture_one
+            .iter()
+            .flat_map(fs::read_dir)
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .starts_with("settings")
+            })
+        {
+            for entry in fs::read_dir(settings.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                let name = entry.file_name().to_string_lossy().to_lowercase();
+                if name.ends_with(".cos") {
+                    others.entry(name).or_default().push(entry.path());
+                }
+            }
+        }
+        SidecarIndex {
+            by_lowercase,
+            others,
+        }
+    }
+
+    /// Fichiers qui accompagnent `image` et doivent la suivre (déplacement, copie,
+    /// renommage, corbeille ; demandé le 29/10/2026 : « si on a créé un clone, c'est pour
+    /// une bonne raison ») : ses sidecars XMP ([`SidecarIndex::sidecars`]), ses clones
+    /// darktable ([`SidecarIndex::clones`]), et les réglages de RawTherapee
+    /// (`IMG.RAF.pp3`), d'ART (`IMG.RAF.arp`) et de Capture One
+    /// (`CaptureOne/Settings…/IMG.RAF.cos`).
+    pub fn companions(&self, image: &Path) -> Vec<PathBuf> {
+        let mut found = self.sidecars(image);
+        found.extend(self.clones(image).into_iter().map(|(_, path)| path));
+        if let Some(name) = image.file_name() {
+            let name = name.to_string_lossy().to_lowercase();
+            for extension in OTHER_SETTINGS {
+                let key = format!("{name}{extension}");
+                for path in self.others.get(&key).into_iter().flatten() {
+                    if !found.contains(path) {
+                        found.push(path.clone());
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Clones (« duplicates ») darktable de `image`, par numéro : `IMG_01.RAF.xmp`,
+    /// `IMG_02.RAF.xmp`… (`IMG.RAF.xmp` est l'original, numéro 0). Un sidecar d'une
+    /// vraie image nommée ainsi (`IMG_01.RAF` existe) n'est pas un clone.
+    pub fn clones(&self, image: &Path) -> Vec<(u32, PathBuf)> {
+        let (Some(stem), Some(extension)) = (image.file_stem(), image.extension()) else {
+            return Vec::new();
+        };
+        let prefix = format!("{}_", stem.to_string_lossy().to_lowercase());
+        let suffix = format!(".{}.xmp", extension.to_string_lossy().to_lowercase());
+        let mut clones: Vec<(u32, PathBuf)> = Vec::new();
+        for (key, paths) in &self.by_lowercase {
+            let Some(number) = key
+                .strip_prefix(&prefix)
+                .and_then(|rest| rest.strip_suffix(&suffix))
+                .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|n| n.parse::<u32>().ok())
+            else {
+                continue;
+            };
+            for path in paths {
+                // Le nom du sidecar sans `.xmp` : une image qui existe ? Alors pas un clone.
+                let own_image = path.with_extension("");
+                if !own_image.exists() {
+                    clones.push((number, path.clone()));
+                }
+            }
+        }
+        clones.sort();
+        clones
     }
 
     /// Sidecars existants de `image` (dans ce dossier), des deux conventions.

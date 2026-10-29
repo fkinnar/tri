@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Clones and settings of other software follow the image**: moving, copying, renaming
+  or deleting an image also takes its darktable clones (`IMG_01.RAF.xmp`…) and the
+  settings of RawTherapee (`.pp3`), ART (`.arp`) and Capture One
+  (`CaptureOne/Settings…/IMG.RAF.cos`, kept in its subfolder). They used to stay behind.
 - **Network login box**: a server asking for an account that the system does not ask
   for itself (Linux, Windows; macOS keeps its own dialog) opens a box: user, domain
   (SMB), password, "Remember the password" (Windows Credential Manager, desktop keyring on

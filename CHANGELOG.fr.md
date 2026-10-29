@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Les clones et les réglages des autres logiciels suivent l'image** : déplacer, copier,
+  renommer ou supprimer une image emporte aussi ses clones darktable (`IMG_01.RAF.xmp`…)
+  et les réglages de RawTherapee (`.pp3`), d'ART (`.arp`) et de Capture One
+  (`CaptureOne/Settings…/IMG.RAF.cos`, gardé dans son sous-dossier). Ils restaient derrière.
 - **Boîte de connexion réseau** : un serveur qui demande un compte que le système ne
   demande pas lui-même (Linux, Windows ; macOS garde sa boîte) ouvre une boîte :
   utilisateur, domaine (SMB), mot de passe, « Retenir le mot de passe » (gestionnaire
