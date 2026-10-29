@@ -478,6 +478,8 @@ pub struct TriApp {
     engine: Option<Engine>,
     /// Ouverture d'un dossier lent en cours.
     opening: Option<Opening>,
+    /// Vignettes visibles déjà signalées au moteur ([`Scheduler::set_visible`]).
+    visible_sent: Option<(usize, usize)>,
     /// Attente de la liste d'un dossier avant de la lire en fond : `[gui.folders]
     /// open_wait_ms`, sauf si remplacée (tests : longue, pour ne pas dépendre de la
     /// vitesse de la machine ; un test la met à zéro).
@@ -968,6 +970,7 @@ impl TriApp {
             progress: [Progress::default(); 6],
             engine: None,
             opening: None,
+            visible_sent: None,
             open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
             repaint: None,
             error,
@@ -4027,6 +4030,8 @@ impl TriApp {
         self.grid_looked.clear();
         if let Some(engine) = &mut self.engine {
             engine.generation = engine.scheduler.set_folder(self.files.clone());
+            // Nouvelle liste : les vignettes visibles sont à redire.
+            self.visible_sent = None;
         }
         self.stacks_dirty = true;
         self.tell_shown();
@@ -4561,6 +4566,7 @@ impl TriApp {
             repaint.request_repaint();
         });
         let generation = scheduler.set_folder(self.files.clone());
+        self.visible_sent = None;
         scheduler.set_focus(self.selected);
         let max_texture = ctx.input(|i| i.max_texture_side);
         let loader = Loader::new(cache.clone(), preview, max_texture, ctx.clone());
@@ -10331,6 +10337,7 @@ impl TriApp {
         let margin = (ui.available_width() - self.layout.width()) / 2.0;
         let deadline = Instant::now() + self.gui.load_budget();
         self.visible_waiting = 0;
+        let mut drawn: Option<(usize, usize)> = None;
         let output = area.show_rows(ui, cell, rows, |ui, visible| {
             for row in visible {
                 ui.horizontal(|ui| {
@@ -10338,11 +10345,23 @@ impl TriApp {
                     let start = row * self.layout.columns;
                     let end = (start + self.layout.columns).min(shown.len());
                     for &index in &shown[start..end] {
+                        drawn = Some(
+                            drawn.map_or((index, index), |(a, b)| (a.min(index), b.max(index))),
+                        );
                         self.cell(ui, &ctx, index, deadline);
                     }
                 });
             }
         });
+        // Vignettes à l'écran : le moteur les sert d'abord (descendu à l'ascenseur, sans
+        // déplacer la sélection).
+        if let Some(range) = drawn
+            && self.visible_sent != Some(range)
+            && let Some(engine) = &self.engine
+        {
+            engine.scheduler.set_visible(range.0, range.1);
+            self.visible_sent = Some(range);
+        }
         self.scroll_offset = output.state.clamped_offset().y;
         self.view_height = output.inner_rect.height();
         if self.grid_fit_pending {
