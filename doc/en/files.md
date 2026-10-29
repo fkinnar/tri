@@ -8,6 +8,14 @@ only handles input and confirmation, and the command line offers the same action
 
 - Its **XMP sidecars** always follow it: without them, its notes would be lost, or later
   attributed to another image with the same name.
+- Its **clones** and the **settings of development software** follow it too
+  (2026-10-29: a darktable clone stayed behind the moved image): darktable clones
+  `IMG_01.RAF.xmp`, `IMG_02.RAF.xmp`… (a sidecar of a real image `IMG_01.RAF` stays with
+  it), RawTherapee `IMG.RAF.pp3`, ART `IMG.RAF.arp`, Capture One
+  `CaptureOne/Settings…/IMG.RAF.cos` (copied or moved into the same subfolder of the
+  destination, renamed in place). `xmp::SidecarIndex::companions` gathers them; ratings
+  are still read from the image's own sidecars only. Lightroom virtual copies live only in
+  its catalogue: nothing to carry along.
 - The other image of its **RAW+JPEG pair** (same name apart from the extension, ignoring
   case) follows it too, by default (`[files] pairs = true`), as for notes: you reject a
   photo, not a file. The **Delete** and **Copy / move to…** dialogs have a "with the other
@@ -27,7 +35,7 @@ that foreseeable errors happen before the first modification.
 | Function | Role |
 |---|---|
 | `adds_pairs(images) -> bool` | do the pairs add files (the other image not chosen)? |
-| `group(images, pairs) -> Group` | images (pairs included), sidecars of their own (`sidecars`), shared sidecars left alone (`shared`) |
+| `group(images, pairs) -> Group` | images (pairs included), sidecars, clones and settings of their own (`sidecars`), shared sidecars left alone (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | new paths (`moves`) and copies of shared sidecars (`copies`); refuses an empty name, one with `/` or `\`, `.` / `..` (`InvalidName`) or one already taken (`Exists`); changing only the case is allowed |
 | `rename(&Rename)` | executes; never overwrites (checked again just before each file); on an error, what was renamed is put back and the copies deleted |
 | `plan_delete(images, settings) -> Group` | files to delete |
