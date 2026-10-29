@@ -708,6 +708,7 @@ settings-section-places = Places
 settings-section-exposure = Exposure
 settings-section-offload = Card offload
 settings-section-remote = Local copy of a server
+settings-section-neighbourhood = Network neighbourhood
 settings-section-files = Files
 settings-section-sharpness = Sharpness
 settings-section-similarity = Grouping

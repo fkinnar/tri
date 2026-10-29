@@ -1122,6 +1122,14 @@ fn percent_decode(text: &str) -> String {
 }
 
 /// Encode tout sauf les lettres, chiffres et `-._~` (RFC 3986).
+/// Chemin `a/b c` encodé élément par élément (`a/b%20c`), pour une adresse.
+pub(crate) fn percent_encode_path(path: &str) -> String {
+    path.split('/')
+        .map(percent_encode)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 fn percent_encode(text: &str) -> String {
     text.bytes()
         .map(|b| match b {

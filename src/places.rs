@@ -32,6 +32,10 @@ pub enum PlaceKind {
     /// est son adresse (`smb://nas/photo`), à rejoindre ([`crate::servers::Server::connect`])
     /// avant d'en lire les dossiers.
     Server,
+    /// Serveur annoncé sur le réseau local ([`crate::neighbourhood`]) ; son chemin est
+    /// son adresse (`smb://nas.local/`), ouverte dans la recherche des dossiers pour
+    /// choisir un partage.
+    Neighbour,
 }
 
 /// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
@@ -82,7 +86,7 @@ impl PlaceKind {
     pub fn section(self) -> Section {
         match self {
             PlaceKind::Volume | PlaceKind::Device => Section::Devices,
-            PlaceKind::Network | PlaceKind::Server => Section::Network,
+            PlaceKind::Network | PlaceKind::Server | PlaceKind::Neighbour => Section::Network,
             PlaceKind::Home => Section::Personal,
             PlaceKind::Favorite => Section::Favorites,
             PlaceKind::Root => Section::System,

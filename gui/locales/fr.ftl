@@ -707,6 +707,7 @@ settings-section-update = Mises à jour
 settings-section-exposure = Exposition
 settings-section-offload = Déchargement de carte
 settings-section-remote = Copie en local d'un serveur
+settings-section-neighbourhood = Voisinage réseau
 settings-section-files = Fichiers
 settings-section-sharpness = Netteté
 settings-section-similarity = Regroupement

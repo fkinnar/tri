@@ -426,6 +426,12 @@ depth = 8
 # de connexions ; plus petit, une progression plus fine et une annulation plus rapide.
 batch = 20
 
+[neighbourhood]
+# Voisinage réseau : écouter les serveurs qui s'annoncent sur le réseau local (Bonjour /
+# mDNS) et les proposer dans « Réseau ». Sous Windows, le pare-feu peut demander une
+# autorisation la première fois.
+enabled = true
+
 [data]
 # Dossier des données (historique des déchargements, dernier dossier ouvert). Absent :
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

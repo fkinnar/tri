@@ -123,6 +123,8 @@ pub struct EngineSettings {
     pub update: crate::update::UpdateSettings,
     /// Copie en local d'un serveur que le système ne sait pas monter.
     pub remote: crate::remote::RemoteSettings,
+    /// Voisinage réseau (serveurs annoncés par mDNS).
+    pub neighbourhood: crate::neighbourhood::NeighbourhoodSettings,
     /// Dossier des données.
     pub data: DataSection,
 }
