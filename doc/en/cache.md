@@ -100,7 +100,12 @@ A key is a **BLAKE3** hash (256 bits, in hexadecimal) of:
 
 Consequences:
 
-- **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation;
+- **file modified** (edited, rewritten) ⇒ new key ⇒ automatic recomputation; size and
+  date are read **once** per file then kept (`cache::stamp`, 2026-10-29: on a NAS, each
+  read waited behind the RAWs read by the engine, and the interface did thousands of
+  them, frozen up to 37 s); the folder watch forgets the stamps of changed files
+  (`forget_stamps`), opening a folder those of its files (`forget_stamps_under`). The same
+  goes for the sidecars of development software (`develop::stamp`, `darktable_sidecar`);
 - **settings changed** (preview size, white balance…) ⇒ same, provided the caller
   includes them in `params`;
 - **folder moved or renamed** ⇒ the cache is no longer found, unless it follows

@@ -123,12 +123,15 @@ fn modifying_the_source_changes_the_key() {
     file.set_modified(SystemTime::now() + Duration::from_secs(60))
         .unwrap();
     drop(file);
+    // Relevés retenus : oubliés comme le fait la surveillance du dossier.
+    tri::cache::forget_stamps([s.source.as_path()]);
     let touched = key(&s.source, Level::Standard);
     assert_ne!(touched, before);
     assert!(s.cache.get(&touched).is_none());
 
     // Autre taille.
     fs::write(&s.source, b"nouveau contenu, plus long").unwrap();
+    tri::cache::forget_stamps([s.source.as_path()]);
     assert_ne!(key(&s.source, Level::Standard), touched);
 }
 

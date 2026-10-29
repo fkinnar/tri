@@ -102,6 +102,12 @@ Une clé est un hash **BLAKE3** (256 bits, en hexadécimal) de :
 Conséquences :
 
 - **fichier modifié** (retouché, réécrit) ⇒ nouvelle clé ⇒ recalcul automatique ;
+  taille et date sont relevées **une fois** par fichier puis retenues (`cache::stamp`,
+  29/10/2026 : sur un NAS, chaque relevé attendait derrière les RAW lus par le moteur,
+  et l'interface en faisait des milliers, jusqu'à 37 s figée) ; la surveillance du
+  dossier oublie les relevés des fichiers changés (`forget_stamps`), l'ouverture d'un
+  dossier ceux de ses fichiers (`forget_stamps_under`). Même chose pour les sidecars des
+  logiciels de développement (`develop::stamp`, `darktable_sidecar`) ;
 - **réglages changés** (taille d'aperçu, balance des blancs…) ⇒ idem, à condition que
   l'appelant les inclue dans `params` ;
 - **dossier déplacé ou renommé** ⇒ le cache n'est plus retrouvé, sauf s'il le suit

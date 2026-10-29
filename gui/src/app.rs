@@ -1315,6 +1315,10 @@ impl TriApp {
     fn open_folder(&mut self, dir: &Path) {
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
+        // Ses fichiers ont pu changer depuis (développés ailleurs) : relevés refaits.
+        if let Ok(absolute) = std::path::absolute(dir) {
+            tri::cache::forget_stamps_under(&absolute);
+        }
         // Une ouverture en cours (dossier lent) cède la place.
         if let Some(opening) = self.opening.take() {
             opening.stop.store(true, Ordering::Relaxed);

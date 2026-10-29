@@ -193,6 +193,15 @@ impl FolderWatch {
                             changes
                         };
                         if !changes.is_empty() {
+                            // Relevés retenus des fichiers changés : à refaire (les rendus
+                            // d'une image développée ailleurs se recalculent).
+                            crate::cache::forget_stamps(
+                                changes
+                                    .images
+                                    .iter()
+                                    .chain(&changes.sidecars)
+                                    .map(PathBuf::as_path),
+                            );
                             on_change(changes);
                         }
                     }

@@ -138,24 +138,74 @@ pub struct Key {
     hash: String,
 }
 
+/// Taille et date de modification (ns) des fichiers sources, relevées une fois puis
+/// retenues ; `None` : fichier absent.
+type Stamps = HashMap<PathBuf, Option<(u64, u128)>>;
+
+fn stamps() -> &'static Mutex<Stamps> {
+    static STAMPS: std::sync::OnceLock<Mutex<Stamps>> = std::sync::OnceLock::new();
+    STAMPS.get_or_init(Default::default)
+}
+
+/// Taille et date de modification (ns) de `path`, ou `None` s'il n'existe pas : relevées
+/// une fois, puis retenues (retour du 29/10/2026 : sur un NAS, chaque relevé attendait
+/// derrière les RAW lus par le moteur, et l'interface en faisait des milliers ; 37 s
+/// figée). Un fichier changé ailleurs est à oublier ([`forget_stamps`]) : la surveillance
+/// du dossier le fait, et l'ouverture d'un dossier oublie les siens.
+pub fn stamp(path: &Path) -> Option<(u64, u128)> {
+    if let Some(known) = stamps().lock().unwrap_or_else(|e| e.into_inner()).get(path) {
+        return *known;
+    }
+    let read = fs::metadata(path).ok().map(|meta| {
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        (meta.len(), modified)
+    });
+    stamps()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(path.to_path_buf(), read);
+    read
+}
+
+/// Oublie les relevés de `paths` ([`stamp`]) : fichiers changés, ajoutés ou retirés.
+pub fn forget_stamps<'a>(paths: impl IntoIterator<Item = &'a Path>) {
+    let mut known = stamps().lock().unwrap_or_else(|e| e.into_inner());
+    for path in paths {
+        known.remove(path);
+    }
+}
+
+/// Oublie les relevés des fichiers sous `dir` (dossier ouvert ou rouvert).
+pub fn forget_stamps_under(dir: &Path) {
+    stamps()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|path, _| !path.starts_with(dir));
+}
+
 impl Key {
     /// Clé pour l'image `source` au niveau `level`, calculée avec les paramètres `params`
     /// (description libre et stable, ex. `"half=1;side=2560"`).
     ///
-    /// Lit les métadonnées du fichier (taille, date de modification) : erreur si `source`
-    /// n'existe pas. Le chemin est rendu absolu, pour qu'un même fichier ait la même clé quel
-    /// que soit le répertoire courant.
+    /// D'après la taille et la date de modification du fichier ([`stamp`], relevées une
+    /// fois) : erreur si `source` n'existe pas. Le chemin est rendu absolu, pour qu'un même
+    /// fichier ait la même clé quel que soit le répertoire courant.
     pub fn new(source: &Path, level: Level, params: &str) -> io::Result<Key> {
         let path = std::path::absolute(source)?;
-        let meta = fs::metadata(&path)?;
-        let modified = meta
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let (len, modified) = stamp(&path).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{} introuvable", path.display()),
+            )
+        })?;
         Ok(Key::from_parts(
             path.as_os_str(),
-            meta.len(),
+            len,
             modified,
             level,
             params,
@@ -811,6 +861,28 @@ mod tests {
         );
         assert_eq!(default_dir_for("linux", env(&[])), None);
         assert_eq!(default_dir_for("windows", env(&[("HOME", "/h")])), None);
+    }
+
+    #[test]
+    fn a_stamp_is_read_once_until_forgotten() {
+        // Retour du 29/10/2026 (NAS) : un relevé par fichier, retenu, jamais un accès
+        // réseau à chaque image de l'interface.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.RAF");
+        assert_eq!(stamp(&file), None, "absent, retenu aussi");
+        fs::write(&file, b"raw").unwrap();
+        assert_eq!(stamp(&file), None, "pas relu de lui-même");
+        forget_stamps([file.as_path()]);
+        assert_eq!(stamp(&file).map(|(len, _)| len), Some(3));
+        let before = Key::new(&file, Level::Thumbnail, "").unwrap();
+        fs::write(&file, b"raw, edited").unwrap();
+        assert_eq!(Key::new(&file, Level::Thumbnail, "").unwrap(), before);
+        forget_stamps_under(dir.path());
+        assert_ne!(
+            Key::new(&file, Level::Thumbnail, "").unwrap(),
+            before,
+            "fichier changé : nouvelle clé une fois oublié"
+        );
     }
 
     #[test]
