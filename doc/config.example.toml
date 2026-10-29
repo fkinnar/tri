@@ -559,6 +559,10 @@ bar_label_scale = 0.85
 # Bulle du nombre d'images au milieu de l'écran après un changement de filtre : durée
 # (millisecondes ; 0 : jamais).
 filter_toast_ms = 1500
+# Bandeau « n développements à refaire » (développés modifiés ailleurs, rendus de nouveau
+# en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 : jamais). La
+# progression reste dans la barre d'état.
+develop_toast_ms = 6000
 # Piles (images semblables regroupées) affichées au démarrage ; false : chaque image
 # seule, Ctrl+S ou le bouton pile les affichent (instantané : les empreintes se
 # calculent en fond, voir [similarity] background).

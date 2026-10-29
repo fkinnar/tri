@@ -456,6 +456,10 @@ pub struct GridSettings {
     /// Bulle du nombre d'images au milieu de l'écran après un changement de filtre :
     /// durée (millisecondes ; 0 : jamais).
     pub filter_toast_ms: u64,
+    /// Bandeau « n développements à refaire » (développés modifiés ailleurs, rendus de
+    /// nouveau en fond) : durée à l'écran au départ, puis à la fin (millisecondes ; 0 :
+    /// jamais). La progression reste dans la barre d'état.
+    pub develop_toast_ms: u64,
     /// Piles affichées au démarrage (sinon chaque image seule ; Ctrl+S bascule). Les
     /// empreintes se calculent en fond quand même (`[similarity] background`) : la
     /// bascule est instantanée.
@@ -498,6 +502,7 @@ impl Default for GridSettings {
             size_slider: 90.0,
             bar_label_scale: 0.85,
             filter_toast_ms: 1500,
+            develop_toast_ms: 6000,
             stacks: false,
             search_width: 200.0,
             search_min_width: 80.0,

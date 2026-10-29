@@ -157,6 +157,13 @@ serve the same way. Already in the cache: skipped. One batch at a time; its prog
 background task ("×": interrupt), the summary (rendered, already done, failed) goes to
 the status bar; afterwards, `b` offers the developed render of each rendered image.
 
+**Renders to redo announced** (2026-10-29: photos edited in darktable were rendered
+again without a word): the batch first sees what is already in the cache
+(`DevelopBatch::redone` → (done, to redo)); if renders are left to redo, a banner at the
+top of the image says so, "12 changed developments to redo (3/12)" with the progress bar,
+then "12 developments redone" at the end; each fades by itself (`[gui.grid]
+develop_toast_ms`, 6 s; 0: never). Progress stays in the status bar.
+
 **Choosing the software** (2026-10-26, user's choice; shortcuts configurable):
 `Shift+B` and `<leader>r` develop the image in its software (the one of its development,
 see `[develop] default`), `<leader>d` in darktable, `<leader>p` in RapidRAW

@@ -708,6 +708,9 @@ pub struct TriApp {
     /// nombre d'images ([`TriApp::filter_toast`]), depuis cet instant.
     filter_seen: (PathBuf, String),
     filter_toast_at: Option<Instant>,
+    /// Bandeau des développements à refaire : depuis quand, et fini (avec le nombre
+    /// refait) ou en cours.
+    develop_toast: Option<(Instant, Option<usize>)>,
     /// Curseur clavier déplacé : à faire défiler jusqu'à lui.
     scroll_to_cursor: bool,
     /// Fenêtre de réglages ouverte.
@@ -1086,6 +1089,7 @@ impl TriApp {
             side_key: None,
             filter_seen: Default::default(),
             filter_toast_at: None,
+            develop_toast: None,
             scroll_to_cursor: false,
             help_search: None,
             help_lines: None,
@@ -3264,6 +3268,9 @@ impl TriApp {
             .unwrap_or_default();
         // Rendus arrivés : les vignettes qui les attendaient relisent le cache.
         self.grid_looked.clear();
+        // Des rendus refaits : le bandeau le dit, un moment.
+        self.develop_toast =
+            (summary.rendered > 0).then(|| (Instant::now(), Some(summary.rendered)));
         if std::mem::take(&mut self.develop_batch_auto)
             && summary.rendered == 0
             && summary.failed == 0
@@ -10038,6 +10045,76 @@ impl TriApp {
         ui.ctx().request_repaint();
     }
 
+    /// Bandeau en haut de l'image : « n développements à refaire », avec la progression,
+    /// au départ d'un lot qui a des rendus à refaire (développés modifiés dans darktable,
+    /// retour du 29/10/2026 : refaits sans rien dire), puis « n développements refaits » à
+    /// la fin ; chacun s'efface de lui-même (`[gui.grid] develop_toast_ms`).
+    fn develop_toast(&mut self, ui: &mut Ui) {
+        let total = Duration::from_millis(self.gui.grid.develop_toast_ms);
+        if total.is_zero() {
+            self.develop_toast = None;
+            return;
+        }
+        let running = self.develop_batch.as_ref().map(|b| b.redone());
+        if let Some((_, stale)) = running
+            && stale > 0
+            && self.develop_toast.is_none()
+        {
+            self.develop_toast = Some((Instant::now(), None));
+        }
+        let Some((at, finished)) = self.develop_toast else {
+            return;
+        };
+        let elapsed = at.elapsed();
+        if elapsed >= total {
+            // En cours : plus montré (la barre d'état garde la progression) jusqu'à la fin.
+            if finished.is_some() || running.is_none() {
+                self.develop_toast = None;
+            }
+            return;
+        }
+        let left = (total - elapsed).as_secs_f32() / total.as_secs_f32();
+        let alpha = (left * 3.0).min(1.0);
+        let (text, fraction) = match (finished, running) {
+            (Some(n), _) => (t!("develop-toast-done", n = n), None),
+            (None, Some((done, stale))) => (
+                t!("develop-toast", n = stale, done = done),
+                Some(done as f32 / stale.max(1) as f32),
+            ),
+            (None, None) => return,
+        };
+        let accent = ui.visuals().selection.bg_fill;
+        let painter = ui.painter();
+        let galley = painter.layout_no_wrap(
+            text,
+            FontId::proportional(self.gui.dialogs.title_size),
+            Color32::WHITE.gamma_multiply(alpha),
+        );
+        let pad = self.gui.dialogs.spacing * 2.0;
+        let bar = if fraction.is_some() { pad } else { 0.0 };
+        let size = galley.size() + vec2(pad * 2.0, pad * 2.0 + bar);
+        let area = ui.max_rect();
+        let rect = Rect::from_min_size(
+            egui::pos2(area.center().x - size.x / 2.0, area.top() + pad),
+            size,
+        );
+        painter.rect_filled(rect, pad, Color32::from_black_alpha((170.0 * alpha) as u8));
+        let text_at = rect.min + vec2(pad, pad);
+        let text_size = galley.size();
+        painter.galley(text_at, galley, Color32::WHITE);
+        if let Some(fraction) = fraction {
+            let track = Rect::from_min_size(
+                text_at + vec2(0.0, text_size.y + pad * 0.4),
+                vec2(text_size.x, pad * 0.4),
+            );
+            painter.rect_filled(track, 2.0, Color32::from_white_alpha((60.0 * alpha) as u8));
+            let mut filled = track;
+            filled.set_width(track.width() * fraction.clamp(0.0, 1.0));
+            painter.rect_filled(filled, 2.0, accent.gamma_multiply(alpha));
+        }
+        ui.ctx().request_repaint();
+    }
+
     /// Parties du résumé des filtres ; `name` : avec la recherche par nom.
     fn filter_parts(&self, name: bool) -> String {
         let mut parts: Vec<String> = Vec::new();
@@ -11982,6 +12059,7 @@ impl eframe::App for TriApp {
                 self.grid(ui);
             }
             self.filter_toast(ui);
+            self.develop_toast(ui);
         });
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         if self.help {

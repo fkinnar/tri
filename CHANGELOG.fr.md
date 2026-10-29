@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Développements à refaire annoncés** : quand des photos développées ailleurs
+  (darktable) ont changé, un bandeau en haut dit combien de rendus sont refaits, avec une
+  barre de progression, puis qu'ils sont faits ; il s'efface de lui-même (`[gui.grid]
+  develop_toast_ms`).
 - **Les clones et les réglages des autres logiciels suivent l'image** : déplacer, copier,
   renommer ou supprimer une image emporte aussi ses clones darktable (`IMG_01.RAF.xmp`…)
   et les réglages de RawTherapee (`.pp3`), d'ART (`.arp`) et de Capture One

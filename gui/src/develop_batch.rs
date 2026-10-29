@@ -34,6 +34,10 @@ pub struct DevelopBatch {
     done: Arc<AtomicUsize>,
     /// Images à rendre (celles qui ont un sidecar), connues une fois les sidecars cherchés.
     total: Arc<AtomicUsize>,
+    /// Rendus à refaire (pas encore en cache : développement changé ailleurs), et ceux
+    /// faits (réussis ou non), connus une fois le cache consulté.
+    stale: Arc<AtomicUsize>,
+    redone: Arc<AtomicUsize>,
     cancel: Arc<AtomicBool>,
     handle: Option<JoinHandle<Summary>>,
 }
@@ -51,7 +55,10 @@ impl DevelopBatch {
         let done = Arc::new(AtomicUsize::new(0));
         let total = Arc::new(AtomicUsize::new(0));
         let cancel = Arc::new(AtomicBool::new(false));
+        let stale = Arc::new(AtomicUsize::new(0));
+        let redone = Arc::new(AtomicUsize::new(0));
         let (d, t, c) = (done.clone(), total.clone(), cancel.clone());
+        let (st, rd) = (stale.clone(), redone.clone());
         let handle = std::thread::spawn(move || {
             // Seulement les images développées, chacune dans le logiciel de son
             // développement ; sans développement, elle garde le rendu LibRaw.
@@ -66,15 +73,22 @@ impl DevelopBatch {
                 })
                 .collect();
             t.store(todo.len(), Ordering::Relaxed);
+            // Ce qui est déjà en cache, vu d'abord : le nombre de rendus à refaire s'annonce
+            // dès le départ (retour du 29/10/2026 : refaits sans rien dire).
+            let cached: Vec<bool> = todo
+                .iter()
+                .map(|(file, engine)| producer.is_done(file, Level::Developed(*engine)))
+                .collect();
+            st.store(cached.iter().filter(|c| !**c).count(), Ordering::Relaxed);
             repaint();
             let mut summary = Summary::default();
-            for (file, engine) in &todo {
+            for ((file, engine), cached) in todo.iter().zip(cached) {
                 let level = Level::Developed(*engine);
                 if c.load(Ordering::Relaxed) {
                     summary.cancelled = true;
                     break;
                 }
-                if producer.is_done(file, level) {
+                if cached {
                     summary.cached += 1;
                 } else {
                     match producer.produce(file, level, &c) {
@@ -88,6 +102,7 @@ impl DevelopBatch {
                             summary.error.get_or_insert(e);
                         }
                     }
+                    rd.fetch_add(1, Ordering::Relaxed);
                 }
                 d.fetch_add(1, Ordering::Relaxed);
                 repaint();
@@ -98,6 +113,8 @@ impl DevelopBatch {
             folder,
             done,
             total,
+            stale,
+            redone,
             cancel,
             handle: Some(handle),
         }
@@ -108,6 +125,15 @@ impl DevelopBatch {
         (
             self.done.load(Ordering::Relaxed),
             self.total.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Rendus à refaire : (faits, à faire) ; (0, 0) tant que le cache n'est pas consulté ou
+    /// si tout y est déjà.
+    pub fn redone(&self) -> (usize, usize) {
+        (
+            self.redone.load(Ordering::Relaxed),
+            self.stale.load(Ordering::Relaxed),
         )
     }
 
@@ -187,6 +213,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
         assert_eq!(batch.progress(), (1, 1), "une seule image développée");
+        assert_eq!(batch.redone(), (1, 1), "pas en cache : à refaire, annoncé");
         assert_eq!(
             summary,
             Summary {
