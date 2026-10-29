@@ -16,7 +16,10 @@
   date of every source file again on each frame (up to 37 s frozen on a NAS): they are
   read once, and forgotten when the folder watch sees a file change; while the grid is
   drawn, a missing one is read in the background instead of holding the page, as are the
-  sidecars it needs (darktable development, version badges).
+  sidecars it needs (darktable development, version badges), the most recent request
+  first (scrolling fast, the visible thumbnails come before those already passed). A
+  sidecar is looked up by its exact name before the whole folder is listed (full screen,
+  from one image to the next).
 - **Network login box**: a server asking for an account that the system does not ask
   for itself (Linux, Windows; macOS keeps its own dialog) opens a box: user, domain
   (SMB), password, "Remember the password" (Windows Credential Manager, desktop keyring on

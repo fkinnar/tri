@@ -217,42 +217,60 @@ thread_local! {
 /// que la même (`id`) est en attente ; [`on_stamps_read`] est prévenu à la fin. Compte
 /// comme un accès différé ([`deferred_misses`]).
 pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
-    use std::sync::OnceLock;
-    use std::sync::mpsc::{self, Sender};
+    use std::sync::{Condvar, OnceLock};
     type Job = (String, Box<dyn FnOnce() + Send>);
-    static PENDING: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
-    static QUEUE: OnceLock<Mutex<Sender<Job>>> = OnceLock::new();
-    MISSES.with(|m| m.set(m.get() + 1));
-    let pending = PENDING.get_or_init(Default::default);
-    if !pending
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(id.clone())
-    {
-        return;
+    /// Lectures en attente, la plus récente au bout (servie d'abord : en défilant vite,
+    /// les vignettes visibles passent avant celles déjà dépassées, retour du 29/10/2026),
+    /// et celles en attente ou en cours, pour ne rien lire deux fois.
+    #[derive(Default)]
+    struct Queue {
+        stack: Vec<Job>,
+        pending: std::collections::HashSet<String>,
     }
-    let queue = QUEUE.get_or_init(|| {
-        let (tx, rx) = mpsc::channel::<Job>();
+    static QUEUE: OnceLock<(Mutex<Queue>, Condvar)> = OnceLock::new();
+    MISSES.with(|m| m.set(m.get() + 1));
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    let (queue, wake) = QUEUE.get_or_init(Default::default);
+    // Fil lancé une fois la file en place.
+    STARTED.call_once(|| {
         let _ = std::thread::Builder::new()
             .name("tri-stamps".into())
             .spawn(move || {
-                while let Ok((id, job)) = rx.recv() {
+                loop {
+                    let (id, job) = {
+                        let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+                        loop {
+                            if let Some(job) = q.stack.pop() {
+                                break job;
+                            }
+                            q = wake.wait(q).unwrap_or_else(|e| e.into_inner());
+                        }
+                    };
                     job();
-                    pending
+                    queue
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
+                        .pending
                         .remove(&id);
                     if let Some(notify) = NOTIFY.get() {
                         notify();
                     }
                 }
             });
-        Mutex::new(tx)
     });
-    let _ = queue
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .send((id, Box::new(job)));
+    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+    if q.pending.contains(&id) {
+        // Redemandée (de nouveau visible) : remontée en tête si elle attend encore.
+        if let Some(at) = q.stack.iter().position(|(i, _)| *i == id) {
+            let again = q.stack.remove(at);
+            q.stack.push(again);
+        }
+        return;
+    }
+    q.pending.insert(id.clone());
+    q.stack.push((id, Box::new(job)));
+    drop(q);
+    wake.notify_one();
 }
 
 /// Relève `path` sur le disque et le retient.
