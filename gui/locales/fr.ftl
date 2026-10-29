@@ -75,6 +75,7 @@ search-folder-address = adresse d'un partage : \\serveur\partage ou smb://serveu
 search-folder-shares-running = recherche des partages de { $host }…
 search-folder-shares-failed = partages de { $host } introuvables : { $error }
 search-folder-shares-none = aucun partage sur { $host }
+search-folder-shares-enter = Entrée : partages de { $host }
 filter-summary-name = « { $query } »
 action-core-view-focus_mode = Mode concentration : plein écran, sans panneaux ni barres
 focus-mode-on = Mode concentration ({ $keys } pour en sortir)

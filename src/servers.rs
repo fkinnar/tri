@@ -223,6 +223,14 @@ impl Host {
         separated.then_some(Host { user, host })
     }
 
+    /// Le serveur d'une adresse tapée, barre ou pas après son nom (`\\host.lan`) : pour
+    /// proposer de lister ses partages (retour du 29/10/2026, WinBoat : `\\host.lan`
+    /// suivi d'Entrée ne faisait rien).
+    pub fn parse_typed(text: &str) -> Option<Host> {
+        let (user, host, parts, _) = split_address(text)?;
+        parts.is_empty().then_some(Host { user, host })
+    }
+
     /// Adresse `smb://[utilisateur@]serveur/`.
     pub fn address(&self) -> String {
         let user = self
@@ -731,6 +739,11 @@ mod tests {
         assert_eq!(Host::parse("smb://nas.local/kph"), Some(nas.clone()));
         assert_eq!(Host::parse("smb://nas.loc"), None, "nom en cours de frappe");
         assert_eq!(Host::parse(r"\\nas"), None);
+        assert_eq!(
+            Host::parse_typed(r"\\host.lan").map(|h| h.host),
+            Some("host.lan".into())
+        );
+        assert_eq!(Host::parse_typed(r"\\nas\photo"), None, "partage tapé");
         assert_eq!(Host::parse("smb://"), None);
         assert_eq!(Host::parse("/home/moi"), None);
         let moi = Host::parse("smb://moi@nas/").unwrap();

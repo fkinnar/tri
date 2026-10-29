@@ -41,7 +41,9 @@ An address without a share, followed by a slash (`smb://nas.local/`, `\\nas\`): 
 asks the system for the server's folder shares (`Host::shares`, hidden `…$` shares left
 out), like Nemo's "Windows shares on nas" (feedback of 2026-10-29: `smb://nas.local/`
 followed by Enter did nothing). Not before the slash: the name is probably still being
-typed.
+typed; Enter on a server alone (`\\host.lan`, feedback of the same day in WinBoat)
+adds the slash and starts the listing, as the "Enter: shares of host.lan" line under the
+field says.
 
 | System | How |
 | --- | --- |

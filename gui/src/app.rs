@@ -5839,7 +5839,14 @@ impl TriApp {
                     ui.weak(t!("search-folder-shares-none", host = host.host.as_str()));
                 }
                 _ if servers.is_empty() => {
-                    ui.weak(t!("search-folder-address"));
+                    match tri::servers::Host::parse_typed(&self.folder_query) {
+                        Some(host) => {
+                            ui.weak(t!("search-folder-shares-enter", host = host.host.as_str()));
+                        }
+                        None => {
+                            ui.weak(t!("search-folder-address"));
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -5855,6 +5862,22 @@ impl TriApp {
         let mut connect = enter
             .then(|| servers.get(self.folder_result).cloned())
             .flatten();
+        // Entrée sur un serveur seul (`\\host.lan`) : la barre qui manque, et ses partages
+        // demandés ; le champ garde le clavier.
+        if enter
+            && servers.is_empty()
+            && tri::servers::Host::parse(&self.folder_query).is_none()
+            && tri::servers::Host::parse_typed(&self.folder_query).is_some()
+        {
+            let separator = if self.folder_query.trim_start().starts_with(r"\\") {
+                '\\'
+            } else {
+                '/'
+            };
+            self.folder_query = format!("{}{separator}", self.folder_query.trim_end());
+            self.restart_folder_search(&ctx);
+            self.focus_request = Some(folder_search_id());
+        }
         if enter
             && let Some((path, _)) = self
                 .folder_results
@@ -15115,8 +15138,18 @@ mod tests {
         press(&mut h, Key::H, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
         h.run_steps(2);
-        h.state_mut().folder_query = "smb://nas.local/".into();
+        // Serveur seul, sans barre (`\\host.lan`, WinBoat) : Entrée ajoute la barre et
+        // demande ses partages.
+        h.state_mut().folder_query = "smb://nas.local".into();
         h.run_steps(3);
+        wait_for_label(&mut h, "Entrée : partages de nas.local");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(h.state().folder_query, "smb://nas.local/");
+        assert!(
+            h.ctx.memory(|m| m.has_focus(folder_search_id())),
+            "le champ garde le clavier"
+        );
         wait_for_label(&mut h, "Se connecter à « home (nas.local) »");
         wait_for_label(&mut h, "Se connecter à « kphoto (nas.local) »");
         press(&mut h, Key::ArrowDown, Modifiers::NONE);

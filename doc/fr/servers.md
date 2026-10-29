@@ -43,7 +43,9 @@ Une adresse sans partage, suivie d'une barre (`smb://nas.local/`, `\\nas\`) : `t
 demande au système les partages de dossiers du serveur (`Host::shares`, partages cachés
 `…$` écartés), comme « Partages Windows sur nas » de Nemo (retour du 29/10/2026 :
 `smb://nas.local/` suivi d'Entrée ne faisait rien). Pas avant la barre : le nom est
-sans doute encore en cours de frappe.
+sans doute encore en cours de frappe ; Entrée sur un serveur seul (`\\host.lan`,
+retour du même jour sous WinBoat) ajoute la barre et lance la liste, ce qu'indique la
+ligne « Entrée : partages de host.lan » sous le champ.
 
 | Système | Comment |
 | --- | --- |
