@@ -1027,7 +1027,16 @@ moitié transparente.
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au
   moteur, image prête, abandonnée, lecture et décodage, image affichée) sur la sortie
-  d'erreur. C'est elle qui a permis de mesurer les délais ci-dessus.
+  d'erreur. C'est elle qui a permis de mesurer les délais ci-dessus. Depuis le
+  29/10/2026 (interface figée sur un NAS), une image de l'interface plus lente que
+  `[gui] trace_slow_ms` (100 ms) est tracée avec la durée de ses étapes (« image lente :
+  850 ms (événements 2, chargements 3, centre 840) ») : de quoi trouver un accès disque
+  resté dans le fil de l'interface.
+
+**Fermeture** : les calculs en fond (moteur, chargement des images, surveillance du
+dossier et des volumes) s'arrêtent sans être attendus (`detach`) ; une vignette en cours
+sur un NAS ne retient plus la fermeture. Le cache s'écrit sous un nom temporaire puis est
+renommé : rien n'y reste à moitié écrit.
 
 **Captures du manuel des testeurs** (`doc/manuel.md`, `doc/manual.md`) :
 `scripts/manual-screenshots.sh <dossier de photos> [--lang fr|en]` copie les photos sur un

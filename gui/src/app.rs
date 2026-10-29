@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -174,6 +174,16 @@ struct Status {
 }
 
 /// Le moteur, démarré à la première image (il faut connaître la taille de l'écran).
+/// Ouverture d'un dossier lent ([`TriApp::open_folder`]) : sa liste lue en fond.
+struct Opening {
+    dir: PathBuf,
+    result: Receiver<std::io::Result<Folder>>,
+    /// Interrompt la lecture.
+    stop: Arc<AtomicBool>,
+    /// Images trouvées jusqu'ici.
+    found: Arc<AtomicUsize>,
+}
+
 struct Engine {
     scheduler: Scheduler,
     events: Receiver<Event>,
@@ -442,6 +452,14 @@ pub struct TriApp {
     status: Vec<Status>,
     progress: [Progress; 6],
     engine: Option<Engine>,
+    /// Ouverture d'un dossier lent en cours.
+    opening: Option<Opening>,
+    /// Attente de la liste d'un dossier avant de la lire en fond : `[gui.folders]
+    /// open_wait_ms`, sauf si remplacée (tests : longue, pour ne pas dépendre de la
+    /// vitesse de la machine ; un test la met à zéro).
+    open_wait_override: Option<Duration>,
+    /// De quoi redessiner depuis un fil (connu dès la première image).
+    repaint: Option<egui::Context>,
     error: Option<String>,
     keymap: Keymap,
     /// Séquences de touches en cours (`g g`).
@@ -923,6 +941,9 @@ impl TriApp {
             status: Vec::new(),
             progress: [Progress::default(); 6],
             engine: None,
+            opening: None,
+            open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
+            repaint: None,
             error,
             keymap,
             sequencer: gui.sequencer(),
@@ -1082,6 +1103,21 @@ impl TriApp {
             self.folder_depth(),
             watching,
         ));
+    }
+
+    /// Fermeture : les calculs en fond s'arrêtent sans être attendus (retour du
+    /// 29/10/2026 : sur un NAS, quitter attendait la fin de chaque vignette en cours).
+    fn stop_background(&mut self) {
+        if let Some(engine) = &mut self.engine {
+            engine.scheduler.detach();
+            engine.loader.detach();
+        }
+        if let Some((watch, _, _)) = &mut self.watch {
+            watch.detach();
+        }
+        if let Some((monitor, _)) = &mut self.volumes {
+            monitor.detach();
+        }
     }
 
     /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
@@ -1279,7 +1315,112 @@ impl TriApp {
     fn open_folder(&mut self, dir: &Path) {
         // Un dossier choisi : le dernier, disparu, ne sera plus rouvert de lui-même.
         self.missing_last = None;
-        match Folder::scan(dir, self.folder_depth(), self.settings.xmp.sidecar) {
+        // Une ouverture en cours (dossier lent) cède la place.
+        if let Some(opening) = self.opening.take() {
+            opening.stop.store(true, Ordering::Relaxed);
+        }
+        // Liste lue dans un fil : attendue un instant (disque local : comme avant), puis
+        // en fond, avec la progression et l'annulation (retour du 29/10/2026 : sur un
+        // NAS, l'interface restait figée sans rien dire).
+        let (tx, rx) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let found = Arc::new(AtomicUsize::new(0));
+        let (target, depth, convention) = (
+            dir.to_path_buf(),
+            self.folder_depth(),
+            self.settings.xmp.sidecar,
+        );
+        let (stop_scan, found_scan) = (stop.clone(), found.clone());
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            let result = Folder::scan_counting(&target, depth, convention, &stop_scan, &found_scan);
+            let _ = tx.send(result);
+            if let Some(ctx) = repaint {
+                ctx.request_repaint();
+            }
+        });
+        match rx.recv_timeout(self.open_wait()) {
+            Ok(result) => self.install_folder(dir, result),
+            Err(_) => {
+                trace(|| format!("dossier lent, lu en fond : {}", dir.display()));
+                self.opening = Some(Opening {
+                    dir: dir.to_path_buf(),
+                    result: rx,
+                    stop,
+                    found,
+                });
+            }
+        }
+    }
+
+    /// Attente de la liste d'un dossier avant de la lire en fond.
+    fn open_wait(&self) -> Duration {
+        self.open_wait_override
+            .unwrap_or(Duration::from_millis(self.gui.folders.open_wait_ms))
+    }
+
+    /// Liste d'un dossier lent arrivée : il s'ouvre.
+    fn poll_opening(&mut self) {
+        let Some(opening) = &self.opening else {
+            return;
+        };
+        match opening.result.try_recv() {
+            Ok(result) => {
+                let dir = opening.dir.clone();
+                self.opening = None;
+                self.install_folder(&dir, result);
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => self.opening = None,
+        }
+    }
+
+    /// Abandonne l'ouverture d'un dossier lent : le dossier d'avant reste affiché.
+    fn cancel_opening(&mut self) {
+        if let Some(opening) = self.opening.take() {
+            opening.stop.store(true, Ordering::Relaxed);
+            self.notice = Some((
+                t!("folder-open-cancelled", name = folder_name(&opening.dir)),
+                false,
+            ));
+        }
+    }
+
+    /// Ouverture d'un dossier lent : son nom, les images trouvées, et « Annuler », au
+    /// centre de la grille.
+    fn opening_box(&mut self, ctx: &egui::Context) {
+        let Some(opening) = &self.opening else {
+            return;
+        };
+        let (name, found) = (
+            folder_name(&opening.dir),
+            opening.found.load(Ordering::Relaxed),
+        );
+        let mut cancel = false;
+        egui::Area::new(egui::Id::unique("opening_box"))
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.strong(t!("folder-opening", name = &name));
+                    });
+                    ui.label(t!("folder-opening-found", count = found));
+                    ui.weak(t!("folder-opening-why"));
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if cancel {
+            self.cancel_opening();
+        }
+        // Le compte avance : redessiné de temps en temps.
+        ctx.request_repaint_after(crate::app::poll_interval(ctx));
+    }
+
+    /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
+    fn install_folder(&mut self, dir: &Path, result: std::io::Result<Folder>) {
+        match result {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
                 // Mémorisé pour le prochain lancement (sans conséquence en cas d'échec).
@@ -4630,6 +4771,12 @@ impl TriApp {
                 if action == Action::Back {
                     self.update = None;
                 }
+                continue;
+            }
+            // Ouverture d'un dossier lent : Échap l'annule ; le reste agit sur le dossier
+            // encore affiché.
+            if self.opening.is_some() && action == Action::Back {
+                self.cancel_opening();
                 continue;
             }
             // Boîte de connexion : seule la fermeture.
@@ -11447,6 +11594,13 @@ impl TriApp {
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let mut steps = crate::trace::Steps::start();
+        if self.repaint.is_none() {
+            self.repaint = Some(ctx.clone());
+        }
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.stop_background();
+        }
         ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
         // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
         // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
@@ -11464,6 +11618,7 @@ impl eframe::App for TriApp {
             trace(|| "moteur démarré".into());
         }
         self.drain_events();
+        steps.mark("événements");
         // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder
         // sur la liste (filtre changé, image renommée…).
         // Retour à la grille depuis une image cachée d'une pile (mode pile) : sa couverture.
@@ -11474,7 +11629,9 @@ impl eframe::App for TriApp {
         if hidden || self.stacks_dirty || self.stacks.shown.iter().any(|&i| i >= self.files.len()) {
             self.regroup();
         }
+        steps.mark("piles");
         self.watch_volumes(&ctx);
+        self.poll_opening();
         self.poll_loading(&ctx);
         if self.engine_backlog {
             ctx.request_repaint();
@@ -11490,10 +11647,13 @@ impl eframe::App for TriApp {
         if ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
             self.mouse_active = true;
         }
+        steps.mark("fonds");
         self.handle_keys(&ctx);
+        steps.mark("touches");
         // Les champs de recherche dessinés dans cette image disent s'ils ont le clavier.
         self.search_focused = None;
         self.update_loads(&ctx);
+        steps.mark("chargements");
 
         self.focus_mode_hint(&ctx);
         // Barre du haut : icône et nom, à gauche (comme darktable).
@@ -11503,6 +11663,7 @@ impl eframe::App for TriApp {
         let status_click = if self.focus_mode {
             None
         } else {
+            steps.mark("titre");
             egui::Panel::bottom("status")
                 .show(ui, |ui| self.status_bar(ui))
                 .inner
@@ -11597,6 +11758,7 @@ impl eframe::App for TriApp {
                 .resizable(true)
                 .default_size(self.gui.folders.width)
                 .show(ui, |ui| self.folder_panel(ui));
+            steps.mark("dossiers");
             folders_rect = Some(panel.response.rect);
         }
         // Recadrage : sa barre, à la place du bandeau de notation.
@@ -11647,6 +11809,7 @@ impl eframe::App for TriApp {
         }
         // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
         // plein écran).
+        steps.mark("panneaux");
         let mut central = egui::CentralPanel::default();
         if let Some(fill) = self
             .background
@@ -11705,6 +11868,8 @@ impl eframe::App for TriApp {
                 self.help_lines = Some(HelpLines::new(&self.keymap, ""));
             }
         }
+        steps.mark("centre");
+        self.opening_box(&ctx);
         self.settings_window(&ctx);
         self.history_dialog(&ctx);
         self.export_report_dialog(&ctx);
@@ -11734,6 +11899,8 @@ impl eframe::App for TriApp {
         self.track_window(&ctx);
         self.save_display();
         self.handle_screenshot(&ctx);
+        steps.mark("boîtes");
+        steps.finish(self.gui.trace_slow_ms);
     }
 }
 
@@ -16841,6 +17008,63 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn a_slow_folder_opens_in_the_background_and_can_be_cancelled() {
+        // Retour du 29/10/2026 (NAS) : l'interface restait figée pendant la lecture du
+        // dossier, sans rien dire ni moyen d'annuler. Attente nulle : la liste se lit
+        // toujours en fond ici.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = h.state().folder.dir.clone();
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::from_pixel(8, 8, image::Rgb([9, 9, 9]))
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.state_mut().open_wait_override = Some(Duration::ZERO);
+        // Annulée tout de suite : le dossier d'avant reste.
+        h.state_mut().open_folder(&other);
+        assert!(h.state().opening.is_some(), "lue en fond");
+        h.state_mut().cancel_opening();
+        h.run_steps(5);
+        assert_eq!(h.state().folder.dir, photos);
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(n, _)| n == "Ouverture de « autre » annulée.")
+        );
+        // Laissée finir : le dossier s'ouvre.
+        h.state_mut().open_folder(&other);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while h.state().opening.is_some() {
+            assert!(Instant::now() < deadline, "ouverture en fond");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.state().folder.dir, std::path::absolute(&other).unwrap());
+        assert_eq!(h.state().files.len(), 1);
+        // La boîte d'attente, et Échap qui annule (liste qui n'arrive jamais).
+        let (_tx, rx) = mpsc::channel();
+        h.state_mut().opening = Some(Opening {
+            dir: photos.clone(),
+            result: rx,
+            stop: Arc::new(AtomicBool::new(false)),
+            found: Arc::new(AtomicUsize::new(12)),
+        });
+        h.run_steps(2);
+        wait_for_label(&mut h, "Ouverture de « photos »…");
+        wait_for_label(&mut h, "12 images trouvées");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().opening.is_none());
+        assert_eq!(
+            h.state().files.len(),
+            1,
+            "le dossier affiché n'a pas changé"
+        );
     }
 
     #[test]

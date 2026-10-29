@@ -8,6 +8,11 @@
   or deleting an image also takes its darktable clones (`IMG_01.RAF.xmp`…) and the
   settings of RawTherapee (`.pp3`), ART (`.arp`) and Capture One
   (`CaptureOne/Settings…/IMG.RAF.cos`, kept in its subfolder). They used to stay behind.
+- **Slow folders (NAS, slow disk)**: a folder whose list takes time opens in the
+  background, with a box showing how many images were found so far and a Cancel button
+  (or Escape); the previous folder stays on screen meanwhile. Quitting no longer waits for
+  the thumbnails in progress. `TRI_GUI_TRACE=1` now also traces slow frames of the
+  interface, step by step (`[gui] trace_slow_ms`).
 - **Network login box**: a server asking for an account that the system does not ask
   for itself (Linux, Windows; macOS keeps its own dialog) opens a box: user, domain
   (SMB), password, "Remember the password" (Windows Credential Manager, desktop keyring on

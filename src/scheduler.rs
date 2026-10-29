@@ -749,6 +749,21 @@ impl Scheduler {
     }
 }
 
+impl Scheduler {
+    /// Arrête les workers sans les attendre (fermeture de l'application : un calcul en
+    /// cours sur un NAS lent peut durer, retour du 29/10/2026). Ils finissent leur fichier
+    /// en fond ou disparaissent avec le processus ; les entrées du cache s'écrivent sous
+    /// un nom temporaire puis sont renommées, jamais à moitié.
+    pub fn detach(&mut self) {
+        let mut s = self.shared.lock();
+        s.shutdown = true;
+        s.cancel_running(|_| false);
+        drop(s);
+        self.shared.work.notify_all();
+        self.threads.clear();
+    }
+}
+
 impl Drop for Scheduler {
     fn drop(&mut self) {
         let mut s = self.shared.lock();

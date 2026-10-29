@@ -8,7 +8,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver};
 
 use crate::filter::{Filter, Groups, KindFilter, ungrouped};
@@ -44,8 +44,27 @@ impl Folder {
     /// ([`Loading`]) et restent vides en attendant ([`NoteBook::pending`]). Issue n° 15 :
     /// 2 820 images sur un disque dur externe, 15 s sans rien à l'écran.
     pub fn scan(dir: &Path, depth: usize, convention: Convention) -> io::Result<Folder> {
+        Folder::scan_counting(
+            dir,
+            depth,
+            convention,
+            &AtomicBool::new(false),
+            &AtomicUsize::new(0),
+        )
+    }
+
+    /// Comme [`Folder::scan`], interruptible (`stop`) et avec le nombre d'images trouvées
+    /// (`found`) : à lancer dans un fil à part pour un dossier lent
+    /// ([`media::scan_counting`]).
+    pub fn scan_counting(
+        dir: &Path,
+        depth: usize,
+        convention: Convention,
+        stop: &AtomicBool,
+        found: &AtomicUsize,
+    ) -> io::Result<Folder> {
         let dir = std::path::absolute(dir)?;
-        let files = media::scan(&dir, depth)?;
+        let files = media::scan_counting(&dir, depth, stop, found)?;
         let notes = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         Ok(Folder { dir, files, notes })
     }

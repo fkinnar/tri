@@ -135,6 +135,9 @@ pub struct GuiSettings {
     /// Touche qui est un raccourci et le début d'un autre (`y` et `y w`) : délai d'attente
     /// de la suite (ms) avant d'agir seule.
     pub key_ambiguous_timeout_ms: u64,
+    /// Trace (`TRI_GUI_TRACE`) : une image de l'interface plus lente que ce délai (ms)
+    /// est tracée avec la durée de ses étapes.
+    pub trace_slow_ms: u64,
     /// Taille initiale de la fenêtre (points).
     pub window: [f32; 2],
     /// Rendus RAW : à la demande (image affichée et voisines, en mode RAW) ou tout le
@@ -226,6 +229,7 @@ impl Default for GuiSettings {
             leader: "Ctrl+b".into(),
             key_sequence_timeout_ms: 1000,
             key_ambiguous_timeout_ms: 300,
+            trace_slow_ms: 100,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
@@ -836,6 +840,10 @@ pub struct FolderSettings {
     /// « Ouvrir dans Darktable » : délai (ms) pendant lequel on se fie à la dernière
     /// vérification « déjà ouvert » (Windows ; le menu se redessine à chaque image).
     pub running_check_ms: u64,
+    /// Ouverture d'un dossier : délai (ms) pendant lequel l'interface attend sa liste
+    /// d'images ; au-delà (NAS, disque lent), elle la lit en fond, avec la progression et
+    /// de quoi annuler.
+    pub open_wait_ms: u64,
 }
 
 impl Default for FolderSettings {
@@ -851,6 +859,7 @@ impl Default for FolderSettings {
             section_scale: 1.25,
             section_gap: 6.0,
             running_check_ms: 1000,
+            open_wait_ms: 150,
         }
     }
 }

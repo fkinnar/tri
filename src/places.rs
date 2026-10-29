@@ -728,6 +728,16 @@ impl Monitor {
     }
 }
 
+impl Monitor {
+    /// Arrête la surveillance des volumes sans l'attendre (fermeture de l'application).
+    pub fn detach(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            thread.thread().unpark();
+        }
+    }
+}
+
 impl Drop for Monitor {
     fn drop(&mut self) {
         self.stop.store(true, std::sync::atomic::Ordering::Relaxed);

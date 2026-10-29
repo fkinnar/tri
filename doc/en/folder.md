@@ -15,6 +15,12 @@ one "opens a folder".
   folder's state for its watch (`watch::Snapshot`, one disk access per file, best done
   there). `try_take()` returns `Loaded { notes, snapshot }` once done; the interface takes
   the ratings with `NoteBook::adopt`;
+- `Folder::scan_counting(dir, depth, convention, stop, found)` (2026-10-29): `scan`,
+  interruptible, counting the images found (`media::scan_counting`). On a NAS, even the
+  list can take time: the interface reads it in a thread, waits `[gui.folders]
+  open_wait_ms` for it (150 ms: nothing changes on a local disk), then lets it finish in
+  the background with a box in the middle ("Opening "shoot"… 340 images found", Cancel or
+  Escape); the previous folder stays on screen meanwhile;
 - `Folder::filtered(type, rule)`: filter by type then filter on ratings, combined here
   once and for all (previously: in the interface);
 - `Folder::default()` / `is_none()`: no folder open (interface launched without a folder).

@@ -227,6 +227,17 @@ impl FolderWatch {
     }
 }
 
+impl FolderWatch {
+    /// Arrête la surveillance sans attendre la fin d'un relevé en cours (fermeture de
+    /// l'application).
+    pub fn detach(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            thread.thread().unpark();
+        }
+    }
+}
+
 impl Drop for FolderWatch {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
