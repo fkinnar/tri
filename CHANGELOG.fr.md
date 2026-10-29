@@ -4,6 +4,13 @@
 
 ## À venir
 
+- **Boîte de connexion réseau** : un serveur qui demande un compte que le système ne
+  demande pas lui-même (Linux, Windows ; macOS garde sa boîte) ouvre une boîte :
+  utilisateur, domaine (SMB), mot de passe, « Retenir le mot de passe » (gestionnaire
+  d'identifiants de Windows, trousseau du bureau sous Linux). Un compte refusé fait
+  revenir la boîte avec l'explication ; les autres échecs disent pourquoi (serveur
+  injoignable, partage inconnu, déjà connecté sous un autre compte). Les copies FTP s'en
+  servent aussi ; SFTP reste aux clés SSH.
 - **Serveurs réseau, autres protocoles** : en plus de SMB, les adresses `afp://`,
   `ftp://`, `sftp://`, `dav://` / `davs://` (WebDAV) et `nfs://`, montées par le système
   quand il le sait (tout sous Linux, tout sauf SFTP sous macOS, SMB et WebDAV sous

@@ -79,11 +79,13 @@ struct RemoteCopy {
     field: crate::path_field::PathField,
     /// Boîte montrée (sinon, la copie continue en fond, progression dans la barre d'état).
     shown: bool,
+    /// Compte saisi dans la boîte de connexion (FTP), gardé pour la copie.
+    login: Option<tri::servers::Login>,
 }
 
 enum RemoteStage {
     /// Lecture du dossier du serveur.
-    Scanning(Receiver<Result<tri::remote::Listing, String>>),
+    Scanning(Receiver<Result<tri::remote::Listing, tri::servers::ConnectError>>),
     /// Ce qui sera copié, à confirmer.
     Confirm(tri::remote::Listing),
     /// Copie en cours : progression (fichiers, octets) et fin.
@@ -102,6 +104,29 @@ enum RemoteEvent {
     /// Fin, ou l'erreur.
     Done(Result<(), String>),
 }
+
+/// Boîte de connexion (demandée le 29/10/2026) : le serveur demande un compte que le
+/// système ne demande pas lui-même (Linux, Windows ; macOS a sa propre boîte).
+struct LoginBox {
+    /// Le serveur à rejoindre.
+    server: tri::servers::Server,
+    /// Pour une copie en local (FTP, SFTP) plutôt qu'un montage.
+    copy: bool,
+    /// Utilisateur, domaine (SMB), mot de passe.
+    user: String,
+    domain: String,
+    password: String,
+    /// Retenir le mot de passe ([`tri::servers::Server::save_login`]).
+    remember: bool,
+    /// Le compte précédent vient d'être refusé.
+    refused: bool,
+    /// Clavier déjà donné au premier champ vide.
+    focused: bool,
+}
+
+/// Fin d'un montage ou d'une connexion : le dossier, ou la cause de l'échec ; et
+/// l'échec éventuel de « retenir le mot de passe ».
+type Mounted = (Result<PathBuf, tri::servers::ConnectError>, Option<String>);
 
 /// Partages d'un serveur, demandés au système dans un fil à part.
 enum ShareList {
@@ -225,12 +250,20 @@ pub struct TriApp {
     ejecting: Option<(PathBuf, Receiver<Result<(), String>>)>,
     /// Montage en cours d'un support pas monté (#113) : périphérique, et dossier où il
     /// est monté à venir.
-    mounting: Option<(PathBuf, Receiver<Result<PathBuf, String>>)>,
+    mounting: Option<(PathBuf, Receiver<Mounted>)>,
     /// Partage réseau en cours de connexion (par `mounting`), mémorisé une fois rejoint.
     connecting: Option<tri::servers::Server>,
     /// Rejoint un partage (`Server::connect` ; remplacé dans les tests, qui ne touchent
     /// pas au réseau).
-    connector: fn(&tri::servers::Server) -> Result<PathBuf, String>,
+    connector: fn(
+        &tri::servers::Server,
+        Option<&tri::servers::Login>,
+    ) -> Result<PathBuf, tri::servers::ConnectError>,
+    /// Retient un compte une fois connecté (`Server::save_login` ; remplacé dans les
+    /// tests, qui ne touchent pas au trousseau).
+    login_saver: fn(&tri::servers::Server, &tri::servers::Login) -> Result<(), String>,
+    /// Boîte de connexion ouverte.
+    login: Option<LoginBox>,
     /// Liste les partages d'un serveur (`Host::shares` ; remplacé dans les tests).
     share_lister: fn(&tri::servers::Host) -> Result<Vec<String>, String>,
     /// Partages du serveur tapé dans la recherche des dossiers (`smb://nas/`) : serveur,
@@ -239,8 +272,12 @@ pub struct TriApp {
     /// Copie en local en cours d'un serveur que le système ne sait pas monter.
     remote: Option<RemoteCopy>,
     /// Lit le dossier d'un serveur à copier (`remote::scan` ; remplacé dans les tests).
-    remote_scanner:
-        fn(&tri::servers::Server, usize, &AtomicBool) -> Result<tri::remote::Listing, String>,
+    remote_scanner: fn(
+        &tri::servers::Server,
+        Option<&tri::servers::Login>,
+        usize,
+        &AtomicBool,
+    ) -> Result<tri::remote::Listing, tri::servers::ConnectError>,
     /// Déplacements du cache en cours (garder le cache sur un disque, dans un dossier, ou
     /// le faire suivre un dossier déplacé), chacun dans un fil ; message à la fin.
     cache_jobs: Vec<std::thread::JoinHandle<Option<(String, bool)>>>,
@@ -801,7 +838,9 @@ impl TriApp {
             ejecting: None,
             mounting: None,
             connecting: None,
-            connector: |server| server.connect(std::env::consts::OS),
+            connector: |server, login| server.connect(std::env::consts::OS, login),
+            login_saver: |server, login| server.save_login(std::env::consts::OS, login),
+            login: None,
             share_lister: |host| host.shares(std::env::consts::OS),
             shares: None,
             remote: None,
@@ -3172,17 +3211,28 @@ impl TriApp {
         let repaint = ctx.clone();
         let target = device.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(tri::places::mount(&target));
+            let mounted = tri::places::mount(&target).map_err(tri::servers::ConnectError::Failed);
+            let _ = tx.send((mounted, None));
             repaint.request_repaint();
         });
         self.notice = Some((t!("mounting", name = self.place_name(&device)), false));
         self.mounting = Some((device, rx));
     }
 
-    /// Rejoint le partage réseau `server` dans un fil à part (le système peut demander le
-    /// mot de passe) ; une fois rejoint, il est mémorisé et son dossier s'ouvre
-    /// (`poll_mount`).
+    /// Rejoint le partage réseau `server` dans un fil à part ; une fois rejoint, il est
+    /// mémorisé et son dossier s'ouvre (`poll_mount`). Un compte demandé ouvre la boîte
+    /// de connexion ([`TriApp::login_dialog`]).
     fn start_connect(&mut self, ctx: &egui::Context, server: tri::servers::Server) {
+        self.start_connect_as(ctx, server, None);
+    }
+
+    /// [`TriApp::start_connect`] avec le compte `login` saisi dans la boîte.
+    fn start_connect_as(
+        &mut self,
+        ctx: &egui::Context,
+        server: tri::servers::Server,
+        login: Option<tri::servers::Login>,
+    ) {
         if self.mounting.is_some() {
             return;
         }
@@ -3191,15 +3241,20 @@ impl TriApp {
         if !server.protocol.mountable(std::env::consts::OS)
             && tri::remote::supported(server.protocol)
         {
-            self.start_remote(ctx, server);
+            self.start_remote_as(ctx, server, login);
             return;
         }
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
         let target = server.clone();
-        let connector = self.connector;
+        let (connector, saver) = (self.connector, self.login_saver);
         std::thread::spawn(move || {
-            let _ = tx.send(connector(&target));
+            let result = connector(&target, login.as_ref());
+            let not_saved = match (&result, &login) {
+                (Ok(_), Some(login)) if login.remember => saver(&target, login).err(),
+                _ => None,
+            };
+            let _ = tx.send((result, not_saved));
             repaint.request_repaint();
         });
         self.notice = Some((t!("connecting", name = server.name()), false));
@@ -3209,7 +3264,13 @@ impl TriApp {
 
     /// Copie en local de `server` : lecture de son dossier dans un fil à part, puis la
     /// boîte de confirmation ([`TriApp::remote_dialog`]).
-    fn start_remote(&mut self, ctx: &egui::Context, server: tri::servers::Server) {
+    /// `login` : compte saisi dans la boîte de connexion (FTP).
+    fn start_remote_as(
+        &mut self,
+        ctx: &egui::Context,
+        server: tri::servers::Server,
+        login: Option<tri::servers::Login>,
+    ) {
         if let Some(remote) = &mut self.remote {
             remote.shown = true;
             return;
@@ -3217,10 +3278,10 @@ impl TriApp {
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel();
         let repaint = ctx.clone();
-        let (target, stop) = (server.clone(), cancel.clone());
+        let (target, stop, account) = (server.clone(), cancel.clone(), login.clone());
         let (scanner, depth) = (self.remote_scanner, self.settings.remote.depth);
         std::thread::spawn(move || {
-            let _ = tx.send(scanner(&target, depth, &stop));
+            let _ = tx.send(scanner(&target, account.as_ref(), depth, &stop));
             repaint.request_repaint();
         });
         let destination = tri::remote::default_destination(&self.settings.remote, &server);
@@ -3231,6 +3292,7 @@ impl TriApp {
             destination: crate::files::tilde(&destination),
             field: Default::default(),
             shown: true,
+            login,
         });
     }
 
@@ -3244,8 +3306,20 @@ impl TriApp {
         match &mut remote.stage {
             RemoteStage::Scanning(rx) => match rx.try_recv() {
                 Ok(Ok(listing)) => remote.stage = RemoteStage::Confirm(listing),
+                Ok(Err(tri::servers::ConnectError::NeedsLogin {
+                    user,
+                    domain,
+                    refused,
+                })) => {
+                    let server = remote.server.clone();
+                    self.remote = None;
+                    self.open_login(server, true, user, domain, refused);
+                }
                 Ok(Err(e)) => {
-                    self.notice = Some((t!("remote-scan-failed", name = &name, error = e), true));
+                    self.notice = Some((
+                        t!("remote-scan-failed", name = &name, error = e.to_string()),
+                        true,
+                    ));
                     self.remote = None;
                 }
                 Err(_) => {}
@@ -3365,13 +3439,22 @@ impl TriApp {
             let repaint = ctx.clone();
             let (server, stop) = (remote.server.clone(), remote.cancel.clone());
             let (list, dest, batch) = (listing.clone(), to.clone(), self.settings.remote.batch);
+            let login = remote.login.clone();
             std::thread::spawn(move || {
                 let progress_tx = tx.clone();
                 let progress_repaint = repaint.clone();
-                let result = tri::remote::download(&server, &list, &dest, batch, &stop, |f, b| {
-                    let _ = progress_tx.send(RemoteEvent::Progress(f, b));
-                    progress_repaint.request_repaint();
-                });
+                let result = tri::remote::download(
+                    &server,
+                    login.as_ref(),
+                    &list,
+                    &dest,
+                    batch,
+                    &stop,
+                    |f, b| {
+                        let _ = progress_tx.send(RemoteEvent::Progress(f, b));
+                        progress_repaint.request_repaint();
+                    },
+                );
                 let _ = tx.send(RemoteEvent::Done(result));
                 repaint.request_repaint();
             });
@@ -3388,6 +3471,121 @@ impl TriApp {
             }
         } else if hide || (copying && modal.should_close()) {
             remote.shown = false;
+        }
+    }
+
+    /// Ouvre la boîte de connexion de `server` (`copy` : pour une copie en local),
+    /// pré-remplie avec `user` et `domain` ; `refused` : le compte précédent a été refusé.
+    fn open_login(
+        &mut self,
+        server: tri::servers::Server,
+        copy: bool,
+        user: Option<String>,
+        domain: Option<String>,
+        refused: bool,
+    ) {
+        self.login = Some(LoginBox {
+            user: user.or_else(|| server.user.clone()).unwrap_or_default(),
+            domain: domain.unwrap_or_default(),
+            password: String::new(),
+            remember: false,
+            refused,
+            focused: false,
+            copy,
+            server,
+        });
+    }
+
+    /// Ferme la boîte de connexion sans se connecter.
+    fn close_login(&mut self) {
+        if let Some(login) = self.login.take() {
+            self.notice = Some((t!("login-cancelled", name = login.server.name()), false));
+        }
+    }
+
+    /// Boîte de connexion : utilisateur, domaine (SMB), mot de passe, « retenir » quand le
+    /// système sait le garder ; Entrée se connecte, Échap renonce.
+    fn login_dialog(&mut self, ctx: &egui::Context) {
+        let Some(login) = self.login.as_mut() else {
+            return;
+        };
+        let os = std::env::consts::OS;
+        let at = ctx.content_rect().center() - vec2(180.0, 120.0);
+        let title = t!("login-title", name = login.server.name());
+        let (mut connect, mut cancel) = (false, false);
+        let modal = modal_at("login_dialog", at).title(title).show(ctx, |ui| {
+            ui.label(t!("login-why", address = login.server.address()));
+            if login.refused {
+                ui.colored_label(ui.visuals().error_fg_color, t!("login-refused"));
+            }
+            ui.add_space(6.0);
+            let width = 240.0;
+            let mut enter = false;
+            egui::Grid::new("login_fields")
+                .num_columns(2)
+                .spacing(vec2(8.0, 6.0))
+                .show(ui, |ui| {
+                    ui.label(t!("login-user"));
+                    let user =
+                        ui.add(egui::TextEdit::singleline(&mut login.user).desired_width(width));
+                    ui.end_row();
+                    let mut fields = vec![user.clone()];
+                    if login.server.protocol == tri::servers::Protocol::Smb {
+                        ui.label(t!("login-domain"));
+                        fields.push(
+                            ui.add(
+                                egui::TextEdit::singleline(&mut login.domain)
+                                    .hint_text(t!("login-domain-hint"))
+                                    .desired_width(width),
+                            ),
+                        );
+                        ui.end_row();
+                    }
+                    ui.label(t!("login-password"));
+                    let password = ui.add(
+                        egui::TextEdit::singleline(&mut login.password)
+                            .password(true)
+                            .desired_width(width),
+                    );
+                    ui.end_row();
+                    if !login.focused {
+                        login.focused = true;
+                        if login.user.is_empty() {
+                            user.request_focus();
+                        } else {
+                            password.request_focus();
+                        }
+                    }
+                    fields.push(password);
+                    enter = fields.iter().any(|f| f.lost_focus())
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                });
+            if !login.copy && login.server.can_save_login(os) {
+                ui.checkbox(&mut login.remember, t!("login-remember"));
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                connect = ui.button(t!("login-connect")).clicked() || enter;
+                cancel = ui.button(t!("cancel")).clicked();
+            });
+        });
+        if connect {
+            let Some(login) = self.login.take() else {
+                return;
+            };
+            let account = tri::servers::Login {
+                user: login.user.trim().to_string(),
+                domain: login.domain.trim().to_string(),
+                password: login.password,
+                remember: login.remember,
+            };
+            if login.copy {
+                self.start_remote_as(ctx, login.server, Some(account));
+            } else {
+                self.start_connect_as(ctx, login.server, Some(account));
+            }
+        } else if cancel || modal.should_close() {
+            self.close_login();
         }
     }
 
@@ -3414,7 +3612,7 @@ impl TriApp {
         let Some((device, rx)) = &self.mounting else {
             return;
         };
-        let Ok(result) = rx.try_recv() else {
+        let Ok((result, not_saved)) = rx.try_recv() else {
             return;
         };
         let name = self.place_name(device);
@@ -3422,20 +3620,36 @@ impl TriApp {
         if let Some(server) = self.connecting.take() {
             let name = server.name();
             match result {
+                Err(tri::servers::ConnectError::NeedsLogin {
+                    user,
+                    domain,
+                    refused,
+                }) => {
+                    self.notice = None;
+                    self.open_login(server, false, user, domain, refused);
+                }
                 Ok(dir) => {
                     if let Some(data) = self.data_dir.clone()
                         && let Ok(list) = tri::servers::remember(&data, &server)
                     {
                         self.tree.set_servers(list);
                     }
-                    self.notice = Some((t!("connected", name = &name), false));
+                    self.notice = Some(match not_saved {
+                        Some(e) => (t!("connected-not-saved", name = &name, error = e), true),
+                        None => (t!("connected", name = &name), false),
+                    });
                     self.tree.refresh();
                     self.tree.reveal(&dir);
                     self.tree.point_at(&dir);
                     self.reveal_folder = true;
                     self.open_folder(&dir);
                 }
-                Err(e) => self.notice = Some((t!("connect-failed", name = &name, error = e), true)),
+                Err(e) => {
+                    self.notice = Some((
+                        t!("connect-failed", name = &name, error = e.to_string()),
+                        true,
+                    ))
+                }
             }
             return;
         }
@@ -3447,7 +3661,12 @@ impl TriApp {
                 self.reveal_folder = true;
                 self.open_folder(&dir);
             }
-            Err(e) => self.notice = Some((t!("mount-failed", name = &name, error = e), true)),
+            Err(e) => {
+                self.notice = Some((
+                    t!("mount-failed", name = &name, error = e.to_string()),
+                    true,
+                ))
+            }
         }
     }
 
@@ -4410,6 +4629,13 @@ impl TriApp {
             if self.update.is_some() {
                 if action == Action::Back {
                     self.update = None;
+                }
+                continue;
+            }
+            // Boîte de connexion : seule la fermeture.
+            if self.login.is_some() {
+                if action == Action::Back {
+                    self.close_login();
                 }
                 continue;
             }
@@ -11489,6 +11715,7 @@ impl eframe::App for TriApp {
         self.poll_export();
         self.eject_dialog(&ctx);
         self.remote_dialog(&ctx);
+        self.login_dialog(&ctx);
         self.update_dialog(&ctx);
         self.download_dialog(&ctx);
         self.histogram_dialog(&ctx);
@@ -15396,7 +15623,12 @@ mod tests {
             assert_eq!(host.host, "nas.local");
             Ok(vec!["home".into(), "kphoto".into()])
         };
-        h.state_mut().connector = |server| Err(format!("refus de test ({})", server.share));
+        h.state_mut().connector = |server, _| {
+            Err(tri::servers::ConnectError::Failed(format!(
+                "refus de test ({})",
+                server.share
+            )))
+        };
         press(&mut h, Key::B, Modifiers::CTRL);
         press(&mut h, Key::H, Modifiers::NONE);
         press(&mut h, Key::C, Modifiers::NONE);
@@ -15469,7 +15701,7 @@ mod tests {
         // « avant de télécharger 60 To ». Faux serveur : rien n'est demandé au réseau.
         let (mut h, dir) = harness();
         h.state_mut().settings.remote.destination = dir.path().join("copies").display().to_string();
-        h.state_mut().remote_scanner = |server, _, _| {
+        h.state_mut().remote_scanner = |server, _, _, _| {
             assert_eq!(server.host, "tri-test-host");
             Ok(tri::remote::Listing {
                 files: vec![
@@ -15490,7 +15722,7 @@ mod tests {
         };
         let server = tri::servers::Server::parse("sftp://tri-test-host/photo/Séance").unwrap();
         let ctx = h.ctx.clone();
-        h.state_mut().start_remote(&ctx, server);
+        h.state_mut().start_remote_as(&ctx, server, None);
         h.run_steps(3);
         wait_for_label(&mut h, "2 images, 8,0 Go à copier");
         let destination = h.state().remote.as_ref().unwrap().destination.clone();
@@ -15505,6 +15737,109 @@ mod tests {
         assert!(!dir.path().join("copies").exists(), "rien de téléchargé");
         assert_eq!(size_label(812_000_000), "812 Mo");
         assert_eq!(size_label(60_000_000_000_000), "60,0 To");
+    }
+
+    #[test]
+    fn a_server_asking_for_an_account_opens_the_login_box_until_it_is_accepted() {
+        // Retours du 29/10/2026 (Mint, Windows) : un serveur qui demande un compte ne
+        // donnait rien. La boîte de connexion s'ouvre, revient sur un refus, et le compte
+        // accepté est retenu à la demande. Faux serveur et faux trousseau.
+        let (mut h, _dir) = harness();
+        h.state_mut().connector = |server, login| match login {
+            None => Err(tri::servers::ConnectError::NeedsLogin {
+                user: Some("fab".into()),
+                domain: None,
+                refused: false,
+            }),
+            Some(l) if l.password == "bon" && l.user == "fab" && l.domain == "MAISON" => {
+                assert_eq!(server.host, "tri-test-nas");
+                Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+            }
+            Some(l) => Err(tri::servers::ConnectError::NeedsLogin {
+                user: Some(l.user.clone()),
+                domain: Some(l.domain.clone()),
+                refused: true,
+            }),
+        };
+        h.state_mut().login_saver = |_, login| {
+            assert!(login.remember);
+            Err(format!("trousseau de test ({})", login.user))
+        };
+        let server = tri::servers::Server::parse("smb://tri-test-nas/photo").unwrap();
+        let ctx = h.ctx.clone();
+        let wait_box = |h: &mut Harness<'_, TriApp>, refused: bool| {
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while !h
+                .state()
+                .login
+                .as_ref()
+                .is_some_and(|l| l.refused == refused)
+            {
+                assert!(Instant::now() < deadline, "boîte de connexion");
+                h.run_steps(1);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            h.run_steps(2);
+        };
+        h.state_mut().start_connect(&ctx, server.clone());
+        wait_box(&mut h, false);
+        wait_for_label(
+            &mut h,
+            "Le serveur smb://tri-test-nas/photo demande un compte.",
+        );
+        assert_eq!(
+            h.state().login.as_ref().unwrap().user,
+            "fab",
+            "utilisateur proposé"
+        );
+        assert!(h.query_by_label("Domaine").is_some(), "SMB : domaine");
+        // Mauvais mot de passe : la boîte revient, avec l'explication.
+        let login = h.state_mut().login.as_mut().unwrap();
+        login.domain = "MAISON".into();
+        login.password = "faux".into();
+        click_settled(&mut h, "Se connecter");
+        wait_box(&mut h, true);
+        wait_for_label(
+            &mut h,
+            "Utilisateur ou mot de passe refusé : vérifiez-les et réessayez.",
+        );
+        let login = h.state_mut().login.as_mut().unwrap();
+        assert_eq!(
+            (login.user.as_str(), login.domain.as_str()),
+            ("fab", "MAISON")
+        );
+        assert!(login.password.is_empty(), "mot de passe à retaper");
+        login.password = "bon".into();
+        login.remember = true;
+        click_settled(&mut h, "Se connecter");
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !h
+            .state()
+            .notice
+            .as_ref()
+            .is_some_and(|(n, _)| n.contains("trousseau de test (fab)"))
+        {
+            assert!(
+                Instant::now() < deadline,
+                "connecté : {:?}",
+                h.state().notice
+            );
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(h.state().login.is_none());
+        // Échap renonce.
+        h.state_mut().open_login(server, false, None, None, false);
+        h.run_steps(3);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().login.is_none());
+        assert!(
+            h.state()
+                .notice
+                .as_ref()
+                .is_some_and(|(n, _)| n.contains("abandonnée"))
+        );
     }
 
     #[test]

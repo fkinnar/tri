@@ -38,25 +38,38 @@ clair (`Protocol::mountable`), sauf FTP et SFTP : **copie en local**, confirmée
 chemin voulu (`sftp://nas/home/moi/photo` dans un montage de `sftp://nas/`), en SMB comme
 en AFP pour un même partage, en WebDAV chiffré ou pas.
 
-## Connexion (`Server::connect`) : le système s'en charge
+## Connexion (`Server::connect`) : le système monte, `tri` demande le compte
 
-Pas de client SMB dans `tri` : le système monte, et demande lui-même le mot de passe
-(rien à stocker de notre côté).
+Pas de client SMB dans `tri` : le système monte. Quand le serveur demande un compte que
+le système ne demande pas lui-même, `connect` renvoie `ConnectError::NeedsLogin` et
+l'interface ouvre sa **boîte de connexion** (29/10/2026) : utilisateur, domaine (SMB),
+mot de passe, « Retenir le mot de passe » ; puis `connect` est rappelé avec le `Login`.
 
-| Système | Comment | Mot de passe |
+| Système | Comment | Compte |
 | --- | --- | --- |
-| Windows | chemin UNC lu directement (`\\nas\photo`) | identifiants de Windows (ceux enregistrés par l'Explorateur) |
-| macOS | `osascript -e 'mount volume "smb://…"'`, monté dans `/Volumes` | boîte du système, trousseau |
-| Linux | `gio mount smb://…` (GVFS, comme Nemo et Nautilus) | trousseau GNOME s'il est déjà enregistré |
+| Windows | chemin UNC lu directement (`\\nas\photo`) ; accès refusé (codes 5, 86, 1326, 1244) : la boîte, puis `WNetAddConnection2` | identifiants de Windows ; « Retenir » : gestionnaire d'identifiants (`CredWrite`, comme `cmdkey /add`) |
+| macOS | `osascript -e 'mount volume "smb://…"'`, monté dans `/Volumes` | boîte du système, trousseau (pas de boîte `tri`) |
+| Linux | `gio mount smb://…` (GVFS, comme Nemo et Nautilus), questions répondues par `tri` | trousseau GNOME s'il est déjà enregistré ; sinon la boîte ; « Retenir » : `secret-tool` (trousseau du bureau, attributs lus par GVFS ; sans garantie) |
+
+Sous Linux, `gio mount` pose ses questions sur sa sortie (`User [fabrice]: `,
+`Domain [WORKGROUP]: `, `Password: `, `LC_ALL=C`) ; `tri` les lit au fil de l'eau et
+répond avec le compte saisi. Sans compte, la première question ouvre la boîte ; une
+question après le mot de passe est un refus : la boîte revient avec « utilisateur ou mot
+de passe refusé ». Une question à choix (clé SFTP inconnue…) arrête avec son texte : se
+connecter une fois depuis le gestionnaire de fichiers. Le mot de passe ne passe jamais
+dans une ligne de commande et n'est jamais écrit par `tri` (seulement par le système,
+quand « Retenir » est coché).
+
+Les erreurs sont expliquées par cause : serveur injoignable (nom, réseau), partage
+inconnu (taper le serveur seul pour voir ses partages), déjà connecté sous un autre
+compte (Windows, `net use`), compte refusé.
 
 Un partage déjà monté n'est pas remonté : son dossier est retrouvé dans les montages
 (`Mounts` : sortie de `mount` sur macOS — `smbfs`, `afpfs`, `ftp`, `webdav`, `nfs` —,
 `/proc/mounts` pour CIFS, NFS, sshfs et davfs, et les montages GVFS sous Linux), **en SMB comme en AFP** (retour du 29/10/2026 : un NAS qui annonce les deux
 est souvent monté en AFP par Nemo, `afp-volume:host=…,volume=…`, et n'était pas
-reconnu). Sous Linux, `gio mount` ne peut pas demander de mot de passe sans terminal :
-un partage protégé se rejoint une fois depuis le gestionnaire de fichiers (« Se
-connecter à un serveur », mot de passe retenu), ensuite `tri` le rejoint seul. La
-connexion peut prendre plusieurs secondes : l'interface l'attend dans un fil à part.
+reconnu). La connexion peut prendre plusieurs secondes : l'interface l'attend dans un
+fil à part.
 
 ## Partages d'un serveur (`Host`)
 
@@ -101,6 +114,6 @@ la section « Réseau » (`Server::place`) :
 
 ## Plus tard
 
-Un vrai voisinage réseau (découverte des serveurs, Bonjour / mDNS) : après la bêta. Sous
-Linux, un partage protégé pas encore monté ni enregistré dans le trousseau : une boîte de
-`tri` pour l'utilisateur et le mot de passe, transmis à `gio mount` sans être gardés.
+Un vrai voisinage réseau (découverte des serveurs, Bonjour / mDNS) : prochaine étape. La
+boîte de connexion n'a pas encore été essayée sur de vrais serveurs (Windows, Mint) ;
+« Retenir » sous Linux dépend du trousseau du bureau.

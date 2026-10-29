@@ -10,7 +10,7 @@
 //! `doc/en/servers.md`.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::places::{Place, PlaceKind};
@@ -301,27 +301,41 @@ impl Server {
     }
 
     /// Rejoint le serveur sous le système `os` et renvoie son dossier (dossiers compris).
-    /// Peut prendre plusieurs secondes (serveur lent, boîte du mot de passe) : à appeler
-    /// dans un fil à part.
-    pub fn connect(&self, os: &str) -> Result<PathBuf, String> {
+    /// Sans `login`, un serveur qui demande un compte donne
+    /// [`ConnectError::NeedsLogin`] : l'interface ouvre sa boîte de connexion, puis
+    /// rappelle avec le compte saisi. macOS demande lui-même (boîte du système,
+    /// trousseau). Peut prendre plusieurs secondes (serveur lent) : à appeler dans un fil
+    /// à part.
+    pub fn connect(&self, os: &str, login: Option<&Login>) -> Result<PathBuf, ConnectError> {
         if !self.protocol.mountable(os) {
-            return Err(crate::t!(
+            return Err(ConnectError::Failed(crate::t!(
                 "servers-unsupported",
                 protocol = self.protocol.label(),
                 system = os_name(os)
-            ));
+            )));
         }
         if os == "windows" {
             let root = self.unc();
-            fs::read_dir(&root)
-                .map_err(|e| crate::t!("servers-unreachable", error = e.to_string()))?;
-            return Ok(self.folders.iter().fold(root, |p, f| p.join(f)));
+            if let Some(login) = login {
+                windows_connect(&root, login).map_err(|code| {
+                    windows_error(Some(code), String::new(), self.user.clone(), Some(login))
+                })?;
+            }
+            return match fs::read_dir(&root) {
+                Ok(_) => Ok(self.folders.iter().fold(root, |p, f| p.join(f))),
+                Err(e) => Err(windows_error(
+                    e.raw_os_error(),
+                    e.to_string(),
+                    self.user.clone(),
+                    login,
+                )),
+            };
         }
         if let Some(dir) = self.mounted_in(&Mounts::read(os)) {
             return Ok(dir);
         }
         let address = self.root().address();
-        let mut command = if os == "macos" {
+        if os == "macos" {
             // Boîte du système (utilisateur, mot de passe, trousseau) ; l'adresse est
             // encodée, sans guillemet qui couperait la chaîne AppleScript. WebDAV : le
             // Finder attend `http(s)://`.
@@ -330,28 +344,435 @@ impl Server {
                 Protocol::Davs => address.replacen("davs://", "https://", 1),
                 _ => address,
             };
-            let mut c = crate::process::command("osascript");
-            c.args(["-e", &format!("mount volume \"{address}\"")]);
-            c
+            let output = crate::process::command("osascript")
+                .args(["-e", &format!("mount volume \"{address}\"")])
+                .stdin(std::process::Stdio::null())
+                .output()
+                .map_err(|e| {
+                    ConnectError::Failed(crate::t!("servers-tool-missing", error = e.to_string()))
+                })?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(ConnectError::Failed(crate::t!(
+                    "servers-refused",
+                    error = stderr.trim().to_string()
+                )));
+            }
         } else {
-            let mut c = crate::process::command("gio");
-            c.args(["mount", &address]);
-            c
-        };
-        let output = command
-            .stdin(std::process::Stdio::null())
-            .output()
-            .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(crate::t!(
-                "servers-refused",
-                error = stderr.trim().to_string()
-            ));
+            gio_mount(&address, self.user.as_deref(), login)?;
         }
         self.mounted_in(&Mounts::read(os))
-            .ok_or_else(|| crate::t!("servers-not-found", name = self.name()))
+            .ok_or_else(|| ConnectError::Failed(crate::t!("servers-not-found", name = self.name())))
     }
+
+    /// Vrai si la boîte de connexion peut proposer de retenir le mot de passe sous `os` :
+    /// gestionnaire d'identifiants de Windows, trousseau du bureau sous Linux
+    /// (`secret-tool`, lu par GVFS).
+    pub fn can_save_login(&self, os: &str) -> bool {
+        self.protocol.mountable(os) && matches!(os, "windows" | "linux")
+    }
+
+    /// Retient le compte `login` pour ce serveur, une fois la connexion réussie : la
+    /// prochaine fois, le système ne demande plus rien. Windows : gestionnaire
+    /// d'identifiants (`CredWrite`, comme `cmdkey /add`). Linux : trousseau du bureau
+    /// par `secret-tool`, sous les attributs que GVFS cherche (sans garantie : à vérifier
+    /// selon le bureau).
+    pub fn save_login(&self, os: &str, login: &Login) -> Result<(), String> {
+        match os {
+            "windows" => windows_save_login(&self.host, login),
+            "linux" => {
+                let mut args = vec![
+                    "store".to_string(),
+                    "--label".to_string(),
+                    format!("tri: {}", self.root().address()),
+                    "xdg:schema".to_string(),
+                    "org.gnome.keyring.NetworkPassword".to_string(),
+                    "user".to_string(),
+                    login.user.clone(),
+                    "server".to_string(),
+                    self.host.clone(),
+                    "protocol".to_string(),
+                    self.protocol.scheme().to_string(),
+                ];
+                if !login.domain.is_empty() {
+                    args.extend(["domain".to_string(), login.domain.clone()]);
+                }
+                if let Some(port) = self.port {
+                    args.extend(["port".to_string(), port.to_string()]);
+                }
+                let mut child = crate::process::command("secret-tool")
+                    .args(&args)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .map_err(|e| crate::t!("servers-tool-missing", error = e.to_string()))?;
+                if let Some(mut stdin) = child.stdin.take() {
+                    stdin
+                        .write_all(login.password.as_bytes())
+                        .map_err(|e| e.to_string())?;
+                }
+                let output = child.wait_with_output().map_err(|e| e.to_string())?;
+                if output.status.success() {
+                    Ok(())
+                } else {
+                    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Compte saisi dans la boîte de connexion.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Login {
+    /// Utilisateur (vide : celui que le système propose).
+    pub user: String,
+    /// Domaine ou groupe de travail (SMB ; vide : celui que le système propose).
+    pub domain: String,
+    /// Mot de passe.
+    pub password: String,
+    /// Retenir le mot de passe une fois connecté ([`Server::save_login`]).
+    pub remember: bool,
+}
+
+/// Jamais le mot de passe dans une trace.
+impl std::fmt::Debug for Login {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Login")
+            .field("user", &self.user)
+            .field("domain", &self.domain)
+            .field("remember", &self.remember)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Échec d'une connexion, par cause.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectError {
+    /// Le serveur demande un compte : ouvrir la boîte de connexion. `user` et `domain` :
+    /// ce que proposer ; `refused` : un compte vient d'être refusé.
+    NeedsLogin {
+        /// Utilisateur à proposer.
+        user: Option<String>,
+        /// Domaine à proposer.
+        domain: Option<String>,
+        /// Un compte vient d'être refusé.
+        refused: bool,
+    },
+    /// Autre échec, message expliqué (serveur injoignable, partage inconnu…).
+    Failed(String),
+}
+
+impl std::fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectError::NeedsLogin { refused: true, .. } => {
+                f.write_str(&crate::t!("servers-login-refused"))
+            }
+            ConnectError::NeedsLogin { .. } => f.write_str(&crate::t!("servers-login-needed")),
+            ConnectError::Failed(message) => f.write_str(message),
+        }
+    }
+}
+
+/// Une erreur Windows (`code`, texte `text`) en cause expliquée. `user` : utilisateur de
+/// l'adresse ; `login` : compte essayé (refusé si l'accès l'est encore).
+fn windows_error(
+    code: Option<i32>,
+    text: String,
+    user: Option<String>,
+    login: Option<&Login>,
+) -> ConnectError {
+    match code {
+        // Accès refusé, mot de passe faux, échec d'ouverture de session, non authentifié.
+        Some(5 | 86 | 1326 | 1244) => ConnectError::NeedsLogin {
+            user: login.map(|l| l.user.clone()).or(user),
+            domain: login.map(|l| l.domain.clone()),
+            refused: login.is_some(),
+        },
+        // Chemin réseau introuvable, emplacement injoignable.
+        Some(53 | 1231 | 1232) => ConnectError::Failed(crate::t!("servers-host-unreachable")),
+        // Nom de partage inconnu.
+        Some(67) => ConnectError::Failed(crate::t!("servers-share-missing")),
+        // Déjà connecté à ce serveur sous un autre compte.
+        Some(1219) => ConnectError::Failed(crate::t!("servers-other-account")),
+        _ => {
+            let text = if text.is_empty() {
+                code.map(|c| io::Error::from_raw_os_error(c).to_string())
+                    .unwrap_or_default()
+            } else {
+                text
+            };
+            ConnectError::Failed(crate::t!("servers-unreachable", error = text))
+        }
+    }
+}
+
+/// Connecte le partage `unc` avec le compte `login` (`WNetAddConnection2`, sans lettre de
+/// lecteur) ; le code d'erreur de Windows sinon.
+#[cfg(windows)]
+fn windows_connect(unc: &Path, login: &Login) -> Result<(), i32> {
+    use windows_sys::Win32::NetworkManagement::WNet::{
+        NETRESOURCEW, RESOURCETYPE_DISK, WNetAddConnection2W,
+    };
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let mut remote = wide(&unc.to_string_lossy());
+    let user = wide(&windows_user(login));
+    let password = wide(&login.password);
+    let resource = NETRESOURCEW {
+        dwType: RESOURCETYPE_DISK,
+        lpRemoteName: remote.as_mut_ptr(),
+        ..Default::default()
+    };
+    // SAFETY : chaînes terminées par un zéro, vivantes pendant l'appel.
+    let status = unsafe { WNetAddConnection2W(&resource, password.as_ptr(), user.as_ptr(), 0) };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(status as i32)
+    }
+}
+
+#[cfg(not(windows))]
+fn windows_connect(_unc: &Path, _login: &Login) -> Result<(), i32> {
+    Ok(())
+}
+
+/// Utilisateur pour Windows : `domaine\utilisateur` si un domaine est donné.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_user(login: &Login) -> String {
+    if login.domain.is_empty() {
+        login.user.clone()
+    } else {
+        format!(r"{}\{}", login.domain, login.user)
+    }
+}
+
+/// Retient `login` pour `host` dans le gestionnaire d'identifiants (`CredWrite`).
+#[cfg(windows)]
+fn windows_save_login(host: &str, login: &Login) -> Result<(), String> {
+    use windows_sys::Win32::Security::Credentials::{
+        CRED_PERSIST_ENTERPRISE, CRED_TYPE_DOMAIN_PASSWORD, CREDENTIALW, CredWriteW,
+    };
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let mut target = wide(host);
+    let mut user = wide(&windows_user(login));
+    let mut blob: Vec<u8> = login
+        .password
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+    let credential = CREDENTIALW {
+        Type: CRED_TYPE_DOMAIN_PASSWORD,
+        TargetName: target.as_mut_ptr(),
+        CredentialBlobSize: blob.len() as u32,
+        CredentialBlob: blob.as_mut_ptr(),
+        Persist: CRED_PERSIST_ENTERPRISE,
+        UserName: user.as_mut_ptr(),
+        ..Default::default()
+    };
+    // SAFETY : la structure et ses chaînes vivent pendant l'appel.
+    if unsafe { CredWriteW(&credential, 0) } != 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error().to_string())
+    }
+}
+
+#[cfg(not(windows))]
+fn windows_save_login(_host: &str, _login: &Login) -> Result<(), String> {
+    Ok(())
+}
+
+/// Une question de `gio mount` (fin de sa sortie, sans retour à la ligne).
+#[derive(Debug, PartialEq, Eq)]
+enum GioPrompt {
+    /// `User [proposé]: `
+    User(Option<String>),
+    /// `Domain [proposé]: `
+    Domain(Option<String>),
+    /// `Password: `
+    Password,
+    /// Question à choix (`[0] Log In Anyway`, `Choice: `), avec son texte.
+    Choice(String),
+}
+
+impl GioPrompt {
+    /// La question qui termine `text` (sortie de `gio mount` depuis la dernière réponse),
+    /// s'il y en a une.
+    fn read(text: &str) -> Option<GioPrompt> {
+        let line = text.rsplit('\n').next()?;
+        let question = line.strip_suffix(": ")?;
+        let (name, default) = match question.split_once(" [") {
+            Some((name, rest)) => (name, rest.strip_suffix(']').map(str::to_string)),
+            None => (question, None),
+        };
+        match name {
+            "User" => Some(GioPrompt::User(default)),
+            "Domain" => Some(GioPrompt::Domain(default)),
+            "Password" => Some(GioPrompt::Password),
+            "Choice" => {
+                let message = text[..text.len() - line.len()].trim();
+                Some(GioPrompt::Choice(message.to_string()))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Réponses aux questions de `gio mount`, dans l'ordre où elles viennent.
+struct GioAnswers<'a> {
+    login: Option<&'a Login>,
+    /// Utilisateur de l'adresse, proposé dans la boîte.
+    user: Option<String>,
+    /// Mot de passe déjà donné : toute nouvelle question est un refus.
+    answered: bool,
+}
+
+impl GioAnswers<'_> {
+    /// Ligne à envoyer, ou la fin de la connexion : sans compte (ou compte refusé), la
+    /// boîte de connexion.
+    fn answer(&mut self, prompt: GioPrompt) -> Result<String, ConnectError> {
+        if let GioPrompt::Choice(message) = prompt {
+            return Err(ConnectError::Failed(crate::t!(
+                "servers-question",
+                question = message
+            )));
+        }
+        match self.login {
+            Some(login) if !self.answered => Ok(match prompt {
+                GioPrompt::User(_) => login.user.clone(),
+                GioPrompt::Domain(_) => login.domain.clone(),
+                _ => {
+                    self.answered = true;
+                    login.password.clone()
+                }
+            }),
+            login => {
+                let offer = match prompt {
+                    GioPrompt::User(offer) => offer,
+                    _ => None,
+                };
+                let given = |f: fn(&Login) -> &String| {
+                    login.map(|l| f(l).clone()).filter(|s| !s.is_empty())
+                };
+                Err(ConnectError::NeedsLogin {
+                    user: given(|l| &l.user).or(self.user.clone()).or(offer),
+                    domain: given(|l| &l.domain),
+                    refused: login.is_some(),
+                })
+            }
+        }
+    }
+}
+
+/// Monte `address` par `gio mount`, en répondant à ses questions (utilisateur, domaine,
+/// mot de passe) avec `login` ; `user` : utilisateur de l'adresse. Sortie lue au fil de
+/// l'eau : les questions ne finissent pas par un retour à la ligne.
+fn gio_mount(address: &str, user: Option<&str>, login: Option<&Login>) -> Result<(), ConnectError> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = crate::process::command("gio")
+        .args(["mount", address])
+        .env("LC_ALL", "C")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            ConnectError::Failed(crate::t!("servers-tool-missing", error = e.to_string()))
+        })?;
+    let mut stdin = child.stdin.take();
+    let mut stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let errors = std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_string(&mut text);
+        }
+        text
+    });
+    let mut answers = GioAnswers {
+        login,
+        user: user.map(str::to_string),
+        answered: false,
+    };
+    let (mut pending, mut buffer, mut stop) = (Vec::new(), [0u8; 4096], None);
+    while let Some(out) = stdout.as_mut() {
+        let n = match out.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+        };
+        pending.extend_from_slice(&buffer[..n]);
+        let Some(prompt) = GioPrompt::read(&String::from_utf8_lossy(&pending)) else {
+            continue;
+        };
+        pending.clear();
+        match answers.answer(prompt) {
+            Ok(line) => {
+                if let Some(input) = stdin.as_mut() {
+                    let _ = input.write_all(format!("{line}\n").as_bytes());
+                    let _ = input.flush();
+                }
+            }
+            Err(e) => {
+                stop = Some(e);
+                let _ = child.kill();
+                break;
+            }
+        }
+    }
+    drop(stdin);
+    drop(stdout);
+    let status = child.wait();
+    let stderr = errors.join().unwrap_or_default();
+    if let Some(e) = stop {
+        return Err(e);
+    }
+    match status {
+        Ok(s) if s.success() => Ok(()),
+        _ => Err(gio_error(&stderr, user, login)),
+    }
+}
+
+/// Une erreur de `gio mount` (en anglais : `LC_ALL=C`) en cause expliquée.
+fn gio_error(stderr: &str, user: Option<&str>, login: Option<&Login>) -> ConnectError {
+    let has = |words: &[&str]| words.iter().any(|w| stderr.contains(w));
+    if has(&[
+        "Permission denied",
+        "Access denied",
+        "Login failed",
+        "Authentication failed",
+    ]) {
+        return ConnectError::NeedsLogin {
+            user: login.map(|l| l.user.clone()).or(user.map(str::to_string)),
+            domain: login.map(|l| l.domain.clone()),
+            refused: login.is_some(),
+        };
+    }
+    if has(&[
+        "Connection refused",
+        "timed out",
+        "resolve",
+        "Name or service not known",
+        "No route to host",
+        "Network is unreachable",
+        "Host is down",
+    ]) {
+        return ConnectError::Failed(crate::t!("servers-host-unreachable"));
+    }
+    if has(&["No such file or directory", "not found", "does not exist"]) {
+        return ConnectError::Failed(crate::t!("servers-share-missing"));
+    }
+    // « gio: smb://nas/photo/: Failed to mount… » : le message seul.
+    let message = stderr.trim();
+    let message = message
+        .strip_prefix("gio: ")
+        .and_then(|m| m.split_once(": ").map(|(_, rest)| rest))
+        .unwrap_or(message);
+    ConnectError::Failed(crate::t!("servers-refused", error = message.to_string()))
 }
 
 /// Nom du système `os` pour les messages.
@@ -1152,7 +1573,7 @@ mod tests {
         assert!(
             Server::parse("ftp://nas/")
                 .unwrap()
-                .connect("windows")
+                .connect("windows", None)
                 .is_err()
         );
         assert_eq!(
@@ -1307,5 +1728,163 @@ mod tests {
         assert_eq!(of_place(&list, &mac.path, "macos"), Some(&list[0]));
         assert_eq!(of_place(&list, &windows.path, "windows"), Some(&list[0]));
         assert_eq!(of_place(&list, Path::new("/ailleurs"), "macos"), None);
+    }
+
+    fn login(user: &str, password: &str) -> Login {
+        Login {
+            user: user.into(),
+            password: password.into(),
+            ..Login::default()
+        }
+    }
+
+    #[test]
+    fn the_questions_of_gio_mount_are_read_at_the_end_of_its_output() {
+        let asked = "Password required for share photo on nas\nUser [fabrice]: ";
+        assert_eq!(
+            GioPrompt::read(asked),
+            Some(GioPrompt::User(Some("fabrice".into())))
+        );
+        assert_eq!(
+            GioPrompt::read("Domain [WORKGROUP]: "),
+            Some(GioPrompt::Domain(Some("WORKGROUP".into())))
+        );
+        assert_eq!(GioPrompt::read("User: "), Some(GioPrompt::User(None)));
+        assert_eq!(GioPrompt::read("Password: "), Some(GioPrompt::Password));
+        assert_eq!(
+            GioPrompt::read(
+                "Can't verify the identity of nas.\n[0] Log In Anyway\n[1] Cancel\nChoice: "
+            ),
+            Some(GioPrompt::Choice(
+                "Can't verify the identity of nas.\n[0] Log In Anyway\n[1] Cancel".into()
+            ))
+        );
+        // Question pas encore finie, ou simple message.
+        assert_eq!(
+            GioPrompt::read("Password required for share photo\nUs"),
+            None
+        );
+        assert_eq!(GioPrompt::read("Mounted smb://nas/photo/\n"), None);
+    }
+
+    #[test]
+    fn gio_mount_is_answered_with_the_account_then_a_new_question_is_a_refusal() {
+        // Sans compte : la boîte, avec l'utilisateur proposé par GVFS.
+        let mut none = GioAnswers {
+            login: None,
+            user: None,
+            answered: false,
+        };
+        assert_eq!(
+            none.answer(GioPrompt::User(Some("fabrice".into()))),
+            Err(ConnectError::NeedsLogin {
+                user: Some("fabrice".into()),
+                domain: None,
+                refused: false
+            })
+        );
+        // Avec un compte : utilisateur, domaine (vide = celui proposé), mot de passe.
+        let account = Login {
+            domain: String::new(),
+            ..login("moi", "secret")
+        };
+        let mut answers = GioAnswers {
+            login: Some(&account),
+            user: None,
+            answered: false,
+        };
+        assert_eq!(answers.answer(GioPrompt::User(None)), Ok("moi".into()));
+        assert_eq!(
+            answers.answer(GioPrompt::Domain(Some("WORKGROUP".into()))),
+            Ok(String::new())
+        );
+        assert_eq!(answers.answer(GioPrompt::Password), Ok("secret".into()));
+        // Redemandé : refusé, la boîte revient avec l'utilisateur tapé.
+        assert_eq!(
+            answers.answer(GioPrompt::User(None)),
+            Err(ConnectError::NeedsLogin {
+                user: Some("moi".into()),
+                domain: None,
+                refused: true
+            })
+        );
+        let mut question = GioAnswers {
+            login: Some(&account),
+            user: None,
+            answered: false,
+        };
+        assert!(matches!(
+            question.answer(GioPrompt::Choice("?".into())),
+            Err(ConnectError::Failed(_))
+        ));
+    }
+
+    #[test]
+    fn connection_errors_are_explained_by_cause() {
+        let account = login("moi", "faux");
+        // Windows : accès refusé sans compte = la boîte ; avec, un refus.
+        assert_eq!(
+            windows_error(Some(5), String::new(), Some("fab".into()), None),
+            ConnectError::NeedsLogin {
+                user: Some("fab".into()),
+                domain: None,
+                refused: false
+            }
+        );
+        assert!(matches!(
+            windows_error(Some(1326), String::new(), None, Some(&account)),
+            ConnectError::NeedsLogin { refused: true, .. }
+        ));
+        let failed =
+            |e: ConnectError, key: &str| assert_eq!(e, ConnectError::Failed(crate::t!(key)));
+        failed(
+            windows_error(Some(53), String::new(), None, None),
+            "servers-host-unreachable",
+        );
+        failed(
+            windows_error(Some(67), String::new(), None, None),
+            "servers-share-missing",
+        );
+        failed(
+            windows_error(Some(1219), String::new(), None, None),
+            "servers-other-account",
+        );
+        // GVFS.
+        assert!(matches!(
+            gio_error("gio: afp://nas/: Permission denied", None, Some(&account)),
+            ConnectError::NeedsLogin { refused: true, .. }
+        ));
+        failed(
+            gio_error(
+                "gio: smb://nax/photo/: Failed to mount Windows share: Connection timed out",
+                None,
+                None,
+            ),
+            "servers-host-unreachable",
+        );
+        failed(
+            gio_error(
+                "gio: smb://nas/fotos/: Failed to mount Windows share: No such file or directory",
+                None,
+                None,
+            ),
+            "servers-share-missing",
+        );
+        assert_eq!(
+            gio_error("gio: ftp://nas/: Location is not mountable", None, None),
+            ConnectError::Failed(crate::t!(
+                "servers-refused",
+                error = "Location is not mountable"
+            ))
+        );
+        // Jamais le mot de passe dans une trace.
+        assert!(!format!("{account:?}").contains("faux"));
+        assert_eq!(
+            windows_user(&Login {
+                domain: "MAISON".into(),
+                ..account
+            }),
+            r"MAISON\moi"
+        );
     }
 }

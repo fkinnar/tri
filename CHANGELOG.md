@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Network login box**: a server asking for an account that the system does not ask
+  for itself (Linux, Windows; macOS keeps its own dialog) opens a box: user, domain
+  (SMB), password, "Remember the password" (Windows Credential Manager, desktop keyring on
+  Linux). A refused account brings the box back with an explanation; other failures say
+  why (server unreachable, share unknown, already connected under another account). FTP
+  copies use it too; SFTP stays with SSH keys.
 - **Network servers, other protocols**: besides SMB, `afp://`, `ftp://`, `sftp://`,
   `dav://` / `davs://` (WebDAV) and `nfs://` addresses, mounted by the system where it
   can (all on Linux, all but SFTP on macOS, SMB and WebDAV on Windows). Elsewhere, FTP
