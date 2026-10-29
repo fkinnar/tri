@@ -111,7 +111,10 @@ Conséquences :
   de la grille, les relevés manquants sont **différés** (`defer_stamps`, `lookup_stamp`) :
   faits par un fil à part, l'interface redessinée à leur arrivée (`on_stamps_read`) ; la
   vignette arrive une image plus tard au lieu de figer la page (encore 0,4 à 3 s à chaque
-  page sur un NAS). Les actions, elles, gardent des relevés exacts ;
+  page sur un NAS). Les lectures des sidecars de darktable (développement ou non,
+  empreinte du rendu) aussi (`deferring`, `defer_job`) : un niveau de vignette calculé
+  pendant qu'une lecture était différée n'est pas retenu (`deferred_misses`). Les
+  actions, elles, gardent des relevés exacts ;
 - **réglages changés** (taille d'aperçu, balance des blancs…) ⇒ idem, à condition que
   l'appelant les inclue dans `params` ;
 - **dossier déplacé ou renommé** ⇒ le cache n'est plus retrouvé, sauf s'il le suit

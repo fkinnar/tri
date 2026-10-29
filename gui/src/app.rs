@@ -1360,9 +1360,16 @@ impl TriApp {
                 ctx.request_repaint();
             }
         });
-        match rx.recv_timeout(self.open_wait()) {
-            Ok(result) => self.install_folder(dir, result),
-            Err(_) => {
+        // Attente nulle : toujours en fond (même un petit dossier déjà lu).
+        let wait = self.open_wait();
+        let ready = if wait.is_zero() {
+            None
+        } else {
+            rx.recv_timeout(wait).ok()
+        };
+        match ready {
+            Some(result) => self.install_folder(dir, result),
+            None => {
                 trace(|| format!("dossier lent, lu en fond : {}", dir.display()));
                 self.opening = Some(Opening {
                     dir: dir.to_path_buf(),
@@ -8113,6 +8120,7 @@ impl TriApp {
             return level;
         }
         let engines = self.developers.engines();
+        let misses = tri::cache::deferred_misses();
         let level = match self.developed_rule().filter(|_| !self.filter_inverted) {
             // Filtre « développées » : le plus récent des logiciels cochés, sinon LibRaw.
             Some(rule) if file.kind == MediaKind::Raw => rule
@@ -8120,7 +8128,10 @@ impl TriApp {
                 .map_or(Level::Standard, Level::Developed),
             _ => self.shown_render().level(file, &engines),
         };
-        self.grid_levels.insert(file.path.clone(), level);
+        // Un sidecar encore en lecture (en fond) : niveau provisoire, pas retenu.
+        if tri::cache::deferred_misses() == misses {
+            self.grid_levels.insert(file.path.clone(), level);
+        }
         level
     }
 

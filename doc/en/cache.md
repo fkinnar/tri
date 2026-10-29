@@ -109,7 +109,10 @@ Consequences:
   While the grid is drawn, missing stamps are **deferred** (`defer_stamps`,
   `lookup_stamp`): read by a separate thread, the interface redrawn when they arrive
   (`on_stamps_read`); the thumbnail arrives one frame later instead of freezing the page
-  (still 0.4 to 3 s per page on a NAS). Actions keep exact stamps;
+  (still 0.4 to 3 s per page on a NAS). The same goes for reading darktable sidecars
+  (developed or not, render fingerprint: `deferring`, `defer_job`): a thumbnail level
+  worked out while a read was deferred is not kept (`deferred_misses`). Actions keep exact
+  stamps;
 - **settings changed** (preview size, white balance…) ⇒ same, provided the caller
   includes them in `params`;
 - **folder moved or renamed** ⇒ the cache is no longer found, unless it follows

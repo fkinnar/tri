@@ -164,7 +164,7 @@ pub fn lookup_stamp(path: &Path) -> Option<Option<(u64, u128)>> {
     if let Some(known) = stamps().lock().unwrap_or_else(|e| e.into_inner()).get(path) {
         return Some(*known);
     }
-    if DEFERRED.with(Cell::get) {
+    if deferring() {
         read_in_background(path);
         return None;
     }
@@ -192,29 +192,56 @@ static NOTIFY: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::Onc
 
 /// Relevé demandé au fil des relevés différés (une fois par fichier en attente).
 fn read_in_background(path: &Path) {
+    let path = path.to_path_buf();
+    defer_job(format!("stamp:{}", path.display()), move || {
+        read_stamp(&path);
+    });
+}
+
+/// Vrai si les accès au disque sont différés dans ce fil ([`defer_stamps`]).
+pub fn deferring() -> bool {
+    DEFERRED.with(Cell::get)
+}
+
+/// Nombre d'accès différés dans ce fil depuis son début : une réponse calculée pendant
+/// qu'il a augmenté est provisoire (à ne pas retenir).
+pub fn deferred_misses() -> u64 {
+    MISSES.with(Cell::get)
+}
+
+thread_local! {
+    static MISSES: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Fait `job` (une lecture du disque) dans le fil des accès différés, une seule fois tant
+/// que la même (`id`) est en attente ; [`on_stamps_read`] est prévenu à la fin. Compte
+/// comme un accès différé ([`deferred_misses`]).
+pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
     use std::sync::OnceLock;
     use std::sync::mpsc::{self, Sender};
-    static PENDING: OnceLock<Mutex<std::collections::HashSet<PathBuf>>> = OnceLock::new();
-    static QUEUE: OnceLock<Mutex<Sender<PathBuf>>> = OnceLock::new();
+    type Job = (String, Box<dyn FnOnce() + Send>);
+    static PENDING: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    static QUEUE: OnceLock<Mutex<Sender<Job>>> = OnceLock::new();
+    MISSES.with(|m| m.set(m.get() + 1));
     let pending = PENDING.get_or_init(Default::default);
     if !pending
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .insert(path.to_path_buf())
+        .insert(id.clone())
     {
         return;
     }
     let queue = QUEUE.get_or_init(|| {
-        let (tx, rx) = mpsc::channel::<PathBuf>();
+        let (tx, rx) = mpsc::channel::<Job>();
         let _ = std::thread::Builder::new()
             .name("tri-stamps".into())
             .spawn(move || {
-                while let Ok(path) = rx.recv() {
-                    read_stamp(&path);
+                while let Ok((id, job)) = rx.recv() {
+                    job();
                     pending
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
-                        .remove(&path);
+                        .remove(&id);
                     if let Some(notify) = NOTIFY.get() {
                         notify();
                     }
@@ -225,7 +252,7 @@ fn read_in_background(path: &Path) {
     let _ = queue
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .send(path.to_path_buf());
+        .send((id, Box::new(job)));
 }
 
 /// Relève `path` sur le disque et le retient.

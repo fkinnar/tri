@@ -627,6 +627,14 @@ pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
     {
         return developed.then_some(sidecar);
     }
+    // Pendant le dessin de la grille : lu en fond, pas encore développé en attendant.
+    if crate::cache::deferring() {
+        let image = image.to_path_buf();
+        crate::cache::defer_job(format!("darktable:{}", sidecar.display()), move || {
+            darktable_sidecar(&image);
+        });
+        return None;
+    }
     let developed = std::fs::read_to_string(&sidecar)
         .ok()
         .and_then(|text| history_end(&text))
@@ -787,6 +795,14 @@ pub fn render_stamp(sidecar: &Path) -> String {
         && known == quick
     {
         return fingerprint;
+    }
+    // Pendant le dessin de la grille : lu en fond.
+    if crate::cache::deferring() {
+        let path = sidecar.to_path_buf();
+        crate::cache::defer_job(format!("render:{}", path.display()), move || {
+            render_stamp(&path);
+        });
+        return PENDING.into();
     }
     let Ok(bytes) = std::fs::read(sidecar) else {
         return "absent".into();
