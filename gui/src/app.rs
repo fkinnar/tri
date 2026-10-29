@@ -15108,8 +15108,14 @@ mod tests {
         // Rien encore à rejoindre : le format attendu.
         wait_for_label(
             &mut h,
-            r"adresse d'un partage : \\serveur\partage ou smb://serveur/partage",
+            r"adresse d'un serveur : \\serveur\partage, smb://serveur/partage ; aussi afp://, ftp://, sftp://, dav://, davs://, nfs://",
         );
+        // FTP : le serveur entier se rejoint, sans partage.
+        h.state_mut().folder_query = "ftp://truc".into();
+        h.run_steps(3);
+        wait_for_label(&mut h, "Se connecter à « truc (FTP) »");
+        h.state_mut().folder_query = prefix.into();
+        h.run_steps(3);
         h.state_mut().folder_query.push_str(rest);
         h.run_steps(3);
         wait_for_label(&mut h, "Se connecter à « machin (truc) »");

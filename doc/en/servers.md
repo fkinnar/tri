@@ -16,6 +16,26 @@ addresses name the same share if their first server names and their shares are e
 case ignored (`NAS` = `nas.local` = `nas._smb._tcp.local`, the name given by Bonjour; an
 IP address is compared whole).
 
+## Protocols (`Protocol`, 2026-10-29)
+
+Asked by the user: "the most common protocols, FTP included". The address gives the
+protocol; what follows the server depends on it (`Server::share`, what gets mounted):
+
+| Address | What is mounted | Linux | macOS | Windows |
+| --- | --- | --- | --- | --- |
+| `smb://`, `\\` | the share (1st folder) | ✅ GVFS | ✅ | ✅ UNC |
+| `afp://` | the share | ✅ | ✅ | ❌ |
+| `ftp://` | the whole server | ✅ | ✅ (read-only) | ❌ |
+| `sftp://` | the whole server | ✅ | ❌ | ❌ |
+| `dav://`, `davs://` (`webdav(s)://`) | the whole path | ✅ | ✅ (`http(s)://`) | ✅ UNC `\\nas@SSL\…` (WebClient service) |
+| `nfs://` | the whole path (the export) | ✅ | ✅ | ❌ |
+
+`[user@]` and `:port` everywhere (`ftp://me@nas:2121/`). The ❌ cases give a clear message
+(`Protocol::mountable`); a **local copy** (confirmed, with the size announced first) is the
+next step. A mount is recognised if it covers the start of the wanted path
+(`sftp://nas/home/me/photo` in a mount of `sftp://nas/`), over SMB or AFP for the same
+share, over WebDAV encrypted or not.
+
 ## Connecting (`Server::connect`): the system does it
 
 No SMB client in `tri`: the system mounts, and asks for the password itself (nothing to
@@ -28,8 +48,8 @@ store on our side).
 | Linux | `gio mount smb://…` (GVFS, like Nemo and Nautilus) | GNOME keyring if already saved |
 
 A share already mounted is not mounted again: its folder is found among the mounts
-(`Mounts`: output of `mount` on macOS, `/proc/mounts` for CIFS and the GVFS mounts on
-Linux), **over SMB as well as AFP** (feedback of 2026-10-29: a NAS that advertises both is
+(`Mounts`: output of `mount` on macOS — `smbfs`, `afpfs`, `ftp`, `webdav`, `nfs` —,
+`/proc/mounts` for CIFS, NFS, sshfs and davfs, and the GVFS mounts on Linux), **over SMB as well as AFP** (feedback of 2026-10-29: a NAS that advertises both is
 often mounted over AFP by Nemo, `afp-volume:host=…,volume=…`, and was not recognised). On Linux, `gio mount` cannot ask for a password without a terminal: join a
 protected share once from the file manager ("Connect to Server", password remembered),
 then `tri` joins it by itself. Connecting can take several seconds: the interface waits

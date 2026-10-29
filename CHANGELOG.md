@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Network servers, other protocols**: besides SMB, `afp://`, `ftp://`, `sftp://`,
+  `dav://` / `davs://` (WebDAV) and `nfs://` addresses, mounted by the system where it
+  can (all on Linux, all but SFTP on macOS, SMB and WebDAV on Windows); elsewhere, a
+  clear message.
 - **Network shares**: connect to a share by its address, `\\nas\photo` or
   `smb://nas/photo` (the "server" icon of the folders panel, `c`, or the address typed in
   the folder search). The system mounts and asks for the password; the share is then
