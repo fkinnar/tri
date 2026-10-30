@@ -201,6 +201,6 @@ Plus d'envoi direct sur `main` : elle reste publiable. Une branche par sujet,
 `fix/<issue ou sujet>` pour une correction, `feat/<sujet>` pour un ajout (ou de la
 documentation), envoyée, puis une pull request vers `main` (« Fixes #n » dans sa
 description ferme l'issue à la fusion). `main` est protégée : fusion par pull request
-seulement, une fois les trois systèmes passés (tâches `ubuntu-24.04`, `macos-14`,
+seulement, une fois les trois systèmes passés (tâches `ubuntu-24.04`, `macos-15`,
 `windows-2022`). Avant l'envoi, comme d'habitude : `cargo fmt`, clippy et les tests
 autour du code modifié.

@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
-use std::sync::{LazyLock, RwLock};
 use std::time::{Duration, Instant};
 
 use std::fs;
@@ -127,9 +126,9 @@ fn walk(
         return Ok(());
     }
     let mut subdirs = Vec::new();
-    // Noms des images et des sidecars XMP du dossier, pour les clones darktable.
+    // Noms des images et des sidecars (XMP, RapidRAW) du dossier, pour les développements.
     let mut images: HashMap<String, (PathBuf, MediaKind)> = HashMap::new();
-    let mut xmps: Vec<String> = Vec::new();
+    let mut sidecars: Vec<String> = Vec::new();
     // Type des entrées demandé tant que c'est rapide.
     let mut ask = true;
     let file_type = |entry: &fs::DirEntry, ask: &mut bool| {
@@ -162,11 +161,9 @@ fn walk(
         }
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if let Some(image) = name
-            .strip_suffix(".xmp")
-            .or_else(|| name.strip_suffix(".XMP"))
-        {
-            xmps.push(image.to_string());
+        let lower = name.to_lowercase();
+        if lower.ends_with(".xmp") || lower.ends_with(".rrdata") {
+            sidecars.push(name.to_string());
         }
         if depth == 1 {
             continue;
@@ -183,17 +180,33 @@ fn walk(
             subdirs.push(path);
         }
     }
-    for image in xmps {
-        if images.contains_key(&image.to_lowercase()) {
-            continue;
+    // Développements de chaque image (darktable, RapidRAW, clones et copies), d'après les
+    // noms ; seul le XMP principal est ouvert, pour savoir s'il est de darktable.
+    let mut by_image: HashMap<String, Vec<String>> = HashMap::new();
+    for name in sidecars {
+        if let Some(image) = sidecar_image(&name, &|n| images.contains_key(n)) {
+            by_image.entry(image).or_default().push(name);
         }
-        let Some((original, _)) = clone_name(&image) else {
-            continue;
-        };
-        if let Some((source, kind)) = images.get(&original.to_lowercase()) {
-            let path = dir.join(&image);
-            register_clone(&path, source);
-            files.push(MediaFile { path, kind: *kind });
+    }
+    // Chaque image du dossier, même sans sidecar : ses développements connus sont remplacés
+    // par ceux d'aujourd'hui (un clone supprimé n'est plus connu).
+    for (photo, kind) in images.values() {
+        let image = photo
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        let names = by_image.remove(&image).unwrap_or_default();
+        let is_image = |n: &str| images.contains_key(n);
+        let developments = crate::developments::find(photo, &names, &is_image, &|xmp| {
+            crate::developments::file_is_darktable(xmp)
+        });
+        crate::developments::set_for(photo, &developments);
+        for development in developments {
+            files.push(MediaFile {
+                path: development.path(),
+                kind: *kind,
+            });
             found.fetch_add(1, AtomicOrdering::Relaxed);
         }
     }
@@ -207,9 +220,6 @@ fn walk(
     Ok(())
 }
 
-/// Clones (« duplicates ») darktable connus : chemin du clone → image d'origine.
-static CLONES: LazyLock<RwLock<HashMap<PathBuf, PathBuf>>> = LazyLock::new(Default::default);
-
 /// Original et numéro d'un nom de clone darktable : `IMG_01.RAF` → (`IMG.RAF`, 1). Le
 /// nom seul : `IMG_0001.CR2` (Canon) en a l'air aussi, c'est le sidecar sans image qui
 /// fait le clone ([`walk`]).
@@ -222,28 +232,40 @@ pub fn clone_name(name: &str) -> Option<(String, u32)> {
     Some((format!("{base}.{extension}"), number.parse().ok()?))
 }
 
-/// Retient que `clone` (sans fichier à lui, seulement son sidecar `clone.xmp`) est un
-/// clone darktable de `source`.
-pub fn register_clone(clone: &Path, source: &Path) {
-    if let Ok(mut clones) = CLONES.write() {
-        clones.insert(clone.to_path_buf(), source.to_path_buf());
+/// Image (nom en minuscules) dont `name` est un sidecar de développement, si elle est
+/// dans le dossier (`is_image`) : `IMG.RAF.xmp`, `IMG_01.RAF.xmp` (clone : sans image à
+/// lui), `IMG.RAF.rrdata`, `IMG.RAF.c33b94.rrdata` → `img.raf`.
+fn sidecar_image(name: &str, is_image: &dyn Fn(&str) -> bool) -> Option<String> {
+    let lower = name.to_lowercase();
+    if let Some(image) = lower.strip_suffix(".xmp") {
+        if is_image(image) {
+            return Some(image.to_string());
+        }
+        let (original, _) = clone_name(image)?;
+        return is_image(&original).then_some(original);
     }
+    let image = lower.strip_suffix(".rrdata")?;
+    if is_image(image) {
+        return Some(image.to_string());
+    }
+    let (image, _) = image.rsplit_once('.')?;
+    is_image(image).then(|| image.to_string())
 }
 
-/// Fichier à lire pour les pixels de `path` : l'image d'origine pour un clone darktable
-/// (une vignette par clone, demandé le 29/10/2026), `path` lui-même sinon. Le clone a
-/// ses propres notes et son propre développement (son sidecar `IMG_01.RAF.xmp`), mais
-/// les données de l'image d'origine.
+/// Fichier à lire pour les pixels de `path` : la photo pour un développement (une
+/// vignette par développement, décidé le 29-30/10/2026 ; voir [`crate::developments`]),
+/// `path` lui-même sinon. Un développement a ses propres notes et son propre rendu (son
+/// sidecar), mais les données de la photo.
 pub fn source(path: &Path) -> Cow<'_, Path> {
-    match CLONES.read().ok().and_then(|c| c.get(path).cloned()) {
-        Some(source) => Cow::Owned(source),
+    match crate::developments::get(path) {
+        Some(development) => Cow::Owned(development.photo),
         None => Cow::Borrowed(path),
     }
 }
 
-/// Vrai si `path` est un clone darktable (pas un fichier, voir [`source`]).
-pub fn is_clone(path: &Path) -> bool {
-    CLONES.read().is_ok_and(|c| c.contains_key(path))
+/// Vrai si `path` est un développement (pas un fichier, voir [`source`]).
+pub fn is_development(path: &Path) -> bool {
+    crate::developments::get(path).is_some()
 }
 
 /// Vrai pour un dossier caché (nom commençant par « . ») : ses images ne sont pas
@@ -254,11 +276,29 @@ pub fn is_hidden_dir(entry: &walkdir::DirEntry) -> bool {
 
 /// Ordre des noms : chemin sans extension, puis le RAW avant l'image plate de même nom.
 pub fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
-    a.path
-        .with_extension("")
-        .cmp(&b.path.with_extension(""))
+    // Un développement se range avec sa photo, juste après elle (et avant l'autre fichier
+    // de la paire : `IMG.RAF`, `IMG@dt.RAF`, `IMG.JPG`), quel que soit son nom propre.
+    let (sa, sb) = (source(&a.path), source(&b.path));
+    sa.with_extension("")
+        .cmp(&sb.with_extension(""))
         .then_with(|| (a.kind == MediaKind::Flat).cmp(&(b.kind == MediaKind::Flat)))
+        .then_with(|| sa.cmp(&sb))
+        .then_with(|| is_development(&a.path).cmp(&is_development(&b.path)))
+        // Deux développements : l'ordre du registre (principal, clones, RapidRAW, copies),
+        // pas celui des noms propres (`IMG@dt-01` passerait avant `IMG@dt`).
+        .then_with(|| crate::developments::order(&a.path).cmp(&crate::developments::order(&b.path)))
         .then_with(|| a.path.cmp(&b.path))
+}
+
+/// Nom sans extension de `path`, tel qu'on l'affiche : pour un développement, celui de sa
+/// photo (`IMG@dt.RAF` → `IMG`, le logiciel étant dit à part).
+pub fn display_stem(path: &Path) -> String {
+    let source = source(path);
+    source
+        .file_stem()
+        .or_else(|| source.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| source.display().to_string())
 }
 
 #[cfg(test)]
@@ -322,16 +362,15 @@ mod tests {
     }
 
     #[test]
-    fn darktable_clones_are_listed_and_read_from_their_original() {
+    fn developments_are_listed_and_read_from_their_photo() {
         // Une vignette par clone (demandé le 29/10/2026) : `IMG_01.RAF.xmp` sans
         // `IMG_01.RAF` est le clone n° 1 de `IMG.RAF`.
         let dir = tempfile::tempdir().unwrap();
         let d = dir.path();
         for name in [
             "IMG.RAF",
-            "IMG.RAF.xmp",
-            "IMG_01.RAF.xmp",
-            "IMG_02.RAF.xmp",
+            "IMG.RAF.rrdata",
+            "IMG.RAF.c33b94.rrdata",
             // Une vraie image de ce nom : pas un clone.
             "B.JPG",
             "B_01.JPG",
@@ -343,6 +382,15 @@ mod tests {
         ] {
             std::fs::write(d.join(name), b"x").unwrap();
         }
+        // Le XMP de la photo : écrit par darktable, un développement ; par tri seul
+        // (notes), non.
+        std::fs::write(d.join("IMG.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        for clone in ["IMG_01.RAF.xmp", "IMG_02.RAF.xmp"] {
+            std::fs::write(d.join(clone), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        }
+        // Un sidecar orphelin d'un autre logiciel : pas un clone.
+        std::fs::write(d.join("IMG_04.RAF.xmp"), r#"<x xmp:Rating="3"/>"#).unwrap();
+        std::fs::write(d.join("B.JPG.xmp"), r#"<x xmp:Rating="3"/>"#).unwrap();
         let files = scan(d, 1).unwrap();
         let names: Vec<String> = files
             .iter()
@@ -354,16 +402,19 @@ mod tests {
                 "B.JPG",
                 "B_01.JPG",
                 "IMG.RAF",
-                "IMG_0001.CR2",
-                "IMG_01.RAF",
-                "IMG_02.RAF"
+                "IMG@dt.RAF",
+                "IMG@dt-01.RAF",
+                "IMG@dt-02.RAF",
+                "IMG@rr.RAF",
+                "IMG@rr-c33b94.RAF",
+                "IMG_0001.CR2"
             ]
         );
-        let clone = d.join("IMG_01.RAF");
-        assert!(is_clone(&clone));
+        let clone = d.join("IMG@dt-01.RAF");
+        assert!(is_development(&clone));
         assert_eq!(files[4].kind, MediaKind::Raw);
         assert_eq!(source(&clone), d.join("IMG.RAF"));
-        assert!(!is_clone(&d.join("B_01.JPG")));
+        assert!(!is_development(&d.join("B_01.JPG")));
         assert_eq!(source(&d.join("B_01.JPG")), d.join("B_01.JPG"));
     }
 
@@ -372,9 +423,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let d = dir.path();
         image::RgbImage::new(6, 4).save(d.join("a.jpg")).unwrap();
-        std::fs::write(d.join("a_01.jpg.xmp"), b"<x/>").unwrap();
+        std::fs::write(d.join("a_01.jpg.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
         scan(d, 1).unwrap();
-        let clone = d.join("a_01.jpg");
+        let clone = d.join("a@dt-01.jpg");
         let bitmap = crate::flat::decode(&clone).unwrap();
         assert_eq!((bitmap.width, bitmap.height), (6, 4));
         assert_eq!(

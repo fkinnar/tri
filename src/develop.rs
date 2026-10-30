@@ -58,8 +58,17 @@ impl Engine {
         Engine::ALL.into_iter().find(|e| e.id() == id)
     }
 
-    /// Sidecar de `image` qui porte un vrai développement de ce logiciel, s'il existe.
+    /// Sidecar de `image` qui porte un vrai développement de ce logiciel, s'il existe. Pour
+    /// un développement ([`crate::developments`]) : son sidecar, s'il est de ce logiciel.
     pub fn sidecar(self, image: &Path) -> Option<PathBuf> {
+        if let Some(development) = crate::developments::get(image) {
+            return (development.engine == self).then_some(development.sidecar);
+        }
+        // Une photo qui a des développements de ce logiciel : son sidecar est le leur
+        // (une image à part dans la grille), elle-même reste le rendu neutre (LibRaw).
+        if crate::developments::has(image, self) {
+            return None;
+        }
         match self {
             Engine::Darktable => darktable_sidecar(image),
             Engine::RapidRaw => rapidraw_sidecar(image),
@@ -1060,11 +1069,26 @@ impl Developer for RapidRaw {
         let _ = std::fs::remove_file(&export);
         // Messages dans un fichier plutôt qu'un tube : un programme bavard ne bloque pas.
         let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
-        let child = self
-            .cli
-            .command()
-            .arg("export")
-            .arg(image)
+        // Une copie virtuelle : RapidRAW n'exporte que la photo ; ses réglages à elle lui
+        // sont passés (`--adjustments`, vu dans son code le 30/10/2026).
+        let development = crate::developments::get(image);
+        let photo = development.as_ref().map_or(image, |d| d.photo.as_path());
+        let adjustments = match &development {
+            Some(d) if d.copy != crate::developments::Copy::Main => {
+                let text = std::fs::read_to_string(&d.sidecar).map_err(|e| failed(&e))?;
+                let json = crate::rrdata::adjustments(&text).map_err(|e| failed(&e))?;
+                let file = self.work_dir.join(format!("adjustments-{id}.json"));
+                std::fs::write(&file, json.to_string()).map_err(|e| failed(&e))?;
+                Some(file)
+            }
+            _ => None,
+        };
+        let mut command = self.cli.command();
+        command.arg("export").arg(photo);
+        if let Some(file) = &adjustments {
+            command.arg("--adjustments").arg(file);
+        }
+        let child = command
             .arg("--output")
             .arg(&export)
             .args(["--format", "jpeg", "--quality", "95"])
@@ -1093,6 +1117,9 @@ impl Developer for RapidRaw {
             Err(e) => Err(e),
         };
         let _ = std::fs::remove_file(&export);
+        if let Some(file) = adjustments {
+            let _ = std::fs::remove_file(file);
+        }
         result
     }
 }
@@ -1282,6 +1309,36 @@ mod tests {
         std::fs::write(path.as_ref(), contents)?;
         crate::cache::forget_stamps([path.as_ref()]);
         Ok(())
+    }
+
+    #[test]
+    fn a_photo_with_developments_has_no_developed_render_of_its_own() {
+        // Décidé le 30/10/2026 : le sidecar d'une photo appartient à son développement
+        // (une image de la grille) ; la photo reste le rendu neutre.
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0002.RAF");
+        written(&image, b"raw").unwrap();
+        let sidecar = dir.path().join("DSCF0002.RAF.xmp");
+        written(&sidecar, r#"<rdf:Description darktable:xmp_version="5"/>"#).unwrap();
+        assert_eq!(Engine::Darktable.sidecar(&image), Some(sidecar.clone()));
+        let development = crate::developments::Development {
+            engine: Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: image.clone(),
+            sidecar: sidecar.clone(),
+        };
+        crate::developments::set_for(&image, std::slice::from_ref(&development));
+        assert_eq!(
+            Engine::Darktable.sidecar(&image),
+            None,
+            "le sidecar est au développement"
+        );
+        assert_eq!(
+            Engine::Darktable.sidecar(&development.path()),
+            Some(sidecar)
+        );
+        assert_eq!(Engine::RapidRaw.sidecar(&development.path()), None);
+        crate::developments::set_for(&image, &[]);
     }
 
     #[test]

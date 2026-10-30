@@ -386,6 +386,26 @@ system one ("cold" measurements, experiments).
 - **Back to the grid with the mouse** (issue #193): in full screen, a grid icon at the
   far right of the bottom bar (like Esc).
 - **"Expand all" button** next to the similarity slider (`Shift+S`).
+- **Development stacks** (2026-10-30, `Stacks::with_developments`, engine
+  `tri::developments`, see `developments.md`): a photo and its developments (darktable
+  and its clones, RapidRAW and its virtual copies) form a stack, **below** the burst
+  stacks (an expanded burst stack shows its photos, each folded or not; a collapsed burst
+  stack never shows a hidden development). Folded by default: one thumbnail, the
+  **cover** (the selected development, else the preferred one, else the latest, else the
+  photo: its camera JPEG), and "N dev." in a badge at the top right
+  (`[gui.colors] development_mark`; a burst's image count is at the top left); unfolded,
+  each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
+  the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
+  `Shift+V` unfolds / folds, `Shift+W` / `Shift+Q` go to the next / previous development
+  (wrapping; a folded stack shows it instead of its cover, in the grid as in full screen,
+  ‹‹ ›› buttons of the bar); `Shift+Enter` on a development makes it the **preferred**
+  one (cover; on the photo itself: no preferred one any more;
+  `preferred-developments.txt` of the data). In full screen, a development shows **its
+  render** (requested by itself when missing, the camera JPEG meanwhile, labelled
+  "· clone 1" and "before (… pending)"); `b` toggles before / after there (the camera
+  JPEG instead) without touching the photos' source. In the grid, a development's
+  thumbnail is always its render, whatever the render chosen for the grid
+  (`[gui.grid] develop = "auto"` computes them in the background).
 - **Stacks** (2026-10-18, `gui/src/stacks.rs`, engine `tri::similarity`, see
   `similarity.md`): similar neighbouring images (bursts, series) form stacks, collapsed
   by default: one thumbnail, the **cover** (the picked one, otherwise the best rated,
@@ -832,6 +852,7 @@ effect: they follow the chosen set.
 | `core.file.copy_stack` / `delete_stack` | Ctrl+Shift+C / Shift+Delete | y) / d) |
 | `core.stack.first` / `core.stack.last` | Shift+Home / Shift+End | ( / ) |
 | `core.stack.enter` | Ctrl+Shift+S | Ctrl+Shift+S |
+| `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Shift+V / Shift+W / Shift+Q | Shift+V / Shift+W / Shift+Q |
 | `core.file.delete` | Delete, Backspace | x, Delete, Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Shift+Z |
 | panels (folders, metadata) | arrows, Home / End, Shift + arrows | j k h l, gg / G, Shift + j k, y |

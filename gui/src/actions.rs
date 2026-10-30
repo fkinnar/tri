@@ -232,6 +232,13 @@ pub enum Action {
     GroupingWindow,
     /// Mode pile en plein écran : ← / → dans la pile, ↑ / ↓ de pile en pile.
     StackMode,
+    /// Déplier / replier les développements de la photo (pile de la photo et de ses
+    /// développements darktable / RapidRAW, 30/10/2026).
+    DevToggle,
+    /// Développement suivant de la photo (en boucle).
+    DevNext,
+    /// Développement précédent de la photo.
+    DevPrev,
     /// Zoom : palier supérieur.
     ZoomIn,
     /// Zoom : palier inférieur (jusqu'à l'ajusté).
@@ -439,7 +446,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 182] = [
+    pub const ALL: [Action; 185] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -530,6 +537,9 @@ impl Action {
         Action::StacksAll,
         Action::GroupingWindow,
         Action::StackMode,
+        Action::DevToggle,
+        Action::DevNext,
+        Action::DevPrev,
         Action::ZoomIn,
         Action::ZoomOut,
         Action::ZoomFit,
@@ -697,7 +707,7 @@ impl Action {
             | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose | StackFirst
-            | StackLast | StackEnterToggle => Group::Selection,
+            | StackLast | StackEnterToggle | DevToggle | DevNext | DevPrev => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
@@ -838,6 +848,9 @@ impl Action {
             Action::StacksAll => "core.stack.all",
             Action::GroupingWindow => "core.stack.settings",
             Action::StackMode => "core.stack.mode",
+            Action::DevToggle => "core.dev.toggle",
+            Action::DevNext => "core.dev.next",
+            Action::DevPrev => "core.dev.prev",
             Action::ZoomIn => "core.view.zoom_in",
             Action::ZoomOut => "core.view.zoom_out",
             Action::ZoomFit => "core.view.zoom_fit",
@@ -1385,6 +1398,11 @@ const FILES: &[Binding] = {
         (&[plain(Key::S)], StackToggle),
         (&[shifted(Key::S)], StacksAll),
         (&[ctrl(Key::G)], GroupingWindow),
+        // Développements d'une photo (30/10/2026) : Maj+V déplie / replie, Maj+W / Maj+Q
+        // le suivant / le précédent (grille et plein écran).
+        (&[shifted(Key::V)], DevToggle),
+        (&[shifted(Key::W)], DevNext),
+        (&[shifted(Key::Q)], DevPrev),
         // Zoom par paliers, comme Lightroom : des caractères, pour la rangée du haut comme
         // pour le pavé numérique, quelle que soit la disposition du clavier.
         (&[Chord::char('+')], ZoomIn),

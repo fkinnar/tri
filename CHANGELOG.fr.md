@@ -4,6 +4,14 @@
 
 ## À venir
 
+- **Développements d'une photo** (darktable et ses clones, RapidRAW et ses copies
+  virtuelles) : chacun est une image de la grille, avec sa vignette (son rendu), ses notes
+  et son export, empilée sous sa photo (repliée par défaut, pastille « N dév. » ; `Maj+V`
+  déplie, `Maj+W` / `Maj+Q` les font défiler, `Maj+Entrée` choisit la couverture, `b` en
+  plein écran montre le JPEG boîtier avant / après). Une photo qui a des développements
+  reste le JPEG boîtier et le rendu LibRaw ; un développement porte le nom de la photo,
+  une pastille dit lequel (« DT · clone 1 », « RR · copie 2 »). Les clones étaient des
+  vignettes en vrac et les copies RapidRAW manquaient.
 - **Démarrage sur un dossier lent** (NAS) : la fenêtre s'ouvre tout de suite, et le
   dernier dossier se lit en fond avec sa progression ; elle attendait la liste du
   dossier plusieurs secondes, avec une icône générique dans le Dock.

@@ -54,7 +54,8 @@ Liste les images de `root` (via `walkdir`) :
   symboliques ne sont pas suivis ;
 - **tri** : par chemin sans extension, puis RAW avant image plate. Les paires RAW+JPEG d'un
   même cliché se suivent donc toujours dans le même ordre (`DSCF0001.RAF`, `DSCF0001.JPG`,
-  `DSCF0002.RAF`…) ;
+  `DSCF0002.RAF`…) ; les développements d'une photo (`developments.md`) suivent la photo,
+  avant l'autre fichier de la paire (`DSCF0001.RAF`, `DSCF0001@dt.RAF`, `DSCF0001.JPG`) ;
 - **erreurs** : `Err` si `root` n'existe pas, est illisible ou n'est pas un dossier
   (`ErrorKind::NotADirectory`). Les entrées illisibles *à l'intérieur* (droits, lien cassé)
   sont ignorées : un fichier problématique ne doit pas empêcher d'afficher le reste.

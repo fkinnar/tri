@@ -84,10 +84,44 @@ pub struct Snapshot {
     sidecars: HashMap<PathBuf, Stamp>,
 }
 
-/// Vrai si `path` est un sidecar XMP (extension `.xmp`, casse ignorée).
+/// Photo dont `sidecar`, créé (`created`) ou supprimé, ajoute ou retire un développement
+/// ([`crate::developments`]), si elle est dans `images`.
+fn development_photo(
+    sidecar: &Path,
+    images: &HashMap<PathBuf, Stamp>,
+    created: bool,
+) -> Option<PathBuf> {
+    let name = sidecar.file_name()?.to_string_lossy().to_lowercase();
+    let in_folder = |image: &str| {
+        images
+            .keys()
+            .find(|p| {
+                p.parent() == sidecar.parent()
+                    && p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().to_lowercase() == image)
+            })
+            .cloned()
+    };
+    if let Some(image) = name.strip_suffix(".rrdata") {
+        return in_folder(image).or_else(|| in_folder(image.rsplit_once('.')?.0));
+    }
+    let image = name.strip_suffix(".xmp")?;
+    if let Some(photo) = in_folder(image) {
+        // Le XMP de la photo : un développement darktable s'il en vient (supprimé : on ne
+        // peut plus le lire, la liste est relue).
+        return (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo);
+    }
+    // Un clone (`IMG_01.RAF.xmp`) : de darktable aussi, un sidecar orphelin d'un autre
+    // logiciel n'ajoute pas d'image.
+    let (original, _) = crate::media::clone_name(image)?;
+    let photo = in_folder(&original)?;
+    (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo)
+}
+
+/// Vrai si `path` est un sidecar : XMP, ou RapidRAW (`.rrdata`), casse ignorée.
 fn is_sidecar(path: &Path) -> bool {
     path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("xmp"))
+        .is_some_and(|e| e.eq_ignore_ascii_case("xmp") || e.eq_ignore_ascii_case("rrdata"))
 }
 
 impl Snapshot {
@@ -140,27 +174,48 @@ impl Snapshot {
             changed
         }
         let mut images = diff(&self.images, &newer.images);
-        // Clone darktable créé ou supprimé (`IMG_01.RAF.xmp` sans `IMG_01.RAF`) : une
-        // image de plus ou de moins dans la liste.
+        // Développement créé ou supprimé ailleurs (clone darktable `IMG_01.RAF.xmp`,
+        // `IMG.RAF.xmp` écrit par darktable, `IMG.RAF.rrdata` ou une copie virtuelle) : une
+        // vignette de plus ou de moins, la liste est à relire (la photo est signalée).
         let appeared = newer
             .sidecars
             .keys()
-            .filter(|p| !self.sidecars.contains_key(*p));
+            .filter(|p| !self.sidecars.contains_key(*p))
+            .map(|p| (p, true));
         let gone = self
             .sidecars
             .keys()
-            .filter(|p| !newer.sidecars.contains_key(*p));
-        for sidecar in appeared.chain(gone) {
-            let clone = sidecar.with_extension("");
-            let original = clone
-                .file_name()
-                .and_then(|n| crate::media::clone_name(&n.to_string_lossy()))
-                .map(|(original, _)| clone.with_file_name(original));
-            if crate::media::kind_of(&clone).is_some()
-                && !newer.images.contains_key(&clone)
-                && original.is_some_and(|o| newer.images.contains_key(&o))
+            .filter(|p| !newer.sidecars.contains_key(*p))
+            .map(|p| (p, false));
+        for (sidecar, created) in appeared.chain(gone) {
+            if let Some(photo) = development_photo(sidecar, &newer.images, created) {
+                images.push(photo);
+            }
+        }
+        // Le XMP de notes d'une photo réécrit par darktable (importée après le tri) : son
+        // développement darktable apparaît.
+        for (sidecar, stamp) in &newer.sidecars {
+            let changed = self.sidecars.get(sidecar).is_some_and(|old| old != stamp);
+            let xmp = sidecar
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("xmp"));
+            if !changed || !xmp {
+                continue;
+            }
+            let Some(photo) = sidecar.file_stem().map(|_| sidecar.with_extension("")) else {
+                continue;
+            };
+            let known = crate::developments::Development {
+                engine: crate::develop::Engine::Darktable,
+                copy: crate::developments::Copy::Main,
+                photo: photo.clone(),
+                sidecar: sidecar.clone(),
+            };
+            if newer.images.contains_key(&photo)
+                && crate::developments::get(&known.path()).is_none()
+                && crate::developments::file_is_darktable(sidecar)
             {
-                images.push(clone);
+                images.push(photo);
             }
         }
         images.sort();
@@ -367,16 +422,21 @@ mod tests {
         std::fs::write(d.join("A.RAF"), b"x").unwrap();
         std::fs::write(d.join("A.RAF.xmp"), b"<x/>").unwrap();
         let before = Snapshot::of(d).unwrap();
-        std::fs::write(d.join("A_01.RAF.xmp"), b"<x/>").unwrap();
+        // Un sidecar orphelin d'un autre logiciel (sans marque darktable) : pas une image.
+        std::fs::write(d.join("A_02.RAF.xmp"), b"<x/>").unwrap();
+        assert!(before.changes(&Snapshot::of(d).unwrap()).images.is_empty());
+        std::fs::remove_file(d.join("A_02.RAF.xmp")).unwrap();
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(d.join("A_01.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
         let after = Snapshot::of(d).unwrap();
         let changes = before.changes(&after);
-        assert_eq!(changes.images, [d.join("A_01.RAF")], "clone créé");
-        assert_eq!(changes.sidecars, [d.join("A_01.RAF.xmp")]);
         assert_eq!(
-            after.changes(&before).images,
-            [d.join("A_01.RAF")],
-            "supprimé"
+            changes.images,
+            [d.join("A.RAF")],
+            "clone créé : la photo est à relire"
         );
+        assert_eq!(changes.sidecars, [d.join("A_01.RAF.xmp")]);
+        assert_eq!(after.changes(&before).images, [d.join("A.RAF")], "supprimé");
         // Simple note changée : pas une image de plus.
         std::fs::write(d.join("A.RAF.xmp"), b"<x a=\"1\"/>").unwrap();
         assert!(after.changes(&Snapshot::of(d).unwrap()).images.is_empty());

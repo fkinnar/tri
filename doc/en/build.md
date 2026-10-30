@@ -200,5 +200,5 @@ No direct push to `main`: it stays releasable. One branch per topic, `fix/<issue
 topic>` for a fix, `feat/<topic>` for a feature (or documentation), pushed, then a pull
 request to `main` ("Fixes #n" in its description closes the issue on merge). `main` is
 protected: merging through a pull request only, once the three systems (`ubuntu-24.04`,
-`macos-14`, `windows-2022` jobs) pass. Before pushing, as usual: `cargo fmt`, clippy
+`macos-15`, `windows-2022` jobs) pass. Before pushing, as usual: `cargo fmt`, clippy
 and the tests around the changed code.
