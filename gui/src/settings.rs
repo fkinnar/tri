@@ -182,6 +182,10 @@ pub struct GuiSettings {
     /// valeurs de la configuration ne servent qu'au premier lancement. La fenêtre aussi
     /// (taille, position, agrandie ; issue n° 58) : `window` ne sert alors qu'au premier.
     pub remember_display: bool,
+    /// Garder les filtres et le tri de chaque dossier d'un lancement à l'autre (demandé le
+    /// 30/10/2026) ; `false` : chaque dossier s'ouvre sans filtre, dans l'ordre retenu
+    /// pour tous.
+    pub remember_folder_view: bool,
     /// Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms),
     /// pas à chaque image du mouvement (et toujours à la fermeture).
     pub window_save_ms: u64,
@@ -248,6 +252,7 @@ impl Default for GuiSettings {
             sort: tri::sort::SortKey::Name,
             sort_descending: false,
             remember_display: true,
+            remember_folder_view: true,
             window_save_ms: 1000,
             rating_bar: true,
             title_bar: true,

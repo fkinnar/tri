@@ -131,6 +131,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en comparaison (`m`), lu dans le RAW (Fujifilm pour l'instant) ; carré, croix, cercle ou
   cœur (`[gui.view] focus_marker`), couleur `[gui.colors] focus`, liseré sombre dessous
   pour rester visible sur tout fond.
+- **Filtres et tri par dossier** (30/10/2026, `state::FolderView`) : les filtres (RAW /
+  JPEG, étoiles et leur comparaison, couleurs, drapeaux, netteté, exposition,
+  développées, inversion) et le tri de chaque dossier sont retenus dans `folder-views` du
+  dossier de données (une ligne JSON par dossier, écrite quand ils changent) et repris à
+  son ouverture, au lancement compris ; un dossier sans rien de retenu s'ouvre sans
+  filtre, dans l'ordre retenu pour tous. La recherche par nom n'en fait pas partie.
+  `[gui] remember_folder_view = false` : comme avant, les filtres du dossier précédent
+  restent. **En plein écran aussi**, la barre des filtres (Maj+F) et tout le panneau de
+  droite (filtres, grille) : on note par passes (1 étoile, filtre, 2 étoiles…) sans
+  repasser par la grille.
 - **État d'affichage gardé** (17/10/2026, `gui/src/state.rs`) : ce qu'on affiche ou
   masque d'une touche (collimateur, carte de netteté, zones, histogramme, panneaux,
   barres, avance automatique) est repris au lancement suivant, depuis `gui-state.toml`

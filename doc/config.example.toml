@@ -511,6 +511,10 @@ sort_descending = false
 # premier lancement. false : toujours les valeurs de ce fichier. La fenêtre aussi : taille,
 # position et agrandissement à la fermeture (window ne sert alors qu'au premier lancement).
 remember_display = true
+# Garder les filtres (RAW / JPEG, étoiles, couleurs, drapeaux, netteté, exposition,
+# développées) et le tri de chaque dossier d'un lancement à l'autre, dans le dossier de
+# données. false : chaque dossier s'ouvre sans filtre, dans l'ordre retenu pour tous.
+remember_folder_view = true
 # Fenêtre déplacée ou redimensionnée : retenue une fois immobile depuis ce délai (ms), et
 # toujours à la fermeture.
 window_save_ms = 1000

@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Filters in full screen**: the filter bar (Shift+F) and the whole right panel
+  (filters, grid) are there in full screen too, to rate in passes without going back to
+  the grid.
+- **Filters and sort kept per folder**, from one launch to the next
+  (`[gui] remember_folder_view`, on by default).
 - **RapidRAW virtual copies** (`IMG.RAF.<id>.rrdata`): they now follow the copied,
   moved or renamed image; they were left behind.
 - **Default darktable render**: an image imported into darktable but not edited (a

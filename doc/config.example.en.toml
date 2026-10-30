@@ -512,6 +512,10 @@ sort_descending = false
 # first launch. false: always the values of this file. The window too: size, position
 # and maximized state when closed (window is then only used on the first launch).
 remember_display = true
+# Keep each folder's filters (RAW / JPEG, stars, colours, flags, sharpness, exposure,
+# developed) and sort order from one launch to the next, in the data folder. false: every
+# folder opens without filters, in the order kept for all.
+remember_folder_view = true
 # Window moved or resized: remembered once still for this delay (ms), and always when
 # closed.
 window_save_ms = 1000

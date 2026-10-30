@@ -399,6 +399,9 @@ pub struct TriApp {
     filter_inverted: bool,
     /// Ordre des images (`f s`, `f r`, liste de la barre des filtres).
     order: tri::sort::Order,
+    /// Filtres et tri du dossier ouvert tels que retenus (`[gui] remember_folder_view`) :
+    /// changés, ils sont réécrits ([`Self::save_folder_view`]).
+    folder_view: Option<crate::state::FolderView>,
     /// Tri par date de prise de vue : des dates sont arrivées depuis le dernier tri
     /// (empreintes de similarité) ; la grille sera triée à nouveau une fois toutes là.
     sort_pending: bool,
@@ -953,6 +956,7 @@ impl TriApp {
             developed_on: false,
             developed_checked: None,
             filter_inverted: false,
+            folder_view: None,
             order: tri::sort::Order {
                 key: gui.sort,
                 descending: gui.sort_descending,
@@ -1127,6 +1131,11 @@ impl TriApp {
             gui,
         };
         app.restore_display();
+        // Filtres et tri du dossier rouvert, après l'ordre retenu pour tous.
+        if !app.folder.is_none() {
+            let dir = app.folder.dir.clone();
+            app.restore_folder_view(&dir);
+        }
         app.start_loading();
         // L'ordre retenu, aussi au lancement (il ne l'était qu'en changeant de dossier).
         app.apply_sort();
@@ -1545,6 +1554,7 @@ impl TriApp {
                     clip(tri::exposure::Clip::Under),
                 );
                 self.apply_cache_location(&folder.dir);
+                self.restore_folder_view(&folder.dir);
                 self.folder = folder;
                 self.start_loading();
                 self.apply_sort();
@@ -1581,7 +1591,7 @@ impl TriApp {
     /// grille son histogramme.
     /// Panneau de droite, en sections titrées et repliables comme celles du panneau des
     /// dossiers (réorganisation du 27/10/2026, idée de l'utilisateur) : l'histogramme en
-    /// haut, puis les réglages — filtres et grille, en grille seulement —, et les
+    /// haut, puis les réglages — filtres et grille, en plein écran aussi —, et les
     /// métadonnées en bas, comme dans les autres logiciels.
     fn side_panel(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
@@ -1592,7 +1602,8 @@ impl TriApp {
             }
             ui.separator();
         }
-        if self.mode == Mode::Grid {
+        // Filtres et grille en plein écran aussi (retour du 30/10/2026 : tout le panneau).
+        if matches!(self.mode, Mode::Grid | Mode::View) {
             if self.panel_section(ui, "filters", t!("panel-section-filters")) {
                 self.filter_settings(ui);
             }
@@ -4363,6 +4374,64 @@ impl TriApp {
         tri::sort::sort(&mut self.folder.files, self.order, |p| {
             signatures.get(p).and_then(|s| s.time)
         });
+    }
+
+    /// Filtres et tri du dossier ouvert, tels qu'on les retient pour lui.
+    fn current_folder_view(&self) -> crate::state::FolderView {
+        crate::state::FolderView {
+            kind: self.filter,
+            notes: self.notes_rule.clone(),
+            stars_op: self.stars_op,
+            blur: self.blur_rule,
+            well_exposed: self.well_exposed,
+            developed: self.developed_on,
+            inverted: self.filter_inverted,
+            order: Some(self.order),
+        }
+    }
+
+    /// Reprend les filtres et le tri retenus pour `dir` (`[gui] remember_folder_view`) ;
+    /// un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous.
+    /// Réglage coupé : les filtres restent ceux du dossier précédent, comme avant.
+    fn restore_folder_view(&mut self, dir: &Path) {
+        if !self.gui.remember_folder_view {
+            self.folder_view = None;
+            return;
+        }
+        let view = self
+            .settings
+            .data_dir()
+            .and_then(|data| crate::state::folder_view(&data, dir))
+            .unwrap_or_default();
+        self.filter = view.kind;
+        self.notes_rule = view.notes.clone();
+        self.stars_op = view.stars_op;
+        self.blur_rule = view.blur;
+        self.well_exposed = view.well_exposed;
+        self.developed_on = view.developed;
+        self.filter_inverted = view.inverted;
+        if let Some(order) = view.order {
+            self.order = order;
+        }
+        self.folder_view = Some(self.current_folder_view());
+    }
+
+    /// Filtres ou tri changés depuis la dernière fois : retenus pour le dossier ouvert.
+    /// Appelé à chaque image (une comparaison ; une écriture seulement s'ils changent).
+    fn save_folder_view(&mut self) {
+        if !self.gui.remember_folder_view || self.folder.is_none() || self.folder_view.is_none() {
+            return;
+        }
+        let view = self.current_folder_view();
+        if self.folder_view.as_ref() == Some(&view) {
+            return;
+        }
+        if let Some(data) = self.settings.data_dir()
+            && let Err(e) = crate::state::remember_folder_view(&data, &self.folder.dir, &view)
+        {
+            trace(|| format!("filtres du dossier pas retenus : {e}"));
+        }
+        self.folder_view = Some(view);
     }
 
     /// Change l'ordre : la grille suit, la même image reste sélectionnée.
@@ -11985,6 +12054,7 @@ impl eframe::App for TriApp {
             ctx.request_repaint();
         }
         self.watch_folder(&ctx);
+        self.save_folder_view();
         self.poll_eject();
         self.poll_mount();
         self.poll_remote();
@@ -12152,7 +12222,13 @@ impl eframe::App for TriApp {
         {
             egui::Panel::bottom("rating").show(ui, |ui| self.rating_bar(ui));
         }
-        if self.filter_bar && !self.focus_mode && self.mode == Mode::Grid && self.error.is_none() {
+        // En plein écran aussi (retour du 30/10/2026 : on note par passes, en changeant de
+        // filtre entre deux, sans repasser par la grille).
+        if self.filter_bar
+            && !self.focus_mode
+            && matches!(self.mode, Mode::Grid | Mode::View)
+            && self.error.is_none()
+        {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
         // Fond central : celui choisi (Ctrl+L), sinon gris neutre avec ce thème (grille et
@@ -15560,6 +15636,71 @@ mod tests {
     }
 
     #[test]
+    fn full_screen_has_the_filter_bar_and_the_whole_right_panel() {
+        // Retour du 30/10/2026 : on note par passes (1 étoile, filtre, 2 étoiles…) sans
+        // repasser par la grille pour changer de filtre.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        h.run_steps(3);
+        assert!(h.query_by_label("Effacer").is_some(), "barre des filtres");
+        assert!(
+            h.query_by_label(&t!("panel-section-grid").to_uppercase())
+                .is_some()
+        );
+        press(&mut h, Key::F, Modifiers::SHIFT);
+        assert!(h.query_by_label("Effacer").is_none(), "Maj+F la masque");
+    }
+
+    #[test]
+    fn filters_and_sort_are_kept_per_folder() {
+        // Demandé le 30/10/2026 : d'un lancement à l'autre, par dossier
+        // (`[gui] remember_folder_view`).
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        let other = dir.path().join("autre");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::new(8, 8)
+            .save(other.join("x.jpg"))
+            .unwrap();
+        h.run_steps(3);
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        let rule = h.state().notes_rule.clone();
+        assert!(rule.stars.is_some(), "filtre posé");
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Modified,
+            descending: true,
+        });
+        h.run_steps(2);
+        let open = |h: &mut Harness<'_, TriApp>, dir: &Path| {
+            h.state_mut().open_folder(dir);
+            let dir = dir.to_path_buf();
+            run_until(h, move |app| app.folder.dir == dir && app.opening.is_none());
+            h.run_steps(2);
+        };
+        open(&mut h, &other);
+        assert_eq!(
+            h.state().notes_rule,
+            NotesRule::default(),
+            "autre dossier : rien"
+        );
+        open(&mut h, &photos);
+        assert_eq!(h.state().notes_rule, rule, "repris");
+        assert_eq!(h.state().order.key, tri::sort::SortKey::Modified);
+        assert!(h.state().order.descending);
+        // Réglage coupé : rien de repris, les filtres restent ceux du moment.
+        h.state_mut().gui.remember_folder_view = false;
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::Num0, Modifiers::NONE);
+        let now = h.state().notes_rule.clone();
+        open(&mut h, &other);
+        open(&mut h, &photos);
+        assert_eq!(h.state().notes_rule, now);
+    }
+
+    #[test]
     fn the_filter_bar_shows_and_hides_with_shift_f() {
         let (mut h, _dir) = harness();
         // Fenêtre étroite, panneaux ouverts : la fin de la barre (effacer) reste dans la
@@ -18674,12 +18815,20 @@ mod tests {
         // Montrée tout de suite, dans la liste des versions du bandeau (issue n° 5).
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
         h.run_steps(2);
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        // La liste des versions, dans le bandeau du bas (le panneau de droite a aussi celle
+        // du tri).
+        let versions_list = |h: &Harness<'_, TriApp>| {
+            h.query_all_by_role(egui::accesskit::Role::ComboBox)
+                .max_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
+                .expect("liste des versions")
+                .click();
+        };
+        versions_list(&h);
         h.run_steps(2);
         h.get_by_label("Original").click();
         h.run_steps(2);
         assert_eq!(h.state().version_shown, None);
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        versions_list(&h);
         h.run_steps(2);
         h.get_by_label("3:2").click();
         h.run_steps(2);
@@ -18707,7 +18856,7 @@ mod tests {
         press(&mut h, Key::N, Modifiers::NONE);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
         // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        versions_list(&h);
         h.run_steps(2);
         h.get_by_label("Supprimer").click();
         h.run_steps(2);

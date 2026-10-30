@@ -408,7 +408,7 @@ impl NoteBook {
 }
 
 /// Règle sur les étoiles.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StarsRule {
     /// Au moins n étoiles.
     AtLeast(u8),
@@ -419,7 +419,7 @@ pub enum StarsRule {
 }
 
 /// Comparaison d'un filtre d'étoiles (#165 : pas seulement « au moins »).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StarsOp {
     /// Au moins.
     #[default]
@@ -481,7 +481,7 @@ impl StarsRule {
 
 /// Règle sur les couleurs : une photo passe si elle porte l'une des couleurs `any_of`, ou si
 /// elle n'en porte aucune et que `none` est vrai.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ColorRule {
     /// Couleurs acceptées.
     pub any_of: Vec<Color>,
@@ -502,7 +502,7 @@ impl ColorRule {
 
 /// Critères de filtrage sur les notes ; `None` : critère ignoré. Les critères se
 /// combinent (et).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NotesRule {
     /// Étoiles.
     pub stars: Option<StarsRule>,

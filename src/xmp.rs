@@ -34,7 +34,9 @@ pub mod ns {
 }
 
 /// Drapeau d'une photo.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum Flag {
     /// Ni accepté ni rejeté.
     #[default]
@@ -46,7 +48,9 @@ pub enum Flag {
 }
 
 /// Couleur d'une photo (les cinq couleurs communes à Lightroom, darktable et Capture One).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum Color {
     /// Rouge.
     Red,
