@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Copies virtuelles de RapidRAW** (`IMG.RAF.<id>.rrdata`) : elles suivent maintenant
+  l'image copiée, déplacée ou renommée ; elles restaient derrière.
 - **Rendu darktable par défaut** : une image importée dans darktable mais pas retouchée
   (un clone vierge, par exemple) a maintenant son rendu darktable, qui n'est pas celui
   de LibRaw ; il suffisait jusqu'ici d'un historique non vide.

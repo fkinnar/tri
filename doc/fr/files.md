@@ -17,7 +17,7 @@ commande offre les mêmes actions.
   destination, renommé à sa place). `xmp::SidecarIndex::companions` les rassemble ; les
   notes, elles, ne lisent que les sidecars de l'image. Les copies virtuelles de Lightroom
   ne vivent que dans son catalogue : rien à faire suivre. RapidRAW `IMG.RAF.rrdata` suit
-  aussi (30/10/2026).
+  aussi (30/10/2026), avec ses copies virtuelles `IMG.RAF.<id>.rrdata`.
 - Un **clone darktable** affiché dans la grille (voir `media.md`) ne se sépare jamais de
   son image (choix de l'utilisateur, 30/10/2026 : « tri ne peut pas scinder les
   versions ») : le copier, le déplacer ou le renommer agit sur l'original, et tous ses

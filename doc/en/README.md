@@ -47,6 +47,7 @@ exists.
 | [process.md](process.md) | Module `tri::process`: external programs, without a console window on Windows |
 | [metadata.md](metadata.md) | Module `tri::metadata`: capture metadata (LibRaw, EXIF), lines to display |
 | [notes.md](notes.md) | Module `tri::notes`: a folder's notes in memory, editing, filters on notes |
+| [rrdata.md](rrdata.md) | Module `tri::rrdata`: notes in RapidRAW sidecars (`.rrdata`, virtual copies included) |
 | [xmp.md](xmp.md) | Module `tri::xmp`: notes (stars, colors, accepted/rejected) in XMP sidecars |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap`: common RGB8 image type |
 | [flat.md](flat.md) | Module `tri::flat`: decoding JPEG, PNG, TIFF, WebP, HEIC |

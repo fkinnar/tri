@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **RapidRAW virtual copies** (`IMG.RAF.<id>.rrdata`): they now follow the copied,
+  moved or renamed image; they were left behind.
 - **Default darktable render**: an image imported into darktable but not edited (a
   virgin clone, for example) now has its darktable render, which is not LibRaw's; a
   non-empty history was required until now.
