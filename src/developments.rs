@@ -512,7 +512,11 @@ mod tests {
         let new = photo.with_file_name("D.RAF.rrdata");
         std::fs::write(&old, b"x").unwrap();
         let earlier = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
-        std::fs::File::open(&old)
+        // Ouvert en écriture : sous Windows, changer la date d'un fichier ouvert en
+        // lecture seule est refusé.
+        std::fs::File::options()
+            .write(true)
+            .open(&old)
             .unwrap()
             .set_modified(earlier)
             .unwrap();

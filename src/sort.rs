@@ -168,11 +168,14 @@ mod tests {
             },
             file("/o/IMG.RAF"),
         ];
+        // Le chemin virtuel suit le séparateur du système (« /o\\IMG@dt.RAF » sous Windows).
+        let dt_path = dt.path();
+        let dt_name = dt_path.to_str().unwrap();
         sort(&mut files, Order::default(), |_| None);
         // Le nom propre « IMG@dt » trierait après « IMG2 » : c'est la photo qui compte.
         assert_eq!(
             names(&files),
-            ["/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG", "/o/IMG2.RAF"]
+            ["/o/IMG.RAF", dt_name, "/o/IMG.JPG", "/o/IMG2.RAF"]
         );
         let descending = Order {
             descending: true,
@@ -181,7 +184,7 @@ mod tests {
         sort(&mut files, descending, |_| None);
         assert_eq!(
             names(&files),
-            ["/o/IMG2.RAF", "/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG"]
+            ["/o/IMG2.RAF", "/o/IMG.RAF", dt_name, "/o/IMG.JPG"]
         );
         // Par date : celle de la photo, inconnue pour le développement lui-même.
         let by_date = Order {
@@ -196,7 +199,7 @@ mod tests {
         sort(&mut files, by_date, captured);
         assert_eq!(
             names(&files),
-            ["/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG", "/o/IMG2.RAF"]
+            ["/o/IMG.RAF", dt_name, "/o/IMG.JPG", "/o/IMG2.RAF"]
         );
     }
 
