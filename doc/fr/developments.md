@@ -33,7 +33,9 @@ demande, `b` fait le tour des rendus).
 - `find(photo, names, images, is_darktable)` : les développements d'une photo d'après les
   noms des fichiers de son dossier, dans l'ordre : principal darktable (si son XMP est de
   darktable : `is_darktable` lit son début, `darktable:xmp_version` ou un historique),
-  clones par numéro, principal RapidRAW, copies par identifiant.
+  clones par numéro (de darktable aussi : un `IMG_01.RAF.xmp` orphelin écrit par un
+  autre logiciel, digiKam par exemple, n'est pas un clone), principal RapidRAW, copies
+  par identifiant. Un XMP de Lightroom, Capture One ou digiKam ne déclenche donc rien.
 - **Registre** (global, rempli par `media::scan`) : `set_for(photo, developments)`
   remplace les développements connus d'une photo (un clone supprimé n'est plus connu),
   `register` en ajoute un ; `get(path)` rend le développement d'un chemin propre, `of(photo)`

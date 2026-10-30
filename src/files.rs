@@ -1392,6 +1392,12 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         std::fs::create_dir_all(&dest).unwrap();
         developed(&d);
+        // Un clone est de darktable (sinon un sidecar orphelin d'un autre logiciel).
+        std::fs::write(
+            d.join("IMG_01.RAF.xmp"),
+            r#"<x darktable:xmp_version="5"/>"#,
+        )
+        .unwrap();
         crate::media::scan(&d, 1).unwrap();
         let clone = d.join("IMG@dt-01.RAF");
         assert!(crate::media::is_development(&clone));

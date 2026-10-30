@@ -14328,7 +14328,7 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::write(
             photos.join("img0_01.jpg.xmp"),
-            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
         h.state_mut().reload_folder(None);

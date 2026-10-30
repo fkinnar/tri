@@ -111,8 +111,11 @@ fn development_photo(
         // peut plus le lire, la liste est relue).
         return (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo);
     }
+    // Un clone (`IMG_01.RAF.xmp`) : de darktable aussi, un sidecar orphelin d'un autre
+    // logiciel n'ajoute pas d'image.
     let (original, _) = crate::media::clone_name(image)?;
-    in_folder(&original)
+    let photo = in_folder(&original)?;
+    (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo)
 }
 
 /// Vrai si `path` est un sidecar : XMP, ou RapidRAW (`.rrdata`), casse ignorée.
@@ -419,7 +422,12 @@ mod tests {
         std::fs::write(d.join("A.RAF"), b"x").unwrap();
         std::fs::write(d.join("A.RAF.xmp"), b"<x/>").unwrap();
         let before = Snapshot::of(d).unwrap();
-        std::fs::write(d.join("A_01.RAF.xmp"), b"<x/>").unwrap();
+        // Un sidecar orphelin d'un autre logiciel (sans marque darktable) : pas une image.
+        std::fs::write(d.join("A_02.RAF.xmp"), b"<x/>").unwrap();
+        assert!(before.changes(&Snapshot::of(d).unwrap()).images.is_empty());
+        std::fs::remove_file(d.join("A_02.RAF.xmp")).unwrap();
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(d.join("A_01.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
         let after = Snapshot::of(d).unwrap();
         let changes = before.changes(&after);
         assert_eq!(

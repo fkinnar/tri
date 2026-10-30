@@ -272,7 +272,7 @@ pub fn file_is_darktable(path: &Path) -> bool {
 /// Les développements de `photo` d'après les noms des fichiers de son dossier : `names`
 /// (noms réels, à côté de la photo). darktable : `IMG.RAF.xmp` s'il est de darktable
 /// (`is_darktable` lit son début), ses clones `IMG_NN.RAF.xmp` (sans image `IMG_NN.RAF`,
-/// voir `images`) ; RapidRAW : `IMG.RAF.rrdata` et `IMG.RAF.<id>.rrdata`. Dans cet ordre,
+/// voir `images`, et de darktable aussi) ; RapidRAW : `IMG.RAF.rrdata` et `IMG.RAF.<id>.rrdata`. Dans cet ordre,
 /// clones et copies par numéro et identifiant.
 pub fn find(
     photo: &Path,
@@ -309,6 +309,9 @@ pub fn find(
                 .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
                 .and_then(|n| n.parse::<u32>().ok())
             && !images(image)
+            // Un clone aussi doit être de darktable : un sidecar orphelin d'un autre
+            // logiciel (digiKam…) n'en est pas un.
+            && is_darktable(&sidecar(file))
         {
             clones.push(new(Engine::Darktable, Copy::Clone(number), file));
         } else if l == format!("{lower}.rrdata") {
@@ -378,9 +381,11 @@ mod tests {
         assert!(found[3].notes_in_rrdata() && !found[0].notes_in_rrdata());
         assert_eq!(found[0].own_file(), None, "le principal partage son XMP");
         assert_eq!(found[1].own_file(), Some(Path::new("/p/IMG_01.RAF.xmp")));
-        // Un XMP écrit par tri seul (notes) : pas de développement darktable.
+        // Un XMP écrit par tri seul ou par un autre logiciel (notes digiKam…) : pas de
+        // développement darktable, clones compris ; RapidRAW reste.
         let none = find(photo, &files, &|_| false, &|_| false);
-        assert_eq!(none[0].copy, Copy::Clone(1));
+        assert_eq!(none.len(), 2);
+        assert_eq!(none[0].engine, Engine::RapidRaw);
     }
 
     #[test]
