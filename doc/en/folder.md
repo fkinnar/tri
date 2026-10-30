@@ -20,7 +20,11 @@ one "opens a folder".
   list can take time: the interface reads it in a thread, waits `[gui.folders]
   open_wait_ms` for it (150 ms: nothing changes on a local disk), then lets it finish in
   the background with a box in the middle ("Opening "shoot"… 340 images found", Cancel or
-  Escape); the previous folder stays on screen meanwhile;
+  Escape); the previous folder stays on screen meanwhile. The launch folder (argument, or
+  the last one) takes the same path (2026-10-30: on a NAS, the window waited several
+  seconds for the list): the window opens at once, the tree unfolds to the folder once it
+  is read, and a last folder that cannot be found is shown in the middle (reopened when
+  it comes back);
 - `Folder::filtered(type, rule)`: filter by type then filter on ratings, combined here
   once and for all (previously: in the interface);
 - `Folder::default()` / `is_none()`: no folder open (interface launched without a folder).

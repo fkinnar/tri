@@ -267,6 +267,11 @@ pub struct TriApp {
     /// Dernier dossier du lancement précédent, disparu depuis (disque débranché, issue
     /// n° 66) : dit au centre, et rouvert s'il revient tant qu'aucun autre n'a été ouvert.
     missing_last: Option<PathBuf>,
+    /// Dossier du lancement, en cours d'ouverture, et vrai si c'est le dernier dossier
+    /// (rouvert de lui-même) : introuvable, il devient `missing_last` plutôt qu'une erreur.
+    start_dir: Option<(PathBuf, bool)>,
+    /// Image à sélectionner une fois le dossier du lancement lu (`TRI_GUI_SELECT`).
+    start_select: Option<usize>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -829,35 +834,22 @@ impl TriApp {
     pub fn new(dir: Option<PathBuf>, settings: AppSettings, warning: Option<String>) -> TriApp {
         let gui = settings.gui.clone();
         let data = settings.engine().data_dir();
-        // Dernier dossier disparu (disque débranché) : dit, et rouvert s'il revient.
+        // Le dossier du lancement (en argument, sinon le dernier) est lu comme un dossier
+        // choisi dans le panneau, en fond au-delà d'un instant (retour du 30/10/2026 : sur
+        // un NAS, la fenêtre attendait la liste plusieurs secondes, icône générique dans le
+        // Dock). Le dernier dossier disparu (disque débranché) est dit, et rouvert s'il
+        // revient : vu quand sa lecture échoue, pas avant (pas d'accès disque ici).
         let remembered = (dir.is_none() && gui.reopen_last)
             .then(|| tri::folder::remembered(data.as_deref()?))
             .flatten();
-        let missing_last = remembered.clone().filter(|p| !p.is_dir());
-        let dir = dir.or(remembered.filter(|p| p.is_dir()));
+        let start_dir = dir.or(remembered.clone());
+        let (folder, error, missing_last) = (Folder::default(), None, None);
         let subfolders = data.as_deref().is_some_and(tri::folder::subfolders);
-        let depth = folder_depth(subfolders, &gui);
-        let (folder, error) = match &dir {
-            Some(dir) => match Folder::scan(dir, depth, settings.xmp.sidecar) {
-                Ok(folder) => {
-                    if let Some(data) = &data {
-                        let _ = tri::folder::remember(data, &folder.dir);
-                    }
-                    (folder, None)
-                }
-                Err(e) => (Folder::default(), Some(format!("{} : {e}", dir.display()))),
-            },
-            None => (Folder::default(), None),
-        };
-        trace(|| format!("dossier lu : {} images, notes en fond", folder.files.len()));
         let mut tree = Tree::new(settings.places.clone(), gui.folders.hidden);
         if let Some(data) = &data {
             tree.set_favorites(tri::places::favorites(data));
             tree.set_favorite_names(tri::places::favorite_names(data));
             tree.set_servers(tri::servers::remembered(data));
-        }
-        if !folder.is_none() {
-            tree.reveal(&folder.dir);
         }
         trace(|| format!("arborescence : {} emplacements", tree.places().len()));
         let screenshot = std::env::var_os("TRI_GUI_SCREENSHOT").map(|p| Screenshot {
@@ -867,10 +859,11 @@ impl TriApp {
             done: Arc::default(),
             started: Instant::now(),
         });
-        let selected = std::env::var("TRI_GUI_SELECT")
+        // Image à sélectionner (captures) : une fois le dossier lu.
+        let start_select = std::env::var("TRI_GUI_SELECT")
             .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+            .and_then(|s| s.parse().ok());
+        let selected = 0;
         let (keymap, key_warnings) = settings.keymap();
         for warning in &key_warnings {
             eprintln!("{}", t!("warning-prefix", message = warning));
@@ -891,6 +884,8 @@ impl TriApp {
             offloaded: None,
             last_offload: None,
             missing_last,
+            start_dir: None,
+            start_select: None,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -1131,15 +1126,14 @@ impl TriApp {
             gui,
         };
         app.restore_display();
-        // Filtres et tri du dossier rouvert, après l'ordre retenu pour tous.
-        if !app.folder.is_none() {
-            let dir = app.folder.dir.clone();
-            app.restore_folder_view(&dir);
+        app.start_select = start_select;
+        if let Some(dir) = start_dir {
+            app.start_dir = Some((
+                dir.clone(),
+                dir.as_path() == remembered.as_deref().unwrap_or(Path::new("")),
+            ));
+            app.open_folder(&dir);
         }
-        app.start_loading();
-        // L'ordre retenu, aussi au lancement (il ne l'était qu'en changeant de dossier).
-        app.apply_sort();
-        app.apply_filter();
         app
     }
 
@@ -1526,6 +1520,20 @@ impl TriApp {
 
     /// Installe le dossier `dir` lu (ou son erreur) : grille, filtres, moteur.
     fn install_folder(&mut self, dir: &Path, result: std::io::Result<Folder>) {
+        // Dossier du lancement : l'arborescence se déplie jusqu'à lui ; le dernier dossier
+        // disparu est dit et attendu, pas une erreur.
+        let start = self.start_dir.take().filter(|(d, _)| d == dir);
+        let result = match (result, &start) {
+            (Err(e), Some((_, true))) if e.kind() == std::io::ErrorKind::NotFound => {
+                self.missing_last = Some(dir.to_path_buf());
+                return;
+            }
+            (result, _) => result,
+        };
+        if start.is_some() && result.is_ok() {
+            self.tree.reveal(dir);
+            self.reveal_folder = true;
+        }
         match result {
             Ok(folder) => {
                 trace(|| format!("dossier ouvert : {}", folder.dir.display()));
@@ -1585,6 +1593,9 @@ impl TriApp {
             meta.clear();
         }
         self.apply_filter();
+        if let Some(i) = self.start_select.take() {
+            self.selected = i.min(self.files.len().saturating_sub(1));
+        }
     }
 
     /// Panneau des métadonnées : celles de l'image sélectionnée (lignes du moteur), et en
@@ -10985,6 +10996,10 @@ impl TriApp {
 
     /// Script de démarrage (développement) : exécute les actions jusqu'à la prochaine pause.
     fn run_script(&mut self, ctx: &egui::Context) {
+        // Le dossier du lancement d'abord (lu en fond au-delà d'un instant).
+        if self.opening.is_some() {
+            return;
+        }
         if let Some(until) = self.script_wait {
             if Instant::now() < until {
                 ctx.request_repaint_after(until - Instant::now());
@@ -12245,6 +12260,8 @@ impl eframe::App for TriApp {
         let center = central.show(ui, |ui| {
             if let Some(error) = &self.error {
                 ui.colored_label(self.gui.colors.error, error);
+            } else if self.folder.is_none() && self.opening.is_some() {
+                // Dossier du lancement en lecture : sa boîte de progression seule.
             } else if self.folder.is_none() {
                 // Rien d'ouvert : en grand, au centre, en gris (issue n° 66), et le dossier
                 // du lancement précédent s'il a disparu.
