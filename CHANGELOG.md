@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Launching on a slow folder** (NAS): the window opens at once, and the last folder is
+  read in the background with its progress; it waited several seconds for the folder's
+  list, with a generic icon in the Dock.
 - **Filters in full screen**: the filter bar (Shift+F) and the whole right panel
   (filters, grid) are there in full screen too, to rate in passes without going back to
   the grid.

@@ -20,7 +20,11 @@ manipule quand on « ouvre un dossier ».
   NAS, même la liste peut prendre du temps : l'interface la lit dans un fil, l'attend
   `[gui.folders] open_wait_ms` (150 ms : un disque local ne voit rien changer), puis la
   laisse finir en fond avec une boîte au centre (« Ouverture de « séance »… 340 images
-  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant ;
+  trouvées », Annuler ou Échap) ; le dossier d'avant reste affiché en attendant. Le
+  dossier du lancement (en argument, ou le dernier) suit le même chemin (30/10/2026 : sur
+  un NAS, la fenêtre attendait la liste plusieurs secondes) : la fenêtre s'ouvre tout de
+  suite, l'arborescence se déplie jusqu'au dossier une fois lu, et un dernier dossier
+  introuvable est dit au centre (rouvert à son retour) ;
 - `Folder::filtered(type, règle)` : filtre par type puis filtre sur les notes, combinés ici
   une fois pour toutes (avant : dans l'interface) ;
 - `Folder::default()` / `is_none()` : aucun dossier ouvert (interface lancée sans dossier).

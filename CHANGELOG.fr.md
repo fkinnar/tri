@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Démarrage sur un dossier lent** (NAS) : la fenêtre s'ouvre tout de suite, et le
+  dernier dossier se lit en fond avec sa progression ; elle attendait la liste du
+  dossier plusieurs secondes, avec une icône générique dans le Dock.
 - **Filtres en plein écran** : la barre des filtres (Maj+F) et tout le panneau de droite
   (filtres, grille) sont aussi là en plein écran, pour noter par passes sans repasser par
   la grille.
