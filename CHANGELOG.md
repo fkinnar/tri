@@ -8,6 +8,11 @@
   image, with its own ratings and its own development. Deleting it deletes only its
   sidecar; copying, moving or renaming it takes the image and all its clones along.
   RapidRAW's sidecar (`.rrdata`) follows the image too.
+- **File actions forbidden by default**: renaming, copying, moving and deleting images
+  and folders from tri only happens once allowed ("File actions" checkbox in the right
+  panel, `[files] allow_actions`); otherwise these actions are greyed out and say why.
+  When allowed, the dialogs remind that darktable, Lightroom or Capture One will no longer
+  find moved or deleted files.
 - **Network neighbourhood**: the servers announced on the local network (Bonjour / mDNS:
   SMB, AFP, SFTP, WebDAV, FTP, NFS) appear under "Network" in the folders panel; a click
   lists their shares, as when typing their address (`[neighbourhood] enabled`).

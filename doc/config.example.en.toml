@@ -328,6 +328,12 @@ trash = true
 editor = []
 # Copy / move to…: number of recent destinations offered (keys 1 to 9).
 recent = 9
+# File actions in the interface: rename, copy, move, delete images and folders. Forbidden
+# by default: a development software (darktable, Lightroom, Capture One…) expects its
+# images where they are, moving or deleting them from here breaks its library. When
+# allowed, every dialog says so. Also a checkbox in the right panel (Grid). Offloading a
+# card is not affected.
+allow_actions = false
 
 [sharpness]
 # Sharpness map (focus peaking, p at 1:1): a pixel is marked if the luminance gradient

@@ -8,6 +8,12 @@
   son image, avec ses propres notes et son propre développement. Le supprimer ne
   supprime que son sidecar ; le copier, le déplacer ou le renommer emporte l'image et
   tous ses clones. Le sidecar de RapidRAW (`.rrdata`) suit aussi l'image.
+- **Actions sur les fichiers interdites par défaut** : renommer, copier, déplacer et
+  supprimer images et dossiers depuis tri se fait seulement si on l'autorise (case
+  « Actions sur les fichiers » du panneau de droite, `[files] allow_actions`) ; sinon,
+  ces actions sont grisées et disent pourquoi. Autorisées, les boîtes rappellent que
+  darktable, Lightroom ou Capture One ne retrouveront plus les fichiers déplacés ou
+  supprimés.
 - **Voisinage réseau** : les serveurs annoncés sur le réseau local (Bonjour / mDNS : SMB,
   AFP, SFTP, WebDAV, FTP, NFS) apparaissent sous « Réseau » dans le panneau des
   dossiers ; un clic liste leurs partages, comme en tapant leur adresse

@@ -383,6 +383,7 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
     response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label));
     let response = response
         .on_hover_text(tip)
+        .on_disabled_hover_text(tip)
         .on_hover_cursor(CursorIcon::PointingHand);
     let visuals = ui.style().interact(&response);
     ui.painter().rect(

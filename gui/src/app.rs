@@ -2007,6 +2007,17 @@ impl TriApp {
                 });
             });
         }
+        // Actions sur les fichiers (30/10/2026) : interdites par défaut, une case pour les
+        // autoriser, écrite dans la configuration.
+        subheading(ui, t!("panel-grid-files"));
+        let mut allowed = self.settings.files.allow_actions;
+        if self
+            .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
+            .on_hover_text(t!("panel-grid-files-tip"))
+            .changed()
+        {
+            self.set_file_actions(allowed);
+        }
         if render != self.grid_render {
             self.set_grid_render(render);
         }
@@ -2579,10 +2590,14 @@ impl TriApp {
                     let removable = row.kind == Some(PlaceKind::Volume) && row.ejectable;
                     let mut open_in = None;
                     label.context_menu(|ui| {
+                        let allowed = self.settings.files.allow_actions;
                         let mut entry = |ui: &mut Ui, action: Action, text: String| {
+                            // Interdite : grisée, la bulle dit pourquoi (30/10/2026).
+                            let enabled = !action.changes_files() || allowed;
                             if ui
-                                .button(text)
+                                .add_enabled(enabled, egui::Button::new(text))
                                 .on_hover_text(self.action_tip(action))
+                                .on_disabled_hover_text(t!("files-actions-off"))
                                 .clicked()
                             {
                                 menu = Some((row.path.clone(), action));
@@ -2827,6 +2842,7 @@ impl TriApp {
             let copy = drag_copies(&ctx);
             match dragged {
                 Dragged::Folder(path) => self.transfer_folder(&ctx, path, copy, Some(&dest)),
+                Dragged::Images(_) if self.refuses_file_action(Action::FileMove) => {}
                 Dragged::Images(paths) => {
                     let mode = if copy {
                         tri::files::TransferMode::Copy
@@ -9258,6 +9274,9 @@ impl TriApp {
     /// Action sur les fichiers `paths` (renommer, afficher : le premier) ; `at` : position
     /// d'une boîte éventuelle.
     fn file_action(&mut self, action: Action, paths: Vec<PathBuf>, at: egui::Pos2) {
+        if self.refuses_file_action(action) {
+            return;
+        }
         let settings = &self.settings.files;
         self.file_error = None;
         let Some(first) = paths.first().cloned() else {
@@ -9723,9 +9742,24 @@ impl TriApp {
                     .into_iter()
                     .filter(|a| a.available())
                     {
-                        let (rect, response) =
-                            marks::icon_button(ui, icon, &action.label(), &self.action_tip(action));
-                        let color = ui.style().interact(&response).fg_stroke.color;
+                        // Actions sur les fichiers interdites : grisées, la bulle dit
+                        // pourquoi (30/10/2026).
+                        let enabled = !action.changes_files() || self.settings.files.allow_actions;
+                        let tip = if enabled {
+                            self.action_tip(action)
+                        } else {
+                            t!("files-actions-off")
+                        };
+                        let (rect, response) = ui
+                            .add_enabled_ui(enabled, |ui| {
+                                marks::icon_button(ui, icon, &action.label(), &tip)
+                            })
+                            .inner;
+                        let color = if enabled {
+                            ui.style().interact(&response).fg_stroke.color
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
                         marks::file_action(ui.painter(), rect.shrink(icon * 0.22), action, color);
                         if response.clicked() {
                             file_action = Some(action);
@@ -10988,10 +11022,49 @@ impl TriApp {
         }
     }
 
+    /// Autorise ou interdit les actions sur les fichiers, et l'écrit dans le fichier de
+    /// configuration (`[files] allow_actions`) ; sans fichier possible, pour cette session.
+    fn set_file_actions(&mut self, allowed: bool) {
+        self.settings.files.allow_actions = allowed;
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "files",
+                "allow_actions",
+                &tri::config_edit::Value::Bool(allowed),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        if let Err(e) = result {
+            self.notice = Some((e, true));
+        }
+    }
+
+    /// Vrai (et la raison dans la barre d'état) si `action` change des fichiers alors que
+    /// `[files] allow_actions` l'interdit (choix de l'utilisateur, 30/10/2026).
+    fn refuses_file_action(&mut self, action: Action) -> bool {
+        if !action.changes_files() || self.settings.files.allow_actions {
+            return false;
+        }
+        self.notice = Some((t!("files-actions-off"), true));
+        true
+    }
+
     /// Créer, renommer, supprimer un dossier depuis le panneau des dossiers : la boîte
     /// (nom à saisir, ou confirmation avec ce que contient le dossier). Les emplacements
     /// (volume, dossier personnel, racine) ne se renomment ni ne se suppriment.
     fn folder_edit_action(&mut self, ctx: &egui::Context, action: Action) {
+        if self.refuses_file_action(action) {
+            return;
+        }
         let Some(i) = self.tree.cursor() else { return };
         let row = self.tree.rows()[i].clone();
         let at = ctx.content_rect().center() - vec2(160.0, 120.0);
@@ -11031,6 +11104,9 @@ impl TriApp {
         copy: bool,
         dest: Option<&Path>,
     ) {
+        if self.refuses_file_action(Action::FolderMove) {
+            return;
+        }
         if let Some(row) = self.tree.rows().iter().find(|r| r.path == path)
             && row.depth == 0
         {
@@ -13311,6 +13387,9 @@ mod tests {
         // Jamais la corbeille de l'utilisateur : suppression définitive, dans le dossier
         // temporaire.
         settings.files.trash = false;
+        // Actions sur les fichiers autorisées (interdites par défaut) : les tests les
+        // essaient ; un test vérifie le refus.
+        settings.files.allow_actions = true;
         // Pas de piles : les images de test, des aplats de couleurs proches, seraient
         // groupées (le test des piles les active).
         settings.similarity.background = false;
@@ -14791,6 +14870,39 @@ mod tests {
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert_eq!(h.state().mode, Mode::Grid, "Échap ne ferme que la boîte");
+    }
+
+    #[test]
+    fn file_actions_are_refused_until_allowed_in_the_grid_panel() {
+        // Choix de l'utilisateur (30/10/2026) : interdites par défaut (darktable,
+        // Lightroom… attendent leurs images à leur place), une case les autorise ;
+        // autorisées, les boîtes le rappellent.
+        let (mut h, dir) = harness();
+        let config = dir.path().join("config.toml");
+        h.state_mut().config_path = Some(config.clone());
+        h.state_mut().settings.files.allow_actions = false;
+        h.run_steps(3);
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_none(), "pas de boîte");
+        assert_eq!(
+            h.state().notice.as_ref().map(|n| n.0.clone()),
+            Some(t!("files-actions-off"))
+        );
+        press(&mut h, Key::X, Modifiers::CTRL);
+        assert!(h.state().file_dialog.is_none());
+        assert!(dir.path().join("photos/img0.jpg").exists());
+        click_settled(&mut h, &t!("panel-grid-files-allow"));
+        h.run_steps(2);
+        assert!(h.state().settings.files.allow_actions);
+        let written = std::fs::read_to_string(&config).unwrap();
+        assert!(written.contains("allow_actions = true"), "{written}");
+        press(&mut h, Key::Delete, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().file_dialog.is_some());
+        assert!(
+            h.query_by_label_contains("ne les y retrouvera plus")
+                .is_some()
+        );
     }
 
     #[test]

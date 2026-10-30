@@ -637,6 +637,25 @@ impl Action {
         tri::send::sender(name)
     }
 
+    /// Vrai pour les actions qui renomment, copient, déplacent ou suppriment des images ou
+    /// des dossiers : interdites sans `[files] allow_actions` (30/10/2026).
+    pub fn changes_files(self) -> bool {
+        use Action::*;
+        matches!(
+            self,
+            FileRename
+                | FileDelete
+                | FileCopy
+                | FileMove
+                | FileDeleteStack
+                | FileCopyStack
+                | FolderRename
+                | FolderDelete
+                | FolderCopy
+                | FolderMove
+        )
+    }
+
     /// Faux pour l'action d'un plugin indisponible sur cette machine (AirDrop hors
     /// macOS) : ni dans l'aide, ni dans les réglages, ni en bouton.
     pub fn available(self) -> bool {
