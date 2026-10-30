@@ -379,16 +379,28 @@ pub fn rename(plan: &Rename) -> Result<()> {
 /// Prépare la suppression de `images` : les fichiers à supprimer (paires et sidecars
 /// compris), à montrer avant de confirmer.
 pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> Group {
-    // Supprimer un clone darktable, c'est supprimer son sidecar (comme darktable) ;
-    // son image d'origine reste.
-    let (clones, images): (Vec<PathBuf>, Vec<PathBuf>) =
-        images.iter().cloned().partition(|i| media::is_clone(i));
+    // Supprimer un clone darktable ou une copie virtuelle RapidRAW, c'est supprimer son
+    // sidecar (comme ces logiciels) ; la photo reste. Un développement principal : la
+    // photo (en attendant « supprimer le développement »).
+    let mut own = Vec::new();
+    let mut images: Vec<PathBuf> = images
+        .iter()
+        .filter_map(|i| match crate::developments::get(i) {
+            Some(d) => match d.own_file() {
+                Some(file) => {
+                    own.push(file.to_path_buf());
+                    None
+                }
+                None => Some(d.photo),
+            },
+            None => Some(i.clone()),
+        })
+        .collect();
+    images.dedup();
     let mut group = group(&images, settings.pairs);
-    for clone in clones {
-        if let Some(sidecar) = crate::develop::darktable_sidecar_path(&clone)
-            && !group.sidecars.contains(&sidecar)
-        {
-            group.sidecars.push(sidecar);
+    for file in own {
+        if !group.sidecars.contains(&file) {
+            group.sidecars.push(file);
         }
     }
     group
@@ -1381,8 +1393,8 @@ mod tests {
         std::fs::create_dir_all(&dest).unwrap();
         developed(&d);
         crate::media::scan(&d, 1).unwrap();
-        let clone = d.join("IMG_01.RAF");
-        assert!(crate::media::is_clone(&clone));
+        let clone = d.join("IMG@dt-01.RAF");
+        assert!(crate::media::is_development(&clone));
         let settings = FileSettings::default();
         let deleted = plan_delete(std::slice::from_ref(&clone), &settings);
         assert!(deleted.images.is_empty(), "l'image d'origine reste");

@@ -13980,7 +13980,8 @@ mod tests {
         )
         .unwrap();
         h.state_mut().reload_folder(None);
-        let clone = photos.join("img0_01.jpg");
+        // Son chemin propre (`tri::developments`), jamais sur le disque.
+        let clone = photos.join("img0@dt-01.jpg");
         run_until(&mut h, |app| {
             app.loading.is_none()
                 && app.files.len() == 4
@@ -13996,7 +13997,12 @@ mod tests {
         assert_eq!(h.state().folder.notes.notes(&clone).stars, 2);
         h.state_mut().selected = i;
         press(&mut h, Key::Num4, Modifiers::SHIFT);
-        assert_eq!(tri::xmp::read(&clone).unwrap().stars, 4);
+        assert_eq!(
+            tri::xmp::read_sidecar(&photos.join("img0_01.jpg.xmp"))
+                .unwrap()
+                .stars,
+            4
+        );
         assert_eq!(
             h.state().folder.notes.notes(&photos.join("img0.jpg")).stars,
             0,

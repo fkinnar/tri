@@ -58,8 +58,12 @@ impl Engine {
         Engine::ALL.into_iter().find(|e| e.id() == id)
     }
 
-    /// Sidecar de `image` qui porte un vrai développement de ce logiciel, s'il existe.
+    /// Sidecar de `image` qui porte un vrai développement de ce logiciel, s'il existe. Pour
+    /// un développement ([`crate::developments`]) : son sidecar, s'il est de ce logiciel.
     pub fn sidecar(self, image: &Path) -> Option<PathBuf> {
+        if let Some(development) = crate::developments::get(image) {
+            return (development.engine == self).then_some(development.sidecar);
+        }
         match self {
             Engine::Darktable => darktable_sidecar(image),
             Engine::RapidRaw => rapidraw_sidecar(image),
@@ -1060,11 +1064,26 @@ impl Developer for RapidRaw {
         let _ = std::fs::remove_file(&export);
         // Messages dans un fichier plutôt qu'un tube : un programme bavard ne bloque pas.
         let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
-        let child = self
-            .cli
-            .command()
-            .arg("export")
-            .arg(image)
+        // Une copie virtuelle : RapidRAW n'exporte que la photo ; ses réglages à elle lui
+        // sont passés (`--adjustments`, vu dans son code le 30/10/2026).
+        let development = crate::developments::get(image);
+        let photo = development.as_ref().map_or(image, |d| d.photo.as_path());
+        let adjustments = match &development {
+            Some(d) if d.copy != crate::developments::Copy::Main => {
+                let text = std::fs::read_to_string(&d.sidecar).map_err(|e| failed(&e))?;
+                let json = crate::rrdata::adjustments(&text).map_err(|e| failed(&e))?;
+                let file = self.work_dir.join(format!("adjustments-{id}.json"));
+                std::fs::write(&file, json.to_string()).map_err(|e| failed(&e))?;
+                Some(file)
+            }
+            _ => None,
+        };
+        let mut command = self.cli.command();
+        command.arg("export").arg(photo);
+        if let Some(file) = &adjustments {
+            command.arg("--adjustments").arg(file);
+        }
+        let child = command
             .arg("--output")
             .arg(&export)
             .args(["--format", "jpeg", "--quality", "95"])
@@ -1093,6 +1112,9 @@ impl Developer for RapidRaw {
             Err(e) => Err(e),
         };
         let _ = std::fs::remove_file(&export);
+        if let Some(file) = adjustments {
+            let _ = std::fs::remove_file(file);
+        }
         result
     }
 }

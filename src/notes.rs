@@ -51,18 +51,10 @@ fn read_entries(
     images
         .iter()
         .map(|image| {
-            let existing = index.existing_sidecar(image);
-            let (notes, error) = match &existing {
-                None => (Notes::default(), None),
-                Some(sidecar) => match xmp::read_sidecar(sidecar) {
-                    Ok(notes) => (notes, None),
-                    Err(e) => (Notes::default(), Some(e.to_string())),
-                },
-            };
+            let (notes, sidecar, error) = read_notes(image, &index, convention);
             if let Some(done) = done {
                 done.fetch_add(1, Ordering::Relaxed);
             }
-            let sidecar = existing.unwrap_or_else(|| convention.sidecar(image));
             (
                 image.clone(),
                 Entry {
@@ -73,6 +65,58 @@ fn read_entries(
             )
         })
         .collect()
+}
+
+/// Notes de `image`, le sidecar qui les porte (lu, ou à créer selon `convention`) et
+/// l'erreur de lecture. Un développement ([`crate::developments`]) a les siennes dans
+/// son sidecar : XMP de darktable, `.rrdata` de RapidRAW ([`crate::rrdata`]).
+fn read_notes(
+    image: &Path,
+    index: &SidecarIndex,
+    convention: Convention,
+) -> (Notes, PathBuf, Option<String>) {
+    let existing = match crate::developments::get(image) {
+        Some(development) => Some(development.sidecar),
+        None => index.existing_sidecar(image),
+    };
+    let (notes, error) = match &existing {
+        None => (Notes::default(), None),
+        Some(sidecar) => match read_sidecar(sidecar) {
+            Ok(notes) => (notes, None),
+            Err(e) => (Notes::default(), Some(e)),
+        },
+    };
+    let sidecar = existing.unwrap_or_else(|| convention.sidecar(image));
+    (notes, sidecar, error)
+}
+
+/// Vrai si `sidecar` est un `.rrdata` de RapidRAW.
+fn is_rrdata(sidecar: &Path) -> bool {
+    sidecar
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("rrdata"))
+}
+
+/// Notes du sidecar `sidecar`, XMP ou RapidRAW.
+fn read_sidecar(sidecar: &Path) -> Result<Notes, String> {
+    if is_rrdata(sidecar) {
+        crate::rrdata::read(sidecar).map_err(|e| e.to_string())
+    } else {
+        xmp::read_sidecar(sidecar).map_err(|e| e.to_string())
+    }
+}
+
+/// Écrit `notes` dans `sidecar`, XMP ou RapidRAW (le reste du fichier gardé).
+fn write_sidecar(sidecar: &Path, notes: &Notes) -> Result<(), String> {
+    if is_rrdata(sidecar) {
+        crate::rrdata::write(sidecar, notes)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    } else {
+        xmp::write_sidecar(sidecar, notes)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
 }
 
 fn dir_of(image: &Path) -> PathBuf {
@@ -234,16 +278,25 @@ impl NoteBook {
             let lower = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().to_lowercase());
             for image in images {
                 let (name, stem) = (lower(image.file_name()), lower(image.file_stem()));
-                if !stems
-                    .iter()
-                    .any(|s| Some(s) == name.as_ref() || Some(s) == stem.as_ref())
+                // Son sidecar, ou (développements) celui qu'il a lu.
+                let own = self
+                    .entries
+                    .get(&image)
+                    .is_some_and(|e| sidecars.contains(&e.sidecar));
+                if !own
+                    && !stems
+                        .iter()
+                        .any(|s| Some(s) == name.as_ref() || Some(s) == stem.as_ref())
                 {
                     continue;
                 }
-                let sidecar = index.sidecar_path(&image, self.convention);
-                let (notes, error) = match xmp::read_sidecar(&sidecar) {
+                let sidecar = match crate::developments::get(&image) {
+                    Some(development) => development.sidecar,
+                    None => index.sidecar_path(&image, self.convention),
+                };
+                let (notes, error) = match read_sidecar(&sidecar) {
                     Ok(notes) => (notes, None),
-                    Err(e) => (Notes::default(), Some(e.to_string())),
+                    Err(e) => (Notes::default(), Some(e)),
                 };
                 let old = self.entries.get(&image);
                 if old.is_none_or(|e| e.notes != notes || e.error != error) {
@@ -291,6 +344,34 @@ impl NoteBook {
         self.entries.is_empty()
     }
 
+    /// `image` et les images qui reçoivent les mêmes notes : sa paire
+    /// ([`NoteBook::siblings`]) ; pour le développement darktable principal, la photo (même
+    /// XMP) et sa paire ; pour la photo, ses développements qui lisent le même XMP.
+    fn shared_with(&mut self, image: &Path) -> Vec<PathBuf> {
+        let base = match crate::developments::get(image) {
+            Some(d) if d.copy == crate::developments::Copy::Main && !d.notes_in_rrdata() => d.photo,
+            _ => image.to_path_buf(),
+        };
+        let mut targets = vec![image.to_path_buf()];
+        if base != image {
+            if !self.entries.contains_key(&base) {
+                self.add(&base);
+            }
+            targets.push(base.clone());
+        }
+        targets.extend(self.siblings(&base));
+        // Développements de la photo qui lisent son XMP, déjà suivis.
+        let sidecar = self.entries.get(&base).map(|e| e.sidecar.clone());
+        let sharing: Vec<PathBuf> = self
+            .entries
+            .iter()
+            .filter(|(p, e)| Some(&e.sidecar) == sidecar.as_ref() && !targets.contains(p))
+            .map(|(p, _)| p.clone())
+            .collect();
+        targets.extend(sharing);
+        targets
+    }
+
     /// Images du même nom que `image` dans son dossier, à l'extension près, sans tenir compte
     /// de la casse : `IMG.JPG` pour `IMG.RAF` (paire RAW+JPEG d'une carte SD).
     pub fn siblings(&self, image: &Path) -> Vec<PathBuf> {
@@ -319,15 +400,14 @@ impl NoteBook {
             });
         }
         if entry.notes != *notes {
-            xmp::write_sidecar(&entry.sidecar, notes).map_err(|e| XmpError::Image {
+            write_sidecar(&entry.sidecar, notes).map_err(|message| XmpError::Image {
                 image: image.to_path_buf(),
-                message: e.to_string(),
+                message,
             })?;
         }
         // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
         // tout le dossier coûtait cher sur un disque lent ou un NAS (issue n° 15).
-        let mut targets = vec![image.to_path_buf()];
-        targets.extend(self.siblings(image));
+        let targets = self.shared_with(image);
         self.reload_images(&targets);
         Ok(())
     }
@@ -359,8 +439,7 @@ impl NoteBook {
         }
         let mut notes = entry.notes.clone();
         edit(&mut notes);
-        let mut targets = vec![image.to_path_buf()];
-        targets.extend(self.siblings(image));
+        let targets = self.shared_with(image);
         let mut written: Vec<PathBuf> = Vec::new();
         let mut failure = None;
         for target in &targets {
@@ -371,9 +450,7 @@ impl NoteBook {
             }
             let result = match &entry.error {
                 Some(error) => Err(error.clone()),
-                None => xmp::write_sidecar(&entry.sidecar, &notes)
-                    .map(|_| ())
-                    .map_err(|e| e.to_string()),
+                None => write_sidecar(&entry.sidecar, &notes),
             };
             match result {
                 Ok(()) => written.push(entry.sidecar.clone()),
@@ -701,5 +778,44 @@ mod tests {
         assert_eq!(book.notes(Path::new("/nulle/part.RAF")), &Notes::EMPTY);
         assert!(book.error(Path::new("/nulle/part.RAF")).is_none());
         assert!(book.is_empty());
+    }
+
+    #[test]
+    fn each_development_keeps_its_notes_where_its_software_reads_them() {
+        // Décidé le 30/10/2026 : la photo et son développement darktable principal
+        // partagent `IMG.RAF.xmp` ; un clone a son XMP ; RapidRAW, son `.rrdata`.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("IMG.RAF"), b"x").unwrap();
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#;
+        std::fs::write(d.join("IMG.RAF.xmp"), darktable).unwrap();
+        std::fs::write(d.join("IMG_01.RAF.xmp"), darktable).unwrap();
+        std::fs::write(
+            d.join("IMG.RAF.rrdata"),
+            r#"{"rating": 1, "adjustments": {}}"#,
+        )
+        .unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let mut book = NoteBook::load_files(&files, Convention::Darktable);
+        let (photo, main, clone, rr) = (
+            d.join("IMG.RAF"),
+            d.join("IMG@dt.RAF"),
+            d.join("IMG@dt-01.RAF"),
+            d.join("IMG@rr.RAF"),
+        );
+        assert_eq!(book.notes(&rr).stars, 1, "lu dans le .rrdata");
+        book.edit(&main, |n| n.set_stars(3)).unwrap();
+        assert_eq!(book.notes(&photo).stars, 3, "même XMP que la photo");
+        assert_eq!(xmp::read(&photo).unwrap().stars, 3);
+        assert_eq!(book.notes(&clone).stars, 0, "le clone a les siennes");
+        book.edit(&clone, |n| n.set_stars(5)).unwrap();
+        assert_eq!(
+            xmp::read_sidecar(&d.join("IMG_01.RAF.xmp")).unwrap().stars,
+            5
+        );
+        book.edit(&rr, |n| n.flag = Flag::Rejected).unwrap();
+        let rrdata = crate::rrdata::read(&d.join("IMG.RAF.rrdata")).unwrap();
+        assert_eq!((rrdata.stars, rrdata.flag), (1, Flag::Rejected));
+        assert_eq!(book.notes(&photo).stars, 3, "RapidRAW à part");
     }
 }

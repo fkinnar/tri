@@ -710,10 +710,19 @@ pub fn export(
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e))?;
     std::fs::create_dir_all(&dt.config_dir)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
-    // Les clones darktable (`IMG_01.RAF`, sans fichier à eux) ne s'importent pas : un
-    // lancement chacun, l'image d'origine avec le sidecar du clone.
-    let (clones, originals): (Vec<&PathBuf>, Vec<&PathBuf>) =
-        images.iter().partition(|p| crate::media::is_clone(p));
+    // Les développements darktable (`IMG@dt-01.RAF`, sans fichier à eux) ne s'importent
+    // pas : un lancement chacun, la photo avec le sidecar du développement. Ceux de
+    // RapidRAW : la photo (l'export ne passe pas encore par RapidRAW).
+    let mut clones = Vec::new();
+    let mut originals: Vec<PathBuf> = Vec::new();
+    for image in &images {
+        match crate::developments::get(image) {
+            Some(d) if d.engine == Engine::Darktable => clones.push(d),
+            Some(d) => originals.push(d.photo),
+            None => originals.push(image.clone()),
+        }
+    }
+    originals.dedup();
     let total = images.len();
     let mut report = Report::default();
     let mut errors = Vec::new();
@@ -746,15 +755,19 @@ pub fn export(
         run(cmd, &mut report)?;
     }
     for clone in clones {
-        let Some(sidecar) = crate::develop::darktable_sidecar_path(clone) else {
-            continue;
+        // Nommé comme darktable nomme ses clones : `IMG_01-Web.jpg`.
+        let stem = clone
+            .photo
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let name = match clone.copy {
+            crate::developments::Copy::Clone(n) => format!("{stem}_{n:02}"),
+            _ => stem.into_owned(),
         };
-        let name = clone.file_stem().unwrap_or_default().to_string_lossy();
-        let out = folder_for(folder, clone).join(format!("{name}{}", profile.suffix));
+        let out = folder_for(folder, &clone.photo).join(format!("{name}{}", profile.suffix));
         let mut cmd = dt.cli.command();
-        cmd.arg(crate::media::source(clone).as_ref())
-            .arg(sidecar)
-            .arg(out);
+        cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
         run(cmd, &mut report)?;
     }
     if report.written.is_empty() && !errors.is_empty() {
