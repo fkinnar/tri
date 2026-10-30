@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -710,24 +710,78 @@ pub fn export(
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e))?;
     std::fs::create_dir_all(&dt.config_dir)
         .map_err(|e| DevelopError::Failed(Engine::Darktable, e.to_string()))?;
-    let mut cmd = dt.cli.command();
-    for image in &images {
-        cmd.arg("--import").arg(image);
+    // Les clones darktable (`IMG_01.RAF`, sans fichier à eux) ne s'importent pas : un
+    // lancement chacun, l'image d'origine avec le sidecar du clone.
+    let (clones, originals): (Vec<&PathBuf>, Vec<&PathBuf>) =
+        images.iter().partition(|p| crate::media::is_clone(p));
+    let total = images.len();
+    let mut report = Report::default();
+    let mut errors = Vec::new();
+    let mut run = |cmd: Command, report: &mut Report| -> Result<(), DevelopError> {
+        let mut cmd = cmd;
+        cmd.args(&args)
+            .args(["--apply-custom-presets", "false"])
+            .arg("--core")
+            .arg("--configdir")
+            .arg(&dt.config_dir)
+            .args(["--library", ":memory:"])
+            // Jamais de sidecar écrit, quelle que soit la configuration de darktable.
+            .args(["--conf", "write_sidecar_files=never"]);
+        for c in &conf {
+            cmd.args(["--conf", c]);
+        }
+        let (status, message) = run_darktable(cmd, total, cancel, report, &mut progress)?;
+        if !status.success() {
+            errors.push(message);
+        }
+        Ok(())
+    };
+    if !originals.is_empty() {
+        let mut cmd = dt.cli.command();
+        for image in &originals {
+            cmd.arg("--import").arg(image);
+        }
+        // darktable ajoute `_01`… plutôt que d'écraser.
+        cmd.arg(output_pattern(folder, &profile.suffix));
+        run(cmd, &mut report)?;
     }
-    // darktable ajoute `_01`… plutôt que d'écraser.
-    let pattern = output_pattern(folder, &profile.suffix);
-    cmd.arg(pattern)
-        .args(args)
-        .args(["--apply-custom-presets", "false"])
-        .arg("--core")
-        .arg("--configdir")
-        .arg(&dt.config_dir)
-        .args(["--library", ":memory:"])
-        // Jamais de sidecar écrit, quelle que soit la configuration de darktable.
-        .args(["--conf", "write_sidecar_files=never"]);
-    for c in conf {
-        cmd.args(["--conf", &c]);
+    for clone in clones {
+        let Some(sidecar) = crate::develop::darktable_sidecar_path(clone) else {
+            continue;
+        };
+        let name = clone.file_stem().unwrap_or_default().to_string_lossy();
+        let out = folder_for(folder, clone).join(format!("{name}{}", profile.suffix));
+        let mut cmd = dt.cli.command();
+        cmd.arg(crate::media::source(clone).as_ref())
+            .arg(sidecar)
+            .arg(out);
+        run(cmd, &mut report)?;
     }
+    if report.written.is_empty() && !errors.is_empty() {
+        let last = errors
+            .iter()
+            .rev()
+            .flat_map(|m| m.lines().rev())
+            .find(|l| !l.trim().is_empty());
+        return Err(DevelopError::Failed(
+            Engine::Darktable,
+            last.unwrap_or("darktable-cli").trim().to_string(),
+        ));
+    }
+    report.failed = total.saturating_sub(report.written.len());
+    Ok(report)
+}
+
+/// Lance darktable (`cmd`, sorties lues au fil de l'eau) jusqu'au bout : chaque fichier
+/// écrit va dans `report` et `progress` (sur `total`). Rend son statut et ses messages
+/// d'erreur ; `cancel` l'arrête.
+fn run_darktable(
+    mut cmd: Command,
+    total: usize,
+    cancel: &AtomicBool,
+    report: &mut Report,
+    progress: &mut impl FnMut(usize, usize, &Path),
+) -> Result<(std::process::ExitStatus, String), DevelopError> {
     let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -750,16 +804,17 @@ pub fn export(
         let _ = stderr.read_to_string(&mut text);
         text
     });
-    let total = images.len();
-    let mut report = Report::default();
+    let mut written = |report: &mut Report, path: PathBuf| {
+        report.written.push(path);
+        progress(
+            report.written.len(),
+            total,
+            report.written.last().expect("ajouté"),
+        );
+    };
     let status = loop {
         for path in rx.try_iter() {
-            report.written.push(path);
-            progress(
-                report.written.len(),
-                total,
-                report.written.last().expect("ajouté"),
-            );
+            written(report, path);
         }
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -776,22 +831,9 @@ pub fn export(
     // Dernières lignes de la sortie, lues après la fin du programme.
     std::thread::sleep(Duration::from_millis(20));
     for path in rx.try_iter() {
-        report.written.push(path);
-        progress(
-            report.written.len(),
-            total,
-            report.written.last().expect("ajouté"),
-        );
+        written(report, path);
     }
-    if report.written.is_empty() && !status.success() {
-        let last = message.lines().rev().find(|l| !l.trim().is_empty());
-        return Err(DevelopError::Failed(
-            Engine::Darktable,
-            last.unwrap_or("darktable-cli").trim().to_string(),
-        ));
-    }
-    report.failed = total.saturating_sub(report.written.len());
-    Ok(report)
+    Ok((status, message))
 }
 
 // --- Sans darktable : LibRaw, ou le JPEG boîtier -----------------------------------------

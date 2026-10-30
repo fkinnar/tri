@@ -62,6 +62,24 @@ Liste les images de `root` (via `walkdir`) :
 Le parcours est fait en entier et en mémoire (pas d'itérateur paresseux) : le tri l'exige, et
 quelques milliers d'entrées représentent un coût négligeable.
 
+### Clones darktable : une vignette chacun
+
+Un clone (« duplicate ») darktable n'a pas de fichier à lui, seulement son sidecar :
+`IMG_01.RAF.xmp` pour le clone n° 1 de `IMG.RAF`. Le parcours le liste comme une image
+`IMG_01.RAF` (choix de l'utilisateur, 29/10/2026 : une vignette par clone, à côté de
+l'original), avec ses propres notes et son propre développement, puisque son sidecar est
+exactement celui que `tri` lit pour ce nom. Le parcours le reconnaît aux noms seuls, sans
+accès disque de plus : un sidecar `NOM_NN.EXT.xmp` sans image `NOM_NN.EXT`, dont l'image
+`NOM.EXT` est dans le même dossier. Une vraie image de ce nom (`IMG_0001.CR2` d'un
+Canon) reste une image.
+
+Les pixels, eux, sont ceux de l'original : `source(path)` donne le fichier à lire
+(l'original pour un clone, `path` sinon). LibRaw (`RawFile::open`), les images plates
+(`flat::decode*`), les métadonnées, l'empreinte du cache (`cache::stamp`) et le rendu par
+darktable (l'original avec le sidecar du clone) passent par elle. `is_clone(path)` dit si
+`path` est un clone, `clone_name("IMG_01.RAF")` donne `("IMG.RAF", 1)`. Les clones connus
+sont retenus au parcours (registre en mémoire, chemin du clone → original).
+
 ## Démonstration
 
 Le binaire `tri` liste un dossier, avec filtre optionnel :

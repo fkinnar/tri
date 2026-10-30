@@ -123,6 +123,8 @@ pub fn decode(path: impl AsRef<Path>) -> Result<Bitmap> {
 /// décodés par `image`, l'orientation EXIF est appliquée *après* la réduction : tourner une
 /// vignette coûte bien moins cher que tourner l'image entière.
 pub fn decode_fit(path: impl AsRef<Path>, max_side: u32) -> Result<Bitmap> {
+    // Clone darktable : les pixels de l'image d'origine.
+    let path = crate::media::source(path.as_ref());
     let path = path.as_ref();
     if is_heif(path) {
         decode_heif(path).map(|b| b.fit(max_side))
@@ -165,6 +167,7 @@ pub enum Deep {
 /// [`Deep::Bits16`] (65 536 niveaux au lieu de 256), le reste [`Deep::Bits8`]. HEIF : 8 bits
 /// pour l'instant (un HEIC 10 bits est ramené à 8 bits par libheif).
 pub fn decode_deep(path: impl AsRef<Path>) -> Result<Deep> {
+    let path = crate::media::source(path.as_ref());
     let path = path.as_ref();
     if is_heif(path) {
         return decode_heif(path).map(Deep::Bits8);

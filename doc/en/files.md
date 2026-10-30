@@ -15,7 +15,13 @@ only handles input and confirmation, and the command line offers the same action
   `CaptureOne/Settings…/IMG.RAF.cos` (copied or moved into the same subfolder of the
   destination, renamed in place). `xmp::SidecarIndex::companions` gathers them; ratings
   are still read from the image's own sidecars only. Lightroom virtual copies live only in
-  its catalogue: nothing to carry along.
+  its catalogue: nothing to carry along. RapidRAW `IMG.RAF.rrdata` follows too
+  (2026-10-30).
+- A **darktable clone** shown in the grid (see `media.md`) is never split from its image
+  (user's choice, 2026-10-30: "tri cannot split versions"): copying, moving or renaming it
+  acts on the original, and all its clones follow (`Mer_01.RAF.xmp` after renaming
+  `IMG_01.RAF` to "Mer"). **Deleting** it deletes only its sidecar, as in darktable; the
+  original stays.
 - The other image of its **RAW+JPEG pair** (same name apart from the extension, ignoring
   case) follows it too, by default (`[files] pairs = true`), as for notes: you reject a
   photo, not a file. The **Delete** and **Copy / move to…** dialogs have a "with the other

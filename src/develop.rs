@@ -978,7 +978,8 @@ fn render_darktable(
     let mut child = dt
         .cli
         .command()
-        .arg(image)
+        // Clone darktable : l'image d'origine, avec le sidecar du clone.
+        .arg(crate::media::source(image).as_ref())
         .arg(sidecar)
         .arg(out)
         .args(["--width", &side, "--height", &side])

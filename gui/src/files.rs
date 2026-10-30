@@ -203,6 +203,8 @@ fn file_name(path: &Path) -> String {
 impl FileDialog {
     /// Boîte « Renommer » pour `image`, nom actuel proposé.
     pub fn rename(image: PathBuf, at: Pos2) -> FileDialog {
+        // Un clone darktable se renomme avec son image d'origine (jamais séparés).
+        let image = tri::media::source(&image).into_owned();
         let name = image
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())

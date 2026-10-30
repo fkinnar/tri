@@ -268,7 +268,7 @@ pub struct SidecarIndex {
 
 /// Extensions des réglages d'autres logiciels, ajoutées au nom complet de l'image
 /// (`IMG.RAF.pp3`) : RawTherapee, ART, et Capture One (dans `CaptureOne/Settings…/`).
-const OTHER_SETTINGS: &[&str] = &[".pp3", ".arp", ".cos"];
+const OTHER_SETTINGS: &[&str] = &[".pp3", ".arp", ".cos", ".rrdata"];
 
 /// Dossier des réglages de Capture One (session) à côté des images.
 const CAPTURE_ONE_DIR: &str = "CaptureOne";
