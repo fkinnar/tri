@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **One thumbnail per darktable clone**: a clone (`IMG_01.RAF.xmp`) appears next to its
+  image, with its own ratings and its own development. Deleting it deletes only its
+  sidecar; copying, moving or renaming it takes the image and all its clones along.
+  RapidRAW's sidecar (`.rrdata`) follows the image too.
 - **Network neighbourhood**: the servers announced on the local network (Bonjour / mDNS:
   SMB, AFP, SFTP, WebDAV, FTP, NFS) appear under "Network" in the folders panel; a click
   lists their shares, as when typing their address (`[neighbourhood] enabled`).

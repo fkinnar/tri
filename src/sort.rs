@@ -56,7 +56,10 @@ pub struct Order {
 
 /// Date de modification de `path`, en secondes depuis 1970 (`None` si illisible).
 pub fn modified(path: &Path) -> Option<i64> {
-    let time = std::fs::metadata(path).ok()?.modified().ok()?;
+    let time = std::fs::metadata(crate::media::source(path))
+        .ok()?
+        .modified()
+        .ok()?;
     let secs = match time.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(d) => d.as_secs() as i64,
         Err(e) => -(e.duration().as_secs() as i64),

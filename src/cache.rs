@@ -275,7 +275,8 @@ pub fn defer_job(id: String, job: impl FnOnce() + Send + 'static) {
 
 /// Relève `path` sur le disque et le retient.
 fn read_stamp(path: &Path) -> Option<(u64, u128)> {
-    let read = fs::metadata(path).ok().map(|meta| {
+    // Clone darktable : le fichier de l'image d'origine.
+    let read = fs::metadata(crate::media::source(path)).ok().map(|meta| {
         let modified = meta
             .modified()
             .ok()

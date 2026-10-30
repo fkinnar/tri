@@ -87,10 +87,12 @@ impl std::error::Error for MetadataError {}
 /// pour l'EXIF du JPEG embarqué), mais à faire hors du fil de l'interface (disque lent,
 /// NAS). Une image sans EXIF donne des champs vides, pas une erreur.
 pub fn read(file: &MediaFile) -> Result<Metadata, MetadataError> {
-    let file_size = fs::metadata(&file.path).map_err(MetadataError::Io)?.len();
+    // Clone darktable : le fichier de l'image d'origine.
+    let path = crate::media::source(&file.path);
+    let file_size = fs::metadata(&path).map_err(MetadataError::Io)?.len();
     let mut m = match file.kind {
         MediaKind::Raw => read_raw(&file.path)?,
-        MediaKind::Flat => read_flat(&file.path),
+        MediaKind::Flat => read_flat(&path),
     };
     m.file_size = file_size;
     Ok(m)

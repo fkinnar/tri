@@ -253,6 +253,8 @@ unsafe impl Send for RawFile {}
 impl RawFile {
     /// Ouvre un fichier RAW : seul le format est analysé, les données ne sont pas lues.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        // Clone darktable : les données de l'image d'origine.
+        let path = crate::media::source(path.as_ref());
         let path = path.as_ref();
         let ptr = unsafe { ffi::libraw_init(0) };
         if ptr.is_null() {

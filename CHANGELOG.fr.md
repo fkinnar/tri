@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Une vignette par clone darktable** : un clone (`IMG_01.RAF.xmp`) apparaît à côté de
+  son image, avec ses propres notes et son propre développement. Le supprimer ne
+  supprime que son sidecar ; le copier, le déplacer ou le renommer emporte l'image et
+  tous ses clones. Le sidecar de RapidRAW (`.rrdata`) suit aussi l'image.
 - **Voisinage réseau** : les serveurs annoncés sur le réseau local (Bonjour / mDNS : SMB,
   AFP, SFTP, WebDAV, FTP, NFS) apparaissent sous « Réseau » dans le panneau des
   dossiers ; un clic liste leurs partages, comme en tapant leur adresse

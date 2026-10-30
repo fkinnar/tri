@@ -16,7 +16,13 @@ commande offre les mêmes actions.
   `CaptureOne/Settings…/IMG.RAF.cos` (copié ou déplacé dans le même sous-dossier de la
   destination, renommé à sa place). `xmp::SidecarIndex::companions` les rassemble ; les
   notes, elles, ne lisent que les sidecars de l'image. Les copies virtuelles de Lightroom
-  ne vivent que dans son catalogue : rien à faire suivre.
+  ne vivent que dans son catalogue : rien à faire suivre. RapidRAW `IMG.RAF.rrdata` suit
+  aussi (30/10/2026).
+- Un **clone darktable** affiché dans la grille (voir `media.md`) ne se sépare jamais de
+  son image (choix de l'utilisateur, 30/10/2026 : « tri ne peut pas scinder les
+  versions ») : le copier, le déplacer ou le renommer agit sur l'original, et tous ses
+  clones suivent (`Mer_01.RAF.xmp` après avoir renommé `IMG_01.RAF` en « Mer »). Le
+  **supprimer** ne supprime que son sidecar, comme dans darktable ; l'original reste.
 - L'autre image de sa **paire RAW+JPEG** (même nom à l'extension près, sans tenir compte de
   la casse) la suit aussi, par défaut (`[files] pairs = true`), comme pour les notes : on
   rejette une photo, pas un fichier. Les boîtes **Supprimer** et **Copier / déplacer

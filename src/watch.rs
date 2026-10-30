@@ -139,8 +139,34 @@ impl Snapshot {
             changed.sort();
             changed
         }
+        let mut images = diff(&self.images, &newer.images);
+        // Clone darktable créé ou supprimé (`IMG_01.RAF.xmp` sans `IMG_01.RAF`) : une
+        // image de plus ou de moins dans la liste.
+        let appeared = newer
+            .sidecars
+            .keys()
+            .filter(|p| !self.sidecars.contains_key(*p));
+        let gone = self
+            .sidecars
+            .keys()
+            .filter(|p| !newer.sidecars.contains_key(*p));
+        for sidecar in appeared.chain(gone) {
+            let clone = sidecar.with_extension("");
+            let original = clone
+                .file_name()
+                .and_then(|n| crate::media::clone_name(&n.to_string_lossy()))
+                .map(|(original, _)| clone.with_file_name(original));
+            if crate::media::kind_of(&clone).is_some()
+                && !newer.images.contains_key(&clone)
+                && original.is_some_and(|o| newer.images.contains_key(&o))
+            {
+                images.push(clone);
+            }
+        }
+        images.sort();
+        images.dedup();
         Changes {
-            images: diff(&self.images, &newer.images),
+            images,
             sidecars: diff(&self.sidecars, &newer.sidecars),
         }
     }
@@ -333,6 +359,28 @@ mod tests {
         );
     }
     use std::sync::mpsc;
+
+    #[test]
+    fn a_darktable_clone_created_or_deleted_elsewhere_changes_the_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.RAF"), b"x").unwrap();
+        std::fs::write(d.join("A.RAF.xmp"), b"<x/>").unwrap();
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(d.join("A_01.RAF.xmp"), b"<x/>").unwrap();
+        let after = Snapshot::of(d).unwrap();
+        let changes = before.changes(&after);
+        assert_eq!(changes.images, [d.join("A_01.RAF")], "clone créé");
+        assert_eq!(changes.sidecars, [d.join("A_01.RAF.xmp")]);
+        assert_eq!(
+            after.changes(&before).images,
+            [d.join("A_01.RAF")],
+            "supprimé"
+        );
+        // Simple note changée : pas une image de plus.
+        std::fs::write(d.join("A.RAF.xmp"), b"<x a=\"1\"/>").unwrap();
+        assert!(after.changes(&Snapshot::of(d).unwrap()).images.is_empty());
+    }
 
     #[test]
     fn snapshots_see_images_and_sidecars_only() {

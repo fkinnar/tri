@@ -11130,7 +11130,12 @@ impl TriApp {
                 Some(dir) => self.open_folder(&dir),
                 None => self.close_folder(),
             }
-        } else if !self.folder.is_none() && self.files.iter().any(|f| !f.path.exists()) {
+        } else if !self.folder.is_none()
+            && self
+                .files
+                .iter()
+                .any(|f| !tri::media::source(&f.path).exists())
+        {
             // Un sous-dossier du dossier ouvert supprimé ou déplacé (« Sous-dossiers »
             // coché) : ses images sortent de la liste, leurs calculs s'arrêtent (retour du
             // 25/10/2026 : ils continuaient pour rien).
@@ -13788,6 +13793,43 @@ mod tests {
             s.thumbnail = Avail::Failed("fichier illisible".into());
         }
         h.run_steps(3);
+    }
+
+    #[test]
+    fn a_darktable_clone_has_its_own_thumbnail_and_its_own_notes() {
+        // Une vignette par clone (choix du 29/10/2026) : `img0_01.jpg.xmp` sans
+        // `img0_01.jpg` est le clone n° 1 de `img0.jpg`, noté dans son propre sidecar.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        let clone = photos.join("img0_01.jpg");
+        run_until(&mut h, |app| {
+            app.loading.is_none()
+                && app.files.len() == 4
+                && app.status.iter().all(|s| s.thumbnail == Avail::Ready)
+        });
+        let i = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == clone)
+            .expect("le clone dans la grille, juste après son original");
+        assert_eq!(h.state().files[i - 1].path, photos.join("img0.jpg"));
+        assert_eq!(h.state().folder.notes.notes(&clone).stars, 2);
+        h.state_mut().selected = i;
+        press(&mut h, Key::Num4, Modifiers::SHIFT);
+        assert_eq!(tri::xmp::read(&clone).unwrap().stars, 4);
+        assert_eq!(
+            h.state().folder.notes.notes(&photos.join("img0.jpg")).stars,
+            0,
+            "l'original garde ses notes"
+        );
     }
 
     #[test]

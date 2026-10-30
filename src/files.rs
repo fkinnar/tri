@@ -171,7 +171,13 @@ pub fn adds_pairs(images: &[PathBuf]) -> bool {
 pub fn group(images: &[PathBuf], pairs: bool) -> Group {
     let mut group = Group::default();
     let mut seen = HashSet::new();
-    for image in images {
+    // Un clone darktable ne se sépare pas de son image (choix de l'utilisateur,
+    // 30/10/2026) : l'image d'origine, ses clones avec elle.
+    let images: Vec<PathBuf> = images
+        .iter()
+        .map(|i| media::source(i).into_owned())
+        .collect();
+    for image in &images {
         let members = if pairs {
             same_stem(image)
         } else {
@@ -223,6 +229,8 @@ pub struct Rename {
 /// déjà pris (changer seulement la casse est permis).
 pub fn plan_rename(image: &Path, new_stem: &str, settings: &FileSettings) -> Result<Rename> {
     check_name(new_stem)?;
+    // Un clone darktable : son image d'origine est renommée, avec tous ses clones.
+    let image = media::source(image);
     let group = group(&[image.to_path_buf()], settings.pairs);
     let old_len = image
         .file_stem()
@@ -364,7 +372,19 @@ pub fn rename(plan: &Rename) -> Result<()> {
 /// Prépare la suppression de `images` : les fichiers à supprimer (paires et sidecars
 /// compris), à montrer avant de confirmer.
 pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> Group {
-    group(images, settings.pairs)
+    // Supprimer un clone darktable, c'est supprimer son sidecar (comme darktable) ;
+    // son image d'origine reste.
+    let (clones, images): (Vec<PathBuf>, Vec<PathBuf>) =
+        images.iter().cloned().partition(|i| media::is_clone(i));
+    let mut group = group(&images, settings.pairs);
+    for clone in clones {
+        if let Some(sidecar) = crate::develop::darktable_sidecar_path(&clone)
+            && !group.sidecars.contains(&sidecar)
+        {
+            group.sidecars.push(sidecar);
+        }
+    }
+    group
 }
 
 /// Un fichier mis à la corbeille, et de quoi l'en ressortir ([`untrash`]).
@@ -1083,7 +1103,9 @@ pub fn common_prefix(candidates: &[String]) -> String {
 /// (macOS, Windows, gestionnaires Linux qui exposent `org.freedesktop.FileManager1` :
 /// Nautilus, Nemo, Dolphin…) ; sinon ouvre son dossier.
 pub fn reveal(path: &Path) -> Result<()> {
-    let path = std::path::absolute(path).map_err(|e| FileError::Io(path.into(), e))?;
+    // Un clone darktable : son image d'origine.
+    let path = media::source(path);
+    let path = std::path::absolute(&path).map_err(|e| FileError::Io(path.into(), e))?;
     if cfg!(target_os = "macos") {
         return spawn(crate::process::command("open").arg("-R").arg(&path), "open");
     }
@@ -1133,6 +1155,15 @@ fn file_uri(path: &Path) -> String {
 /// programme et arguments. Vide : application par défaut du système. Séparée de
 /// [`open_with`] pour être testée sans rien lancer.
 pub fn editor_command(editor: &[String], files: &[PathBuf]) -> Vec<Command> {
+    // Clones darktable : leur image d'origine, une fois.
+    let mut sources: Vec<PathBuf> = Vec::new();
+    for file in files {
+        let source = media::source(file).into_owned();
+        if !sources.contains(&source) {
+            sources.push(source);
+        }
+    }
+    let files = &sources;
     let Some((program, args)) = editor.split_first() else {
         return files.iter().map(|f| default_opener(f)).collect();
     };
@@ -1323,6 +1354,55 @@ mod tests {
             d.join("IMG_02.RAF.xmp").exists(),
             "l'autre image n'a pas bougé"
         );
+    }
+
+    #[test]
+    fn a_clone_is_deleted_alone_but_never_moved_or_renamed_alone() {
+        // Choix de l'utilisateur (30/10/2026) : supprimer un clone, c'est supprimer son
+        // sidecar ; le copier, le déplacer ou le renommer emporte l'image et tous ses
+        // clones (« tri ne peut pas scinder les versions »).
+        let dir = tempfile::tempdir().unwrap();
+        let (d, dest) = (dir.path().join("src"), dir.path().join("dest"));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+        developed(&d);
+        crate::media::scan(&d, 1).unwrap();
+        let clone = d.join("IMG_01.RAF");
+        assert!(crate::media::is_clone(&clone));
+        let settings = FileSettings::default();
+        let deleted = plan_delete(std::slice::from_ref(&clone), &settings);
+        assert!(deleted.images.is_empty(), "l'image d'origine reste");
+        assert_eq!(names(&deleted.sidecars), ["IMG_01.RAF.xmp"]);
+        let moved = plan_transfer(
+            std::slice::from_ref(&clone),
+            &dest,
+            TransferMode::Move,
+            &settings,
+        )
+        .unwrap();
+        let mut moved: Vec<String> = moved
+            .files
+            .iter()
+            .map(|(from, _)| from.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        moved.sort();
+        assert_eq!(
+            moved,
+            [
+                "IMG.RAF",
+                "IMG.RAF.arp",
+                "IMG.RAF.cos",
+                "IMG.RAF.pp3",
+                "IMG.RAF.xmp",
+                "IMG_01.RAF.xmp",
+                "IMG_12.RAF.xmp"
+            ]
+        );
+        let plan = plan_rename(&clone, "Mer", &settings).unwrap();
+        rename(&plan).unwrap();
+        for name in ["Mer.RAF", "Mer_01.RAF.xmp", "Mer_12.RAF.xmp"] {
+            assert!(d.join(name).exists(), "{name}");
+        }
     }
 
     #[test]

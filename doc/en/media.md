@@ -62,6 +62,23 @@ Lists the images in `root` (via `walkdir`):
 The scan is done entirely and in memory (no lazy iterator): sorting requires it, and a
 few thousand entries cost a negligible amount.
 
+### darktable clones: one thumbnail each
+
+A darktable clone ("duplicate") has no file of its own, only its sidecar: `IMG_01.RAF.xmp`
+for clone no. 1 of `IMG.RAF`. The scan lists it as an image `IMG_01.RAF` (user's choice,
+2026-10-29: one thumbnail per clone, next to the original), with its own notes and its own
+development, since its sidecar is exactly the one `tri` reads for that name. The scan
+recognises it by names alone, with no extra disk access: a sidecar `NAME_NN.EXT.xmp`
+without an image `NAME_NN.EXT`, whose image `NAME.EXT` is in the same folder. A real image
+with that name (`IMG_0001.CR2` from a Canon) stays an image.
+
+The pixels are the original's: `source(path)` gives the file to read (the original for a
+clone, `path` otherwise). LibRaw (`RawFile::open`), flat images (`flat::decode*`),
+metadata, the cache stamp (`cache::stamp`) and the darktable render (the original with the
+clone's sidecar) go through it. `is_clone(path)` tells whether `path` is a clone,
+`clone_name("IMG_01.RAF")` gives `("IMG.RAF", 1)`. Known clones are recorded during the
+scan (in-memory registry, clone path → original).
+
 ## Demonstration
 
 The `tri` binary lists a folder, with an optional filter:
