@@ -428,6 +428,12 @@ depth = 8
 # smaller, finer progress and quicker cancelling.
 batch = 20
 
+[neighbourhood]
+# Network neighbourhood: listen for the servers that announce themselves on the local
+# network (Bonjour / mDNS) and offer them under "Network". On Windows, the firewall may
+# ask for permission the first time.
+enabled = true
+
 [data]
 # Data folder (offload history, last folder opened). Missing:
 # Linux ~/.local/share/tri, macOS ~/Library/Application Support/tri, Windows %APPDATA%\tri.

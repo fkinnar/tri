@@ -12,6 +12,8 @@ repository = "https://github.com/fkinnar/tri"
 [dependencies]
 blake3 = "1"
 kamadak-exif = "0.6"
+# Voisinage réseau (Bonjour / mDNS), sans runtime asynchrone.
+mdns-sd = { version = "0.21", default-features = false }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp"] }
 # Profils ICC des exports sans darktable (déjà compilé par `image`, même version).
 moxcms = "0.8"

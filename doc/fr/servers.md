@@ -114,6 +114,6 @@ la section « Réseau » (`Server::place`) :
 
 ## Plus tard
 
-Un vrai voisinage réseau (découverte des serveurs, Bonjour / mDNS) : prochaine étape. La
+Voisinage réseau (Bonjour / mDNS) : fait, voir [neighbourhood.md](neighbourhood.md). La
 boîte de connexion n'a pas encore été essayée sur de vrais serveurs (Windows, Mint) ;
 « Retenir » sous Linux dépend du trousseau du bureau.

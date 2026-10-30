@@ -71,7 +71,11 @@ ICC profiles of exports without darktable, pure Rust colour management, already 
 `image` (same version), actively maintained (0.9.1 of 2026-09-15) — under BSD-3-Clause OR
 Apache-2.0; `serde_json` — versions (crops) in the XMP,
 one JSON object per element, dtolnay, very well maintained (1.0.154 of 2026-10-11) — under MIT OR
-Apache-2.0): the 89 crates
+Apache-2.0; `mdns-sd` — network neighbourhood (Bonjour / mDNS), pure Rust without an
+async runtime, keepsimple1/mdns-sd, active (0.21.6 of 2026-10-19), without its default
+features — under Apache-2.0 OR MIT, with `flume` under Apache-2.0 / MIT, `if-addrs` under
+MIT OR BSD-3-Clause, `socket-pktinfo` under MIT, `mio`, `socket2`, `fastrand` under MIT
+(OR Apache-2.0)): the 89 crates
 of the engine's
 dependency tree on macOS (`cargo tree -p tri -e normal,build`, recounted on
 2026-10-17) are under permissive

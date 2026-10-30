@@ -39,6 +39,7 @@ pub mod i18n;
 pub mod jpeg;
 pub mod media;
 pub mod metadata;
+pub mod neighbourhood;
 pub mod notes;
 pub mod offload;
 pub mod overlay;

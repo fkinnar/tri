@@ -60,6 +60,8 @@ pub struct AppSettings {
     pub update: tri::update::UpdateSettings,
     /// `[remote]`.
     pub remote: tri::remote::RemoteSettings,
+    /// `[neighbourhood]`.
+    pub neighbourhood: tri::neighbourhood::NeighbourhoodSettings,
     /// `[gui]`.
     pub gui: GuiSettings,
     /// `[keys]` : raccourcis par identifiant d'action (`"core.flag.accept" = ["Maj+P"]`),
@@ -90,6 +92,7 @@ impl AppSettings {
             i18n: self.i18n,
             update: self.update.clone(),
             remote: self.remote.clone(),
+            neighbourhood: self.neighbourhood.clone(),
         }
     }
 

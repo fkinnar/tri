@@ -32,6 +32,10 @@ pub enum PlaceKind {
     /// est son adresse (`smb://nas/photo`), à rejoindre ([`crate::servers::Server::connect`])
     /// avant d'en lire les dossiers.
     Server,
+    /// Serveur annoncé sur le réseau local ([`crate::neighbourhood`]) ; son chemin est
+    /// son adresse (`smb://nas.local/`), ouverte dans la recherche des dossiers pour
+    /// choisir un partage.
+    Neighbour,
 }
 
 /// Section du panneau des dossiers, dans l'ordre d'affichage (demandé le 20/10/2026) :
@@ -82,7 +86,7 @@ impl PlaceKind {
     pub fn section(self) -> Section {
         match self {
             PlaceKind::Volume | PlaceKind::Device => Section::Devices,
-            PlaceKind::Network | PlaceKind::Server => Section::Network,
+            PlaceKind::Network | PlaceKind::Server | PlaceKind::Neighbour => Section::Network,
             PlaceKind::Home => Section::Personal,
             PlaceKind::Favorite => Section::Favorites,
             PlaceKind::Root => Section::System,
@@ -1328,6 +1332,9 @@ pub struct Tree {
     /// Partages réseau mémorisés ([`crate::servers::remembered`]), ajoutés aux
     /// emplacements quand ils n'y sont pas déjà (montés).
     servers: Vec<crate::servers::Server>,
+    /// Serveurs annoncés sur le réseau local ([`crate::neighbourhood`]), ajoutés aux
+    /// emplacements.
+    neighbours: Vec<Place>,
 }
 
 impl Tree {
@@ -1358,6 +1365,7 @@ impl Tree {
             names: HashMap::new(),
             folded: HashSet::new(),
             servers: Vec::new(),
+            neighbours: Vec::new(),
         }
     }
 
@@ -1372,6 +1380,25 @@ impl Tree {
             .retain(|p| p.kind != PlaceKind::Server && !old.contains(&p.path));
         self.servers = servers;
         self.add_servers();
+        self.add_neighbours();
+    }
+
+    /// Remplace les serveurs du voisinage réseau, proposés dans la section « Réseau »
+    /// (un clic ouvre leur adresse dans la recherche des dossiers, pour choisir un
+    /// partage).
+    pub fn set_neighbours(&mut self, neighbours: Vec<Place>) {
+        self.places.retain(|p| p.kind != PlaceKind::Neighbour);
+        self.neighbours = neighbours;
+        self.add_neighbours();
+    }
+
+    /// Ajoute aux emplacements les serveurs du voisinage qui n'y sont pas déjà.
+    fn add_neighbours(&mut self) {
+        for place in &self.neighbours {
+            if !self.places.iter().any(|p| p.path == place.path) && !self.filter.hides(place) {
+                self.places.push(place.clone());
+            }
+        }
     }
 
     /// Partages réseau mémorisés.
@@ -1526,6 +1553,7 @@ impl Tree {
     pub fn set_places(&mut self, places: Vec<Place>) {
         self.places = places;
         self.add_servers();
+        self.add_neighbours();
         self.check_favorites();
     }
 
@@ -1533,6 +1561,7 @@ impl Tree {
     pub fn refresh(&mut self) {
         self.places = places_filtered(&self.filter);
         self.add_servers();
+        self.add_neighbours();
         self.check_favorites();
         self.reload();
     }

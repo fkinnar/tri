@@ -41,6 +41,7 @@ existe.
 | [update.md](update.md) | Module `tri::update` : rechercher une nouvelle version, sur demande |
 | [watch.md](watch.md) | Module `tri::watch` : surveillance du dossier ouvert (images ajoutées, XMP modifiés ailleurs) |
 | [servers.md](servers.md) | Module `tri::servers` : serveurs réseau rejoints par leur adresse (`\\nas\photo`, `smb://`, `ftp://`, `sftp://`, WebDAV, NFS) |
+| [neighbourhood.md](neighbourhood.md) | Module `tri::neighbourhood` : voisinage réseau, serveurs annoncés par Bonjour / mDNS |
 | [remote.md](remote.md) | Module `tri::remote` : copie en local d'un serveur que le système ne sait pas monter (FTP, SFTP) |
 | [places.md](places.md) | Module `tri::places` : emplacements (volumes, dossier personnel, racine) et arborescence |
 | [process.md](process.md) | Module `tri::process` : programmes externes, sans fenêtre de console sous Windows |

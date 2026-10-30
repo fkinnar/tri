@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Network neighbourhood**: the servers announced on the local network (Bonjour / mDNS:
+  SMB, AFP, SFTP, WebDAV, FTP, NFS) appear under "Network" in the folders panel; a click
+  lists their shares, as when typing their address (`[neighbourhood] enabled`).
 - **Developments to redo announced**: when photos developed elsewhere (darktable) have
   changed, a banner at the top says how many renders are redone, with a progress bar,
   then that they are done; it fades by itself (`[gui.grid] develop_toast_ms`).
