@@ -42,9 +42,11 @@ choice: someone working in darktable who tries another software sets
   exported launcher opens the interface, not `darktable-cli`). The Flatpak must be able to
   read `tri`'s images and cache (home folder): to be checked for images outside the home
   folder.
-- `darktable_sidecar(image)`: `IMAGE.RAF.xmp`, **only if it carries an actual
-  development** (`darktable:history_end` > 0): a sidecar written by `tri` alone (notes)
-  has none.
+- `darktable_sidecar(image)`: `IMAGE.RAF.xmp`, **only if it is darktable's**: written
+  by darktable (`darktable:xmp_version`), or with a history (`darktable:history_end` >
+  0). An image imported but not edited (virgin clone) thus has its default darktable
+  render, which is not LibRaw's (feedback of 2026-10-30). A sidecar written by `tri`
+  alone (notes) has none.
 - `Darktable::render`: `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, cancellable (the program is stopped).

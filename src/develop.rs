@@ -610,9 +610,12 @@ pub fn rapidraw_sidecar(image: &Path) -> Option<PathBuf> {
     crate::cache::stamp(&sidecar).is_some().then_some(sidecar)
 }
 
-/// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il porte un vrai développement : un
-/// historique non vide (`darktable:history_end` > 0). Un sidecar écrit par `tri` seul
-/// (notes) ou par un autre logiciel n'en a pas.
+/// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il est de darktable : écrit par
+/// darktable (`darktable:xmp_version`), même sans historique, ou avec un historique non
+/// vide (`darktable:history_end` > 0). Retour du 30/10/2026 : une image importée dans
+/// darktable mais pas retouchée (un clone vierge) a son rendu darktable par défaut, qui
+/// n'est pas celui de LibRaw. Un sidecar écrit par `tri` seul (notes) ou par un autre
+/// logiciel n'en a pas.
 pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
     use std::sync::{Mutex, OnceLock};
     type Memo = std::collections::HashMap<PathBuf, ((u64, u128), bool)>;
@@ -635,10 +638,9 @@ pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
         });
         return None;
     }
-    let developed = std::fs::read_to_string(&sidecar)
-        .ok()
-        .and_then(|text| history_end(&text))
-        .is_some_and(|end| end > 0);
+    let developed = std::fs::read_to_string(&sidecar).is_ok_and(|text| {
+        text.contains("darktable:xmp_version") || history_end(&text).is_some_and(|end| end > 0)
+    });
     if let Ok(mut m) = memo.lock() {
         m.insert(sidecar.clone(), (now, developed));
     }
@@ -1283,7 +1285,7 @@ mod tests {
     }
 
     #[test]
-    fn only_sidecars_with_a_history_count() {
+    fn only_sidecars_written_by_darktable_or_with_a_history_count() {
         let dir = tempfile::tempdir().unwrap();
         let image = dir.path().join("DSCF0001.RAF");
         written(&image, b"raw").unwrap();
@@ -1294,6 +1296,18 @@ mod tests {
         assert_eq!(darktable_sidecar(&image), None);
         written(&sidecar, r#"<rdf:Description darktable:history_end="0"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), None, "historique vide");
+        // Écrit par darktable, sans historique (importée, clone vierge) : son rendu par
+        // défaut, différent de LibRaw (retour du 30/10/2026).
+        written(
+            &sidecar,
+            r#"<rdf:Description darktable:xmp_version="5" darktable:history_end="0"/>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            darktable_sidecar(&image),
+            Some(sidecar.clone()),
+            "par défaut"
+        );
         written(&sidecar, r#"<rdf:Description darktable:history_end="27"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), Some(sidecar.clone()));
         written(&sidecar, "<darktable:history_end>4</darktable:history_end>").unwrap();
