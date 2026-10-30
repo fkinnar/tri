@@ -330,6 +330,11 @@ impl SidecarIndex {
     pub fn companions(&self, image: &Path) -> Vec<PathBuf> {
         let mut found = self.sidecars(image);
         found.extend(self.clones(image).into_iter().map(|(_, path)| path));
+        found.extend(
+            self.rapidraw_copies(image)
+                .into_iter()
+                .map(|(_, path)| path),
+        );
         if let Some(name) = image.file_name() {
             let name = name.to_string_lossy().to_lowercase();
             for extension in OTHER_SETTINGS {
@@ -342,6 +347,29 @@ impl SidecarIndex {
             }
         }
         found
+    }
+
+    /// Copies virtuelles RapidRAW de `image`, par identifiant : `IMG.RAF.c33b94.rrdata`
+    /// (`IMG.RAF.rrdata` est le développement principal). Retour du 30/10/2026 : elles
+    /// restaient derrière l'image déplacée.
+    pub fn rapidraw_copies(&self, image: &Path) -> Vec<(String, PathBuf)> {
+        let Some(name) = image.file_name() else {
+            return Vec::new();
+        };
+        let prefix = format!("{}.", name.to_string_lossy().to_lowercase());
+        let mut copies: Vec<(String, PathBuf)> = self
+            .others
+            .iter()
+            .filter_map(|(key, paths)| {
+                let id = key.strip_prefix(&prefix)?.strip_suffix(".rrdata")?;
+                // Un identifiant seul (pas `IMG.RAF.pp3.rrdata`, ni vide).
+                let ok = !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric());
+                ok.then(|| paths.iter().map(move |p| (id.to_string(), p.clone())))
+            })
+            .flatten()
+            .collect();
+        copies.sort();
+        copies
     }
 
     /// Clones (« duplicates ») darktable de `image`, par numéro : `IMG_01.RAF.xmp`,

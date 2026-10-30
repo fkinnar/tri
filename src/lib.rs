@@ -48,6 +48,7 @@ pub mod preview;
 pub mod process;
 pub mod raw;
 pub mod remote;
+pub mod rrdata;
 pub mod scheduler;
 pub mod selection;
 pub mod send;

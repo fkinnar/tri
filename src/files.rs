@@ -1281,6 +1281,9 @@ mod tests {
                 "IMG_12.RAF.xmp",
                 "IMG.RAF.pp3",
                 "IMG.RAF.arp",
+                // RapidRAW : le développement principal et une copie virtuelle.
+                "IMG.RAF.rrdata",
+                "IMG.RAF.c33b94.rrdata",
                 // Une vraie image nommée comme un clone : son sidecar est à elle.
                 "IMG_02.RAF",
                 "IMG_02.RAF.xmp",
@@ -1309,8 +1312,10 @@ mod tests {
             sidecars,
             [
                 "IMG.RAF.arp",
+                "IMG.RAF.c33b94.rrdata",
                 "IMG.RAF.cos",
                 "IMG.RAF.pp3",
+                "IMG.RAF.rrdata",
                 "IMG.RAF.xmp",
                 "IMG_01.RAF.xmp",
                 "IMG_12.RAF.xmp"
@@ -1348,6 +1353,8 @@ mod tests {
             "Mer_12.RAF.xmp",
             "Mer.RAF.pp3",
             "Mer.RAF.arp",
+            "Mer.RAF.rrdata",
+            "Mer.RAF.c33b94.rrdata",
         ] {
             assert!(d.join(name).exists(), "{name}");
         }
@@ -1398,8 +1405,10 @@ mod tests {
             [
                 "IMG.RAF",
                 "IMG.RAF.arp",
+                "IMG.RAF.c33b94.rrdata",
                 "IMG.RAF.cos",
                 "IMG.RAF.pp3",
+                "IMG.RAF.rrdata",
                 "IMG.RAF.xmp",
                 "IMG_01.RAF.xmp",
                 "IMG_12.RAF.xmp"
@@ -1421,9 +1430,10 @@ mod tests {
         developed(&src);
         let s = FileSettings::default();
         let plan = plan_transfer(&[src.join("IMG.RAF")], &dest, TransferMode::Move, &s).unwrap();
-        assert_eq!(plan.len(), 7);
+        assert_eq!(plan.len(), 9);
         transfer(&plan, |_, _| {}).unwrap();
         for name in [
+            "IMG.RAF.c33b94.rrdata",
             "IMG.RAF",
             "IMG_01.RAF.xmp",
             "IMG_12.RAF.xmp",

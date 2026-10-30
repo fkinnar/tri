@@ -21,7 +21,7 @@ libheif-rs = { version = "3", default-features = false, features = ["v1_17"], op
 quick-xml = "0.42"
 serde = { version = "1", features = ["derive"] }
 # Versions (recadrages) dans le XMP : un objet JSON par élément de `tri:Versions`.
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 toml = "1"
 toml_edit = "0.25"
 trash = "5"

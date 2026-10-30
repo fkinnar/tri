@@ -16,7 +16,7 @@ only handles input and confirmation, and the command line offers the same action
   destination, renamed in place). `xmp::SidecarIndex::companions` gathers them; ratings
   are still read from the image's own sidecars only. Lightroom virtual copies live only in
   its catalogue: nothing to carry along. RapidRAW `IMG.RAF.rrdata` follows too
-  (2026-10-30).
+  (2026-10-30), with its virtual copies `IMG.RAF.<id>.rrdata`.
 - A **darktable clone** shown in the grid (see `media.md`) is never split from its image
   (user's choice, 2026-10-30: "tri cannot split versions"): copying, moving or renaming it
   acts on the original, and all its clones follow (`Mer_01.RAF.xmp` after renaming
