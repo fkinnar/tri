@@ -109,6 +109,47 @@ pub fn save(data: &Path, state: &DisplayState) -> io::Result<()> {
     std::fs::rename(tmp, data.join(FILE))
 }
 
+/// Fichier des filtres et du tri de chaque dossier, dans le dossier de données.
+const FOLDER_VIEWS: &str = "folder-views";
+
+/// Filtres et tri d'un dossier, retenus d'un lancement à l'autre (demandé le 30/10/2026 :
+/// on trie en plusieurs passes, filtre changé entre deux ; `[gui] remember_folder_view`).
+/// La recherche par nom n'en fait pas partie (un geste du moment).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FolderView {
+    /// RAW et / ou JPEG.
+    pub kind: tri::filter::KindFilter,
+    /// Étoiles, couleurs, drapeaux.
+    pub notes: tri::notes::NotesRule,
+    /// Comparaison du filtre d'étoiles.
+    pub stars_op: tri::notes::StarsOp,
+    /// Netteté.
+    pub blur: Option<tri::sharpness::BlurRule>,
+    /// Bien exposées.
+    pub well_exposed: bool,
+    /// Développées.
+    pub developed: bool,
+    /// Filtres inversés.
+    pub inverted: bool,
+    /// Ordre des images ; `None` : celui retenu pour tous.
+    pub order: Option<tri::sort::Order>,
+}
+
+/// Filtres et tri retenus pour `dir`, s'il y en a.
+pub fn folder_view(data: &Path, dir: &Path) -> Option<FolderView> {
+    serde_json::from_str(&tri::folder::folder_text(data, FOLDER_VIEWS, dir)?).ok()
+}
+
+/// Retient `view` pour `dir` ; les filtres par défaut et pas de tri à lui : oublié.
+pub fn remember_folder_view(data: &Path, dir: &Path, view: &FolderView) -> io::Result<()> {
+    let json = (*view != FolderView::default())
+        .then(|| serde_json::to_string(view))
+        .transpose()
+        .map_err(io::Error::other)?;
+    tri::folder::remember_folder_text(data, FOLDER_VIEWS, dir, json.as_deref())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +195,27 @@ mod tests {
         let v = restore_window(eframe::egui::ViewportBuilder::default(), &wayland);
         assert_eq!((v.inner_size, v.position), (None, None));
         assert_eq!(v.maximized, Some(false));
+    }
+
+    #[test]
+    fn a_folder_view_is_kept_per_folder_and_forgotten_when_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (Path::new("/photos/a"), Path::new("/photos/b"));
+        let view = FolderView {
+            notes: tri::notes::NotesRule {
+                stars: Some(tri::notes::StarsRule::AtLeast(2)),
+                ..Default::default()
+            },
+            order: Some(tri::sort::Order {
+                key: tri::sort::SortKey::Captured,
+                descending: true,
+            }),
+            ..Default::default()
+        };
+        remember_folder_view(dir.path(), a, &view).unwrap();
+        assert_eq!(folder_view(dir.path(), a), Some(view));
+        assert_eq!(folder_view(dir.path(), b), None, "par dossier");
+        remember_folder_view(dir.path(), a, &FolderView::default()).unwrap();
+        assert_eq!(folder_view(dir.path(), a), None, "rien à retenir : oublié");
     }
 }

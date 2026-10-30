@@ -127,6 +127,15 @@ system one ("cold" measurements, experiments).
   comparison (`m`), read from the RAW (Fujifilm for now); square, cross, circle or heart
   (`[gui.view] focus_marker`), colour `[gui.colors] focus`, dark outline underneath to
   stay visible on any background.
+- **Filters and sort per folder** (2026-10-30, `state::FolderView`): each folder's
+  filters (RAW / JPEG, stars and their comparison, colours, flags, sharpness, exposure,
+  developed, inversion) and sort order are kept in `folder-views` in the data folder (one
+  JSON line per folder, written when they change) and restored when it opens, at launch
+  too; a folder with nothing kept opens without filters, in the order kept for all. The
+  name search is not part of it. `[gui] remember_folder_view = false`: as before, the
+  previous folder's filters stay. **In full screen too**, the filter bar (Shift+F) and the
+  whole right panel (filters, grid): ratings are given in passes (1 star, filter, 2
+  stars…) without going back to the grid.
 - **Display state kept** (2026-10-17, `gui/src/state.rs`): what is shown or hidden with a
   key (focus point, sharpness map, zones, histogram, panels, bars, auto-advance) is
   restored at the next launch, from `gui-state.toml` in the data folder; the

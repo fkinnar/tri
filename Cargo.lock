@@ -3708,6 +3708,7 @@ dependencies = [
  "egui_kittest",
  "image",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "tri",

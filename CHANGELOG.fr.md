@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Filtres en plein écran** : la barre des filtres (Maj+F) et tout le panneau de droite
+  (filtres, grille) sont aussi là en plein écran, pour noter par passes sans repasser par
+  la grille.
+- **Filtres et tri retenus par dossier**, d'un lancement à l'autre
+  (`[gui] remember_folder_view`, activé par défaut).
 - **Copies virtuelles de RapidRAW** (`IMG.RAF.<id>.rrdata`) : elles suivent maintenant
   l'image copiée, déplacée ou renommée ; elles restaient derrière.
 - **Rendu darktable par défaut** : une image importée dans darktable mais pas retouchée

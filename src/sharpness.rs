@@ -418,7 +418,7 @@ pub fn judge_in_groups(
 }
 
 /// Ce que garde le filtre sur la netteté.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum BlurRule {
     /// Masquer les photos jugées floues : une photo sans jugement (score pas encore
     /// calculé) est gardée, on ne cache pas ce qu'on n'a pas jugé.

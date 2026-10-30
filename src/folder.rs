@@ -162,12 +162,7 @@ impl Folder {
 /// `data` (une ligne par dossier : valeur, tabulation, chemin), s'il y en a une : seuil
 /// des piles, sévérité du flou… réglés par un curseur et gardés par dossier.
 pub fn folder_value(data: &Path, file: &str, dir: &Path) -> Option<f32> {
-    let text = std::fs::read_to_string(data.join(file)).ok()?;
-    let wanted = dir.to_string_lossy();
-    text.lines()
-        .filter_map(|l| l.split_once('\t'))
-        .find(|(_, path)| *path == wanted)
-        .and_then(|(v, _)| v.parse().ok())
+    folder_text(data, file, dir)?.parse().ok()
 }
 
 /// Retient `value` pour le dossier `dir` dans le fichier `file` du dossier de données
@@ -177,6 +172,27 @@ pub fn remember_folder_value(
     file: &str,
     dir: &Path,
     value: Option<f32>,
+) -> io::Result<()> {
+    remember_folder_text(data, file, dir, value.map(|v| v.to_string()).as_deref())
+}
+
+/// Comme [`folder_value`], pour un texte d'une ligne sans tabulation (les filtres et le
+/// tri d'un dossier, en JSON, retenus par l'interface).
+pub fn folder_text(data: &Path, file: &str, dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(data.join(file)).ok()?;
+    let wanted = dir.to_string_lossy();
+    text.lines()
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(_, path)| *path == wanted)
+        .map(|(v, _)| v.to_string())
+}
+
+/// Comme [`remember_folder_value`], pour un texte d'une ligne sans tabulation.
+pub fn remember_folder_text(
+    data: &Path,
+    file: &str,
+    dir: &Path,
+    value: Option<&str>,
 ) -> io::Result<()> {
     let path = data.join(file);
     let wanted = dir.to_string_lossy().into_owned();

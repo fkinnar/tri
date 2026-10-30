@@ -49,7 +49,7 @@ pub fn retain(groups: Groups, mut keep: impl FnMut(&MediaFile) -> bool) -> Group
 }
 
 /// Filtre par nature de fichier (ex. carte SD en RAW+JPEG : tout, RAW seuls ou JPEG seuls).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum KindFilter {
     /// RAW et images plates.
     #[default]
