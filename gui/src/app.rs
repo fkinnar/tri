@@ -479,6 +479,12 @@ pub struct TriApp {
     status: Vec<Status>,
     progress: [Progress; 6],
     engine: Option<Engine>,
+    /// Voisinage réseau : serveurs annoncés (mDNS), et leur écoute (démarrée à la
+    /// première image si `[neighbourhood] enabled` ; jamais dans les tests, qui ne
+    /// touchent pas au réseau).
+    neighbourhood: tri::neighbourhood::Neighbourhood,
+    neighbour_browser: Option<tri::neighbourhood::Browser>,
+    neighbour_tried: bool,
     /// Ouverture d'un dossier lent en cours.
     opening: Option<Opening>,
     /// Vignettes visibles déjà signalées au moteur ([`Scheduler::set_visible`]).
@@ -978,6 +984,9 @@ impl TriApp {
             status: Vec::new(),
             progress: [Progress::default(); 6],
             engine: None,
+            neighbourhood: Default::default(),
+            neighbour_browser: None,
+            neighbour_tried: cfg!(test),
             opening: None,
             visible_sent: None,
             open_wait_override: cfg!(test).then(|| Duration::from_secs(60)),
@@ -1146,6 +1155,38 @@ impl TriApp {
         ));
     }
 
+    /// Voisinage réseau : l'écoute démarre une fois (si activée) ; les serveurs annoncés
+    /// ou retirés mettent à jour la section « Réseau ».
+    fn watch_neighbourhood(&mut self, ctx: &egui::Context) {
+        if !self.neighbour_tried {
+            self.neighbour_tried = true;
+            if self.settings.neighbourhood.enabled {
+                let repaint = ctx.clone();
+                match tri::neighbourhood::Browser::start(move || repaint.request_repaint()) {
+                    Ok(browser) => self.neighbour_browser = Some(browser),
+                    Err(e) => trace(|| format!("voisinage réseau indisponible : {e}")),
+                }
+            }
+        }
+        if let Some(browser) = &self.neighbour_browser
+            && browser.poll(&mut self.neighbourhood)
+        {
+            self.show_neighbours();
+        }
+    }
+
+    /// Serveurs du voisinage dans la section « Réseau ».
+    fn show_neighbours(&mut self) {
+        let os = std::env::consts::OS;
+        let places = self
+            .neighbourhood
+            .neighbours()
+            .iter()
+            .map(|n| n.place(os))
+            .collect();
+        self.tree.set_neighbours(places);
+    }
+
     /// Fermeture : les calculs en fond s'arrêtent sans être attendus (retour du
     /// 29/10/2026 : sur un NAS, quitter attendait la fin de chaque vignette en cours).
     fn stop_background(&mut self) {
@@ -1159,6 +1200,8 @@ impl TriApp {
         if let Some((monitor, _)) = &mut self.volumes {
             monitor.detach();
         }
+        // Écoute du voisinage arrêtée (son démon reçoit l'ordre, sans attendre).
+        self.neighbour_browser = None;
     }
 
     /// Notes lues en fond : reprises (les notes posées entre-temps gardées), filtres et
@@ -2457,7 +2500,7 @@ impl TriApp {
                     let device = row.kind == Some(PlaceKind::Device);
                     // Partage réseau mémorisé pas monté (28/10/2026) : de même, un clic le
                     // rejoint.
-                    let server = row.kind == Some(PlaceKind::Server);
+                    let server = matches!(row.kind, Some(PlaceKind::Server | PlaceKind::Neighbour));
                     if device || server {
                         ui.add_space(size + ui.spacing().item_spacing.x);
                     } else {
@@ -2471,7 +2514,12 @@ impl TriApp {
                     }
                     let current = row.path == self.folder.dir;
                     let label = if device || server {
-                        let tip = if server {
+                        let tip = if row.kind == Some(PlaceKind::Neighbour) {
+                            t!(
+                                "folders-neighbour-tip",
+                                address = row.path.display().to_string()
+                            )
+                        } else if server {
                             t!(
                                 "folders-server-tip",
                                 address = row.path.display().to_string()
@@ -3384,16 +3432,29 @@ impl TriApp {
     /// Vrai si `path` est un support pas monté (#113) ou un partage réseau mémorisé pas
     /// monté : à monter avant de l'ouvrir ([`TriApp::start_mount`]).
     fn is_device(&self, path: &Path) -> bool {
-        self.tree
-            .places()
-            .iter()
-            .any(|p| p.path == path && matches!(p.kind, PlaceKind::Device | PlaceKind::Server))
+        self.tree.places().iter().any(|p| {
+            p.path == path
+                && matches!(
+                    p.kind,
+                    PlaceKind::Device | PlaceKind::Server | PlaceKind::Neighbour
+                )
+        })
     }
 
     /// Monte le support `device` dans un fil à part (une seconde ou deux) ; une fois
     /// monté, son dossier s'ouvre (`poll_mount`). Un partage réseau mémorisé est rejoint
     /// ([`TriApp::start_connect`]).
     fn start_mount(&mut self, ctx: &egui::Context, device: PathBuf) {
+        // Serveur du voisinage : son adresse dans la recherche, ses partages listés.
+        if self
+            .tree
+            .places()
+            .iter()
+            .any(|p| p.path == device && p.kind == PlaceKind::Neighbour)
+        {
+            self.start_server_search_at(ctx, &device.to_string_lossy());
+            return;
+        }
         if self.mounting.is_some() {
             return;
         }
@@ -6287,9 +6348,16 @@ impl TriApp {
     /// le début d'une adresse (`\\` sous Windows, `smb://` ailleurs) ; Entrée rejoint le
     /// partage tapé.
     fn start_server_search(&mut self, ctx: &egui::Context) {
+        self.start_server_search_at(ctx, if cfg!(windows) { r"\\" } else { "smb://" });
+    }
+
+    /// La recherche des dossiers sur l'adresse `address` : un serveur seul
+    /// (`smb://nas.local/`) y liste ses partages, une adresse complète se rejoint par
+    /// Entrée.
+    fn start_server_search_at(&mut self, ctx: &egui::Context, address: &str) {
         self.folder_panel = true;
         self.focus = crate::actions::Scope::Folders;
-        self.folder_query = if cfg!(windows) { r"\\" } else { "smb://" }.to_string();
+        self.folder_query = address.to_string();
         self.restart_folder_search(ctx);
         self.focus_request = Some(folder_search_id());
     }
@@ -11829,6 +11897,7 @@ impl eframe::App for TriApp {
         }
         steps.mark("piles");
         self.watch_volumes(&ctx);
+        self.watch_neighbourhood(&ctx);
         self.poll_opening();
         self.poll_loading(&ctx);
         if self.engine_backlog {
@@ -16211,6 +16280,71 @@ mod tests {
                 .as_ref()
                 .is_some_and(|(n, _)| n.contains("abandonnée"))
         );
+    }
+
+    #[test]
+    fn a_server_of_the_neighbourhood_is_listed_and_shows_its_shares() {
+        // Voisinage réseau (demandé le 29/10/2026) : les serveurs annoncés apparaissent
+        // sous « Réseau » ; un clic liste leurs partages. Faux voisinage : rien n'écoute
+        // le réseau dans les tests.
+        let (mut h, _dir) = harness();
+        h.state_mut().share_lister = |host| {
+            assert_eq!(host.host, "tri-test-nas.local");
+            Ok(vec!["photo".into()])
+        };
+        let service = |protocol, fullname: &str| tri::neighbourhood::Service {
+            fullname: fullname.into(),
+            name: "Photos".into(),
+            host: "tri-test-nas.local".into(),
+            protocol,
+            port: if protocol == tri::servers::Protocol::Smb {
+                445
+            } else {
+                548
+            },
+            path: String::new(),
+        };
+        for (protocol, name) in [
+            (tri::servers::Protocol::Smb, "Photos._smb._tcp.local."),
+            (
+                tri::servers::Protocol::Afp,
+                "Photos._afpovertcp._tcp.local.",
+            ),
+        ] {
+            h.state_mut()
+                .neighbourhood
+                .apply(tri::neighbourhood::Event::Found(service(protocol, name)));
+        }
+        h.state_mut().show_neighbours();
+        h.run_steps(3);
+        wait_for_label(&mut h, "Photos (SMB, AFP)");
+        let row = h
+            .state()
+            .tree
+            .rows()
+            .into_iter()
+            .find(|r| r.name == "Photos (SMB, AFP)")
+            .expect("ligne du serveur");
+        assert_eq!(row.section, tri::places::Section::Network);
+        assert_eq!(row.kind, Some(PlaceKind::Neighbour));
+        h.get_by_label("Photos (SMB, AFP)").click();
+        h.run_steps(3);
+        let expected = if cfg!(windows) {
+            r"\\tri-test-nas.local\"
+        } else {
+            "smb://tri-test-nas.local/"
+        };
+        assert_eq!(h.state().folder_query, expected);
+        wait_for_label(&mut h, "Se connecter à « photo (tri-test-nas.local) »");
+        // Retiré du réseau : il disparaît.
+        for name in ["Photos._smb._tcp.local.", "Photos._afpovertcp._tcp.local."] {
+            h.state_mut()
+                .neighbourhood
+                .apply(tri::neighbourhood::Event::Removed(name.into()));
+        }
+        h.state_mut().show_neighbours();
+        h.run_steps(3);
+        assert!(h.query_by_label("Photos (SMB, AFP)").is_none());
     }
 
     #[test]

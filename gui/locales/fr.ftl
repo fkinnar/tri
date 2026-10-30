@@ -307,6 +307,7 @@ mounted = « { $name } » monté.
 mount-failed = « { $name } » n'a pas pu être monté : { $error }
 folders-device-tip = Pas monté : cliquer pour le monter.
 folders-server-tip = Partage réseau mémorisé, pas connecté ({ $address }) : cliquer pour s'y connecter.
+folders-neighbour-tip = Serveur du réseau ({ $address }) : un clic montre ses partages, ou se connecte.
 folders-connect-tip = Taper l'adresse d'un serveur (\\nas\photo, smb://nas/photo, ftp://nas…) ; le mot de passe est demandé s'il le faut, et le serveur reste ensuite dans « Réseau ».
 connecting = Connexion à « { $name } »…
 connected = Connecté à « { $name } ».

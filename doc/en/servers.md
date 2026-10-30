@@ -109,6 +109,6 @@ File `servers` in the data folder (`[data] dir`): one `smb://` address per line
 
 ## Later
 
-A real network neighbourhood (discovering servers, Bonjour / mDNS): next step. The login
-box has not been tried against real servers yet (Windows, Mint); "Remember" on Linux
+Network neighbourhood (Bonjour / mDNS): done, see [neighbourhood.md](neighbourhood.md).
+The login box has not been tried against real servers yet (Windows, Mint); "Remember" on Linux
 depends on the desktop keyring.

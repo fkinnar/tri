@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Voisinage réseau** : les serveurs annoncés sur le réseau local (Bonjour / mDNS : SMB,
+  AFP, SFTP, WebDAV, FTP, NFS) apparaissent sous « Réseau » dans le panneau des
+  dossiers ; un clic liste leurs partages, comme en tapant leur adresse
+  (`[neighbourhood] enabled`).
 - **Développements à refaire annoncés** : quand des photos développées ailleurs
   (darktable) ont changé, un bandeau en haut dit combien de rendus sont refaits, avec une
   barre de progression, puis qu'ils sont faits ; il s'efface de lui-même (`[gui.grid]

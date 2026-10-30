@@ -308,6 +308,7 @@ mounted = "{ $name }" mounted.
 mount-failed = "{ $name }" could not be mounted: { $error }
 folders-device-tip = Not mounted: click to mount it.
 folders-server-tip = Remembered network share, not connected ({ $address }): click to connect.
+folders-neighbour-tip = Server on the network ({ $address }): a click shows its shares, or connects.
 folders-connect-tip = Type the address of a server (\\nas\photo, smb://nas/photo, ftp://nas…); the password is asked for if needed, and the server then stays under "Network".
 connecting = Connecting to "{ $name }"…
 connected = Connected to "{ $name }".
