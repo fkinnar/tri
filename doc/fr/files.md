@@ -77,9 +77,23 @@ zombie).
 | `pairs` | `true` | la paire RAW+JPEG suit |
 | `trash` | `true` | corbeille ; `false` : suppression définitive |
 | `editor` | `[]` | programme puis arguments, `{files}` remplacé par les fichiers (ajoutés à la fin sinon) ; vide : application par défaut |
+| `allow_actions` | `false` | l'interface peut renommer, copier, déplacer et supprimer images et dossiers |
 
 Exemples d'éditeur : `["darktable"]`, `["open", "-a", "darktable"]` (macOS),
 `["gimp", "{files}"]`.
+
+**Actions interdites par défaut** (choix de l'utilisateur, 30/10/2026). Un logiciel de
+développement (darktable, Lightroom, Capture One…) range les images dans sa
+bibliothèque ou son catalogue et les attend à leur place : les renommer, les déplacer ou
+les supprimer depuis `tri` les lui fait perdre. Sans `allow_actions`, l'interface grise
+ces actions (bulle : comment les autoriser) et un raccourci le dit dans la barre d'état ;
+une case « Actions sur les fichiers » du panneau de droite (Grille) les autorise et
+l'écrit dans la configuration. Autorisées, les boîtes qui renomment, déplacent ou
+suppriment le rappellent (copier ne casse rien). Le choix est le même pour tout, images
+et dossiers, sans regarder les sidecars (une détection d'après les XMP a été écartée :
+`tri` en écrit lui-même pour les notes, la règle devenait confuse). Pas concernés : créer
+un dossier, le déchargement d'une carte, la ligne de commande (une commande tapée est
+un choix explicite).
 
 ## Ligne de commande
 

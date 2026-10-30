@@ -349,6 +349,7 @@ impl FileDialog {
                     *at,
                     fresh,
                     &t!("folder-new-button"),
+                    false,
                     check,
                 ) {
                     Some(true) => match files::create_dir(parent, name) {
@@ -385,6 +386,7 @@ impl FileDialog {
                     *at,
                     fresh,
                     &t!("rename-button"),
+                    true,
                     check,
                 ) {
                     Some(true) => match files::rename_dir(path, name) {
@@ -419,6 +421,7 @@ impl FileDialog {
                     *at,
                     fresh,
                     &t!("favorite-name-button"),
+                    false,
                     |_| None,
                 ) {
                     Some(true) => Outcome::FavoriteNamed {
@@ -516,6 +519,7 @@ fn rename_dialog(
                     ui.colored_label(ui.visuals().error_fg_color, e.to_string());
                 }
             }
+            library_warning(ui);
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let ok = plan.is_ok() && !unchanged;
@@ -631,6 +635,15 @@ fn deleting(
     Outcome::Open
 }
 
+/// Rappel, dans une boîte qui renomme, déplace ou supprime (actions autorisées par
+/// `[files] allow_actions`) : la bibliothèque d'un logiciel de développement ne
+/// retrouvera plus ces fichiers (demandé le 30/10/2026).
+fn library_warning(ui: &mut egui::Ui) {
+    ui.add_space(4.0);
+    let text = egui::RichText::new(t!("files-library-warning")).color(ui.visuals().warn_fg_color);
+    ui.add(egui::Label::new(text).wrap());
+}
+
 /// Boîte de confirmation ; confirmée, la suppression part en fond (`job`).
 fn delete_dialog(
     ctx: &egui::Context,
@@ -662,6 +675,7 @@ fn delete_dialog(
                 ui.add_space(4.0);
                 pairs_checkbox(ui, pairs);
             }
+            library_warning(ui);
             if !settings.trash {
                 ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
             }
@@ -697,6 +711,7 @@ fn name_dialog(
     at: Pos2,
     fresh: &mut bool,
     button: &str,
+    warn: bool,
     check: impl Fn(&str) -> Option<String>,
 ) -> Option<bool> {
     let field_id = egui::Id::unique(id).with("field");
@@ -724,6 +739,9 @@ fn name_dialog(
             && !name.trim().is_empty()
         {
             ui.colored_label(ui.visuals().error_fg_color, e);
+        }
+        if warn {
+            library_warning(ui);
         }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -761,6 +779,7 @@ fn delete_folder_dialog(
         .show(ctx, |ui| {
             ui.add_space(6.0);
             ui.label(t!("folder-contents", files = files_in, dirs = dirs_in));
+            library_warning(ui);
             if !settings.trash {
                 ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
             }
@@ -895,6 +914,10 @@ impl Transfer {
                 }
                 if has_pairs {
                     pairs_checkbox(ui, &mut pairs);
+                }
+                // Copier ne casse rien ; déplacer, si (30/10/2026).
+                if self.mode == TransferMode::Move {
+                    library_warning(ui);
                 }
                 // Dossier déplacé : son cache le suit, sur demande (issue n° 55).
                 if matches!(self.source, Source::Folder(_)) && self.mode == TransferMode::Move {

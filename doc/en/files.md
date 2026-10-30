@@ -75,9 +75,22 @@ Launched programs are not waited for; a thread reaps their exit (no zombie proce
 | `pairs` | `true` | the RAW+JPEG pair follows |
 | `trash` | `true` | trash; `false`: permanent deletion |
 | `editor` | `[]` | program then arguments, `{files}` replaced by the files (appended at the end otherwise); empty: default application |
+| `allow_actions` | `false` | the interface may rename, copy, move and delete images and folders |
 
 Editor examples: `["darktable"]`, `["open", "-a", "darktable"]` (macOS),
 `["gimp", "{files}"]`.
+
+**Actions forbidden by default** (user's choice, 2026-10-30). A development software
+(darktable, Lightroom, Capture One…) keeps images in its library or catalogue and expects
+them where they are: renaming, moving or deleting them from `tri` makes it lose them.
+Without `allow_actions`, the interface greys these actions out (tooltip: how to allow
+them) and a shortcut says so in the status bar; a "File actions" checkbox in the right
+panel (Grid) allows them and writes it to the configuration. When allowed, the dialogs
+that rename, move or delete say so (copying breaks nothing). The choice is the same for
+everything, images and folders, without looking at sidecars (detection from XMP files was
+dropped: `tri` writes some itself for ratings, the rule became confusing). Not affected:
+creating a folder, offloading a card, the command line (a typed command is an explicit
+choice).
 
 ## Command line
 

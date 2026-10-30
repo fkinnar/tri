@@ -41,7 +41,7 @@ cannot change without updating its documentation.
 | `[remote]` | Local copy of a server the system cannot mount (FTP, SFTP): destination, depth, batches | engine |
 | `[i18n]` | Text language: `auto` (system), `fr`, `en` (`i18n.md`) | engine |
 | `[sharpness]` | Sharpness map: threshold, thickening, isolated points (`sharpness.md`) | engine |
-| `[files]` | File actions: pairs that follow, trash or permanent deletion, external editor (`files.md`) | engine |
+| `[files]` | File actions: allowed or not, pairs that follow, trash or permanent deletion, external editor (`files.md`) | engine |
 | `[data]` | Data folder (offload history, last opened folder) | engine |
 | `[gui]` | Theme, shortcut profiles, key sequence delay (`gg`), window, RAW render policy, loading budget | interface |
 | `[gui.grid]` | Grid dimensions, thumbnails in memory, size of the ratings, opacity of a rejected photo, hover frame | interface |

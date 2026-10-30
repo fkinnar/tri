@@ -326,6 +326,12 @@ trash = true
 editor = []
 # Copier / déplacer vers… : nombre de destinations récentes proposées (touches 1 à 9).
 recent = 9
+# Actions sur les fichiers dans l'interface : renommer, copier, déplacer, supprimer images
+# et dossiers. Interdites par défaut : un logiciel de développement (darktable,
+# Lightroom, Capture One…) attend ses images à leur place, les déplacer ou les supprimer
+# d'ici casse sa bibliothèque. Autorisées, chaque boîte le rappelle. Aussi une case dans
+# le panneau de droite (Grille). Le déchargement d'une carte n'est pas concerné.
+allow_actions = false
 
 [sharpness]
 # Carte de netteté (focus peaking, p en 1:1) : un pixel est marqué si le gradient de

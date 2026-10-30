@@ -35,6 +35,12 @@ pub struct FileSettings {
     pub editor: Vec<String>,
     /// Copier / déplacer vers… : nombre de destinations récentes proposées.
     pub recent: usize,
+    /// L'interface peut renommer, copier, déplacer et supprimer images et dossiers
+    /// (choix de l'utilisateur, 30/10/2026 : interdit par défaut). Un logiciel de
+    /// développement (darktable, Lightroom, Capture One…) attend ses images à leur place :
+    /// les déplacer ou les supprimer d'ailleurs casse sa bibliothèque. Autorisé, chaque
+    /// boîte le rappelle. Le déchargement d'une carte n'est pas concerné.
+    pub allow_actions: bool,
 }
 
 impl Default for FileSettings {
@@ -44,6 +50,7 @@ impl Default for FileSettings {
             trash: true,
             editor: Vec::new(),
             recent: 9,
+            allow_actions: false,
         }
     }
 }

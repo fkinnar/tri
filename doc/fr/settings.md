@@ -41,7 +41,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[remote]` | Copie en local d'un serveur que le système ne sait pas monter (FTP, SFTP) : destination, profondeur, lots | moteur |
 | `[i18n]` | Langue des textes : `auto` (système), `fr`, `en` (`i18n.md`) | moteur |
 | `[sharpness]` | Carte de netteté : seuil, épaississement, points isolés (`sharpness.md`) | moteur |
-| `[files]` | Actions sur les fichiers : paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |
+| `[files]` | Actions sur les fichiers : autorisées ou non, paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |
 | `[data]` | Dossier des données (historique des déchargements, dernier dossier ouvert) | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement | interface |
 | `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, opacité d'une photo rejetée, cadre du survol | interface |
