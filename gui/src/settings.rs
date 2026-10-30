@@ -849,6 +849,9 @@ pub struct FolderSettings {
     /// d'images ; au-delà (NAS, disque lent), elle la lit en fond, avec la progression et
     /// de quoi annuler.
     pub open_wait_ms: u64,
+    /// Lecture d'un dossier : une demande du type d'une entrée plus lente que ce délai
+    /// (ms ; partage monté par GVFS sous Linux) fait se fier aux noms pour la suite.
+    pub type_check_ms: u64,
 }
 
 impl Default for FolderSettings {
@@ -865,6 +868,7 @@ impl Default for FolderSettings {
             section_gap: 6.0,
             running_check_ms: 1000,
             open_wait_ms: 150,
+            type_check_ms: 20,
         }
     }
 }

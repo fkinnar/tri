@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+use std::time::{Duration, Instant};
 
 use std::fs;
 
@@ -64,15 +65,26 @@ pub fn kind_of(path: &Path) -> Option<MediaKind> {
 /// Erreur si `root` n'est pas un dossier lisible ; les entrées illisibles à l'intérieur sont
 /// ignorées.
 pub fn scan(root: impl AsRef<Path>, depth: usize) -> io::Result<Vec<MediaFile>> {
-    scan_counting(root, depth, &AtomicBool::new(false), &AtomicUsize::new(0))
+    scan_counting(
+        root,
+        depth,
+        Duration::MAX,
+        &AtomicBool::new(false),
+        &AtomicUsize::new(0),
+    )
 }
 
 /// Comme [`scan`], pour un dossier lent (NAS, disque lent, beaucoup de sous-dossiers) :
 /// `found` compte les images trouvées au fil du parcours, et `stop` l'interrompt (erreur
 /// `Interrupted`).
+///
+/// `slow` : une demande du type d'une entrée plus lente que ce délai (partage monté par
+/// GVFS : un aller-retour réseau par fichier) fait se fier aux noms pour la suite du
+/// dossier (une image se reconnaît à son extension) ; `Duration::MAX` : toujours demander.
 pub fn scan_counting(
     root: impl AsRef<Path>,
     depth: usize,
+    slow: Duration,
     stop: &AtomicBool,
     found: &AtomicUsize,
 ) -> io::Result<Vec<MediaFile>> {
@@ -84,7 +96,7 @@ pub fn scan_counting(
         ));
     }
     let mut files: Vec<MediaFile> = Vec::new();
-    walk(root, depth, stop, found, &mut files)?;
+    walk(root, depth, slow, stop, found, &mut files)?;
     files.sort_by(compare);
     Ok(files)
 }
@@ -94,14 +106,16 @@ pub fn scan_counting(
 const COMPANIONS: &[&str] = &["xmp", "pp3", "arp", "cos", "rrdata", "dop", "json", "txt"];
 
 /// Images de `dir` sur `depth` niveaux, ajoutées à `files`. Le type d'une entrée n'est
-/// demandé au système que s'il le faut : une image se reconnaît à son extension, un
-/// sidecar n'est jamais un dossier, et sans sous-dossiers rien d'autre ne compte (retour
-/// du 29/10/2026 : sur un partage monté par GVFS sous Linux, le système ne donne pas le
-/// type des entrées ; le demander coûtait un aller-retour réseau par fichier, 1 à 2
-/// images par seconde).
+/// demandé au système que s'il le faut, et tant que c'est rapide : sur un partage monté
+/// par GVFS sous Linux, le système ne le donne pas, le demander coûtait un aller-retour
+/// réseau par fichier (retour du 29/10/2026 : 1 à 2 images par seconde). Une demande plus
+/// lente que `slow` fait alors se fier aux noms pour le reste du dossier : une image se
+/// reconnaît à son extension (un dossier nommé `x.RAF` passerait pour une image), un
+/// sidecar n'est jamais un dossier, et sans sous-dossiers rien d'autre ne compte.
 fn walk(
     dir: &Path,
     depth: usize,
+    slow: Duration,
     stop: &AtomicBool,
     found: &AtomicUsize,
     files: &mut Vec<MediaFile>,
@@ -110,6 +124,16 @@ fn walk(
         return Ok(());
     }
     let mut subdirs = Vec::new();
+    // Type des entrées demandé tant que c'est rapide.
+    let mut ask = true;
+    let file_type = |entry: &fs::DirEntry, ask: &mut bool| {
+        let started = Instant::now();
+        let kind = entry.file_type().ok();
+        if started.elapsed() > slow {
+            *ask = false;
+        }
+        kind
+    };
     for entry in fs::read_dir(dir)? {
         if stop.load(AtomicOrdering::Relaxed) {
             return Err(io::ErrorKind::Interrupted.into());
@@ -117,6 +141,13 @@ fn walk(
         let Ok(entry) = entry else { continue };
         let path = entry.path();
         if let Some(kind) = kind_of(&path) {
+            // Un dossier au nom d'image (`x.RAF`) n'en est pas une.
+            if ask && file_type(&entry, &mut ask).is_some_and(|t| t.is_dir()) {
+                if depth > 1 && !entry.file_name().to_string_lossy().starts_with('.') {
+                    subdirs.push(path);
+                }
+                continue;
+            }
             files.push(MediaFile { path, kind });
             found.fetch_add(1, AtomicOrdering::Relaxed);
             continue;
@@ -134,13 +165,13 @@ fn walk(
             continue;
         }
         // Liens symboliques pas suivis (comme avant).
-        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+        if file_type(&entry, &mut ask).is_some_and(|t| t.is_dir()) {
             subdirs.push(path);
         }
     }
     for sub in subdirs {
         // Un sous-dossier illisible est ignoré, comme une entrée illisible.
-        match walk(&sub, depth - 1, stop, found, files) {
+        match walk(&sub, depth - 1, slow, stop, found, files) {
             Err(e) if e.kind() == io::ErrorKind::Interrupted => return Err(e),
             _ => {}
         }
@@ -209,10 +240,17 @@ mod tests {
             std::fs::write(dir.path().join(name), b"x").unwrap();
         }
         let found = AtomicUsize::new(0);
-        let files = scan_counting(dir.path(), 1, &AtomicBool::new(false), &found).unwrap();
+        let files = scan_counting(
+            dir.path(),
+            1,
+            Duration::MAX,
+            &AtomicBool::new(false),
+            &found,
+        )
+        .unwrap();
         assert_eq!(files.len(), 2);
         assert_eq!(found.load(AtomicOrdering::Relaxed), 2);
-        let stopped = scan_counting(dir.path(), 1, &AtomicBool::new(true), &found);
+        let stopped = scan_counting(dir.path(), 1, Duration::MAX, &AtomicBool::new(true), &found);
         assert_eq!(stopped.unwrap_err().kind(), io::ErrorKind::Interrupted);
     }
 

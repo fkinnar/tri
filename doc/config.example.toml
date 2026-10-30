@@ -738,6 +738,10 @@ running_check_ms = 1000
 # Ouverture d'un dossier : délai (ms) pendant lequel l'interface attend sa liste d'images ;
 # au-delà (NAS, disque lent), elle la lit en fond, avec la progression et de quoi annuler.
 open_wait_ms = 150
+# Lecture d'un dossier : une demande du type d'une entrée (fichier ou dossier) plus lente
+# que ce délai (ms ; partage monté par GVFS sous Linux, un aller-retour réseau par
+# fichier) fait se fier aux noms pour la suite : une image se reconnaît à son extension.
+type_check_ms = 20
 
 [gui.histogram]
 # Histogramme (données du capteur pour un RAW), en haut du panneau des métadonnées :

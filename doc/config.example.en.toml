@@ -740,6 +740,10 @@ running_check_ms = 1000
 # beyond it (NAS, slow disk), the list is read in the background, with progress and a way
 # to cancel.
 open_wait_ms = 150
+# Reading a folder: asking the type of an entry (file or folder) more slowly than this
+# delay (ms; share mounted by GVFS on Linux, one network round trip per file) makes the
+# rest rely on names: an image is recognised by its extension.
+type_check_ms = 20
 
 [gui.histogram]
 # Histogram (sensor data for a RAW), at the top of the metadata panel:

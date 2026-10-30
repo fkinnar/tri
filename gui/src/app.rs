@@ -1376,9 +1376,11 @@ impl TriApp {
             self.settings.xmp.sidecar,
         );
         let (stop_scan, found_scan) = (stop.clone(), found.clone());
+        let slow = Duration::from_millis(self.gui.folders.type_check_ms);
         let repaint = self.repaint.clone();
         std::thread::spawn(move || {
-            let result = Folder::scan_counting(&target, depth, convention, &stop_scan, &found_scan);
+            let result =
+                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan);
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();

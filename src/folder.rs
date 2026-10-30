@@ -48,6 +48,7 @@ impl Folder {
             dir,
             depth,
             convention,
+            std::time::Duration::MAX,
             &AtomicBool::new(false),
             &AtomicUsize::new(0),
         )
@@ -60,11 +61,12 @@ impl Folder {
         dir: &Path,
         depth: usize,
         convention: Convention,
+        slow: std::time::Duration,
         stop: &AtomicBool,
         found: &AtomicUsize,
     ) -> io::Result<Folder> {
         let dir = std::path::absolute(dir)?;
-        let files = media::scan_counting(&dir, depth, stop, found)?;
+        let files = media::scan_counting(&dir, depth, slow, stop, found)?;
         let notes = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         Ok(Folder { dir, files, notes })
     }
