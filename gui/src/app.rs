@@ -1376,9 +1376,11 @@ impl TriApp {
             self.settings.xmp.sidecar,
         );
         let (stop_scan, found_scan) = (stop.clone(), found.clone());
+        let slow = Duration::from_millis(self.gui.folders.type_check_ms);
         let repaint = self.repaint.clone();
         std::thread::spawn(move || {
-            let result = Folder::scan_counting(&target, depth, convention, &stop_scan, &found_scan);
+            let result =
+                Folder::scan_counting(&target, depth, convention, slow, &stop_scan, &found_scan);
             let _ = tx.send(result);
             if let Some(ctx) = repaint {
                 ctx.request_repaint();
@@ -2257,21 +2259,18 @@ impl TriApp {
                 let _ = tx.send(changes);
                 repaint.request_repaint();
             };
-            let interval_d = Duration::from_millis(interval);
+            let pace = self.settings.watch.pace();
             let watch = match self.watch_snapshot.take() {
                 Some(known) => tri::watch::FolderWatch::start_from(
                     &self.folder.dir,
                     depth,
-                    interval_d,
+                    pace,
                     known,
                     on_change,
                 ),
-                None => tri::watch::FolderWatch::start_depth(
-                    &self.folder.dir,
-                    depth,
-                    interval_d,
-                    on_change,
-                ),
+                None => {
+                    tri::watch::FolderWatch::start_depth(&self.folder.dir, depth, pace, on_change)
+                }
             };
             self.watch = Some((watch, rx, interval));
         }
