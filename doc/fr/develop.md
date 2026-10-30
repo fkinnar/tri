@@ -42,9 +42,11 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
   lanceur exporté ouvre l'interface, pas `darktable-cli`). Le Flatpak doit pouvoir lire
   les images et le cache de `tri` (dossier personnel) : à vérifier pour des images hors
   du dossier personnel.
-- `darktable_sidecar(image)` : `IMAGE.RAF.xmp`, **seulement s'il porte un vrai
-  développement** (`darktable:history_end` > 0) : un sidecar écrit par `tri` seul (notes)
-  n'en a pas.
+- `darktable_sidecar(image)` : `IMAGE.RAF.xmp`, **seulement s'il est de darktable** :
+  écrit par darktable (`darktable:xmp_version`), ou avec un historique
+  (`darktable:history_end` > 0). Une image importée mais pas retouchée (clone vierge) a
+  donc son rendu darktable par défaut, qui n'est pas celui de LibRaw (retour du
+  30/10/2026). Un sidecar écrit par `tri` seul (notes) n'en a pas.
 - `Darktable::render` : `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, annulable (le programme est arrêté).

@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Rendu darktable par défaut** : une image importée dans darktable mais pas retouchée
+  (un clone vierge, par exemple) a maintenant son rendu darktable, qui n'est pas celui
+  de LibRaw ; il suffisait jusqu'ici d'un historique non vide.
 - **Une vignette par clone darktable** : un clone (`IMG_01.RAF.xmp`) apparaît à côté de
   son image, avec ses propres notes et son propre développement. Le supprimer ne
   supprime que son sidecar ; le copier, le déplacer ou le renommer emporte l'image et

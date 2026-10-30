@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Default darktable render**: an image imported into darktable but not edited (a
+  virgin clone, for example) now has its darktable render, which is not LibRaw's; a
+  non-empty history was required until now.
 - **One thumbnail per darktable clone**: a clone (`IMG_01.RAF.xmp`) appears next to its
   image, with its own ratings and its own development. Deleting it deletes only its
   sidecar; copying, moving or renaming it takes the image and all its clones along.
