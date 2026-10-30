@@ -161,6 +161,14 @@ cache : passée. Un lot à la fois ; sa progression est une tâche de fond (« �
 interrompre), le bilan (rendus, déjà faits, échecs) va dans la barre d'état ; ensuite,
 `b` propose le développé de chaque image rendue.
 
+**Rendus à refaire annoncés** (29/10/2026 : des photos retouchées dans darktable étaient
+refaites sans rien dire) : le lot voit d'abord ce qui est déjà en cache
+(`DevelopBatch::redone` → (faits, à refaire)) ; s'il reste des rendus à refaire, un
+bandeau en haut de l'image l'annonce, « 12 développements modifiés à refaire (3/12) »
+avec la barre de progression, puis « 12 développements refaits » à la fin ; chacun
+s'efface de lui-même (`[gui.grid] develop_toast_ms`, 6 s ; 0 : jamais). La progression
+reste dans la barre d'état.
+
 **Choisir le logiciel** (26/10/2026, choix de l'utilisateur ; raccourcis réglables) :
 `Maj+B` et `<leader>r` développent l'image dans son logiciel (celui de son
 développement, voir `[develop] default`), `<leader>d` dans darktable, `<leader>p` dans

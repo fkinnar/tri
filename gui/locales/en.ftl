@@ -479,6 +479,14 @@ filter-toast = { $n ->
    *[other] { $n } images
 }
 filter-toast-none = No images
+develop-toast = { $n ->
+    [one] 1 changed development to redo ({ $done }/1)
+   *[other] { $n } changed developments to redo ({ $done }/{ $n })
+}
+develop-toast-done = { $n ->
+    [one] 1 development redone
+   *[other] { $n } developments redone
+}
 empty-filtered = No image for these filters (f then Esc to clear them).
 color-red = red
 color-yellow = yellow

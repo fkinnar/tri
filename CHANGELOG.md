@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Developments to redo announced**: when photos developed elsewhere (darktable) have
+  changed, a banner at the top says how many renders are redone, with a progress bar,
+  then that they are done; it fades by itself (`[gui.grid] develop_toast_ms`).
 - **Clones and settings of other software follow the image**: moving, copying, renaming
   or deleting an image also takes its darktable clones (`IMG_01.RAF.xmp`…) and the
   settings of RawTherapee (`.pp3`), ART (`.arp`) and Capture One

@@ -559,6 +559,10 @@ bar_label_scale = 0.85
 # Bubble with the number of images in the middle of the screen after a filter change:
 # duration (milliseconds; 0: never).
 filter_toast_ms = 1500
+# "n developments to redo" banner (developed images changed elsewhere, rendered again in
+# the background): time on screen at the start, then at the end (milliseconds; 0: never).
+# Progress stays in the status bar.
+develop_toast_ms = 6000
 # Stacks (similar images grouped) shown at startup; false: each image
 # alone, Ctrl+S or the stack button shows them (instant: the fingerprints are
 # computed in the background, see [similarity] background).
