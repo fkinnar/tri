@@ -16327,7 +16327,12 @@ mod tests {
             .expect("ligne du serveur");
         assert_eq!(row.section, tri::places::Section::Network);
         assert_eq!(row.kind, Some(PlaceKind::Neighbour));
-        h.get_by_label("Photos (SMB, AFP)").click();
+        assert!(h.state().is_device(&row.path), "à rejoindre, pas à ouvrir");
+        // Au clavier plutôt qu'au clic : sous Windows, la ligne peut tomber hors de la
+        // partie visible du panneau (lecteurs en plus), et le clic s'y perd.
+        h.state_mut().tree.point_at(&row.path);
+        h.state_mut().focus = crate::actions::Scope::Folders;
+        press(&mut h, Key::Enter, Modifiers::NONE);
         h.run_steps(3);
         let expected = if cfg!(windows) {
             r"\\tri-test-nas.local\"
