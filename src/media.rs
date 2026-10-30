@@ -188,15 +188,21 @@ fn walk(
             by_image.entry(image).or_default().push(name);
         }
     }
-    for (image, names) in by_image {
-        let Some((photo, kind)) = images.get(&image) else {
-            continue;
-        };
+    // Chaque image du dossier, même sans sidecar : ses développements connus sont remplacés
+    // par ceux d'aujourd'hui (un clone supprimé n'est plus connu).
+    for (photo, kind) in images.values() {
+        let image = photo
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        let names = by_image.remove(&image).unwrap_or_default();
         let is_image = |n: &str| images.contains_key(n);
-        for development in crate::developments::find(photo, &names, &is_image, &|xmp| {
+        let developments = crate::developments::find(photo, &names, &is_image, &|xmp| {
             crate::developments::file_is_darktable(xmp)
-        }) {
-            crate::developments::register(&development);
+        });
+        crate::developments::set_for(photo, &developments);
+        for development in developments {
             files.push(MediaFile {
                 path: development.path(),
                 kind: *kind,
@@ -270,11 +276,29 @@ pub fn is_hidden_dir(entry: &walkdir::DirEntry) -> bool {
 
 /// Ordre des noms : chemin sans extension, puis le RAW avant l'image plate de même nom.
 pub fn compare(a: &MediaFile, b: &MediaFile) -> Ordering {
-    a.path
-        .with_extension("")
-        .cmp(&b.path.with_extension(""))
+    // Un développement se range avec sa photo, juste après elle (et avant l'autre fichier
+    // de la paire : `IMG.RAF`, `IMG@dt.RAF`, `IMG.JPG`), quel que soit son nom propre.
+    let (sa, sb) = (source(&a.path), source(&b.path));
+    sa.with_extension("")
+        .cmp(&sb.with_extension(""))
         .then_with(|| (a.kind == MediaKind::Flat).cmp(&(b.kind == MediaKind::Flat)))
+        .then_with(|| sa.cmp(&sb))
+        .then_with(|| is_development(&a.path).cmp(&is_development(&b.path)))
+        // Deux développements : l'ordre du registre (principal, clones, RapidRAW, copies),
+        // pas celui des noms propres (`IMG@dt-01` passerait avant `IMG@dt`).
+        .then_with(|| crate::developments::order(&a.path).cmp(&crate::developments::order(&b.path)))
         .then_with(|| a.path.cmp(&b.path))
+}
+
+/// Nom sans extension de `path`, tel qu'on l'affiche : pour un développement, celui de sa
+/// photo (`IMG@dt.RAF` → `IMG`, le logiciel étant dit à part).
+pub fn display_stem(path: &Path) -> String {
+    let source = source(path);
+    source
+        .file_stem()
+        .or_else(|| source.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| source.display().to_string())
 }
 
 #[cfg(test)]

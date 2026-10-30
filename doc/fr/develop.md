@@ -47,6 +47,9 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
   (`darktable:history_end` > 0). Une image importée mais pas retouchée (clone vierge) a
   donc son rendu darktable par défaut, qui n'est pas celui de LibRaw (retour du
   30/10/2026). Un sidecar écrit par `tri` seul (notes) n'en a pas.
+- `Engine::sidecar(image)` : pour un développement (`developments.md`), son sidecar s'il
+  est de ce logiciel ; pour une photo qui a des développements de ce logiciel, **rien** :
+  le sidecar est le leur (ils ont leur vignette), la photo reste le rendu neutre.
 - `Darktable::render` : `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, annulable (le programme est arrêté).

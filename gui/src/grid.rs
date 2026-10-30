@@ -152,6 +152,9 @@ pub fn navigate(
         | Action::StacksAll
         | Action::GroupingWindow
         | Action::StackMode
+        | Action::DevToggle
+        | Action::DevNext
+        | Action::DevPrev
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit

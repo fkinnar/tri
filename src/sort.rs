@@ -80,9 +80,12 @@ pub fn sort(files: &mut [MediaFile], order: Order, captured: impl Fn(&Path) -> O
         return;
     }
     // Clé d'une paire : celle de son premier fichier (le RAW).
+    // Un développement a la clé de sa photo (même prise de vue), comme l'autre fichier de
+    // la paire.
+    let stem = |f: &MediaFile| crate::media::source(&f.path).with_extension("");
     let mut keys: HashMap<PathBuf, Option<i64>> = HashMap::new();
     for file in files.iter() {
-        let stem = file.path.with_extension("");
+        let stem = stem(file);
         keys.entry(stem).or_insert_with(|| match order.key {
             SortKey::Captured => captured(&file.path),
             SortKey::Modified => modified(&file.path),
@@ -94,7 +97,7 @@ pub fn sort(files: &mut [MediaFile], order: Order, captured: impl Fn(&Path) -> O
         .enumerate()
         .map(|(i, f)| (f.path.clone(), i))
         .collect();
-    let key = |f: &MediaFile| keys[&f.path.with_extension("")];
+    let key = |f: &MediaFile| keys[&stem(f)];
     files.sort_by(|a, b| {
         let by_key = match (key(a), key(b)) {
             (Some(x), Some(y)) if order.descending => y.cmp(&x),
@@ -106,9 +109,8 @@ pub fn sort(files: &mut [MediaFile], order: Order, captured: impl Fn(&Path) -> O
         };
         // À clé égale : l'ordre des noms (paire gardée ensemble, RAW d'abord).
         by_key.then_with(|| {
-            a.path
-                .with_extension("")
-                .cmp(&b.path.with_extension(""))
+            stem(a)
+                .cmp(&stem(b))
                 .then(rank[&a.path].cmp(&rank[&b.path]))
         })
     });
@@ -116,10 +118,10 @@ pub fn sort(files: &mut [MediaFile], order: Order, captured: impl Fn(&Path) -> O
 
 /// Inverse l'ordre des paires en gardant, dans chacune, le RAW avant le JPEG.
 fn reverse_pairs(files: &mut [MediaFile]) {
+    let stem = |f: &MediaFile| crate::media::source(&f.path).with_extension("");
     files.sort_by(|a, b| {
-        b.path
-            .with_extension("")
-            .cmp(&a.path.with_extension(""))
+        stem(b)
+            .cmp(&stem(a))
             .then_with(|| crate::media::compare(a, b))
     });
 }
@@ -143,6 +145,59 @@ mod tests {
 
     fn names(files: &[MediaFile]) -> Vec<&str> {
         files.iter().map(|f| f.path.to_str().unwrap()).collect()
+    }
+
+    #[test]
+    fn developments_follow_their_photo_in_both_directions() {
+        use crate::develop::Engine;
+        use crate::developments::{Copy, Development, set_for};
+        let photo = PathBuf::from("/o/IMG.RAF");
+        let dt = Development {
+            engine: Engine::Darktable,
+            copy: Copy::Main,
+            photo: photo.clone(),
+            sidecar: PathBuf::from("/o/IMG.RAF.xmp"),
+        };
+        set_for(&photo, std::slice::from_ref(&dt));
+        let mut files = vec![
+            file("/o/IMG2.RAF"),
+            file("/o/IMG.JPG"),
+            MediaFile {
+                path: dt.path(),
+                kind: MediaKind::Raw,
+            },
+            file("/o/IMG.RAF"),
+        ];
+        sort(&mut files, Order::default(), |_| None);
+        // Le nom propre « IMG@dt » trierait après « IMG2 » : c'est la photo qui compte.
+        assert_eq!(
+            names(&files),
+            ["/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG", "/o/IMG2.RAF"]
+        );
+        let descending = Order {
+            descending: true,
+            ..Order::default()
+        };
+        sort(&mut files, descending, |_| None);
+        assert_eq!(
+            names(&files),
+            ["/o/IMG2.RAF", "/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG"]
+        );
+        // Par date : celle de la photo, inconnue pour le développement lui-même.
+        let by_date = Order {
+            key: SortKey::Captured,
+            descending: true,
+        };
+        let captured = |p: &Path| match p.to_str().unwrap() {
+            "/o/IMG.RAF" => Some(10),
+            "/o/IMG2.RAF" => Some(5),
+            _ => None,
+        };
+        sort(&mut files, by_date, captured);
+        assert_eq!(
+            names(&files),
+            ["/o/IMG.RAF", "/o/IMG@dt.RAF", "/o/IMG.JPG", "/o/IMG2.RAF"]
+        );
     }
 
     #[test]

@@ -129,10 +129,29 @@ action-core-stack-toggle = Déplier / replier la pile
 action-core-stack-all = Déplier / replier toutes les piles
 action-core-stack-settings = Regroupement des images semblables
 action-core-stack-mode = Piles (grille ; plein écran : flèches gauche / droite dans la pile, haut / bas de pile en pile)
+action-core-dev-toggle = Déplier / replier les développements de la photo
+action-core-dev-next = Développement suivant de la photo
+action-core-dev-prev = Développement précédent de la photo
 action-core-stack-choose = Choisir comme couverture de la pile (sa préférée)
 action-core-stack-first = Première image de la pile
 action-core-stack-last = Dernière image de la pile
 action-core-stack-enter = En entrant dans une pile : sa première photo (allumé) ou sa couverture
+## Développements d'une photo (darktable, RapidRAW ; 30/10/2026)
+dev-count = { $n } dév.
+dev-count-tip = { $n ->
+    [one] { $n } développement
+   *[other] { $n } développements
+  } · { $keys } : déplier / replier
+dev-clone = clone { $n }
+dev-copy = copie { $n }
+dev-none = Cette photo n'a pas de développement (darktable, RapidRAW)
+dev-before = Avant : le JPEG boîtier à la place du développement (b : retour)
+dev-after = Après : le développement
+dev-preferred = { $name } : couverture de la photo
+dev-badge-tip = Développement : { $name }
+dev-badge-tip-pending = Développement : { $name } (vignette de la photo en attendant son rendu)
+view-info-development = avant ({ $name } en cours ou absent)
+
 stack-chosen = { $name } : couverture de sa pile
 stack-position = pile : { $n } / { $total }
 stack-slider-tip = Sévérité des piles : au centre, la valeur calculée d'après le dossier ; vers la droite plus strict (petites piles), vers la gauche plus souple ; double-clic : retour au centre ; Maj pendant le réglage : piles dépliées ({ $keys } : réglages fins)
@@ -1099,6 +1118,9 @@ kw-core-flag-accept = pick choisie retenue
 kw-core-flag-reject = rejeter éliminer
 kw-core-select-visual = vim mode visuel
 kw-core-stack-toggle = piles rafales regrouper
+kw-core-dev-toggle = développements darktable rapidraw clones copies virtuelles pile
+kw-core-dev-next = développements darktable rapidraw clones copies virtuelles
+kw-core-dev-prev = développements darktable rapidraw clones copies virtuelles
 kw-core-folders-offload = carte sd importer décharger
 kw-core-folders-eject = éjecter carte disque
 kw-core-search = chercher trouver nom fichier

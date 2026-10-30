@@ -47,6 +47,9 @@ choice: someone working in darktable who tries another software sets
   0). An image imported but not edited (virgin clone) thus has its default darktable
   render, which is not LibRaw's (feedback of 2026-10-30). A sidecar written by `tri`
   alone (notes) has none.
+- `Engine::sidecar(image)`: for a development (`developments.md`), its sidecar if it is
+  this software's; for a photo that has developments of this software, **nothing**: the
+  sidecar is theirs (they have their thumbnail), the photo remains the neutral render.
 - `Darktable::render`: `darktable-cli image sidecar sortie --width --height --hq
   --core --configdir <cache>/darktable --library :memory: --conf
   write_sidecar_files=never`, cancellable (the program is stopped).

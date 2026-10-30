@@ -54,7 +54,9 @@ Lists the images in `root` (via `walkdir`):
   followed;
 - **sorting**: by path without extension, then RAW before flat image. The RAW+JPEG pairs
   of a single shot therefore always follow each other in the same order (`DSCF0001.RAF`,
-  `DSCF0001.JPG`, `DSCF0002.RAF`…);
+  `DSCF0001.JPG`, `DSCF0002.RAF`…); a photo's developments (`developments.md`) follow the
+  photo, before the other file of the pair (`DSCF0001.RAF`, `DSCF0001@dt.RAF`,
+  `DSCF0001.JPG`);
 - **errors**: `Err` if `root` does not exist, is unreadable or is not a folder
   (`ErrorKind::NotADirectory`). Unreadable entries *inside* (permissions, broken link)
   are ignored: one problematic file must not prevent displaying the rest.

@@ -32,6 +32,7 @@ exists.
 | [selection.md](selection.md) | Module `tri::selection`: multiple selection (marks, visual mode, action targets) |
 | [folder.md](folder.md) | Module `tri::folder`: open folder (images, notes, filtered list) |
 | [offload.md](offload.md) | Module `tri::offload`: card offloading (verified copy, history, deletion) |
+| [developments.md](developments.md) | Module `tri::developments`: a photo's developments (darktable and its clones, RapidRAW and its virtual copies), one grid image each |
 | [develop.md](develop.md) | Module `tri::develop`: rendering by darktable (plugin driving `darktable-cli`) |
 | [versions.md](versions.md) | Module `tri::versions`: crops of a photo (versions), stored in the XMP |
 | [export.md](export.md) | Module `tri::export`: JPEG / TIFF / PNG export with presets (darktable), no ProPhoto in 8 bits; `tri::export_log`: export report |

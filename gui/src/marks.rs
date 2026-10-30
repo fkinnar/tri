@@ -564,6 +564,21 @@ pub fn bar_icon_on(
             painter.line_segment([p(0.24, 0.22), p(0.24, 0.78)], stroke);
             chevron(0.5, 0.78);
         }
+        Action::DevPrev | Action::DevNext => {
+            // Développement précédent / suivant : deux chevrons, comme ‹ › doublés.
+            let thin = Stroke::new(stroke.width * 0.8, color);
+            let (tip, back) = if action == Action::DevNext {
+                (0.3, 0.0)
+            } else {
+                (-0.3, 0.0)
+            };
+            for x in [0.28, 0.58] {
+                painter.add(Shape::line(
+                    vec![p(x + back, 0.22), p(x + tip + 0.12, 0.5), p(x + back, 0.78)],
+                    thin,
+                ));
+            }
+        }
         Action::StacksAll => {
             // Piles dépliées : trois feuilles côte à côte.
             for x in [0.0, 0.36, 0.72] {

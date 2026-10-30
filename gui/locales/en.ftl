@@ -130,10 +130,29 @@ action-core-stack-toggle = Expand / collapse the stack
 action-core-stack-all = Expand / collapse all stacks
 action-core-stack-settings = Grouping of similar images
 action-core-stack-mode = Stacks (grid; full screen: left / right arrows inside the stack, up / down from stack to stack)
+action-core-dev-toggle = Unfold / fold the photo's developments
+action-core-dev-next = Next development of the photo
+action-core-dev-prev = Previous development of the photo
 action-core-stack-choose = Make it the stack cover (its pick)
 action-core-stack-first = First image of the stack
 action-core-stack-last = Last image of the stack
 action-core-stack-enter = Entering a stack: its first photo (on) or its cover
+## A photo's developments (darktable, RapidRAW; 2026-10-30)
+dev-count = { $n } dev.
+dev-count-tip = { $n ->
+    [one] { $n } development
+   *[other] { $n } developments
+  } · { $keys }: unfold / fold
+dev-clone = clone { $n }
+dev-copy = copy { $n }
+dev-none = This photo has no development (darktable, RapidRAW)
+dev-before = Before: the camera JPEG instead of the development (b: back)
+dev-after = After: the development
+dev-preferred = { $name }: cover of the photo
+dev-badge-tip = Development: { $name }
+dev-badge-tip-pending = Development: { $name } (the photo's thumbnail until it is rendered)
+view-info-development = before ({ $name } pending or missing)
+
 stack-chosen = { $name }: cover of its stack
 stack-position = stack: { $n } / { $total }
 stack-slider-tip = Stack strictness: in the middle, the value computed from the folder; to the right stricter (smaller stacks), to the left more lenient; double-click: back to the middle; hold Shift while adjusting to expand the stacks ({ $keys }: fine settings)
@@ -1097,6 +1116,9 @@ kw-core-flag-accept = pick chosen keep
 kw-core-flag-reject = reject discard
 kw-core-select-visual = vim visual mode
 kw-core-stack-toggle = stacks bursts group
+kw-core-dev-toggle = developments darktable rapidraw clones virtual copies stack
+kw-core-dev-next = developments darktable rapidraw clones virtual copies
+kw-core-dev-prev = developments darktable rapidraw clones virtual copies
 kw-core-folders-offload = sd card import offload
 kw-core-folders-eject = eject card disk
 kw-core-search = search find file name

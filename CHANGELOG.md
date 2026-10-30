@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- **Developments of a photo** (darktable and its clones, RapidRAW and its virtual
+  copies): each one is an image of the grid with its own thumbnail (its render), its own
+  notes and its own export, stacked under its photo (folded by default, "N dev." badge;
+  `Shift+V` unfolds, `Shift+W` / `Shift+Q` step through them, `Shift+Enter` picks the
+  cover, `b` in full screen shows the camera JPEG before / after). A photo with
+  developments stays the camera JPEG and the LibRaw render; a development's name is the
+  photo's, a chip says which one ("DT · clone 1", "RR · copy 2"). Clones used to be loose
+  thumbnails and RapidRAW copies were missing.
 - **Launching on a slow folder** (NAS): the window opens at once, and the last folder is
   read in the background with its progress; it waited several seconds for the folder's
   list, with a generic icon in the Dock.

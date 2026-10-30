@@ -693,6 +693,17 @@ pub struct TriApp {
     group_dialog: bool,
     /// Couvertures choisies (la préférée de chaque pile), retenues dans les données.
     chosen: HashSet<PathBuf>,
+    /// Photos dont la pile de développements est dépliée (chemin de la photo).
+    dev_unfolded: HashSet<PathBuf>,
+    /// Développement montré à la place de la couverture d'une pile repliée (Maj+W /
+    /// Maj+Q le font défiler sur place) : photo → chemin propre.
+    dev_shown: HashMap<PathBuf, PathBuf>,
+    /// Développements préférés (couverture de la pile de leur photo), chemins propres ;
+    /// `tri::developments::preferred`.
+    dev_preferred: HashSet<PathBuf>,
+    /// Plein écran, sur un développement : montrer le JPEG boîtier à la place de son rendu
+    /// (`b` : avant / après).
+    dev_before: bool,
     /// Curseur de similarité en cours de réglage : piles dépliées, fonds alternés.
     grouping_preview: bool,
     /// Liste de l'historique ouverte (`Ctrl+H`).
@@ -1085,6 +1096,14 @@ impl TriApp {
                 .data_dir()
                 .map(|d| tri::similarity::chosen_covers(&d))
                 .unwrap_or_default(),
+            dev_unfolded: HashSet::new(),
+            dev_shown: HashMap::new(),
+            dev_preferred: settings
+                .engine()
+                .data_dir()
+                .map(|d| tri::developments::preferred(&d))
+                .unwrap_or_default(),
+            dev_before: false,
             grouping_preview: false,
             history_open: false,
             focus: crate::actions::Scope::Images,
@@ -1576,6 +1595,8 @@ impl TriApp {
         self.files.clear(); // la sélection ne survit pas au changement de dossier
         self.leave_stack_only();
         self.expanded.clear();
+        self.dev_unfolded.clear();
+        self.dev_shown.clear();
         self.selection.clear();
         self.scores.clear();
         self.signatures.clear();
@@ -2125,7 +2146,7 @@ impl TriApp {
                 let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
                 // Nom : une ligne comme les autres, en tête (demandé le 22/10/2026 : un
                 // titre blanc au-dessus de l'histogramme répétait la barre d'état).
-                let mut rows = vec![(t!("panel-name"), file_name(&file.path))];
+                let mut rows = vec![(t!("panel-name"), self.shown_name(&file.path))];
                 rows.extend(m.rows());
                 // Netteté : une ligne comme les autres (pointable, copiable).
                 if let Some(j) = self.judgements.get(&file.path) {
@@ -4604,8 +4625,42 @@ impl TriApp {
         let expanded = |r: &std::ops::Range<usize>| {
             preview || r.clone().any(|i| self.expanded.contains(&files[i].path))
         };
+        // Piles de développements (30/10/2026) : la photo et ses développements, repliées
+        // sauf demande (Maj+V). Couverture : le développement qu'on a fait défiler sur
+        // place (Maj+W / Maj+Q), sinon le préféré, sinon le plus récent, sinon la photo
+        // (son JPEG boîtier).
+        let dev_unfolded = &self.dev_unfolded;
+        let dev_shown = &self.dev_shown;
+        let dev_preferred = &self.dev_preferred;
+        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
+        let same_photo = |i: usize, j: usize| photo(i) == photo(j);
+        let dev_cover = |r: &std::ops::Range<usize>| {
+            if let Some(shown) = dev_shown.get(&photo(r.start))
+                && let Some(i) = r.clone().find(|&i| &files[i].path == shown)
+            {
+                return i;
+            }
+            if let Some(i) = r.clone().find(|&i| dev_preferred.contains(&files[i].path)) {
+                return i;
+            }
+            let developments: Vec<tri::developments::Development> = r
+                .clone()
+                .filter_map(|i| tri::developments::get(&files[i].path))
+                .collect();
+            if let Some(latest) = tri::developments::latest(&developments)
+                && let Some(i) = r.clone().find(|&i| files[i].path == latest.path())
+            {
+                return i;
+            }
+            r.clone()
+                .find(|&i| !tri::media::is_development(&files[i].path))
+                .unwrap_or(r.start)
+        };
+        let dev_unfolded_in =
+            |r: &std::ops::Range<usize>| r.clone().any(|i| dev_unfolded.contains(&photo(i)));
         self.stacks =
-            crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded);
+            crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded)
+                .with_developments(same_photo, dev_cover, dev_unfolded_in);
         // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile.
         let browsing = self.mode == Mode::View && self.stacking;
         if !self.files.is_empty() && !browsing {
@@ -4621,6 +4676,21 @@ impl TriApp {
     /// Fait de l'image sélectionnée la couverture de sa pile (la préférée), ou l'oublie
     /// si elle l'était ; une seule par pile, retenue dans les données de tri.
     fn choose_cover(&mut self) {
+        // Un développement, ou une photo avec développements, piles de rafale inactives
+        // (ou la pile de rafale réduite à cette photo) : le développement préféré, couverture
+        // de la pile de la photo.
+        let photo_stack = self.stacks.developments_of(self.selected).cloned();
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|r| self.stacking && r.len() > 1)
+            .cloned();
+        if let Some(r) = photo_stack
+            && burst.as_ref().is_none_or(|b| *b == r)
+        {
+            self.prefer_development(self.selected);
+            return;
+        }
         let Some(range) = self.stacks.range_of(self.selected).cloned() else {
             return;
         };
@@ -4638,7 +4708,7 @@ impl TriApp {
         }
         if on {
             self.chosen.insert(path.clone());
-            self.notice = Some((t!("stack-chosen", name = file_name(&path)), false));
+            self.notice = Some((t!("stack-chosen", name = self.shown_name(&path)), false));
         } else {
             self.chosen.remove(&path);
         }
@@ -4646,6 +4716,119 @@ impl TriApp {
             let _ = tri::similarity::choose_cover(&data, &path, &others, on);
         }
         self.stacks_dirty = true;
+    }
+
+    /// Fait de l'image `index` le développement préféré de sa photo (couverture de sa pile
+    /// de développements), ou l'oublie si elle l'était ; une photo (pas un développement)
+    /// préférée veut dire « aucun » : la pile se replie sur son JPEG boîtier.
+    fn prefer_development(&mut self, index: usize) {
+        let path = self.files[index].path.clone();
+        let Some(range) = self.stacks.developments_of(index).cloned() else {
+            return;
+        };
+        let on = !self.dev_preferred.contains(&path);
+        let others: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
+        for o in &others {
+            self.dev_preferred.remove(o);
+        }
+        if on {
+            self.dev_preferred.insert(path.clone());
+            self.notice = Some((
+                t!("dev-preferred", name = self.development_label(&path)),
+                false,
+            ));
+        }
+        if let Some(data) = self.settings.data_dir() {
+            let result = if tri::media::is_development(&path) {
+                tri::developments::prefer(&data, &path, on)
+            } else {
+                // La photo elle-même : plus de préféré.
+                others
+                    .iter()
+                    .filter(|p| tri::media::is_development(p))
+                    .try_for_each(|p| tri::developments::prefer(&data, p, false))
+            };
+            if let Err(e) = result {
+                self.notice = Some((e.to_string(), true));
+            }
+        }
+        self.stacks_dirty = true;
+    }
+
+    /// Déplie ou replie la pile de développements de l'image sélectionnée (Maj+V).
+    fn toggle_developments(&mut self) {
+        let Some(range) = self.stacks.developments_of(self.selected).cloned() else {
+            self.hint = Some(t!("dev-none"));
+            return;
+        };
+        let photo = tri::media::source(&self.files[range.start].path).into_owned();
+        if !self.dev_unfolded.remove(&photo) {
+            self.dev_unfolded.insert(photo);
+        }
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
+    }
+
+    /// Développement suivant (`step` 1) ou précédent (-1) de la photo, en boucle ; dans la
+    /// grille, une pile repliée le montre à la place de sa couverture.
+    fn step_developments(&mut self, step: isize) {
+        match self.stacks.step_in_developments(self.selected, step) {
+            Some(i) => {
+                let path = self.files[i].path.clone();
+                self.dev_shown
+                    .insert(tri::media::source(&path).into_owned(), path);
+                self.select(i);
+                self.stacks_dirty = true;
+            }
+            None => self.hint = Some(t!("dev-none")),
+        }
+    }
+
+    /// Étiquette courte d'un développement : « DT », « DT · clone 1 », « RR · copie 2 »
+    /// (`None` pour une photo).
+    fn development_badge(&self, path: &Path) -> Option<String> {
+        let development = tri::developments::get(path)?;
+        let siblings = tri::developments::of(&development.photo);
+        let short = development.engine.short();
+        Some(match development.rank(&siblings) {
+            tri::developments::Rank::Main => short.to_string(),
+            tri::developments::Rank::Clone(n) => format!("{short} · {}", t!("dev-clone", n = n)),
+            tri::developments::Rank::Copy(n) => format!("{short} · {}", t!("dev-copy", n = n)),
+        })
+    }
+
+    /// Nom affiché d'une image : son nom de fichier ; pour un développement, celui de sa
+    /// photo suivi du développement (« DSCF0306.RAF · Darktable · clone 1 »), jamais le
+    /// chemin propre (`DSCF0306@dt-01.RAF`).
+    fn shown_name(&self, path: &Path) -> String {
+        match tri::developments::get(path) {
+            Some(development) => format!(
+                "{} · {}",
+                file_name(&development.photo),
+                self.development_label(path)
+            ),
+            None => file_name(path),
+        }
+    }
+
+    /// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
+    fn development_label(&self, path: &Path) -> String {
+        match tri::developments::get(path) {
+            Some(development) => {
+                let siblings = tri::developments::of(&development.photo);
+                let name = development.engine.name();
+                match development.rank(&siblings) {
+                    tri::developments::Rank::Main => name.to_string(),
+                    tri::developments::Rank::Clone(n) => {
+                        format!("{name} · {}", t!("dev-clone", n = n))
+                    }
+                    tri::developments::Rank::Copy(n) => {
+                        format!("{name} · {}", t!("dev-copy", n = n))
+                    }
+                }
+            }
+            None => tri::media::display_stem(path),
+        }
     }
 
     /// Déplie ou replie la pile de l'image sélectionnée.
@@ -5336,6 +5519,22 @@ impl TriApp {
             }
             Action::StackChoose => self.choose_cover(),
             Action::ToggleSource => {
+                // Un développement : avant / après (le JPEG boîtier à la place de son
+                // rendu), la source des photos ne bouge pas.
+                if self
+                    .files
+                    .get(self.selected)
+                    .is_some_and(|f| tri::media::is_development(&f.path))
+                {
+                    self.dev_before = !self.dev_before;
+                    self.hint = Some(t!(if self.dev_before {
+                        "dev-before"
+                    } else {
+                        "dev-after"
+                    }));
+                    self.request_zoom();
+                    return;
+                }
                 // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
                 // Les développements n'entrent dans la rotation que s'ils existent déjà pour
                 // l'image (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B
@@ -5827,6 +6026,9 @@ impl TriApp {
             }
             Action::StackToggle => self.toggle_stack(),
             Action::StacksAll => self.toggle_all_stacks(),
+            Action::DevToggle => self.toggle_developments(),
+            Action::DevNext => self.step_developments(1),
+            Action::DevPrev => self.step_developments(-1),
             Action::GroupingWindow => {
                 self.group_dialog = !self.group_dialog;
                 self.group_dialog_fresh = self.group_dialog;
@@ -6218,6 +6420,12 @@ impl TriApp {
             // (Maj+B le demande pour l'image affichée).
             if self.source == Source::Developed && self.developed_ready(i) {
                 wanted.push((rank == 0, i, self.developed_level(&self.files[i].path)));
+            }
+            // Un développement : son rendu, calculé s'il le faut (on l'a choisi), lui et
+            // ses voisins.
+            if tri::media::is_development(&self.files[i].path) && !self.dev_before {
+                let path = self.files[i].path.clone();
+                wanted.push((rank == 0, i, self.developed_level(&path)));
             }
             if self.zoom.is_some() || (self.loupe_on && rank == 0) {
                 let developed = self.developed_level(&self.files[i].path);
@@ -6838,7 +7046,13 @@ impl TriApp {
     /// qui n'a pas (encore) de développement : alors celle d'avant, avec son 1:1 (retour
     /// du 20/10/2026 : après un Maj+B, plus aucune autre image ne zoomait).
     fn source_for(&self, file: &MediaFile) -> Source {
-        if self.source != Source::Developed {
+        // Un développement montre son rendu (c'est lui), sauf « avant » (`b`) ; en
+        // attendant le rendu, le JPEG boîtier.
+        let development = tri::media::is_development(&file.path);
+        if development && self.dev_before {
+            return Source::Embedded;
+        }
+        if self.source != Source::Developed && !development {
             return self.source;
         }
         let level = self.developed_level(&file.path);
@@ -6848,9 +7062,21 @@ impl TriApp {
         });
         if developed {
             Source::Developed
+        } else if development {
+            Source::Embedded
         } else {
             self.base_source
         }
+    }
+
+    /// Vrai si l'image `index` est un développement dont on attend le rendu (plein écran :
+    /// demandé de lui-même, c'est l'image qu'on regarde).
+    fn development_pending(&self, index: usize) -> bool {
+        self.files.get(index).is_some_and(|f| {
+            tri::media::is_development(&f.path)
+                && !self.dev_before
+                && self.source_for(f) != Source::Developed
+        })
     }
 
     /// Niveau développé de l'image `path` : celui du logiciel choisi pour elle, sinon du
@@ -7689,7 +7915,7 @@ impl TriApp {
                 }
             }
             // Nom, ce qui est affiché, notes.
-            let mut label = file_name(&file.path);
+            let mut label = self.shown_name(&file.path);
             if let Some(level) = shown {
                 label.push_str(" · ");
                 label.push_str(&view::label(file.kind, level));
@@ -8089,6 +8315,29 @@ impl TriApp {
             Some(level) => {
                 info.push_str(" · ");
                 info.push_str(&view::label(file.kind, level));
+                // Un développement : lequel (« · clone 1 »), et « avant » si c'est le JPEG
+                // boîtier qu'on regarde à sa place.
+                if let Some(development) = tri::developments::get(&file.path) {
+                    let siblings = tri::developments::of(&development.photo);
+                    match development.rank(&siblings) {
+                        tri::developments::Rank::Main => {}
+                        tri::developments::Rank::Clone(n) => {
+                            info.push_str(&format!(" · {}", t!("dev-clone", n = n)));
+                        }
+                        tri::developments::Rank::Copy(n) => {
+                            info.push_str(&format!(" · {}", t!("dev-copy", n = n)));
+                        }
+                    }
+                    if !matches!(level, Level::Developed(_)) {
+                        info.push_str(&format!(
+                            " · {}",
+                            t!(
+                                "view-info-development",
+                                name = self.development_label(&file.path)
+                            )
+                        ));
+                    }
+                }
                 if let Some(ratio) = sensor_ratio {
                     info.push_str(&t!(
                         "view-info-sensor",
@@ -8137,7 +8386,9 @@ impl TriApp {
         // Développé : en cours, ou pas de développement pour cette image (raison au
         // survol de la barre d'état, ici en clair).
         let developed = &self.status[index].developed;
-        if self.source == Source::Developed && !matches!(shown, Some(Level::Developed(_))) {
+        if (self.source == Source::Developed || self.development_pending(index))
+            && !matches!(shown, Some(Level::Developed(_)))
+        {
             let asked = self
                 .requested
                 .contains(&(file.path.clone(), self.developed_level(&file.path)));
@@ -8162,7 +8413,7 @@ impl TriApp {
                 &painter,
                 view_rect.left_top() + vec2(10.0, 10.0),
                 Align2::LEFT_TOP,
-                &format!("{position} · {}{info}", file_name(&file.path)),
+                &format!("{position} · {}{info}", self.shown_name(&file.path)),
             );
         }
         self.view_info = format!("{position}{info}");
@@ -8358,6 +8609,12 @@ impl TriApp {
         }
         let engines = self.developers.engines();
         let misses = tri::cache::deferred_misses();
+        // Un développement montre son rendu, quel que soit le rendu choisi pour la grille.
+        if let Some(development) = tri::developments::get(&file.path) {
+            let level = Level::Developed(development.engine);
+            self.grid_levels.insert(file.path.clone(), level);
+            return level;
+        }
         let level = match self.developed_rule().filter(|_| !self.filter_inverted) {
             // Filtre « développées » : le plus récent des logiciels cochés, sinon LibRaw.
             Some(rule) if file.kind == MediaKind::Raw => rule
@@ -8490,9 +8747,23 @@ impl TriApp {
             return;
         }
         self.auto_develop_pending = false;
-        let Some(force) = self.shown_render().to_develop() else {
-            return;
+        // Les développements de la grille (une vignette chacun) sont toujours à rendre,
+        // chacun dans son logiciel ; le reste selon le rendu choisi.
+        let force = self.shown_render().to_develop();
+        let files: Vec<MediaFile> = match force {
+            Some(_) => self.folder.files.clone(),
+            None => self
+                .folder
+                .files
+                .iter()
+                .filter(|f| tri::media::is_development(&f.path))
+                .cloned()
+                .collect(),
         };
+        if files.is_empty() {
+            return;
+        }
+        let force = force.unwrap_or(None);
         let Some(engine) = &self.engine else { return };
         if self.gui.grid.develop != crate::grid_render::GridDevelop::Auto
             || self.developers.is_empty()
@@ -8511,7 +8782,7 @@ impl TriApp {
         let repaint = ctx.clone();
         self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
             self.folder.dir.clone(),
-            self.folder.files.clone(),
+            files,
             producer,
             force,
             move || repaint.request_repaint(),
@@ -8818,7 +9089,7 @@ impl TriApp {
                 && let Some(file) = self.files.get(self.selected)
             {
                 ui.separator();
-                ui.label(file_name(&file.path));
+                ui.label(self.shown_name(&file.path));
                 // Plein écran : numéro, source, taille, attentes (écrits par la vue).
                 if self.mode == Mode::View && !self.view_info.is_empty() {
                     ui.weak(&self.view_info);
@@ -9798,7 +10069,7 @@ impl TriApp {
         let mut develop: Option<Option<tri::develop::Engine>> = None;
         let engines = self.developers.engines();
         let modal = modal_at("rating_dialog", at)
-            .title(file_name(&path))
+            .title(self.shown_name(&path))
             .show(ctx, |ui| {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
@@ -10059,6 +10330,11 @@ impl TriApp {
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && !self.developers.is_empty() {
                     actions.push(Action::Develop);
+                }
+                // Développements de la photo (30/10/2026) : précédent / suivant, quand elle
+                // en a.
+                if self.mode == Mode::View && self.stacks.developments_of(self.selected).is_some() {
+                    actions.extend([Action::DevPrev, Action::DevNext]);
                 }
                 actions.push(Action::ToggleZoom);
                 for action in actions {
@@ -10759,6 +11035,52 @@ impl TriApp {
             );
         }
 
+        // Pile de développements dépliée (30/10/2026) : un cadre fin de la couleur des
+        // développements autour de chacune de ses vignettes.
+        let dev_mark = Color32::from(colors.development_mark);
+        if self.stacks.in_unfolded_developments(index) && !selected && !marked {
+            painter.rect_stroke(
+                rect.shrink(0.5),
+                4.0,
+                egui::Stroke::new(1.0, dev_mark),
+                egui::StrokeKind::Inside,
+            );
+        }
+        // Pile de développements repliée : le nombre de développements, en haut à droite
+        // (le nombre d'images d'une pile de rafale est en haut à gauche).
+        if self.stacks.folded_count(index).is_some()
+            && let Some(range) = self.stacks.developments_of(index)
+        {
+            let n = range
+                .clone()
+                .filter(|&i| tri::media::is_development(&self.files[i].path))
+                .count();
+            let label = painter.layout_no_wrap(
+                t!("dev-count", n = n),
+                FontId::proportional(12.0),
+                Color32::BLACK,
+            );
+            let at = pos2(
+                rect.max.x - g.padding - 2.0 - label.size().x,
+                rect.min.y + g.padding + 2.0,
+            );
+            let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
+            painter.rect_filled(back, 6.0, dev_mark);
+            painter.galley(at, label, Color32::BLACK);
+            let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
+            let tip = t!("dev-count-tip", n = n, keys = keys);
+            let badge = ui.interact(back, response.id.with("developments"), Sense::click());
+            badge.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
+            });
+            if badge
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(&tip)
+                .clicked()
+            {
+                self.cell_action = Some((index, Action::DevToggle));
+            }
+        }
         // Pile repliée : des feuilles derrière la vignette, et le nombre d'images (pile
         // dépliée : son fond, plus haut).
         let accent = Color32::from(colors.stack_mark);
@@ -10844,9 +11166,12 @@ impl TriApp {
         let mut caption_left = badge_rect.min.x;
         // Rendu montré (#114) : le nom du logiciel (ou LibRaw) si la vignette n'est pas le
         // JPEG boîtier (retour du 26/10/2026 : « DEV » ne disait rien).
+        // Un développement : lequel (« DT · clone 1 »), toujours ; en attendant son rendu,
+        // la vignette est celle de la photo.
         let shown = self.texture_levels.get(&file.path).copied();
-        if let Some(level @ (Level::Developed(_) | Level::Standard)) = shown
-            && file.kind == MediaKind::Raw
+        let development = self.development_badge(&file.path);
+        if let Some(level @ (Level::Developed(_) | Level::Standard)) =
+            shown.filter(|_| development.is_none() && file.kind == MediaKind::Raw)
         {
             let side = badge_rect.height();
             let galley = ui.painter().layout_no_wrap(
@@ -10878,6 +11203,35 @@ impl TriApp {
                 Level::Developed(engine) => t!("grid-render-badge", engine = engine.name()),
                 _ => t!("grid-render-badge-libraw"),
             });
+        } else if let Some(badge) = development {
+            let side = badge_rect.height();
+            let galley =
+                ui.painter()
+                    .layout_no_wrap(badge, FontId::monospace(side * 0.7), text_color);
+            let pad = side * 0.3;
+            let width = galley.size().x + 2.0 * pad;
+            let chip = Rect::from_min_size(
+                pos2(caption_left - 6.0 - width, badge_rect.min.y),
+                vec2(width, side),
+            );
+            ui.painter().rect_stroke(
+                chip,
+                2.0,
+                egui::Stroke::new(1.0, text_color),
+                egui::StrokeKind::Inside,
+            );
+            ui.painter()
+                .galley(chip.center() - galley.size() / 2.0, galley, text_color);
+            caption_left = chip.min.x;
+            let rendered = matches!(shown, Some(Level::Developed(_)));
+            tips.push(t!(
+                if rendered {
+                    "dev-badge-tip"
+                } else {
+                    "dev-badge-tip-pending"
+                },
+                name = self.development_label(&file.path)
+            ));
         }
         if g.blur_badge && self.is_blurry(&file.path) {
             let side = badge_rect.height();
@@ -10931,7 +11285,8 @@ impl TriApp {
             caption_left = icon.min.x;
         }
         let name_x = rect.min.x + g.padding;
-        let mut name = truncate(&file_stem(&file.path), g.name_chars);
+        // Un développement porte le nom de sa photo (le logiciel est dans la pastille).
+        let mut name = truncate(&tri::media::display_stem(&file.path), g.name_chars);
         let font = FontId::proportional(12.0);
         let room = caption_left - 6.0 - name_x;
         while name.chars().count() > 1
@@ -12537,12 +12892,6 @@ fn visuals_text(ui: &Ui, strong: bool) -> Color32 {
     }
 }
 
-/// Nom du fichier sans son extension (grille : le format est écrit à droite).
-fn file_stem(path: &Path) -> String {
-    path.file_stem()
-        .map_or_else(|| file_name(path), |n| n.to_string_lossy().into_owned())
-}
-
 /// Format écrit sous une vignette : « RAW » pour tous les RAW, sinon le nom usuel du
 /// format d'après l'extension (JPEG, TIFF, HEIF, PNG…).
 fn format_label(path: &Path, kind: MediaKind) -> String {
@@ -13942,7 +14291,10 @@ mod tests {
 
     #[test]
     fn the_thumbnail_caption_names_the_format_instead_of_the_extension() {
-        assert_eq!(file_stem(Path::new("/a/DSCF0001.RAF")), "DSCF0001");
+        assert_eq!(
+            tri::media::display_stem(Path::new("/a/DSCF0001.RAF")),
+            "DSCF0001"
+        );
         assert_eq!(format_label(Path::new("a.RAF"), MediaKind::Raw), "RAW");
         assert_eq!(format_label(Path::new("a.jpg"), MediaKind::Flat), "JPEG");
         assert_eq!(format_label(Path::new("a.tif"), MediaKind::Flat), "TIFF");
@@ -13992,10 +14344,36 @@ mod tests {
             .files
             .iter()
             .position(|f| f.path == clone)
-            .expect("le clone dans la grille, juste après son original");
+            .expect("le clone dans la liste, juste après son original");
         assert_eq!(h.state().files[i - 1].path, photos.join("img0.jpg"));
         assert_eq!(h.state().folder.notes.notes(&clone).stars, 2);
-        h.state_mut().selected = i;
+        // Pile de développements repliée (30/10/2026) : la grille montre la photo (sa
+        // couverture, sans préféré : le clone, le plus récent) et « 1 dév. » ; Maj+W passe
+        // au développement suivant, sur place.
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "une vignette par photo");
+        assert!(
+            h.state().stacks.folded_count(i).is_some(),
+            "le clone est la couverture"
+        );
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+        press(&mut h, Key::W, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, i - 1, "en boucle : la photo");
+        let keys = h.state().keymap.keys_for(Action::DevToggle).join(" / ");
+        let badge = t!("dev-count-tip", n = 1, keys = keys);
+        h.get_by_label(&badge);
+        press(&mut h, Key::Q, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, i);
+        // Maj+V déplie : les deux vignettes, cadrées.
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 4);
+        assert!(h.state().stacks.in_unfolded_developments(i));
+        assert!(h.query_by_label(&badge).is_none());
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3);
+        assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
         press(&mut h, Key::Num4, Modifiers::SHIFT);
         assert_eq!(
             tri::xmp::read_sidecar(&photos.join("img0_01.jpg.xmp"))

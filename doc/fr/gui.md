@@ -401,6 +401,26 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
   en attendant (« 100 % en cours »).
 - **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
+- **Piles de développements** (30/10/2026, `Stacks::with_developments`, moteur
+  `tri::developments`, voir `developments.md`) : une photo et ses développements
+  (darktable et ses clones, RapidRAW et ses copies virtuelles) forment une pile, **sous**
+  les piles de rafales (une pile de rafale dépliée montre ses photos, chacune repliée ou
+  non ; une pile de rafale repliée ne montre jamais un développement caché). Repliée par
+  défaut : une vignette, la **couverture** (le développement sélectionné, sinon le
+  préféré, sinon le plus récent, sinon la photo : son JPEG boîtier), et « N dév. » dans
+  une pastille en haut à droite (`[gui.colors] development_mark` ; le nombre d'images
+  d'une rafale est en haut à gauche) ; dépliée, chaque vignette dans un cadre fin de la
+  même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
+  lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `Maj+V` déplie / replie, `Maj+W` /
+  `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
+  montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
+  bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
+  photo elle-même : plus de préféré ; `preferred-developments.txt` des données). En plein
+  écran, un développement montre **son rendu** (demandé de lui-même s'il manque, le JPEG
+  boîtier en attendant, étiqueté « · clone 1 » et « avant (… en cours) ») ; `b` y bascule
+  avant / après (le JPEG boîtier à sa place) sans toucher à la source des photos. Dans la
+  grille, la vignette d'un développement est toujours son rendu, quel que soit le rendu
+  choisi pour la grille (`[gui.grid] develop = "auto"` les calcule en fond).
 - **Piles** (18/10/2026, `gui/src/stacks.rs`, moteur `tri::similarity`, voir
   `similarity.md`) : les images semblables voisines (rafales, séries) forment des piles,
   repliées par défaut : une vignette, la **couverture** (l'acceptée, sinon la mieux notée,
@@ -871,6 +891,7 @@ suivent le jeu choisi.
 | `core.file.copy_stack` / `delete_stack` | Ctrl+Maj+C / Maj+Suppr | y) / d) |
 | `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | ( / ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
+| `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Maj+V / Maj+W / Maj+Q | Maj+V / Maj+W / Maj+Q |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |
 | panneaux (dossiers, métadonnées) | flèches, Début / Fin, Maj + flèches | j k h l, gg / G, Maj + j k, y |

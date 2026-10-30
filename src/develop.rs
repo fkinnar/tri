@@ -64,6 +64,11 @@ impl Engine {
         if let Some(development) = crate::developments::get(image) {
             return (development.engine == self).then_some(development.sidecar);
         }
+        // Une photo qui a des développements de ce logiciel : son sidecar est le leur
+        // (une image à part dans la grille), elle-même reste le rendu neutre (LibRaw).
+        if crate::developments::has(image, self) {
+            return None;
+        }
         match self {
             Engine::Darktable => darktable_sidecar(image),
             Engine::RapidRaw => rapidraw_sidecar(image),
@@ -1304,6 +1309,36 @@ mod tests {
         std::fs::write(path.as_ref(), contents)?;
         crate::cache::forget_stamps([path.as_ref()]);
         Ok(())
+    }
+
+    #[test]
+    fn a_photo_with_developments_has_no_developed_render_of_its_own() {
+        // Décidé le 30/10/2026 : le sidecar d'une photo appartient à son développement
+        // (une image de la grille) ; la photo reste le rendu neutre.
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("DSCF0002.RAF");
+        written(&image, b"raw").unwrap();
+        let sidecar = dir.path().join("DSCF0002.RAF.xmp");
+        written(&sidecar, r#"<rdf:Description darktable:xmp_version="5"/>"#).unwrap();
+        assert_eq!(Engine::Darktable.sidecar(&image), Some(sidecar.clone()));
+        let development = crate::developments::Development {
+            engine: Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: image.clone(),
+            sidecar: sidecar.clone(),
+        };
+        crate::developments::set_for(&image, std::slice::from_ref(&development));
+        assert_eq!(
+            Engine::Darktable.sidecar(&image),
+            None,
+            "le sidecar est au développement"
+        );
+        assert_eq!(
+            Engine::Darktable.sidecar(&development.path()),
+            Some(sidecar)
+        );
+        assert_eq!(Engine::RapidRaw.sidecar(&development.path()), None);
+        crate::developments::set_for(&image, &[]);
     }
 
     #[test]
