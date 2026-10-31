@@ -1322,6 +1322,11 @@ impl Developer for ProfileTool {
         let engine = self.engine;
         let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(engine, e.to_string());
         let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
+        // Un développement (`IMG@rt.RAF`, chemin propre, jamais sur le disque) : le
+        // logiciel reçoit la photo (vérifié sur RawTherapee 5.13 le 31/10/2026 : le lot
+        // rendait l'entrée du développement et échouait).
+        let photo =
+            crate::developments::get(image).map_or_else(|| image.to_path_buf(), |d| d.photo);
         // Un dossier de sortie par rendu : le logiciel nomme lui-même le fichier
         // (`<nom sans extension>.jpg`).
         let export_dir = self.work_dir.join(format!("export-{id}"));
@@ -1336,7 +1341,7 @@ impl Developer for ProfileTool {
             .arg("-p")
             .arg(sidecar)
             .args(["-j95", "-Y", "-c"])
-            .arg(image)
+            .arg(&photo)
             .stdin(Stdio::null())
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
             .stderr(messages)
@@ -1879,8 +1884,10 @@ mod tests {
     fn fake_profile_tool(dir: &Path, engine: Engine, jpeg: &Path) -> ProfileTool {
         use std::os::unix::fs::PermissionsExt;
         let script = dir.join(profile_cli_names(engine).0);
+        // `-c` reçoit un fichier qui existe (la photo, jamais le chemin virtuel d'un
+        // développement : 31/10/2026).
         let body = format!(
-            "#!/bin/sh\n[ \"$1\" = -o ] || exit 2\n[ \"$3\" = -p ] || exit 3\n[ -f \"$4\" ] || exit 4\ncp '{}' \"$2/photo.jpg\"\n",
+            "#!/bin/sh\n[ \"$1\" = -o ] || exit 2\n[ \"$3\" = -p ] || exit 3\n[ -f \"$4\" ] || exit 4\n[ \"$7\" = -c ] || exit 7\n[ -f \"$8\" ] || exit 8\ncp '{}' \"$2/photo.jpg\"\n",
             jpeg.display()
         );
         std::fs::write(&script, body).unwrap();
@@ -1905,6 +1912,7 @@ mod tests {
         let bytes = crate::jpeg::encode(&bitmap, 90, crate::jpeg::Chroma::Half).unwrap();
         std::fs::write(&big, bytes).unwrap();
         let image = dir.path().join("photo.RAF");
+        written(&image, b"raw").unwrap();
         let cancel = AtomicBool::new(false);
         for engine in [Engine::RawTherapee, Engine::Art] {
             let profile = crate::pp3::path(&image, engine.profile_extension().unwrap());
@@ -1913,6 +1921,19 @@ mod tests {
             let tool = fake_profile_tool(dir.path(), engine, &big);
             tool.render(&image, &profile, &out, 100, &cancel).unwrap();
             assert_eq!(image::image_dimensions(&out).unwrap(), (100, 75));
+            // L'entrée du développement (chemin virtuel) : rendue depuis la photo.
+            let development = crate::developments::Development {
+                engine,
+                copy: crate::developments::Copy::Main,
+                photo: image.clone(),
+                sidecar: profile.clone(),
+            };
+            crate::developments::set_for(&image, std::slice::from_ref(&development));
+            let virtual_out = dir.path().join(format!("{}-dev.jpg", engine.id()));
+            tool.render(&development.path(), &profile, &virtual_out, 100, &cancel)
+                .unwrap_or_else(|e| panic!("rendu du développement : {e}"));
+            assert!(virtual_out.exists());
+            crate::developments::set_for(&image, &[]);
             assert!(
                 tool.open_folder(dir.path()).is_none(),
                 "pas d'interface à côté du script"

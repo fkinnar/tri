@@ -11,6 +11,9 @@
   posée, annulée ou modifiée ailleurs retrie la grille aussitôt, la sélection suit
   l'image. Les couleurs s'écrivent `"red"`, `"yellow"`… en TOML et dans les vues par
   dossier enregistrées (l'ancien `"Red"` reste lu).
+- **Corrigé : le rendu RawTherapee / ART d'un développement échouait** (premier essai réel,
+  31/10/2026) : le lot en fond passait à la ligne de commande le chemin virtuel du
+  développement (`IMG@rt.RAF`) au lieu du fichier de la photo.
 - **Interrupteur des piles de retour dans le bandeau de la grille** (parti de la barre
   des filtres avec sa réorganisation, #199) et **dans la section « Vue »** du panneau de
   droite en plein écran, à côté de la source affichée (retour du 31/10/2026).
