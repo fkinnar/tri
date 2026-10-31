@@ -11372,10 +11372,13 @@ impl TriApp {
             for (action, on) in self.content_toggles() {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
-                // Allumé à l'accent, éteint fondu (retour du 31/10/2026 : même logique que
-                // les autres contrôles).
-                let accent = marks::accent_mark(ui.ctx());
-                let color = if on { accent } else { marks::faded(accent) };
+                // Allumé à l'accent, éteint en gris moyen comme les étoiles (retour du
+                // 31/10/2026 : l'accent fondu sur le gris de la barre ne se lisait pas).
+                let color = if on {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
                 filter_icon(ui.painter(), rect, action, color);
                 if response.clicked() {
                     clicked.push(action);

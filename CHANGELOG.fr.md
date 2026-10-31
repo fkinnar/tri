@@ -12,7 +12,8 @@
   filtre est posé, fondus sinon, sans fond ni cercle. Les **drapeaux du filtre sont trois
   boutons combinables** (acceptées, neutres, rejetées : n'importe quel mélange ; les
   préréglages du clavier restent), et les interrupteurs d'analyse se fondent au lieu de
-  grisailler. Les pastilles « n dév. » et « replier » passent en gris foncé (`[gui.colors]
+  grisailler (puis retour au gris moyen : l'accent fondu ne se lisait pas sur la barre).
+  Les pastilles « n dév. » et « replier » passent en gris foncé (`[gui.colors]
   development_mark`, un peu plus sombre en thème clair) au lieu du bleu clair.
 - **Noter à la souris sur la vignette elle-même** (#257) : un clic sur les étoiles, le
   drapeau ou les pastilles de couleur d'une vignette ouvre un petit sélecteur du groupe
