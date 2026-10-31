@@ -89,6 +89,13 @@ create = "auto"
 [sidecars.art]
 create = "auto"
 
+[sort]
+# Sorting by colour (f s up to "Colour"): the order of the colours, first to last. The
+# list may name only a few (e.g. ["red", "yellow", "green"]: those three ordered, blue and
+# purple kept for something else); an image is ranked by its best-placed colour; without
+# a colour, or none in the list, it comes last.
+color_order = ["red", "yellow", "green", "blue", "purple"]
+
 [places]
 # Locations offered by the folders panel. Hide Time Machine backups, recognised by their
 # content (not by their name):
@@ -525,8 +532,10 @@ reopen_last = true
 # --focus argument forces it in every case.
 image_focus = true
 # Order of the images: "name" (the camera's order), "captured" (shooting date, several
-# cameras in a session) or "modified" (modification date), and the direction; f s and
-# f r change them, the choice is remembered (a RAW+JPEG pair stays together).
+# cameras in a session), "modified" (modification date), "stars" (a rejected one below
+# 0), "color" (the order of [sort] color_order) or "flag" (accepted, no flag, rejected),
+# and the direction; f s and f r change them, the choice is remembered (a RAW+JPEG pair
+# stays together).
 sort = "name"
 sort_descending = false
 # Keep from one launch to the next what is shown or hidden with a key (focus point,

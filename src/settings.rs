@@ -103,6 +103,8 @@ pub struct EngineSettings {
     pub places: crate::places::PlaceSettings,
     /// Surveillance du dossier ouvert.
     pub watch: crate::watch::WatchSettings,
+    /// Tri des images (ordre des couleurs).
+    pub sort: crate::sort::SortSettings,
     /// Rendu par un logiciel de développement (darktable).
     pub develop: crate::develop::DevelopSettings,
     /// Export (profils, destination).
