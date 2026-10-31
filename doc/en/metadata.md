@@ -25,7 +25,7 @@ standard" licence on crates.io).
 
 ## Display
 
-`Metadata::rows()`: (label, value) rows in the interface language, in order, unknown
+`Metadata::rows()`: `Row` rows (label, value, a grey note on a second line or after a dash: 35 mm equivalent, megapixels; `Row::text` on one line for the command line) in the interface language, in order, unknown
 fields omitted — ready for any interface: "Exposure: 1/250 s · f/2.8 · ISO 400",
 "Compensation: +0.7 EV", "Focal length: 5.7 mm (35 mm equiv.: 26 mm)",
 "Date: 2026-10-16 14:32:05", "Dimensions: 4160 × 6240 (26 MP)". Helpers:

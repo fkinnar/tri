@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- **Filter bar: the name search sits at the right**, just before the image count (#241).
+- **Help: "Report a problem" in dark red** (#242), and **the help window can be moved**
+  (#251). The **offload dialog opens at the centre** like the other dialogs (#252).
+- **`q q` quits** instead of `q` alone, too immediate next to `Shift+Q` (#244).
+- **`tri-gui <image>` opens the image's folder on it** (#250).
+- **EXIF panel: details in grey** (#249): the 35 mm equivalent focal length and the
+  sharpness coefficients on a second line, the megapixels after a dash, without
+  parentheses. `Metadata::rows` returns `Row`s (label, value, note); `tri --metadata`
+  prints "value – note".
 - **Full screen: a "View" section in the right panel** in place of "Grid" (#239): the
   shown source as a drop-down list (camera render, RAW render, each development already
   rendered; on a development, a "before" check box) and the file actions switch. The grid

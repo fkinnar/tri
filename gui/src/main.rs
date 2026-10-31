@@ -1,10 +1,11 @@
 //! Interface graphique de tri.
 //!
 //! ```text
-//! tri-gui [<dossier>] [--cache <dossier du cache>] [--config <fichier>]
+//! tri-gui [<dossier>|<image>] [--cache <dossier du cache>] [--config <fichier>]
 //! ```
 //!
-//! Sans dossier, l'interface s'ouvre sur le panneau des dossiers.
+//! Sans dossier, l'interface s'ouvre sur le panneau des dossiers ; une image ouvre son
+//! dossier, sur elle (#250).
 //!
 //! Réglages : fichier de configuration (`--config`, sinon l'emplacement par défaut, voir
 //! `tri::settings` et `doc/config.example.toml`) ; `--cache` l'emporte sur lui.

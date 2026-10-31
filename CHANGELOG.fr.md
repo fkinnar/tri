@@ -4,6 +4,17 @@
 
 ## À venir
 
+- **Barre des filtres : la recherche par nom est à droite**, juste avant le compteur
+  d'images (#241).
+- **Aide : « Signaler un problème » en bordeaux** (#242), et **la fenêtre d'aide se
+  déplace** (#251). La **boîte de déchargement s'ouvre au centre** comme les autres
+  (#252).
+- **`q q` quitte** au lieu de `q` seul, trop immédiat à côté de `Maj+Q` (#244).
+- **`tri-gui <image>` ouvre le dossier de l'image, sur elle** (#250).
+- **Panneau EXIF : précisions en gris** (#249) : la focale équivalente 24 × 36 et les
+  coefficients de netteté à la ligne, les mégapixels derrière un tiret, sans parenthèses.
+  `Metadata::rows` renvoie des `Row` (libellé, valeur, précision) ; `tri --metadata` écrit
+  « valeur – précision ».
 - **Plein écran : une section « Vue » dans le panneau de droite** à la place de
   « Grille » (#239) : la source affichée en liste déroulante (rendu boîtier, rendu RAW,
   chaque développement déjà rendu ; sur un développement, une case « avant ») et

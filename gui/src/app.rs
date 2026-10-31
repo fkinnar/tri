@@ -272,6 +272,8 @@ pub struct TriApp {
     start_dir: Option<(PathBuf, bool)>,
     /// Image à sélectionner une fois le dossier du lancement lu (`TRI_GUI_SELECT`).
     start_select: Option<usize>,
+    /// Image passée en argument (#250) : sélectionnée une fois son dossier lu.
+    start_select_path: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -567,7 +569,6 @@ pub struct TriApp {
     search_focused: Option<egui::Id>,
     /// Largeur de la fin de la barre des filtres (du tri à l'effacement), entière puis en
     /// menu « … », mesurée à l'image précédente (issue n° 71).
-    filter_tail: f32,
     /// Largeur des boutons de droite du bandeau de notation, mesurée à l'image précédente
     /// (fenêtre étroite : ils passent à la ligne, issue n° 71).
     rating_tail: f32,
@@ -713,7 +714,7 @@ pub struct TriApp {
     /// Panneau des métadonnées : ligne pointée au clavier, et les lignes affichées (pour
     /// copier la valeur).
     meta_cursor: usize,
-    meta_rows: Vec<(String, String)>,
+    meta_rows: Vec<tri::metadata::Row>,
     /// L'histogramme est en tête du panneau : premier élément pointable (Entrée l'ouvre
     /// en grand).
     meta_has_histogram: bool,
@@ -884,6 +885,11 @@ impl TriApp {
         // un NAS, la fenêtre attendait la liste plusieurs secondes, icône générique dans le
         // Dock). Le dernier dossier disparu (disque débranché) est dit, et rouvert s'il
         // revient : vu quand sa lecture échoue, pas avant (pas d'accès disque ici).
+        // Une image en argument (#250) : son dossier s'ouvre, sur elle.
+        let (dir, start_file) = match dir {
+            Some(p) if p.is_file() => (p.parent().map(Path::to_path_buf), Some(p)),
+            dir => (dir, None),
+        };
         let remembered = (dir.is_none() && gui.reopen_last)
             .then(|| tri::folder::remembered(data.as_deref()?))
             .flatten();
@@ -931,6 +937,7 @@ impl TriApp {
             missing_last,
             start_dir: None,
             start_select: None,
+            start_select_path: None,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -1060,7 +1067,6 @@ impl TriApp {
             name_query: String::new(),
             focus_request: None,
             search_focused: None,
-            filter_tail: 0.0,
             rating_tail: 0.0,
             rating_wrapped_at: None,
             folder_query: String::new(),
@@ -1180,6 +1186,7 @@ impl TriApp {
         };
         app.restore_display();
         app.start_select = start_select;
+        app.start_select_path = start_file;
         if let Some(dir) = start_dir {
             app.start_dir = Some((
                 dir.clone(),
@@ -1652,6 +1659,11 @@ impl TriApp {
         self.apply_filter();
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
+        }
+        if let Some(path) = self.start_select_path.take()
+            && let Some(i) = self.files.iter().position(|f| f.path == path)
+        {
+            self.selected = i;
         }
     }
 
@@ -2263,33 +2275,38 @@ impl TriApp {
                 let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
                 // Nom : une ligne comme les autres, en tête (demandé le 22/10/2026 : un
                 // titre blanc au-dessus de l'histogramme répétait la barre d'état).
-                let mut rows = vec![(t!("panel-name"), shown_name(&file.path))];
+                let mut rows = vec![tri::metadata::Row::new(
+                    t!("panel-name"),
+                    shown_name(&file.path),
+                )];
                 rows.extend(m.rows());
                 // Netteté : une ligne comme les autres (pointable, copiable).
                 if let Some(j) = self.judgements.get(&file.path) {
                     let ratio = |r: Option<f32>| {
                         r.map_or("-".to_string(), |r| tri::i18n::decimal(r as f64, 2))
                     };
-                    let score = tri::i18n::decimal(j.score as f64, 1);
-                    // Dans une pile, jugée contre elle (et le dossier), pas ses voisines.
-                    let mut text = match j.group_ratio {
+                    let mut score = tri::i18n::decimal(j.score as f64, 1);
+                    if j.blurry {
+                        score.push_str(&t!("panel-sharpness-blurry"));
+                    }
+                    // Les coefficients en précision à la ligne (#249) ; dans une pile, jugée
+                    // contre elle (et le dossier), pas ses voisines.
+                    let note = match j.group_ratio {
                         Some(g) => t!(
-                            "panel-sharpness-value-stack",
-                            score = score,
+                            "panel-sharpness-note-stack",
                             folder = ratio(j.folder_ratio),
                             stack = ratio(Some(g))
                         ),
                         None => t!(
-                            "panel-sharpness-value",
-                            score = score,
+                            "panel-sharpness-note",
                             folder = ratio(j.folder_ratio),
                             neighbours = ratio(j.neighbour_ratio)
                         ),
                     };
-                    if j.blurry {
-                        text.push_str(&t!("panel-sharpness-blurry"));
-                    }
-                    rows.push((t!("panel-sharpness"), text));
+                    rows.push(
+                        tri::metadata::Row::new(t!("panel-sharpness"), score)
+                            .with_note(note, false),
+                    );
                 }
                 // Le curseur ne parcourt que les lignes (issue n° 77 : l'histogramme encadré
                 // n'avait pas de sens ; Entrée l'ouvre en grand de toute façon).
@@ -2303,17 +2320,29 @@ impl TriApp {
                     .num_columns(2)
                     .spacing(vec2(10.0, 4.0))
                     .show(ui, |ui| {
-                        for (i, (label, value)) in rows.iter().enumerate() {
+                        let font = egui::TextStyle::Body.resolve(ui.style());
+                        let (normal, weak) =
+                            (ui.visuals().text_color(), ui.visuals().weak_text_color());
+                        for (i, row) in rows.iter().enumerate() {
                             let a = ui.add(
-                                egui::Label::new(egui::RichText::new(label.as_str()).weak())
+                                egui::Label::new(egui::RichText::new(row.label.as_str()).weak())
                                     .sense(Sense::click()),
                             );
-                            // À la ligne plutôt qu'élargir le panneau (noms d'objectif).
-                            let b = ui.add(
-                                egui::Label::new(value.as_str())
-                                    .wrap()
-                                    .sense(Sense::click()),
-                            );
+                            // La valeur, puis sa précision en gris (#249), derrière un tiret
+                            // ou à la ligne ; à la ligne plutôt qu'élargir le panneau (noms
+                            // d'objectif).
+                            let mut job = egui::text::LayoutJob::default();
+                            let format = |color| egui::TextFormat {
+                                font_id: font.clone(),
+                                color,
+                                ..Default::default()
+                            };
+                            job.append(&row.value, 0.0, format(normal));
+                            if let Some(note) = &row.note {
+                                let sep = if row.inline { " – " } else { "\n" };
+                                job.append(&format!("{sep}{note}"), 0.0, format(weak));
+                            }
+                            let b = ui.add(egui::Label::new(job).wrap().sense(Sense::click()));
                             let rect = a.rect.union(b.rect).expand(2.0);
                             // Sélection (y la copie) ; la ligne pointée au clavier en bande.
                             if focused && picked(i) && hi > lo {
@@ -2914,7 +2943,10 @@ impl TriApp {
                                 let c = if response.hovered() { hover } else { color };
                                 marks::offload(ui.painter(), rect, c);
                                 if response.clicked() {
-                                    offload = Some((row.path.clone(), rect.right_bottom()));
+                                    // Au centre, comme les autres boîtes (#252 ; près du
+                                    // clic avant).
+                                    let at = ui.ctx().content_rect().center() - vec2(210.0, 160.0);
+                                    offload = Some((row.path.clone(), at));
                                 }
                             }
                             let (rect, response) = marks::clickable(ui, size, &t!("eject"));
@@ -5585,7 +5617,7 @@ impl TriApp {
                 } else {
                     self.meta_range()
                 };
-                let rows: Vec<&(String, String)> = self
+                let rows: Vec<&tri::metadata::Row> = self
                     .meta_rows
                     .iter()
                     .enumerate()
@@ -5595,16 +5627,21 @@ impl TriApp {
                 match rows.as_slice() {
                     [] => {}
                     // Une ligne : la valeur seule (à coller dans un champ).
-                    [(label, value)] => {
-                        ctx.copy_text(value.clone());
-                        self.notice = Some((t!("metadata-copied", label = label.clone()), false));
+                    [row] => {
+                        ctx.copy_text(row.text());
+                        self.notice =
+                            Some((t!("metadata-copied", label = row.label.clone()), false));
                     }
                     // Plusieurs : « libellé : valeur », une par ligne.
                     many => {
                         let text: Vec<String> = many
                             .iter()
-                            .map(|(l, v)| {
-                                t!("metadata-copy-line", label = l.clone(), value = v.clone())
+                            .map(|r| {
+                                t!(
+                                    "metadata-copy-line",
+                                    label = r.label.clone(),
+                                    value = r.text()
+                                )
                             })
                             .collect();
                         ctx.copy_text(text.join("\n"));
@@ -10951,35 +10988,11 @@ impl TriApp {
                 || content
                 || self.filter_inverted
                 || !self.name_query.trim().is_empty();
-            // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf.
-            ui.add_space(self.gui.dialogs.spacing);
-            // Le champ prend la place qui reste (jusqu'à `search_width`), sans recouvrir
-            // la fin de la barre (issue n° 71), largeur mesurée à l'image précédente.
-            let spacing = ui.spacing().item_spacing.x;
-            let room = ui.available_size_before_wrap().x - spacing - self.filter_tail;
-            let grid = self.gui.grid;
-            let search_width = room.clamp(grid.search_min_width, grid.search_width);
-            let hint = t!("search-grid-hint", keys = self.search_keys());
-            let field = ui.add(
-                egui::TextEdit::singleline(&mut self.name_query)
-                    .id(grid_search_id())
-                    .hint_text(hint)
-                    .desired_width(search_width),
-            );
-            if self.focus_request == Some(grid_search_id()) {
-                field.request_focus();
-                self.focus_request = None;
-            }
-            if field.changed() {
-                refilter = true;
-            }
-            if field.has_focus() {
-                self.search_focused = Some(grid_search_id());
-            }
             // Tout à droite (retour du 21/10/2026) : effacer les filtres (entonnoir barré,
-            // grisé sans filtre), et juste à sa gauche le nombre d'images.
+            // grisé sans filtre), juste à sa gauche le nombre d'images, puis la recherche
+            // par nom (#241).
+            let spacing = ui.spacing().item_spacing.x;
             tail_visible(ui, |ui| {
-                let right = ui.max_rect().right();
                 let tip = self.action_tip(Action::FilterClear);
                 ui.add_enabled_ui(any, |ui| {
                     let (rect, response) =
@@ -11015,7 +11028,28 @@ impl TriApp {
                     n = self.folder.files.len()
                 ))
                 .on_hover_text(t!("filter-bar-count-tip"));
-                self.filter_tail = right - ui.min_rect().left();
+                // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf. Le
+                // champ prend la place qui reste, jusqu'à `search_width` (issue n° 71).
+                let grid = self.gui.grid;
+                let room = ui.available_width() - spacing;
+                let search_width = room.clamp(grid.search_min_width, grid.search_width);
+                let hint = t!("search-grid-hint", keys = self.search_keys());
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut self.name_query)
+                        .id(grid_search_id())
+                        .hint_text(hint)
+                        .desired_width(search_width),
+                );
+                if self.focus_request == Some(grid_search_id()) {
+                    field.request_focus();
+                    self.focus_request = None;
+                }
+                if field.changed() {
+                    refilter = true;
+                }
+                if field.has_focus() {
+                    self.search_focused = Some(grid_search_id());
+                }
             });
         });
         if refilter {
@@ -12439,7 +12473,9 @@ impl TriApp {
             .max_width(width)
             .collapsible(false)
             .resizable(false)
-            .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            // Au centre, mais déplaçable (#251 : ancrée, elle ne bougeait pas).
+            .pivot(Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
             .show(ctx, |ui| {
                 // Le contenu à cette largeur : la zone défilante (qui ne rétrécit pas) prenait
                 // sinon toute la place disponible, au-delà de la barre de titre.
@@ -12488,8 +12524,16 @@ impl TriApp {
                         }
                     }
                     let keys = self.keymap.keys_for(Action::ReportIssue).join(", ");
+                    // En bordeaux (#242) : le bouton qu'on cherche quand ça va mal.
+                    let red =
+                        Color32::from(self.gui.colors.error).lerp_to_gamma(Color32::BLACK, 0.4);
+                    let report_button = egui::Button::new(
+                        egui::RichText::new(t!("help-report")).color(Color32::WHITE),
+                    )
+                    .small()
+                    .fill(red);
                     if ui
-                        .small_button(t!("help-report"))
+                        .add(report_button)
                         .on_hover_text(format!("{}\n{keys}", t!("help-report-tip")))
                         .clicked()
                     {
@@ -16503,6 +16547,39 @@ mod tests {
     }
 
     #[test]
+    fn an_image_argument_opens_its_folder_on_it() {
+        // #250 : `tri-gui <image>` ouvre le dossier de l'image, sur elle.
+        let dir = tempfile::tempdir().unwrap();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir(&photos).unwrap();
+        for name in ["a.jpg", "b.jpg", "c.jpg"] {
+            image::RgbImage::new(8, 8).save(photos.join(name)).unwrap();
+        }
+        let mut s = AppSettings::default();
+        s.cache.dir = Some(dir.path().join("cache"));
+        s.data.dir = Some(dir.path().join("data"));
+        s.places.watch_ms = 0;
+        s.gui.reopen_last = false;
+        let image = photos.join("b.jpg");
+        let mut h = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(image), s, None));
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        assert_eq!(h.state().folder.dir, photos);
+        assert_eq!(selected_name(&h), "b.jpg");
+    }
+
+    #[test]
+    fn quitting_takes_q_twice() {
+        // #244 : `q` seul quittait trop vite, à côté de Maj+Q.
+        let (mut h, _dir) = harness();
+        press(&mut h, Key::Q, Modifiers::NONE);
+        assert!(!h.state().quit_requested, "un seul q");
+        press(&mut h, Key::Q, Modifiers::NONE);
+        assert!(h.state().quit_requested);
+    }
+
+    #[test]
     fn the_last_folder_is_reopened_without_an_argument() {
         let dir = tempfile::tempdir().unwrap();
         let photos = dir.path().join("séance");
@@ -16598,10 +16675,17 @@ mod tests {
         assert_eq!(h.state().mode, Mode::View);
         h.run_steps(3);
         assert!(h.query_by_label("Effacer").is_some(), "barre des filtres");
+        // La section « Vue » remplace « Grille » en plein écran (#239) : la source
+        // affichée (une image plate : « Image » seulement) et les actions sur les fichiers.
         assert!(
-            h.query_by_label(&t!("panel-section-grid").to_uppercase())
+            h.query_by_label(&t!("panel-section-view").to_uppercase())
                 .is_some()
         );
+        assert!(
+            h.query_by_label(&t!("panel-section-grid").to_uppercase())
+                .is_none()
+        );
+        assert!(h.query_by_label(&t!("panel-grid-files-allow")).is_some());
         press(&mut h, Key::F, Modifiers::SHIFT);
         assert!(h.query_by_label("Effacer").is_none(), "Maj+F la masque");
     }

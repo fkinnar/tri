@@ -1007,8 +1007,8 @@ filter-bar-more = Sort and number of images (the bar lacks room)
 badge-blurry = Judged blurry (sharpness score)
 badge-blurry-view = Judged blurry (sharpness score); click: sharpness map
 panel-sharpness = Sharpness
-panel-sharpness-value = { $score } (× { $folder } the folder, × { $neighbours } the neighbours)
-panel-sharpness-value-stack = { $score } (× { $folder } the folder, × { $stack } the stack)
+panel-sharpness-note = × { $folder } the folder, × { $neighbours } the neighbours
+panel-sharpness-note-stack = × { $folder } the folder, × { $stack } the stack
 panel-sharpness-blurry = { " " }· blurry
 
 ## Histogram statistics

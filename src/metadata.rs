@@ -289,17 +289,22 @@ impl Metadata {
 
     /// Lignes à afficher (libellé, valeur), dans l'ordre, dans la langue choisie
     /// ([`crate::i18n`]) ; les champs inconnus sont omis.
-    pub fn rows(&self) -> Vec<(String, String)> {
-        let mut rows = Vec::new();
-        let mut push = |label: String, value: Option<String>| {
+    pub fn rows(&self) -> Vec<Row> {
+        fn push_plain(rows: &mut Vec<Row>, label: String, value: Option<String>) {
             if let Some(v) = value {
-                rows.push((label, v));
+                rows.push(Row::new(label, v));
             }
-        };
-        push(crate::t!("metadata-camera"), self.camera());
-        push(crate::t!("metadata-lens"), self.lens.clone());
-        push(crate::t!("metadata-exposure"), self.exposure_text());
-        push(
+        }
+        let mut rows = Vec::new();
+        push_plain(&mut rows, crate::t!("metadata-camera"), self.camera());
+        push_plain(&mut rows, crate::t!("metadata-lens"), self.lens.clone());
+        push_plain(
+            &mut rows,
+            crate::t!("metadata-exposure"),
+            self.exposure_text(),
+        );
+        push_plain(
+            &mut rows,
             crate::t!("metadata-bias"),
             self.exposure_bias.map(|b| {
                 let sign = if b > 0.0 { "+" } else { "" };
@@ -309,19 +314,25 @@ impl Metadata {
                 )
             }),
         );
-        push(crate::t!("metadata-mode"), self.program.clone());
-        push(
+        push_plain(&mut rows, crate::t!("metadata-mode"), self.program.clone());
+        // Focale, l'équivalent 24 × 36 en précision à la ligne (#249).
+        push_plain(
+            &mut rows,
             crate::t!("metadata-focal"),
-            self.focal.map(|f| match self.focal_35mm {
-                Some(eq) if (eq - f).abs() >= 1.0 => crate::t!(
-                    "metadata-focal-equivalent",
-                    focal = decimal_text(f as f64, 1),
-                    equivalent = eq.round() as i64
-                ),
-                _ => crate::t!("metadata-focal-value", focal = decimal_text(f as f64, 1)),
-            }),
+            self.focal
+                .map(|f| crate::t!("metadata-focal-value", focal = decimal_text(f as f64, 1))),
         );
-        push(
+        if let (Some(f), Some(eq)) = (self.focal, self.focal_35mm)
+            && (eq - f).abs() >= 1.0
+            && let Some(row) = rows.last_mut()
+        {
+            row.note = Some(crate::t!(
+                "metadata-focal-equivalent",
+                equivalent = eq.round() as i64
+            ));
+        }
+        push_plain(
+            &mut rows,
             crate::t!("metadata-flash"),
             self.flash.map(|f| {
                 if f {
@@ -331,23 +342,27 @@ impl Metadata {
                 }
             }),
         );
-        push(
+        push_plain(
+            &mut rows,
             crate::t!("metadata-date"),
             self.date.as_deref().map(date_text),
         );
-        push(
-            crate::t!("metadata-dimensions"),
-            self.size.map(|(w, h)| {
-                let mpx = w as f64 * h as f64 / 1e6;
-                crate::t!(
-                    "metadata-dimensions-value",
-                    width = w,
-                    height = h,
-                    mpx = decimal_text(mpx, 1)
+        // Dimensions, les mégapixels en précision sur la même ligne (#249).
+        if let Some((w, h)) = self.size {
+            let mpx = w as f64 * h as f64 / 1e6;
+            rows.push(
+                Row::new(
+                    crate::t!("metadata-dimensions"),
+                    crate::t!("metadata-dimensions-value", width = w, height = h),
                 )
-            }),
-        );
-        push(
+                .with_note(
+                    crate::t!("metadata-dimensions-note", mpx = decimal_text(mpx, 1)),
+                    true,
+                ),
+            );
+        }
+        push_plain(
+            &mut rows,
             crate::t!("metadata-file"),
             (self.file_size > 0).then(|| match self.file_size {
                 n if n < 1_000_000 => {
@@ -357,6 +372,47 @@ impl Metadata {
             }),
         );
         rows
+    }
+}
+
+/// Ligne du panneau des métadonnées (#249) : libellé, valeur, et une précision en gris
+/// (`note`), à la ligne ou sur la même ligne derrière un tiret (`inline`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    /// Libellé (« Focale »).
+    pub label: String,
+    /// Valeur principale (« 16 mm »).
+    pub value: String,
+    /// Précision en gris (« éq. 24 × 36 : 24 mm »).
+    pub note: Option<String>,
+    /// Précision sur la même ligne, derrière un tiret, plutôt qu'à la ligne.
+    pub inline: bool,
+}
+
+impl Row {
+    /// Ligne sans précision.
+    pub fn new(label: String, value: String) -> Row {
+        Row {
+            label,
+            value,
+            note: None,
+            inline: false,
+        }
+    }
+
+    /// Ajoute la précision `note`, sur la même ligne si `inline`.
+    pub fn with_note(mut self, note: String, inline: bool) -> Row {
+        self.note = Some(note);
+        self.inline = inline;
+        self
+    }
+
+    /// Texte sur une ligne (ligne de commande, copie) : « valeur – précision ».
+    pub fn text(&self) -> String {
+        match &self.note {
+            Some(note) => format!("{} – {note}", self.value),
+            None => self.value.clone(),
+        }
     }
 }
 
@@ -475,19 +531,21 @@ mod tests {
     #[test]
     fn readable_rows_in_french() {
         let rows = sample().rows();
-        let get = |label: &str| {
-            rows.iter()
-                .find(|(l, _)| *l == label)
-                .map(|(_, v)| v.as_str())
-        };
-        assert_eq!(get("Appareil"), Some("Fujifilm X-T4"));
-        assert_eq!(get("Exposition"), Some("1/250 s · f/4 · ISO 640"));
-        assert_eq!(get("Correction"), Some("+0,7 IL"));
-        assert_eq!(get("Focale"), Some("16 mm (éq. 24 × 36 : 24 mm)"));
-        assert_eq!(get("Date"), Some("16/10/2026 à 14:32:05"));
-        assert_eq!(get("Dimensions"), Some("4160 × 6240 (26 Mpx)"));
-        assert_eq!(get("Fichier"), Some("26,3 Mo"));
-        assert_eq!(get("Flash"), Some("non déclenché"));
+        let get = |label: &str| rows.iter().find(|r| r.label == label).map(Row::text);
+        assert_eq!(get("Appareil").as_deref(), Some("Fujifilm X-T4"));
+        assert_eq!(
+            get("Exposition").as_deref(),
+            Some("1/250 s · f/4 · ISO 640")
+        );
+        assert_eq!(get("Correction").as_deref(), Some("+0,7 IL"));
+        assert_eq!(
+            get("Focale").as_deref(),
+            Some("16 mm – éq. 24 × 36 : 24 mm")
+        );
+        assert_eq!(get("Date").as_deref(), Some("16/10/2026 à 14:32:05"));
+        assert_eq!(get("Dimensions").as_deref(), Some("4160 × 6240 – 26 Mpx"));
+        assert_eq!(get("Fichier").as_deref(), Some("26,3 Mo"));
+        assert_eq!(get("Flash").as_deref(), Some("non déclenché"));
     }
 
     #[test]
@@ -497,7 +555,7 @@ mod tests {
             ..Metadata::default()
         }
         .rows();
-        assert_eq!(rows, [("Fichier".to_string(), "1 Mo".to_string())]);
+        assert_eq!(rows, [Row::new("Fichier".to_string(), "1 Mo".to_string())]);
     }
 
     #[test]
@@ -534,13 +592,11 @@ mod tests {
             focal_35mm: Some(26.0),
             ..Metadata::default()
         };
-        assert_eq!(
-            m.rows(),
-            [(
-                "Focale".to_string(),
-                "5,7 mm (éq. 24 × 36 : 26 mm)".to_string()
-            )]
-        );
+        let rows = m.rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Focale");
+        assert_eq!(rows[0].text(), "5,7 mm – éq. 24 × 36 : 26 mm");
+        assert!(!rows[0].inline, "à la ligne");
     }
 
     #[test]
@@ -550,7 +606,10 @@ mod tests {
             focal_35mm: Some(50.0),
             ..Metadata::default()
         };
-        assert_eq!(m.rows(), [("Focale".to_string(), "50 mm".to_string())]);
+        assert_eq!(
+            m.rows(),
+            [Row::new("Focale".to_string(), "50 mm".to_string())]
+        );
     }
 
     /// Note du fabricant Fujifilm minimale : en-tête, IFD de deux entrées dont

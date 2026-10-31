@@ -1293,7 +1293,8 @@ const BASICS: &[Binding] = {
         // « ? » arrive avec ou sans Maj selon la disposition du clavier.
         (&[plain(Key::Questionmark)], Help),
         (&[shifted(Key::Questionmark)], Help),
-        (&[plain(Key::Q)], Quit),
+        // `q q` (#244 : `q` seul quittait trop vite, à côté de Maj+Q).
+        (&[plain(Key::Q), plain(Key::Q)], Quit),
     ]
 };
 

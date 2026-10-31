@@ -1009,8 +1009,8 @@ filter-bar-more = Tri et nombre d'images (la barre manque de place)
 badge-blurry = Jugée floue (score de netteté)
 badge-blurry-view = Jugée floue (score de netteté) ; clic : carte de netteté
 panel-sharpness = Netteté
-panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
-panel-sharpness-value-stack = { $score } (× { $folder } le dossier, × { $stack } la pile)
+panel-sharpness-note = × { $folder } le dossier, × { $neighbours } les voisines
+panel-sharpness-note-stack = × { $folder } le dossier, × { $stack } la pile
 panel-sharpness-blurry = { " " }· floue
 
 ## Statistiques de l'histogramme

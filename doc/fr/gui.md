@@ -317,8 +317,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   seulement les fonds du thème sombre d'egui (`Theme::apply`), remis d'origine en
   changeant de thème ; appliqué à chaud depuis les réglages.
 - **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
-  écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ après le compteur de
-  la barre des filtres (`[gui.grid] search_width` ; fenêtre étroite, issue n° 71 : le
+  écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ à droite de la barre des
+  filtres, juste avant le compteur (#241, 31/10/2026 ; après les filtres avant ;
+  `[gui.grid] search_width` ; fenêtre étroite, issue n° 71 : le
   tri, le rendu des vignettes et le nombre d'images passent dans un menu « … » juste
   avant l'inversion et l'effacement, toujours visibles, leurs listes en sous-menus
   (`bar_choice`, #181 : une liste déroulante ouverte depuis un menu se refermait avec lui), et le champ se rétrécit jusqu'à `search_min_width` ;
