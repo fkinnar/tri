@@ -20,7 +20,7 @@ Fait le 18/10/2026, d'après les décisions prises avec l'utilisateur le même j
 
 | Pas | Enregistré | Défaire | Vérifié avant |
 |---|---|---|---|
-| `Notes` | notes avant / après de chaque image (`snapshot`, puis `notes_step`) | notes d'avant, image par image (`NoteBook::write_only` : chaque image d'une paire retrouve **ses** notes) | notes du disque = notes d'après |
+| `Notes` | notes avant / après de chaque image, paire et développements principaux compris (`snapshot` sur `NoteBook::shared`, puis `notes_step`) | notes d'avant, image par image (`NoteBook::write_only` : chaque image d'une paire retrouve **ses** notes) | notes du disque = notes d'après |
 | `Rename` | le plan exécuté | renommage inverse ; copies d'un sidecar partagé supprimées | nouveaux noms présents, anciens libres |
 | `Transfer` | le plan, et l'empreinte (taille, date) des fichiers écrits (`transfer_step`) | copie : copies supprimées ; déplacement : retour (même mécanique, copies vérifiées entre volumes) | fichiers écrits présents et **inchangés** (une copie retouchée depuis n'est pas supprimée) |
 | `CreateDir` | le dossier créé | supprimé, **seulement s'il est encore vide** | dossier présent et vide |

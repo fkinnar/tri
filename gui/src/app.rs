@@ -6158,7 +6158,8 @@ impl TriApp {
 
     /// Note plusieurs images (sélection multiple), sans avance automatique. Une paire
     /// RAW+JPEG n'est notée qu'une fois (noter une image note aussi l'autre : une couleur
-    /// basculerait deux fois). Couleur : même effet sur toutes, d'après la première
+    /// basculerait deux fois), de même qu'une photo et ses développements principaux
+    /// (`NoteBook::shared`). Couleur : même effet sur toutes, d'après la première
     /// (ajoutée si elle ne l'a pas, retirée sinon), au lieu d'une bascule image par image
     /// qui mélangerait.
     fn rate_many(&mut self, targets: &[PathBuf], action: Action) {
@@ -6174,7 +6175,7 @@ impl TriApp {
             if !done.insert(path.clone()) {
                 continue;
             }
-            done.extend(self.folder.notes.siblings(path));
+            done.extend(self.folder.notes.shared(path));
             let result = self.folder.notes.edit(path, |n| match action {
                 Action::Stars(stars) => n.set_stars(stars),
                 Action::Color(color) if n.has_color(color) != add => {

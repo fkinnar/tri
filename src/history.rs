@@ -157,11 +157,12 @@ impl From<FileError> for HistoryError {
 /// `Result` spécialisé pour l'historique.
 pub type Result<T> = std::result::Result<T, HistoryError>;
 
-/// Notes de `images` et de leurs paires, avant une action ([`notes_step`] après).
+/// Notes de `images` et de ce qui reçoit les mêmes (paires, développements
+/// principaux : [`NoteBook::shared`]), avant une action ([`notes_step`] après).
 pub fn snapshot(book: &NoteBook, images: &[PathBuf]) -> Vec<(PathBuf, Notes)> {
     let mut seen = Vec::new();
     for image in images {
-        for p in std::iter::once(image.clone()).chain(book.siblings(image)) {
+        for p in book.shared(image) {
             if !seen.iter().any(|(q, _)| *q == p) {
                 let notes = book.notes(&p).clone();
                 seen.push((p, notes));
@@ -828,6 +829,54 @@ mod tests {
         book.reload();
         assert_eq!(book.notes(&raf).stars, 2);
         assert_eq!(history.position(), 1, "le pas reste en vigueur");
+    }
+
+    #[test]
+    fn undoing_a_note_restores_the_main_developments_too() {
+        // Issue n° 234 (31/10/2026) : la photo et ses développements principaux ont les
+        // mêmes notes ; annuler remet aussi le `.rrdata` de RapidRAW et le XMP de darktable.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        touch(d, &["A.RAF"]);
+        std::fs::write(
+            d.join("A.RAF.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        std::fs::write(
+            d.join("A.RAF.rrdata"),
+            r#"{"rating": 1, "adjustments": {}}"#,
+        )
+        .unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let mut book = NoteBook::load_files(&files, Convention::Darktable);
+        let (raf, dt, rr) = (d.join("A.RAF"), d.join("A@dt.RAF"), d.join("A@rr.RAF"));
+        let before = snapshot(&book, std::slice::from_ref(&dt));
+        assert_eq!(
+            before.len(),
+            3,
+            "la photo et ses deux développements principaux"
+        );
+        book.edit(&dt, |n| n.set_stars(4)).unwrap();
+        assert_eq!(
+            crate::rrdata::read(&d.join("A.RAF.rrdata")).unwrap().stars,
+            4
+        );
+        let mut history = History::new(10);
+        history.push(notes_step(&book, before).unwrap());
+        history.undo(Convention::Darktable).unwrap();
+        book.reload();
+        assert_eq!(
+            crate::rrdata::read(&d.join("A.RAF.rrdata")).unwrap().stars,
+            1
+        );
+        assert_eq!(book.notes(&rr).stars, 1, "le .rrdata retrouve sa note");
+        assert_eq!(book.notes(&raf).stars, 0);
+        assert_eq!(book.notes(&dt).stars, 0);
+        history.redo(Convention::Darktable).unwrap();
+        book.reload();
+        assert_eq!(book.notes(&rr).stars, 4);
+        assert_eq!(book.notes(&raf).stars, 4);
     }
 
     #[test]

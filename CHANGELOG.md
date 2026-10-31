@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Fixed: ratings reached RapidRAW only when set on its development** (#234). A photo
+  and its main developments (darktable, RapidRAW) now share the same notes: rating any
+  of them writes the photo's XMP (darktable, the RAW+JPEG pair) and RapidRAW's
+  `IMG.RAF.rrdata`. Clones and virtual copies keep their own notes. Undo restores both
+  sidecars.
 - **Developments counted apart** in the status bar ("12 images (10 RAW, 3 dev.)": a photo
   and its two copies are no longer "3 images"), and **their thumbnails always rendered in
   the background**, each by its software, even with `[gui.grid] develop = "manual"`
