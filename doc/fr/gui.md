@@ -210,13 +210,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Actualiser** (panneau des dossiers) : icône de flèche circulaire, libellé, raccourci
   (F5) et explication au survol.
 - **Boîtes** (notation au clic droit, éjection, déchargement, renommage, corbeille ;
-  retour du 17/10/2026) : **déplaçables** en glissant leur fond ou leur titre, plus
+  retour du 17/10/2026) : **déplaçables** en glissant leur **titre** (sur toute la
+  largeur de la boîte ; d'abord aussi par leur fond, jusqu'au retour du 01/11/2026 :
+  dans la fenêtre de réglages, glisser une pastille à côté déplaçait la fenêtre ; une
+  boîte sans titre se saisit encore partout), plus
   grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur
   d'accent, `title_color`, souligné d'une ligne de séparation).
   La `Modal` d'egui ne se déplace pas (sa zone couvre aussi le fond grisé) : `Dialog`
-  garde la position et la décale au glissement ; le cadre est dans la zone de
-  glissement, et les textes n'y sont pas sélectionnables (sinon glisser le titre
-  sélectionnait du texte). Boutons et champs restent prioritaires.
+  garde la position et la décale au glissement ; les textes n'y sont pas sélectionnables
+  (sinon glisser le titre sélectionnait du texte). Boutons et champs restent prioritaires.
 - **Barre de filtres compacte** (retour du 17/10/2026 : elle débordait sur un écran de
   portable) : icônes dessinées (étoiles ; drapeaux : coche verte = acceptées, croix grise
   = masquer les rejetées, croix rouge = rejetées seulement ; triangle (netteté, 21/10/2026 : la goutte barrée ne se comprenait pas) =

@@ -14295,13 +14295,23 @@ impl Dialog {
         let frame = egui::Frame::popup(&ctx.global_style()).inner_margin(d.margin);
         let mut moved = egui::Vec2::ZERO;
         let mut closed = false;
-        // Le cadre est dessiné dans la zone de glissement : marges comprises, toute la boîte
-        // se saisit.
+        // La boîte se saisit par son titre, sur toute sa largeur (retour du 01/11/2026 :
+        // dans la fenêtre de réglages, glisser une pastille un peu à côté déplaçait la
+        // fenêtre ; jusque-là tout le fond se saisissait). Sans titre : partout, comme
+        // avant.
+        let drag_anywhere = self.title.is_none();
+        let mut title_delta = egui::Vec2::ZERO;
+        let mut title_hovered = false;
         let modal = egui::Modal::new(self.id)
             .area(area)
             .frame(egui::Frame::NONE);
         let response = modal.show(ctx, |ui| {
-            let scope = ui.scope_builder(egui::UiBuilder::new().sense(Sense::drag()), |ui| {
+            let sense = if drag_anywhere {
+                Sense::drag()
+            } else {
+                Sense::hover()
+            };
+            let scope = ui.scope_builder(egui::UiBuilder::new().sense(sense), |ui| {
                 frame
                     .show(ui, |ui| {
                         let style = ui.style_mut();
@@ -14323,7 +14333,7 @@ impl Dialog {
                         }
                         if let Some(title) = &self.title {
                             let color = Color32::from(d.title_color);
-                            ui.horizontal(|ui| {
+                            let row = ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new(title).size(d.title_size).color(color),
                                 );
@@ -14332,6 +14342,17 @@ impl Dialog {
                                     ui.add_space(d.title_size * 1.2);
                                 }
                             });
+                            // La barre de titre, d'un bord à l'autre : la poignée.
+                            let bar = Rect::from_min_max(
+                                egui::pos2(ui.max_rect().left(), row.response.rect.top()),
+                                egui::pos2(ui.max_rect().right(), row.response.rect.bottom()),
+                            );
+                            let handle =
+                                ui.interact(bar, self.id.with("title_drag"), Sense::drag());
+                            if handle.dragged() {
+                                title_delta = handle.drag_delta();
+                            }
+                            title_hovered = handle.hovered();
                             ui.separator();
                         }
                         add(ui)
@@ -14340,6 +14361,9 @@ impl Dialog {
             });
             if scope.response.dragged() {
                 moved = scope.response.drag_delta();
+            }
+            if title_delta != egui::Vec2::ZERO {
+                moved = title_delta;
             }
             // Croix dans le coin haut droit, à la hauteur du titre (après le reste : elle
             // passe devant la zone de glissement).
@@ -14360,16 +14384,18 @@ impl Dialog {
             // Sous le pointeur, un élément qui se clique (case, radio, icône dessinée :
             // `interact_cursor` ne vaut que pour les boutons d'egui) : la main ; ailleurs,
             // « saisir » pour déplacer la boîte (retours du 18/10/2026).
-            if scope.response.hovered()
+            // `contains_pointer` et non `hovered` : le fond ne se saisit plus, egui ne le
+            // compte plus comme survolé.
+            if scope.response.contains_pointer()
                 && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
             {
                 let clickable =
                     ctx.viewport(|v| v.hits.click.is_some_and(|w| w.sense.senses_click()));
-                ctx.set_cursor_icon(if clickable {
-                    egui::CursorIcon::PointingHand
-                } else {
-                    egui::CursorIcon::Grab
-                });
+                if clickable {
+                    ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+                } else if drag_anywhere || title_hovered {
+                    ctx.set_cursor_icon(egui::CursorIcon::Grab);
+                }
             }
             scope.inner
         });
@@ -16445,6 +16471,30 @@ mod tests {
         let moved = h.get_by_label(title).rect().center();
         assert!((moved - after).length() < 2.0, "{before:?} → {moved:?}");
         assert!(h.state().file_dialog.is_some(), "toujours ouverte");
+        // Par le fond (la marge au-dessus du titre), non (retour du 01/11/2026 : glisser
+        // une pastille à côté déplaçait la fenêtre de réglages).
+        let edge = egui::pos2(moved.x, h.get_by_label(title).rect().top() - 5.0);
+        h.event(UiEvent::PointerMoved(edge));
+        h.event(UiEvent::PointerButton {
+            pos: edge,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(1);
+        for step in 1..=4 {
+            h.event(UiEvent::PointerMoved(edge + vec2(0.0, 20.0 * step as f32)));
+            h.run_steps(1);
+        }
+        h.event(UiEvent::PointerButton {
+            pos: edge + vec2(0.0, 80.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        let still = h.get_by_label(title).rect().center();
+        assert!((still - moved).length() < 2.0, "{moved:?} → {still:?}");
     }
 
     #[test]

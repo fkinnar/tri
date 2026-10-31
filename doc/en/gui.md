@@ -201,13 +201,15 @@ system one ("cold" measurements, experiments).
 - **Refresh** (folders panel): circular arrow icon, label, shortcut (F5) and
   explanation on hover.
 - **Dialogs** (right-click rating, ejection, offload, rename, trash; feedback of
-  2026-10-17): **movable** by dragging their background or title, larger and more airy
+  2026-10-17): **movable** by dragging their **title** (across the dialog's whole width;
+  at first by their background too, until the feedback of 2026-11-01: in the settings
+  window, dragging a dot slightly off moved the window; a dialog without a title can
+  still be grabbed anywhere), larger and more airy
   (`[gui.dialogs]`: margins, spacing, widths; title in the accent colour, `title_color`,
   underlined by a separator line).
   egui's `Modal` cannot be moved (its area also covers the greyed background): `Dialog`
-  keeps the position and shifts it while dragging; the frame is in the drag area, and
-  texts in it are not selectable (otherwise dragging the title selected text). Buttons
-  and fields keep priority.
+  keeps the position and shifts it while dragging; texts in it are not selectable
+  (otherwise dragging the title selected text). Buttons and fields keep priority.
 - **Compact filter bar** (feedback of 2026-10-17: it overflowed on a laptop screen):
   drawn icons (stars; flags: green tick = picked, grey cross = hide rejected, red cross =
   rejected only; triangle (sharpness, 2026-10-21: the crossed-out drop was unclear) = hide blurry, sun = well

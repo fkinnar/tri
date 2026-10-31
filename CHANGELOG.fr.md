@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Les boîtes se déplacent par leur titre seulement** (retour du 01/11/2026 : dans la
+  fenêtre de réglages, glisser une pastille un peu à côté déplaçait toute la fenêtre) ;
+  une boîte sans titre se saisit encore partout.
 - Vignettes : plus de pastille « LibRaw » sur une photo montrée dans le rendu interne
   (retour du 31/10/2026 : elle ne servait à rien) ; seul le rendu d'un logiciel porte
   une pastille.
