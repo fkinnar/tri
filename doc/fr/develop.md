@@ -246,10 +246,16 @@ de RawTherapee) : `rawtherapee-cli` / `ART-cli -o <dossier> -p <profil> -j95 -Y 
 `<dossier>/<nom>.jpg` (pas d'option de taille : `tri` réduit ensuite, `shrink`) ; un
 dossier de sortie par rendu, dans le cache. Exécutables (`find_profile_cli`,
 `[develop] rawtherapee` / `art`) : `PATH`, `/Applications/<App>.app/Contents/MacOS/…`,
-`C:\Program Files\RawTherapee\<version>\`, et sous Linux une AppImage (lancée avec le nom
-de la commande en premier argument) ou le Flatpak `com.rawtherapee.RawTherapee` (pas de
-Flatpak connu pour ART). « Ouvrir le dossier dans… » lance l'interface à côté de la
-ligne de commande (`rawtherapee` / `ART <dossier>`).
+`C:\Program Files\RawTherapee\<version>\`, et sous Linux une AppImage (`*rawtherapee*`,
+`ART_*` / `ART.AppImage` : « art » seul est contenu dans « darktable ») ou le Flatpak
+`com.rawtherapee.RawTherapee` (pas de Flatpak connu pour ART). **AppImage** : les
+récentes ne lancent que l'interface (le `--cli` des anciennes n'existe plus, fil
+pixls.us de 2023) ; `tri` l'extrait une fois (`appimage_cli` : `--appimage-extract` dans
+`<cache>/develop/<logiciel>/appimage/<nom>-<taille>-<date>/`, une nouvelle version est
+extraite à son tour) et lance `squashfs-root/usr/bin/rawtherapee-cli` / `ART-cli` avec
+ses bibliothèques (`LD_LIBRARY_PATH`). Pas encore vérifié sur une vraie AppImage (31/10/2026).
+« Ouvrir le dossier dans… » lance l'interface à côté de la ligne de commande
+(`rawtherapee` / `ART <dossier>` ; une AppImage, elle-même).
 
 Le profil n'est un développement (`Engine::sidecar`, `profile_sidecar`) que s'il a une
 section autre que `[Version]` et `[General]` : un profil réduit aux notes (écrit par
