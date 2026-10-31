@@ -12821,7 +12821,10 @@ impl TriApp {
         match crate::settings_window::SettingsWindow::open(&path) {
             Ok(w) => {
                 self.help = false;
-                self.settings_window = Some(w.with_engines(self.developers.engines()));
+                self.settings_window = Some(
+                    w.with_engines(self.developers.engines())
+                        .with_colors(self.gui.colors.clone()),
+                );
             }
             Err(e) => self.file_error = Some(e),
         }

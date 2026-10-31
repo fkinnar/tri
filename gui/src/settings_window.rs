@@ -22,7 +22,7 @@ use eframe::egui::{self, Event, Key, Modifiers, RichText, ScrollArea, Ui, vec2};
 use crate::actions::{Action, Chord, Group, Keymap, keys_spec, parse_keys};
 use tri::config_edit::{ConfigFile, Entry, Schema, Value, parse_color};
 
-use crate::settings::AppSettings;
+use crate::settings::{AppSettings, Colors};
 
 /// Le fichier d'exemple, embarqué : la liste des réglages, décrits en français.
 const EXAMPLE: &str = include_str!("../../doc/config.example.toml");
@@ -268,6 +268,8 @@ pub struct SettingsWindow {
     file: ConfigFile,
     /// Logiciels de développement installés, pour la liste de `[develop] default`.
     engines: Vec<tri::develop::Engine>,
+    /// Couleurs du thème, pour les pastilles de `[sort] color_order`.
+    colors: Colors,
     /// Section affichée (sans recherche).
     section: usize,
     query: String,
@@ -350,6 +352,12 @@ impl SettingsWindow {
         self
     }
 
+    /// Couleurs du thème (les pastilles de `[sort] color_order`).
+    pub fn with_colors(mut self, colors: Colors) -> SettingsWindow {
+        self.colors = colors;
+        self
+    }
+
     /// Ouvre la fenêtre sur le fichier `path` (créé au premier changement s'il n'existe
     /// pas).
     pub fn open(path: &Path) -> Result<SettingsWindow, String> {
@@ -358,6 +366,7 @@ impl SettingsWindow {
         let (keymap, key_warnings) = settings.keymap();
         Ok(SettingsWindow {
             engines: Vec::new(),
+            colors: Colors::default(),
             keymap,
             key_warnings,
             recording: None,
@@ -1409,6 +1418,13 @@ impl SettingsWindow {
                         new = Some(Value::Str(v));
                     }
                 }
+                // Ordre des couleurs du tri (idée de l'utilisateur, 31/10/2026) : des
+                // pastilles à glisser (ou cliquer) plutôt qu'une liste à taper.
+                value if section == "sort" && entry.key == "color_order" => {
+                    let (r, changed) = self.color_order_editor(ui, value);
+                    widget = Some(r);
+                    new = changed;
+                }
                 Value::Str(s) if parse_color(s).is_some() => {
                     let mut rgb = parse_color(s).unwrap_or_default();
                     let r = ui.color_edit_button_srgb(&mut rgb);
@@ -1477,6 +1493,206 @@ impl SettingsWindow {
         self.drafts.remove(&id);
         self.commit(section, &entry.key, Some(value))
     }
+
+    /// Éditeur de `[sort] color_order` (idée de l'utilisateur, 31/10/2026) : à gauche,
+    /// sous « Tri », cinq emplacements (pastilles vides) qui reçoivent les couleurs dans
+    /// l'ordre voulu ; à droite, sous « Disponibles », les couleurs restantes. On glisse
+    /// une couleur d'un côté à l'autre, ou dans l'ordre à gauche ; un clic fait de même
+    /// (ajouter à la fin, retirer). Rend la réponse du premier emplacement (focus) et la
+    /// nouvelle valeur si elle a changé.
+    fn color_order_editor(&self, ui: &mut Ui, value: &Value) -> (egui::Response, Option<Value>) {
+        use eframe::egui::{Sense, Stroke};
+        use tri::xmp::Color;
+        let mut chosen = color_order_of(value);
+        let before = chosen.clone();
+        let size = 18.0;
+        let gap = 4.0;
+        let faded = ui.visuals().weak_text_color();
+        let mut first: Option<egui::Response> = None;
+        // Une pastille cliquable et glissable (`dnd_set_drag_payload` plutôt que
+        // `dnd_drag_source`, qui avalait le clic) ; vide : un cercle gris.
+        let dot = |ui: &mut Ui, color: Option<Color>, drag: Option<ColorDrag>| -> egui::Response {
+            let (rect, response) =
+                ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
+            match color {
+                Some(c) => {
+                    let dragging = egui::DragAndDrop::payload::<ColorDrag>(ui.ctx())
+                        .is_some_and(|d| Some(*d) == drag);
+                    crate::marks::color_dot(
+                        ui.painter(),
+                        rect.center(),
+                        size,
+                        crate::marks::color_of(&self.colors, c),
+                        !dragging,
+                    );
+                    let name = t!(&format!("color-{}", c.id()));
+                    response.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &name)
+                    });
+                    if let Some(payload) = drag {
+                        response.dnd_set_drag_payload(payload);
+                    }
+                    response.on_hover_cursor(egui::CursorIcon::Grab)
+                }
+                None => {
+                    ui.painter()
+                        .circle_stroke(rect.center(), size * 0.4, Stroke::new(1.2, faded));
+                    response
+                }
+            }
+        };
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                // « Tri » : les emplacements, dans l'ordre.
+                ui.vertical(|ui| {
+                    ui.weak(t!("settings-color-order-sorted"));
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = gap;
+                        for k in 0..Color::ALL.len() {
+                            let color = chosen.get(k).copied();
+                            let response = dot(ui, color, color.map(|_| ColorDrag::Sorted(k)));
+                            if response.dnd_hover_payload::<ColorDrag>().is_some() {
+                                ui.painter().rect_stroke(
+                                    response.rect.expand(1.0),
+                                    3.0,
+                                    Stroke::new(1.5, ui.visuals().selection.stroke.color),
+                                    egui::StrokeKind::Outside,
+                                );
+                            }
+                            if let Some(d) = response.dnd_release_payload::<ColorDrag>() {
+                                match *d {
+                                    ColorDrag::Sorted(from) if from != k => {
+                                        let c = chosen.remove(from);
+                                        let at = k.min(chosen.len());
+                                        chosen.insert(at, c);
+                                    }
+                                    ColorDrag::Sorted(_) => {}
+                                    ColorDrag::Available(c) => {
+                                        let at = k.min(chosen.len());
+                                        chosen.insert(at, c);
+                                    }
+                                }
+                            } else if response.clicked() && color.is_some() {
+                                chosen.remove(k);
+                            }
+                            if first.is_none() {
+                                first = Some(response);
+                            }
+                        }
+                    });
+                });
+                ui.add_space(12.0);
+                // « Disponibles » : ce qui reste, dans l'ordre habituel.
+                ui.vertical(|ui| {
+                    ui.weak(t!("settings-color-order-available"));
+                    let zone = ui
+                        .horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = gap;
+                            let mut clicked = None;
+                            for c in Color::ALL {
+                                if chosen.contains(&c) {
+                                    continue;
+                                }
+                                let response = dot(ui, Some(c), Some(ColorDrag::Available(c)));
+                                if response.clicked() {
+                                    clicked = Some(c);
+                                }
+                            }
+                            // Au moins la place d'une pastille : zone de dépôt visible.
+                            ui.allocate_exact_size(vec2(size, size), Sense::hover());
+                            clicked
+                        })
+                        .inner;
+                    if let Some(c) = zone {
+                        chosen.push(c);
+                    }
+                    let zone_rect = ui.min_rect();
+                    let hovering = ui.input(|i| {
+                        i.pointer
+                            .latest_pos()
+                            .is_some_and(|p| zone_rect.contains(p))
+                    });
+                    let released = ui.input(|i| i.pointer.any_released());
+                    if let Some(d) = egui::DragAndDrop::payload::<ColorDrag>(ui.ctx())
+                        && hovering
+                    {
+                        ui.painter().rect_stroke(
+                            zone_rect.expand(2.0),
+                            3.0,
+                            Stroke::new(1.5, ui.visuals().selection.stroke.color),
+                            egui::StrokeKind::Outside,
+                        );
+                        if released && let ColorDrag::Sorted(k) = *d {
+                            chosen.remove(k);
+                            egui::DragAndDrop::clear_payload(ui.ctx());
+                        }
+                    }
+                });
+            });
+        });
+        // La pastille glissée suit le pointeur (`dnd_set_drag_payload` ne la dessine pas).
+        if let Some(d) = egui::DragAndDrop::payload::<ColorDrag>(ui.ctx())
+            && let Some(pos) = ui.ctx().pointer_latest_pos()
+        {
+            let color = match *d {
+                ColorDrag::Sorted(k) => before.get(k).copied(),
+                ColorDrag::Available(c) => Some(c),
+            };
+            if let Some(c) = color {
+                let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                    egui::Order::Tooltip,
+                    egui::Id::unique("color_order_drag"),
+                ));
+                crate::marks::color_dot(
+                    &painter,
+                    pos,
+                    size,
+                    crate::marks::color_of(&self.colors, c),
+                    true,
+                );
+            }
+        }
+        let response = first.expect("cinq emplacements");
+        let changed = (chosen != before).then(|| {
+            Value::Toml(format!(
+                "[{}]",
+                chosen
+                    .iter()
+                    .map(|c| format!("\"{}\"", c.id()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+        });
+        (response, changed)
+    }
+}
+
+/// Ce qu'on glisse dans l'éditeur de `[sort] color_order`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ColorDrag {
+    /// Une couleur déjà triée, par son rang.
+    Sorted(usize),
+    /// Une couleur disponible.
+    Available(tri::xmp::Color),
+}
+
+/// Les couleurs de la valeur TOML de `[sort] color_order` (`["red", "green"]`), dans
+/// l'ordre, sans doublon ; une entrée inconnue est ignorée.
+fn color_order_of(value: &Value) -> Vec<tri::xmp::Color> {
+    let text = match value {
+        Value::Strings(list) => list.join(","),
+        Value::Str(s) | Value::Toml(s) => s.clone(),
+        _ => String::new(),
+    };
+    let mut colors = Vec::new();
+    for word in text.split(|c: char| !c.is_ascii_alphabetic()) {
+        if let Some(c) = tri::xmp::Color::from_id(word)
+            && !colors.contains(&c)
+        {
+            colors.push(c);
+        }
+    }
+    colors
 }
 
 #[cfg(test)]
@@ -1914,6 +2130,68 @@ mod tests {
         assert!(
             h.query_by_label("Renommer…").is_some(),
             "en-tête de la famille"
+        );
+    }
+
+    #[test]
+    fn the_colour_order_is_built_by_clicking_the_dots() {
+        // Idée de l'utilisateur (31/10/2026) : pastilles « Tri » / « Disponibles » ; au
+        // clic (le glisser-déposer fait de même), une disponible s'ajoute à la fin, une
+        // triée se retire ; la liste est écrite à chaque changement.
+        crate::i18n::ensure();
+        use egui_kittest::kittest::Queryable;
+        use tri::xmp::Color;
+        assert_eq!(
+            color_order_of(&Value::Toml(r#"["blue", "Red", "blue", "mauve"]"#.into())),
+            [Color::Blue, Color::Red]
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.show_section("sort");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(3);
+        // Par défaut, les cinq sont triées : « bleu » est une pastille triée ; cliquée,
+        // elle part dans les disponibles.
+        h.get_by_label("bleu").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .file
+                .get("sort", "color_order")
+                .map(|v| v.to_string()),
+            Some(r#"["red", "yellow", "green", "purple"]"#.to_string())
+        );
+        // Cliquée à nouveau (disponible) : à la fin.
+        h.get_by_label("bleu").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .file
+                .get("sort", "color_order")
+                .map(|v| v.to_string()),
+            Some(r#"["red", "yellow", "green", "purple", "blue"]"#.to_string())
+        );
+        // La valeur est bien celle que le moteur relit.
+        let loaded = tri::settings::load::<crate::settings::AppSettings>(Some(&path));
+        assert!(loaded.warning.is_none(), "{:?}", loaded.warning);
+        assert_eq!(
+            loaded.settings.sort.color_order,
+            [
+                Color::Red,
+                Color::Yellow,
+                Color::Green,
+                Color::Purple,
+                Color::Blue
+            ]
         );
     }
 

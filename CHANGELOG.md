@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Settings window: a dot editor for the colour sort order** (`[sort] color_order`,
+  user's idea): five empty slots under "Sort", the remaining colours under "Available";
+  drag or click to build the order, written at every change.
 - **Sort by ratings** (`f s`, the sort list of the "Grid" section, `[gui] sort`): by
   **stars** (a rejected photo below 0 stars), by **colour** (order of the new
   `[sort] color_order`, which may name only a few colours: the others and the uncoloured

@@ -29,7 +29,8 @@ donne la valeur d'une image.
 - **Dates de modification** : lues sur le disque au moment du tri (`modified`).
 - **Notes** : fournies par l'appelant (`notes(chemin)`, le carnet du dossier) ; la paire
   d'après son RAW, un développement d'après sa photo (même clé que les dates).
-  `[sort] color_order` (`SortSettings`) peut ne citer que quelques couleurs (demande de
+  `[sort] color_order` (`SortSettings`, éditeur à pastilles dans la fenêtre de réglages,
+  voir `settings.md`) peut ne citer que quelques couleurs (demande de
   l'utilisateur, 31/10/2026 : rouge / jaune / vert ordonnées pour une chose, bleu et
   violet pour une autre) ; une image est classée d'après la mieux placée de ses couleurs
   (mode plusieurs couleurs), les autres vont à la fin avec les sans couleur, dans les

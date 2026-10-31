@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Fenêtre de réglages : un éditeur à pastilles pour l'ordre des couleurs du tri**
+  (`[sort] color_order`, idée de l'utilisateur) : cinq emplacements vides sous « Tri »,
+  les couleurs restantes sous « Disponibles » ; glisser ou cliquer pour composer l'ordre,
+  écrit à chaque changement.
 - **Tri par note** (`f s`, liste des tris de la section « Grille », `[gui] sort`) : par
   **étoiles** (une rejetée sous 0 étoile), par **couleur** (ordre du nouveau
   `[sort] color_order`, qui peut ne citer que quelques couleurs : les autres et les sans
