@@ -559,9 +559,10 @@ system one ("cold" measurements, experiments).
   another is no longer reported as shadowed, the sequencer (`Sequencer::expire`,
   `deadline`) runs it after the delay, or before the next key that does not continue.
   Copy / move (2026-10-18, see `files.md`: field with Tab completion, recent destinations
-  with the arrows, progress). Also through six icon buttons in the right-click dialog
-  (pencil, two sheets, arrow into a folder, trash can, folder, outgoing arrow; label and
-  shortcut on hover; `[gui.dialogs] icon_size`). Rename: the name (without extension) is
+  with the arrows, progress). Also through icon buttons in the right-click dialog
+  (pencil, two sheets, arrow into a folder, trash can, folder, outgoing arrow, and since
+  2026-10-31 a sidecar sheet with a dot: generate the rating sidecars, `sidecars.md`;
+  label and shortcut on hover; `[gui.dialogs] icon_size`). Rename: the name (without extension) is
   selected, you type the new one; the dialog shows what becomes of the image, its pair
   and its sidecars, or why it is impossible (name taken); Enter confirms, Esc cancels.
   Trash: the list of files (pair and sidecars included) before confirmation (Enter).

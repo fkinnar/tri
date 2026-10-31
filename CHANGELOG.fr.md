@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Générer les sidecars de notes manquants depuis l'interface** (suite de #253) : une
+  icône « sidecar » dans la boîte du clic droit d'une vignette (la sélection) et « Générer
+  les sidecars… » dans le menu du clic droit du dossier ouvert ; la boîte propose tous les
+  logiciels ou un format, annonce le nombre de sidecars à créer avant de le faire, et
+  rend compte dans la barre d'état. Action `core.file.sidecars`, sans touche par défaut.
 - **Barre des filtres : la recherche par nom est à droite**, juste avant le compteur
   d'images (#241).
 - **Aide : « Signaler un problème » en bordeaux** (#242), et **la fenêtre d'aide se

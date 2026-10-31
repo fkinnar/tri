@@ -847,6 +847,28 @@ action-plugin-darktable-open_folder = Dossiers : ouvrir le dossier pointé dans 
 action-plugin-rapidraw-open_folder = Dossiers : ouvrir le dossier pointé dans RapidRAW
 action-core-develop-folder = Développer tout le dossier en fond (chaque image dans le logiciel de son développement)
 folder-menu-develop = Développer tout le dossier…
+folder-menu-sidecars = Générer les sidecars…
+action-core-file-sidecars = Générer les sidecars de notes manquants (un logiciel, ou tous)
+kw-core-file-sidecars = sidecars rrdata xmp rapidraw notes métadonnées générer créer
+sidecars-title-folder = Sidecars de « { $folder } »
+sidecars-title-images = Sidecars de { $n ->
+    [one] l'image
+   *[other] { $n } images
+}
+sidecars-all = Tous les logiciels
+sidecars-format = { $engine } (.{ $id })
+sidecars-preview = { $created ->
+    [0] Rien à créer
+    [one] 1 sidecar à créer
+   *[other] { $created } sidecars à créer
+} · { $unchanged } déjà pourvues · { $skipped } passées (sans notes, ou développements)
+sidecars-go = Générer
+sidecars-done = { $created ->
+    [0] Aucun sidecar créé
+    [one] 1 sidecar créé
+   *[other] { $created } sidecars créés
+}
+sidecars-done-errors = { " " }· { $n } erreurs : { $error }
 folder-menu-open-in = Ouvrir dans { $name }
 folder-open-in-missing = { $name } ne sait pas ouvrir un dossier, ou n'est pas installé
 folder-open-in-running = { $name } est déjà ouvert : fermez-le d'abord (sous Windows, on ne peut pas lui passer un dossier alors)
