@@ -8,6 +8,9 @@
   interface, so `tri` extracts the AppImage once into its cache and runs the extracted
   `rawtherapee-cli` / `ART-cli` with the bundled libraries. An ART AppImage is recognised
   by its name (`ART_*`), no longer confused with darktable's ("art" is in "darktable").
+- **Fixed: the RawTherapee / ART render of a development failed** (first real run,
+  2026-10-31): the background batch handed the development's virtual path (`IMG@rt.RAF`)
+  to the command line instead of the photo's file.
 - **Stacks switch back in the bottom bar of the grid** (it had left the filter bar with
   its reorganisation, #199) and **in the "View" section** of the right panel in full
   screen, next to the shown source (feedback of 2026-10-31).
