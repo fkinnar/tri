@@ -14869,6 +14869,43 @@ mod tests {
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
     }
 
+    #[test]
+    fn rating_creates_the_sidecars_of_the_installed_software() {
+        // Formats de sidecars (31/10/2026) : sans RapidRAW, le XMP seul ; RapidRAW installé
+        // (`create = "auto"`), le `.rrdata` naît avec la note ; `never` s'y oppose.
+        use tri::sidecars::Create;
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&photos.join("img0.jpg")).unwrap().stars, 3);
+        assert!(!photos.join("img0.jpg.rrdata").exists(), "RapidRAW absent");
+
+        h.state_mut().developers = tri::develop::Developers::none()
+            .with(Arc::new(FakeDeveloper(tri::develop::Engine::RapidRaw)));
+        h.state_mut().apply_sidecar_policy();
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        let rrdata = photos.join("img1.jpg.rrdata");
+        assert_eq!(tri::xmp::read(&photos.join("img1.jpg")).unwrap().stars, 4);
+        assert_eq!(
+            tri::rrdata::read(&rrdata).unwrap().stars,
+            4,
+            "le sidecar RapidRAW porte la note"
+        );
+        assert!(
+            !tri::rrdata::file_is_development(&rrdata),
+            "un sidecar de notes n'est pas un développement"
+        );
+        assert!(h.state().note_error.is_none());
+
+        h.state_mut().settings.sidecars.rapidraw.create = Create::Never;
+        h.state_mut().apply_sidecar_policy();
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num5, Modifiers::NONE);
+        assert_eq!(tri::xmp::read(&photos.join("img2.jpg")).unwrap().stars, 5);
+        assert!(!photos.join("img2.jpg.rrdata").exists(), "create = never");
+    }
+
     fn names(h: &Harness<'_, TriApp>) -> Vec<String> {
         h.state().files.iter().map(|f| file_name(&f.path)).collect()
     }

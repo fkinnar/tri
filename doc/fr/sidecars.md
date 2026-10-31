@@ -19,7 +19,7 @@ s'ajoute ici, avec sa section de réglages.
 - `read`, `write` (le reste du fichier gardé, voir chaque format), `create` (notes
   seules : pour le `.rrdata`, des réglages nuls, comme RapidRAW pour une image notée
   sans être développée).
-- `of(sidecar)` : le format d'un sidecar d'après son nom ; `by_id(id)`.
+- `of(sidecar)` : le format d'un sidecar d'après son nom ; `by_id(id)` : par identifiant de format (`rrdata`) ou de logiciel (`rapidraw`).
 
 ## Quand créer un sidecar manquant : `[sidecars.<logiciel>]`
 

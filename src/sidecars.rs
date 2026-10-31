@@ -111,9 +111,13 @@ pub fn formats() -> &'static [&'static dyn Format] {
     &ALL
 }
 
-/// Le format d'identifiant `id`.
+/// Le format d'identifiant `id` (`"rrdata"`), ou celui du logiciel d'identifiant `id`
+/// (`"rapidraw"`, le nom de sa section des réglages et de la ligne de commande).
 pub fn by_id(id: &str) -> Option<&'static dyn Format> {
-    formats().iter().copied().find(|f| f.id() == id)
+    formats()
+        .iter()
+        .copied()
+        .find(|f| f.id() == id || f.engine().is_some_and(|e| e.id() == id))
 }
 
 /// Le format du sidecar `sidecar` (d'après son nom) ; le XMP à défaut.
@@ -198,6 +202,10 @@ mod tests {
         assert_eq!(of(Path::new("/p/IMG.RAF.xmp")).id(), "xmp");
         assert_eq!(of(Path::new("/p/IMG.RAF.rrdata")).id(), "rrdata");
         assert_eq!(of(Path::new("/p/IMG.RAF.RRDATA")).id(), "rrdata");
+        assert_eq!(by_id("rapidraw").map(|f| f.id()), Some("rrdata"));
+        assert_eq!(by_id("rrdata").map(|f| f.id()), Some("rrdata"));
+        assert_eq!(by_id("xmp").map(|f| f.id()), Some("xmp"));
+        assert!(by_id("lightroom").is_none());
         assert!(by_id("pp3").is_none());
         let auto = SidecarSettings::default();
         assert_eq!(

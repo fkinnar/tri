@@ -707,6 +707,7 @@ settings-section-render = RAW rendering
 settings-section-cache = Cache
 settings-section-scheduler = Background work
 settings-section-xmp = Ratings (XMP)
+settings-section-sidecars-rapidraw = RapidRAW sidecars (ratings)
 settings-section-keys = Shortcuts
 settings-section-develop = Darktable rendering
 settings-section-export-profile-user = Export preset “{ $id }”

@@ -19,7 +19,7 @@ section.
 - `read`, `write` (the rest of the file kept, see each format), `create` (notes only: for
   the `.rrdata`, null adjustments, like RapidRAW for an image rated without being
   developed).
-- `of(sidecar)`: a sidecar's format from its name; `by_id(id)`.
+- `of(sidecar)`: a sidecar's format from its name; `by_id(id)`: by format id (`rrdata`) or software id (`rapidraw`).
 
 ## When to create a missing sidecar: `[sidecars.<software>]`
 

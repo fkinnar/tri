@@ -42,10 +42,7 @@ fn loads_existing_notes_and_reports_malformed_sidecars() {
     assert_eq!(book.notes(&a).colors, [Color::Red]);
     assert!(book.error(&b).is_some(), "sidecar mal formé signalé");
     assert_eq!(book.notes(&c), &xmp::Notes::EMPTY);
-    assert_eq!(
-        book.sidecar(&c),
-        Some(dir.path().join("C.RAF.xmp").as_path())
-    );
+    assert_eq!(book.sidecar(&c), Some(dir.path().join("C.RAF.xmp")));
 }
 
 #[test]

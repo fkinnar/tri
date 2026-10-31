@@ -706,6 +706,7 @@ settings-section-render = Rendu RAW
 settings-section-cache = Cache
 settings-section-scheduler = Calculs en arrière-plan
 settings-section-xmp = Notes (XMP)
+settings-section-sidecars-rapidraw = Sidecars RapidRAW (notes)
 settings-section-places = Emplacements
 settings-section-keys = Raccourcis
 settings-section-develop = Rendu Darktable
