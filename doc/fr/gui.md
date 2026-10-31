@@ -226,7 +226,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la netteté, comme celui des piles avec les piles ; même largeur (90 points).
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
-  issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; pour une
+  issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; **31/10/2026 :
+  la pile de rafale si elle est repliée, sinon la photo et ses développements** (JPEG
+  boîtier, darktable, clones, copies RapidRAW ; `TriApp::compare_stack`), sinon la pile de
+  rafale ; une rafale compare chaque photo par la couverture de sa pile de développements,
+  jamais deux fois la même photo ; Échap sur un développement caché le montre à la place
+  de sa couverture, comme `Maj+W` ; pour une
   pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille (une
   seule pile, sans regroupement à part : #163),
   `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; piles actives, une photo seule est une pile d'une image et se compare
@@ -1202,7 +1207,9 @@ Boîtes (17/10/2026) : la boîte « Renommer », saisie par son titre et glissé
 pointeur et reste ouverte.
 
 Comparaison (17/10/2026) : `c` refusé avec une seule image (indication dans la barre
-d'état) ; trois images en mode visuel puis `c` : l'image courante reste active, les
+d'état) ; `c` sur une photo développée compare la photo et son clone, Échap revient sur
+l'image active montrée à la place de la couverture, une rafale repliée compare ses photos
+sans doublon (31/10/2026) ; trois images en mode visuel puis `c` : l'image courante reste active, les
 flèches restent dans la comparaison, la note ne va qu'à l'image active, `Espace` l'élimine
 (comparaison et sélection), Échap revient à la grille en gardant la sélection, Entrée ouvre
 le plein écran. Disposition (`compare.rs`) : deux paysages côte à côte en fenêtre large,

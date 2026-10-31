@@ -52,7 +52,7 @@ action-core-view-grid_info = Show / hide the thumbnail info (name, format, ratin
 action-core-rate-auto_advance = Auto-advance after rating: on / off
 action-core-select-toggle = Select / deselect the image
 action-core-select-visual = Visual mode: select a range (v to confirm)
-action-core-view-compare = Compare the selected images side by side (no selection: those of the stack)
+action-core-view-compare = Compare the selected images side by side (no selection: the collapsed stack, or the photo and its developments)
 action-core-view-peaking = Show / hide sharpness (sharp edges)
 action-core-view-sharpness_lenient = More lenient sharpness (fewer blurry photos, more sharp edges)
 action-core-view-sharpness_strict = Stricter sharpness (more blurry photos, fewer sharp edges)
@@ -359,7 +359,7 @@ cache-unavailable = cache unavailable: { $error }
 ## Comparison, full screen, status bar
 
 rating-not-saved = rating not saved: { $error }
-compare-needs-two = compare: select at least 2 images (Space, v, Ctrl+A, Shift+click), or stand on a stack
+compare-needs-two = compare: select at least 2 images (Space, v, Ctrl+A, Shift+click), or stand on a stack or a developed photo
 compare-limited = comparison limited to the first { $max } ([gui.compare] max)
 view-info-selected = { " " }· selected
 view-info-peaking = { " " }· sharpness
@@ -1104,7 +1104,7 @@ kw-core-view-clipping = blown blocked zones exposure warning
 kw-core-view-histogram = histogram exposure
 kw-core-view-overlay = grid thirds golden ratio overlay
 kw-core-view-crop = crop version story instagram
-kw-core-view-compare = side by side burst
+kw-core-view-compare = side by side burst developments
 kw-core-view-focus-mode = full screen focus
 kw-core-view-focus-point = focus point autofocus af
 kw-core-view-grid-info = name format badges hide caption thumbnails

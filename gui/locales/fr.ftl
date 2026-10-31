@@ -52,7 +52,7 @@ action-core-view-grid_info = Afficher / masquer les infos des vignettes (nom, fo
 action-core-rate-auto_advance = Avance automatique après une note : oui / non
 action-core-select-toggle = Sélectionner / désélectionner l'image
 action-core-select-visual = Mode visuel : sélectionner une plage (v pour valider)
-action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : celles de la pile)
+action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : la pile repliée, ou la photo et ses développements)
 action-core-view-peaking = Afficher / masquer la netteté (contours nets)
 action-core-view-sharpness_lenient = Netteté plus souple (moins de photos floues, plus de contours nets)
 action-core-view-sharpness_strict = Netteté plus stricte (plus de photos floues, moins de contours nets)
@@ -358,7 +358,7 @@ cache-unavailable = cache inaccessible : { $error }
 ## Comparaison, plein écran, barre d'état
 
 rating-not-saved = note non enregistrée : { $error }
-compare-needs-two = comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic), ou placez-vous sur une pile
+compare-needs-two = comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic), ou placez-vous sur une pile ou une photo développée
 compare-limited = comparaison limitée aux { $max } premières ([gui.compare] max)
 view-info-selected = { " " }· sélectionnée
 view-info-peaking = { " " }· netteté
@@ -1106,7 +1106,7 @@ kw-core-view-clipping = brûlé bouché zones exposition alerte
 kw-core-view-histogram = histogramme exposition
 kw-core-view-overlay = grille tiers nombre d'or superposition
 kw-core-view-crop = recadrer version story instagram
-kw-core-view-compare = côte à côte rafale
+kw-core-view-compare = côte à côte rafale développements
 kw-core-view-focus-mode = plein écran concentration
 kw-core-view-focus-point = collimateur autofocus af
 kw-core-view-grid-info = nom format badges masquer texte vignettes

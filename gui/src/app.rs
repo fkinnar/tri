@@ -6292,19 +6292,31 @@ impl TriApp {
     }
 
     /// Entre en comparaison avec les images sélectionnées (au moins deux) ; sans
-    /// sélection, piles actives, avec les images de la pile courante (issue n° 52 : `c`
-    /// sur une pile repliée compare ses photos d'un coup d'œil).
+    /// sélection, avec la pile courante : la pile de rafale repliée (issue n° 52 : `c`
+    /// sur une pile repliée compare ses photos d'un coup d'œil), sinon la photo et ses
+    /// **développements** (31/10/2026 : le JPEG boîtier, le développement darktable, ses
+    /// clones, les copies RapidRAW côte à côte), sinon la pile de rafale (une photo seule
+    /// comprise, #167).
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
-        // Piles actives : la pile de l'image, même d'une seule photo (#167 : une photo
-        // seule est une pile d'une image ; `c` ne faisait rien).
         if targets.len() < 2
-            && self.stacking
-            && let Some(r) = self.stacks.range_of(self.selected)
+            && let Some(r) = self.compare_stack()
         {
-            targets = self.files[r.clone()]
-                .iter()
-                .map(|f| f.path.clone())
+            // Une pile de développements : toutes ses images ; une rafale : ce que la
+            // grille montrerait dépliée, chaque photo par la couverture de sa pile de
+            // développements (ou tous, dépliée).
+            let developments = self.stacks.developments_of(self.selected) == Some(&r);
+            let mut seen = HashSet::new();
+            targets = r
+                .map(|i| {
+                    if developments {
+                        i
+                    } else {
+                        self.stacks.photo_visible(i)
+                    }
+                })
+                .filter(|&i| seen.insert(i))
+                .map(|i| self.files[i].path.clone())
                 .collect();
         }
         if targets.is_empty() || (targets.len() < 2 && !self.stacking) {
@@ -6333,13 +6345,46 @@ impl TriApp {
         self.request_zoom();
     }
 
+    /// Pile que `c` compare sans sélection : la pile de rafale si elle est repliée (et
+    /// contient d'autres photos), sinon la pile de développements de l'image (si elle en
+    /// a), sinon la pile de rafale (piles actives seulement).
+    fn compare_stack(&self) -> Option<std::ops::Range<usize>> {
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|_| self.stacking)
+            .cloned();
+        let developments = self.stacks.developments_of(self.selected).cloned();
+        // Une rafale réduite à la photo et ses développements : ce sont eux qu'on compare.
+        if burst.is_some()
+            && burst != developments
+            && self.stacks.collapsed_count(self.selected).is_some()
+        {
+            return burst;
+        }
+        developments.or(burst)
+    }
+
     /// Quitte la comparaison vers la grille, sur l'image active.
     fn leave_compare(&mut self) {
         self.mode = Mode::Grid;
         self.compare.clear();
-        // Image d'une pile repliée (comparaison de la pile) : la grille montre sa
-        // couverture.
-        self.selected = self.stacks.visible(self.selected);
+        // Image d'une pile de rafale repliée (comparaison de la pile) : la grille montre
+        // sa couverture ; un développement caché dans sa pile repliée : montré à la place
+        // de la couverture (comme Maj+W), on reste dessus.
+        let visible = self.stacks.visible(self.selected);
+        let in_developments = self
+            .stacks
+            .developments_of(self.selected)
+            .is_some_and(|r| r.contains(&visible));
+        if visible != self.selected && in_developments {
+            let path = self.files[self.selected].path.clone();
+            self.dev_shown
+                .insert(tri::media::source(&path).into_owned(), path);
+            self.stacks_dirty = true;
+        } else {
+            self.selected = visible;
+        }
         self.zoom = None;
         self.zoom_anchor = None;
         self.reveal = Some(Reveal::Minimal);
@@ -17812,6 +17857,118 @@ mod tests {
         assert_eq!(h.state().compare.len(), 1);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
+    }
+
+    #[test]
+    fn c_compares_a_photo_with_its_developments() {
+        // 31/10/2026 : sans sélection, `c` sur une photo qui a des développements les
+        // compare côte à côte (JPEG boîtier et clone darktable ici) ; Échap revient à la
+        // grille sur le développement actif, montré à la place de la couverture.
+        // Trois photos dissemblables (img0 unie, img1 et img2 en dégradés) : piles de
+        // rafale actives, seuls img0 et son clone (mêmes pixels) se regroupent.
+        let ramp = |vertical: bool, tint: [u8; 3]| {
+            image::RgbImage::from_fn(64, 48, |x, y| {
+                let v = if vertical { y * 255 / 47 } else { x * 255 / 63 } as u16;
+                image::Rgb(tint.map(|c| (v * c as u16 / 255) as u8))
+            })
+        };
+        let (mut h, dir) = harness_images(vec![
+            (
+                "img0.jpg",
+                image::RgbImage::from_pixel(64, 48, image::Rgb([30, 100, 160])),
+            ),
+            ("img1.jpg", ramp(false, [255, 40, 40])),
+            ("img2.jpg", ramp(true, [40, 255, 40])),
+        ]);
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        let clone = photos.join("img0@dt-01.jpg");
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        h.run_steps(2);
+        let i = h
+            .state()
+            .files
+            .iter()
+            .position(|f| f.path == clone)
+            .unwrap();
+        assert_eq!(h.state().selected, i, "la couverture : le clone");
+        assert!(!h.state().stacking, "piles de rafale inactives");
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare, "hint: {:?}", h.state().hint);
+        assert_eq!(
+            h.state().compare,
+            vec![photos.join("img0.jpg"), clone.clone()],
+            "la photo et son développement"
+        );
+        assert_eq!(
+            selected_name(&h),
+            "img0@dt-01.jpg",
+            "l'image courante reste active"
+        );
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0.jpg", "on reste sur l'image active");
+        assert!(
+            h.state().stacks.folded_count(i - 1).is_some(),
+            "montrée à la place de la couverture, pile toujours repliée"
+        );
+        // Piles de rafale actives : la rafale réduite à la photo et son clone, ce sont
+        // encore les développements qu'on compare (pas une seule image).
+        h.state_mut().stacking = true;
+        // Empreintes calculées directement (le moteur du banc de test ne les fait pas) ; le
+        // clone a les pixels de sa photo.
+        let files = h.state().files.clone();
+        let preview = tri::preview::Settings::default();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        for f in &files {
+            let source = tri::media::source(&f.path).into_owned();
+            let sig = tri::preview::compute_signature(
+                &MediaFile {
+                    path: source,
+                    ..f.clone()
+                },
+                &preview,
+                &cancel,
+            )
+            .unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(
+            h.state().stacks.groups(),
+            3,
+            "img0 et son clone, img1, img2"
+        );
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(
+            h.state().compare.len(),
+            2,
+            "shown: {:?}",
+            h.state().stacks.shown
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Une rafale repliée (ici : toutes les images en une pile) : ses photos, chacune
+        // par la couverture de sa pile de développements, jamais deux fois la même photo.
+        let all: HashSet<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut().stack_only = Some(all);
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 1, "une seule pile repliée");
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        let compared: Vec<String> = h.state().compare.iter().map(|p| file_name(p)).collect();
+        assert_eq!(compared, ["img0.jpg", "img1.jpg", "img2.jpg"]);
     }
 
     #[test]

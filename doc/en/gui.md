@@ -219,7 +219,12 @@ system one ("cold" measurements, experiments).
   points).
 - **Side-by-side comparison** (2026-10-17, `c`, `gui/src/compare.rs` for the layout):
   the selected images, or with no selection those of the current stack (2026-10-25,
-  issue #52: `c` on a collapsed stack; Esc comes back to its cover; for a stack larger
+  issue #52: `c` on a collapsed stack; Esc comes back to its cover; **2026-10-31: the
+  burst stack if it is collapsed, else the photo and its developments** (camera JPEG,
+  darktable, clones, RapidRAW copies; `TriApp::compare_stack`), else the burst stack; a
+  burst compares each photo through the cover of its development stack, never the same
+  photo twice; Esc on a hidden development shows it in place of its cover, like
+  `Shift+W`; for a stack larger
   than the limit, `f c` shows the whole stack, expanded, in the grid (a single stack, not
   regrouped apart: #163), `f c` again or
   "Clear" gives everything back, and a stack that was collapsed collapses again; with stacks on, a single photo is a one-image stack and compares
@@ -1149,7 +1154,10 @@ Sharpness (2026-10-17): see [sharpness.md](sharpness.md#tests).
 Dialogs (2026-10-17): the "Rename" dialog, grabbed by its title and dragged, follows the
 pointer and stays open.
 
-Comparison (2026-10-17): `c` refused with a single image (hint in the status bar); three
+Comparison (2026-10-17): `c` refused with a single image (hint in the status bar); `c` on
+a developed photo compares the photo and its clone, Esc comes back on the active image
+shown in place of the cover, a collapsed burst compares its photos without duplicates
+(2026-10-31); three
 images in visual mode then `c`: the current image stays active, the arrows stay within
 the comparison, the rating goes only to the active image, `Space` eliminates it
 (comparison and selection), Esc goes back to the grid keeping the selection, Enter opens
