@@ -526,6 +526,8 @@ pub struct TriApp {
     /// Boîte « Développer le dossier » (clic droit sur un dossier) : dossier, position, et
     /// logiciel choisi (`None` : chaque image dans le logiciel de son développement).
     develop_folder_dialog: Option<(PathBuf, egui::Pos2, Option<tri::develop::Engine>)>,
+    /// Boîte « Générer les sidecars » (31/10/2026).
+    sidecars_dialog: Option<SidecarsDialog>,
     /// Rendus développés d'un dossier en cours (issue n° 69), un lot à la fois.
     develop_batch: Option<crate::develop_batch::DevelopBatch>,
     /// Lot lancé de lui-même pour la grille (`[gui.grid] develop = "auto"`) : pas de
@@ -1051,6 +1053,7 @@ impl TriApp {
             developers: tri::develop::Developers::none(),
             develop_choice: HashMap::new(),
             develop_folder_dialog: None,
+            sidecars_dialog: None,
             develop_batch: None,
             develop_batch_auto: false,
             auto_develop_pending: false,
@@ -1754,6 +1757,15 @@ impl TriApp {
         response
     }
 
+    /// Sous-titre d'un groupe de réglages du panneau de droite (« Tri », « Piles »…), après
+    /// un peu d'air sous le groupe précédent (`[gui.metadata] group_gap`, en hauteurs de
+    /// ligne ; retour du 31/10/2026 : les sections Vue et Grille étaient trop serrées).
+    fn subheading(&self, ui: &mut Ui, text: String) -> egui::Response {
+        let line = ui.text_style_height(&egui::TextStyle::Body);
+        ui.add_space(self.gui.metadata.group_gap * line);
+        ui.label(egui::RichText::new(text).weak())
+    }
+
     /// Liste déroulante pointable du panneau (#246 : une liste de boutons radio prenait
     /// trop de place pour un réglage accessoire) : ← / → passent au choix précédent /
     /// suivant de `all`, Espace au suivant en boucle. Vrai si la valeur a changé.
@@ -1986,7 +1998,7 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
         // Ordre : la clé, puis le sens ; en tête de la section (retour du 27/10/2026).
-        subheading(ui, t!("panel-grid-sort"));
+        self.subheading(ui, t!("panel-grid-sort"));
         let mut key = self.order.key;
         ui.horizontal(|ui| {
             // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
@@ -2028,7 +2040,7 @@ impl TriApp {
             }
         });
         // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
-        subheading(ui, t!("panel-grid-render"))
+        self.subheading(ui, t!("panel-grid-render"))
             .on_hover_text(self.action_tip(Action::GridRenderNext));
         let engines = self.developers.engines();
         let mut render = self.grid_render;
@@ -2046,7 +2058,7 @@ impl TriApp {
             ui.weak(t!("panel-grid-render-filtered"));
         }
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        subheading(ui, t!("panel-grid-stacks"));
+        self.subheading(ui, t!("panel-grid-stacks"));
         let mut stacking = self.stacking;
         if self
             .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
@@ -2178,7 +2190,7 @@ impl TriApp {
     /// Sous-section « Fichiers » (30/10/2026) : les actions sur les fichiers, interdites
     /// par défaut, une case pour les autoriser, écrite dans la configuration.
     fn file_actions_switch(&mut self, ui: &mut Ui) {
-        subheading(ui, t!("panel-grid-files"));
+        self.subheading(ui, t!("panel-grid-files"));
         let mut allowed = self.settings.files.allow_actions;
         if self
             .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
@@ -2198,7 +2210,8 @@ impl TriApp {
             return;
         };
         let tip = self.action_tip(Action::ToggleSource);
-        subheading(ui, t!("panel-view-source")).on_hover_text(&tip);
+        self.subheading(ui, t!("panel-view-source"))
+            .on_hover_text(&tip);
         if tri::media::is_development(&file.path) {
             let mut before = self.dev_before;
             if self
@@ -2864,6 +2877,11 @@ impl TriApp {
                         if !self.developers.is_empty() {
                             entry(ui, Action::DevelopFolder, t!("folder-menu-develop"));
                         }
+                        // Sidecars de notes manquants (31/10/2026) : du dossier ouvert, dont
+                        // les notes sont connues.
+                        if row.path == self.folder.dir {
+                            entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
+                        }
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
                         // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
@@ -3007,6 +3025,13 @@ impl TriApp {
                 Action::DevelopFolder => {
                     let at = ctx.pointer_latest_pos().unwrap_or_default();
                     self.develop_folder_dialog = Some((path, at, None));
+                }
+                Action::Sidecars => {
+                    let images: Vec<PathBuf> =
+                        self.folder.files.iter().map(|f| f.path.clone()).collect();
+                    let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                    let title = t!("sidecars-title-folder", folder = folder_name(&path));
+                    self.open_sidecars_dialog(images, title, at);
                 }
                 Action::FolderOpen => self.start_mount(&ctx, path),
                 Action::FolderOffload | Action::FolderEject => {
@@ -3472,6 +3497,107 @@ impl TriApp {
 
     /// Boîte « Développer le dossier » : chaque image dans le logiciel de son
     /// développement (sinon le rendu RAW reste), ou tout dans un logiciel choisi.
+    /// Ouvre la boîte « Générer les sidecars » sur `images`, titrée `title`, avec la
+    /// simulation pour « tous les logiciels ».
+    fn open_sidecars_dialog(&mut self, images: Vec<PathBuf>, title: String, at: egui::Pos2) {
+        let preview = self
+            .folder
+            .notes
+            .generate(&images, &Self::sidecar_formats(None), true);
+        self.sidecars_dialog = Some(SidecarsDialog {
+            images,
+            title,
+            at,
+            choice: None,
+            preview,
+        });
+    }
+
+    /// Formats visés par un choix de la boîte : un identifiant, ou tous.
+    fn sidecar_formats(choice: Option<&str>) -> Vec<&'static dyn tri::sidecars::Format> {
+        match choice {
+            Some(id) => tri::sidecars::by_id(id).into_iter().collect(),
+            None => tri::sidecars::formats().to_vec(),
+        }
+    }
+
+    /// Boîte « Générer les sidecars » : le logiciel (ou tous), le compte de ce qui sera
+    /// créé, puis la création ; le bilan dans la barre d'état.
+    fn sidecars_dialog(&mut self, ctx: &egui::Context) {
+        let Some(dialog) = self.sidecars_dialog.as_ref() else {
+            return;
+        };
+        let (at, title, mut choice) = (dialog.at, dialog.title.clone(), dialog.choice);
+        let preview = dialog.preview.clone();
+        let name = |c: Option<&'static str>| match c.and_then(tri::sidecars::by_id) {
+            Some(f) => match f.engine() {
+                Some(e) => t!("sidecars-format", engine = e.name(), id = f.id()),
+                None => f.id().to_uppercase(),
+            },
+            None => t!("sidecars-all"),
+        };
+        let mut go = false;
+        let mut cancel = false;
+        let modal = modal_at("sidecars_dialog", at)
+            .title(title)
+            .show(ctx, |ui| {
+                egui::ComboBox::from_id_salt("sidecars_choice")
+                    .selected_text(name(choice))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut choice, None, name(None));
+                        for f in tri::sidecars::formats() {
+                            ui.selectable_value(&mut choice, Some(f.id()), name(Some(f.id())));
+                        }
+                    });
+                ui.add_space(6.0);
+                ui.weak(t!(
+                    "sidecars-preview",
+                    created = preview.created.len(),
+                    unchanged = preview.unchanged,
+                    skipped = preview.skipped
+                ));
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    go = ui
+                        .add_enabled(
+                            !preview.created.is_empty(),
+                            egui::Button::new(t!("sidecars-go")),
+                        )
+                        .clicked();
+                    cancel = ui.button(t!("cancel")).clicked();
+                });
+            });
+        if go {
+            let Some(dialog) = self.sidecars_dialog.take() else {
+                return;
+            };
+            let formats = Self::sidecar_formats(dialog.choice);
+            let done = self.folder.notes.generate(&dialog.images, &formats, false);
+            // Le dossier a maintenant des sidecars de ce format : la politique « auto »
+            // les créera aussi en notant.
+            self.apply_sidecar_policy();
+            let mut text = t!("sidecars-done", created = done.created.len());
+            if let Some((_, error)) = done.errors.first() {
+                text.push_str(&t!(
+                    "sidecars-done-errors",
+                    n = done.errors.len(),
+                    error = error
+                ));
+            }
+            self.notice = Some((text, !done.errors.is_empty()));
+        } else if cancel || modal.should_close() {
+            self.sidecars_dialog = None;
+        } else if let Some(d) = &mut self.sidecars_dialog
+            && d.choice != choice
+        {
+            d.choice = choice;
+            d.preview = self
+                .folder
+                .notes
+                .generate(&d.images, &Self::sidecar_formats(choice), true);
+        }
+    }
+
     fn develop_folder_dialog(&mut self, ctx: &egui::Context) {
         let Some((dir, at, mut choice)) = self.develop_folder_dialog.clone() else {
             return;
@@ -6018,6 +6144,7 @@ impl TriApp {
             | Action::FileCopy
             | Action::FileMove
             | Action::FileExport
+            | Action::Sidecars
             | Action::Send(_) => {
                 // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
@@ -6026,6 +6153,7 @@ impl TriApp {
                     | Action::FileCopy
                     | Action::FileMove
                     | Action::FileExport
+                    | Action::Sidecars
                     | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
@@ -9895,6 +10023,11 @@ impl TriApp {
             }
             Action::FileReveal => tri::files::reveal(&first),
             Action::FileEdit => tri::files::open_with(&settings.editor, &paths),
+            Action::Sidecars => {
+                let title = t!("sidecars-title-images", n = paths.len());
+                self.open_sidecars_dialog(paths.clone(), title, at);
+                Ok(())
+            }
             Action::Send(_) => {
                 let Some(sender) = action.sender() else {
                     return;
@@ -10346,6 +10479,7 @@ impl TriApp {
                         Action::FileDelete,
                         Action::FileReveal,
                         Action::FileEdit,
+                        Action::Sidecars,
                         Action::Send("plugin.airdrop.send"),
                     ]
                     .into_iter()
@@ -10592,7 +10726,9 @@ impl TriApp {
                 // Développements de la photo (30/10/2026) : précédent / suivant, quand elle
                 // en a.
                 if self.mode == Mode::View && self.stacks.developments_of(self.selected).is_some() {
-                    actions.extend([Action::DevPrev, Action::DevNext]);
+                    // De droite à gauche dans la barre : le suivant d'abord, pour que le
+                    // précédent soit à gauche (retour du 31/10/2026).
+                    actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
                 for action in actions {
@@ -12987,6 +13123,7 @@ impl eframe::App for TriApp {
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
         self.develop_folder_dialog(&ctx);
+        self.sidecars_dialog(&ctx);
         self.file_dialog(&ctx);
         self.poll_export();
         self.eject_dialog(&ctx);
@@ -13410,13 +13547,6 @@ fn section_title(
     .inner
 }
 
-/// Intertitre d'un groupe de réglages du panneau de droite (estompé, plus petit que le
-/// titre de section).
-fn subheading(ui: &mut Ui, text: String) -> egui::Response {
-    ui.add_space(ui.spacing().item_spacing.y);
-    ui.label(egui::RichText::new(text).weak())
-}
-
 /// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
 /// strict » à droite, pour lire le sens sans le survoler.
 fn slider_ends(ui: &mut Ui, width: f32) {
@@ -13637,6 +13767,20 @@ pub(crate) fn modal_at(id: &str, at: egui::Pos2) -> Dialog {
         free_width: false,
         closable: true,
     }
+}
+
+/// Boîte « Générer les sidecars » (31/10/2026, suite de #253) : les sidecars de notes
+/// manquants d'une sélection ou d'un dossier, pour un logiciel ou tous, avec le compte de
+/// ce qui sera créé avant de valider.
+struct SidecarsDialog {
+    /// Images visées (un dossier : toutes ses images ; les développements sont passés).
+    images: Vec<PathBuf>,
+    title: String,
+    at: egui::Pos2,
+    /// Identifiant du format choisi (`None` : tous).
+    choice: Option<&'static str>,
+    /// Simulation pour le choix en cours.
+    preview: tri::notes::Generated,
 }
 
 /// Boîte de [`modal_at`].
@@ -16577,6 +16721,53 @@ mod tests {
         assert!(!h.state().quit_requested, "un seul q");
         press(&mut h, Key::Q, Modifiers::NONE);
         assert!(h.state().quit_requested);
+    }
+
+    #[test]
+    fn the_sidecars_dialog_creates_the_missing_ones_for_the_chosen_software() {
+        // Boîte « Générer les sidecars » (31/10/2026) : RapidRAW choisi, la photo notée
+        // reçoit son `.rrdata`, celle sans note non ; le compte est annoncé avant.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        // Une seule liste déroulante : celle de la boîte.
+        h.state_mut().metadata_panel = false;
+        h.state_mut().filter_bar = false;
+        let images: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut()
+            .open_sidecars_dialog(images, "sidecars".into(), pos2(200.0, 200.0));
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .sidecars_dialog
+                .as_ref()
+                .unwrap()
+                .preview
+                .created
+                .len(),
+            1,
+            "tous les logiciels : le .rrdata de la photo notée"
+        );
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("sidecars-format", engine = "RapidRAW", id = "rrdata"))
+            .click();
+        h.run_steps(2);
+        let dialog = h.state().sidecars_dialog.as_ref().unwrap();
+        assert_eq!(dialog.choice, Some("rrdata"));
+        assert_eq!(dialog.preview.created.len(), 1);
+        assert_eq!(dialog.preview.skipped, 2, "deux photos sans note");
+        h.get_by_label(&t!("sidecars-go")).click();
+        h.run_steps(2);
+        assert!(h.state().sidecars_dialog.is_none());
+        assert_eq!(
+            tri::rrdata::read(&photos.join("img0.jpg.rrdata"))
+                .unwrap()
+                .stars,
+            3
+        );
+        assert!(!photos.join("img1.jpg.rrdata").exists());
+        assert!(h.state().notice.is_some(), "bilan dans la barre d'état");
     }
 
     #[test]

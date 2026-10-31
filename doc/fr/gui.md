@@ -592,9 +592,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   début d'un autre n'est plus signalée comme masquée, le séquenceur
   (`Sequencer::expire`, `deadline`) la fait au bout du délai, ou avant la touche
   suivante qui ne continue pas. Copier / déplacer (18/10/2026, voir `files.md` : champ avec
-  complétion par Tab, destinations récentes aux flèches, progression). Aussi par six
+  complétion par Tab, destinations récentes aux flèches, progression). Aussi par des
   boutons à icône dans la boîte du clic droit (crayon, deux feuilles, flèche dans un
-  dossier, poubelle, dossier, flèche sortante ; libellé et raccourci au survol ; `[gui.dialogs] icon_size`). Renommer : le nom (sans extension) est
+  dossier, poubelle, dossier, flèche sortante, et depuis le 31/10/2026 une feuille de
+  sidecar à point : générer les sidecars de notes, `sidecars.md` ; libellé et raccourci au
+  survol ; `[gui.dialogs] icon_size`). Renommer : le nom (sans extension) est
   sélectionné, on tape le nouveau ; la boîte montre ce que deviennent l'image, sa paire et
   ses sidecars, ou pourquoi c'est impossible (nom pris) ; Entrée confirme, Échap annule.
   Corbeille : la liste des fichiers (paire et sidecars compris) avant confirmation

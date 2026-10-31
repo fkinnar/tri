@@ -930,6 +930,9 @@ pub struct MetadataSettings {
     /// Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h /
     /// l), sur sa course de -1 à 1.
     pub slider_step: f32,
+    /// Air sous chaque groupe de réglages du panneau, avant le sous-titre du suivant, en
+    /// hauteurs de ligne (0,5 : un interligne et demi).
+    pub group_gap: f32,
 }
 
 impl Default for MetadataSettings {
@@ -940,6 +943,7 @@ impl Default for MetadataSettings {
             histogram: true,
             histogram_height: 120.0,
             slider_step: 0.1,
+            group_gap: 0.5,
         }
     }
 }

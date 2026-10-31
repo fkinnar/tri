@@ -848,6 +848,28 @@ action-plugin-darktable-open_folder = Folders: open the pointed folder in Darkta
 action-plugin-rapidraw-open_folder = Folders: open the pointed folder in RapidRAW
 action-core-develop-folder = Develop the whole folder in the background (each image in the software of its development)
 folder-menu-develop = Develop the whole folder…
+folder-menu-sidecars = Generate the sidecars…
+action-core-file-sidecars = Generate the missing rating sidecars (one software, or all)
+kw-core-file-sidecars = sidecars rrdata xmp rapidraw ratings metadata generate create
+sidecars-title-folder = Sidecars of "{ $folder }"
+sidecars-title-images = Sidecars of { $n ->
+    [one] the image
+   *[other] { $n } images
+}
+sidecars-all = Every software
+sidecars-format = { $engine } (.{ $id })
+sidecars-preview = { $created ->
+    [0] Nothing to create
+    [one] 1 sidecar to create
+   *[other] { $created } sidecars to create
+} · { $unchanged } already provided · { $skipped } skipped (unrated, or developments)
+sidecars-go = Generate
+sidecars-done = { $created ->
+    [0] No sidecar created
+    [one] 1 sidecar created
+   *[other] { $created } sidecars created
+}
+sidecars-done-errors = { " " }· { $n } errors: { $error }
 folder-menu-open-in = Open in { $name }
 folder-open-in-missing = { $name } cannot open a folder, or is not installed
 folder-open-in-running = { $name } is already open: close it first (on Windows, a folder cannot be passed to it then)

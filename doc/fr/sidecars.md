@@ -45,8 +45,13 @@ qu'il lui faut quand on en a besoin : `NoteBook::generate(images, formats, dry_r
 pour les photos qui ont des notes, les sidecars des formats demandés qu'elles n'ont pas
 encore, avec leurs notes ; les développements, les images sans notes et celles déjà
 pourvues sont passés (`Generated` : créés, inchangées, passées, erreurs). En ligne de
-commande : `tri <dossier> --sidecars rapidraw|xmp|all [--dry-run]`. Dans l'interface :
-à venir (par image ou par dossier, un logiciel ou tous).
+commande : `tri <dossier> --sidecars rapidraw|xmp|all [--dry-run]`. Dans l'interface
+(31/10/2026) : action `core.file.sidecars` (sans touche par défaut), icône « sidecar »
+dans la boîte du clic droit d'une vignette (la sélection) et « Générer les sidecars… »
+dans le menu du clic droit du dossier ouvert ; la boîte (`SidecarsDialog`) propose « tous
+les logiciels » ou un format (« RapidRAW (.rrdata) », « XMP »), annonce le compte de ce qui
+sera créé, passé ou déjà pourvu (simulation), puis crée ; le bilan va dans la barre
+d'état, et la politique « auto » est réappliquée (le dossier a maintenant ce format).
 
 ## Un `.rrdata` sans réglages n'est pas un développement
 

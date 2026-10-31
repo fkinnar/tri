@@ -218,6 +218,9 @@ pub enum Action {
     FileReveal,
     /// Ouvrir l'image dans l'éditeur externe.
     FileEdit,
+    /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
+    /// du dossier (31/10/2026, suite de #253).
+    Sidecars,
     /// Annuler la dernière modification.
     Undo,
     /// Rétablir la dernière modification annulée.
@@ -450,7 +453,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 187] = [
+    pub const ALL: [Action; 188] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -506,6 +509,7 @@ impl Action {
         Action::FileDelete,
         Action::FileReveal,
         Action::FileEdit,
+        Action::Sidecars,
         Action::FileCopy,
         Action::FileMove,
         Action::FileDeleteStack,
@@ -710,7 +714,7 @@ impl Action {
             | FilterDeveloped | SortNext | SortReverse | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
-            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
+            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove | Sidecars
             | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
             | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
@@ -914,6 +918,7 @@ impl Action {
             Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
+            Action::Sidecars => "core.file.sidecars",
             Action::ToggleFolderPanel => "core.view.folders",
             Action::Search => "core.search",
             Action::FocusMode => "core.view.focus_mode",
@@ -2558,8 +2563,9 @@ mod tests {
             // Les actions des plugins n'ont pas de touche par défaut (à régler dans
             // `[keys]` ou la fenêtre de réglages).
             let plugin = |a: &Action| a.id().starts_with("plugin.");
-            // Rare, par un bouton de l'aide : pas de touche par défaut non plus.
-            let rare = [Action::CheckUpdate];
+            // Rares, par un bouton de l'aide ou du clic droit : pas de touche par défaut
+            // non plus.
+            let rare = [Action::CheckUpdate, Action::Sidecars];
             for a in Action::ALL
                 .into_iter()
                 .filter(|a| !by_leader.contains(a) && !plugin(a) && !rare.contains(a))

@@ -427,6 +427,22 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
                 painter.line_segment([p(x, 0.38), p(x, 0.84)], stroke);
             }
         }
+        Action::Sidecars => {
+            // Sidecar : une feuille au coin corné, et un point (la note) à côté.
+            painter.add(Shape::closed_line(
+                vec![
+                    p(0.06, 0.04),
+                    p(0.5, 0.04),
+                    p(0.68, 0.22),
+                    p(0.68, 0.96),
+                    p(0.06, 0.96),
+                ],
+                stroke,
+            ));
+            painter.line_segment([p(0.5, 0.04), p(0.5, 0.22)], stroke);
+            painter.line_segment([p(0.5, 0.22), p(0.68, 0.22)], stroke);
+            painter.circle_filled(p(0.86, 0.8), w * 0.1, color);
+        }
         Action::FileReveal => {
             // Dossier : onglet puis corps.
             painter.add(Shape::closed_line(

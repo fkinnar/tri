@@ -49,7 +49,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
 | `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
 | `[gui.histogram]` | Histogramme (affiché, échelle IL / linéaire, taille du grand histogramme, IL montrés), zones (affichées, opacité), seuils des badges | interface |
-| `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur | interface |
+| `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur, pas des curseurs au clavier, air sous chaque groupe de réglages (`group_gap`) | interface |
 | `[gui.sharpness]` | Carte de netteté affichée au démarrage, couleurs de la rotation, opacité | interface |
 | `[gui.compare]` | Comparaison : images au plus, espace, cadre de l'image active | interface |
 | `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, barres de progression, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
