@@ -297,17 +297,20 @@ pub fn colour_dot_geometry(area: Rect, size: f32) -> (Pos2, f32) {
     )
 }
 
-/// Carré de la bobine des développements (ou de l'icône « replier ») d'une vignette :
-/// sous la première pastille de couleur, le cercle de la bobine centré sur elle et de son
-/// rayon (retour du 31/10/2026 : même taille apparente, centrées l'une sur l'autre). La
-/// bobine dessine son cercle à 36 % du côté, décalé de 6 % vers la gauche pour laisser
-/// place à la pellicule ([`film_reel`]).
-pub fn development_mark_rect(area: Rect, size: f32) -> Rect {
+/// Carré de la bobine des développements (`reel`) ou de l'icône « replier » d'une
+/// vignette : sous la première pastille de couleur, centré sur elle, le cercle de la
+/// bobine de son rayon (retour du 31/10/2026 : même taille apparente, centrées l'une sur
+/// l'autre). La bobine dessine son cercle à 36 % du côté, décalé de 6 % vers la gauche
+/// pour laisser place à la pellicule ([`film_reel`]) : son carré est poussé d'autant vers
+/// la droite ; l'icône « replier », dessinée au centre, ne l'est pas (retour du même
+/// jour : elle sortait de l'axe de la pastille).
+pub fn development_mark_rect(area: Rect, size: f32, reel: bool) -> Rect {
     let (dot, outer) = colour_dot_geometry(area, size);
     let side = outer / 0.36;
     let gap = size * 0.25;
+    let shift = if reel { side * 0.06 } else { 0.0 };
     Rect::from_center_size(
-        pos2(dot.x + side * 0.06, dot.y + outer + gap + side / 2.0),
+        pos2(dot.x + shift, dot.y + outer + gap + side / 2.0),
         vec2(side, side),
     )
 }

@@ -11765,7 +11765,8 @@ impl TriApp {
             rect.min + vec2(g.padding, g.padding),
             pos2(rect.max.x - g.padding, rect.max.y - bottom),
         );
-        let reel_rect = marks::development_mark_rect(image_area, g.marks);
+        let reel_rect = marks::development_mark_rect(image_area, g.marks, true);
+        let fold_rect = marks::development_mark_rect(image_area, g.marks, false);
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info_shown()
@@ -11800,11 +11801,11 @@ impl TriApp {
             // gardant ce développement comme couverture (sa préférée).
             // L'icône « replier », le dessin seul dans la couleur du texte (retour du
             // 31/10/2026).
-            marks::fold(painter, reel_rect, mark_color);
+            marks::fold(painter, fold_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-fold-tip", keys = keys);
             let badge = ui.interact(
-                reel_rect.expand(2.0),
+                fold_rect.expand(2.0),
                 response.id.with("fold"),
                 Sense::click(),
             );

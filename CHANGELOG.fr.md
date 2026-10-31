@@ -36,7 +36,7 @@
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
   nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,
   sans fond. Les deux sont centrées sur la pastille de couleur au-dessus, de sa taille
-  apparente.
+  apparente (l'icône « replier » sans le décalage que la bobine réserve à sa pellicule).
 - Bandeau de notation et sélecteurs : plus de cercle d'accent autour de la couleur posée,
   la pastille pleine face aux autres fondues suffit, comme les étoiles et les drapeaux.
   L'anneau du drapeau neutre est dessiné un peu plus petit, pour paraître de la taille des
