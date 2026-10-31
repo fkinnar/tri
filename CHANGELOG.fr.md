@@ -7,6 +7,13 @@
 - Vignettes : plus de pastille « LibRaw » sur une photo montrée dans le rendu interne
   (retour du 31/10/2026 : elle ne servait à rien) ; seul le rendu d'un logiciel porte
   une pastille.
+- **Fenêtre de réglages : un éditeur à pastilles pour l'ordre des couleurs du tri**
+  (`[sort] color_order`, idée de l'utilisateur) : cinq emplacements vides sous « Tri »,
+  les couleurs restantes sous « Disponibles » ; glisser ou cliquer pour composer l'ordre,
+  écrit à chaque changement et appliqué aussitôt (la grille triée par couleur suit).
+  **Corrigé : au lancement, un tri par note était appliqué avant la lecture des notes**
+  (ordre des noms jusqu'au changement suivant) : la grille est retriée à la fin de la
+  lecture en fond.
 - **« Développer avec » : tout logiciel est grisé tant que la photo n'y est pas
   développée**, darktable compris (il rendrait par défaut, mais il n'y a rien à voir) ;
   seul le rendu LibRaw est toujours proposé. Les raccourcis le disent aussi (règle de

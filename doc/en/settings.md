@@ -79,7 +79,13 @@ default location is not.
 ## Settings window
 
 In the interface, `Ctrl+,` opens a window that edits this file without losing its
-comments or its other keys (see `config_edit.md` and `gui.md`).
+comments or its other keys (see `config_edit.md` and `gui.md`). A few settings have their
+own editor: the shortcuts (`[keys]`), and `[sort] color_order` (user's idea, 2026-10-31):
+under "Sort", five slots (empty dots) that receive the colours in the wanted order; under
+"Available", the remaining colours. Drag a colour from one side to the other or within
+the order, or click (an available one is appended, a sorted one removed); the list is
+written at every change (`SettingsWindow::color_order_editor`, dots in the theme's
+colours).
 
 ## Module `tri::settings` (engine)
 
