@@ -11734,7 +11734,7 @@ impl TriApp {
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
-        let reel = g.marks * 1.4;
+
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11750,12 +11750,13 @@ impl TriApp {
         // elles se superposaient, puis sautaient selon qu'il y avait une couleur ou non ;
         // puis la pastille « n dév. » colorée accrochait : juste le dessin, le nombre dans
         // la bulle).
-        let below = g.marks + 6.0;
-        let reel_rect = Rect::from_min_size(
-            pos2(
-                rect.max.x - g.padding - 2.0 - reel,
-                rect.min.y + g.padding + 2.0 + below,
-            ),
+        // Sous la pastille de couleur, au même centre et du même diamètre (retour du
+        // 31/10/2026) : le cercle de la bobine fait 0,36 de son carré, décalé de 0,06 vers
+        // la gauche (`marks::film_reel`).
+        let (dot, dot_radius) = marks::colour_dot_geometry(rect.shrink(g.padding), g.marks);
+        let reel = dot_radius / 0.36;
+        let reel_rect = Rect::from_center_size(
+            pos2(dot.x + reel * 0.06, dot.y + 3.0 * dot_radius + 4.0),
             vec2(reel, reel),
         );
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette

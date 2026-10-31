@@ -6,7 +6,8 @@
 
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the
   cell's text colour, no coloured badge) replaces "N dev."; the count is in its tooltip;
-  the "fold" icon of an unfolded stack is drawn the same way, without background.
+  the "fold" icon of an unfolded stack is drawn the same way, without background. Both sit
+  right under the colour label, centred on it and of the same diameter.
 - Rating bar and pickers: no more accent ring around the chosen colour, the full dot
   against the faded ones is enough, like the stars and flags. The neutral flag's ring is
   drawn a little smaller, so that it looks the size of the accepted / rejected badges,

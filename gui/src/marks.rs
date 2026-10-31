@@ -258,6 +258,19 @@ pub enum MarkKind {
     Colors,
 }
 
+/// Centre de la première pastille de couleur d'une vignette (en haut à droite) et son
+/// rayon, liseré compris : la bobine des développements se place dessous, au même centre
+/// et de la même taille (retour du 31/10/2026).
+pub fn colour_dot_geometry(area: Rect, size: f32) -> (Pos2, f32) {
+    let radius = size / 2.0;
+    let inset = radius + 3.0;
+    let rim = (radius * 0.18).max(1.2);
+    (
+        pos2(area.max.x - inset, area.min.y + inset),
+        radius * 0.8 + rim,
+    )
+}
+
 /// Zones cliquables des marques d'une vignette (même géométrie que
 /// [`thumbnail_notes`]) : les cinq emplacements d'étoiles, qu'elles soient posées ou non,
 /// le drapeau (posé ou cercle du neutre), les couleurs (au moins un emplacement).
