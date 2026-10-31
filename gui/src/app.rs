@@ -38,6 +38,34 @@ use crate::trace::trace;
 use crate::view::{self, Source};
 
 /// Ce qui occupe la fenêtre.
+/// Referme les coupes de `ranges` (piles de rafale, contiguës et ordonnées) qui tombent
+/// entre deux images de la même photo (`same_photo`) : ses développements restent avec
+/// elle.
+fn merge_split_photos(
+    ranges: Vec<std::ops::Range<usize>>,
+    same_photo: impl Fn(usize, usize) -> bool,
+) -> Vec<std::ops::Range<usize>> {
+    let mut merged: Vec<std::ops::Range<usize>> = Vec::with_capacity(ranges.len());
+    for r in ranges {
+        match merged.last_mut() {
+            Some(last) if last.end == r.start && same_photo(last.end - 1, r.start) => {
+                last.end = r.end;
+            }
+            _ => merged.push(r),
+        }
+    }
+    merged
+}
+
+/// Pile visée par un raccourci des piles ([`TriApp::applicable_stack`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum StackKind {
+    /// Pile de rafale (images semblables), indices dans la liste.
+    Burst(std::ops::Range<usize>),
+    /// Photo et ses développements.
+    Developments(std::ops::Range<usize>),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
     Grid,
@@ -272,8 +300,11 @@ pub struct TriApp {
     start_dir: Option<(PathBuf, bool)>,
     /// Image à sélectionner une fois le dossier du lancement lu (`TRI_GUI_SELECT`).
     start_select: Option<usize>,
-    /// Image passée en argument (#250) : sélectionnée une fois son dossier lu.
+    /// Image passée en argument (#250) : ouverte en plein écran une fois son dossier lu.
     start_select_path: Option<PathBuf>,
+    /// Mode concentration à la première image (`--focus`, ou une image en argument avec
+    /// `[gui] image_focus`).
+    start_focus: bool,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -836,6 +867,13 @@ pub fn development_label(path: &Path) -> String {
 }
 
 impl TriApp {
+    /// `--focus` : mode concentration dès l'ouverture, dossier ou image (31/10/2026 : `tri`
+    /// en visionneuse par défaut).
+    pub fn with_focus(mut self, on: bool) -> TriApp {
+        self.start_focus |= on;
+        self
+    }
+
     /// Fichier de configuration que la fenêtre de réglages modifie.
     pub fn with_config(mut self, path: Option<PathBuf>) -> TriApp {
         self.config_path = path;
@@ -940,6 +978,7 @@ impl TriApp {
             start_dir: None,
             start_select: None,
             start_select_path: None,
+            start_focus: false,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -1663,10 +1702,16 @@ impl TriApp {
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
+        // Une image en argument (#250) : ouverte en plein écran, comme une visionneuse
+        // (retour du 31/10/2026 : sélectionnée seulement, « ça n'ouvre pas l'image »).
         if let Some(path) = self.start_select_path.take()
             && let Some(i) = self.files.iter().position(|f| f.path == path)
         {
             self.selected = i;
+            self.open_view();
+            if self.gui.image_focus {
+                self.start_focus = true;
+            }
         }
     }
 
@@ -3500,15 +3545,16 @@ impl TriApp {
     /// Ouvre la boîte « Générer les sidecars » sur `images`, titrée `title`, avec la
     /// simulation pour « tous les logiciels ».
     fn open_sidecars_dialog(&mut self, images: Vec<PathBuf>, title: String, at: egui::Pos2) {
-        let preview = self
-            .folder
-            .notes
-            .generate(&images, &Self::sidecar_formats(None), true);
+        let preview =
+            self.folder
+                .notes
+                .generate(&images, &Self::sidecar_formats(None), true, false);
         self.sidecars_dialog = Some(SidecarsDialog {
             images,
             title,
             at,
             choice: None,
+            rewrite: false,
             preview,
         });
     }
@@ -3528,7 +3574,9 @@ impl TriApp {
             return;
         };
         let (at, title, mut choice) = (dialog.at, dialog.title.clone(), dialog.choice);
+        let mut rewrite = dialog.rewrite;
         let preview = dialog.preview.clone();
+        let warning = Color32::from(self.gui.colors.warning);
         let name = |c: Option<&'static str>| match c.and_then(tri::sidecars::by_id) {
             Some(f) => match f.engine() {
                 Some(e) => t!("sidecars-format", engine = e.name(), id = f.id()),
@@ -3550,17 +3598,30 @@ impl TriApp {
                         }
                     });
                 ui.add_space(6.0);
+                // Réécrire aussi les existants (31/10/2026 : « on a fait une bêtise, on veut
+                // régénérer ») : prévenu, rien de cassé (notes seules, fichier illisible
+                // recréé).
+                ui.checkbox(&mut rewrite, t!("sidecars-rewrite"))
+                    .on_hover_text(t!("sidecars-rewrite-tip"));
+                ui.add_space(6.0);
                 ui.weak(t!(
                     "sidecars-preview",
                     created = preview.created.len(),
+                    rewritten = preview.rewritten.len(),
                     unchanged = preview.unchanged,
                     skipped = preview.skipped
                 ));
+                if rewrite && !preview.rewritten.is_empty() {
+                    ui.colored_label(
+                        warning,
+                        t!("sidecars-rewrite-warning", n = preview.rewritten.len()),
+                    );
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     go = ui
                         .add_enabled(
-                            !preview.created.is_empty(),
+                            !preview.created.is_empty() || !preview.rewritten.is_empty(),
                             egui::Button::new(t!("sidecars-go")),
                         )
                         .clicked();
@@ -3572,11 +3633,18 @@ impl TriApp {
                 return;
             };
             let formats = Self::sidecar_formats(dialog.choice);
-            let done = self.folder.notes.generate(&dialog.images, &formats, false);
+            let done = self
+                .folder
+                .notes
+                .generate(&dialog.images, &formats, false, dialog.rewrite);
             // Le dossier a maintenant des sidecars de ce format : la politique « auto »
             // les créera aussi en notant.
             self.apply_sidecar_policy();
-            let mut text = t!("sidecars-done", created = done.created.len());
+            let mut text = t!(
+                "sidecars-done",
+                created = done.created.len(),
+                rewritten = done.rewritten.len()
+            );
             if let Some((_, error)) = done.errors.first() {
                 text.push_str(&t!(
                     "sidecars-done-errors",
@@ -3588,13 +3656,16 @@ impl TriApp {
         } else if cancel || modal.should_close() {
             self.sidecars_dialog = None;
         } else if let Some(d) = &mut self.sidecars_dialog
-            && d.choice != choice
+            && (d.choice != choice || d.rewrite != rewrite)
         {
             d.choice = choice;
-            d.preview = self
-                .folder
-                .notes
-                .generate(&d.images, &Self::sidecar_formats(choice), true);
+            d.rewrite = rewrite;
+            d.preview = self.folder.notes.generate(
+                &d.images,
+                &Self::sidecar_formats(choice),
+                true,
+                rewrite,
+            );
         }
     }
 
@@ -4889,6 +4960,12 @@ impl TriApp {
             tri::similarity::group(&links, self.group_threshold(), self.group_gap)
         };
         let files = &self.files;
+        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
+        let same_photo = |i: usize, j: usize| photo(i) == photo(j);
+        // Une photo et ses développements ne se séparent jamais (31/10/2026) : un
+        // développement n'a pas d'empreinte, la similarité coupait entre eux et la pile de
+        // développements disparaissait dès que les piles étaient actives.
+        let ranges = merge_split_photos(ranges, same_photo);
         let notes = &self.folder.notes;
         let scores = &self.scores;
         // Couverture : l'acceptée, sinon la mieux notée, sinon la plus nette, sinon la
@@ -4935,8 +5012,6 @@ impl TriApp {
         let dev_shown = &self.dev_shown;
         let dev_preferred = &self.dev_preferred;
         let render = self.shown_render();
-        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
-        let same_photo = |i: usize, j: usize| photo(i) == photo(j);
         let dev_cover = |r: &std::ops::Range<usize>| {
             use crate::grid_render::GridRender;
             if let Some(shown) = dev_shown.get(&photo(r.start))
@@ -5082,33 +5157,33 @@ impl TriApp {
         self.reveal = Some(Reveal::Minimal);
     }
 
-    /// Déplie ou replie la pile de développements de l'image sélectionnée (Maj+V).
+    /// Déplie ou replie la pile de développements de l'image sélectionnée
+    /// (`core.dev.toggle`, sans touche par défaut depuis le 31/10/2026 : `s` le fait).
     fn toggle_developments(&mut self) {
         let Some(range) = self.stacks.developments_of(self.selected).cloned() else {
             self.hint = Some(t!("dev-none"));
             return;
         };
-        let photo = tri::media::source(&self.files[range.start].path).into_owned();
-        if !self.dev_unfolded.remove(&photo) {
-            self.dev_unfolded.insert(photo);
-        }
-        self.stacks_dirty = true;
-        self.reveal = Some(Reveal::Minimal);
+        let on = !self.dev_unfolded.contains(&self.photo_of_range(&range));
+        self.set_developments_unfolded(&range, on);
     }
 
-    /// Développement suivant (`step` 1) ou précédent (-1) de la photo, en boucle ; dans la
-    /// grille, une pile repliée le montre à la place de sa couverture.
+    /// Développement suivant (`step` 1) ou précédent (-1) de la photo, en boucle.
     fn step_developments(&mut self, step: isize) {
         match self.stacks.step_in_developments(self.selected, step) {
-            Some(i) => {
-                let path = self.files[i].path.clone();
-                self.dev_shown
-                    .insert(tri::media::source(&path).into_owned(), path);
-                self.select(i);
-                self.stacks_dirty = true;
-            }
+            Some(i) => self.show_development(i),
             None => self.hint = Some(t!("dev-none")),
         }
+    }
+
+    /// Sélectionne l'image `index` d'une pile de développements ; dans la grille, une pile
+    /// repliée la montre à la place de sa couverture.
+    fn show_development(&mut self, index: usize) {
+        let path = self.files[index].path.clone();
+        self.dev_shown
+            .insert(tri::media::source(&path).into_owned(), path);
+        self.select(index);
+        self.stacks_dirty = true;
     }
 
     /// Étiquette courte d'un développement : « DT », « DT · clone 1 », « RR · copie 2 »
@@ -5124,32 +5199,145 @@ impl TriApp {
         })
     }
 
-    /// Déplie ou replie la pile de l'image sélectionnée.
-    fn toggle_stack(&mut self) {
-        let Some(range) = self.stacks.range_of(self.selected).cloned() else {
-            return;
-        };
-        if range.len() < 2 {
-            return;
+    /// Pile sur laquelle agissent les raccourcis des piles pour l'image `index`
+    /// (harmonisation du 31/10/2026, règle de `Maj+Entrée`) : la rafale si les piles sont
+    /// actives et qu'elle compte plusieurs photos, sinon la pile de développements de la
+    /// photo ; un développement vise toujours celle de sa photo.
+    fn applicable_stack(&self, index: usize) -> Option<StackKind> {
+        let developments = self.stacks.developments_of(index).cloned();
+        let is_development = self
+            .files
+            .get(index)
+            .is_some_and(|f| tri::media::is_development(&f.path));
+        if is_development && let Some(r) = developments.clone() {
+            return Some(StackKind::Developments(r));
         }
-        let paths: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
-        if paths.iter().any(|p| self.expanded.contains(p)) {
-            for p in &paths {
-                self.expanded.remove(p);
+        let burst = self
+            .stacks
+            .range_of(index)
+            .filter(|r| self.stacking && r.len() > 1)
+            .cloned();
+        match (burst, developments) {
+            (Some(b), Some(d)) if b == d => Some(StackKind::Developments(d)),
+            (Some(b), _) => Some(StackKind::Burst(b)),
+            (None, Some(d)) => Some(StackKind::Developments(d)),
+            (None, None) => None,
+        }
+    }
+
+    /// Photo d'une pile de développements `range` (sa clé dans `dev_unfolded`).
+    fn photo_of_range(&self, range: &std::ops::Range<usize>) -> PathBuf {
+        tri::media::source(&self.files[range.start].path).into_owned()
+    }
+
+    /// Vrai si la pile de rafale `range` est dépliée.
+    fn burst_unfolded(&self, range: &std::ops::Range<usize>) -> bool {
+        range
+            .clone()
+            .any(|i| self.expanded.contains(&self.files[i].path))
+    }
+
+    /// Déplie (`on`) ou replie la pile de rafale `range`.
+    fn set_burst_unfolded(&mut self, range: &std::ops::Range<usize>, on: bool) {
+        let paths: Vec<PathBuf> = range.clone().map(|i| self.files[i].path.clone()).collect();
+        for p in paths {
+            if on {
+                self.expanded.insert(p);
+            } else {
+                self.expanded.remove(&p);
             }
-        } else {
-            self.expanded.extend(paths);
         }
         self.stacks_dirty = true;
         self.reveal = Some(Reveal::Minimal);
     }
 
-    /// Déplie toutes les piles, ou les replie toutes si l'une est dépliée.
+    /// Déplie (`on`) ou replie la pile de développements `range`.
+    fn set_developments_unfolded(&mut self, range: &std::ops::Range<usize>, on: bool) {
+        let photo = self.photo_of_range(range);
+        if on {
+            self.dev_unfolded.insert(photo);
+        } else {
+            self.dev_unfolded.remove(&photo);
+        }
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
+    }
+
+    /// Déplie ou replie la pile qui s'applique à l'image sélectionnée (`s`).
+    fn toggle_stack(&mut self) {
+        match self.applicable_stack(self.selected) {
+            Some(StackKind::Burst(r)) => {
+                let on = !self.burst_unfolded(&r);
+                self.set_burst_unfolded(&r, on);
+            }
+            Some(StackKind::Developments(r)) => {
+                let on = !self.dev_unfolded.contains(&self.photo_of_range(&r));
+                self.set_developments_unfolded(&r, on);
+            }
+            None => {}
+        }
+    }
+
+    /// `((` : ouvre le niveau suivant — la pile de rafale si elle est repliée, sinon les
+    /// développements de la photo.
+    fn open_stack_level(&mut self) {
+        let developments = self.stacks.developments_of(self.selected).cloned();
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|r| self.stacking && r.len() > 1 && developments.as_ref() != Some(r))
+            .cloned();
+        if let Some(b) = burst
+            && !self.burst_unfolded(&b)
+        {
+            self.set_burst_unfolded(&b, true);
+            return;
+        }
+        if let Some(d) = developments
+            && !self.dev_unfolded.contains(&self.photo_of_range(&d))
+        {
+            self.set_developments_unfolded(&d, true);
+            return;
+        }
+        self.hint = Some(t!("stack-nothing-to-open"));
+    }
+
+    /// `))` : ferme le niveau le plus intérieur ouvert — les développements, sinon la
+    /// pile de rafale.
+    fn close_stack_level(&mut self) {
+        let developments = self.stacks.developments_of(self.selected).cloned();
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|r| self.stacking && r.len() > 1 && developments.as_ref() != Some(r))
+            .cloned();
+        if let Some(d) = developments
+            && self.dev_unfolded.contains(&self.photo_of_range(&d))
+        {
+            self.set_developments_unfolded(&d, false);
+            return;
+        }
+        if let Some(b) = burst
+            && self.burst_unfolded(&b)
+        {
+            self.set_burst_unfolded(&b, false);
+            return;
+        }
+        self.hint = Some(t!("stack-nothing-to-close"));
+    }
+
+    /// Déplie toutes les piles — rafales et développements —, ou les replie toutes si
+    /// l'une est dépliée.
     fn toggle_all_stacks(&mut self) {
-        if self.expanded.is_empty() {
+        if self.expanded.is_empty() && self.dev_unfolded.is_empty() {
             self.expanded = self.files.iter().map(|f| f.path.clone()).collect();
+            self.dev_unfolded = (0..self.files.len())
+                .filter(|&i| self.stacks.developments_of(i).is_some())
+                .map(|i| tri::media::source(&self.files[i].path).into_owned())
+                .collect();
         } else {
             self.expanded.clear();
+            self.dev_unfolded.clear();
         }
         self.stacks_dirty = true;
         self.reveal = Some(Reveal::Minimal);
@@ -6043,8 +6231,23 @@ impl TriApp {
             Action::NavPrev | Action::NavNext if self.mode == Mode::View && self.stacking => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 let wrap = self.gui.view.stack_wrap;
-                if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
-                    self.select(i);
+                match self.applicable_stack(self.selected) {
+                    // Les développements de la photo, comme une pile (31/10/2026).
+                    Some(StackKind::Developments(r)) => {
+                        let len = r.len() as isize;
+                        let at = (self.selected - r.start) as isize + step;
+                        let at = if wrap {
+                            at.rem_euclid(len)
+                        } else {
+                            at.clamp(0, len - 1)
+                        };
+                        self.show_development(r.start + at as usize);
+                    }
+                    _ => {
+                        if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
+                            self.select(i);
+                        }
+                    }
                 }
             }
             Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stacking => {
@@ -6062,19 +6265,23 @@ impl TriApp {
             // Début / fin de la pile (issue n° 62) ; en grille, une pile repliée montre sa
             // couverture.
             Action::StackFirst | Action::StackLast => {
-                if let Some(r) = self.stacks.range_of(self.selected).cloned() {
-                    let at = if action == Action::StackFirst {
-                        r.start
-                    } else {
-                        r.end - 1
-                    };
-                    let browsing = self.mode == Mode::View && self.stacking;
-                    let at = if browsing {
-                        at
-                    } else {
-                        self.stacks.visible(at)
-                    };
-                    self.select(at);
+                let first = action == Action::StackFirst;
+                match self.applicable_stack(self.selected) {
+                    Some(StackKind::Burst(r)) => {
+                        let at = if first { r.start } else { r.end - 1 };
+                        let browsing = self.mode == Mode::View && self.stacking;
+                        let at = if browsing {
+                            at
+                        } else {
+                            self.stacks.visible(at)
+                        };
+                        self.select(at);
+                    }
+                    // La photo, ou son dernier développement (31/10/2026).
+                    Some(StackKind::Developments(r)) => {
+                        self.show_development(if first { r.start } else { r.end - 1 });
+                    }
+                    None => {}
                 }
             }
             Action::StackEnterToggle => {
@@ -6104,9 +6311,13 @@ impl TriApp {
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FileDeleteStack | Action::FileCopyStack => {
-                // Toute la pile de l'image (images cachées dans une pile repliée comprises).
-                let range = self.stacks.range_of(self.selected).cloned();
-                match range.filter(|_| self.stacking) {
+                // Toute la pile de l'image (images cachées dans une pile repliée comprises),
+                // ou la photo et ses développements (31/10/2026).
+                let range = match self.applicable_stack(self.selected) {
+                    Some(StackKind::Burst(r) | StackKind::Developments(r)) => Some(r),
+                    None => None,
+                };
+                match range {
                     Some(range) => {
                         let paths = self.files[range].iter().map(|f| f.path.clone()).collect();
                         let file_action = if action == Action::FileDeleteStack {
@@ -6339,6 +6550,8 @@ impl TriApp {
                 self.reveal_folder = self.folder_panel;
             }
             Action::StackToggle => self.toggle_stack(),
+            Action::StackOpen => self.open_stack_level(),
+            Action::StackClose => self.close_stack_level(),
             Action::StacksAll => self.toggle_all_stacks(),
             Action::DevToggle => self.toggle_developments(),
             Action::DevFoldAll => self.fold_all_developments(),
@@ -10519,9 +10732,23 @@ impl TriApp {
                             .show_ui(ui, |ui| {
                                 for &engine in &engines {
                                     let action = Action::DevelopWith(engine);
+                                    // RapidRAW ne rend que ce qu'on y a développé (un
+                                    // `.rrdata` de notes seules donnait un rendu orphelin,
+                                    // hors de la pile : retour du 31/10/2026) ; darktable
+                                    // rend aussi par défaut.
+                                    let developable = engine != tri::develop::Engine::RapidRaw
+                                        || engine.sidecar(&path).is_some();
+                                    let tip = if developable {
+                                        self.action_tip(action)
+                                    } else {
+                                        t!("develop-with-not-developed", engine = engine.name())
+                                    };
                                     if ui
-                                        .selectable_label(false, engine.name())
-                                        .on_hover_text(self.action_tip(action))
+                                        .add_enabled(
+                                            developable,
+                                            egui::Button::selectable(false, engine.name()),
+                                        )
+                                        .on_hover_text(tip)
                                         .clicked()
                                     {
                                         develop = Some(Some(engine));
@@ -11445,6 +11672,15 @@ impl TriApp {
         }
         // Pile de développements repliée : le nombre de développements, en haut à droite
         // (le nombre d'images d'une pile de rafale est en haut à gauche).
+        // Badge « n dév. » et pastille « replier » sous les pastilles de couleur quand il y
+        // en a (retour du 31/10/2026 : ils se superposaient).
+        let has_colors = !self
+            .folder
+            .notes
+            .notes(&self.files[index].path)
+            .colors
+            .is_empty();
+        let below = if has_colors { g.marks + 6.0 } else { 0.0 };
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info
@@ -11462,7 +11698,7 @@ impl TriApp {
             );
             let at = pos2(
                 rect.max.x - g.padding - 2.0 - label.size().x,
-                rect.min.y + g.padding + 2.0,
+                rect.min.y + g.padding + 2.0 + below,
             );
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, dev_mark);
@@ -11488,7 +11724,7 @@ impl TriApp {
             let back = Rect::from_min_size(
                 pos2(
                     rect.max.x - g.padding - 2.0 - side,
-                    rect.min.y + g.padding + 2.0,
+                    rect.min.y + g.padding + 2.0 + below,
                 ),
                 vec2(side, side),
             );
@@ -11745,7 +11981,14 @@ impl TriApp {
         // Notes sur la vignette : étoiles en bas à gauche, drapeau en bas à droite,
         // couleurs en haut à droite, chaque marque cerclée de sombre.
         let notes = self.folder.notes.notes(&file.path);
-        marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
+        marks::thumbnail_notes(
+            ui.painter(),
+            image_area,
+            notes,
+            g.marks,
+            &colors,
+            g.neutral_flag,
+        );
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
         // Pas sur une pile repliée (issue n° 75) : son nombre d'images est à cette place,
@@ -11796,6 +12039,9 @@ impl TriApp {
                 return;
             }
             self.script_wait = None;
+        }
+        if std::mem::take(&mut self.start_focus) && !self.focus_mode {
+            self.perform(ctx, Action::FocusMode);
         }
         while let Some(step) = self.startup_actions.pop_front() {
             match step {
@@ -12603,7 +12849,7 @@ impl TriApp {
             - style.spacing.scroll.bar_width
             - style.spacing.scroll.bar_outer_margin)
             .max(width / 2.0);
-        egui::Window::new(t!("help-title"))
+        let shown = egui::Window::new(t!("help-title"))
             .open(&mut open)
             .min_width(width)
             .max_width(width)
@@ -12759,6 +13005,22 @@ impl TriApp {
                 ui.add_space(6.0);
                 ui.weak(t!("help-close-hint"));
             });
+        // Main « saisir » sur la barre de titre, comme sur le fond des autres boîtes (retour
+        // du 31/10/2026) ; la barre d'egui ne la met pas d'elle-même.
+        if let Some(shown) = shown
+            && let Some(pos) = ctx.pointer_hover_pos()
+            && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
+        {
+            let style = ctx.global_style();
+            let heading = egui::TextStyle::Heading.resolve(&style).size;
+            let margin = style.spacing.window_margin.top as f32;
+            let frame = shown.response.rect;
+            let title_bar =
+                Rect::from_min_size(frame.min, vec2(frame.width(), heading + 2.0 * margin));
+            if title_bar.contains(pos) {
+                ctx.set_cursor_icon(egui::CursorIcon::Grab);
+            }
+        }
         self.help_lines = Some(lines);
         self.help_search = Some(query);
         self.help = open;
@@ -13779,6 +14041,8 @@ struct SidecarsDialog {
     at: egui::Pos2,
     /// Identifiant du format choisi (`None` : tous).
     choice: Option<&'static str>,
+    /// Réécrire aussi les sidecars existants (leurs notes ; le reste conservé).
+    rewrite: bool,
     /// Simulation pour le choix en cours.
     preview: tri::notes::Generated,
 }
@@ -14781,6 +15045,62 @@ mod tests {
     }
 
     #[test]
+    fn stack_keys_apply_to_the_developments_too() {
+        // Harmonisation du 31/10/2026 : sans pile de rafale, `s`, `((`, `))`, `(`, `)` et le
+        // mode pile visent la pile de développements de la photo.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().metadata_panel = false;
+        assert_eq!(selected_name(&h), "img0.jpg");
+        assert_eq!(h.state().stacks.shown.len(), 3, "pile repliée");
+        // `((` ouvre, `))` ferme ; `s` bascule.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::StackOpen);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 5, "développements dépliés");
+        h.state_mut().perform(&ctx, Action::StackOpen);
+        assert!(h.state().hint.is_some(), "plus rien à ouvrir");
+        h.state_mut().perform(&ctx, Action::StackClose);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "repliés");
+        press(&mut h, Key::S, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 5);
+        press(&mut h, Key::S, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3);
+        // `)` : le dernier développement, `(` : la photo (montrés à la place de la
+        // couverture).
+        h.state_mut().perform(&ctx, Action::StackLast);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg");
+        h.state_mut().perform(&ctx, Action::StackFirst);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        // Plein écran, mode pile : → parcourt les développements, ← revient.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert!(h.state().stacking, "mode pile");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg");
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
     fn the_view_buttons_step_through_the_developments() {
         // #240 : en plein écran, les boutons ‹‹ ›› passent au développement précédent /
         // suivant de la photo, pas à la photo voisine ; absents sans développement.
@@ -14893,13 +15213,13 @@ mod tests {
         h.get_by_label(&badge);
         press(&mut h, Key::Q, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i);
-        // Maj+V déplie : les deux vignettes, cadrées.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        // `s` déplie (comme une pile, 31/10/2026) : les deux vignettes, cadrées.
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
         assert!(h.state().stacks.in_unfolded_developments(i));
         assert!(h.query_by_label(&badge).is_none());
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
         assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
@@ -14909,7 +15229,7 @@ mod tests {
             h.query_by_label(&fold_tip).is_none(),
             "repliée : pas de pastille"
         );
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(
             h.query_all_by_label(&fold_tip).count(),
@@ -14921,7 +15241,7 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 3, "repliée au clic");
         assert!(h.state().dev_preferred.is_empty());
         // Alt+clic : replier en gardant ce développement (le clone) comme couverture.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         h.get_all_by_label(&fold_tip)
             .nth(1)
@@ -14945,15 +15265,20 @@ mod tests {
             h.state().dev_preferred.is_empty(),
             "la photo : plus de préféré"
         );
-        // Ctrl+Maj+V replie toutes les piles de développements.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        // Maj+S replie toutes les piles, développements compris (31/10/2026), puis les
+        // redéplie toutes.
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
-        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::SHIFT);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3, "tout replié");
-        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
-        assert!(h.state().hint.is_some(), "déjà tout replié : dit");
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 4, "tout déplié");
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3);
         press(&mut h, Key::Q, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i, "retour sur le clone");
         press(&mut h, Key::Num4, Modifiers::SHIFT);
@@ -16711,6 +17036,25 @@ mod tests {
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
         assert_eq!(h.state().folder.dir, photos);
         assert_eq!(selected_name(&h), "b.jpg");
+        assert_eq!(h.state().mode, Mode::View, "ouverte en plein écran");
+        h.run_steps(2);
+        assert!(
+            h.state().focus_mode,
+            "mode concentration ([gui] image_focus)"
+        );
+        // `--focus` sur un dossier : mode concentration aussi, en grille.
+        let mut s = AppSettings::default();
+        s.cache.dir = Some(dir.path().join("cache"));
+        s.data.dir = Some(dir.path().join("data"));
+        s.places.watch_ms = 0;
+        s.gui.reopen_last = false;
+        let folder = photos.clone();
+        let mut f = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(folder), s, None).with_focus(true));
+        run_until(&mut f, |app| app.loading.is_none());
+        assert_eq!(f.state().mode, Mode::Grid);
+        assert!(f.state().focus_mode, "--focus");
     }
 
     #[test]
@@ -16768,6 +17112,35 @@ mod tests {
         );
         assert!(!photos.join("img1.jpg.rrdata").exists());
         assert!(h.state().notice.is_some(), "bilan dans la barre d'état");
+        // Réécrire (31/10/2026) : les deux sidecars d'img0 existent, prévenu, réécrits.
+        let images: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut()
+            .open_sidecars_dialog(images, "sidecars".into(), pos2(200.0, 200.0));
+        h.run_steps(2);
+        assert!(
+            h.state()
+                .sidecars_dialog
+                .as_ref()
+                .unwrap()
+                .preview
+                .created
+                .is_empty()
+        );
+        h.get_by_label(&t!("sidecars-rewrite")).click();
+        h.run_steps(2);
+        let dialog = h.state().sidecars_dialog.as_ref().unwrap();
+        assert!(dialog.rewrite);
+        assert_eq!(dialog.preview.rewritten.len(), 2, "XMP et .rrdata d'img0");
+        h.get_by_label(&t!("sidecars-rewrite-warning", n = 2));
+        h.get_by_label(&t!("sidecars-go")).click();
+        h.run_steps(2);
+        assert!(h.state().sidecars_dialog.is_none());
+        assert_eq!(
+            tri::rrdata::read(&photos.join("img0.jpg.rrdata"))
+                .unwrap()
+                .stars,
+            3
+        );
     }
 
     #[test]
@@ -18445,6 +18818,9 @@ mod tests {
         assert!(h.query_by_label_contains("3 images vers").is_some());
         press(&mut h, Key::Escape, Modifiers::NONE);
         // Plein écran, mode pile : `)` la dernière, `(` la première ; Maj+Fin, Maj+Début.
+        // `(` et `)` commencent aussi `((` / `))` (31/10/2026) : sans délai d'attente ici.
+        h.state_mut().sequencer =
+            crate::actions::Sequencer::new(Duration::from_secs(60)).with_ambiguous(Duration::ZERO);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         bracket(&mut h);
@@ -18483,7 +18859,9 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         let cover = h.state().stacks.visible(h.state().selected);
         assert_eq!(h.state().selected, cover, "la couverture, visible");
-        // Piles désactivées : expliqué, rien d'autre.
+        // Piles désactivées : expliqué, rien d'autre (`d` attend de nouveau sa suite).
+        h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
+            .with_ambiguous(Duration::from_secs(60));
         h.state_mut().stacking = false;
         press(&mut h, Key::D, Modifiers::NONE);
         bracket(&mut h);
@@ -18494,7 +18872,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .0
-                .contains("Piles désactivées")
+                .contains("Pas de pile ici")
         );
     }
 

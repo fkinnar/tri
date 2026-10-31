@@ -117,7 +117,9 @@ action-core-crop-preset_prev = Crop: previous preset
 action-core-file-delete_stack = Delete the whole stack
 action-core-file-delete_photo = Delete the photo with its developments…
 action-core-file-copy_stack = Copy the whole stack to…
-stack-actions-need-stacks = Stacks are off ({ $keys }): this action is for a whole stack
+stack-actions-need-stacks = No stack here (stacks: { $keys }): this action applies to a whole stack, or a photo and its developments
+stack-nothing-to-open = Nothing to open here
+stack-nothing-to-close = Nothing to close here
 action-plugin-airdrop-send = Send with AirDrop
 send-started = { $name }: { $n ->
     [one] { $n } image to send
@@ -127,8 +129,10 @@ action-core-file-move = Move to…
 action-core-edit-undo = Undo the last change
 action-core-edit-redo = Redo
 action-core-edit-history = History of changes
-action-core-stack-toggle = Expand / collapse the stack
-action-core-stack-all = Expand / collapse all stacks
+action-core-stack-toggle = Expand / collapse the stack (burst, else the photo's developments)
+action-core-stack-open = Open the next level: the burst stack, then the developments
+action-core-stack-close = Close the open level: the developments, then the burst stack
+action-core-stack-all = Expand / collapse all stacks (bursts and developments)
 action-core-stack-settings = Grouping of similar images
 action-core-stack-mode = Stacks (grid; full screen: left / right arrows inside the stack, up / down from stack to stack)
 action-core-dev-toggle = Unfold / fold the photo's developments
@@ -136,8 +140,8 @@ action-core-dev-next = Next development of the photo
 action-core-dev-fold_all = Fold every development stack
 action-core-dev-prev = Previous development of the photo
 action-core-stack-choose = Make it the stack cover (its pick)
-action-core-stack-first = First image of the stack
-action-core-stack-last = Last image of the stack
+action-core-stack-first = First image of the stack (or the photo, before its developments)
+action-core-stack-last = Last image of the stack (or the last development)
 action-core-stack-enter = Entering a stack: its first photo (on) or its cover
 ## A photo's developments (darktable, RapidRAW; 2026-10-30)
 dev-count = { $n } dev.
@@ -858,17 +862,15 @@ sidecars-title-images = Sidecars of { $n ->
 }
 sidecars-all = Every software
 sidecars-format = { $engine } (.{ $id })
-sidecars-preview = { $created ->
-    [0] Nothing to create
-    [one] 1 sidecar to create
-   *[other] { $created } sidecars to create
-} · { $unchanged } already provided · { $skipped } skipped (unrated, or developments)
+sidecars-preview = { $created } to create · { $rewritten } to rewrite · { $unchanged } left alone (already there) · { $skipped } skipped (unrated, or developments)
+sidecars-rewrite = Also rewrite the existing sidecars
+sidecars-rewrite-tip = Their ratings are replaced by tri's; the rest (development, keywords…) is kept. An unreadable file is recreated.
+sidecars-rewrite-warning = Warning: { $n ->
+    [one] one existing sidecar will be rewritten
+   *[other] { $n } existing sidecars will be rewritten
+} (its ratings only, the rest is kept).
 sidecars-go = Generate
-sidecars-done = { $created ->
-    [0] No sidecar created
-    [one] 1 sidecar created
-   *[other] { $created } sidecars created
-}
+sidecars-done = Sidecars: { $created } created · { $rewritten } rewritten
 sidecars-done-errors = { " " }· { $n } errors: { $error }
 folder-menu-open-in = Open in { $name }
 folder-open-in-missing = { $name } cannot open a folder, or is not installed
@@ -928,6 +930,7 @@ filter-developed-none-hint = None checked: not developed (LibRaw)
 develop-with = Develop with
 develop-with-choose = choose…
 develop-with-libraw = RAW render (LibRaw)
+develop-with-not-developed = Not developed in { $engine }: nothing to render (a sidecar holding only a rating is not a development)
 develop-folder-title = Develop "{ $folder }"
 develop-folder-each = Each image's own development (otherwise the RAW render)
 develop-folder-only = All in { $engine } (the images it developed)
@@ -1158,6 +1161,8 @@ kw-core-flag-accept = pick chosen keep
 kw-core-flag-reject = reject discard
 kw-core-select-visual = vim visual mode
 kw-core-stack-toggle = stacks bursts group
+kw-core-stack-open = expand open stack developments parentheses
+kw-core-stack-close = collapse close stack developments parentheses
 kw-core-dev-fold-all = developments fold all stacks
 kw-core-dev-toggle = developments darktable rapidraw clones virtual copies stack
 kw-core-dev-next = developments darktable rapidraw clones virtual copies

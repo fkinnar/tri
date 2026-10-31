@@ -426,16 +426,23 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   d'une rafale est en haut à gauche ; masquée avec les infos des vignettes, Maj+T, où
   elle était tronquée : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
-  lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `Maj+V` déplie / replie, `Maj+W` /
-  `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
+  lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `s` déplie / replie (comme une pile :
+  harmonisation du 31/10/2026, voir plus bas), `Maj+W` / `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
   montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
   photo elle-même : plus de préféré ; `preferred-developments.txt` des données), **sans
   bascule** (31/10/2026 : refaire ne retire rien). Dépliée, chaque vignette porte une
   pastille « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
   repliait à la souris) : clic = replier, **Alt+clic** = replier en gardant ce
-  développement en couverture ; `Ctrl+Maj+V` (`core.dev.fold_all`) replie toutes les
-  piles de développements.
+  développement en couverture ; `Maj+S` déplie ou replie toutes les piles, rafales et
+  développements. **Mêmes touches pour les deux sortes de piles** (31/10/2026, demande de
+  l'utilisateur : « les notions sont proches ») : `s`, `(` `)`, `Maj+S`, `d)` `y)` et le
+  mode pile (`Ctrl+S`, ← →) visent la rafale si les piles sont actives et qu'elle compte
+  plusieurs photos, sinon les développements de la photo (`TriApp::applicable_stack`,
+  règle de `Maj+Entrée`). `((` ouvre le niveau suivant (la rafale repliée, sinon les
+  développements) et `))` ferme le plus intérieur (idée de l'utilisateur : les
+  parenthèses s'emboîtent comme les piles ; jamais `[` `]` ni `{` `}`, Alt+Maj sur
+  macOS). `core.dev.toggle` et `core.dev.fold_all` restent sans touche par défaut.
   **Double suppression** (30/10/2026) : `x` / Suppr sur un développement ne retire que
   lui (clone, copie, principal RapidRAW : son fichier à la corbeille ; principal
   darktable : son XMP réécrit sans l'historique, notes gardées, voir `files.md`), la photo
@@ -931,9 +938,10 @@ suivent le jeu choisi.
 | `core.file.copy` / `core.file.move` | Ctrl+C / Ctrl+X | y / Ctrl+X |
 | `core.file.copy_stack` / `delete_stack` | Ctrl+Maj+C / Maj+Suppr | y) / d) |
 | `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | ( / ) |
+| `core.stack.open` / `core.stack.close` | ( ( / ) ) | ( ( / ) ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
-| `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Maj+V / Maj+W / Maj+Q | Maj+V / Maj+W / Maj+Q |
-| `core.dev.fold_all` | Ctrl+Maj+V | Ctrl+Maj+V |
+| `core.dev.next` / `core.dev.prev` | Maj+W / Maj+Q | Maj+W / Maj+Q |
+| `core.dev.toggle` / `core.dev.fold_all` | — (`s`, `Maj+S` le font) | — |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
 | `core.file.delete_photo` | Ctrl+Suppr, Ctrl+Backspace | dd, Ctrl+Suppr, Ctrl+Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |

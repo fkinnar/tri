@@ -616,7 +616,11 @@ pub fn rapidraw_sidecar(image: &Path) -> Option<PathBuf> {
     let mut name = image.file_name()?.to_os_string();
     name.push(".rrdata");
     let sidecar = image.with_file_name(name);
-    crate::cache::stamp(&sidecar).is_some().then_some(sidecar)
+    // Un `.rrdata` qui ne porte qu'une note (écrit par `tri`, voir `sidecars`) n'est pas un
+    // développement : rien à rendre (31/10/2026, retour de l'utilisateur : « Développer
+    // avec RapidRAW » donnait un rendu orphelin, hors de la pile).
+    (crate::cache::stamp(&sidecar).is_some() && crate::rrdata::file_is_development(&sidecar))
+        .then_some(sidecar)
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il est de darktable : écrit par
@@ -1471,7 +1475,15 @@ mod tests {
         written(dir.path().join("DSCF0001.RAF.a1b2.rrdata"), b"{}").unwrap();
         assert_eq!(rapidraw_sidecar(&image), None);
         let sidecar = dir.path().join("DSCF0001.RAF.rrdata");
-        written(&sidecar, b"{}").unwrap();
+        // Une note seule (sidecar écrit par `tri`) : pas un développement, rien à rendre.
+        written(&sidecar, br#"{"rating": 3, "adjustments": null}"#).unwrap();
+        assert_eq!(rapidraw_sidecar(&image), None, "note seule");
+        written(
+            &sidecar,
+            br#"{"rating": 3, "adjustments": {"exposure": 0.5}}"#,
+        )
+        .unwrap();
+        crate::cache::forget_stamps([sidecar.as_path()]);
         assert_eq!(rapidraw_sidecar(&image), Some(sidecar));
         assert_eq!(Engine::RapidRaw.sidecar(&image), rapidraw_sidecar(&image));
         assert_eq!(find_rapidraw(""), None, "désactivé");
@@ -1498,7 +1510,11 @@ mod tests {
         )
         .unwrap();
         std::thread::sleep(Duration::from_millis(20));
-        std::fs::write(dir.path().join("DSCF0001.RAF.rrdata"), b"{}").unwrap();
+        std::fs::write(
+            dir.path().join("DSCF0001.RAF.rrdata"),
+            br#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
         assert_eq!(
             resolve(&image, Preference::Auto, &both),
             Some(Engine::RapidRaw),
@@ -1668,7 +1684,11 @@ mod tests {
         let c = file("c.RAF", MediaKind::Raw);
         let d = file("d.JPG", MediaKind::Flat);
         std::fs::write(dir.path().join("a.RAF.xmp"), sidecar(2, &[])).unwrap();
-        std::fs::write(dir.path().join("b.RAF.rrdata"), b"{}").unwrap();
+        std::fs::write(
+            dir.path().join("b.RAF.rrdata"),
+            br#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
         std::thread::sleep(Duration::from_millis(20));
         std::fs::write(dir.path().join("b.RAF.xmp"), sidecar(2, &[])).unwrap();
         std::fs::write(dir.path().join("c.RAF.xmp"), sidecar(0, &[])).unwrap();

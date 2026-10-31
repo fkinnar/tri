@@ -4,19 +4,36 @@
 
 ## Unreleased
 
+- **Same keys for burst stacks and development stacks**: `s`, `(` `)`, `Shift+S`, `d)`
+  `y)` and the stack mode's arrows act on the burst when stacks are on and it holds
+  several photos, else on the photo's developments. New **`((`** opens the next level
+  (the folded burst, then the developments) and **`))`** closes the innermost one.
+  `Shift+V` and `Ctrl+Shift+V` lose their default keys (`core.dev.toggle`,
+  `core.dev.fold_all` stay bindable in `[keys]`). A photo's developments now always stay
+  in its burst stack (the similarity cut between them, and the development stack vanished
+  as soon as stacks were on). The "N dev." badge and the "fold" badge sit below the colour
+  labels instead of over them. The **neutral flag is drawn too** (an empty circle at the
+  flag's place, `[gui.grid] neutral_flag`), so every thumbnail shows all its information.
+- **Fixed: "Develop with RapidRAW" on a photo whose `.rrdata` holds only a rating** rendered
+  an orphan development, outside the stack: such a sidecar is no longer a RapidRAW
+  development for the renderer either, and the entry is greyed in the right-click dialog.
 - **Generate the missing rating sidecars from the interface** (follow-up to #253): a
   sidecar icon in a thumbnail's right-click dialog (the selection) and "Generate the
   sidecars…" in the open folder's right-click menu; the dialog offers every software or
-  one format, says how many sidecars will be created before doing it, and reports in the
+  one format, can **also rewrite the existing sidecars** (their ratings only, the rest
+  kept, an unreadable file recreated; with a warning; `--rewrite` on the command line),
+  says how many sidecars will be created or rewritten before doing it, and reports in the
   status bar. Action `core.file.sidecars`, no default key.
 - **Right panel: air below each group of settings** (`[gui.metadata] group_gap`, in line
   heights), and the full screen's development buttons in reading order, previous on the
   left (feedback of 2026-10-31).
 - **Filter bar: the name search sits at the right**, just before the image count (#241).
 - **Help: "Report a problem" in dark red** (#242), and **the help window can be moved**
-  (#251). The **offload dialog opens at the centre** like the other dialogs (#252).
+  (#251; grab cursor on its title bar). The **offload dialog opens at the centre** like the other dialogs (#252).
 - **`q q` quits** instead of `q` alone, too immediate next to `Shift+Q` (#244).
-- **`tri-gui <image>` opens the image's folder on it** (#250).
+- **`tri-gui <image>` opens the image in full screen**, in its folder (#250), in focus mode
+  by default (`[gui] image_focus`); **`tri-gui --focus`** forces the focus mode in every
+  case, so `tri` can be the system's image viewer.
 - **EXIF panel: details in grey** (#249): the 35 mm equivalent focal length and the
   sharpness coefficients on a second line, the megapixels after a dash, without
   parentheses. `Metadata::rows` returns `Row`s (label, value, note); `tri --metadata`

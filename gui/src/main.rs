@@ -1,11 +1,13 @@
 //! Interface graphique de tri.
 //!
 //! ```text
-//! tri-gui [<dossier>|<image>] [--cache <dossier du cache>] [--config <fichier>]
+//! tri-gui [<dossier>|<image>] [--focus] [--cache <dossier du cache>] [--config <fichier>]
 //! ```
 //!
-//! Sans dossier, l'interface s'ouvre sur le panneau des dossiers ; une image ouvre son
-//! dossier, sur elle (#250).
+//! Sans dossier, l'interface s'ouvre sur le panneau des dossiers ; une image s'ouvre en
+//! plein écran, dans son dossier (#250), en mode concentration si `[gui] image_focus`
+//! (défaut) ; `--focus` force le mode concentration dans tous les cas (`tri` en
+//! visionneuse par défaut, 31/10/2026).
 //!
 //! Réglages : fichier de configuration (`--config`, sinon l'emplacement par défaut, voir
 //! `tri::settings` et `doc/config.example.toml`) ; `--cache` l'emporte sur lui.
@@ -59,9 +61,11 @@ use std::path::PathBuf;
 fn main() -> eframe::Result {
     trace::trace(|| "démarrage".into());
     let mut args = std::env::args_os().skip(1);
-    let (mut dir, mut cache, mut config) = (None, None, None);
+    let (mut dir, mut cache, mut config, mut focus) = (None, None, None, false);
     while let Some(arg) = args.next() {
-        if arg == "--cache" {
+        if arg == "--focus" {
+            focus = true;
+        } else if arg == "--cache" {
             cache = args.next().map(PathBuf::from);
         } else if arg == "--config" {
             config = args.next().map(PathBuf::from);
@@ -114,7 +118,9 @@ fn main() -> eframe::Result {
             // l'emplacement par défaut (créé au premier changement).
             let path = loaded.path.or(config).or_else(tri::settings::default_path);
             Ok(Box::new(
-                app::TriApp::new(dir, settings, loaded.warning).with_config(path),
+                app::TriApp::new(dir, settings, loaded.warning)
+                    .with_config(path)
+                    .with_focus(focus),
             ))
         }),
     )

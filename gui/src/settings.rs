@@ -175,6 +175,9 @@ pub struct GuiSettings {
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
     pub reopen_last: bool,
+    /// Une image en argument (`tri-gui <image>`) : ouverte en mode concentration (F11),
+    /// comme dans une visionneuse (demandé le 31/10/2026) ; `--focus` le force toujours.
+    pub image_focus: bool,
     /// Ordre des images au premier lancement (`f s` le change, retenu ensuite) : par nom,
     /// date de prise de vue ou de modification.
     pub sort: tri::sort::SortKey,
@@ -252,6 +255,7 @@ impl Default for GuiSettings {
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
+            image_focus: true,
             sort: tri::sort::SortKey::Name,
             sort_descending: false,
             remember_display: true,
@@ -447,6 +451,9 @@ pub struct GridSettings {
     pub textures: usize,
     /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
     pub marks: f32,
+    /// Drapeau « neutre » dessiné aussi (cercle vide), pour que chaque vignette montre
+    /// toutes ses informations (demandé le 31/10/2026).
+    pub neutral_flag: bool,
     /// Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
     pub rejected_opacity: f32,
     /// Épaisseur du cadre de la vignette survolée par la souris.
@@ -505,6 +512,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
+            neutral_flag: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
             marked_frame: 3.0,

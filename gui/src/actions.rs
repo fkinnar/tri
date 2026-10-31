@@ -229,6 +229,11 @@ pub enum Action {
     History,
     /// Déplier / replier la pile de l'image sélectionnée.
     StackToggle,
+    /// `((` : ouvrir le niveau suivant — la pile de rafale repliée, sinon les
+    /// développements de la photo (harmonisation du 31/10/2026).
+    StackOpen,
+    /// `))` : fermer le niveau le plus intérieur — les développements, sinon la rafale.
+    StackClose,
     /// Déplier toutes les piles, ou les replier toutes.
     StacksAll,
     /// Fenêtre de regroupement (seuil, écart de temps).
@@ -453,7 +458,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 188] = [
+    pub const ALL: [Action; 190] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -543,6 +548,8 @@ impl Action {
         Action::Redo,
         Action::History,
         Action::StackToggle,
+        Action::StackOpen,
+        Action::StackClose,
         Action::StacksAll,
         Action::GroupingWindow,
         Action::StackMode,
@@ -718,10 +725,9 @@ impl Action {
             | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
             | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
-            StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose | StackFirst
-            | StackLast | StackEnterToggle | DevToggle | DevNext | DevPrev | DevFoldAll => {
-                Group::Selection
-            }
+            StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
+            | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
+            | DevPrev | DevFoldAll => Group::Selection,
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
@@ -859,6 +865,8 @@ impl Action {
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
             Action::StackToggle => "core.stack.toggle",
+            Action::StackOpen => "core.stack.open",
+            Action::StackClose => "core.stack.close",
             Action::StacksAll => "core.stack.all",
             Action::GroupingWindow => "core.stack.settings",
             Action::StackMode => "core.stack.mode",
@@ -1425,10 +1433,11 @@ const FILES: &[Binding] = {
         // Développements d'une photo (30/10/2026) : Maj+V déplie / replie, Maj+W / Maj+Q
         // le suivant / le précédent (grille et plein écran) ; Ctrl+Maj+V replie toutes
         // les piles (31/10/2026).
-        (&[shifted(Key::V)], DevToggle),
+        // Les développements se plient avec les touches des piles (harmonisation du
+        // 31/10/2026) : `core.dev.toggle` et `core.dev.fold_all` n'ont plus de touche par
+        // défaut (réglables dans `[keys]`).
         (&[shifted(Key::W)], DevNext),
         (&[shifted(Key::Q)], DevPrev),
-        (&[ctrl_shift(Key::V)], DevFoldAll),
         // Zoom par paliers, comme Lightroom : des caractères, pour la rangée du haut comme
         // pour le pavé numérique, quelle que soit la disposition du clavier.
         (&[Chord::char('+')], ZoomIn),
@@ -1438,6 +1447,11 @@ const FILES: &[Binding] = {
         // Mode pile (plein écran) ; la préférée de la pile : Maj+Entrée (Entrée aussi en
         // mode pile, en plein écran).
         (&[ctrl(Key::S)], StackMode),
+        // `((` ouvre un niveau (rafale, puis développements), `))` le ferme (idée de
+        // l'utilisateur, 31/10/2026) ; caractères : directs en AZERTY, Maj+9 / Maj+0 en
+        // QWERTY. Jamais `[` `]` ni `{` `}` (Alt+Maj sur macOS).
+        (&[Chord::char('('), Chord::char('(')], StackOpen),
+        (&[Chord::char(')'), Chord::char(')')], StackClose),
         (&[shifted(Key::Enter)], StackChoose),
         // En entrant dans une pile : couverture ou première photo (bouton du bandeau).
         (&[ctrl_shift(Key::S)], StackEnterToggle),
@@ -2565,7 +2579,12 @@ mod tests {
             let plugin = |a: &Action| a.id().starts_with("plugin.");
             // Rares, par un bouton de l'aide ou du clic droit : pas de touche par défaut
             // non plus.
-            let rare = [Action::CheckUpdate, Action::Sidecars];
+            let rare = [
+                Action::CheckUpdate,
+                Action::Sidecars,
+                Action::DevToggle,
+                Action::DevFoldAll,
+            ];
             for a in Action::ALL
                 .into_iter()
                 .filter(|a| !by_leader.contains(a) && !plugin(a) && !rare.contains(a))
@@ -2588,7 +2607,8 @@ mod tests {
     #[test]
     fn only_the_copy_key_is_also_the_start_of_another() {
         // Une telle touche attend un court instant la suite avant d'agir : voulu pour `y`
-        // (`y w`) seulement, pour ne retarder aucune autre touche. Une touche d'un panneau
+        // (`y w`) et pour `(` / `)` (`((` / `))`, 31/10/2026) seulement, pour ne retarder
+        // aucune autre touche. Une touche d'un panneau
         // peut commencer une séquence générale (`g` du grand histogramme, `gg`) : dans le
         // panneau, la touche l'emporte ; ailleurs, la séquence marche.
         let km = Keymap::default();
@@ -2598,7 +2618,11 @@ mod tests {
                 .iter()
                 .any(|(l, b)| l.len() > k.len() && l.starts_with(k) && conflict(*a, *b));
             assert!(
-                !starts || *a == Action::FileCopy,
+                !starts
+                    || matches!(
+                        *a,
+                        Action::FileCopy | Action::StackFirst | Action::StackLast
+                    ),
                 "{a:?} ({k:?}) est aussi le début d'une séquence"
             );
         }
@@ -2832,6 +2856,29 @@ mod tests {
     }
 
     #[test]
+    fn a_double_parenthesis_opens_or_closes_a_level() {
+        // `((` ouvre, `))` ferme (31/10/2026) ; `(` seul reste « première de la pile »,
+        // au bout du délai court.
+        let km = Keymap::default();
+        let mut seq =
+            Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        assert!(seq.feed(&km, Chord::char('('), t0).is_empty());
+        assert_eq!(
+            seq.feed(&km, Chord::char('('), ms(100)),
+            [Action::StackOpen]
+        );
+        assert!(seq.feed(&km, Chord::char(')'), ms(500)).is_empty());
+        assert_eq!(
+            seq.feed(&km, Chord::char(')'), ms(600)),
+            [Action::StackClose]
+        );
+        assert!(seq.feed(&km, Chord::char('('), ms(2000)).is_empty());
+        assert_eq!(seq.expire(ms(2400)), Some(Action::StackFirst));
+    }
+
+    #[test]
     fn a_key_that_starts_a_sequence_waits_for_the_rest() {
         // `y` copie, `y )` copie la pile : `y` attend la suite le temps du délai court.
         let km = Keymap::default();
@@ -2863,11 +2910,10 @@ mod tests {
             seq.feed(&km, Chord::char(')'), ms(3500)),
             [Action::FileDeleteStack]
         );
-        // `)` seul : la fin de la pile (issue n° 62).
-        assert_eq!(
-            seq.feed(&km, Chord::char(')'), ms(5000)),
-            [Action::StackLast]
-        );
+        // `)` seul : la fin de la pile (issue n° 62), au bout du délai court depuis que
+        // `))` existe (31/10/2026).
+        assert!(seq.feed(&km, Chord::char(')'), ms(5000)).is_empty());
+        assert_eq!(seq.expire(ms(5400)), Some(Action::StackLast));
         // Plus de signalement : la touche seule reste joignable.
         let (_, warnings) =
             Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));

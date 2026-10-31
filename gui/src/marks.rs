@@ -140,7 +140,14 @@ const RIM: Color32 = Color32::from_black_alpha(170);
 /// rectangle sombre, chaque marque cerclée de sombre comme les pastilles) : étoiles en bas
 /// à gauche, drapeau en bas à droite, couleurs en haut à droite. `size` : taille d'une
 /// marque.
-pub fn thumbnail_notes(painter: &Painter, area: Rect, notes: &Notes, size: f32, colors: &Colors) {
+pub fn thumbnail_notes(
+    painter: &Painter,
+    area: Rect,
+    notes: &Notes,
+    size: f32,
+    colors: &Colors,
+    neutral: bool,
+) {
     let radius = size / 2.0;
     let gap = size * 0.25;
     let inset = radius + 3.0;
@@ -158,6 +165,16 @@ pub fn thumbnail_notes(painter: &Painter, area: Rect, notes: &Notes, size: f32, 
         let c = pos2(area.max.x - inset, area.max.y - inset);
         painter.circle_filled(c, radius + rim, RIM);
         flag(painter, c, radius, notes.flag, colors);
+    } else if neutral {
+        // Neutre : un cercle vide à la même place (`[gui.grid] neutral_flag`, 31/10/2026 :
+        // chaque vignette montre toutes ses informations).
+        let c = pos2(area.max.x - inset, area.max.y - inset);
+        painter.circle_filled(c, radius + rim, RIM);
+        painter.circle_stroke(
+            c,
+            radius * 0.62,
+            Stroke::new((radius * 0.28).max(1.5), Color32::from_gray(210)),
+        );
     }
     for (k, &color) in notes.colors.iter().enumerate() {
         let c = pos2(

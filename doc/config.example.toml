@@ -507,6 +507,9 @@ filter_bar = true
 # Sans dossier en argument, rouvrir le dernier dossier ouvert (mémorisé dans le dossier de
 # données : ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# Une image en argument (tri-gui <image>) : ouverte en mode concentration (F11), comme dans
+# une visionneuse ; l'argument --focus le force dans tous les cas.
+image_focus = true
 # Ordre des images : "name" (nom, l'ordre du boîtier), "captured" (date de prise de vue,
 # plusieurs boîtiers dans une séance) ou "modified" (date de modification), et le sens ;
 # f s et f r les changent, le choix est retenu (une paire RAW+JPEG reste ensemble).
@@ -566,6 +569,9 @@ name_chars = 24
 textures = 600
 # Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
 marks = 12.0
+# Drapeau « neutre » dessiné aussi (cercle vide), pour que chaque vignette montre toutes
+# ses informations.
+neutral_flag = true
 # Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
 rejected_opacity = 0.35
 # Épaisseur du cadre de la vignette survolée par la souris.

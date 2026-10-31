@@ -4,21 +4,41 @@
 
 ## À venir
 
+- **Mêmes touches pour les piles de rafale et de développements** : `s`, `(` `)`, `Maj+S`,
+  `d)` `y)` et les flèches du mode pile agissent sur la rafale si les piles sont actives
+  et qu'elle compte plusieurs photos, sinon sur les développements de la photo. Nouveaux
+  **`((`** : ouvre le niveau suivant (la rafale repliée, puis les développements) et
+  **`))`** : ferme le plus intérieur. `Maj+V` et `Ctrl+Maj+V` perdent leur touche par
+  défaut (`core.dev.toggle`, `core.dev.fold_all` restent réglables dans `[keys]`). Les
+  développements d'une photo restent désormais dans sa pile de rafale (la similarité
+  coupait entre eux, et la pile de développements disparaissait dès que les piles étaient
+  actives). Les pastilles « N dév. » et « replier » passent sous les pastilles de couleur
+  au lieu de les recouvrir. Le **drapeau neutre est dessiné aussi** (un cercle vide à la
+  place du drapeau, `[gui.grid] neutral_flag`) : chaque vignette montre toutes ses
+  informations.
+- **Corrigé : « Développer avec RapidRAW » sur une photo dont le `.rrdata` ne porte qu'une
+  note** rendait un développement orphelin, hors de la pile : un tel sidecar n'est plus un
+  développement RapidRAW pour le rendu non plus, et l'entrée est grisée dans la boîte du
+  clic droit.
 - **Générer les sidecars de notes manquants depuis l'interface** (suite de #253) : une
   icône « sidecar » dans la boîte du clic droit d'une vignette (la sélection) et « Générer
   les sidecars… » dans le menu du clic droit du dossier ouvert ; la boîte propose tous les
-  logiciels ou un format, annonce le nombre de sidecars à créer avant de le faire, et
-  rend compte dans la barre d'état. Action `core.file.sidecars`, sans touche par défaut.
+  logiciels ou un format, peut **aussi réécrire les sidecars existants** (leurs notes
+  seulement, le reste conservé, un fichier illisible recréé ; avec avertissement ;
+  `--rewrite` en ligne de commande), annonce le nombre de sidecars à créer ou réécrire
+  avant de le faire, et rend compte dans la barre d'état. Action `core.file.sidecars`, sans touche par défaut.
 - **Panneau de droite : de l'air sous chaque groupe de réglages** (`[gui.metadata]
   group_gap`, en hauteurs de ligne), et les boutons de développement du plein écran dans
   le sens de lecture, précédent à gauche (retour du 31/10/2026).
 - **Barre des filtres : la recherche par nom est à droite**, juste avant le compteur
   d'images (#241).
 - **Aide : « Signaler un problème » en bordeaux** (#242), et **la fenêtre d'aide se
-  déplace** (#251). La **boîte de déchargement s'ouvre au centre** comme les autres
+  déplace** (#251 ; main « saisir » sur sa barre de titre). La **boîte de déchargement s'ouvre au centre** comme les autres
   (#252).
 - **`q q` quitte** au lieu de `q` seul, trop immédiat à côté de `Maj+Q` (#244).
-- **`tri-gui <image>` ouvre le dossier de l'image, sur elle** (#250).
+- **`tri-gui <image>` ouvre l'image en plein écran**, dans son dossier (#250), en mode
+  concentration par défaut (`[gui] image_focus`) ; **`tri-gui --focus`** force le mode
+  concentration dans tous les cas, pour faire de `tri` la visionneuse du système.
 - **Panneau EXIF : précisions en gris** (#249) : la focale équivalente 24 × 36 et les
   coefficients de netteté à la ligne, les mégapixels derrière un tiret, sans parenthèses.
   `Metadata::rows` renvoie des `Row` (libellé, valeur, précision) ; `tri --metadata` écrit
