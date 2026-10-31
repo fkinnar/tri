@@ -8,6 +8,20 @@
   développée**, darktable compris (il rendrait par défaut, mais il n'y a rien à voir) ;
   seul le rendu LibRaw est toujours proposé. Les raccourcis le disent aussi (règle de
   l'utilisateur, 31/10/2026 : « c'est moi qui développe »).
+- **Corrigé : un profil RawTherapee / ART (ou un `.rrdata` RapidRAW) rempli après la note
+  qui l'avait créé n'entrait pas dans la pile des développements** avant la réouverture
+  du dossier (retour du 31/10/2026) : la surveillance traite un sidecar principal qui
+  devient un développement comme le XMP réécrit par darktable.
+- Pastilles des clones et copies sur les vignettes : le numéro seul (« DT · 1 »,
+  « RR · 2 ») ; une photo montrée dans le rendu d'un logiciel porte aussi le nom court
+  (« RT », pas « RawTherapee »).
+- **Tri par note** (`f s`, liste des tris de la section « Grille », `[gui] sort`) : par
+  **étoiles** (une rejetée sous 0 étoile), par **couleur** (ordre du nouveau
+  `[sort] color_order`, qui peut ne citer que quelques couleurs : les autres et les sans
+  couleur vont à la fin) ou par **drapeau** (acceptée, sans drapeau, rejetée). Une note
+  posée, annulée ou modifiée ailleurs retrie la grille aussitôt, la sélection suit
+  l'image. Les couleurs s'écrivent `"red"`, `"yellow"`… en TOML et dans les vues par
+  dossier enregistrées (l'ancien `"Red"` reste lu).
 - **Boîte « Sidecars » : les logiciels installés seulement** (XMP toujours), comme la
   liste des rendus ; ART était proposé sans être là (retour du 31/10/2026).
 - **RawTherapee / ART en AppImage sous Linux** : les AppImage récentes ne lancent que

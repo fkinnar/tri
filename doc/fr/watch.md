@@ -27,7 +27,14 @@ grille, dossiers cachés écartés comme dans `media::scan`.
 Un changement n'est signalé que quand deux lectures successives sont identiques : une
 copie de 500 fichiers en cours, ou un fichier dont la taille grandit, ne donne qu'un
 signal, à la fin. Le signal (`Changes`) liste les images et les sidecars ajoutés,
-retirés ou modifiés depuis le signal précédent.
+retirés ou modifiés depuis le signal précédent. Un sidecar qui ajoute ou retire un
+**développement** compte comme une image (la liste est à relire : une vignette de plus
+ou de moins) : clone darktable, copie virtuelle RapidRAW, `.rrdata` principal ou profil
+`.pp3` / `.arp` créé avec des réglages (`development_photo`) ; et un sidecar principal
+**modifié** qui en devient un (`became_development`, 31/10/2026 : XMP réécrit par
+darktable, puis `.rrdata` et profils RawTherapee / ART remplis après la note qui les a
+créés ; sans ça, la pile ne les voyait qu'à la réouverture du dossier). Un sidecar réduit
+aux notes reste un simple changement de sidecar.
 
 `FolderWatch::sync()` reprend l'état actuel pour référence sans rien signaler : après un
 changement fait par `tri` lui-même (renommage, corbeille, dossier relu), déjà pris en

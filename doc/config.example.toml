@@ -89,6 +89,13 @@ create = "auto"
 [sidecars.art]
 create = "auto"
 
+[sort]
+# Tri par couleur (f s jusqu'à « Couleur ») : l'ordre des couleurs, de la première à la
+# dernière. La liste peut n'en citer que quelques-unes (ex. ["red", "yellow", "green"] :
+# ces trois ordonnées, bleu et violet gardés pour autre chose) ; une image est classée
+# d'après la mieux placée de ses couleurs ; sans couleur, ou aucune dans la liste, à la fin.
+color_order = ["red", "yellow", "green", "blue", "purple"]
+
 [places]
 # Emplacements proposés par le panneau des dossiers. Masquer les sauvegardes Time Machine,
 # reconnues à leur contenu (pas à leur nom) :
@@ -524,8 +531,10 @@ reopen_last = true
 # une visionneuse ; l'argument --focus le force dans tous les cas.
 image_focus = true
 # Ordre des images : "name" (nom, l'ordre du boîtier), "captured" (date de prise de vue,
-# plusieurs boîtiers dans une séance) ou "modified" (date de modification), et le sens ;
-# f s et f r les changent, le choix est retenu (une paire RAW+JPEG reste ensemble).
+# plusieurs boîtiers dans une séance), "modified" (date de modification), "stars"
+# (étoiles ; une rejetée sous 0), "color" (ordre de [sort] color_order) ou "flag"
+# (acceptée, sans drapeau, rejetée), et le sens ; f s et f r les changent, le choix est
+# retenu (une paire RAW+JPEG reste ensemble).
 sort = "name"
 sort_descending = false
 # Garder d'un lancement à l'autre ce qu'on affiche ou masque d'une touche (collimateur,

@@ -2630,10 +2630,8 @@ impl TriApp {
             let changed = self.folder.notes.reload_sidecars(&sidecars);
             trace(|| format!("XMP modifiés ailleurs : {}", changed.len()));
             if !changed.is_empty() {
-                // Filtre sur les notes, couverture des piles : à revoir.
-                if !self.notes_rule.is_empty() {
-                    self.refilter(Reveal::Minimal);
-                }
+                // Filtre ou tri sur les notes, couverture des piles : à revoir.
+                self.notes_changed();
                 self.stacks_dirty = true;
                 self.notice = Some((t!("watch-notes", count = changed.len()), false));
             }
@@ -4782,9 +4780,26 @@ impl TriApp {
     /// empreintes de similarité, déjà lues en fond pour les piles ; inconnues : à la fin).
     fn apply_sort(&mut self) {
         let signatures = &self.signatures;
-        tri::sort::sort(&mut self.folder.files, self.order, |p| {
-            signatures.get(p).and_then(|s| s.time)
-        });
+        let notes = &self.folder.notes;
+        tri::sort::sort(
+            &mut self.folder.files,
+            self.order,
+            |p| signatures.get(p).and_then(|s| s.time),
+            |p| notes.notes(p).clone(),
+            &self.settings.sort,
+        );
+    }
+
+    /// Des notes ont changé (notée ici, annulée, modifiée ailleurs) : la grille retriée
+    /// sous un tri par note (31/10/2026 : l'image prend sa place tout de suite, la
+    /// sélection la suit), refiltrée sous un filtre sur les notes.
+    fn notes_changed(&mut self) {
+        if self.order.key.by_notes() {
+            self.apply_sort();
+            self.refilter(Reveal::Minimal);
+        } else if !self.notes_rule.is_empty() {
+            self.refilter(Reveal::Minimal);
+        }
     }
 
     /// Filtres et tri du dossier ouvert, tels qu'on les retient pour lui.
@@ -5219,16 +5234,18 @@ impl TriApp {
         self.stacks_dirty = true;
     }
 
-    /// Étiquette courte d'un développement : « DT », « DT · clone 1 », « RR · copie 2 »
-    /// (`None` pour une photo).
+    /// Étiquette courte d'un développement : « DT », « DT · 1 », « RR · 2 » (le numéro du
+    /// clone ou de la copie, sans le mot : retour du 31/10/2026 ; le nom complet
+    /// « Darktable · clone 1 » reste ailleurs) ; `None` pour une photo.
     fn development_badge(&self, path: &Path) -> Option<String> {
         let development = tri::developments::get(path)?;
         let siblings = tri::developments::of(&development.photo);
         let short = development.engine.short();
         Some(match development.rank(&siblings) {
             tri::developments::Rank::Main => short.to_string(),
-            tri::developments::Rank::Clone(n) => format!("{short} · {}", t!("dev-clone", n = n)),
-            tri::developments::Rank::Copy(n) => format!("{short} · {}", t!("dev-copy", n = n)),
+            tri::developments::Rank::Clone(n) | tri::developments::Rank::Copy(n) => {
+                format!("{short} · {n}")
+            }
         })
     }
 
@@ -6743,9 +6760,7 @@ impl TriApp {
         if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
             self.history.push(step);
         }
-        if !self.notes_rule.is_empty() {
-            self.refilter(Reveal::Minimal);
-        }
+        self.notes_changed();
     }
 
     /// Note l'image `path` et écrit son sidecar. En cas d'échec, l'erreur est affichée
@@ -6771,10 +6786,9 @@ impl TriApp {
         }
         // Couverture des piles : la meilleure, qui a pu changer.
         self.stacks_dirty = true;
-        // Filtre sur les notes : l'image peut ne plus y correspondre.
-        if !self.notes_rule.is_empty() {
-            self.refilter(Reveal::Minimal);
-        }
+        // Filtre sur les notes : l'image peut ne plus y correspondre ; tri par note : elle
+        // change de place.
+        self.notes_changed();
     }
 
     fn select(&mut self, index: usize) {
@@ -11948,7 +11962,9 @@ impl TriApp {
             let side = badge_rect.height();
             let galley = ui.painter().layout_no_wrap(
                 match level {
-                    Level::Developed(engine) => engine.name().to_string(),
+                    // Le nom court, comme la pastille d'un développement (retour du
+                    // 31/10/2026 : « RawTherapee » ici, « RT » là) ; la bulle a le long.
+                    Level::Developed(engine) => engine.short().to_string(),
                     _ => t!("grid-render-libraw-short"),
                 },
                 // Un peu plus petit que la légende : de l'air dans le cadre (retour du
@@ -12582,6 +12598,9 @@ impl TriApp {
                 self.reload_folder(show.clone());
             } else {
                 self.folder.notes.reload();
+                if self.order.key.by_notes() {
+                    self.apply_sort();
+                }
                 self.refilter(Reveal::Minimal);
             }
             if let Some(path) = show
@@ -14429,6 +14448,9 @@ fn sort_name(key: tri::sort::SortKey) -> String {
         tri::sort::SortKey::Name => t!("sort-name"),
         tri::sort::SortKey::Captured => t!("sort-captured"),
         tri::sort::SortKey::Modified => t!("sort-modified"),
+        tri::sort::SortKey::Stars => t!("sort-stars"),
+        tri::sort::SortKey::Color => t!("sort-color"),
+        tri::sort::SortKey::Flag => t!("sort-flag"),
     }
 }
 
@@ -16473,6 +16495,75 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(3);
         assert_ne!(h.state().stack_enter, before);
+    }
+
+    #[test]
+    fn sorting_by_ratings_follows_every_change_of_the_notes() {
+        // 31/10/2026 : tri par étoiles, couleur ou drapeau ; une note posée, annulée ou
+        // changée ailleurs replace l'image tout de suite, la sélection la suit.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        h.run_steps(3);
+        let names = |h: &Harness<'_, TriApp>| -> Vec<String> {
+            h.state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        // img1 : 3 étoiles ; tri décroissant par étoiles : elle passe en tête.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Stars,
+            descending: true,
+        });
+        h.run_steps(2);
+        assert_eq!(names(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
+        assert_eq!(h.state().selected, 0, "la sélection suit l'image notée");
+        // img2 notée 5 : elle passe devant, img1 (toujours sélectionnée) glisse en 2e.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num5, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(names(&h), ["img2.jpg", "img1.jpg", "img0.jpg"]);
+        assert_eq!(h.state().selected, 0);
+        // Annulée : img2 revient à 0 étoile, derrière (ordre des noms à égalité).
+        press(&mut h, Key::U, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(names(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
+        // Drapeaux : acceptée, sans drapeau, rejetée ; une rejetée sous 0 étoile.
+        press(&mut h, Key::X, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(
+            names(&h),
+            ["img1.jpg", "img0.jpg", "img2.jpg"],
+            "img2 rejetée : toujours dernière en étoiles décroissantes"
+        );
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Flag,
+            descending: false,
+        });
+        h.run_steps(2);
+        press(&mut h, Key::P, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(names(&h), ["img2.jpg", "img0.jpg", "img1.jpg"]);
+        // Modifiée ailleurs (ce que fait la surveillance : sidecars relus, puis
+        // `notes_changed`) : img0 acceptée dans son sidecar, retriée.
+        let mut other = tri::notes::NoteBook::load_files(
+            &h.state().folder.files,
+            tri::xmp::Convention::Darktable,
+        );
+        other
+            .edit(&photos.join("img0.jpg"), |n| n.flag = Flag::Accepted)
+            .unwrap();
+        let app = h.state_mut();
+        app.folder
+            .notes
+            .reload_sidecars(&[photos.join("img0.jpg.xmp")]);
+        app.notes_changed();
+        h.run_steps(2);
+        assert_eq!(names(&h), ["img0.jpg", "img2.jpg", "img1.jpg"]);
     }
 
     #[test]
