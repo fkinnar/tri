@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Sort by ratings** (`f s`, the sort list of the "Grid" section, `[gui] sort`): by
+  **stars** (a rejected photo below 0 stars), by **colour** (order of the new
+  `[sort] color_order`, which may name only a few colours: the others and the uncoloured
+  go last) or by **flag** (accepted, no flag, rejected). A rating set, undone or changed
+  elsewhere sorts the grid again at once, the selection follows the image. Colours are
+  written `"red"`, `"yellow"`… in TOML and in the saved folder views (the former
+  `"Red"` is still read).
 - **Stacks switch back in the bottom bar of the grid** (it had left the filter bar with
   its reorganisation, #199) and **in the "View" section** of the right panel in full
   screen, next to the shown source (feedback of 2026-10-31).

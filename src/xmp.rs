@@ -48,19 +48,26 @@ pub enum Flag {
 }
 
 /// Couleur d'une photo (les cinq couleurs communes à Lightroom, darktable et Capture One).
+/// En TOML et en JSON : `"red"`, `"yellow"`… (l'ancienne graphie `"Red"` reste lue :
+/// vues par dossier enregistrées avant le 31/10/2026).
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum Color {
     /// Rouge.
+    #[serde(rename = "red", alias = "Red")]
     Red,
     /// Jaune.
+    #[serde(rename = "yellow", alias = "Yellow")]
     Yellow,
     /// Vert.
+    #[serde(rename = "green", alias = "Green")]
     Green,
     /// Bleu.
+    #[serde(rename = "blue", alias = "Blue")]
     Blue,
     /// Violet.
+    #[serde(rename = "purple", alias = "Purple")]
     Purple,
 }
 

@@ -4,6 +4,13 @@
 
 ## À venir
 
+- **Tri par note** (`f s`, liste des tris de la section « Grille », `[gui] sort`) : par
+  **étoiles** (une rejetée sous 0 étoile), par **couleur** (ordre du nouveau
+  `[sort] color_order`, qui peut ne citer que quelques couleurs : les autres et les sans
+  couleur vont à la fin) ou par **drapeau** (acceptée, sans drapeau, rejetée). Une note
+  posée, annulée ou modifiée ailleurs retrie la grille aussitôt, la sélection suit
+  l'image. Les couleurs s'écrivent `"red"`, `"yellow"`… en TOML et dans les vues par
+  dossier enregistrées (l'ancien `"Red"` reste lu).
 - **Interrupteur des piles de retour dans le bandeau de la grille** (parti de la barre
   des filtres avec sa réorganisation, #199) et **dans la section « Vue »** du panneau de
   droite en plein écran, à côté de la source affichée (retour du 31/10/2026).
