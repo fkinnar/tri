@@ -12,6 +12,14 @@
   with a **non-empty history** (`darktable:history_end` > 0, attribute or element); an
   XMP merely imported into darktable, or written by `tri` for the ratings, is not; and
   the filter keeps a photo with its developments of the checked software.
+- **Fixed: rating photos restarted the background development batch** (same-day
+  feedback: twenty ratings, twenty restarts). With RapidRAW installed a rating creates
+  a `.rrdata`, which the folder watcher took for a new development: it reloaded the
+  folder and relaunched the batch. A `.rrdata` holding only ratings no longer counts.
+- **Fixed: rating a RapidRAW-developed photo re-rendered its development in the
+  background** (same-day feedback: twenty ratings, twenty renders). The render cache key
+  of a `.rrdata` now covers its adjustments only, like the darktable XMP ignores the
+  colour labels and the RawTherapee / ART profiles ignore `[General]`.
 - **Thumbnail info hidden by itself on small cells** (`[gui.grid] info_min_cell`, 110
   points): name, format and marks were unreadable; the Shift+T setting does not change,
   the info comes back when enlarging the thumbnails.

@@ -103,7 +103,14 @@ fn development_photo(
             .cloned()
     };
     if let Some(image) = name.strip_suffix(".rrdata") {
-        return in_folder(image).or_else(|| in_folder(image.rsplit_once('.')?.0));
+        // Le `.rrdata` principal n'ajoute un développement que s'il a des réglages : celui
+        // qu'une note crée (`[sidecars.rapidraw] create`) ne doit pas relire le dossier ni
+        // relancer les rendus (retour du 31/10/2026 : vingt notes, vingt relances). Une
+        // copie virtuelle (`IMG.RAF.<id>.rrdata`) en est toujours un.
+        if let Some(photo) = in_folder(image) {
+            return (!created || crate::rrdata::file_is_development(sidecar)).then_some(photo);
+        }
+        return in_folder(image.rsplit_once('.')?.0);
     }
     // Profils de RawTherapee / ART (31/10/2026) : la photo, si le profil développe.
     for extension in [".pp3", ".arp"] {
@@ -455,6 +462,48 @@ mod tests {
         // Simple note changée : pas une image de plus.
         std::fs::write(d.join("A.RAF.xmp"), b"<x a=\"1\"/>").unwrap();
         assert!(after.changes(&Snapshot::of(d).unwrap()).images.is_empty());
+    }
+
+    #[test]
+    fn a_rating_only_rrdata_is_a_sidecar_change_not_an_image_change() {
+        // 31/10/2026 : le `.rrdata` qu'une note crée relisait le dossier et relançait les
+        // rendus ; seul un `.rrdata` avec réglages (ou une copie virtuelle) est un
+        // développement de plus.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.RAF"), b"x").unwrap();
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(
+            d.join("A.RAF.rrdata"),
+            br#"{"version": 1, "rating": 3, "adjustments": null}"#,
+        )
+        .unwrap();
+        let after = Snapshot::of(d).unwrap();
+        let changes = before.changes(&after);
+        assert!(
+            changes.images.is_empty(),
+            "note seule : pas d'image de plus"
+        );
+        assert_eq!(changes.sidecars, [d.join("A.RAF.rrdata")]);
+        // Avec des réglages : un développement, la photo est à relire.
+        std::fs::remove_file(d.join("A.RAF.rrdata")).unwrap();
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(
+            d.join("A.RAF.rrdata"),
+            br#"{"rating": 3, "adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            before.changes(&Snapshot::of(d).unwrap()).images,
+            [d.join("A.RAF")]
+        );
+        // Une copie virtuelle : toujours un développement.
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(d.join("A.RAF.c33b94.rrdata"), b"{}").unwrap();
+        assert_eq!(
+            before.changes(&Snapshot::of(d).unwrap()).images,
+            [d.join("A.RAF")]
+        );
     }
 
     #[test]

@@ -986,6 +986,15 @@ pub fn render_stamp(sidecar: &Path) -> String {
             .ok()
             .map(|text| crate::pp3::development_content(&text).into_bytes())
             .unwrap_or(bytes)
+    } else if extension("rrdata") {
+        // RapidRAW : les réglages seuls (`adjustments`) ; la note, le drapeau et les
+        // étiquettes que `tri` y écrit ne refont pas le rendu (retour du 31/10/2026 :
+        // noter vingt images relançait vingt développements en fond).
+        String::from_utf8(bytes.clone())
+            .ok()
+            .and_then(|text| crate::rrdata::adjustments(&text).ok())
+            .map(|adjustments| adjustments.to_string().into_bytes())
+            .unwrap_or(bytes)
     } else {
         bytes
     };
@@ -1683,13 +1692,20 @@ mod tests {
             developed,
             "exposition changée : autre rendu"
         );
-        // Un autre format (RapidRAW) : tout le contenu.
+        // RapidRAW : les réglages seuls ; la note ne refait pas le rendu (31/10/2026).
         let rr = dir.path().join("DSCF0001.RAF.rrdata");
-        written(&rr, "{\"exposure\": 1}").unwrap();
+        written(&rr, r#"{"rating": 0, "adjustments": {"exposure": 1}}"#).unwrap();
         let before = render_stamp(&rr);
         std::thread::sleep(Duration::from_millis(10));
-        written(&rr, "{\"exposure\": 2}").unwrap();
-        assert_ne!(render_stamp(&rr), before);
+        written(
+            &rr,
+            r#"{"rating": 4, "flag": "pick", "adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
+        assert_eq!(render_stamp(&rr), before, "note posée : même rendu");
+        std::thread::sleep(Duration::from_millis(10));
+        written(&rr, r#"{"rating": 4, "adjustments": {"exposure": 2}}"#).unwrap();
+        assert_ne!(render_stamp(&rr), before, "réglage changé : autre rendu");
     }
 
     #[test]

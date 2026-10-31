@@ -13,6 +13,14 @@
   (`darktable:history_end` > 0, en attribut ou en élément) ; un XMP seulement importé
   dans darktable, ou écrit par `tri` pour les notes, n'en est pas un ; et le filtre garde
   une photo avec ses développements des logiciels cochés.
+- **Corrigé : noter des photos relançait le lot de développements en fond** (retour du
+  jour : vingt notes, vingt relances). RapidRAW installé, une note crée un `.rrdata`, que
+  la surveillance du dossier prenait pour un nouveau développement : relecture du dossier
+  et relance du lot. Un `.rrdata` qui n'a que des notes ne compte plus.
+- **Corrigé : noter une photo développée dans RapidRAW refaisait son rendu en fond**
+  (retour du jour : vingt notes, vingt développements). La clé de cache du rendu d'un
+  `.rrdata` ne couvre plus que ses réglages, comme le XMP darktable ignore les étiquettes
+  de couleur et les profils RawTherapee / ART ignorent `[General]`.
 - **Infos des vignettes masquées d'elles-mêmes sur les petites cellules** (`[gui.grid]
   info_min_cell`, 110 points) : nom, format et marques étaient illisibles ; le réglage
   Maj+T ne bouge pas, les infos reviennent en agrandissant les vignettes.
