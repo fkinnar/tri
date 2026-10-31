@@ -31,7 +31,9 @@
 - **Help: "Report a problem" in dark red** (#242), and **the help window can be moved**
   (#251; grab cursor on its title bar). The **offload dialog opens at the centre** like the other dialogs (#252).
 - **`q q` quits** instead of `q` alone, too immediate next to `Shift+Q` (#244).
-- **`tri-gui <image>` opens the image in full screen**, in its folder (#250).
+- **`tri-gui <image>` opens the image in full screen**, in its folder (#250), in focus mode
+  by default (`[gui] image_focus`); **`tri-gui --focus`** forces the focus mode in every
+  case, so `tri` can be the system's image viewer.
 - **EXIF panel: details in grey** (#249): the 35 mm equivalent focal length and the
   sharpness coefficients on a second line, the megapixels after a dash, without
   parentheses. `Metadata::rows` returns `Row`s (label, value, note); `tri --metadata`

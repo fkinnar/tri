@@ -44,7 +44,7 @@ cannot change without updating its documentation.
 | `[sharpness]` | Sharpness map: threshold, thickening, isolated points (`sharpness.md`) | engine |
 | `[files]` | File actions: allowed or not, pairs that follow, trash or permanent deletion, external editor (`files.md`) | engine |
 | `[data]` | Data folder (offload history, last opened folder) | engine |
-| `[gui]` | Theme, shortcut profiles, key sequence delay (`gg`), window, RAW render policy, loading budget | interface |
+| `[gui]` | Theme, shortcut profiles, key sequence delay (`gg`), window, RAW render policy, loading budget, focus mode for an image argument (`image_focus`) | interface |
 | `[gui.grid]` | Grid dimensions, thumbnails in memory, size of the ratings, neutral flag drawn (`neutral_flag`), opacity of a rejected photo, hover frame | interface |
 | `[gui.view]` | Wait before a RAW 100 %, large textures in memory, keyboard pan step, size of the ratings | interface |
 | `[gui.folders]` | Folders panel: shown, width, indentation, hidden folders | interface |

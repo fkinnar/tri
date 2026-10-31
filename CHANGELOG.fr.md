@@ -36,7 +36,9 @@
   déplace** (#251 ; main « saisir » sur sa barre de titre). La **boîte de déchargement s'ouvre au centre** comme les autres
   (#252).
 - **`q q` quitte** au lieu de `q` seul, trop immédiat à côté de `Maj+Q` (#244).
-- **`tri-gui <image>` ouvre l'image en plein écran**, dans son dossier (#250).
+- **`tri-gui <image>` ouvre l'image en plein écran**, dans son dossier (#250), en mode
+  concentration par défaut (`[gui] image_focus`) ; **`tri-gui --focus`** force le mode
+  concentration dans tous les cas, pour faire de `tri` la visionneuse du système.
 - **Panneau EXIF : précisions en gris** (#249) : la focale équivalente 24 × 36 et les
   coefficients de netteté à la ligne, les mégapixels derrière un tiret, sans parenthèses.
   `Metadata::rows` renvoie des `Row` (libellé, valeur, précision) ; `tri --metadata` écrit

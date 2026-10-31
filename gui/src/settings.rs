@@ -175,6 +175,9 @@ pub struct GuiSettings {
     pub filter_bar: bool,
     /// Sans dossier en argument, rouvrir le dernier dossier ouvert.
     pub reopen_last: bool,
+    /// Une image en argument (`tri-gui <image>`) : ouverte en mode concentration (F11),
+    /// comme dans une visionneuse (demandé le 31/10/2026) ; `--focus` le force toujours.
+    pub image_focus: bool,
     /// Ordre des images au premier lancement (`f s` le change, retenu ensuite) : par nom,
     /// date de prise de vue ou de modification.
     pub sort: tri::sort::SortKey,
@@ -252,6 +255,7 @@ impl Default for GuiSettings {
             bar_icon_size: 24.0,
             filter_bar: true,
             reopen_last: true,
+            image_focus: true,
             sort: tri::sort::SortKey::Name,
             sort_descending: false,
             remember_display: true,

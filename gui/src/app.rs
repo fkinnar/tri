@@ -302,6 +302,9 @@ pub struct TriApp {
     start_select: Option<usize>,
     /// Image passée en argument (#250) : ouverte en plein écran une fois son dossier lu.
     start_select_path: Option<PathBuf>,
+    /// Mode concentration à la première image (`--focus`, ou une image en argument avec
+    /// `[gui] image_focus`).
+    start_focus: bool,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
     /// Volume dont l'éjection attend confirmation.
@@ -864,6 +867,13 @@ pub fn development_label(path: &Path) -> String {
 }
 
 impl TriApp {
+    /// `--focus` : mode concentration dès l'ouverture, dossier ou image (31/10/2026 : `tri`
+    /// en visionneuse par défaut).
+    pub fn with_focus(mut self, on: bool) -> TriApp {
+        self.start_focus |= on;
+        self
+    }
+
     /// Fichier de configuration que la fenêtre de réglages modifie.
     pub fn with_config(mut self, path: Option<PathBuf>) -> TriApp {
         self.config_path = path;
@@ -968,6 +978,7 @@ impl TriApp {
             start_dir: None,
             start_select: None,
             start_select_path: None,
+            start_focus: false,
             eject_failed: None,
             eject_dialog: None,
             update: None,
@@ -1698,6 +1709,9 @@ impl TriApp {
         {
             self.selected = i;
             self.open_view();
+            if self.gui.image_focus {
+                self.start_focus = true;
+            }
         }
     }
 
@@ -12026,6 +12040,9 @@ impl TriApp {
             }
             self.script_wait = None;
         }
+        if std::mem::take(&mut self.start_focus) && !self.focus_mode {
+            self.perform(ctx, Action::FocusMode);
+        }
         while let Some(step) = self.startup_actions.pop_front() {
             match step {
                 Step::Do(action) => {
@@ -17020,6 +17037,24 @@ mod tests {
         assert_eq!(h.state().folder.dir, photos);
         assert_eq!(selected_name(&h), "b.jpg");
         assert_eq!(h.state().mode, Mode::View, "ouverte en plein écran");
+        h.run_steps(2);
+        assert!(
+            h.state().focus_mode,
+            "mode concentration ([gui] image_focus)"
+        );
+        // `--focus` sur un dossier : mode concentration aussi, en grille.
+        let mut s = AppSettings::default();
+        s.cache.dir = Some(dir.path().join("cache"));
+        s.data.dir = Some(dir.path().join("data"));
+        s.places.watch_ms = 0;
+        s.gui.reopen_last = false;
+        let folder = photos.clone();
+        let mut f = Harness::builder()
+            .with_size(vec2(1000.0, 700.0))
+            .build_eframe(move |_cc| TriApp::new(Some(folder), s, None).with_focus(true));
+        run_until(&mut f, |app| app.loading.is_none());
+        assert_eq!(f.state().mode, Mode::Grid);
+        assert!(f.state().focus_mode, "--focus");
     }
 
     #[test]

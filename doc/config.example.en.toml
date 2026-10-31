@@ -508,6 +508,9 @@ filter_bar = true
 # Without a folder argument, reopen the last folder opened (remembered in the data
 # folder: ~/.local/share/tri, ~/Library/Application Support/tri, %APPDATA%\tri).
 reopen_last = true
+# An image argument (tri-gui <image>): opened in focus mode (F11), like in a viewer; the
+# --focus argument forces it in every case.
+image_focus = true
 # Order of the images: "name" (the camera's order), "captured" (shooting date, several
 # cameras in a session) or "modified" (modification date), and the direction; f s and
 # f r change them, the choice is remembered (a RAW+JPEG pair stays together).
