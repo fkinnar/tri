@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Les boîtes se déplacent par leur titre seulement** (retour du 01/11/2026 : dans la
+  fenêtre de réglages, glisser une pastille un peu à côté déplaçait toute la fenêtre) ;
+  une boîte sans titre se saisit encore partout.
 - **Fenêtre de réglages : un éditeur à pastilles pour l'ordre des couleurs du tri**
   (`[sort] color_order`, idée de l'utilisateur) : cinq emplacements vides sous « Tri »,
   les couleurs restantes sous « Disponibles » ; glisser ou cliquer pour composer l'ordre,
