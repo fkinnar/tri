@@ -92,6 +92,24 @@ impl Color {
         }
     }
 
+    /// Identifiant en TOML et en JSON (`"red"`…), celui de `serde`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Color::Red => "red",
+            Color::Yellow => "yellow",
+            Color::Green => "green",
+            Color::Blue => "blue",
+            Color::Purple => "purple",
+        }
+    }
+
+    /// Couleur d'un identifiant (`"red"`, ou l'ancienne graphie `"Red"`).
+    pub fn from_id(id: &str) -> Option<Color> {
+        Color::ALL
+            .into_iter()
+            .find(|c| c.id().eq_ignore_ascii_case(id.trim()))
+    }
+
     /// Numéro dans `darktable:colorlabels`.
     pub fn darktable(self) -> u8 {
         self as u8

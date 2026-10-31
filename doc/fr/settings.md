@@ -79,7 +79,13 @@ fichier absent à l'emplacement par défaut, non.
 ## Fenêtre de réglages
 
 Dans l'interface, `Ctrl+,` ouvre une fenêtre qui modifie ce fichier sans perdre ses
-commentaires ni ses autres clés (voir `config_edit.md` et `gui.md`).
+commentaires ni ses autres clés (voir `config_edit.md` et `gui.md`). Quelques réglages
+ont leur propre éditeur : les raccourcis (`[keys]`), et `[sort] color_order` (idée de
+l'utilisateur, 31/10/2026) : sous « Tri », cinq emplacements (pastilles vides) qui
+reçoivent les couleurs dans l'ordre voulu ; sous « Disponibles », les couleurs restantes.
+On glisse une couleur d'un côté à l'autre ou dans l'ordre, ou on clique (une disponible
+s'ajoute à la fin, une triée se retire) ; la liste est écrite à chaque changement
+(`SettingsWindow::color_order_editor`, pastilles aux couleurs du thème).
 
 ## Module `tri::settings` (moteur)
 

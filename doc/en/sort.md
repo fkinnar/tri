@@ -27,7 +27,8 @@ place. `SortKey::by_notes()` says whether the key depends on the ratings;
   announce its own again, a trap already met with the "well exposed" filter, issue #10).
 - **Modification dates**: read on the disk when sorting (`modified`).
 - **Ratings**: provided by the caller (`notes(path)`, the folder's book); a pair by its
-  RAW, a development by its photo (same key as the dates). `[sort] color_order`
+  RAW, a development by its photo (same key as the dates). `[sort] color_order` (dot
+  editor in the settings window, see `settings.md`)
   (`SortSettings`) may name only a few colours (user's request, 2026-10-31: red / yellow
   / green ordered for one thing, blue and purple for another); an image is ranked by its
   best-placed colour (several-colours mode), the others go last with the uncoloured, in
