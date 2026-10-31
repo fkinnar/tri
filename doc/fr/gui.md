@@ -421,10 +421,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   place, sinon **selon le rendu des vignettes**, décidé le 31/10/2026 avec l'utilisateur :
   « JPEG boîtier » et « Rendu RAW (LibRaw) », la photo elle-même, la grille ne change plus
   après coup ; « Couverture », le développement préféré, sinon le plus récent ; un
-  logiciel, son développement principal ; à défaut la photo), et « N dév. » dans
-  une pastille en haut à droite (`[gui.colors] development_mark` ; le nombre d'images
-  d'une rafale est en haut à gauche ; masquée avec les infos des vignettes, Maj+T, où
-  elle était tronquée : #243) ; dépliée, chaque vignette dans un cadre fin de la
+  logiciel, son développement principal ; à défaut la photo), et la **bobine** des
+  développements (l'icône du filtre « développées », dans la couleur du texte de la
+  cellule, sans fond : retour du 31/10/2026, « N dév. » en pastille colorée accrochait
+  l'œil ; le nombre est dans sa bulle) en haut à droite, sous la rangée des couleurs (le
+  nombre d'images d'une rafale est en haut à gauche ; masquée avec les infos des
+  vignettes, Maj+T : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
   lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `s` déplie / replie (comme une pile :
   harmonisation du 31/10/2026, voir plus bas), `Maj+W` / `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
@@ -432,7 +434,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
   photo elle-même : plus de préféré ; `preferred-developments.txt` des données), **sans
   bascule** (31/10/2026 : refaire ne retire rien). Dépliée, chaque vignette porte une
-  pastille « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
+  icône « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
   repliait à la souris) : clic = replier, **Alt+clic** = replier en gardant ce
   développement en couverture ; `Maj+S` déplie ou replie toutes les piles, rafales et
   développements. **Mêmes touches pour les deux sortes de piles** (31/10/2026, demande de

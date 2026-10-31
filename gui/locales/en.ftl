@@ -147,7 +147,6 @@ action-core-stack-first = First image of the stack (or the photo, before its dev
 action-core-stack-last = Last image of the stack (or the last development)
 action-core-stack-enter = Entering a stack: its first photo (on) or its cover
 ## A photo's developments (darktable, RapidRAW; 2026-10-30)
-dev-count = { $n } dev.
 dev-count-tip = { $n ->
     [one] { $n } development
    *[other] { $n } developments

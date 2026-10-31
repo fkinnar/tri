@@ -357,9 +357,10 @@ pub fn film_reel(painter: &Painter, rect: Rect, color: Color32) {
     let s = rect.width().min(rect.height());
     let c = rect.center() - vec2(s * 0.06, 0.0);
     let r = s * 0.36;
-    let stroke = Stroke::new((s * 0.08).max(1.2), color);
+    // Trait fin (retour du 31/10/2026 : trop épais sur les vignettes).
+    let stroke = Stroke::new((s * 0.055).max(1.0), color);
     painter.circle_stroke(c, r, stroke);
-    painter.circle_filled(c, s * 0.06, color);
+    painter.circle_filled(c, s * 0.055, color);
     for k in 0..5 {
         let a = -FRAC_PI_2 + std::f32::consts::TAU * k as f32 / 5.0;
         painter.circle_filled(c + vec2(a.cos(), a.sin()) * r * 0.55, s * 0.08, color);
@@ -1057,11 +1058,13 @@ pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
 }
 
 /// Icône « replier » d'une pile de développements dépliée (31/10/2026) : un chevron vers
-/// le haut au-dessus d'un trait, les vignettes qui remontent sous la couverture.
+/// le haut au-dessus d'un trait, les vignettes qui remontent sous la couverture ; le
+/// dessin seul, dans la couleur du texte (retour du même soir).
 pub fn fold(painter: &Painter, rect: Rect, color: Color32) {
     let c = rect.center();
     let r = rect.width() * 0.28;
-    let stroke = Stroke::new(1.5, color);
+    // Trait fin, comme la bobine (retour du 31/10/2026 : trop gras).
+    let stroke = Stroke::new((rect.width() * 0.06).max(1.0), color);
     painter.line_segment([c + vec2(-r, -r * 0.15), c + vec2(0.0, -r * 0.85)], stroke);
     painter.line_segment([c + vec2(0.0, -r * 0.85), c + vec2(r, -r * 0.15)], stroke);
     painter.line_segment([c + vec2(-r, r * 0.6), c + vec2(r, r * 0.6)], stroke);

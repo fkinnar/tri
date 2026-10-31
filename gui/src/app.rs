@@ -11372,10 +11372,13 @@ impl TriApp {
             for (action, on) in self.content_toggles() {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
-                // Allumé à l'accent, éteint fondu (retour du 31/10/2026 : même logique que
-                // les autres contrôles).
-                let accent = marks::accent_mark(ui.ctx());
-                let color = if on { accent } else { marks::faded(accent) };
+                // Allumé à l'accent, éteint en gris moyen comme les étoiles (retour du
+                // 31/10/2026 : l'accent fondu sur le gris de la barre ne se lisait pas).
+                let color = if on {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
                 filter_icon(ui.painter(), rect, action, color);
                 if response.clicked() {
                     clicked.push(action);
@@ -11722,7 +11725,16 @@ impl TriApp {
         // Pile de développements dépliée (30/10/2026) : un cadre fin de la couleur des
         // développements autour de chacune de ses vignettes.
         let dev_mark = self.gui.theme.development_mark(&colors, ui.visuals());
-        let on_mark = marks::on_color(dev_mark);
+        // La bobine des développements, dans la couleur du texte de la cellule (retour du
+        // 31/10/2026 : une pastille colorée accrochait l'œil).
+        let mark_color = if selected {
+            self.gui
+                .theme
+                .selected_text(&colors, visuals_text(ui, true))
+        } else {
+            self.gui.theme.cell_text(&colors, visuals_text(ui, false))
+        };
+        let reel = g.marks * 1.4;
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11733,10 +11745,19 @@ impl TriApp {
         }
         // Pile de développements repliée : le nombre de développements, en haut à droite
         // (le nombre d'images d'une pile de rafale est en haut à gauche).
-        // Badge « n dév. » et pastille « replier » sous la rangée des pastilles de couleur,
-        // toujours à la même hauteur (retours du 31/10/2026 : ils se superposaient, puis
-        // sautaient selon qu'il y avait une couleur ou non).
+        // Bobine « développements » (pile repliée) ou « replier » (dépliée) sous la rangée
+        // des pastilles de couleur, toujours à la même hauteur (retours du 31/10/2026 :
+        // elles se superposaient, puis sautaient selon qu'il y avait une couleur ou non ;
+        // puis la pastille « n dév. » colorée accrochait : juste le dessin, le nombre dans
+        // la bulle).
         let below = g.marks + 6.0;
+        let reel_rect = Rect::from_min_size(
+            pos2(
+                rect.max.x - g.padding - 2.0 - reel,
+                rect.min.y + g.padding + 2.0 + below,
+            ),
+            vec2(reel, reel),
+        );
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info
@@ -11747,18 +11768,14 @@ impl TriApp {
                 .clone()
                 .filter(|&i| tri::media::is_development(&self.files[i].path))
                 .count();
-            let label =
-                painter.layout_no_wrap(t!("dev-count", n = n), FontId::proportional(12.0), on_mark);
-            let at = pos2(
-                rect.max.x - g.padding - 2.0 - label.size().x,
-                rect.min.y + g.padding + 2.0 + below,
-            );
-            let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
-            painter.rect_filled(back, 6.0, dev_mark);
-            painter.galley(at, label, on_mark);
+            marks::film_reel(painter, reel_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-count-tip", n = n, keys = keys);
-            let badge = ui.interact(back, response.id.with("developments"), Sense::click());
+            let badge = ui.interact(
+                reel_rect.expand(2.0),
+                response.id.with("developments"),
+                Sense::click(),
+            );
             badge.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
             });
@@ -11773,19 +11790,16 @@ impl TriApp {
             // Pile dépliée (31/10/2026, demande de l'utilisateur : rien ne la repliait à
             // la souris) : une pastille « replier » au même endroit ; Alt+clic replie en
             // gardant ce développement comme couverture (sa préférée).
-            let side = 16.0;
-            let back = Rect::from_min_size(
-                pos2(
-                    rect.max.x - g.padding - 2.0 - side,
-                    rect.min.y + g.padding + 2.0 + below,
-                ),
-                vec2(side, side),
-            );
-            painter.rect_filled(back, 6.0, dev_mark);
-            marks::fold(painter, back, on_mark);
+            // L'icône « replier », le dessin seul dans la couleur du texte (retour du
+            // 31/10/2026).
+            marks::fold(painter, reel_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-fold-tip", keys = keys);
-            let badge = ui.interact(back, response.id.with("fold"), Sense::click());
+            let badge = ui.interact(
+                reel_rect.expand(2.0),
+                response.id.with("fold"),
+                Sense::click(),
+            );
             badge.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
             });

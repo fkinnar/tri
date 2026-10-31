@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
+  la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
+  nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,
+  sans fond.
 - Bandeau de notation et sélecteurs : plus de cercle d'accent autour de la couleur posée,
   la pastille pleine face aux autres fondues suffit, comme les étoiles et les drapeaux.
   L'anneau du drapeau neutre est dessiné un peu plus petit, pour paraître de la taille des
@@ -12,7 +16,8 @@
   filtre est posé, fondus sinon, sans fond ni cercle. Les **drapeaux du filtre sont trois
   boutons combinables** (acceptées, neutres, rejetées : n'importe quel mélange ; les
   préréglages du clavier restent), et les interrupteurs d'analyse se fondent au lieu de
-  grisailler. Les pastilles « n dév. » et « replier » passent en gris foncé (`[gui.colors]
+  grisailler (puis retour au gris moyen : l'accent fondu ne se lisait pas sur la barre).
+  Les pastilles « n dév. » et « replier » passent en gris foncé (`[gui.colors]
   development_mark`, un peu plus sombre en thème clair) au lieu du bleu clair.
 - **Noter à la souris sur la vignette elle-même** (#257) : un clic sur les étoiles, le
   drapeau ou les pastilles de couleur d'une vignette ouvre un petit sélecteur du groupe
