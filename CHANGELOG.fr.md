@@ -4,6 +4,9 @@
 
 ## À venir
 
+- Vignettes : plus de pastille « LibRaw » sur une photo montrée dans le rendu interne
+  (retour du 31/10/2026 : elle ne servait à rien) ; seul le rendu d'un logiciel porte
+  une pastille.
 - **Fenêtre de réglages : un éditeur à pastilles pour l'ordre des couleurs du tri**
   (`[sort] color_order`, idée de l'utilisateur) : cinq emplacements vides sous « Tri »,
   les couleurs restantes sous « Disponibles » ; glisser ou cliquer pour composer l'ordre,
