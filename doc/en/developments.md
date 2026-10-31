@@ -73,7 +73,9 @@ order (not the order of the paths of their own: `IMG@dt-01` would come before `I
 ## In the interface
 
 See `gui.md`, "Development stacks": a photo is a stack of its developments, folded by
-default (cover and "N dev."), unfoldable (`Shift+V`); `Shift+W` / `Shift+Q` step from one
+default (cover according to the folder's thumbnail render, 2026-10-31: the photo in
+camera JPEG, the preferred or latest development in "Cover", a software's main
+development; and "N dev."), unfoldable (`Shift+V`); `Shift+W` / `Shift+Q` step from one
 to the next, `Ctrl+Shift+V` folds every stack, a badge on each unfolded thumbnail folds
 with the mouse (Alt+click: keeping this development as the cover, 2026-10-31); in full
 screen a development shows its render, `b` shows the camera JPEG

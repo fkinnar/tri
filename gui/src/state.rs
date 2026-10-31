@@ -134,6 +134,8 @@ pub struct FolderView {
     pub inverted: bool,
     /// Ordre des images ; `None` : celui retenu pour tous.
     pub order: Option<tri::sort::Order>,
+    /// Rendu des vignettes (`f d`, 31/10/2026) ; `None` : celui de la configuration.
+    pub render: Option<crate::grid_render::GridRender>,
 }
 
 /// Filtres et tri retenus pour `dir`, s'il y en a.
@@ -210,6 +212,7 @@ mod tests {
                 key: tri::sort::SortKey::Captured,
                 descending: true,
             }),
+            render: Some(crate::grid_render::GridRender::Cover),
             ..Default::default()
         };
         remember_folder_view(dir.path(), a, &view).unwrap();

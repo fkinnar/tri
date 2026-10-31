@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Thumbnail render kept per folder**, like the filters and the sort (`f d`, right panel):
+  a folder never set uses `[gui.grid] render`. The render now decides the **cover** of a
+  photo with developments: "camera JPEG" and "LibRaw" show the photo itself (the grid no
+  longer changes after a few seconds), **"Cover"** (replaces "Latest development") shows
+  the preferred development, else the latest, a software shows its main development.
+  `render = "latest"` is still accepted in the configuration.
 - **Folding development stacks with the mouse**: each thumbnail of an unfolded stack
   carries a "fold" badge (click: fold; Alt+click: fold and keep this development as the
   cover). `Ctrl+Shift+V` folds every development stack. `Shift+Enter` now always makes

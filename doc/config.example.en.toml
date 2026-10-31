@@ -592,10 +592,12 @@ search_width = 200.0
 # Minimum width of this field when the bar lacks room (narrow window: the sort and the
 # number of images then go into a "…" menu).
 search_min_width = 80.0
-# Thumbnail render, also changed in the filter bar (f d): "embedded" (camera JPEG, to
-# offload and cull), "latest" (each image's most recent development), "darktable" or
-# "rapidraw" (always this software), "libraw" (RAW render). An image without the wanted
-# development shows its LibRaw render, computed in the background.
+# Thumbnail render, also changed in the filter bar (f d), kept per folder (this is the
+# value of a folder never set): "embedded" (camera JPEG, to offload and cull; a developed
+# photo folds on its JPEG), "cover" (the cover: the preferred development, else the
+# latest), "darktable" or "rapidraw" (always this software), "libraw" (RAW render). An
+# image without the wanted development shows its LibRaw render, computed in the
+# background.
 render = "embedded"
 # Photos to develop for the chosen render: "auto" (rendered in the background, one
 # image after another) or "manual" (Ctrl+Shift+B on the folder; LibRaw meanwhile).
