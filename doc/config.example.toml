@@ -83,6 +83,12 @@ multiple_colors = false
 [sidecars.rapidraw]
 create = "auto"
 
+[sidecars.rawtherapee]
+create = "auto"
+
+[sidecars.art]
+create = "auto"
+
 [places]
 # Emplacements proposés par le panneau des dossiers. Masquer les sauvegardes Time Machine,
 # reconnues à leur contenu (pas à leur nom) :
@@ -121,9 +127,16 @@ high_quality = false
 # PATH, aux emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
 # (l'exécutable de RapidRAW ou son AppImage), "flatpak", ou "" (pas de rendu RapidRAW).
 rapidraw = "auto"
+# RawTherapee (rawtherapee-cli, profil .pp3 ; 31/10/2026) : "auto" (cherché dans le PATH,
+# aux emplacements habituels, puis sous Linux en AppImage et en Flatpak), un chemin
+# (rawtherapee-cli ou une AppImage), "flatpak" (com.rawtherapee.RawTherapee), ou "".
+rawtherapee = "auto"
+# ART, dérivé de RawTherapee (ART-cli, profil .arp) : "auto" (PATH, emplacements
+# habituels, AppImage sous Linux), un chemin (ART-cli ou l'AppImage), ou "".
+art = "auto"
 # Logiciel dont le rendu développé s'affiche quand une image a été développée dans
 # plusieurs : "auto" (le développement le plus récent) ou un logiciel ("darktable",
-# "rapidraw"), gardé tant qu'il a développé l'image.
+# "rapidraw", "rawtherapee", "art"), gardé tant qu'il a développé l'image.
 default = "auto"
 
 [export]

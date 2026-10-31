@@ -238,8 +238,16 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui.view", "stack_enter") => &["cover", "first"],
         ("cache", "location") => &["user", "disk", "folder"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
-        ("develop", "default") => &["auto", "darktable", "rapidraw"],
-        ("gui.grid", "render") => &["embedded", "cover", "darktable", "rapidraw", "libraw"],
+        ("develop", "default") => &["auto", "darktable", "rapidraw", "rawtherapee", "art"],
+        ("gui.grid", "render") => &[
+            "embedded",
+            "cover",
+            "darktable",
+            "rapidraw",
+            "rawtherapee",
+            "art",
+            "libraw",
+        ],
         ("gui.grid", "develop") => &["auto", "manual"],
         ("gui.histogram", "scale") => &["ev", "linear"],
         _ => return None,

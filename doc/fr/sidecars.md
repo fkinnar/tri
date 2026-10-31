@@ -6,8 +6,9 @@ Noter dans `tri` suffit alors : darktable (XMP) et RapidRAW (`.rrdata`) suivent,
 sur une image jamais ouverte dans l'un d'eux. Un format = une implémentation du trait
 `Format`, et la liste `formats()` (un « vecteur de trait ») : le XMP ([xmp.md](xmp.md),
 lu par darktable, Lightroom, Capture One, digiKam…) et le `.rrdata` de RapidRAW
-([rrdata.md](rrdata.md)). Un prochain logiciel à sidecar propre (RawTherapee, `.pp3`)
-s'ajoute ici, avec sa section de réglages.
+([rrdata.md](rrdata.md)), et depuis le 31/10/2026 les profils de RawTherapee (`.pp3`) et
+d'ART (`.arp`), un même format `sidecars::Profile` ([pp3.md](pp3.md)), avec leurs
+sections `[sidecars.rawtherapee]` et `[sidecars.art]`.
 
 ## Le trait `Format`
 

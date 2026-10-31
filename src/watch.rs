@@ -105,6 +105,13 @@ fn development_photo(
     if let Some(image) = name.strip_suffix(".rrdata") {
         return in_folder(image).or_else(|| in_folder(image.rsplit_once('.')?.0));
     }
+    // Profils de RawTherapee / ART (31/10/2026) : la photo, si le profil développe.
+    for extension in [".pp3", ".arp"] {
+        if let Some(image) = name.strip_suffix(extension) {
+            let photo = in_folder(image)?;
+            return (!created || crate::pp3::file_is_development(sidecar)).then_some(photo);
+        }
+    }
     let image = name.strip_suffix(".xmp")?;
     if let Some(photo) = in_folder(image) {
         // Le XMP de la photo : un développement darktable s'il en vient (supprimé : on ne
@@ -118,10 +125,14 @@ fn development_photo(
     (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo)
 }
 
-/// Vrai si `path` est un sidecar : XMP, ou RapidRAW (`.rrdata`), casse ignorée.
+/// Vrai si `path` est un sidecar : XMP, RapidRAW (`.rrdata`), RawTherapee (`.pp3`) ou
+/// ART (`.arp`), casse ignorée.
 fn is_sidecar(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("xmp") || e.eq_ignore_ascii_case("rrdata"))
+    path.extension().is_some_and(|e| {
+        ["xmp", "rrdata", "pp3", "arp"]
+            .iter()
+            .any(|s| e.eq_ignore_ascii_case(s))
+    })
 }
 
 impl Snapshot {

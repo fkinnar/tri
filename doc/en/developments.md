@@ -3,7 +3,9 @@
 Decided on 2026-10-30: everything that **renders** a photo is a *development*, all at the
 same level: **darktable**'s main development (its XMP, when darktable wrote it) and its
 **clones** (`IMG_01.RAF.xmp` without an `IMG_01.RAF` image), **RapidRAW**'s main one
-(`IMG.RAF.rrdata`) and its **virtual copies** (`IMG.RAF.<id>.rrdata`). The neutral LibRaw
+(`IMG.RAF.rrdata`) and its **virtual copies** (`IMG.RAF.<id>.rrdata`), **RawTherapee**
+(`IMG.RAF.pp3`) and **ART** (`IMG.RAF.arp`; 2026-10-31: one main development each, no
+clones; paths `IMG@rt.RAF`, `IMG@art.RAF`). The neutral LibRaw
 render is the photo itself; the camera JPEG is its initial display, not a development.
 "Versions" keep their meaning in `tri`: the crops.
 

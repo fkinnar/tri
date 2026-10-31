@@ -45,6 +45,7 @@ pub mod notes;
 pub mod offload;
 pub mod overlay;
 pub mod places;
+pub mod pp3;
 pub mod preview;
 pub mod process;
 pub mod raw;

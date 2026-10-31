@@ -5,9 +5,10 @@ Requested by the user on 2026-10-31: when an image is rated, the rating must go 
 enough: darktable (XMP) and RapidRAW (`.rrdata`) follow, even on an image never opened in
 either. A format is an implementation of the `Format` trait, and the `formats()` list (a
 "vector of trait objects"): the XMP ([xmp.md](xmp.md), read by darktable, Lightroom,
-Capture One, digiKam…) and RapidRAW's `.rrdata` ([rrdata.md](rrdata.md)). The next
-software with a sidecar of its own (RawTherapee, `.pp3`) is added here, with its settings
-section.
+Capture One, digiKam…) and RapidRAW's `.rrdata` ([rrdata.md](rrdata.md)), and since
+2026-10-31 the RawTherapee (`.pp3`) and ART (`.arp`) profiles, one `sidecars::Profile`
+format ([pp3.md](pp3.md)), with their `[sidecars.rawtherapee]` and `[sidecars.art]`
+sections.
 
 ## The `Format` trait
 

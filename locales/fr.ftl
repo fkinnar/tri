@@ -288,7 +288,7 @@ send-refused = { $name } refuse ces fichiers
 
 ## Rendu par un logiciel de développement
 develop-none = pas de développement pour cette image
-develop-unknown-engine = logiciel de développement inconnu : « { $value } » (auto, darktable, rapidraw)
+develop-unknown-engine = logiciel de développement inconnu : « { $value } » (auto, darktable, rapidraw, rawtherapee, art)
 develop-unavailable = { $engine } introuvable (réglage [develop] { $id })
 develop-rapidraw-open = interface ouverte : l'export en ligne de commande ne tourne pas en même temps, fermez-la puis recommencez
 develop-rapidraw-black = image toute noire : l'interface de RapidRAW est sans doute ouverte, fermez-la puis recommencez

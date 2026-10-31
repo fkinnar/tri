@@ -458,7 +458,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 190] = [
+    pub const ALL: [Action; 194] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -585,6 +585,8 @@ impl Action {
         Action::FolderConnect,
         Action::FolderForget,
         Action::FolderOpenIn(tri::develop::Engine::Darktable),
+        Action::FolderOpenIn(tri::develop::Engine::RawTherapee),
+        Action::FolderOpenIn(tri::develop::Engine::Art),
         Action::FolderCopy,
         Action::FolderMove,
         Action::MetaUp,
@@ -606,6 +608,8 @@ impl Action {
         Action::Develop,
         Action::DevelopWith(tri::develop::Engine::Darktable),
         Action::DevelopWith(tri::develop::Engine::RapidRaw),
+        Action::DevelopWith(tri::develop::Engine::RawTherapee),
+        Action::DevelopWith(tri::develop::Engine::Art),
         Action::DevelopFolder,
         Action::ToggleFolderPanel,
         Action::RefreshFolders,
@@ -903,6 +907,10 @@ impl Action {
             Action::FolderForget => "core.folders.forget",
             Action::FolderOpenIn(tri::develop::Engine::Darktable) => "plugin.darktable.open_folder",
             Action::FolderOpenIn(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.open_folder",
+            Action::FolderOpenIn(tri::develop::Engine::RawTherapee) => {
+                "plugin.rawtherapee.open_folder"
+            }
+            Action::FolderOpenIn(tri::develop::Engine::Art) => "plugin.art.open_folder",
             Action::FolderCopy => "core.folders.copy",
             Action::FolderMove => "core.folders.move",
             Action::MetaUp => "core.metadata.up",
@@ -933,6 +941,8 @@ impl Action {
             Action::Develop => "core.develop.render",
             Action::DevelopWith(tri::develop::Engine::Darktable) => "plugin.darktable.develop",
             Action::DevelopWith(tri::develop::Engine::RapidRaw) => "plugin.rapidraw.develop",
+            Action::DevelopWith(tri::develop::Engine::RawTherapee) => "plugin.rawtherapee.develop",
+            Action::DevelopWith(tri::develop::Engine::Art) => "plugin.art.develop",
             Action::DevelopFolder => "core.develop.folder",
             Action::RefreshFolders => "core.view.refresh_folders",
             Action::ToggleHistogram => "core.view.histogram",

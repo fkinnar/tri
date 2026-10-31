@@ -49,7 +49,8 @@ exists.
 | [metadata.md](metadata.md) | Module `tri::metadata`: capture metadata (LibRaw, EXIF), lines to display |
 | [notes.md](notes.md) | Module `tri::notes`: a folder's notes in memory, editing, filters on notes |
 | [rrdata.md](rrdata.md) | Module `tri::rrdata`: notes in RapidRAW sidecars (`.rrdata`, virtual copies included) |
-| [sidecars.md](sidecars.md) | Module `tri::sidecars`: the formats of the notes sidecars (XMP, `.rrdata`), all written, the missing ones created according to `[sidecars]` or on demand |
+| [pp3.md](pp3.md) | Module `tri::pp3`: ratings in RawTherapee (`.pp3`) and ART (`.arp`) profiles, same format |
+| [sidecars.md](sidecars.md) | Module `tri::sidecars`: the formats of the notes sidecars (XMP, `.rrdata`, `.pp3`, `.arp`), all written, the missing ones created according to `[sidecars]` or on demand |
 | [xmp.md](xmp.md) | Module `tri::xmp`: notes (stars, colors, accepted/rejected) in XMP sidecars |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap`: common RGB8 image type |
 | [flat.md](flat.md) | Module `tri::flat`: decoding JPEG, PNG, TIFF, WebP, HEIC |
