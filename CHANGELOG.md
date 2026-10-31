@@ -7,6 +7,8 @@
 - **Dialogs move by their title only** (feedback of 2026-11-01: in the settings window,
   dragging a colour dot slightly off moved the whole window); a dialog without a title
   can still be grabbed anywhere.
+- Thumbnails: no more "LibRaw" chip on a photo shown in the internal render (feedback of
+  2026-10-31: it said nothing); only a software's render carries a chip.
 - **Settings window: a dot editor for the colour sort order** (`[sort] color_order`,
   user's idea): five empty slots under "Sort", the remaining colours under "Available";
   drag or click to build the order, written at every change and applied at once (the
