@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Corrigé : les notes n'atteignaient RapidRAW que posées sur son développement** (#234).
+  Une photo et ses développements principaux (darktable, RapidRAW) ont désormais les
+  mêmes notes : noter l'un d'eux écrit le XMP de la photo (darktable, la paire RAW+JPEG)
+  et le `IMG.RAF.rrdata` de RapidRAW. Les clones et copies virtuelles gardent les leurs.
+  L'annulation remet les deux sidecars.
 - **Développements comptés à part** dans la barre d'état (« 12 images (10 RAW, 3 dév.) » :
   une photo et ses deux copies ne font plus « 3 images »), et **leurs vignettes toujours
   rendues en fond**, chacune par son logiciel, même avec `[gui.grid] develop = "manual"`

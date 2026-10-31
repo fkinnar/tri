@@ -15,10 +15,12 @@ photo's folder and with its extension: `IMG@dt.RAF`, `IMG@dt-01.RAF` (clone 1),
 treats it as an image:
 
 - the **pixels** are the photo's (`media::source(path)` gives the file to read);
-- the **notes** are its own, where its software reads them: the clone's XMP, the copy's
-  `.rrdata`; the photo and darktable's main development share `IMG.RAF.xmp` (`NoteBook`,
-  `shared_with`). `tri` writes only its own fields and never creates an `IMG_NN.RAF.xmp`
-  itself;
+- the **notes**: a clone and a virtual copy have their own, where their software reads
+  them (the clone's XMP, the copy's `.rrdata`); a **main development has the photo's**
+  (it is the photo in its software), written to each sidecar: the `IMG.RAF.xmp` shared
+  with darktable and RapidRAW's `IMG.RAF.rrdata` (`NoteBook::shared`, issue #234 of
+  2026-10-31: with the `.rrdata` apart, RapidRAW did not see the notes set on the photo).
+  `tri` writes only its own fields and never creates an `IMG_NN.RAF.xmp` itself;
 - the **render** is its sidecar's (`Engine::sidecar` resolves it; a RapidRAW copy goes
   through `--adjustments`).
 

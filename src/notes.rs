@@ -345,30 +345,41 @@ impl NoteBook {
     }
 
     /// `image` et les images qui reçoivent les mêmes notes : sa paire
-    /// ([`NoteBook::siblings`]) ; pour le développement darktable principal, la photo (même
-    /// XMP) et sa paire ; pour la photo, ses développements qui lisent le même XMP.
-    fn shared_with(&mut self, image: &Path) -> Vec<PathBuf> {
+    /// ([`NoteBook::siblings`]) ; pour un développement **principal** (darktable,
+    /// RapidRAW), la photo et sa paire ; pour la photo, ses développements principaux,
+    /// chacun dans son sidecar (le XMP de darktable, partagé avec la photo ; le `.rrdata`
+    /// de RapidRAW). Un développement principal est la photo dans son logiciel : la noter
+    /// dans `tri` doit se voir dans darktable **et** dans RapidRAW (issue n° 234, 31/10/2026 ;
+    /// le `.rrdata` principal avait ses notes à part, RapidRAW ne voyait pas celles de la
+    /// photo). Un clone et une copie virtuelle gardent les leurs.
+    pub fn shared(&self, image: &Path) -> Vec<PathBuf> {
         let base = match crate::developments::get(image) {
-            Some(d) if d.copy == crate::developments::Copy::Main && !d.notes_in_rrdata() => d.photo,
+            Some(d) if d.copy == crate::developments::Copy::Main => d.photo,
             _ => image.to_path_buf(),
         };
         let mut targets = vec![image.to_path_buf()];
         if base != image {
-            if !self.entries.contains_key(&base) {
-                self.add(&base);
-            }
             targets.push(base.clone());
         }
         targets.extend(self.siblings(&base));
-        // Développements de la photo qui lisent son XMP, déjà suivis.
-        let sidecar = self.entries.get(&base).map(|e| e.sidecar.clone());
-        let sharing: Vec<PathBuf> = self
-            .entries
-            .iter()
-            .filter(|(p, e)| Some(&e.sidecar) == sidecar.as_ref() && !targets.contains(p))
-            .map(|(p, _)| p.clone())
-            .collect();
-        targets.extend(sharing);
+        // Développements principaux de la photo (chaque sidecar écrit une fois).
+        for development in crate::developments::of(&base) {
+            let path = development.path();
+            if development.copy == crate::developments::Copy::Main && !targets.contains(&path) {
+                targets.push(path);
+            }
+        }
+        targets
+    }
+
+    /// [`NoteBook::shared`], les images encore inconnues ajoutées au carnet.
+    fn shared_with(&mut self, image: &Path) -> Vec<PathBuf> {
+        let targets = self.shared(image);
+        for target in &targets {
+            if !self.entries.contains_key(target) {
+                self.add(target);
+            }
+        }
         targets
     }
 
@@ -783,10 +794,13 @@ mod tests {
     #[test]
     fn each_development_keeps_its_notes_where_its_software_reads_them() {
         // Décidé le 30/10/2026 : la photo et son développement darktable principal
-        // partagent `IMG.RAF.xmp` ; un clone a son XMP ; RapidRAW, son `.rrdata`.
+        // partagent `IMG.RAF.xmp` ; un clone a son XMP ; RapidRAW, son `.rrdata`. Issue
+        // n° 234 (31/10/2026) : le développement RapidRAW principal a les notes de la
+        // photo, écrites aussi dans son `.rrdata` ; une copie virtuelle garde les siennes.
         let dir = tempfile::tempdir().unwrap();
         let d = dir.path();
         std::fs::write(d.join("IMG.RAF"), b"x").unwrap();
+        std::fs::write(d.join("IMG.JPG"), b"x").unwrap();
         let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#;
         std::fs::write(d.join("IMG.RAF.xmp"), darktable).unwrap();
         std::fs::write(d.join("IMG_01.RAF.xmp"), darktable).unwrap();
@@ -795,27 +809,74 @@ mod tests {
             r#"{"rating": 1, "adjustments": {}}"#,
         )
         .unwrap();
+        std::fs::write(
+            d.join("IMG.RAF.ab12.rrdata"),
+            r#"{"rating": 2, "adjustments": {}}"#,
+        )
+        .unwrap();
         let files = crate::media::scan(d, 1).unwrap();
         let mut book = NoteBook::load_files(&files, Convention::Darktable);
-        let (photo, main, clone, rr) = (
+        let (photo, jpg, main, clone, rr, copy) = (
             d.join("IMG.RAF"),
+            d.join("IMG.JPG"),
             d.join("IMG@dt.RAF"),
             d.join("IMG@dt-01.RAF"),
             d.join("IMG@rr.RAF"),
+            d.join("IMG@rr-ab12.RAF"),
         );
         assert_eq!(book.notes(&rr).stars, 1, "lu dans le .rrdata");
-        book.edit(&main, |n| n.set_stars(3)).unwrap();
+        assert_eq!(book.notes(&copy).stars, 2, "lu dans le .rrdata de la copie");
+        // Noter le développement darktable principal : la photo, sa paire et le
+        // développement RapidRAW principal suivent (XMP et .rrdata écrits).
+        let changed = book.edit(&main, |n| n.set_stars(3)).unwrap();
         assert_eq!(book.notes(&photo).stars, 3, "même XMP que la photo");
         assert_eq!(xmp::read(&photo).unwrap().stars, 3);
+        assert_eq!(xmp::read(&jpg).unwrap().stars, 3, "la paire");
+        assert_eq!(
+            crate::rrdata::read(&d.join("IMG.RAF.rrdata"))
+                .unwrap()
+                .stars,
+            3,
+            "écrit dans le .rrdata : RapidRAW voit la note (issue n° 234)"
+        );
+        assert_eq!(book.notes(&rr).stars, 3);
+        assert!(changed.contains(&rr) && changed.contains(&photo) && changed.contains(&jpg));
         assert_eq!(book.notes(&clone).stars, 0, "le clone a les siennes");
+        assert_eq!(book.notes(&copy).stars, 2, "la copie virtuelle aussi");
         book.edit(&clone, |n| n.set_stars(5)).unwrap();
         assert_eq!(
             xmp::read_sidecar(&d.join("IMG_01.RAF.xmp")).unwrap().stars,
             5
         );
+        assert_eq!(
+            book.notes(&photo).stars,
+            3,
+            "le clone ne touche pas la photo"
+        );
+        // Noter le développement RapidRAW principal : la photo et darktable suivent.
         book.edit(&rr, |n| n.flag = Flag::Rejected).unwrap();
         let rrdata = crate::rrdata::read(&d.join("IMG.RAF.rrdata")).unwrap();
-        assert_eq!((rrdata.stars, rrdata.flag), (1, Flag::Rejected));
-        assert_eq!(book.notes(&photo).stars, 3, "RapidRAW à part");
+        assert_eq!((rrdata.stars, rrdata.flag), (3, Flag::Rejected));
+        assert_eq!(
+            xmp::read(&photo).unwrap().flag,
+            Flag::Rejected,
+            "la photo aussi"
+        );
+        assert_eq!(book.notes(&main).flag, Flag::Rejected);
+        // Noter la photo : les deux développements principaux suivent, pas la copie.
+        book.edit(&photo, |n| n.colors = vec![Color::Red]).unwrap();
+        assert_eq!(
+            crate::rrdata::read(&d.join("IMG.RAF.rrdata"))
+                .unwrap()
+                .colors,
+            [Color::Red]
+        );
+        assert_eq!(
+            crate::rrdata::read(&d.join("IMG.RAF.ab12.rrdata"))
+                .unwrap()
+                .stars,
+            2
+        );
+        assert!(book.notes(&copy).colors.is_empty());
     }
 }

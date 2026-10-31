@@ -22,7 +22,10 @@ Le format des sidecars est l'affaire de [xmp.md](xmp.md).
   (convention darktable : `IMG.RAF.xmp` et `IMG.JPG.xmp` ; Adobe : un seul `IMG.xmp`,
   écrit une fois). Une paire déjà différente est réalignée. Un sidecar mal formé dans la
   paire est signalé (`XmpError::Image`, qui nomme l'image) sans empêcher les autres
-  écritures.
+  écritures. `shared(image)` donne tout ce qui reçoit les mêmes notes : la paire, et la
+  photo avec ses développements principaux darktable et RapidRAW (XMP et `.rrdata`,
+  issue n° 234, 31/10/2026 ; voir `developments.md`) ; l'historique en fait son
+  instantané.
 - `reload()` : relit tout (notes changées par un autre logiciel).
 - **Lecture en fond** (23/10/2026, issue n° 15) : `NoteBook::pending(images, convention)`
   crée un carnet sans rien lire (notes vides) ; `load_counting(&files, convention,

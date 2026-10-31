@@ -20,7 +20,7 @@ Done on 2026-10-18, following the decisions made with the user the same day.
 
 | Step | Recorded | Undo | Checked before |
 |---|---|---|---|
-| `Notes` | ratings before / after for each image (`snapshot`, then `notes_step`) | previous ratings, image by image (`NoteBook::write_only`: each image of a pair gets back **its own** ratings) | ratings on disk = ratings after |
+| `Notes` | ratings before / after for each image, pair and main developments included (`snapshot` over `NoteBook::shared`, then `notes_step`) | previous ratings, image by image (`NoteBook::write_only`: each image of a pair gets back **its own** ratings) | ratings on disk = ratings after |
 | `Rename` | the executed plan | reverse rename; copies of a shared sidecar deleted | new names present, old ones free |
 | `Transfer` | the plan, and the fingerprint (size, date) of the written files (`transfer_step`) | copy: copies deleted; move: moved back (same mechanism, verified copies across volumes) | written files present and **unchanged** (a copy edited since is not deleted) |
 | `CreateDir` | the created folder | deleted, **only if it is still empty** | folder present and empty |

@@ -15,10 +15,13 @@ disque, dans le dossier de la photo et avec son extension : `IMG@dt.RAF`, `IMG@d
 exports) le traite comme une image :
 
 - les **pixels** sont ceux de la photo (`media::source(path)` rend le fichier à lire) ;
-- les **notes** sont les siennes, là où son logiciel les lit : le XMP du clone, le
-  `.rrdata` de la copie ; la photo et le développement principal de darktable partagent
-  `IMG.RAF.xmp` (`NoteBook`, `shared_with`). `tri` n'écrit que ses champs et ne crée jamais
-  lui-même un `IMG_NN.RAF.xmp` ;
+- les **notes** : un clone et une copie virtuelle ont les leurs, là où leur logiciel les
+  lit (le XMP du clone, le `.rrdata` de la copie) ; un **développement principal a celles
+  de la photo** (c'est la photo dans son logiciel), écrites dans chaque sidecar : le
+  `IMG.RAF.xmp` partagé avec darktable et le `IMG.RAF.rrdata` de RapidRAW
+  (`NoteBook::shared`, issue n° 234 du 31/10/2026 : avec le `.rrdata` à part, RapidRAW ne
+  voyait pas les notes posées sur la photo). `tri` n'écrit que ses champs et ne crée
+  jamais lui-même un `IMG_NN.RAF.xmp` ;
 - le **rendu** est celui de son sidecar (`Engine::sidecar` le résout ; une copie RapidRAW
   passe par `--adjustments`).
 

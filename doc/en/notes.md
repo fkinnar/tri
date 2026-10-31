@@ -22,6 +22,9 @@ these ratings. The sidecar format is the business of [xmp.md](xmp.md).
   convention: `IMG.RAF.xmp` and `IMG.JPG.xmp`; Adobe: a single `IMG.xmp`, written once).
   A pair that already differs is realigned. A malformed sidecar in the pair is reported
   (`XmpError::Image`, which names the image) without blocking the other writes.
+  `shared(image)` gives everything that receives the same ratings: the pair, and the
+  photo with its main darktable and RapidRAW developments (XMP and `.rrdata`, issue
+  #234, 2026-10-31; see `developments.md`); the history takes its snapshot from it.
 - `reload()`: rereads everything (ratings changed by another program).
 - **Background reading** (2026-10-23, issue #15): `NoteBook::pending(images, convention)`
   creates a book without reading anything (empty ratings); `load_counting(&files,

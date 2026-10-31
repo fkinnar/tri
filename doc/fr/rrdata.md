@@ -6,7 +6,9 @@ copie virtuelle (en interne, RapidRAW la désigne par `IMAGE.RAF?vc=<id>`). Vér
 son code source le 30/10/2026.
 
 Chaque développement garde ses notes là où son logiciel les lit (décidé le 30/10/2026) :
-un développement RapidRAW, principal ou copie, a donc les siennes dans son `.rrdata`.
+une copie virtuelle a les siennes dans son `.rrdata` ; le développement principal a
+celles de la photo, écrites aussi dans `IMAGE.RAF.rrdata` (issue n° 234, 31/10/2026 ;
+voir `developments.md`).
 
 ## Champs
 
