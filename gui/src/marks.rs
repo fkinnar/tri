@@ -220,9 +220,6 @@ pub fn sharp_triangle(painter: &Painter, rect: Rect, color: Color32) {
 /// sombre.
 const RIM: Color32 = Color32::from_black_alpha(170);
 
-/// Gris clair des marques vides d'une vignette (rien de posé : où cliquer).
-const PLACEHOLDER: Color32 = Color32::from_gray(185);
-
 /// Notes posées sur une vignette de la grille, dans `area` (retour du 21/10/2026 : plus de
 /// rectangle sombre, chaque marque cerclée de sombre comme les pastilles) : étoiles en bas
 /// à gauche, drapeau en bas à droite, couleurs en haut à droite. `size` : taille d'une
@@ -241,11 +238,13 @@ pub fn thumbnail_notes(
     let star_fill = chip_star_color(painter.ctx(), colors);
     // Liseré de 2 points partout (retour du 31/10/2026 : il paraissait plus fin autour
     // des étoiles qu'autour des pastilles).
-    let rim = (radius * 0.3).max(2.0);
+    let rim = mark_rim(radius);
     // Marques vides (`[gui.grid] empty_marks`, 31/10/2026) : là où rien n'est posé, un
-    // contour gris clair montre où cliquer (une étoile, une pastille, le cercle du
+    // contour sombre (`[gui.colors] empty_mark` ; gris clair d'abord, invisible sur la
+    // case sélectionnée) montre où cliquer (une étoile, une pastille, le cercle du
     // neutre), et chaque vignette montre toutes ses informations.
-    let empty = Stroke::new(1.5, PLACEHOLDER);
+    let placeholder = Color32::from(colors.empty_mark);
+    let empty = Stroke::new(1.5, placeholder);
     let star_at = |k: u8| {
         pos2(
             area.min.x + inset + k as f32 * (size + gap),
@@ -265,22 +264,50 @@ pub fn thumbnail_notes(
         painter.circle_filled(flag_at, radius + rim, RIM);
         flag(painter, flag_at, radius, notes.flag, colors);
     } else if placeholders {
-        neutral_ring(painter, flag_at, radius + rim, PLACEHOLDER);
+        neutral_ring(painter, flag_at, radius + rim, placeholder);
     }
-    let color_at = |k: usize| {
-        pos2(
-            area.max.x - inset - k as f32 * (size + gap),
-            area.min.y + inset,
-        )
-    };
+    let (first, outer) = colour_dot_geometry(area, size);
+    let color_at = |k: usize| pos2(first.x - k as f32 * (size + gap), first.y);
     for (k, &color) in notes.colors.iter().enumerate() {
         let c = color_at(k);
-        painter.circle_filled(c, radius * 0.8 + rim, RIM);
-        painter.circle_filled(c, radius * 0.8, color_of(colors, color));
+        painter.circle_filled(c, outer, RIM);
+        painter.circle_filled(c, outer - rim, color_of(colors, color));
     }
     if notes.colors.is_empty() && placeholders {
-        painter.circle_stroke(color_at(0), radius * 0.8 + rim / 2.0, empty);
+        painter.circle_stroke(color_at(0), outer - rim / 2.0, empty);
     }
+}
+
+/// Liseré sombre d'une marque de vignette de rayon `radius` : 2 points au moins.
+fn mark_rim(radius: f32) -> f32 {
+    (radius * 0.3).max(2.0)
+}
+
+/// Première pastille de couleur d'une vignette (en haut à droite de `area`, marques de
+/// taille `size`) : son centre et son rayon, liseré compris. Partagé avec la bobine des
+/// développements, dessinée juste dessous.
+pub fn colour_dot_geometry(area: Rect, size: f32) -> (Pos2, f32) {
+    let radius = size / 2.0;
+    let inset = radius + 3.0;
+    (
+        pos2(area.max.x - inset, area.min.y + inset),
+        radius * 0.8 + mark_rim(radius),
+    )
+}
+
+/// Carré de la bobine des développements (ou de l'icône « replier ») d'une vignette :
+/// sous la première pastille de couleur, le cercle de la bobine centré sur elle et de son
+/// rayon (retour du 31/10/2026 : même taille apparente, centrées l'une sur l'autre). La
+/// bobine dessine son cercle à 36 % du côté, décalé de 6 % vers la gauche pour laisser
+/// place à la pellicule ([`film_reel`]).
+pub fn development_mark_rect(area: Rect, size: f32) -> Rect {
+    let (dot, outer) = colour_dot_geometry(area, size);
+    let side = outer / 0.36;
+    let gap = size * 0.25;
+    Rect::from_center_size(
+        pos2(dot.x + side * 0.06, dot.y + outer + gap + side / 2.0),
+        vec2(side, side),
+    )
 }
 
 /// Groupe de marques d'une vignette qu'un clic peut modifier (#257, 31/10/2026).

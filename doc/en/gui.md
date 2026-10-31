@@ -408,8 +408,9 @@ system one ("cold" measurements, experiments).
   the developments **reel** (the
   "developed" filter's icon, in the cell's text colour, no background: feedback of
   2026-10-31, the coloured "N dev." badge caught the eye; the count is in its tooltip) at
-  the top right, below the colour row (a burst's image count is at the top left; hidden
-  with the thumbnail info, Shift+T: #243); unfolded,
+  the top right, below the first colour dot, centred on it and of its size
+  (`marks::development_mark_rect`, the dot's own geometry; a burst's image count is at
+  the top left; hidden with the thumbnail info, Shift+T: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
   `s` unfolds / folds (like a stack: harmonisation of 2026-10-31, see below), `Shift+W` /

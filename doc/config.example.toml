@@ -916,6 +916,10 @@ stack_mark = "#8c8c8c"
 # cadre fin des vignettes d'une pile dépliée ; un gris foncé, un peu plus sombre en thème
 # clair (le texte posé dessus s'adapte : blanc sur sombre, noir sur clair).
 development_mark = "#585858"
+# Marques vides des vignettes (`[gui.grid] empty_marks`) : contour de l'étoile, de la
+# pastille et du cercle du neutre quand rien n'est posé ; sombre, pour rester visible sur
+# la case sélectionnée.
+empty_mark = "#3c3c3c"
 # Badge « RAW » des cellules (absent : couleur d'accent du thème).
 # badge = "#78aae6"
 warning = "#e6a03c"
