@@ -7,7 +7,7 @@
 - **Fenêtre de réglages : un éditeur à pastilles pour l'ordre des couleurs du tri**
   (`[sort] color_order`, idée de l'utilisateur) : cinq emplacements vides sous « Tri »,
   les couleurs restantes sous « Disponibles » ; glisser ou cliquer pour composer l'ordre,
-  écrit à chaque changement.
+  écrit à chaque changement et appliqué aussitôt (la grille triée par couleur suit).
 - **Corrigé : un profil RawTherapee / ART (ou un `.rrdata` RapidRAW) rempli après la note
   qui l'avait créé n'entrait pas dans la pile des développements** avant la réouverture
   du dossier (retour du 31/10/2026) : la surveillance traite un sidecar principal qui

@@ -6,7 +6,8 @@
 
 - **Settings window: a dot editor for the colour sort order** (`[sort] color_order`,
   user's idea): five empty slots under "Sort", the remaining colours under "Available";
-  drag or click to build the order, written at every change.
+  drag or click to build the order, written at every change and applied at once (the
+  grid sorted by colour follows).
 - **Fixed: a RawTherapee / ART profile (or a RapidRAW `.rrdata`) filled after the rating
   that created it did not enter the development stack** until the folder was reopened
   (feedback of 2026-10-31): the folder watcher now treats a main sidecar that becomes a

@@ -915,6 +915,15 @@ impl TriApp {
         self.settings.export = new.export;
         self.settings.versions = new.versions;
         self.settings.develop = new.develop;
+        // Ordre des couleurs du tri (31/10/2026 : l'éditeur écrivait, la grille ne
+        // bougeait pas) : la grille retriée si elle est triée par note.
+        if new.sort != self.settings.sort {
+            self.settings.sort = new.sort;
+            if self.order.key.by_notes() {
+                self.apply_sort();
+                self.refilter(Reveal::Minimal);
+            }
+        }
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -16490,6 +16499,45 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(3);
         assert_ne!(h.state().stack_enter, before);
+    }
+
+    #[test]
+    fn a_new_colour_order_from_the_settings_sorts_the_grid_again() {
+        // 31/10/2026 : l'éditeur de `[sort] color_order` écrivait le fichier, la grille
+        // triée par couleur restait dans l'ancien ordre.
+        use tri::xmp::Color;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Num6, Modifiers::NONE); // img0 rouge
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num8, Modifiers::NONE); // img1 vert
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Color,
+            descending: false,
+        });
+        h.run_steps(2);
+        let names = |h: &Harness<'_, TriApp>| -> Vec<String> {
+            h.state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(
+            names(&h),
+            ["img0.jpg", "img1.jpg", "img2.jpg"],
+            "rouge avant vert"
+        );
+        let mut settings = AppSettings::default();
+        settings.sort.color_order = vec![Color::Green, Color::Red];
+        let ctx = h.ctx.clone();
+        h.state_mut().apply_settings(&ctx, settings);
+        h.run_steps(2);
+        assert_eq!(
+            names(&h),
+            ["img1.jpg", "img0.jpg", "img2.jpg"],
+            "vert avant rouge"
+        );
     }
 
     #[test]
