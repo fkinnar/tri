@@ -274,7 +274,9 @@ pub fn thumbnail_notes(
         painter.circle_filled(c, outer - rim, color_of(colors, color));
     }
     if notes.colors.is_empty() && placeholders {
-        painter.circle_stroke(color_at(0), outer - rim / 2.0, empty);
+        // Le bord extérieur du contour sur le bord de la couleur (retour du 31/10/2026,
+        // mesuré à l'écran : la pastille colorée paraissait 1 pixel plus petite).
+        painter.circle_stroke(color_at(0), outer - rim - empty.width / 2.0, empty);
     }
 }
 

@@ -26,7 +26,8 @@
 - **Thumbnails: empty marks** (`[gui.grid] empty_marks`, replaces `neutral_flag`): where
   nothing is set, a dark outline (`[gui.colors] empty_mark`; light grey at first,
   invisible on the selected cell) of a star, a colour dot and the neutral flag's circle
-  shows every piece of information and where to click.
+  shows every piece of information and where to click; the empty dot's outline sits on
+  the coloured dot's edge (same size).
 - Thumbnails: a uniform two-point dark rim around the stars (a traced outline, the
   points thinned a scaled star) and the dots; the mark picker is as wide as its content.
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the

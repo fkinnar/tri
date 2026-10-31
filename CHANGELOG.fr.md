@@ -27,7 +27,8 @@
 - **Vignettes : marques vides** (`[gui.grid] empty_marks`, remplace `neutral_flag`) : là
   où rien n'est posé, un contour sombre (`[gui.colors] empty_mark` ; gris clair d'abord,
   invisible sur la case sélectionnée) d'étoile, de pastille de couleur et du cercle du
-  drapeau neutre montre chaque information et où cliquer.
+  drapeau neutre montre chaque information et où cliquer ; le contour de la pastille
+  vide est sur le bord de la pastille colorée (même taille).
 - Vignettes : liseré sombre de 2 points uniforme autour des étoiles (un contour tracé,
   une étoile agrandie amincissait les pointes) et des pastilles ; le sélecteur de marque
   est à la largeur de son contenu.
