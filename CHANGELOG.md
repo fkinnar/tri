@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Comparing a photo's developments** (`c` on a photo with developments, no selection):
+  the camera JPEG, the darktable development, its clones and the RapidRAW copies side by
+  side, like a burst; on a development, `b` shows the camera JPEG before / after. A collapsed
+  burst still compares its photos, each through the cover of its development stack. Esc
+  comes back to the grid on the active development, shown in place of the cover.
 - **Exporting RapidRAW developments** (`Ctrl+E`, `tri --export`): a RapidRAW copy or
   main development is rendered by RapidRAW (16-bit TIFF, converted to the preset's space,
   cropped, reduced and sharpened like the others), a darktable clone by darktable,

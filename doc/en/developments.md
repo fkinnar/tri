@@ -73,7 +73,8 @@ order (not the order of the paths of their own: `IMG@dt-01` would come before `I
 See `gui.md`, "Development stacks": a photo is a stack of its developments, folded by
 default (cover and "N dev."), unfoldable (`Shift+V`); `Shift+W` / `Shift+Q` step from one
 to the next; in full screen a development shows its render, `b` shows the camera JPEG
-instead (before / after).
+instead (before / after); `c` on the photo (2026-10-31) compares it side by side with its
+developments (see "Side-by-side comparison").
 
 ## Export
 
@@ -84,6 +85,6 @@ what we are looking at" and "Through RapidRAW".
 
 ## Next
 
-Comparing a photo's developments; the status bar's "N images" count includes
+The status bar's "N images" count includes
 developments; their thumbnails are only computed in the background with
 `[gui.grid] develop = "auto"`.

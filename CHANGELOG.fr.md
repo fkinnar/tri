@@ -4,6 +4,12 @@
 
 ## À venir
 
+- **Comparaison des développements d'une photo** (`c` sur une photo développée, sans
+  sélection) : le JPEG boîtier, le développement darktable, ses clones et les copies
+  RapidRAW côte à côte, comme une rafale ; sur un développement, `b` montre le JPEG boîtier
+  avant / après. Une rafale repliée compare toujours ses photos, chacune par la couverture
+  de sa pile de développements. Échap revient à la grille sur le développement actif,
+  montré à la place de la couverture.
 - **Export des développements RapidRAW** (`Ctrl+E`, `tri --export`) : une copie ou le
   développement principal RapidRAW est rendu par RapidRAW (TIFF 16 bits, converti dans
   l'espace du préréglage, recadré, réduit et accentué comme les autres), un clone

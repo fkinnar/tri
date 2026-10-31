@@ -143,8 +143,9 @@ impl Stacks {
     }
 
     /// Image montrée pour `index` dans sa pile de développements : elle-même, ou la
-    /// couverture si la pile est repliée.
-    fn photo_visible(&self, index: usize) -> usize {
+    /// couverture si la pile est repliée (sans regarder la pile de rafale : ce que la
+    /// rafale dépliée montrerait).
+    pub fn photo_visible(&self, index: usize) -> usize {
         match self.photo_of.get(index) {
             Some(&p) if self.photo_folded[p] => self.photo_covers[p],
             _ => index,
