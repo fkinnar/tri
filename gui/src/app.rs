@@ -1757,6 +1757,15 @@ impl TriApp {
         response
     }
 
+    /// Sous-titre d'un groupe de réglages du panneau de droite (« Tri », « Piles »…), après
+    /// un peu d'air sous le groupe précédent (`[gui.metadata] group_gap`, en hauteurs de
+    /// ligne ; retour du 31/10/2026 : les sections Vue et Grille étaient trop serrées).
+    fn subheading(&self, ui: &mut Ui, text: String) -> egui::Response {
+        let line = ui.text_style_height(&egui::TextStyle::Body);
+        ui.add_space(self.gui.metadata.group_gap * line);
+        ui.label(egui::RichText::new(text).weak())
+    }
+
     /// Liste déroulante pointable du panneau (#246 : une liste de boutons radio prenait
     /// trop de place pour un réglage accessoire) : ← / → passent au choix précédent /
     /// suivant de `all`, Espace au suivant en boucle. Vrai si la valeur a changé.
@@ -1989,7 +1998,7 @@ impl TriApp {
         let mut clicked: Vec<Action> = Vec::new();
         let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
         // Ordre : la clé, puis le sens ; en tête de la section (retour du 27/10/2026).
-        subheading(ui, t!("panel-grid-sort"));
+        self.subheading(ui, t!("panel-grid-sort"));
         let mut key = self.order.key;
         ui.horizontal(|ui| {
             // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
@@ -2031,7 +2040,7 @@ impl TriApp {
             }
         });
         // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
-        subheading(ui, t!("panel-grid-render"))
+        self.subheading(ui, t!("panel-grid-render"))
             .on_hover_text(self.action_tip(Action::GridRenderNext));
         let engines = self.developers.engines();
         let mut render = self.grid_render;
@@ -2049,7 +2058,7 @@ impl TriApp {
             ui.weak(t!("panel-grid-render-filtered"));
         }
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        subheading(ui, t!("panel-grid-stacks"));
+        self.subheading(ui, t!("panel-grid-stacks"));
         let mut stacking = self.stacking;
         if self
             .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
@@ -2181,7 +2190,7 @@ impl TriApp {
     /// Sous-section « Fichiers » (30/10/2026) : les actions sur les fichiers, interdites
     /// par défaut, une case pour les autoriser, écrite dans la configuration.
     fn file_actions_switch(&mut self, ui: &mut Ui) {
-        subheading(ui, t!("panel-grid-files"));
+        self.subheading(ui, t!("panel-grid-files"));
         let mut allowed = self.settings.files.allow_actions;
         if self
             .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
@@ -2201,7 +2210,8 @@ impl TriApp {
             return;
         };
         let tip = self.action_tip(Action::ToggleSource);
-        subheading(ui, t!("panel-view-source")).on_hover_text(&tip);
+        self.subheading(ui, t!("panel-view-source"))
+            .on_hover_text(&tip);
         if tri::media::is_development(&file.path) {
             let mut before = self.dev_before;
             if self
@@ -10716,7 +10726,9 @@ impl TriApp {
                 // Développements de la photo (30/10/2026) : précédent / suivant, quand elle
                 // en a.
                 if self.mode == Mode::View && self.stacks.developments_of(self.selected).is_some() {
-                    actions.extend([Action::DevPrev, Action::DevNext]);
+                    // De droite à gauche dans la barre : le suivant d'abord, pour que le
+                    // précédent soit à gauche (retour du 31/10/2026).
+                    actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
                 for action in actions {
@@ -13537,10 +13549,6 @@ fn section_title(
 
 /// Intertitre d'un groupe de réglages du panneau de droite (estompé, plus petit que le
 /// titre de section).
-fn subheading(ui: &mut Ui, text: String) -> egui::Response {
-    ui.add_space(ui.spacing().item_spacing.y);
-    ui.label(egui::RichText::new(text).weak())
-}
 
 /// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
 /// strict » à droite, pour lire le sens sans le survoler.

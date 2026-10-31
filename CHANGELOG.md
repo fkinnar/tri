@@ -9,6 +9,9 @@
   sidecars…" in the open folder's right-click menu; the dialog offers every software or
   one format, says how many sidecars will be created before doing it, and reports in the
   status bar. Action `core.file.sidecars`, no default key.
+- **Right panel: air below each group of settings** (`[gui.metadata] group_gap`, in line
+  heights), and the full screen's development buttons in reading order, previous on the
+  left (feedback of 2026-10-31).
 - **Filter bar: the name search sits at the right**, just before the image count (#241).
 - **Help: "Report a problem" in dark red** (#242), and **the help window can be moved**
   (#251). The **offload dialog opens at the centre** like the other dialogs (#252).

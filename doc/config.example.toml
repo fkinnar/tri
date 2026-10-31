@@ -849,6 +849,9 @@ histogram_height = 120.0
 # Pas d'un curseur de sévérité du panneau au clavier (flèches gauche / droite, h / l),
 # sur sa course de -1 à 1.
 slider_step = 0.1
+# Air sous chaque groupe de réglages du panneau, avant le sous-titre du suivant, en
+# hauteurs de ligne (0,5 : un interligne et demi).
+group_gap = 0.5
 
 [gui.colors]
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :

@@ -851,6 +851,9 @@ histogram_height = 120.0
 # Step of a strictness slider of the panel from the keyboard (left / right arrows, h / l),
 # over its range from -1 to 1.
 slider_step = 0.1
+# Air below each group of settings of the panel, before the next subheading, in line
+# heights (0.5: one and a half line spacing).
+group_gap = 0.5
 
 [gui.colors]
 # Colours "#rrggbb". Selection (click or keyboard) missing: theme colour. Example:

@@ -49,7 +49,7 @@ cannot change without updating its documentation.
 | `[gui.view]` | Wait before a RAW 100 %, large textures in memory, keyboard pan step, size of the ratings | interface |
 | `[gui.folders]` | Folders panel: shown, width, indentation, hidden folders | interface |
 | `[gui.histogram]` | Histogram (shown, EV / linear scale, size of the large histogram, EV shown), zones (shown, opacity), badge thresholds | interface |
-| `[gui.metadata]` | Metadata panel: shown, width, histogram in the grid and its height | interface |
+| `[gui.metadata]` | Metadata panel: shown, width, histogram in the grid and its height, keyboard slider step, air below each group of settings (`group_gap`) | interface |
 | `[gui.sharpness]` | Sharpness map shown at startup, rotation colors, opacity | interface |
 | `[gui.compare]` | Comparison: maximum images, spacing, frame of the active image | interface |
 | `[gui.colors]` | `"#rrggbb"` colors (selection, hover frame, progress bars, badge, errors, full-screen background, stars, flags, rating colors) | interface |
