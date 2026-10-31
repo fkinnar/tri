@@ -8,6 +8,8 @@
   développée**, darktable compris (il rendrait par défaut, mais il n'y a rien à voir) ;
   seul le rendu LibRaw est toujours proposé. Les raccourcis le disent aussi (règle de
   l'utilisateur, 31/10/2026 : « c'est moi qui développe »).
+- **Boîte « Sidecars » : les logiciels installés seulement** (XMP toujours), comme la
+  liste des rendus ; ART était proposé sans être là (retour du 31/10/2026).
 - **RawTherapee / ART en AppImage sous Linux** : les AppImage récentes ne lancent que
   l'interface ; `tri` extrait l'AppImage une fois dans son cache et lance le
   `rawtherapee-cli` / `ART-cli` extrait avec ses bibliothèques. Une AppImage d'ART est

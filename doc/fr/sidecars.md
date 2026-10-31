@@ -50,7 +50,8 @@ commande : `tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run]` (
 (31/10/2026) : action `core.file.sidecars` (sans touche par défaut), icône « sidecar »
 dans la boîte du clic droit d'une vignette (la sélection) et « Générer les sidecars… »
 dans le menu du clic droit du dossier ouvert ; la boîte (`SidecarsDialog`) propose « tous
-les logiciels » ou un format (« RapidRAW (.rrdata) », « XMP »), une case « Réécrire aussi
+les logiciels » ou un format (« RapidRAW (.rrdata) », « XMP »), **les logiciels installés
+seulement** (XMP toujours ; retour du 31/10/2026, comme la liste des rendus), une case « Réécrire aussi
 les sidecars existants » (avec avertissement : leurs notes seulement, le reste conservé),
 annonce le compte de ce qui sera créé, réécrit, laissé ou passé (simulation), puis écrit ; le bilan va dans la barre
 d'état, et la politique « auto » est réappliquée (le dossier a maintenant ce format).
