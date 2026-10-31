@@ -4,6 +4,18 @@
 
 ## À venir
 
+- **RawTherapee et ART comme logiciels de développement**, sur les mêmes traits que
+  darktable et RapidRAW : leur développement principal (`IMG.RAF.pp3`, `IMG.RAF.arp`, sans
+  clones) apparaît dans la pile de la photo, est rendu à la demande par `rawtherapee-cli`
+  / `ART-cli` (cherchés dans le PATH, aux emplacements habituels, en AppImage ou Flatpak ;
+  `[develop] rawtherapee`, `art`), et le dossier s'ouvre dans l'un ou l'autre. **Les notes
+  suivent dans leurs profils** (`[General] Rank`, `ColorLabel`, `InTrash` = rejetée ;
+  nouveau module `tri::pp3`, un format pour les deux), créés comme le `.rrdata` selon
+  `[sidecars.rawtherapee]` / `[sidecars.art]` ; un profil réduit aux notes n'est pas un
+  développement. Le drapeau neutre est le même cercle vide partout (vignette, bandeau,
+  filtre), de la taille des autres pastilles ; dans le bandeau de notation, les pastilles
+  acceptée / rejetée non choisies gardent leur couleur, fondue comme les pastilles de
+  couleur ; la pastille « n dév. » garde une seule hauteur.
 - **Mêmes touches pour les piles de rafale et de développements** : `s`, `(` `)`, `Maj+S`,
   `d)` `y)` et les flèches du mode pile agissent sur la rafale si les piles sont actives
   et qu'elle compte plusieurs photos, sinon sur les développements de la photo. Nouveaux

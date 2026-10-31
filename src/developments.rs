@@ -55,6 +55,8 @@ impl Development {
         let engine = match self.engine {
             Engine::Darktable => "dt",
             Engine::RapidRaw => "rr",
+            Engine::RawTherapee => "rt",
+            Engine::Art => "art",
         };
         let copy = match &self.copy {
             Copy::Main => String::new(),
@@ -69,9 +71,10 @@ impl Development {
         self.photo.with_file_name(name)
     }
 
-    /// Vrai si les notes sont dans le `.rrdata` de RapidRAW (sinon dans un XMP).
+    /// Vrai si les notes sont dans le sidecar propre du logiciel (`.rrdata`, `.pp3`,
+    /// `.arp`) plutôt que dans un XMP partagé avec la photo.
     pub fn notes_in_rrdata(&self) -> bool {
-        self.engine == Engine::RapidRaw
+        self.engine.notes_in_own_sidecar()
     }
 
     /// Le fichier propre à ce développement, qu'on peut supprimer sans toucher à la photo
@@ -356,6 +359,7 @@ pub fn find(
     images: &dyn Fn(&str) -> bool,
     is_darktable: &dyn Fn(&Path) -> bool,
     is_rapidraw: &dyn Fn(&Path) -> bool,
+    is_profile: &dyn Fn(&Path) -> bool,
 ) -> Vec<Development> {
     let Some(name) = photo.file_name().map(|n| n.to_string_lossy().into_owned()) else {
         return Vec::new();
@@ -373,8 +377,20 @@ pub fn find(
     let mut clones = Vec::new();
     let mut rapidraw = Vec::new();
     let mut copies = Vec::new();
+    let mut profiles = Vec::new();
     for file in names {
         let l = file.to_lowercase();
+        // Profils de RawTherapee (`.pp3`) et d'ART (`.arp`) : un développement principal
+        // chacun, sans clones ; un profil réduit aux notes n'en est pas un (31/10/2026).
+        if let Some(engine) = [Engine::RawTherapee, Engine::Art].into_iter().find(|e| {
+            e.profile_extension()
+                .is_some_and(|x| l == format!("{lower}.{x}"))
+        }) {
+            if is_profile(&sidecar(file)) {
+                profiles.push(new(engine, Copy::Main, file));
+            }
+            continue;
+        }
         if l == format!("{lower}.xmp") {
             if is_darktable(&sidecar(file)) {
                 found.push(new(Engine::Darktable, Copy::Main, file));
@@ -418,6 +434,8 @@ pub fn find(
     found.extend(clones);
     found.extend(rapidraw);
     found.extend(copies);
+    profiles.sort_by_key(|d| d.engine);
+    found.extend(profiles);
     found
 }
 
@@ -443,7 +461,14 @@ mod tests {
             "IMG_03.RAF.xmp",
             "AUTRE.RAF.xmp",
         ]);
-        let found = find(photo, &files, &|n| n == "img_03.raf", &|_| true, &|_| true);
+        let found = find(
+            photo,
+            &files,
+            &|n| n == "img_03.raf",
+            &|_| true,
+            &|_| true,
+            &|_| true,
+        );
         let paths: Vec<String> = found
             .iter()
             .map(|d| d.path().file_name().unwrap().to_string_lossy().into_owned())
@@ -474,9 +499,23 @@ mod tests {
         );
         // Un XMP écrit par tri seul ou par un autre logiciel (notes digiKam…) : pas de
         // développement darktable, clones compris ; RapidRAW reste.
-        let none = find(photo, &files, &|_| false, &|_| false, &|_| true);
+        let none = find(photo, &files, &|_| false, &|_| false, &|_| true, &|_| true);
         assert_eq!(none.len(), 2);
         assert_eq!(none[0].engine, Engine::RapidRaw);
+        // RawTherapee et ART (31/10/2026) : un profil chacun, après RapidRAW ; un profil
+        // de notes seules n'en est pas un.
+        let files = names(&["IMG.RAF.pp3", "IMG.RAF.arp", "IMG.RAF.xmp"]);
+        let both = find(photo, &files, &|_| false, &|_| false, &|_| true, &|_| true);
+        let shown: Vec<String> = both
+            .iter()
+            .map(|d| d.path().file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(shown, ["IMG@rt.RAF", "IMG@art.RAF"]);
+        assert_eq!(both[0].sidecar, Path::new("/p/IMG.RAF.pp3"));
+        assert!(both[0].notes_in_rrdata(), "notes dans le profil");
+        assert_eq!(both[1].own_file(), Some(Path::new("/p/IMG.RAF.arp")));
+        let rated_only = find(photo, &files, &|_| false, &|_| false, &|_| true, &|_| false);
+        assert!(rated_only.is_empty());
     }
 
     #[test]

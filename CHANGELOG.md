@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- **RawTherapee and ART as development software**, on the same traits as darktable and
+  RapidRAW: their main development (`IMG.RAF.pp3`, `IMG.RAF.arp`, no clones) shows in the
+  photo's stack, is rendered on demand by `rawtherapee-cli` / `ART-cli` (found in the
+  PATH, the usual places, as an AppImage or a Flatpak; `[develop] rawtherapee`, `art`),
+  and the folder can be opened in them. **Ratings follow in their profiles** (`[General]
+  Rank`, `ColorLabel`, `InTrash` = rejected; new module `tri::pp3`, one format for both),
+  created like the `.rrdata` according to `[sidecars.rawtherapee]` / `[sidecars.art]`; a
+  profile holding only ratings is not a development. The neutral flag is the same empty
+  circle everywhere (thumbnail, rating bar, filter), sized like the other badges; in the
+  rating bar the unchosen accepted / rejected badges keep their colour, faded like the
+  colour dots; the "N dev." badge keeps one height.
 - **Same keys for burst stacks and development stacks**: `s`, `(` `)`, `Shift+S`, `d)`
   `y)` and the stack mode's arrows act on the burst when stacks are on and it holds
   several photos, else on the photo's developments. New **`((`** opens the next level

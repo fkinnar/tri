@@ -162,7 +162,11 @@ fn walk(
         let name = entry.file_name();
         let name = name.to_string_lossy();
         let lower = name.to_lowercase();
-        if lower.ends_with(".xmp") || lower.ends_with(".rrdata") {
+        if lower.ends_with(".xmp")
+            || lower.ends_with(".rrdata")
+            || lower.ends_with(".pp3")
+            || lower.ends_with(".arp")
+        {
             sidecars.push(name.to_string());
         }
         if depth == 1 {
@@ -204,6 +208,7 @@ fn walk(
             &is_image,
             &|xmp| crate::developments::file_is_darktable(xmp),
             &|rrdata| crate::rrdata::file_is_development(rrdata),
+            &|profile| crate::pp3::file_is_development(profile),
         );
         crate::developments::set_for(photo, &developments);
         for development in developments {
@@ -247,6 +252,12 @@ fn sidecar_image(name: &str, is_image: &dyn Fn(&str) -> bool) -> Option<String> 
         }
         let (original, _) = clone_name(image)?;
         return is_image(&original).then_some(original);
+    }
+    // Profils de RawTherapee / ART (31/10/2026) : `IMG.RAF.pp3`, `IMG.RAF.arp`.
+    for extension in [".pp3", ".arp"] {
+        if let Some(image) = lower.strip_suffix(extension) {
+            return is_image(image).then(|| image.to_string());
+        }
     }
     let image = lower.strip_suffix(".rrdata")?;
     if is_image(image) {

@@ -11672,15 +11672,10 @@ impl TriApp {
         }
         // Pile de développements repliée : le nombre de développements, en haut à droite
         // (le nombre d'images d'une pile de rafale est en haut à gauche).
-        // Badge « n dév. » et pastille « replier » sous les pastilles de couleur quand il y
-        // en a (retour du 31/10/2026 : ils se superposaient).
-        let has_colors = !self
-            .folder
-            .notes
-            .notes(&self.files[index].path)
-            .colors
-            .is_empty();
-        let below = if has_colors { g.marks + 6.0 } else { 0.0 };
+        // Badge « n dév. » et pastille « replier » sous la rangée des pastilles de couleur,
+        // toujours à la même hauteur (retours du 31/10/2026 : ils se superposaient, puis
+        // sautaient selon qu'il y avait une couleur ou non).
+        let below = g.marks + 6.0;
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info
@@ -17089,8 +17084,8 @@ mod tests {
                 .preview
                 .created
                 .len(),
-            1,
-            "tous les logiciels : le .rrdata de la photo notée"
+            3,
+            "tous les logiciels : .rrdata, .pp3 et .arp de la photo notée"
         );
         h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
@@ -17117,14 +17112,16 @@ mod tests {
         h.state_mut()
             .open_sidecars_dialog(images, "sidecars".into(), pos2(200.0, 200.0));
         h.run_steps(2);
-        assert!(
+        assert_eq!(
             h.state()
                 .sidecars_dialog
                 .as_ref()
                 .unwrap()
                 .preview
                 .created
-                .is_empty()
+                .len(),
+            2,
+            "il manque encore le .pp3 et le .arp"
         );
         h.get_by_label(&t!("sidecars-rewrite")).click();
         h.run_steps(2);
@@ -17548,7 +17545,9 @@ mod tests {
         assert_eq!(h.state().help_search.as_deref(), Some("wqx"));
         // « wqx » ne correspond à rien.
         assert!(h.query_by_label("Aucune action ne correspond.").is_some());
-        h.state_mut().help_search = Some("pnd".into());
+        // « pandos » plutôt que « pnd » (31/10/2026) : avec les actions des piles et des
+        // développements, « pnd » trouve trop de lignes et celle-ci sort de la zone visible.
+        h.state_mut().help_search = Some("pandos".into());
         h.run_steps(2);
         assert!(
             h.query_by_label("Afficher / masquer le panneau des dossiers")

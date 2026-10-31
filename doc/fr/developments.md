@@ -3,7 +3,9 @@
 Décidé le 30/10/2026 : tout ce qui **rend** une photo est un *développement*, au même
 niveau : le développement principal de **darktable** (son XMP, quand il a été écrit par
 darktable) et ses **clones** (`IMG_01.RAF.xmp` sans image `IMG_01.RAF`), le principal de
-**RapidRAW** (`IMG.RAF.rrdata`) et ses **copies virtuelles** (`IMG.RAF.<id>.rrdata`). Le
+**RapidRAW** (`IMG.RAF.rrdata`) et ses **copies virtuelles** (`IMG.RAF.<id>.rrdata`),
+**RawTherapee** (`IMG.RAF.pp3`) et **ART** (`IMG.RAF.arp`, 31/10/2026 : un développement
+principal chacun, pas de clones ; chemins `IMG@rt.RAF`, `IMG@art.RAF`). Le
 rendu LibRaw neutre, c'est la photo elle-même ; le JPEG boîtier est son affichage initial,
 pas un développement. Les « versions » gardent leur sens dans `tri` : les recadrages.
 

@@ -237,6 +237,26 @@ plusieurs (`DevelopedRule::engine_for`), le rendu LibRaw si aucun n'est coché ;
 écran s'ouvre dessus. Inversé, le filtre laisse à la grille son rendu
 (`TriApp::shown_render`).
 
+## RawTherapee et ART (31/10/2026)
+
+Même modèle que RapidRAW, un seul type pour les deux (`ProfileTool`, ART étant un dérivé
+de RawTherapee) : `rawtherapee-cli` / `ART-cli -o <dossier> -p <profil> -j95 -Y -c
+<image>` applique le profil (`IMAGE.RAF.pp3` / `.arp`, [pp3.md](pp3.md)) et écrit
+`<dossier>/<nom>.jpg` (pas d'option de taille : `tri` réduit ensuite, `shrink`) ; un
+dossier de sortie par rendu, dans le cache. Exécutables (`find_profile_cli`,
+`[develop] rawtherapee` / `art`) : `PATH`, `/Applications/<App>.app/Contents/MacOS/…`,
+`C:\Program Files\RawTherapee\<version>\`, et sous Linux une AppImage (lancée avec le nom
+de la commande en premier argument) ou le Flatpak `com.rawtherapee.RawTherapee` (pas de
+Flatpak connu pour ART). « Ouvrir le dossier dans… » lance l'interface à côté de la
+ligne de commande (`rawtherapee` / `ART <dossier>`).
+
+Le profil n'est un développement (`Engine::sidecar`, `profile_sidecar`) que s'il a une
+section autre que `[Version]` et `[General]` : un profil réduit aux notes (écrit par
+leur explorateur ou par `tri`) ne se rend pas, et « Développer avec » le grise comme
+pour RapidRAW. La clé de cache du rendu ignore `[General]` (`render_stamp`) : noter ne
+refait pas le rendu. Pas de clones ni de copies virtuelles dans ces logiciels. Vérifié
+sur les docs et pages de manuel, pas encore sur une installation réelle (testeurs).
+
 ## Autres logiciels de développement (recherche du 28/10/2026)
 
 Ce que chaque logiciel permet depuis la ligne de commande : un rendu sans interface (ce

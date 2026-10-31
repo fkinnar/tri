@@ -229,6 +229,25 @@ render chosen for the grid (feedback of 2026-10-27): the most recent one when se
 checked (`DevelopedRule::engine_for`), the LibRaw render when none is; full screen opens on
 it. Inverted, the filter leaves the grid its render (`TriApp::shown_render`).
 
+## RawTherapee and ART (2026-10-31)
+
+Same model as RapidRAW, one type for both (`ProfileTool`, ART being a RawTherapee fork):
+`rawtherapee-cli` / `ART-cli -o <folder> -p <profile> -j95 -Y -c <image>` applies the
+profile (`IMAGE.RAF.pp3` / `.arp`, [pp3.md](pp3.md)) and writes `<folder>/<name>.jpg` (no
+size option: `tri` then shrinks, `shrink`); one output folder per render, in the cache.
+Executables (`find_profile_cli`, `[develop] rawtherapee` / `art`): `PATH`,
+`/Applications/<App>.app/Contents/MacOS/…`, `C:\Program Files\RawTherapee\<version>\`,
+and on Linux an AppImage (run with the command name as first argument) or the
+`com.rawtherapee.RawTherapee` Flatpak (no known Flatpak for ART). "Open the folder in…"
+launches the interface next to the command line (`rawtherapee` / `ART <folder>`).
+
+The profile is a development (`Engine::sidecar`, `profile_sidecar`) only when it has a
+section other than `[Version]` and `[General]`: a ratings-only profile (written by their
+browser or by `tri`) is not rendered, and "Develop with" greys it like RapidRAW. The
+render cache key ignores `[General]` (`render_stamp`): rating does not redo the render.
+No clones nor virtual copies in these programs. Checked against docs and man pages, not
+yet on a real installation (testers).
+
 ## Other development software (research of 2026-10-28)
 
 What each program allows from the command line: a render without interface (what a

@@ -23,17 +23,28 @@ pub enum Engine {
     Darktable,
     /// RapidRAW (`rapidraw export`, réglages du sidecar `IMAGE.RAF.rrdata`).
     RapidRaw,
+    /// RawTherapee (`rawtherapee-cli`, profil `IMAGE.RAF.pp3` ; 31/10/2026).
+    RawTherapee,
+    /// ART, dérivé de RawTherapee (`ART-cli`, profil `IMAGE.RAF.arp` ; 31/10/2026).
+    Art,
 }
 
 impl Engine {
     /// Tous les logiciels, dans l'ordre des listes.
-    pub const ALL: [Engine; 2] = [Engine::Darktable, Engine::RapidRaw];
+    pub const ALL: [Engine; 4] = [
+        Engine::Darktable,
+        Engine::RapidRaw,
+        Engine::RawTherapee,
+        Engine::Art,
+    ];
 
     /// Identifiant (configuration, `--level`, clés de cache).
     pub fn id(self) -> &'static str {
         match self {
             Engine::Darktable => "darktable",
             Engine::RapidRaw => "rapidraw",
+            Engine::RawTherapee => "rawtherapee",
+            Engine::Art => "art",
         }
     }
 
@@ -42,6 +53,8 @@ impl Engine {
         match self {
             Engine::Darktable => "Darktable",
             Engine::RapidRaw => "RapidRAW",
+            Engine::RawTherapee => "RawTherapee",
+            Engine::Art => "ART",
         }
     }
 
@@ -50,7 +63,24 @@ impl Engine {
         match self {
             Engine::Darktable => "DT",
             Engine::RapidRaw => "RR",
+            Engine::RawTherapee => "RT",
+            Engine::Art => "ART",
         }
+    }
+
+    /// Extension du profil de RawTherapee / ART (`"pp3"`, `"arp"`), pour eux seuls.
+    pub fn profile_extension(self) -> Option<&'static str> {
+        match self {
+            Engine::RawTherapee => Some("pp3"),
+            Engine::Art => Some("arp"),
+            Engine::Darktable | Engine::RapidRaw => None,
+        }
+    }
+
+    /// Vrai si les notes d'un développement de ce logiciel vivent dans son propre sidecar
+    /// (RapidRAW, RawTherapee, ART) plutôt que dans un XMP partagé avec la photo.
+    pub fn notes_in_own_sidecar(self) -> bool {
+        !matches!(self, Engine::Darktable)
     }
 
     /// Logiciel d'identifiant `id`.
@@ -72,6 +102,8 @@ impl Engine {
         match self {
             Engine::Darktable => darktable_sidecar(image),
             Engine::RapidRaw => rapidraw_sidecar(image),
+            Engine::RawTherapee => profile_sidecar(image, "pp3"),
+            Engine::Art => profile_sidecar(image, "arp"),
         }
     }
 }
@@ -252,6 +284,18 @@ impl Developers {
                 work_dir: work_dir.join("rapidraw"),
             }));
         }
+        for (engine, setting) in [
+            (Engine::RawTherapee, &settings.rawtherapee),
+            (Engine::Art, &settings.art),
+        ] {
+            if let Some(cli) = find_profile_cli(engine, setting) {
+                tools.push(Arc::new(ProfileTool {
+                    engine,
+                    cli,
+                    work_dir: work_dir.join(engine.id()),
+                }));
+            }
+        }
         Developers {
             tools,
             preference: settings.default,
@@ -328,6 +372,13 @@ pub struct DevelopSettings {
     /// (l'exécutable de RapidRAW ou son AppImage), `"flatpak"`, ou `""` (pas de rendu
     /// RapidRAW).
     pub rapidraw: String,
+    /// `rawtherapee-cli` (31/10/2026) : `"auto"` (cherché dans le `PATH`, aux emplacements
+    /// habituels, puis sous Linux en AppImage et en Flatpak), un chemin, `"flatpak"`
+    /// (`com.rawtherapee.RawTherapee`), ou `""` (pas de rendu RawTherapee).
+    pub rawtherapee: String,
+    /// `ART-cli` (31/10/2026) : `"auto"` (`PATH`, emplacements habituels, AppImage sous
+    /// Linux), un chemin, ou `""` (pas de rendu ART).
+    pub art: String,
     /// Logiciel préféré quand une image a été développée dans plusieurs : `"auto"` (le
     /// développement le plus récent) ou un logiciel (`"darktable"`).
     pub default: Preference,
@@ -339,6 +390,8 @@ impl Default for DevelopSettings {
             darktable: "auto".into(),
             high_quality: false,
             rapidraw: "auto".into(),
+            rawtherapee: "auto".into(),
+            art: "auto".into(),
             default: Preference::Auto,
         }
     }
@@ -623,6 +676,106 @@ pub fn rapidraw_sidecar(image: &Path) -> Option<PathBuf> {
         .then_some(sidecar)
 }
 
+/// Profil de RawTherapee ou d'ART de `image` (`IMAGE.RAF.pp3` / `.arp`, à côté de
+/// l'image), s'il existe et développe l'image : un profil réduit aux notes (image notée
+/// dans leur explorateur, ou par `tri`) n'en est pas un (31/10/2026).
+pub fn profile_sidecar(image: &Path, extension: &str) -> Option<PathBuf> {
+    let sidecar = crate::pp3::path(image, extension);
+    (crate::cache::stamp(&sidecar).is_some() && crate::pp3::file_is_development(&sidecar))
+        .then_some(sidecar)
+}
+
+/// Identifiant Flatpak de RawTherapee (Flathub).
+pub const RAWTHERAPEE_FLATPAK: &str = "com.rawtherapee.RawTherapee";
+
+/// Noms de la ligne de commande de RawTherapee / ART, et de leur interface.
+fn profile_cli_names(engine: Engine) -> (&'static str, &'static str) {
+    match engine {
+        Engine::RawTherapee => ("rawtherapee-cli", "rawtherapee"),
+        Engine::Art => ("ART-cli", "ART"),
+        Engine::Darktable | Engine::RapidRaw => ("", ""),
+    }
+}
+
+/// Emplacements habituels de `rawtherapee-cli` / `ART-cli`, selon le système.
+fn profile_cli_defaults(engine: Engine, os: &str) -> Vec<PathBuf> {
+    let (cli, app) = profile_cli_names(engine);
+    match os {
+        "macos" => vec![PathBuf::from(format!(
+            "/Applications/{app}.app/Contents/MacOS/{cli}"
+        ))],
+        "windows" => {
+            // RawTherapee s'installe dans un dossier versionné (`RawTherapee\5.11\`).
+            let root = PathBuf::from(format!(r"C:\Program Files\{app}"));
+            let mut found: Vec<PathBuf> = std::fs::read_dir(&root)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path().join(format!("{cli}.exe")))
+                .collect();
+            found.push(root.join(format!("{cli}.exe")));
+            found
+        }
+        _ => ["/usr/bin", "/usr/local/bin"]
+            .iter()
+            .map(|d| Path::new(d).join(cli))
+            .collect(),
+    }
+}
+
+/// `rawtherapee-cli` / `ART-cli` selon le réglage `setting` (voir
+/// [`DevelopSettings::rawtherapee`]) : `None` s'il est désactivé ou introuvable. Une
+/// AppImage (format de distribution officiel d'ART) fait aussi la ligne de commande,
+/// lancée avec le nom de la commande en premier argument.
+pub fn find_profile_cli(engine: Engine, setting: &str) -> Option<Cli> {
+    let (cli, _) = profile_cli_names(engine);
+    let flatpak = || {
+        (engine == Engine::RawTherapee)
+            .then(|| flatpak_app(RAWTHERAPEE_FLATPAK, Some(cli)))
+            .flatten()
+    };
+    match setting.trim() {
+        "" => return None,
+        "flatpak" => return flatpak(),
+        "auto" => {}
+        path => {
+            let path = crate::settings::expand_home(path);
+            return path.is_file().then(|| {
+                if is_appimage(&path) {
+                    Cli {
+                        program: path,
+                        args: vec![cli.into()],
+                    }
+                } else {
+                    Cli::native(path)
+                }
+            });
+        }
+    }
+    let name = if cfg!(windows) {
+        format!("{cli}.exe")
+    } else {
+        cli.to_string()
+    };
+    let native = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+        .map(|dir| dir.join(&name))
+        .chain(profile_cli_defaults(engine, std::env::consts::OS))
+        .find(|p| p.is_file())
+        .map(Cli::native);
+    if native.is_some() || !cfg!(target_os = "linux") {
+        return native;
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    appimage(home.as_deref(), engine.id())
+        .map(|path| Cli {
+            program: path,
+            args: vec![cli.into()],
+        })
+        .or_else(flatpak)
+}
+
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il est de darktable : écrit par
 /// darktable (`darktable:xmp_version`), même sans historique, ou avec un historique non
 /// vide (`darktable:history_end` > 0). Retour du 30/10/2026 : une image importée dans
@@ -822,13 +975,21 @@ pub fn render_stamp(sidecar: &Path) -> String {
     let Ok(bytes) = std::fs::read(sidecar) else {
         return "absent".into();
     };
-    let is_xmp = sidecar
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("xmp"));
-    let content = if is_xmp {
+    let extension = |e: &str| {
+        sidecar
+            .extension()
+            .is_some_and(|x| x.eq_ignore_ascii_case(e))
+    };
+    let content = if extension("xmp") {
         String::from_utf8(bytes.clone())
             .ok()
             .and_then(|text| darktable_content(&text))
+            .unwrap_or(bytes)
+    } else if extension("pp3") || extension("arp") {
+        // Profil de RawTherapee / ART : sans `[General]` (les notes, écrites par `tri`).
+        String::from_utf8(bytes.clone())
+            .ok()
+            .map(|text| crate::pp3::development_content(&text).into_bytes())
             .unwrap_or(bytes)
     } else {
         bytes
@@ -1125,6 +1286,114 @@ impl Developer for RapidRaw {
             let _ = std::fs::remove_file(file);
         }
         result
+    }
+}
+
+/// RawTherapee ou ART (31/10/2026) : `rawtherapee-cli` / `ART-cli -o <dossier> -p <profil>
+/// -j95 -Y -c <image>` applique le profil (`.pp3` / `.arp`) à l'image et écrit
+/// `<dossier>/<nom>.jpg` ; pas d'option de taille, `tri` réduit ensuite à `side`.
+#[derive(Debug)]
+pub struct ProfileTool {
+    /// RawTherapee ou ART.
+    pub engine: Engine,
+    /// Sa ligne de commande ([`find_profile_cli`]).
+    pub cli: Cli,
+    /// Fichiers de travail (export temporaire, messages), dans le cache de `tri`.
+    pub work_dir: PathBuf,
+}
+
+impl Developer for ProfileTool {
+    fn engine(&self) -> Engine {
+        self.engine
+    }
+
+    fn render(
+        &self,
+        image: &Path,
+        sidecar: &Path,
+        out: &Path,
+        side: u32,
+        cancel: &AtomicBool,
+    ) -> Result<(), DevelopError> {
+        let engine = self.engine;
+        let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(engine, e.to_string());
+        let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
+        // Un dossier de sortie par rendu : le logiciel nomme lui-même le fichier
+        // (`<nom sans extension>.jpg`).
+        let export_dir = self.work_dir.join(format!("export-{id}"));
+        std::fs::create_dir_all(&export_dir).map_err(|e| failed(&e))?;
+        let log = self.work_dir.join(format!("export-{id}.log"));
+        let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
+        let child = self
+            .cli
+            .command()
+            .arg("-o")
+            .arg(&export_dir)
+            .arg("-p")
+            .arg(sidecar)
+            .args(["-j95", "-Y", "-c"])
+            .arg(image)
+            .stdin(Stdio::null())
+            .stdout(messages.try_clone().map_err(|e| failed(&e))?)
+            .stderr(messages)
+            .spawn()
+            .map_err(|e| failed(&e))?;
+        let status = wait(child, engine, cancel);
+        let text = std::fs::read_to_string(&log).unwrap_or_default();
+        let _ = std::fs::remove_file(&log);
+        let produced = std::fs::read_dir(&export_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("jpg")));
+        let result = match (status, produced) {
+            (Ok(status), Some(export)) if status.success() => {
+                shrink(&export, out, side).map_err(|e| failed(&e))
+            }
+            (Ok(_), _) => {
+                let last = text.lines().rev().find(|l| !l.trim().is_empty());
+                Err(DevelopError::Failed(
+                    engine,
+                    last.unwrap_or(profile_cli_names(engine).0)
+                        .trim()
+                        .to_string(),
+                ))
+            }
+            (Err(e), _) => Err(e),
+        };
+        let _ = std::fs::remove_dir_all(&export_dir);
+        result
+    }
+
+    /// `rawtherapee <dossier>` / `ART <dossier>` : l'interface à côté de la ligne de
+    /// commande (même dossier, nom sans `-cli`), si elle est là ; une AppImage ou un
+    /// Flatpak ouvre l'interface par le programme lui-même.
+    fn open_folder(&self, dir: &Path) -> Option<Command> {
+        let (_, app) = profile_cli_names(self.engine);
+        if self.cli.args.is_empty() {
+            let name = if cfg!(windows) {
+                format!("{app}.exe")
+            } else {
+                app.to_string()
+            };
+            let gui = self.cli.program.with_file_name(name);
+            if !gui.is_file() {
+                return None;
+            }
+            let mut command = crate::process::command(&gui);
+            command.arg(dir);
+            return Some(command);
+        }
+        let mut command = crate::process::command(&self.cli.program);
+        command.args(
+            self.cli
+                .args
+                .iter()
+                .filter(|a| !a.starts_with("--command=") && !a.ends_with("-cli")),
+        );
+        command.arg(dir);
+        Some(command)
     }
 }
 
@@ -1554,6 +1823,58 @@ mod tests {
         RapidRaw {
             cli: Cli::native(script),
             work_dir: dir.join("work"),
+        }
+    }
+
+    /// Un faux `rawtherapee-cli` / `ART-cli` (script) : il copie `jpeg` dans le dossier
+    /// `-o` sous le nom que le vrai donnerait (`<nom sans extension>.jpg`).
+    #[cfg(unix)]
+    fn fake_profile_tool(dir: &Path, engine: Engine, jpeg: &Path) -> ProfileTool {
+        use std::os::unix::fs::PermissionsExt;
+        let script = dir.join(profile_cli_names(engine).0);
+        let body = format!(
+            "#!/bin/sh\n[ \"$1\" = -o ] || exit 2\n[ \"$3\" = -p ] || exit 3\n[ -f \"$4\" ] || exit 4\ncp '{}' \"$2/photo.jpg\"\n",
+            jpeg.display()
+        );
+        std::fs::write(&script, body).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        ProfileTool {
+            engine,
+            cli: Cli::native(script),
+            work_dir: dir.join("work"),
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn rawtherapee_and_art_export_into_a_folder_then_tri_shrinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.jpg");
+        let bitmap = crate::bitmap::Bitmap {
+            width: 400,
+            height: 300,
+            data: vec![128; 400 * 300 * 3],
+        };
+        let bytes = crate::jpeg::encode(&bitmap, 90, crate::jpeg::Chroma::Half).unwrap();
+        std::fs::write(&big, bytes).unwrap();
+        let image = dir.path().join("photo.RAF");
+        let cancel = AtomicBool::new(false);
+        for engine in [Engine::RawTherapee, Engine::Art] {
+            let profile = crate::pp3::path(&image, engine.profile_extension().unwrap());
+            std::fs::write(&profile, "[Exposure]\nCompensation=1\n").unwrap();
+            let out = dir.path().join(format!("{}.jpg", engine.id()));
+            let tool = fake_profile_tool(dir.path(), engine, &big);
+            tool.render(&image, &profile, &out, 100, &cancel).unwrap();
+            assert_eq!(image::image_dimensions(&out).unwrap(), (100, 75));
+            assert!(
+                tool.open_folder(dir.path()).is_none(),
+                "pas d'interface à côté du script"
+            );
+            // Le profil : un développement ; réduit aux notes, non.
+            assert_eq!(engine.sidecar(&image), Some(profile.clone()));
+            std::fs::write(&profile, "[General]\nRank=3\n").unwrap();
+            crate::cache::forget_stamps([profile.as_path()]);
+            assert_eq!(engine.sidecar(&image), None, "notes seules : rien à rendre");
         }
     }
 

@@ -56,8 +56,22 @@ pub fn flag(painter: &Painter, center: Pos2, radius: f32, flag: Flag, colors: &C
 
 /// Pastille coche (`accepted`) ou croix, de couleur `fill`.
 fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Color32) {
+    badge_with_glyph(painter, center, radius, accepted, fill, Color32::WHITE);
+}
+
+/// [`badge`] avec la couleur du signe `glyph` (estompée avec la pastille, bandeau de
+/// notation : retour du 31/10/2026, les drapeaux non choisis en couleur fondue comme les
+/// pastilles de couleur, plus en gris).
+fn badge_with_glyph(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    accepted: bool,
+    fill: Color32,
+    glyph: Color32,
+) {
     painter.circle_filled(center, radius, fill);
-    let stroke = Stroke::new((radius * 0.28).max(1.5), Color32::WHITE);
+    let stroke = Stroke::new((radius * 0.28).max(1.5), glyph);
     let r = radius * 0.5;
     if accepted {
         painter.line(
@@ -74,8 +88,18 @@ fn badge(painter: &Painter, center: Pos2, radius: f32, accepted: bool, fill: Col
     }
 }
 
+/// Opacité d'un contrôle de notation non choisi (pastilles de couleur, drapeaux).
+const FADED: f32 = 0.4;
+
+/// Cercle vide du drapeau « neutre » (retour du 31/10/2026 : la même icône partout —
+/// vignette, bandeau de notation, filtre), de la taille des pastilles coche / croix.
+pub fn neutral_ring(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
+    let width = (radius * 0.28).max(1.5);
+    painter.circle_stroke(center, radius - width / 2.0, Stroke::new(width, color));
+}
+
 /// Icône d'un filtre sur le drapeau, dans `rect` : coche verte (acceptées), croix rouge
-/// (rejetées seulement), la même croix en gris (masquer les rejetées).
+/// (rejetées seulement), un cercle vide gris (masquer les rejetées).
 pub fn flag_filter(
     painter: &Painter,
     rect: Rect,
@@ -87,7 +111,7 @@ pub fn flag_filter(
     match choice {
         FlagFilter::Accepted => flag(painter, center, radius, Flag::Accepted, colors),
         FlagFilter::Rejected => flag(painter, center, radius, Flag::Rejected, colors),
-        FlagFilter::NotRejected => badge(painter, center, radius, false, Color32::from_gray(120)),
+        FlagFilter::NotRejected => neutral_ring(painter, center, radius, Color32::from_gray(120)),
     }
 }
 
@@ -167,14 +191,11 @@ pub fn thumbnail_notes(
         flag(painter, c, radius, notes.flag, colors);
     } else if neutral {
         // Neutre : un cercle vide à la même place (`[gui.grid] neutral_flag`, 31/10/2026 :
-        // chaque vignette montre toutes ses informations).
+        // chaque vignette montre toutes ses informations), cerclé de sombre comme les
+        // autres marques.
         let c = pos2(area.max.x - inset, area.max.y - inset);
-        painter.circle_filled(c, radius + rim, RIM);
-        painter.circle_stroke(
-            c,
-            radius * 0.62,
-            Stroke::new((radius * 0.28).max(1.5), Color32::from_gray(210)),
-        );
+        neutral_ring(painter, c, radius + rim, RIM);
+        neutral_ring(painter, c, radius, Color32::from_gray(230));
     }
     for (k, &color) in notes.colors.iter().enumerate() {
         let c = pos2(
@@ -1079,17 +1100,22 @@ pub fn controls(
     ] {
         let action = Action::Flag(flag);
         let (rect, hit) = cell(ui, action);
-        let fill = if notes.flag == flag {
-            Color32::from(color)
+        // Non choisi : la même couleur, fondue, comme les pastilles de couleur.
+        let (fill, glyph) = if notes.flag == flag {
+            (Color32::from(color), Color32::WHITE)
         } else {
-            weak
+            (
+                Color32::from(color).gamma_multiply(FADED),
+                Color32::WHITE.gamma_multiply(FADED),
+            )
         };
-        badge(
+        badge_with_glyph(
             ui.painter(),
             rect.center(),
             size * 0.45,
             flag == Flag::Accepted,
             fill,
+            glyph,
         );
         if hit {
             clicked = Some(action);
@@ -1100,10 +1126,10 @@ pub fn controls(
     let ring = if notes.flag == Flag::None {
         strong
     } else {
-        weak
+        strong.gamma_multiply(FADED)
     };
-    ui.painter()
-        .circle_stroke(rect.center(), size * 0.38, Stroke::new(1.5, ring));
+    // De la taille des deux pastilles (retour du 31/10/2026 : il paraissait plus grand).
+    neutral_ring(ui.painter(), rect.center(), size * 0.45, ring);
     if hit {
         clicked = Some(action);
     }
@@ -1144,7 +1170,7 @@ pub fn controls(
                 Stroke::new(2.0, accent_mark(ui.ctx())),
             );
         } else {
-            painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(0.4));
+            painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(FADED));
         }
         if hit {
             clicked = Some(action);

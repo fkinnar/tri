@@ -105,9 +105,57 @@ impl Format for Rrdata {
     }
 }
 
+/// Profil de RawTherapee (`.pp3`) ou d'ART (`.arp`), même format (31/10/2026) : les notes
+/// dans `[General]` (`Rank`, `ColorLabel`, `InTrash`), voir [`crate::pp3`].
+pub struct Profile {
+    engine: Engine,
+    extension: &'static str,
+}
+
+/// Le profil de RawTherapee.
+pub static PP3: Profile = Profile {
+    engine: Engine::RawTherapee,
+    extension: "pp3",
+};
+
+/// Le profil d'ART.
+pub static ARP: Profile = Profile {
+    engine: Engine::Art,
+    extension: "arp",
+};
+
+impl Format for Profile {
+    fn id(&self) -> &'static str {
+        self.extension
+    }
+    fn engine(&self) -> Option<Engine> {
+        Some(self.engine)
+    }
+    fn owns(&self, sidecar: &Path) -> bool {
+        sidecar
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case(self.extension))
+    }
+    fn existing(&self, image: &Path, index: &SidecarIndex) -> Option<PathBuf> {
+        index.setting_file(image, &format!(".{}", self.extension))
+    }
+    fn new_path(&self, image: &Path, _convention: Convention) -> PathBuf {
+        crate::pp3::path(image, self.extension)
+    }
+    fn read(&self, sidecar: &Path) -> Result<Notes, String> {
+        crate::pp3::read(sidecar).map_err(|e| e.to_string())
+    }
+    fn write(&self, sidecar: &Path, notes: &Notes) -> Result<bool, String> {
+        crate::pp3::write(sidecar, notes).map_err(|e| e.to_string())
+    }
+    fn create(&self, sidecar: &Path, notes: &Notes) -> Result<(), String> {
+        crate::pp3::create(sidecar, notes).map_err(|e| e.to_string())
+    }
+}
+
 /// Tous les formats, le XMP d'abord (celui que `tri` lit et écrit toujours).
 pub fn formats() -> &'static [&'static dyn Format] {
-    static ALL: [&dyn Format; 2] = [&Xmp, &Rrdata];
+    static ALL: [&dyn Format; 4] = [&Xmp, &Rrdata, &PP3, &ARP];
     &ALL
 }
 
@@ -156,6 +204,10 @@ pub struct FormatSettings {
 pub struct SidecarSettings {
     /// RapidRAW (`.rrdata`).
     pub rapidraw: FormatSettings,
+    /// RawTherapee (`.pp3`, 31/10/2026).
+    pub rawtherapee: FormatSettings,
+    /// ART (`.arp`, 31/10/2026).
+    pub art: FormatSettings,
 }
 
 impl SidecarSettings {
@@ -163,6 +215,8 @@ impl SidecarSettings {
     fn of(&self, format: &dyn Format) -> Option<FormatSettings> {
         match format.engine()? {
             Engine::RapidRaw => Some(self.rapidraw),
+            Engine::RawTherapee => Some(self.rawtherapee),
+            Engine::Art => Some(self.art),
             Engine::Darktable => None,
         }
     }
@@ -206,7 +260,11 @@ mod tests {
         assert_eq!(by_id("rrdata").map(|f| f.id()), Some("rrdata"));
         assert_eq!(by_id("xmp").map(|f| f.id()), Some("xmp"));
         assert!(by_id("lightroom").is_none());
-        assert!(by_id("pp3").is_none());
+        // RawTherapee et ART (31/10/2026) : même module, deux formats.
+        assert_eq!(by_id("pp3").map(|f| f.id()), Some("pp3"));
+        assert_eq!(by_id("rawtherapee").map(|f| f.id()), Some("pp3"));
+        assert_eq!(by_id("art").map(|f| f.id()), Some("arp"));
+        assert_eq!(of(Path::new("/p/IMG.RAF.arp")).engine(), Some(Engine::Art));
         let auto = SidecarSettings::default();
         assert_eq!(
             auto.creates(&[], |_| false),
@@ -222,12 +280,28 @@ mod tests {
             rapidraw: FormatSettings {
                 create: Create::Never,
             },
+            ..SidecarSettings::default()
         };
-        assert_eq!(never.creates(&[Engine::RapidRaw], |_| true), ["xmp"]);
+        assert_eq!(
+            never.creates(&[Engine::RapidRaw], |f| f.id() == "rrdata"),
+            ["xmp"]
+        );
+        // RawTherapee / ART (31/10/2026) : leur profil suit la même politique.
+        assert_eq!(
+            auto.creates(&[Engine::Art], |_| false),
+            ["xmp", "arp"],
+            "ART installé"
+        );
+        assert_eq!(
+            auto.creates(&[], |f| f.id() == "pp3"),
+            ["xmp", "pp3"],
+            "le dossier a des .pp3"
+        );
         let always = SidecarSettings {
             rapidraw: FormatSettings {
                 create: Create::Always,
             },
+            ..SidecarSettings::default()
         };
         assert_eq!(always.creates(&[], |_| false), ["xmp", "rrdata"]);
     }
