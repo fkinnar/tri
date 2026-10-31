@@ -62,6 +62,7 @@ files-not-a-directory = { $path } n'est pas un dossier
 files-same-folder = les images sont déjà dans { $path }
 files-mismatch = copie de { $path } différente de l'original (rien n'a été gardé)
 files-into-itself = impossible de mettre { $path } dans lui-même
+files-changed = { $path } a changé entre-temps : rien n'a été fait
 files-not-in-trash = { $path } n'est plus dans la corbeille
 history-notes-changed = { $name } : notes modifiées ailleurs depuis (rien n'a été changé)
 history-missing = { $name } est introuvable (déplacé ou supprimé ailleurs)
@@ -103,6 +104,10 @@ history-move = { $n ->
 history-trash = { $n ->
     [one] 1 fichier mis à la corbeille
    *[other] { $n } fichiers mis à la corbeille
+}
+history-developments = { $n ->
+    [one] 1 développement supprimé
+   *[other] { $n } développements supprimés
 }
 config-invalid-toml = valeur TOML invalide : { $value }
 config-not-a-section = « { $section } » n'est pas une section
@@ -222,6 +227,7 @@ cli-rename-shared-copy = (copie : partagé)
 cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :
 cli-delete-kept = gardé (partagé) :
+cli-delete-stripped = développement darktable retiré de :
 cli-dry-run = (--dry-run : rien n'a été modifié)
 cli-export-unknown-profile = préréglage d'export inconnu : { $profile } (préréglages : { $known })
 cli-export-plan = export « { $profile } » ({ $summary }) vers { $dest } :

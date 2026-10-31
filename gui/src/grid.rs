@@ -132,6 +132,7 @@ pub fn navigate(
         | Action::FileCopy
         | Action::FileMove
         | Action::FileDeleteStack
+        | Action::FileDeletePhoto
         | Action::FileCopyStack
         | Action::FileExport
         | Action::ExportReport

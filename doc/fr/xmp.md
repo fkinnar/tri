@@ -108,6 +108,9 @@ effet.
 - `convert(images, convention, simulation) -> Conversion` (bilan : écrits, inchangés,
   conflits, erreurs) ;
 - `parse(xml) -> Notes`, `apply(xml, &notes) -> xml` : le même travail sur un texte ;
+- `strip_darktable(xml) -> xml` (30/10/2026) : le texte sans le développement darktable
+  (attributs et éléments de son espace de noms, sauf `colorlabels`, une note ; le reste
+  octet pour octet), pour « supprimer le développement principal » (`developments.md`) ;
 - `SidecarIndex::new(dossier)`, `.sidecars(image)`, `.sidecar_path(image, convention)` ;
   `existing_sidecars`, `sidecar_path` (une image isolée) ;
 - `Notes { stars, flag, colors }`, `Flag { None, Accepted, Rejected }`,

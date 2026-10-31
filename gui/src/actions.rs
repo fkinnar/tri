@@ -339,6 +339,8 @@ pub enum Action {
     FileMove,
     /// Supprimer toute la pile de l'image (`dw`, comme un mot dans vim).
     FileDeleteStack,
+    /// La photo entière, avec tous ses développements (Ctrl+Suppr / `dd`).
+    FileDeletePhoto,
     /// Envoyer la sélection par un plugin d'envoi ([`tri::send`]) ; l'identifiant complet
     /// de l'action, dans l'espace de noms des plugins (`plugin.airdrop.send`).
     Send(&'static str),
@@ -446,7 +448,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 185] = [
+    pub const ALL: [Action; 186] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -505,6 +507,7 @@ impl Action {
         Action::FileCopy,
         Action::FileMove,
         Action::FileDeleteStack,
+        Action::FileDeletePhoto,
         Action::FileCopyStack,
         Action::FileExport,
         Action::ExportReport,
@@ -658,6 +661,7 @@ impl Action {
                 | FileCopy
                 | FileMove
                 | FileDeleteStack
+                | FileDeletePhoto
                 | FileCopyStack
                 | FolderRename
                 | FolderDelete
@@ -704,7 +708,8 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove
-            | FileDeleteStack | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
+            | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
+            | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose | StackFirst
             | StackLast | StackEnterToggle | DevToggle | DevNext | DevPrev => Group::Selection,
@@ -898,6 +903,7 @@ impl Action {
             Action::FolderSectionPrev => "core.folders.section_prev",
             Action::FileMove => "core.file.move",
             Action::FileDeleteStack => "core.file.delete_stack",
+            Action::FileDeletePhoto => "core.file.delete_photo",
             Action::FileCopyStack => "core.file.copy_stack",
             Action::Send(id) => id,
             Action::FileReveal => "core.file.reveal",
@@ -1223,6 +1229,8 @@ const VIM: &[Binding] = {
         (&[plain(Key::Y)], FileCopy),
         (&[plain(Key::Y), Chord::char(')')], FileCopyStack),
         (&[plain(Key::D), Chord::char(')')], FileDeleteStack),
+        // `dd` : la photo entière, avec ses développements (30/10/2026).
+        (&[plain(Key::D), plain(Key::D)], FileDeletePhoto),
         (&[Chord::char('(')], StackFirst),
         (&[Chord::char(')')], StackLast),
         (&[plain(Key::X)], FileDelete),
@@ -1373,6 +1381,10 @@ const FILES: &[Binding] = {
         (&[plain(Key::F2)], FileRename),
         (&[plain(Key::Delete)], FileDelete),
         (&[plain(Key::Backspace)], FileDelete),
+        // La photo avec tous ses développements (30/10/2026) : Ctrl en plus. Sans
+        // développement, Suppr suffit (même boîte).
+        (&[ctrl(Key::Delete)], FileDeletePhoto),
+        (&[ctrl(Key::Backspace)], FileDeletePhoto),
         (&[shifted(Key::R)], FileReveal),
         (&[plain(Key::E)], FileEdit),
         // Comme la plupart des applications (Cmd+, sur macOS est pris par le système).

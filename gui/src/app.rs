@@ -798,6 +798,40 @@ pub struct TriApp {
     last_shown: (usize, Option<Level>),
 }
 
+/// Nom affiché d'une image : son nom de fichier ; pour un développement, celui de sa
+/// photo suivi du développement (« DSCF0306.RAF · Darktable · clone 1 »), jamais le
+/// chemin propre (`DSCF0306@dt-01.RAF`).
+pub fn shown_name(path: &Path) -> String {
+    match tri::developments::get(path) {
+        Some(development) => format!(
+            "{} · {}",
+            file_name(&development.photo),
+            development_label(path)
+        ),
+        None => file_name(path),
+    }
+}
+
+/// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
+pub fn development_label(path: &Path) -> String {
+    match tri::developments::get(path) {
+        Some(development) => {
+            let siblings = tri::developments::of(&development.photo);
+            let name = development.engine.name();
+            match development.rank(&siblings) {
+                tri::developments::Rank::Main => name.to_string(),
+                tri::developments::Rank::Clone(n) => {
+                    format!("{name} · {}", t!("dev-clone", n = n))
+                }
+                tri::developments::Rank::Copy(n) => {
+                    format!("{name} · {}", t!("dev-copy", n = n))
+                }
+            }
+        }
+        None => tri::media::display_stem(path),
+    }
+}
+
 impl TriApp {
     /// Fichier de configuration que la fenêtre de réglages modifie.
     pub fn with_config(mut self, path: Option<PathBuf>) -> TriApp {
@@ -2146,7 +2180,7 @@ impl TriApp {
                 let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
                 // Nom : une ligne comme les autres, en tête (demandé le 22/10/2026 : un
                 // titre blanc au-dessus de l'histogramme répétait la barre d'état).
-                let mut rows = vec![(t!("panel-name"), self.shown_name(&file.path))];
+                let mut rows = vec![(t!("panel-name"), shown_name(&file.path))];
                 rows.extend(m.rows());
                 // Netteté : une ligne comme les autres (pointable, copiable).
                 if let Some(j) = self.judgements.get(&file.path) {
@@ -4708,7 +4742,7 @@ impl TriApp {
         }
         if on {
             self.chosen.insert(path.clone());
-            self.notice = Some((t!("stack-chosen", name = self.shown_name(&path)), false));
+            self.notice = Some((t!("stack-chosen", name = shown_name(&path)), false));
         } else {
             self.chosen.remove(&path);
         }
@@ -4733,10 +4767,7 @@ impl TriApp {
         }
         if on {
             self.dev_preferred.insert(path.clone());
-            self.notice = Some((
-                t!("dev-preferred", name = self.development_label(&path)),
-                false,
-            ));
+            self.notice = Some((t!("dev-preferred", name = development_label(&path)), false));
         }
         if let Some(data) = self.settings.data_dir() {
             let result = if tri::media::is_development(&path) {
@@ -4795,40 +4826,6 @@ impl TriApp {
             tri::developments::Rank::Clone(n) => format!("{short} · {}", t!("dev-clone", n = n)),
             tri::developments::Rank::Copy(n) => format!("{short} · {}", t!("dev-copy", n = n)),
         })
-    }
-
-    /// Nom affiché d'une image : son nom de fichier ; pour un développement, celui de sa
-    /// photo suivi du développement (« DSCF0306.RAF · Darktable · clone 1 »), jamais le
-    /// chemin propre (`DSCF0306@dt-01.RAF`).
-    fn shown_name(&self, path: &Path) -> String {
-        match tri::developments::get(path) {
-            Some(development) => format!(
-                "{} · {}",
-                file_name(&development.photo),
-                self.development_label(path)
-            ),
-            None => file_name(path),
-        }
-    }
-
-    /// Nom lisible d'un développement (« Darktable · clone 1 »), ou de la photo (son nom).
-    fn development_label(&self, path: &Path) -> String {
-        match tri::developments::get(path) {
-            Some(development) => {
-                let siblings = tri::developments::of(&development.photo);
-                let name = development.engine.name();
-                match development.rank(&siblings) {
-                    tri::developments::Rank::Main => name.to_string(),
-                    tri::developments::Rank::Clone(n) => {
-                        format!("{name} · {}", t!("dev-clone", n = n))
-                    }
-                    tri::developments::Rank::Copy(n) => {
-                        format!("{name} · {}", t!("dev-copy", n = n))
-                    }
-                }
-            }
-            None => tri::media::display_stem(path),
-        }
     }
 
     /// Déplie ou replie la pile de l'image sélectionnée.
@@ -5825,6 +5822,20 @@ impl TriApp {
                     }
                 }
             }
+            Action::FileDeletePhoto => {
+                // La photo entière, avec tous ses développements (Ctrl+Suppr / `dd`,
+                // 30/10/2026) : depuis un développement, sa photo ; même boîte.
+                let mut seen = std::collections::HashSet::new();
+                let paths: Vec<PathBuf> = self
+                    .selection
+                    .targets(&self.files, self.selected)
+                    .iter()
+                    .map(|p| tri::media::source(p).into_owned())
+                    .filter(|p| seen.insert(p.clone()))
+                    .collect();
+                let at = ctx.content_rect().center() - vec2(160.0, 80.0);
+                self.file_action(Action::FileDelete, paths, at);
+            }
             Action::FileRename
             | Action::FileDelete
             | Action::FileReveal
@@ -6392,6 +6403,11 @@ impl TriApp {
             | Action::FileMove => {
                 let at = pos2(200.0, 200.0);
                 self.file_action(action, vec![path], at);
+            }
+            Action::FileDeletePhoto => {
+                let at = pos2(200.0, 200.0);
+                let photo = tri::media::source(&path).into_owned();
+                self.file_action(Action::FileDelete, vec![photo], at);
             }
             _ => return false,
         }
@@ -7915,7 +7931,7 @@ impl TriApp {
                 }
             }
             // Nom, ce qui est affiché, notes.
-            let mut label = self.shown_name(&file.path);
+            let mut label = shown_name(&file.path);
             if let Some(level) = shown {
                 label.push_str(" · ");
                 label.push_str(&view::label(file.kind, level));
@@ -8333,7 +8349,7 @@ impl TriApp {
                             " · {}",
                             t!(
                                 "view-info-development",
-                                name = self.development_label(&file.path)
+                                name = development_label(&file.path)
                             )
                         ));
                     }
@@ -8413,7 +8429,7 @@ impl TriApp {
                 &painter,
                 view_rect.left_top() + vec2(10.0, 10.0),
                 Align2::LEFT_TOP,
-                &format!("{position} · {}{info}", self.shown_name(&file.path)),
+                &format!("{position} · {}{info}", shown_name(&file.path)),
             );
         }
         self.view_info = format!("{position}{info}");
@@ -9089,7 +9105,7 @@ impl TriApp {
                 && let Some(file) = self.files.get(self.selected)
             {
                 ui.separator();
-                ui.label(self.shown_name(&file.path));
+                ui.label(shown_name(&file.path));
                 // Plein écran : numéro, source, taille, attentes (écrits par la vue).
                 if self.mode == Mode::View && !self.view_info.is_empty() {
                     ui.weak(&self.view_info);
@@ -10069,7 +10085,7 @@ impl TriApp {
         let mut develop: Option<Option<tri::develop::Engine>> = None;
         let engines = self.developers.engines();
         let modal = modal_at("rating_dialog", at)
-            .title(self.shown_name(&path))
+            .title(shown_name(&path))
             .show(ctx, |ui| {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
@@ -11230,7 +11246,7 @@ impl TriApp {
                 } else {
                     "dev-badge-tip-pending"
                 },
-                name = self.development_label(&file.path)
+                name = development_label(&file.path)
             ));
         }
         if g.blur_badge && self.is_blurry(&file.path) {
@@ -12787,6 +12803,7 @@ fn uses_cursor(action: Action) -> bool {
             | Action::FileMove
             | Action::FileExport
             | Action::FileDeleteStack
+            | Action::FileDeletePhoto
             | Action::FileCopyStack
             | Action::Send(_)
             | Action::SelectToggle
@@ -14386,6 +14403,73 @@ mod tests {
             0,
             "l'original garde ses notes"
         );
+    }
+
+    #[test]
+    fn deleting_a_development_strips_its_xmp_and_ctrl_delete_takes_the_photo() {
+        // Double suppression (30/10/2026) : Suppr / `x` retire le développement affiché
+        // (principal darktable : son XMP sans l'historique, notes gardées) ; Ctrl+Suppr
+        // supprime la photo avec tout.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let xmp = photos.join("img0.jpg.xmp");
+        std::fs::write(
+            &xmp,
+            concat!(
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">"#,
+                r#"<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" "#,
+                r#"xmp:Rating="3" darktable:xmp_version="5" darktable:history_end="1"><darktable:history><rdf:Seq><rdf:li darktable:operation="exposure"/></rdf:Seq></darktable:history>"#,
+                r#"</rdf:Description></rdf:RDF></x:xmpmeta>"#
+            ),
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        h.run_steps(2);
+        assert_eq!(
+            selected_name(&h),
+            "img0@dt.jpg",
+            "la couverture : le développement"
+        );
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert!(h.state().file_dialog.is_some());
+        h.get_by_label(&t!("delete-stripped", name = "img0.jpg.xmp"));
+        assert!(
+            h.query_by_label("img0.jpg").is_none(),
+            "la photo ne part pas"
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
+        assert!(photos.join("img0.jpg").exists() && xmp.exists());
+        assert!(!tri::developments::file_is_darktable(&xmp));
+        assert_eq!(
+            tri::xmp::read_sidecar(&xmp).unwrap().stars,
+            3,
+            "notes gardées"
+        );
+        assert_eq!(h.state().history.entries().len(), 1);
+        // Annulé : le développement revient.
+        press(&mut h, Key::U, Modifiers::NONE);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        assert!(tri::developments::file_is_darktable(&xmp));
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0@dt.jpg");
+        // Ctrl+Suppr depuis le développement : la photo et son XMP.
+        press(&mut h, Key::Delete, Modifiers::CTRL);
+        assert!(h.state().file_dialog.is_some());
+        h.get_by_label("img0.jpg");
+        h.get_by_label("img0.jpg.xmp");
+        assert!(
+            h.query_by_label(&t!("delete-stripped", name = "img0.jpg.xmp"))
+                .is_none()
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        run_until(&mut h, |app| app.file_dialog.is_none());
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 2);
+        assert!(!photos.join("img0.jpg").exists() && !xmp.exists());
+        assert!(h.state().file_error.is_none());
     }
 
     #[test]

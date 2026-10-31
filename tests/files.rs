@@ -117,7 +117,7 @@ fn deleting_removes_the_pair_and_its_sidecars_only() {
             "AUTRE.RAF.xmp",
         ],
     );
-    let group = files::plan_delete(&[d.join("IMG.JPG")], &FileSettings::default());
+    let group = files::plan_delete(&[d.join("IMG.JPG")], &FileSettings::default()).group;
     assert_eq!(group.files().count(), 4);
     files::delete(&group, false).unwrap();
     assert_eq!(listing(d), ["AUTRE.RAF", "AUTRE.RAF.xmp"]);
@@ -129,7 +129,7 @@ fn a_deletion_reports_its_progress_file_by_file() {
     let d = dir.path();
     touch(d, &["A.JPG", "B.JPG", "C.JPG"]);
     let images: Vec<_> = ["A.JPG", "B.JPG", "C.JPG"].map(|n| d.join(n)).into();
-    let group = files::plan_delete(&images, &FileSettings::default());
+    let group = files::plan_delete(&images, &FileSettings::default()).group;
     let mut steps = Vec::new();
     files::delete_with_progress(&group, false, |done, total| steps.push((done, total))).unwrap();
     assert_eq!(steps, [(1, 3), (2, 3), (3, 3)]);
@@ -145,7 +145,8 @@ fn trash_really_trashes() {
     let group = files::plan_delete(
         &[dir.path().join("tri-test-corbeille.jpg")],
         &FileSettings::default(),
-    );
+    )
+    .group;
     files::delete(&group, true).unwrap();
     assert!(listing(dir.path()).is_empty());
 }

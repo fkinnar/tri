@@ -62,6 +62,7 @@ files-not-a-directory = { $path } is not a folder
 files-same-folder = the images are already in { $path }
 files-mismatch = copy of { $path } differs from the original (nothing was kept)
 files-into-itself = cannot put { $path } inside itself
+files-changed = { $path } changed in the meantime: nothing was done
 files-not-in-trash = { $path } is no longer in the trash
 history-notes-changed = { $name }: ratings changed elsewhere since (nothing was changed)
 history-missing = { $name } cannot be found (moved or deleted elsewhere)
@@ -102,6 +103,10 @@ history-move = { $n ->
 history-trash = { $n ->
     [one] 1 file moved to the trash
    *[other] { $n } files moved to the trash
+}
+history-developments = { $n ->
+    [one] 1 development deleted
+   *[other] { $n } developments deleted
 }
 config-invalid-toml = invalid TOML value: { $value }
 config-not-a-section = “{ $section }” is not a section
@@ -221,6 +226,7 @@ cli-rename-shared-copy = (copy: shared)
 cli-delete-trash = trash:
 cli-delete-permanent = deleted:
 cli-delete-kept = kept (shared):
+cli-delete-stripped = darktable development removed from:
 cli-dry-run = (--dry-run: nothing was changed)
 cli-export-unknown-profile = unknown export preset: { $profile } (presets: { $known })
 cli-export-plan = export “{ $profile }” ({ $summary }) to { $dest }:

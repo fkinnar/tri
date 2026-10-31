@@ -20,8 +20,17 @@ only handles input and confirmation, and the command line offers the same action
 - A **darktable clone** shown in the grid (see `media.md`) is never split from its image
   (user's choice, 2026-10-30: "tri cannot split versions"): copying, moving or renaming it
   acts on the original, and all its clones follow (`Mer_01.RAF.xmp` after renaming
-  `IMG_01.RAF` to "Mer"). **Deleting** it deletes only its sidecar, as in darktable; the
-  original stays.
+  `IMG_01.RAF` to "Mer").
+- **Two-level deletion** (decided 2026-10-30, see `developments.md`): deleting a
+  **development** (virtual path, `developments::get`) never touches the photo. A darktable
+  clone, a virtual copy or the main RapidRAW development lose their file
+  (`Development::own_file`, trash); the main darktable development shares `IMG.RAF.xmp`
+  with the photo, so the XMP is **rewritten without the history**
+  (`xmp::strip_darktable`, `developments::Rewrite`), the notes stay, and the photo is an
+  image without development again. Deleting the **photo** (Ctrl+Delete, `dd`; from a
+  development, `media::source`) takes everything: pair, sidecars, clones and copies. The
+  photo and its main development requested together: nothing to rewrite, the XMP goes
+  with it.
 - The other image of its **RAW+JPEG pair** (same name apart from the extension, ignoring
   case) follows it too, by default (`[files] pairs = true`), as for notes: you reject a
   photo, not a file. The **Delete** and **Copy / move to…** dialogs have a "with the other
@@ -44,7 +53,8 @@ that foreseeable errors happen before the first modification.
 | `group(images, pairs) -> Group` | images (pairs included), sidecars, clones and settings of their own (`sidecars`), shared sidecars left alone (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | new paths (`moves`) and copies of shared sidecars (`copies`); refuses an empty name, one with `/` or `\`, `.` / `..` (`InvalidName`) or one already taken (`Exists`); changing only the case is allowed |
 | `rename(&Rename)` | executes; never overwrites (checked again just before each file); on an error, what was renamed is put back and the copies deleted |
-| `plan_delete(images, settings) -> Group` | files to delete |
+| `plan_delete(images, settings) -> DeletePlan` | files to delete (`group`) and darktable XMP to rewrite without their development (`stripped`) |
+| `delete_plan(&DeletePlan, trash, progress) -> Deleted` | rewrites, then deletions; `Deleted`: trashed files and rewritten sidecars (`history::Step::Developments`) |
 | `delete(&Group, trash)` | trash ([`trash`](https://crates.io/crates/trash) crate) or permanent deletion |
 | `reveal(path)` | file manager, file selected |
 | `editor_command(editor, files)` / `open_with(editor, files)` | external editor (command built separately, to be tested without launching anything); programs launched without input or outputs (their traces do not go to the terminal of `tri`) |
@@ -179,6 +189,11 @@ another volume, the one left in the source is removed.
 them again), `untrash` puts them back (see `history.md`). On macOS, moving to the trash goes
 through `NSFileManager` (exact location returned) rather than through the `trash` crate,
 which does not provide it.
+
+`delete_plan` rewrites the XMP first (`Rewrite::apply`: re-read just before; a sidecar
+changed between the dialog and the confirmation, by darktable for instance, stops
+everything with `FileError::Changed` and puts back the ones already rewritten), then
+deletes the files. The progress counts both.
 
 `delete_with_progress(&Group, trash, progress)`: the same, with (done, total) after each
 file. The interface runs it in a separate thread, with a bar in the dialog (2026-10-24,

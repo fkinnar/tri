@@ -26,6 +26,7 @@ Done on 2026-10-18, following the decisions made with the user the same day.
 | `CreateDir` | the created folder | deleted, **only if it is still empty** | folder present and empty |
 | `RenameDir` | old and new name | reverse rename | new name present, old one free |
 | `Trash` | where each file went (`files::delete` → `Trashed`) | `files::untrash` | original location free, file still in the trash |
+| `Developments` | deleted developments (`files::delete_plan` → `Deleted`): sidecars in the trash and darktable XMP rewritten without history (`Rewrite`, content before / after) | XMP put back as before, then `files::untrash` | XMP still as written (rated in darktable since: refused), files still in the trash |
 
 Trash: the `trash` crate can only restore on Linux and Windows
 (`os_limited::restore_all`, the item found by its original location). On macOS, `tri`

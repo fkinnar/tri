@@ -41,8 +41,19 @@ on demand, `b` cycles through the renders).
   `get(path)` gives the development of a path of its own, `of(photo)` a photo's in order,
   `has(photo, engine)` whether it has one of that software, `order(path)` a development's
   rank (for sorting).
-- `Development::path()`, `own_file()` (the sidecar one can delete without touching the
-  photo: a clone or copy, never the main one), `notes_in_rrdata()`.
+- `Development::path()`, `own_file()` (the file one can delete without touching the
+  photo: a clone, a virtual copy, or the `.rrdata` of the main RapidRAW development; never
+  the main darktable XMP, shared with the photo), `notes_in_rrdata()`.
+- **Deleting a development** (decided 2026-10-30): `removal()` says what it touches,
+  `Removal::File` (the own file, trash) or `Removal::Strip` (main darktable: its XMP
+  rewritten **without the history**, `xmp::strip_darktable`, everything darktable writes
+  there except `colorlabels`, a note; the notes stay and the photo has no development any
+  more). `Rewrite::strip(development)` prepares the rewrite (content before and after,
+  nothing written), `apply()` / `revert()` write or undo it, re-reading the file just
+  before: changed in the meantime, nothing is written (`false`). On darktable's side, its
+  library keeps the history until it re-reads the XMP ("look for updated XMP files on
+  startup" option). The whole plan is in `files.md` (`plan_delete`, `delete_plan`), the
+  undo in `history.md` (`Step::Developments`).
 - `Development::rank(siblings)`: its place for the label, `Rank::Main`, `Rank::Clone(n)`
   (the file's number) or `Rank::Copy(n)` (the virtual copy's rank among the photo's, the
   first = 1: the identifier says nothing).

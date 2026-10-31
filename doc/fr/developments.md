@@ -41,8 +41,19 @@ demande, `b` fait le tour des rendus).
   `register` en ajoute un ; `get(path)` rend le développement d'un chemin propre, `of(photo)`
   ceux d'une photo dans l'ordre, `has(photo, engine)` dit si elle en a un de ce logiciel,
   `order(path)` le rang d'un développement (pour trier).
-- `Development::path()`, `own_file()` (le sidecar qu'on peut supprimer sans toucher à la
-  photo : clone ou copie, jamais le principal), `notes_in_rrdata()`.
+- `Development::path()`, `own_file()` (le fichier qu'on peut supprimer sans toucher à la
+  photo : clone, copie virtuelle, ou `.rrdata` du principal RapidRAW ; jamais le XMP du
+  principal darktable, partagé avec la photo), `notes_in_rrdata()`.
+- **Supprimer un développement** (décidé le 30/10/2026) : `removal()` dit ce que ça
+  touche, `Removal::File` (le fichier propre, corbeille) ou `Removal::Strip` (principal
+  darktable : son XMP réécrit **sans l'historique**, `xmp::strip_darktable`, tout ce que
+  darktable y écrit sauf `colorlabels`, une note ; les notes restent et la photo n'a plus
+  de développement). `Rewrite::strip(development)` prépare la réécriture (contenu avant et
+  après, rien d'écrit), `apply()` / `revert()` l'écrivent ou la défont, en relisant le
+  fichier juste avant : modifié entre-temps, rien n'est écrit (`false`). Côté darktable, sa
+  bibliothèque garde l'historique tant qu'il ne relit pas le XMP (option « rechercher les
+  XMP mis à jour au démarrage »). Le plan complet est dans `files.md` (`plan_delete`,
+  `delete_plan`), l'annulation dans `history.md` (`Step::Developments`).
 - `Development::rank(siblings)` : sa place pour l'étiquette, `Rank::Main`,
   `Rank::Clone(n)` (le numéro du fichier) ou `Rank::Copy(n)` (le rang de la copie virtuelle
   parmi celles de la photo, la première = 1 : l'identifiant ne dit rien).

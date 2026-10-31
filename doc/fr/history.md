@@ -26,6 +26,7 @@ Fait le 18/10/2026, d'après les décisions prises avec l'utilisateur le même j
 | `CreateDir` | le dossier créé | supprimé, **seulement s'il est encore vide** | dossier présent et vide |
 | `RenameDir` | ancien et nouveau nom | renommage inverse | nouveau nom présent, ancien libre |
 | `Trash` | où chaque fichier est parti (`files::delete` → `Trashed`) | `files::untrash` | emplacement d'origine libre, fichier encore dans la corbeille |
+| `Developments` | développements supprimés (`files::delete_plan` → `Deleted`) : sidecars à la corbeille et XMP darktable réécrits sans historique (`Rewrite`, contenu avant / après) | XMP remis comme avant, puis `files::untrash` | XMP encore tel qu'écrit (noté dans darktable depuis : refusé), fichiers encore dans la corbeille |
 
 Corbeille : le crate `trash` ne sait restaurer que sous Linux et Windows
 (`os_limited::restore_all`, l'élément retrouvé par son emplacement d'origine). Sur macOS,

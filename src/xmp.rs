@@ -1136,6 +1136,129 @@ pub fn apply(xml: &str, notes: &Notes) -> Result<String> {
     String::from_utf8(writer.into_inner()).map_err(|e| XmpError::Malformed(e.to_string()))
 }
 
+/// Vrai si `qname` (préfixe:nom, dans `scopes`) est une donnée de développement de
+/// darktable : son espace de noms, sauf `colorlabels`, qui est une note.
+fn is_darktable_development(scopes: &Scopes, qname: &str) -> bool {
+    scopes
+        .resolve(qname)
+        .is_some_and(|(uri, local)| uri == ns::DARKTABLE && local != "colorlabels")
+}
+
+/// Balise ouvrante sans ses attributs de développement darktable
+/// ([`is_darktable_development`]), chacun retiré avec l'espace qui le précède ; le reste du
+/// texte de la balise est conservé tel quel.
+fn without_darktable_attributes<'a>(
+    start: &BytesStart<'_>,
+    scopes: &Scopes,
+) -> Result<BytesStart<'a>> {
+    let name = name_of(start);
+    let raw: &str = start;
+    let attrs = raw_attributes(raw, name.len())?;
+    let mut out = String::with_capacity(raw.len());
+    let mut cursor = 0;
+    for a in &attrs {
+        if is_darktable_development(scopes, &a.key) {
+            out.push_str(&raw[cursor..a.space]);
+            cursor = a.end;
+        }
+    }
+    out.push_str(&raw[cursor..]);
+    Ok(BytesStart::from_content(out, name.len()).into_owned())
+}
+
+/// `xml` sans le développement darktable (30/10/2026, « supprimer le développement
+/// principal ») : tout ce que darktable écrit dans son espace de noms disparaît —
+/// `xmp_version`, `history_end`, `<darktable:history>`, masques, ordre des modules,
+/// empreintes… — sauf `darktable:colorlabels`, une note. Tout le reste (notes, mots-clés,
+/// auteur, mise en page) est conservé octet pour octet. Le fichier n'est plus « de
+/// darktable » ([`crate::developments::is_darktable`]) : la photo redevient une image
+/// sans développement, avec ses notes. Un XMP sans rien de darktable ressort inchangé.
+pub fn strip_darktable(xml: &str) -> Result<String> {
+    let mut reader = new_reader(xml);
+    let mut writer = Writer::new(Vec::new());
+    let mut scopes = Scopes::default();
+    let mut depth = 0usize;
+    let mut skip: Option<usize> = None;
+    // Espaces en attente : supprimés avec un élément retiré, recopiés sinon.
+    let mut pending: Option<Event<'static>> = None;
+    let write = |writer: &mut Writer<Vec<u8>>, event: Event<'_>| -> Result<()> {
+        writer
+            .write_event(event)
+            .map_err(|e| XmpError::Malformed(e.to_string()))
+    };
+    loop {
+        let event = reader.read_event()?;
+        if skip.is_some() {
+            match &event {
+                Event::Start(_) => depth += 1,
+                Event::End(_) => {
+                    if skip == Some(depth) {
+                        skip = None;
+                    }
+                    depth -= 1;
+                }
+                Event::Eof => break,
+                _ => {}
+            }
+            continue;
+        }
+        match event {
+            Event::Text(ref t) if t.chars().all(char::is_whitespace) => {
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                pending = Some(event.into_owned());
+            }
+            Event::Start(ref e) | Event::Empty(ref e) => {
+                let is_empty = matches!(event, Event::Empty(_));
+                scopes.push(e)?;
+                depth += 1;
+                if is_darktable_development(&scopes, &name_of(e)) {
+                    // Élément de darktable : retiré avec les espaces qui le précèdent.
+                    pending = None;
+                    scopes.pop();
+                    if is_empty {
+                        depth -= 1;
+                    } else {
+                        skip = Some(depth);
+                    }
+                    continue;
+                }
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                let rebuilt = without_darktable_attributes(e, &scopes)?;
+                if is_empty {
+                    write(&mut writer, Event::Empty(rebuilt))?;
+                    scopes.pop();
+                    depth -= 1;
+                } else {
+                    write(&mut writer, Event::Start(rebuilt))?;
+                }
+            }
+            Event::End(ref e) => {
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                write(&mut writer, Event::End(e.borrow()))?;
+                scopes.pop();
+                depth -= 1;
+            }
+            Event::Eof => break,
+            other => {
+                if let Some(p) = pending.take() {
+                    write(&mut writer, p)?;
+                }
+                write(&mut writer, other)?;
+            }
+        }
+    }
+    if let Some(p) = pending.take() {
+        write(&mut writer, p)?;
+    }
+    String::from_utf8(writer.into_inner()).map_err(|e| XmpError::Malformed(e.to_string()))
+}
+
 /// Vrai si les champs présents sont déjà exactement ceux qu'on écrirait (rien à faire).
 fn consistent(existing: &Raw, notes: &Notes) -> bool {
     let targets = targets(notes, existing);
@@ -1693,6 +1816,107 @@ mod tests {
  </rdf:RDF>
 </x:xmpmeta>
 "#;
+
+    /// Sidecar darktable avec un historique, des masques et une couleur.
+    const DEVELOPED: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"
+    xmlns:darktable="http://darktable.sf.net/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmp:Rating="3"
+   xmpMM:DerivedFrom="DSCF0092.RAF"
+   darktable:import_timestamp="63900000000000"
+   darktable:xmp_version="5"
+   darktable:raw_params="0"
+   darktable:auto_presets_applied="1"
+   darktable:history_end="2"
+   darktable:iop_order_version="2">
+   <darktable:colorlabels>
+    <rdf:Seq>
+     <rdf:li>0</rdf:li>
+    </rdf:Seq>
+   </darktable:colorlabels>
+   <darktable:masks_history>
+    <rdf:Seq/>
+   </darktable:masks_history>
+   <darktable:history>
+    <rdf:Seq>
+     <rdf:li
+      darktable:num="0"
+      darktable:operation="exposure"
+      darktable:enabled="1"
+      darktable:params="gz01"/>
+     <rdf:li
+      darktable:num="1"
+      darktable:operation="filmicrgb"
+      darktable:enabled="1"
+      darktable:params="gz02"/>
+    </rdf:Seq>
+   </darktable:history>
+   <dc:subject>
+    <rdf:Bag>
+     <rdf:li>Mer</rdf:li>
+    </rdf:Bag>
+   </dc:subject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+
+    #[test]
+    fn stripping_darktable_keeps_the_notes_and_everything_else() {
+        let stripped = strip_darktable(DEVELOPED).unwrap();
+        assert!(!crate::developments::is_darktable(&stripped));
+        for gone in [
+            "darktable:history",
+            "darktable:masks_history",
+            "import_timestamp",
+            "raw_params",
+            "auto_presets_applied",
+            "iop_order_version",
+            "filmicrgb",
+        ] {
+            assert!(!stripped.contains(gone), "{gone} encore là :\n{stripped}");
+        }
+        let expected = r#"<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/"
+    xmlns:darktable="http://darktable.sf.net/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmp:Rating="3"
+   xmpMM:DerivedFrom="DSCF0092.RAF">
+   <darktable:colorlabels>
+    <rdf:Seq>
+     <rdf:li>0</rdf:li>
+    </rdf:Seq>
+   </darktable:colorlabels>
+   <dc:subject>
+    <rdf:Bag>
+     <rdf:li>Mer</rdf:li>
+    </rdf:Bag>
+   </dc:subject>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#;
+        assert_eq!(stripped, expected);
+        let notes = parse(&stripped).unwrap();
+        assert_eq!(
+            (notes.stars, notes.colors.as_slice()),
+            (3, &[Color::Red][..])
+        );
+        // Un XMP sans rien de darktable : inchangé, octet pour octet.
+        let lightroom = DEVELOPED.replace("darktable", "crs");
+        assert_eq!(strip_darktable(&lightroom).unwrap(), lightroom);
+        // Un XMP déjà dépouillé ne change plus.
+        assert_eq!(strip_darktable(&stripped).unwrap(), stripped);
+    }
 
     fn notes(stars: u8, flag: Flag, colors: &[Color]) -> Notes {
         Notes {

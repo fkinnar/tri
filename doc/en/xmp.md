@@ -106,6 +106,9 @@ files, darktable sidecars unchanged byte for byte, second conversion without eff
 - `convert(images, convention, dry_run) -> Conversion` (summary: written, unchanged,
   conflicts, errors);
 - `parse(xml) -> Notes`, `apply(xml, &notes) -> xml`: the same work on a text;
+- `strip_darktable(xml) -> xml` (2026-10-30): the text without the darktable development
+  (attributes and elements of its namespace, except `colorlabels`, a note; the rest byte
+  for byte), to "delete the main development" (`developments.md`);
 - `SidecarIndex::new(folder)`, `.sidecars(image)`, `.sidecar_path(image, convention)`;
   `existing_sidecars`, `sidecar_path` (a single image);
 - `Notes { stars, flag, colors }`, `Flag { None, Accepted, Rejected }`,

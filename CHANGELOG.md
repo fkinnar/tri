@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Deleting a development** (Delete / `x` on a development) removes only it: a darktable
+  clone, a RapidRAW copy or the main RapidRAW development lose their sidecar, the main
+  darktable development has its XMP rewritten without the history (notes kept); the photo
+  stays. **Ctrl+Delete** / `dd` deletes the photo with all its developments, even from a
+  development; Shift+Delete / `d)` still deletes the whole stack. Several developments
+  selected: one ticked checkbox each. Undoable (`u`); a sidecar changed by darktable in
+  the meantime is never overwritten. Command line: `tri --delete` does the same.
 - **Developments of a photo** (darktable and its clones, RapidRAW and its virtual
   copies): each one is an image of the grid with its own thumbnail (its render), its own
   notes and its own export, stacked under its photo (folded by default, "N dev." badge;

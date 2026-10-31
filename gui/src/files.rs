@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 
 use eframe::egui::{self, Key, Modifiers, Pos2, ScrollArea};
-use tri::files::{self, FileError, FileSettings, Group, TransferMode};
+use tri::files::{self, DeletePlan, FileError, FileSettings, TransferMode};
 
 /// Boîte ouverte.
 pub enum FileDialog {
@@ -20,13 +20,15 @@ pub enum FileDialog {
         /// Première image : le champ prend le focus, nom sélectionné.
         fresh: bool,
     },
-    /// Confirmer la suppression des fichiers de `group` (`images`, avec leurs paires si
-    /// `pairs` : case montrée quand `has_pairs`).
+    /// Confirmer la suppression de `images` (`plan` : avec leurs paires si `pairs`, case
+    /// montrée quand `has_pairs` ; `chosen` : cases des développements, quand il y en a
+    /// plusieurs).
     Delete {
         images: Vec<PathBuf>,
         pairs: bool,
         has_pairs: bool,
-        group: Group,
+        plan: DeletePlan,
+        chosen: Vec<bool>,
         at: Pos2,
         /// Suppression lancée (confirmée).
         job: Option<Deleting>,
@@ -142,7 +144,7 @@ pub struct Transfer {
 pub struct Deleting {
     done: Arc<AtomicUsize>,
     total: usize,
-    handle: Option<JoinHandle<Result<Vec<files::Trashed>, FileError>>>,
+    handle: Option<JoinHandle<Result<files::Deleted, FileError>>>,
 }
 
 /// Copie en cours, dans un fil à part (copies vérifiées : longues vers un autre disque).
@@ -223,7 +225,8 @@ impl FileDialog {
             images: images.to_vec(),
             pairs: settings.pairs,
             has_pairs: files::adds_pairs(images),
-            group: files::plan_delete(images, settings),
+            plan: files::plan_delete(images, settings),
+            chosen: vec![true; images.len()],
             at,
             job: None,
         }
@@ -442,18 +445,33 @@ impl FileDialog {
                 images,
                 pairs,
                 has_pairs,
-                group,
+                plan,
+                chosen,
                 at,
                 job,
             } => {
                 if job.is_some() {
-                    return deleting(ctx, settings, group, *at, job);
+                    return deleting(ctx, settings, plan, *at, job);
                 }
-                let before = *pairs;
-                let outcome =
-                    delete_dialog(ctx, settings, group, *at, has_pairs.then_some(pairs), job);
-                if *pairs != before {
-                    *group = files::plan_delete(images, &with_pairs(settings, *pairs));
+                let before = (*pairs, chosen.clone());
+                let outcome = delete_dialog(
+                    ctx,
+                    settings,
+                    plan,
+                    images,
+                    chosen,
+                    *at,
+                    has_pairs.then_some(pairs),
+                    job,
+                );
+                if (*pairs, &*chosen) != (before.0, &before.1) {
+                    let kept: Vec<PathBuf> = images
+                        .iter()
+                        .zip(chosen.iter())
+                        .filter(|(_, on)| **on)
+                        .map(|(p, _)| p.clone())
+                        .collect();
+                    *plan = files::plan_delete(&kept, &with_pairs(settings, *pairs));
                 }
                 outcome
             }
@@ -568,22 +586,29 @@ fn pairs_checkbox(ui: &mut egui::Ui, pairs: &mut bool) {
 }
 
 /// Titre de la boîte de suppression.
-fn delete_title(settings: &FileSettings, group: &Group) -> String {
-    let n = group.files().count();
-    if settings.trash {
+fn delete_title(settings: &FileSettings, plan: &DeletePlan) -> String {
+    let n = plan.count();
+    if only_strips(plan) {
+        t!("delete-developments-question", n = n)
+    } else if settings.trash {
         t!("delete-trash-question", n = n)
     } else {
         t!("delete-permanently-question", n = n)
     }
 }
 
-/// Lance la suppression de `group` dans un fil à part.
-fn start_delete(ctx: &egui::Context, settings: &FileSettings, group: &Group) -> Deleting {
+/// Vrai si rien ne part : seulement des XMP darktable réécrits sans leur développement.
+fn only_strips(plan: &DeletePlan) -> bool {
+    plan.group.files().next().is_none()
+}
+
+/// Lance la suppression de `plan` dans un fil à part.
+fn start_delete(ctx: &egui::Context, settings: &FileSettings, plan: &DeletePlan) -> Deleting {
     let done = Arc::new(AtomicUsize::new(0));
-    let (counter, ctx, group, trash) = (done.clone(), ctx.clone(), group.clone(), settings.trash);
-    let total = group.files().count();
+    let (counter, ctx, plan, trash) = (done.clone(), ctx.clone(), plan.clone(), settings.trash);
+    let total = plan.count();
     let handle = std::thread::spawn(move || {
-        files::delete_with_progress(&group, trash, |n, _| {
+        files::delete_plan(&plan, trash, |n, _| {
             counter.store(n, Ordering::Relaxed);
             ctx.request_repaint();
         })
@@ -599,7 +624,7 @@ fn start_delete(ctx: &egui::Context, settings: &FileSettings, group: &Group) -> 
 fn deleting(
     ctx: &egui::Context,
     settings: &FileSettings,
-    group: &Group,
+    plan: &DeletePlan,
     at: Pos2,
     job: &mut Option<Deleting>,
 ) -> Outcome {
@@ -610,9 +635,17 @@ fn deleting(
         let result = running.handle.take().map(|h| h.join());
         *job = None;
         return match result {
-            Some(Ok(Ok(trashed))) => Outcome::Done {
+            Some(Ok(Ok(deleted))) => Outcome::Done {
                 select: None,
-                step: settings.trash.then_some(tri::history::Step::Trash(trashed)),
+                // Un XMP réécrit se défait toujours ; des fichiers, seulement depuis la
+                // corbeille.
+                step: if deleted.rewritten.is_empty() {
+                    settings
+                        .trash
+                        .then_some(tri::history::Step::Trash(deleted.trashed))
+                } else {
+                    Some(tri::history::Step::Developments(deleted))
+                },
             },
             Some(Ok(Err(e))) => Outcome::Failed(t!("delete-failed", error = e.to_string())),
             _ => Outcome::Failed(t!("delete-failed", error = "?")),
@@ -620,7 +653,7 @@ fn deleting(
     }
     let (done, total) = (running.done.load(Ordering::Relaxed), running.total);
     crate::app::modal_at("delete_dialog", at)
-        .title(delete_title(settings, group))
+        .title(delete_title(settings, plan))
         .busy()
         .show(ctx, |ui| {
             ui.add(
@@ -645,30 +678,58 @@ fn library_warning(ui: &mut egui::Ui) {
 }
 
 /// Boîte de confirmation ; confirmée, la suppression part en fond (`job`).
+#[allow(clippy::too_many_arguments)]
 fn delete_dialog(
     ctx: &egui::Context,
     settings: &FileSettings,
-    group: &Group,
+    plan: &DeletePlan,
+    images: &[PathBuf],
+    chosen: &mut [bool],
     at: Pos2,
     pairs: Option<&mut bool>,
     job: &mut Option<Deleting>,
 ) -> Outcome {
     let (mut confirm, mut cancel) = (false, false);
-    let verb = if settings.trash {
+    let only_strips = only_strips(plan);
+    let verb = if only_strips {
+        t!("delete-developments")
+    } else if settings.trash {
         t!("delete-to-trash")
     } else {
         t!("delete-permanently")
     };
+    let ok = plan.count() > 0;
     let modal = crate::app::modal_at("delete_dialog", at)
-        .title(delete_title(settings, group))
+        .title(delete_title(settings, plan))
         .show(ctx, |ui| {
             ui.add_space(6.0);
+            // Plusieurs développements demandés : une case par développement, cochée
+            // (30/10/2026) ; décocher l'un le garde. Pas de case pour un développement
+            // dont la photo part aussi : son sidecar suit la photo de toute façon.
+            let photos: std::collections::HashSet<&PathBuf> = images
+                .iter()
+                .filter(|image| tri::developments::get(image).is_none())
+                .collect();
+            let alone = |image: &PathBuf| {
+                tri::developments::get(image).is_some_and(|d| !photos.contains(&d.photo))
+            };
+            if images.len() > 1 && images.iter().any(&alone) {
+                for (image, on) in images.iter().zip(chosen.iter_mut()) {
+                    if alone(image) {
+                        ui.checkbox(on, crate::app::shown_name(image));
+                    }
+                }
+                ui.add_space(4.0);
+            }
             ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
-                for file in group.files() {
+                for rewrite in &plan.stripped {
+                    ui.weak(t!("delete-stripped", name = file_name(&rewrite.sidecar)));
+                }
+                for file in plan.group.files() {
                     ui.weak(file_name(file));
                 }
             });
-            for file in &group.shared {
+            for file in &plan.group.shared {
                 ui.weak(t!("delete-kept-shared", name = file_name(file)));
             }
             if let Some(pairs) = pairs {
@@ -676,20 +737,20 @@ fn delete_dialog(
                 pairs_checkbox(ui, pairs);
             }
             library_warning(ui);
-            if !settings.trash {
+            if !settings.trash && !only_strips {
                 ui.colored_label(ui.visuals().error_fg_color, t!("delete-irreversible"));
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                confirm = ui.button(verb).clicked();
+                confirm = ui.add_enabled(ok, egui::Button::new(verb)).clicked();
                 cancel = ui.button(t!("cancel")).clicked();
                 ui.weak(t!("enter-or-escape"));
             });
         });
     // Entrée confirme (pas de champ de saisie ici).
-    confirm |= ctx.input(|i| i.key_pressed(Key::Enter));
+    confirm |= ok && ctx.input(|i| i.key_pressed(Key::Enter));
     if confirm {
-        *job = Some(start_delete(ctx, settings, group));
+        *job = Some(start_delete(ctx, settings, plan));
         return Outcome::Open;
     }
     if cancel || modal.should_close() {

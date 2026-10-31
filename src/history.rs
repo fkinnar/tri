@@ -16,7 +16,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::files::{self, DirTransfer, FileError, Rename, Transfer, TransferMode, Trashed};
+use crate::files::{
+    self, Deleted, DirTransfer, FileError, Rename, Transfer, TransferMode, Trashed,
+};
 use crate::notes::NoteBook;
 use crate::xmp::{Color, Convention, Flag, Notes};
 
@@ -75,6 +77,9 @@ pub enum Step {
     },
     /// Mise à la corbeille (fichiers, ou un dossier entier).
     Trash(Vec<Trashed>),
+    /// Développements supprimés ([`files::delete_plan`]) : sidecars à la corbeille et
+    /// XMP darktable réécrits sans leur historique ([`crate::developments::Rewrite`]).
+    Developments(Deleted),
     /// Dossier créé.
     CreateDir(PathBuf),
     /// Dossier renommé : (ancien, nouveau).
@@ -288,6 +293,10 @@ impl Step {
                 [one] => crate::t!("history-trash-one", name = name(&one.original)),
                 _ => crate::t!("history-trash", n = items.len()),
             },
+            Step::Developments(deleted) => crate::t!(
+                "history-developments",
+                n = deleted.rewritten.len() + deleted.trashed.len()
+            ),
             Step::CreateDir(path) => crate::t!("history-create-dir", name = name(path)),
             Step::RenameDir(from, to) => {
                 crate::t!("history-rename", from = name(from), to = name(to))
@@ -328,6 +337,10 @@ impl Step {
                 } else {
                     Vec::new()
                 }
+            }
+            // La photo reste, défait ou non : c'est elle qu'on montre.
+            Step::Developments(deleted) => {
+                deleted.rewritten.iter().map(|r| r.photo.clone()).collect()
             }
             Step::CreateDir(_) | Step::TransferDir { .. } => Vec::new(),
             Step::RenameDir(from, to) => vec![if undone { from.clone() } else { to.clone() }],
@@ -458,6 +471,21 @@ impl Step {
                 Ok(())
             }
             Step::Trash(items) => Ok(files::untrash(items)?),
+            Step::Developments(deleted) => {
+                for rewrite in &deleted.rewritten {
+                    match rewrite.revert() {
+                        Ok(true) => {}
+                        Ok(false) => return Err(HistoryError::Modified(rewrite.sidecar.clone())),
+                        Err(e) => {
+                            return Err(HistoryError::Files(FileError::Io(
+                                rewrite.sidecar.clone(),
+                                e,
+                            )));
+                        }
+                    }
+                }
+                Ok(files::untrash(&deleted.trashed)?)
+            }
             Step::CreateDir(path) => {
                 // Seulement vide : ce qu'on y a mis depuis ne disparaît pas.
                 if !path.is_dir() {
@@ -539,6 +567,32 @@ impl Step {
                     [one] if one.is_dir() => files::delete_dir(one, true)?,
                     _ => files::delete(&group, true)?,
                 };
+                Ok(())
+            }
+            Step::Developments(deleted) => {
+                let group = files::Group {
+                    images: deleted.trashed.iter().map(|t| t.original.clone()).collect(),
+                    sidecars: Vec::new(),
+                    shared: Vec::new(),
+                };
+                for p in &group.images {
+                    if !p.exists() {
+                        return Err(HistoryError::Missing(p.clone()));
+                    }
+                }
+                for rewrite in &deleted.rewritten {
+                    match rewrite.apply() {
+                        Ok(true) => {}
+                        Ok(false) => return Err(HistoryError::Modified(rewrite.sidecar.clone())),
+                        Err(e) => {
+                            return Err(HistoryError::Files(FileError::Io(
+                                rewrite.sidecar.clone(),
+                                e,
+                            )));
+                        }
+                    }
+                }
+                deleted.trashed = files::delete(&group, true)?;
                 Ok(())
             }
             Step::CreateDir(path) => {
@@ -886,6 +940,53 @@ mod tests {
         assert!(seance.join("JPEG/A.JPG").exists() && !archive.join("Séance").exists());
         history.redo(Convention::Darktable).unwrap();
         assert!(!seance.exists() && archive.join("Séance/A.RAF").exists());
+    }
+
+    #[test]
+    fn a_removed_development_comes_back_unless_its_sidecar_changed_since() {
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("F.RAF");
+        let sidecar = dir.path().join("F.RAF.xmp");
+        let xml = concat!(
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">"#,
+            r#"<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" "#,
+            r#"xmp:Rating="1" darktable:xmp_version="5" darktable:history_end="0"><darktable:history><rdf:Seq/></darktable:history>"#,
+            r#"</rdf:Description></rdf:RDF></x:xmpmeta>"#
+        );
+        std::fs::write(&photo, b"x").unwrap();
+        std::fs::write(&sidecar, xml).unwrap();
+        let main = crate::developments::Development {
+            engine: crate::develop::Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: photo.clone(),
+            sidecar: sidecar.clone(),
+        };
+        let plan = files::DeletePlan {
+            group: files::Group::default(),
+            stripped: vec![crate::developments::Rewrite::strip(&main).unwrap()],
+        };
+        let deleted = files::delete_plan(&plan, false, |_, _| {}).unwrap();
+        assert!(!crate::developments::file_is_darktable(&sidecar));
+        let step = Step::Developments(deleted);
+        assert!(step.describe().contains('1'), "{}", step.describe());
+        assert_eq!(step.images(true), std::slice::from_ref(&photo));
+        let mut history = History::new(10);
+        history.push(step);
+        history.undo(Convention::Darktable).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&sidecar).unwrap(),
+            xml,
+            "le développement revient"
+        );
+        history.redo(Convention::Darktable).unwrap();
+        assert!(!crate::developments::file_is_darktable(&sidecar));
+        // Noté dans darktable entre-temps : on ne l'écrase pas.
+        std::fs::write(&sidecar, xml).unwrap();
+        assert!(matches!(
+            history.undo(Convention::Darktable),
+            Err(HistoryError::Modified(_))
+        ));
+        assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), xml);
     }
 
     #[test]

@@ -10,6 +10,7 @@
 //! ([`crate::media::source`]), le rendu et les notes ceux de son sidecar.
 
 use std::collections::HashMap;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 
@@ -74,11 +75,86 @@ impl Development {
     }
 
     /// Le fichier propre à ce développement, qu'on peut supprimer sans toucher à la photo
-    /// ni à ses autres développements : le sidecar d'un clone ou d'une copie virtuelle.
-    /// Le développement principal partage le sien avec la photo (notes) : `None`.
+    /// ni à ses autres développements : le sidecar d'un clone ou d'une copie virtuelle, et
+    /// le `.rrdata` du développement principal RapidRAW (la photo garde ses notes dans son
+    /// XMP). Le développement principal darktable partage son XMP avec la photo (notes) :
+    /// `None`, voir [`Development::removal`].
     pub fn own_file(&self) -> Option<&Path> {
-        (self.copy != Copy::Main).then_some(self.sidecar.as_path())
+        (self.copy != Copy::Main || self.notes_in_rrdata()).then_some(self.sidecar.as_path())
     }
+
+    /// Ce que supprimer ce développement touche.
+    pub fn removal(&self) -> Removal<'_> {
+        match self.own_file() {
+            Some(file) => Removal::File(file),
+            None => Removal::Strip(&self.sidecar),
+        }
+    }
+}
+
+/// Ce que supprimer un développement touche (décidé le 30/10/2026) : le fichier qui n'est
+/// qu'à lui (clone darktable, copie virtuelle ou développement principal RapidRAW), ou,
+/// pour le développement principal darktable, son XMP **réécrit sans l'historique**
+/// ([`crate::xmp::strip_darktable`]) : les notes, partagées avec la photo, restent, et la
+/// photo redevient une image sans développement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Removal<'a> {
+    /// Fichier à supprimer (corbeille).
+    File(&'a Path),
+    /// XMP à réécrire sans le développement.
+    Strip(&'a Path),
+}
+
+/// Un sidecar réécrit sur place, et de quoi revenir en arrière ([`Rewrite::revert`], pour
+/// [`crate::history`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rewrite {
+    /// La photo du développement.
+    pub photo: PathBuf,
+    /// Le sidecar réécrit.
+    pub sidecar: PathBuf,
+    /// Son contenu avant.
+    pub before: String,
+    /// Son contenu après.
+    pub after: String,
+}
+
+impl Rewrite {
+    /// Prépare le retrait du développement principal darktable `development` : son XMP
+    /// tel qu'il est, et sans l'historique. Rien n'est écrit ([`Rewrite::apply`]).
+    pub fn strip(development: &Development) -> io::Result<Rewrite> {
+        let before = std::fs::read_to_string(&development.sidecar)?;
+        let after = crate::xmp::strip_darktable(&before)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        Ok(Rewrite {
+            photo: development.photo.clone(),
+            sidecar: development.sidecar.clone(),
+            before,
+            after,
+        })
+    }
+
+    /// Écrit le contenu d'après. Faux si le fichier n'a plus celui d'avant (modifié
+    /// entre-temps, par darktable par exemple) : rien n'est écrit.
+    pub fn apply(&self) -> io::Result<bool> {
+        rewrite(&self.sidecar, &self.before, &self.after)
+    }
+
+    /// Remet le contenu d'avant. Faux si le fichier n'a plus celui d'après.
+    pub fn revert(&self) -> io::Result<bool> {
+        rewrite(&self.sidecar, &self.after, &self.before)
+    }
+}
+
+/// Écrit `new` dans `path` si son contenu est encore `expected` (relu juste avant, comme
+/// pour les notes) ; le cache oublie sa date.
+fn rewrite(path: &Path, expected: &str, new: &str) -> io::Result<bool> {
+    if std::fs::read_to_string(path)? != expected {
+        return Ok(false);
+    }
+    std::fs::write(path, new)?;
+    crate::cache::forget_stamps([path]);
+    Ok(true)
 }
 
 /// Développements connus (vus au parcours d'un dossier).
@@ -380,7 +456,16 @@ mod tests {
         assert_eq!(found[4].sidecar, Path::new("/p/IMG.RAF.c33b94.rrdata"));
         assert!(found[3].notes_in_rrdata() && !found[0].notes_in_rrdata());
         assert_eq!(found[0].own_file(), None, "le principal partage son XMP");
+        assert_eq!(
+            found[0].removal(),
+            Removal::Strip(Path::new("/p/IMG.RAF.xmp"))
+        );
         assert_eq!(found[1].own_file(), Some(Path::new("/p/IMG_01.RAF.xmp")));
+        assert_eq!(
+            found[3].own_file(),
+            Some(Path::new("/p/IMG.RAF.rrdata")),
+            "le principal RapidRAW n'a que lui dans son .rrdata (la photo note dans son XMP)"
+        );
         // Un XMP écrit par tri seul ou par un autre logiciel (notes digiKam…) : pas de
         // développement darktable, clones compris ; RapidRAW reste.
         let none = find(photo, &files, &|_| false, &|_| false);
@@ -501,6 +586,45 @@ mod tests {
         );
         prefer(dir.path(), &rr.path(), false).unwrap();
         assert!(preferred(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn stripping_a_main_development_is_prepared_then_applied_and_reverted() {
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("E.RAF");
+        let sidecar = dir.path().join("E.RAF.xmp");
+        let xml = concat!(
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">"#,
+            r#"<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" "#,
+            r#"xmp:Rating="4" darktable:xmp_version="5" darktable:history_end="1"><darktable:history><rdf:Seq><rdf:li darktable:operation="exposure"/></rdf:Seq></darktable:history>"#,
+            r#"</rdf:Description></rdf:RDF></x:xmpmeta>"#
+        );
+        std::fs::write(&sidecar, xml).unwrap();
+        let main = Development {
+            engine: Engine::Darktable,
+            copy: Copy::Main,
+            photo: photo.clone(),
+            sidecar: sidecar.clone(),
+        };
+        let rewrite = Rewrite::strip(&main).unwrap();
+        assert_eq!(rewrite.before, xml);
+        assert!(!is_darktable(&rewrite.after));
+        assert_eq!(
+            std::fs::read_to_string(&sidecar).unwrap(),
+            xml,
+            "rien d'écrit"
+        );
+        assert!(rewrite.apply().unwrap());
+        assert!(!file_is_darktable(&sidecar));
+        assert_eq!(crate::xmp::read_sidecar(&sidecar).unwrap().stars, 4);
+        // Déjà appliqué : le contenu n'est plus celui d'avant.
+        assert!(!rewrite.apply().unwrap());
+        assert!(rewrite.revert().unwrap());
+        assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), xml);
+        // Modifié ailleurs entre-temps : refusé, rien d'écrit.
+        std::fs::write(&sidecar, "<x/>").unwrap();
+        assert!(!rewrite.apply().unwrap());
+        assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), "<x/>");
     }
 
     #[test]

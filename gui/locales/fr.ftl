@@ -114,6 +114,7 @@ action-core-crop-save = Recadrage : enregistrer la version
 action-core-crop-preset = Recadrage : préréglage suivant
 action-core-crop-preset_prev = Recadrage : préréglage précédent
 action-core-file-delete_stack = Supprimer toute la pile
+action-core-file-delete_photo = Supprimer la photo avec ses développements…
 action-core-file-copy_stack = Copier toute la pile vers…
 stack-actions-need-stacks = Piles désactivées ({ $keys }) : cette action vaut pour toute une pile
 action-plugin-airdrop-send = Envoyer par AirDrop
@@ -758,6 +759,12 @@ delete-permanently-question = { $n ->
 delete-kept-shared = { $name } gardé (partagé avec la paire)
 delete-irreversible = Irréversible.
 delete-failed = suppression impossible : { $error }
+delete-developments = Retirer
+delete-developments-question = { $n ->
+    [one] Retirer le développement de son XMP ?
+   *[other] Retirer { $n } développements de leurs XMP ?
+}
+delete-stripped = { $name } : historique darktable retiré, notes gardées
 folder-new-title = Nouveau dossier dans « { $name } »
 folder-new-button = Créer
 folder-rename-title = Renommer le dossier « { $name } »
@@ -1103,6 +1110,7 @@ kw-core-view-focus-mode = plein écran concentration
 kw-core-view-focus-point = collimateur autofocus af
 kw-core-view-grid-info = nom format badges masquer texte vignettes
 kw-core-file-delete = supprimer corbeille effacer
+kw-core-file-delete-photo = supprimer photo développements corbeille
 kw-core-file-move = déplacer ranger
 kw-core-file-copy = copier dupliquer
 kw-core-file-export = exporter jpeg tiff sortie
