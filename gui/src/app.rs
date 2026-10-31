@@ -13547,9 +13547,6 @@ fn section_title(
     .inner
 }
 
-/// Intertitre d'un groupe de réglages du panneau de droite (estompé, plus petit que le
-/// titre de section).
-
 /// Sous un curseur de sévérité de largeur `width` : « plus souple » à gauche, « plus
 /// strict » à droite, pour lire le sens sans le survoler.
 fn slider_ends(ui: &mut Ui, width: f32) {
