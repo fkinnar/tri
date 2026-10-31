@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Fixed: a RawTherapee / ART profile (or a RapidRAW `.rrdata`) filled after the rating
+  that created it did not enter the development stack** until the folder was reopened
+  (feedback of 2026-10-31): the folder watcher now treats a main sidecar that becomes a
+  development like the darktable XMP rewritten by darktable.
+- Thumbnail chips of clones and copies: the number alone ("DT · 1", "RR · 2"); a photo
+  shown in a software's render carries the short name too ("RT", not "RawTherapee").
 - **RawTherapee / ART as an AppImage on Linux**: recent AppImages only launch the
   interface, so `tri` extracts the AppImage once into its cache and runs the extracted
   `rawtherapee-cli` / `ART-cli` with the bundled libraries. An ART AppImage is recognised

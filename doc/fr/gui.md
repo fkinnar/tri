@@ -430,7 +430,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   masquée avec les infos des
   vignettes, Maj+T : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
-  lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `s` déplie / replie (comme une pile :
+  lequel : « DT », « DT · 1 », « RR · 2 » (le numéro seul, retour du 31/10/2026). `s` déplie / replie (comme une pile :
   harmonisation du 31/10/2026, voir plus bas), `Maj+W` / `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
   montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
