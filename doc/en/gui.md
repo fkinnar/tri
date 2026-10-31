@@ -405,9 +405,11 @@ system one ("cold" measurements, experiments).
   render**, decided with the user on 2026-10-31: "camera JPEG" and "RAW render (LibRaw)",
   the photo itself, the grid no longer changes afterwards; "Cover", the preferred
   development, else the latest; a software, its main development; else the photo), and
-  "N dev." in a badge at the top right
-  (`[gui.colors] development_mark`; a burst's image count is at the top left; hidden with
-  the thumbnail info, Shift+T, where it was truncated: #243); unfolded,
+  the developments **reel** (the
+  "developed" filter's icon, in the cell's text colour, no background: feedback of
+  2026-10-31, the coloured "N dev." badge caught the eye; the count is in its tooltip) at
+  the top right, below the colour row (a burst's image count is at the top left; hidden
+  with the thumbnail info, Shift+T: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
   `s` unfolds / folds (like a stack: harmonisation of 2026-10-31, see below), `Shift+W` /
@@ -416,7 +418,7 @@ system one ("cold" measurements, experiments).
   ‹‹ ›› buttons of the bar); `Shift+Enter` on a development makes it the **preferred**
   one (cover; on the photo itself: no preferred one any more), **without toggling**
   (2026-10-31: doing it again removes nothing). Unfolded, each thumbnail carries a "fold"
-  badge (`marks::fold`, 2026-10-31, user request: nothing folded with the mouse): click =
+  reel (`marks::film_reel`, 2026-10-31, user request: nothing folded with the mouse): click =
   fold, **Alt+click** = fold and keep this development as the cover; `Shift+S` unfolds
   or folds every stack, bursts and developments. **Same keys for both kinds of stacks**
   (2026-10-31, user request: "the notions are close"): `s`, `(` `)`, `Shift+S`, `d)` `y)`

@@ -146,7 +146,6 @@ action-core-stack-first = Première image de la pile (ou la photo, avant ses dé
 action-core-stack-last = Dernière image de la pile (ou le dernier développement)
 action-core-stack-enter = En entrant dans une pile : sa première photo (allumé) ou sa couverture
 ## Développements d'une photo (darktable, RapidRAW ; 30/10/2026)
-dev-count = { $n } dév.
 dev-count-tip = { $n ->
     [one] { $n } développement
    *[other] { $n } développements

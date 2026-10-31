@@ -1056,17 +1056,6 @@ pub fn disclosure(painter: &Painter, rect: Rect, open: bool, color: Color32) {
     painter.add(Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
-/// Icône « replier » d'une pile de développements dépliée (31/10/2026) : un chevron vers
-/// le haut au-dessus d'un trait, les vignettes qui remontent sous la couverture.
-pub fn fold(painter: &Painter, rect: Rect, color: Color32) {
-    let c = rect.center();
-    let r = rect.width() * 0.28;
-    let stroke = Stroke::new(1.5, color);
-    painter.line_segment([c + vec2(-r, -r * 0.15), c + vec2(0.0, -r * 0.85)], stroke);
-    painter.line_segment([c + vec2(0.0, -r * 0.85), c + vec2(r, -r * 0.15)], stroke);
-    painter.line_segment([c + vec2(-r, r * 0.6), c + vec2(r, r * 0.6)], stroke);
-}
-
 /// Côté d'un panneau, pour [`panel`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
