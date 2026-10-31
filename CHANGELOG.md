@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Sidecars dialog: installed software only** (XMP always), like the render list; ART
+  was offered without being there (feedback of 2026-10-31).
 - **Fixed: the RawTherapee / ART render of a development failed** (first real run,
   2026-10-31): the background batch handed the development's virtual path (`IMG@rt.RAF`)
   to the command line instead of the photo's file.

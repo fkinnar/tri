@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Boîte « Sidecars » : les logiciels installés seulement** (XMP toujours), comme la
+  liste des rendus ; ART était proposé sans être là (retour du 31/10/2026).
 - **Corrigé : le rendu RawTherapee / ART d'un développement échouait** (premier essai réel,
   31/10/2026) : le lot en fond passait à la ligne de commande le chemin virtuel du
   développement (`IMG@rt.RAF`) au lieu du fichier de la photo.
