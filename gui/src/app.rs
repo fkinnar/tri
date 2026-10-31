@@ -14686,6 +14686,9 @@ mod tests {
         )
         .unwrap();
         h.state_mut().reload_folder(None);
+        // Rendu « Couverture » (31/10/2026) : la pile se replie sur le développement.
+        h.state_mut()
+            .set_grid_render(crate::grid_render::GridRender::Cover);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
         h.run_steps(2);
         assert_eq!(
