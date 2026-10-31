@@ -300,7 +300,7 @@ pub struct TriApp {
     start_dir: Option<(PathBuf, bool)>,
     /// Image à sélectionner une fois le dossier du lancement lu (`TRI_GUI_SELECT`).
     start_select: Option<usize>,
-    /// Image passée en argument (#250) : sélectionnée une fois son dossier lu.
+    /// Image passée en argument (#250) : ouverte en plein écran une fois son dossier lu.
     start_select_path: Option<PathBuf>,
     /// Volume dont l'éjection a été refusée : « Réessayer l'éjection ».
     eject_failed: Option<PathBuf>,
@@ -1691,10 +1691,13 @@ impl TriApp {
         if let Some(i) = self.start_select.take() {
             self.selected = i.min(self.files.len().saturating_sub(1));
         }
+        // Une image en argument (#250) : ouverte en plein écran, comme une visionneuse
+        // (retour du 31/10/2026 : sélectionnée seulement, « ça n'ouvre pas l'image »).
         if let Some(path) = self.start_select_path.take()
             && let Some(i) = self.files.iter().position(|f| f.path == path)
         {
             self.selected = i;
+            self.open_view();
         }
     }
 
@@ -17016,6 +17019,7 @@ mod tests {
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 3);
         assert_eq!(h.state().folder.dir, photos);
         assert_eq!(selected_name(&h), "b.jpg");
+        assert_eq!(h.state().mode, Mode::View, "ouverte en plein écran");
     }
 
     #[test]
