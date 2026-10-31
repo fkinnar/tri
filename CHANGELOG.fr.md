@@ -4,6 +4,10 @@
 
 ## À venir
 
+- Bandeau de notation et sélecteurs : plus de cercle d'accent autour de la couleur posée,
+  la pastille pleine face aux autres fondues suffit, comme les étoiles et les drapeaux.
+  L'anneau du drapeau neutre est dessiné un peu plus petit, pour paraître de la taille des
+  pastilles acceptée / rejetée, et sur la vignette c'est un seul cercle sombre.
 - **Noter à la souris sur la vignette elle-même** (#257) : un clic sur les étoiles, le
   drapeau ou les pastilles de couleur d'une vignette ouvre un petit sélecteur du groupe
   concerné, à cet endroit (les contrôles du bandeau, scindés en trois) ; une étoile ou un

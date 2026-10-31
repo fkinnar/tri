@@ -94,6 +94,9 @@ const FADED: f32 = 0.4;
 /// Cercle vide du drapeau « neutre » (retour du 31/10/2026 : la même icône partout —
 /// vignette, bandeau de notation, filtre), de la taille des pastilles coche / croix.
 pub fn neutral_ring(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
+    // Un anneau paraît plus grand qu'un disque plein de même rayon (retour du
+    // 31/10/2026) : un peu plus petit pour sembler de la même taille.
+    let radius = radius * 0.88;
     let width = (radius * 0.28).max(1.5);
     painter.circle_stroke(center, radius - width / 2.0, Stroke::new(width, color));
 }
@@ -190,12 +193,11 @@ pub fn thumbnail_notes(
         painter.circle_filled(c, radius + rim, RIM);
         flag(painter, c, radius, notes.flag, colors);
     } else if neutral {
-        // Neutre : un cercle vide à la même place (`[gui.grid] neutral_flag`, 31/10/2026 :
-        // chaque vignette montre toutes ses informations), cerclé de sombre comme les
-        // autres marques.
+        // Neutre : un seul cercle sombre à la même place (`[gui.grid] neutral_flag`,
+        // 31/10/2026 : chaque vignette montre toutes ses informations ; retour du même
+        // jour : juste un cercle, sans blanc), de la couleur du liseré des autres marques.
         let c = pos2(area.max.x - inset, area.max.y - inset);
         neutral_ring(painter, c, radius + rim, RIM);
-        neutral_ring(painter, c, radius, Color32::from_gray(230));
     }
     for (k, &color) in notes.colors.iter().enumerate() {
         let c = pos2(
@@ -1254,13 +1256,11 @@ pub fn color_controls(
         let active = notes.has_color(color);
         let fill = color_of(colors, color);
         let painter = ui.painter();
+        // Posée : pleine ; sinon plus petite et fondue. Plus de cercle d'accent autour de
+        // la couleur posée (retour du 31/10/2026 : les étoiles et les drapeaux n'en ont
+        // pas, le fondu suffit).
         if active {
             painter.circle_filled(rect.center(), size * 0.4, fill);
-            painter.circle_stroke(
-                rect.center(),
-                size * 0.48,
-                Stroke::new(2.0, accent_mark(ui.ctx())),
-            );
         } else {
             painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(FADED));
         }

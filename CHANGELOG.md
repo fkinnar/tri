@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Rating bar and pickers: no more accent ring around the chosen colour, the full dot
+  against the faded ones is enough, like the stars and flags. The neutral flag's ring is
+  drawn a little smaller, so that it looks the size of the accepted / rejected badges,
+  and on the thumbnail it is a single dark circle.
 - **Rating with the mouse on the thumbnail itself** (#257): clicking the stars, the flag or
   the colour dots of a thumbnail opens a small picker of that group right there (the
   rating bar's controls, split in three); a star or a flag closes it, colours stay open.
