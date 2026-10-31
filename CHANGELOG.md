@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- **Exporting RapidRAW developments** (`Ctrl+E`, `tri --export`): a RapidRAW copy or
+  main development is rendered by RapidRAW (16-bit TIFF, converted to the preset's space,
+  cropped, reduced and sharpened like the others), a darktable clone by darktable,
+  whatever is being looked at; a development without its software is exported as its
+  photo. Files are named as the software names its own exports (`IMG_01`, `IMG_VC01`).
+  Fixed: a darktable clone exported with a crop or sharpening preset was silently skipped.
 - **Deleting a development** (Delete / `x` on a development) removes only it: a darktable
   clone, a RapidRAW copy or the main RapidRAW development lose their sidecar, the main
   darktable development has its XMP rewritten without the history (notes kept); the photo

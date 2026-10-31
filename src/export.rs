@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::develop::{Darktable, DevelopError, Engine};
+use crate::develop::{Darktable, DevelopError, Engine, RapidRaw};
 use crate::media::{MediaKind, kind_of};
 
 /// Espaces couleur proposés (liste déroulante des réglages), dans l'ordre de darktable.
@@ -755,16 +755,8 @@ pub fn export(
         run(cmd, &mut report)?;
     }
     for clone in clones {
-        // Nommé comme darktable nomme ses clones : `IMG_01-Web.jpg`.
-        let stem = clone
-            .photo
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
-        let name = match clone.copy {
-            crate::developments::Copy::Clone(n) => format!("{stem}_{n:02}"),
-            _ => stem.into_owned(),
-        };
+        // Nommé comme darktable nomme ses clones : `IMG_01-Web.jpg` ([`export_name`]).
+        let name = export_name(&clone.path());
         let out = folder_for(folder, &clone.photo).join(format!("{name}{}", profile.suffix));
         let mut cmd = dt.cli.command();
         cmd.arg(&clone.photo).arg(&clone.sidecar).arg(out);
@@ -1275,16 +1267,101 @@ impl Batch {
 pub enum Renderer<'a> {
     /// Par darktable.
     Darktable(&'a Darktable),
-    /// Sans darktable : LibRaw ou JPEG boîtier.
+    /// Par RapidRAW (voir [`export_rapidraw`]).
+    RapidRaw(&'a RapidRaw),
+    /// Sans logiciel de développement : LibRaw ou JPEG boîtier.
     Local(Local),
 }
 
-/// Exporte `batch` : les RAW par `renderer` (darktable passe par un TIFF temporaire s'il
-/// faut recadrer ou accentuer), puis les images déjà développées (copiées, converties ou
-/// réduites ; JPEG de paire suffixé de `pair_suffix`). Une progression, un bilan.
+/// Les logiciels d'un export (31/10/2026, modèle des développements) : **chaque
+/// développement est rendu par son logiciel** s'il est là (on exporte ce qu'on regarde :
+/// une copie RapidRAW est l'image de RapidRAW, un clone darktable celle de darktable), les
+/// photos par `photos`. Un développement dont le logiciel manque est exporté comme sa
+/// photo, par `photos`.
+#[derive(Clone, Copy, Debug)]
+pub struct Renderers<'a> {
+    /// Les photos sans développement, et les développements sans leur logiciel.
+    pub photos: Renderer<'a>,
+    /// darktable, pour ses développements.
+    pub darktable: Option<&'a Darktable>,
+    /// RapidRAW, pour ses développements.
+    pub rapidraw: Option<&'a RapidRaw>,
+}
+
+impl<'a> Renderers<'a> {
+    /// `photos` seul ; s'il est darktable ou RapidRAW, ses développements sont à lui.
+    pub fn new(photos: Renderer<'a>) -> Renderers<'a> {
+        Renderers {
+            photos,
+            darktable: match photos {
+                Renderer::Darktable(dt) => Some(dt),
+                _ => None,
+            },
+            rapidraw: match photos {
+                Renderer::RapidRaw(rr) => Some(rr),
+                _ => None,
+            },
+        }
+    }
+
+    /// Avec darktable pour ses développements.
+    pub fn darktable(self, darktable: Option<&'a Darktable>) -> Renderers<'a> {
+        Renderers {
+            darktable: darktable.or(self.darktable),
+            ..self
+        }
+    }
+
+    /// Avec RapidRAW pour ses développements.
+    pub fn rapidraw(self, rapidraw: Option<&'a RapidRaw>) -> Renderers<'a> {
+        Renderers {
+            rapidraw: rapidraw.or(self.rapidraw),
+            ..self
+        }
+    }
+
+    /// Range `raws` par logiciel : les développements RapidRAW (si RapidRAW est là), les
+    /// développements darktable (si darktable est là, et n'est pas déjà `photos` : il les
+    /// prend dans le même lancement), le reste pour `photos`. Ordre de `raws` conservé.
+    pub fn split(&self, raws: &[PathBuf]) -> Split {
+        let mut split = Split::default();
+        for raw in raws {
+            let engine = crate::developments::get(raw).map(|d| d.engine);
+            match engine {
+                Some(Engine::RapidRaw) if self.rapidraw.is_some() => {
+                    split.rapidraw.push(raw.clone())
+                }
+                Some(Engine::Darktable)
+                    if self.darktable.is_some()
+                        && !matches!(self.photos, Renderer::Darktable(_)) =>
+                {
+                    split.darktable.push(raw.clone());
+                }
+                _ => split.photos.push(raw.clone()),
+            }
+        }
+        split
+    }
+}
+
+/// Les RAW d'un export rangés par logiciel ([`Renderers::split`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Split {
+    /// Développements RapidRAW, rendus par RapidRAW.
+    pub rapidraw: Vec<PathBuf>,
+    /// Développements darktable, rendus par darktable.
+    pub darktable: Vec<PathBuf>,
+    /// Le reste, rendu par [`Renderers::photos`].
+    pub photos: Vec<PathBuf>,
+}
+
+/// Exporte `batch` : les RAW par `renderers` (chaque développement par son logiciel ;
+/// darktable passe par un TIFF temporaire s'il faut recadrer ou accentuer), puis les
+/// images déjà développées (copiées, converties ou réduites ; JPEG de paire suffixé de
+/// `pair_suffix`). Une progression, un bilan.
 pub fn run(
     batch: &Batch,
-    renderer: Renderer<'_>,
+    renderers: Renderers<'_>,
     req: &Request<'_>,
     pair_suffix: &str,
     cancel: &AtomicBool,
@@ -1292,19 +1369,25 @@ pub fn run(
 ) -> Result<Report, DevelopError> {
     let total = batch.len();
     let mut report = Report::default();
-    if !batch.raws.is_empty() {
-        let mut step = |done: usize, _: usize, path: &Path| progress(done, total, path);
-        let part = match renderer {
-            Renderer::Darktable(dt)
-                if req.cut.is_some() || req.profile.sharpen != Sharpen::None =>
-            {
-                export_via_tiff(dt, &batch.raws, req, cancel, &mut step)?
-            }
-            Renderer::Darktable(dt) => {
-                export(dt, &batch.raws, req.profile, req.folder, cancel, &mut step)?
-            }
-            Renderer::Local(local) => export_libraw(&batch.raws, req, local, cancel, &mut step)?,
-        };
+    let split = renderers.split(&batch.raws);
+    let mut parts: Vec<(Renderer<'_>, &[PathBuf])> = Vec::new();
+    if let Some(rr) = renderers.rapidraw
+        && !split.rapidraw.is_empty()
+    {
+        parts.push((Renderer::RapidRaw(rr), &split.rapidraw));
+    }
+    if let Some(dt) = renderers.darktable
+        && !split.darktable.is_empty()
+    {
+        parts.push((Renderer::Darktable(dt), &split.darktable));
+    }
+    if !split.photos.is_empty() {
+        parts.push((renderers.photos, &split.photos));
+    }
+    for (renderer, images) in parts {
+        let offset = report.written.len();
+        let step = |done: usize, _: usize, path: &Path| progress(offset + done, total, path);
+        let part = render_raws(renderer, images, req, cancel, step)?;
         report.merge(part);
     }
     if !batch.flats.is_empty() {
@@ -1318,6 +1401,152 @@ pub fn run(
         report.merge(part);
     }
     Ok(report)
+}
+
+/// Les RAW `images` par `renderer`.
+fn render_raws(
+    renderer: Renderer<'_>,
+    images: &[PathBuf],
+    req: &Request<'_>,
+    cancel: &AtomicBool,
+    progress: impl FnMut(usize, usize, &Path),
+) -> Result<Report, DevelopError> {
+    match renderer {
+        Renderer::Darktable(dt) if req.cut.is_some() || req.profile.sharpen != Sharpen::None => {
+            export_via_tiff(dt, images, req, cancel, progress)
+        }
+        Renderer::Darktable(dt) => export(dt, images, req.profile, req.folder, cancel, progress),
+        Renderer::RapidRaw(rr) => export_rapidraw(rr, images, req, cancel, progress),
+        Renderer::Local(local) => export_libraw(images, req, local, cancel, progress),
+    }
+}
+
+/// Exporte `images` **par RapidRAW** (`rapidraw export`, un lancement par image : la
+/// commande ne prend qu'une image et ses réglages). RapidRAW rend un **TIFF 16 bits**
+/// temporaire à pleine taille, toujours en **sRGB** (le seul espace qu'il produit) ;
+/// l'image est ensuite convertie dans l'espace du profil (`moxcms`, mêmes espaces qu'avec
+/// LibRaw : [`libraw_check`]), recadrée, réduite, accentuée et écrite comme les autres
+/// ([`finish`]). Un espace plus large que sRGB n'y gagne rien : le rendu est sRGB.
+///
+/// Le développement principal (`IMG.RAF.rrdata`) est appliqué par RapidRAW lui-même ; une
+/// copie virtuelle passe ses réglages par `--adjustments` ; une photo sans développement
+/// reçoit ses réglages par défaut. Nommé comme RapidRAW nomme ses propres exports
+/// ([`export_name`]). Une image en échec n'arrête pas les autres ([`Report::errors`]).
+pub fn export_rapidraw(
+    rr: &RapidRaw,
+    images: &[PathBuf],
+    req: &Request<'_>,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &Path),
+) -> Result<Report, DevelopError> {
+    libraw_check(req.profile, Local::LibRaw).map_err(DevelopError::Other)?;
+    let images = sources(images);
+    let total = images.len();
+    let mut report = Report::default();
+    let tmp = rr.work_dir.join(format!("export-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp)
+        .map_err(|e| DevelopError::Failed(Engine::RapidRaw, e.to_string()))?;
+    let result = (|| {
+        for (i, image) in images.iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DevelopError::Cancelled);
+            }
+            match rapidraw_one(rr, &tmp, i, image, req, cancel) {
+                Ok(out) => {
+                    report.written.push(out);
+                    progress(
+                        report.written.len(),
+                        total,
+                        report.written.last().expect("ajouté"),
+                    );
+                }
+                Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
+                Err(e) => report.errors.push((image.clone(), e.to_string())),
+            }
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    result?;
+    report.failed = report.errors.len();
+    Ok(report)
+}
+
+/// Un rendu RapidRAW de `image` (TIFF 16 bits sRGB dans `tmp`), fini comme les autres
+/// exports ; voir [`export_rapidraw`].
+fn rapidraw_one(
+    rr: &RapidRaw,
+    tmp: &Path,
+    i: usize,
+    image: &Path,
+    req: &Request<'_>,
+    cancel: &AtomicBool,
+) -> Result<PathBuf, DevelopError> {
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(Engine::RapidRaw, e.to_string());
+    let development = crate::developments::get(image);
+    let photo = development.as_ref().map_or(image, |d| d.photo.as_path());
+    // Une copie virtuelle : RapidRAW n'exporte que la photo, ses réglages à elle lui sont
+    // passés (`--adjustments`, comme pour ses rendus : `develop::RapidRaw`).
+    let adjustments = match &development {
+        Some(d) if d.engine == Engine::RapidRaw && d.copy != crate::developments::Copy::Main => {
+            let text = std::fs::read_to_string(&d.sidecar).map_err(|e| failed(&e))?;
+            let json = crate::rrdata::adjustments(&text).map_err(|e| failed(&e))?;
+            let file = tmp.join(format!("adjustments-{i}.json"));
+            std::fs::write(&file, json.to_string()).map_err(|e| failed(&e))?;
+            Some(file)
+        }
+        _ => None,
+    };
+    let tiff = tmp.join(format!("render-{i}.tif"));
+    let log = tmp.join(format!("render-{i}.log"));
+    // Messages dans un fichier plutôt qu'un tube : un programme bavard ne bloque pas.
+    let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
+    let mut command = rr.cli.command();
+    command.arg("export").arg(photo);
+    if let Some(file) = &adjustments {
+        command.arg("--adjustments").arg(file);
+    }
+    let child = command
+        .arg("--output")
+        .arg(&tiff)
+        .args(["--format", "tiff", "--tiff-bit-depth", "16"])
+        .stdin(Stdio::null())
+        .stdout(messages.try_clone().map_err(|e| failed(&e))?)
+        .stderr(messages)
+        .spawn()
+        .map_err(|e| failed(&e))?;
+    let status = crate::develop::wait(child, Engine::RapidRaw, cancel)?;
+    let text = std::fs::read_to_string(&log).unwrap_or_default();
+    if !status.success() || !tiff.is_file() {
+        if text.contains("already running") {
+            return Err(failed(&crate::t!("develop-rapidraw-open")));
+        }
+        let last = text.lines().rev().find(|l| !l.trim().is_empty());
+        return Err(DevelopError::Failed(
+            Engine::RapidRaw,
+            last.unwrap_or("rapidraw export").trim().to_string(),
+        ));
+    }
+    let pixels = match crate::flat::decode_deep(&tiff).map_err(|e| failed(&e))? {
+        crate::flat::Deep::Bits16(img) => img,
+        crate::flat::Deep::Bits8(bmp) => {
+            let data = bmp.data.iter().map(|&v| u16::from(v) * 257).collect();
+            crate::raw::Rgb16::from_raw(bmp.width, bmp.height, data)
+                .ok_or_else(|| failed(&"image"))?
+        }
+    };
+    // Interface de RapidRAW ouverte : une image toute noire, sans erreur (voir
+    // `develop.md`) ; le bruit du capteur suffit à dépasser 0 sur une vraie photo.
+    if pixels.as_raw().iter().all(|&v| v == 0) {
+        return Err(failed(&crate::t!("develop-rapidraw-open")));
+    }
+    let developed = Developed {
+        pixels,
+        origin: Origin::Srgb,
+        jpeg: None,
+    };
+    let (pixels, icc) = in_profile_space(developed, req.profile)?;
+    finish(image, pixels, icc.as_deref(), req)
 }
 
 impl Report {
@@ -1379,24 +1608,23 @@ fn export_one(
 ) -> Result<(PathBuf, bool), DevelopError> {
     let (profile, cut) = (req.profile, req.cut);
     let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
-    let encode = |p: moxcms::ColorProfile| p.encode().map_err(|e| failed(&format!("{e:?}")));
-    let (pixels, icc) = if kind_of(image) == Some(MediaKind::Raw) && local == Local::LibRaw {
+    // Un développement (`IMG@rr.RAF`) se lit dans sa photo ; le fichier écrit porte son nom
+    // ([`export_name`]).
+    let file = crate::media::source(image);
+    let (pixels, icc) = if kind_of(&file) == Some(MediaKind::Raw) && local == Local::LibRaw {
         let (space, target) = libraw_space(&profile.color).expect("vérifié");
-        let mut raw = crate::raw::RawFile::open(image).map_err(|e| failed(&e))?;
+        let mut raw = crate::raw::RawFile::open(&file).map_err(|e| failed(&e))?;
         let pixels = raw
             .render_deep(&req.render, space, cancel)
             .map_err(|e| match e {
                 crate::raw::RawError::Cancelled => DevelopError::Cancelled,
                 e => failed(&e),
             })?;
-        (pixels, Some(encode(target)?))
+        let icc = target.encode().map_err(|e| failed(&format!("{e:?}")))?;
+        (pixels, Some(icc))
     } else {
-        let Developed {
-            mut pixels,
-            origin,
-            jpeg,
-        } = developed(image)?;
-        let (w, h) = pixels.dimensions();
+        let developed = developed(&file)?;
+        let (w, h) = developed.pixels.dimensions();
         let fits = profile.max_side == 0 || w.max(h) <= profile.max_side;
         // Sans recompression : JPEG vers JPEG, sans recadrage ni réduction, sans changer
         // d'espace.
@@ -1405,37 +1633,50 @@ fn export_one(
             && profile.sharpen == Sharpen::None
             && profile.format == Format::Jpeg
             && fits
-            && origin.is(&profile.color)
-            && let Some(bytes) = jpeg
+            && developed.origin.is(&profile.color)
+            && let Some(bytes) = &developed.jpeg
         {
-            return write_bytes(image, req, &bytes).map(|out| (out, true));
+            return write_bytes(image, req, bytes).map(|out| (out, true));
         }
-        let icc = if origin.is(&profile.color) {
-            origin.icc()
-        } else {
-            // Conversion de l'espace d'origine vers celui du profil.
-            let (_, target) = libraw_space(&profile.color).expect("vérifié");
-            let source = origin
-                .profile()
-                .ok_or_else(|| DevelopError::Other(crate::t!("export-bad-icc")))?;
-            let transform = source
-                .create_transform_16bit(
-                    moxcms::Layout::Rgb,
-                    &target,
-                    moxcms::Layout::Rgb,
-                    moxcms::TransformOptions::default(),
-                )
-                .map_err(|e| failed(&format!("{e:?}")))?;
-            let mut out = vec![0u16; pixels.as_raw().len()];
-            transform
-                .transform(pixels.as_raw(), &mut out)
-                .map_err(|e| failed(&format!("{e:?}")))?;
-            pixels = crate::raw::Rgb16::from_raw(w, h, out).expect("même taille");
-            Some(encode(target)?)
-        };
-        (pixels, icc)
+        in_profile_space(developed, profile)?
     };
     finish(image, pixels, icc.as_deref(), req).map(|out| (out, false))
+}
+
+/// Une image déjà développée dans l'espace du profil : gardée telle quelle (même espace,
+/// avec son profil ICC), ou **convertie** depuis son espace d'origine (`moxcms`, 16 bits),
+/// avec le profil ICC du nouvel espace.
+fn in_profile_space(
+    developed: Developed,
+    profile: &Profile,
+) -> Result<(crate::raw::Rgb16, Option<Vec<u8>>), DevelopError> {
+    let failed = |e: &dyn std::fmt::Display| DevelopError::Other(e.to_string());
+    let Developed {
+        mut pixels, origin, ..
+    } = developed;
+    if origin.is(&profile.color) {
+        return Ok((pixels, origin.icc()));
+    }
+    let (w, h) = pixels.dimensions();
+    let (_, target) = libraw_space(&profile.color).expect("vérifié");
+    let source = origin
+        .profile()
+        .ok_or_else(|| DevelopError::Other(crate::t!("export-bad-icc")))?;
+    let transform = source
+        .create_transform_16bit(
+            moxcms::Layout::Rgb,
+            &target,
+            moxcms::Layout::Rgb,
+            moxcms::TransformOptions::default(),
+        )
+        .map_err(|e| failed(&format!("{e:?}")))?;
+    let mut out = vec![0u16; pixels.as_raw().len()];
+    transform
+        .transform(pixels.as_raw(), &mut out)
+        .map_err(|e| failed(&format!("{e:?}")))?;
+    pixels = crate::raw::Rgb16::from_raw(w, h, out).expect("même taille");
+    let icc = target.encode().map_err(|e| failed(&format!("{e:?}")))?;
+    Ok((pixels, Some(icc)))
 }
 
 /// Fin d'un export : recadrage (version), réduction au côté maximal du profil,
@@ -1515,18 +1756,19 @@ pub fn export_via_tiff(
         let mut used = vec![false; total];
         let mut report = Report::default();
         for file in &rendered.written {
-            // L'image d'origine du rendu : même nom (darktable ajoute « _01 » en cas de
-            // doublon de nom).
+            // L'image d'origine du rendu : même nom d'export (un clone `IMG@dt-01.RAF`
+            // est rendu sous `IMG_01` ; darktable ajoute « _01 » en cas de doublon de nom).
             let stem = file
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default();
             let base = stem.rsplit_once('_').map_or(stem.as_str(), |(b, _)| b);
             let Some(i) = (0..total).find(|&i| {
-                !used[i]
-                    && images[i]
-                        .file_stem()
-                        .is_some_and(|s| s.to_string_lossy() == stem || s.to_string_lossy() == base)
+                if used[i] {
+                    return false;
+                }
+                let name = export_name(&images[i]);
+                name == stem || name == base
             }) else {
                 continue;
             };
@@ -1572,15 +1814,34 @@ fn output_path(
 ) -> Result<PathBuf, DevelopError> {
     let dir = folder_for(folder, image);
     std::fs::create_dir_all(&dir).map_err(|e| DevelopError::Other(e.to_string()))?;
-    let stem = image
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
     Ok(unique_path(
         &dir,
-        &format!("{stem}{}{extra}", profile.suffix),
+        &format!("{}{}{extra}", export_name(image), profile.suffix),
         ext,
     ))
+}
+
+/// Nom (sans extension) du fichier exporté de `image` : celui de la photo. Un
+/// développement prend le nom que son logiciel donne à ses propres exports, pour s'y
+/// retrouver : clone darktable `IMG_01` (son numéro), copie virtuelle RapidRAW `IMG_VC01`
+/// (son rang parmi les copies de la photo) ; le développement principal, le nom de la
+/// photo, comme elle.
+pub fn export_name(image: &Path) -> String {
+    use crate::developments::Rank;
+    let stem = |p: &Path| {
+        p.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    let Some(development) = crate::developments::get(image) else {
+        return stem(image);
+    };
+    let photo = stem(&development.photo);
+    match development.rank(&crate::developments::of(&development.photo)) {
+        Rank::Main => photo,
+        Rank::Clone(n) => format!("{photo}_{n:02}"),
+        Rank::Copy(n) => format!("{photo}_VC{n:02}"),
+    }
 }
 
 /// Écrit `bytes` (JPEG sans recompression) à la place de l'export de `image`.
@@ -1912,7 +2173,7 @@ mod tests {
         };
         let report = run(
             &only_flats,
-            Renderer::Local(Local::LibRaw),
+            Renderers::new(Renderer::Local(Local::LibRaw)),
             &Request::new(p.get("asis").unwrap(), "out"),
             "-camera",
             &AtomicBool::new(false),
@@ -1926,6 +2187,131 @@ mod tests {
             .collect();
         assert_eq!(names, ["DSCF0001-camera.jpg", "autre.jpg"]);
         assert_eq!(report.passthrough, 2, "copiés tels quels");
+    }
+
+    #[test]
+    fn developments_are_named_like_their_software_and_rendered_by_it() {
+        use crate::develop::Cli;
+        use crate::developments::{Copy, Development, set_for};
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("DSCF0001.RAF");
+        let dev = |engine, copy, sidecar: &str| Development {
+            engine,
+            copy,
+            photo: photo.clone(),
+            sidecar: dir.path().join(sidecar),
+        };
+        let main_dt = dev(Engine::Darktable, Copy::Main, "DSCF0001.RAF.xmp");
+        let clone = dev(Engine::Darktable, Copy::Clone(2), "DSCF0001_02.RAF.xmp");
+        let main_rr = dev(Engine::RapidRaw, Copy::Main, "DSCF0001.RAF.rrdata");
+        let copy_a = dev(
+            Engine::RapidRaw,
+            Copy::Virtual("c33b94".into()),
+            "DSCF0001.RAF.c33b94.rrdata",
+        );
+        let copy_b = dev(
+            Engine::RapidRaw,
+            Copy::Virtual("0a1b".into()),
+            "DSCF0001.RAF.0a1b.rrdata",
+        );
+        set_for(
+            &photo,
+            &[
+                main_dt.clone(),
+                clone.clone(),
+                main_rr.clone(),
+                copy_a.clone(),
+                copy_b.clone(),
+            ],
+        );
+        // Nommés comme leur logiciel nomme ses exports.
+        assert_eq!(export_name(&photo), "DSCF0001");
+        assert_eq!(export_name(&main_dt.path()), "DSCF0001");
+        assert_eq!(export_name(&clone.path()), "DSCF0001_02");
+        assert_eq!(export_name(&main_rr.path()), "DSCF0001");
+        assert_eq!(export_name(&copy_a.path()), "DSCF0001_VC01");
+        assert_eq!(export_name(&copy_b.path()), "DSCF0001_VC02");
+        // Chaque développement est rendu par son logiciel, s'il est là.
+        let dt = Darktable {
+            cli: Cli::native(dir.path().join("darktable-cli")),
+            config_dir: dir.path().join("dt"),
+            high_quality: true,
+        };
+        let rr = RapidRaw {
+            cli: Cli::native(dir.path().join("rapidraw")),
+            work_dir: dir.path().join("rr"),
+        };
+        let raws = vec![photo.clone(), clone.path(), copy_a.path(), main_rr.path()];
+        let both = Renderers::new(Renderer::Darktable(&dt))
+            .rapidraw(Some(&rr))
+            .split(&raws);
+        assert_eq!(both.rapidraw, [copy_a.path(), main_rr.path()]);
+        assert!(
+            both.darktable.is_empty(),
+            "darktable prend ses clones avec les photos"
+        );
+        assert_eq!(both.photos, [photo.clone(), clone.path()]);
+        let local = Renderers::new(Renderer::Local(Local::LibRaw))
+            .darktable(Some(&dt))
+            .split(&raws);
+        assert_eq!(local.darktable, [clone.path()]);
+        assert_eq!(
+            local.photos,
+            [photo.clone(), copy_a.path(), main_rr.path()],
+            "sans RapidRAW, ses développements sont exportés comme leur photo"
+        );
+        let none = Renderers::new(Renderer::Local(Local::LibRaw)).split(&raws);
+        assert_eq!(none.photos, raws);
+        let rapid = Renderers::new(Renderer::RapidRaw(&rr)).split(&raws);
+        assert_eq!(rapid.rapidraw, [copy_a.path(), main_rr.path()]);
+        assert_eq!(rapid.photos, [photo.clone(), clone.path()]);
+    }
+
+    /// Export réel par RapidRAW : `TRI_TEST_RAW` et RapidRAW installé (interface fermée).
+    #[test]
+    #[ignore]
+    fn rapidraw_exports_a_raw_reduced_to_the_profile() {
+        let Some(raw) = std::env::var_os("TRI_TEST_RAW").map(PathBuf::from) else {
+            return;
+        };
+        let Some(cli) = crate::develop::find_rapidraw("auto") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let rr = RapidRaw {
+            cli,
+            work_dir: dir.path().join("work"),
+        };
+        let profile = Profile {
+            max_side: 600,
+            ..Profiles::default().get("web").unwrap().clone()
+        };
+        let folder = dir.path().join("out").display().to_string();
+        let report = export_rapidraw(
+            &rr,
+            std::slice::from_ref(&raw),
+            &Request::new(&profile, &folder),
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.written.len(), 1);
+        let out = &report.written[0];
+        let stem = raw.file_stem().unwrap().to_string_lossy();
+        assert!(
+            out.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with(&*stem),
+            "{out:?}"
+        );
+        let img = image::open(out).unwrap();
+        assert_eq!(img.width().max(img.height()), 600);
+        assert!(
+            std::fs::read_dir(dir.path().join("work")).map_or(true, |d| d.count() == 0),
+            "fichiers temporaires effacés"
+        );
     }
 
     #[test]

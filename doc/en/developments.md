@@ -75,7 +75,15 @@ default (cover and "N dev."), unfoldable (`Shift+V`); `Shift+W` / `Shift+Q` step
 to the next; in full screen a development shows its render, `b` shows the camera JPEG
 instead (before / after).
 
+## Export
+
+A development is exported by **its own software** (`Ctrl+E`, 2026-10-31: RapidRAW copies
+through RapidRAW, clones through darktable, whatever is being looked at), under the name
+that software gives to its exports (`IMG_01`, `IMG_VC01`); see `export.md`, "We export
+what we are looking at" and "Through RapidRAW".
+
 ## Next
 
-Double delete (the shown development, the photo, the stack; `[files] allow_actions`),
-export of RapidRAW developments, comparing a photo's developments.
+Comparing a photo's developments; the status bar's "N images" count includes
+developments; their thumbnails are only computed in the background with
+`[gui.grid] develop = "auto"`.

@@ -76,7 +76,15 @@ repliée par défaut (couverture et « N dév. »), dépliable (`Maj+V`) ; `Maj+
 passent de l'un à l'autre ; en plein écran un développement montre son rendu, `b` montre
 le JPEG boîtier à sa place (avant / après).
 
+## Export
+
+Un développement est exporté par **son logiciel** (`Ctrl+E`, 31/10/2026 : les copies
+RapidRAW par RapidRAW, les clones par darktable, quoi qu'on regarde), sous le nom que ce
+logiciel donne à ses exports (`IMG_01`, `IMG_VC01`) ; voir `export.md`, « On exporte ce
+qu'on regarde » et « Par RapidRAW ».
+
 ## À venir
 
-Double suppression (le développement affiché, la photo, la pile ; `[files] allow_actions`),
-export des développements RapidRAW, comparaison des développements d'une photo.
+Comparaison des développements d'une photo ; le compte « N images » de la barre d'état
+compte les développements ; leurs vignettes ne se calculent en fond qu'avec
+`[gui.grid] develop = "auto"`.

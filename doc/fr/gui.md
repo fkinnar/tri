@@ -271,8 +271,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   les préréglages d'export (flèches haut / bas sur la liste seulement, résumé de chacun ;
   Tab passe au dossier) et le dossier (complétion par Tab) ; export en fond, barre de progression et bouton × dans la barre d'état, bilan à
   la fin. Profil choisi retenu pendant la session. Image exportée : ce qu'on regarde
-  (grille : darktable, sinon LibRaw ; plein écran : la source affichée), modifiable dans
-  la boîte (`export::Render`). Boîte épurée (retour du 19/10/2026) : profils, dossier et
+  (grille : le logiciel du rendu développé, sinon LibRaw ; plein écran : la source
+  affichée ; un développement, toujours par son logiciel), modifiable dans la boîte
+  (`export::Render`, `TriApp::export_engine`). Boîte épurée (retour du 19/10/2026) : profils, dossier et
   destination réelle seulement ; les explications (flèches, règle du dossier, rendu) sont
   dans la doc.
 - **Rapport d'export** (20/10/2026, voir `export.md`) : `Ctrl+Maj+E` ou bouton

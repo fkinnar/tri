@@ -152,8 +152,8 @@ Règle de l'utilisateur (19/10/2026) : l'image exportée est celle qu'on regarde
 
 | Où | Image exportée |
 |---|---|
-| Grille | développée par darktable s'il est là, sinon rendu LibRaw |
-| Plein écran, développé (`Maj+B`) | développée par darktable |
+| Grille | développée par le logiciel de son rendu développé (darktable, RapidRAW), sinon rendu LibRaw |
+| Plein écran, développé (`Maj+B`) | développée par le logiciel affiché |
 | Plein écran, rendu RAW (`b`) | rendu LibRaw |
 | Plein écran, JPEG boîtier | le JPEG boîtier (aperçu embarqué, à sa taille) |
 
@@ -161,6 +161,17 @@ La boîte d'export ne propose **pas de choix** : on fait `Ctrl+E` sur l'image vo
 (retour de l'utilisateur, 19/10/2026 : pas de complexité de plus dans la boîte).
 `Render::of` décide, une ligne d'explication le dit. En ligne de commande : darktable
 s'il est là, `--libraw` ou `--embedded` pour les autres.
+
+**Un développement est toujours rendu par son logiciel** (31/10/2026, modèle des
+développements, voir `developments.md`) : une copie RapidRAW de la sélection part par
+RapidRAW, un clone darktable par darktable, quoi qu'on regarde par ailleurs ; le tableau
+ci-dessus ne vaut que pour les photos. `Renderers` porte les logiciels d'un export
+(`photos` pour les photos, `darktable` et `rapidraw` pour leurs développements),
+`Renderers::split` range les RAW, `run` lance chaque part à la suite, avec une seule
+progression. Un développement dont le logiciel manque est exporté comme sa photo. Le
+fichier porte le nom que **son logiciel** donne à ses exports (`export_name`) : `IMG_01`
+pour le clone darktable n° 1, `IMG_VC01` pour la première copie virtuelle RapidRAW de la
+photo ; un développement principal, le nom de la photo.
 
 Le **JPEG boîtier** (`Local::Embedded`) est l'aperçu embarqué du RAW, à sa taille (71 % du
 capteur sur un X-T4), redressé.
@@ -292,6 +303,30 @@ darktable.
   même image : cadrage, orientation et couleurs cohérents, darktable plus clair (ses
   réglages par défaut).
 
+## Par RapidRAW
+
+Les développements RapidRAW (le principal `IMG.RAF.rrdata`, les copies virtuelles
+`IMG.RAF.<id>.rrdata`) sont exportés par RapidRAW (`export_rapidraw`, 31/10/2026), comme
+ses rendus (`develop.md`) :
+
+- **Un lancement par image** : `rapidraw export <photo> --output <tiff> --format tiff
+  --tiff-bit-depth 16`, plus `--adjustments <json>` pour une copie virtuelle (ses réglages
+  tirés de son `.rrdata` par `rrdata::adjustments`) ; le développement principal est
+  appliqué par RapidRAW lui-même. La commande ne prend qu'une image et un jeu de
+  réglages ; elle n'a ni taille, ni espace couleur, ni recadrage.
+- **TIFF 16 bits temporaire, toujours en sRGB** : le seul espace que RapidRAW produit.
+  L'image est ensuite **convertie** dans l'espace du profil (`moxcms`, comme une image
+  déjà développée : « Espace d'origine »), recadrée (version), réduite, accentuée et
+  écrite comme les autres (`finish`). Mêmes espaces qu'avec LibRaw (`libraw_check`) ; un
+  espace plus large que sRGB n'y gagne rien, la boîte le dit (« RapidRAW rend en sRGB »).
+- **Interface de RapidRAW ouverte** : image toute noire sans erreur (voir `develop.md`) ;
+  refusée, avec le même message que pour les rendus. Une image en échec n'arrête pas les
+  autres (`Report::errors`) ; les fichiers temporaires (`<cache>/rapidraw-export`) sont
+  effacés.
+- Une photo **sans** développement RapidRAW passe aussi par là quand on regarde un rendu
+  RapidRAW en plein écran (`Render::Developed(RapidRaw)`) : réglages par défaut de
+  RapidRAW.
+
 ## Créer un profil depuis l'interface
 
 Demandé le 19/10/2026 : plus besoin d'éditer le fichier. Dans la fenêtre de réglages
@@ -360,5 +395,9 @@ Les préréglages de recadrage se créent de la même façon (voir `versions.md`
   la lecture des réglages), paires, destination, lecture des lignes de progression.
 - `darktable_exports_a_tiff_and_a_jpeg` (`#[ignore]`, `TRI_TEST_DARKTABLE_RAW`) : vrai
   export TIFF puis JPEG d'une copie, progression, taille, sidecar intact.
+- `developments_are_named_like_their_software_and_rendered_by_it` : noms d'export des
+  développements (`IMG_02`, `IMG_VC01`), répartition par logiciel (`Renderers::split`) ;
+  `rapidraw_exports_a_raw_reduced_to_the_profile` (`#[ignore]`, `TRI_TEST_RAW`, RapidRAW
+  installé) : vrai export réduit au profil, temporaires effacés.
 - Interface : `ctrl_e_offers_the_export_profiles_and_remembers_the_choice` ;
   fenêtre de réglages : `export_profiles_only_offer_coherent_choices`.

@@ -151,8 +151,8 @@ User's rule (2026-10-19): the exported image is the one being looked at.
 
 | Where | Exported image |
 |---|---|
-| Grid | developed by darktable if available, otherwise LibRaw render |
-| Full screen, developed (`Shift+B`) | developed by darktable |
+| Grid | developed by the software of its developed render (darktable, RapidRAW), otherwise LibRaw render |
+| Full screen, developed (`Shift+B`) | developed by the software shown |
 | Full screen, RAW render (`b`) | LibRaw render |
 | Full screen, camera JPEG | the camera JPEG (embedded preview, at its own size) |
 
@@ -160,6 +160,16 @@ The export dialog offers **no choice**: you press `Ctrl+E` on the desired image 
 feedback, 2026-10-19: no extra complexity in the dialog). `Render::of` decides, and a
 line of explanation says so. On the command line: darktable if available, `--libraw` or
 `--embedded` for the others.
+
+**A development is always rendered by its own software** (2026-10-31, developments
+model, see `developments.md`): a RapidRAW copy in the selection goes through RapidRAW, a
+darktable clone through darktable, whatever else is being looked at; the table above only
+applies to photos. `Renderers` carries the software of an export (`photos` for the photos,
+`darktable` and `rapidraw` for their developments), `Renderers::split` sorts the RAWs,
+`run` launches each part in turn, with a single progress. A development whose software is
+missing is exported as its photo. The file takes the name **its software** gives to its
+exports (`export_name`): `IMG_01` for darktable clone no. 1, `IMG_VC01` for the photo's
+first RapidRAW virtual copy; a main development, the photo's name.
 
 The **camera JPEG** (`Local::Embedded`) is the RAW's embedded preview, at its own size
 (71 % of the sensor on an X-T4), straightened.
@@ -289,6 +299,29 @@ shot, flatter than darktable's default settings.
   image: consistent framing, orientation and colors, darktable brighter (its default
   settings).
 
+## Through RapidRAW
+
+RapidRAW developments (the main `IMG.RAF.rrdata`, the virtual copies
+`IMG.RAF.<id>.rrdata`) are exported by RapidRAW (`export_rapidraw`, 2026-10-31), like its
+renders (`develop.md`):
+
+- **One launch per image**: `rapidraw export <photo> --output <tiff> --format tiff
+  --tiff-bit-depth 16`, plus `--adjustments <json>` for a virtual copy (its settings taken
+  from its `.rrdata` by `rrdata::adjustments`); the main development is applied by
+  RapidRAW itself. The command takes one image and one set of settings; it has no size,
+  color space or crop option.
+- **Temporary 16-bit TIFF, always in sRGB**: the only space RapidRAW produces. The image
+  is then **converted** to the profile's space (`moxcms`, like an already developed image:
+  "Original space"), cropped (version), reduced, sharpened and written like the others
+  (`finish`). Same spaces as with LibRaw (`libraw_check`); a space wider than sRGB gains
+  nothing, and the dialog says so ("RapidRAW renders in sRGB").
+- **RapidRAW's interface open**: all-black image without any error (see `develop.md`);
+  refused, with the same message as for renders. A failing image does not stop the others
+  (`Report::errors`); the temporary files (`<cache>/rapidraw-export`) are removed.
+- A photo **without** a RapidRAW development also goes through it when a RapidRAW render
+  is being looked at in full screen (`Render::Developed(RapidRaw)`): RapidRAW's default
+  settings.
+
 ## Creating a profile from the interface
 
 Requested on 2026-10-19: no more need to edit the file. In the settings window
@@ -356,5 +389,9 @@ Crop presets are created the same way (see `versions.md`).
   soon as the settings are read), pairs, destination, reading of the progress lines.
 - `darktable_exports_a_tiff_and_a_jpeg` (`#[ignore]`, `TRI_TEST_DARKTABLE_RAW`): real
   TIFF then JPEG export of a copy, progress, size, sidecar intact.
+- `developments_are_named_like_their_software_and_rendered_by_it`: export names of
+  developments (`IMG_02`, `IMG_VC01`), sorting by software (`Renderers::split`);
+  `rapidraw_exports_a_raw_reduced_to_the_profile` (`#[ignore]`, `TRI_TEST_RAW`, RapidRAW
+  installed): real export reduced to the profile, temporary files removed.
 - Interface: `ctrl_e_offers_the_export_profiles_and_remembers_the_choice`;
   settings window: `export_profiles_only_offer_coherent_choices`.

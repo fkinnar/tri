@@ -4,6 +4,13 @@
 
 ## À venir
 
+- **Export des développements RapidRAW** (`Ctrl+E`, `tri --export`) : une copie ou le
+  développement principal RapidRAW est rendu par RapidRAW (TIFF 16 bits, converti dans
+  l'espace du préréglage, recadré, réduit et accentué comme les autres), un clone
+  darktable par darktable, quoi qu'on regarde ; un développement sans son logiciel est
+  exporté comme sa photo. Fichiers nommés comme le logiciel nomme ses exports (`IMG_01`,
+  `IMG_VC01`). Corrigé : un clone darktable exporté avec un préréglage recadré ou accentué
+  était passé sous silence.
 - **Supprimer un développement** (Suppr / `x` sur un développement) ne retire que lui : un
   clone darktable, une copie RapidRAW ou le développement principal RapidRAW perdent leur
   sidecar, le développement principal darktable voit son XMP réécrit sans l'historique

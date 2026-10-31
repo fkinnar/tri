@@ -1082,8 +1082,10 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
     let progress = |done: usize, total: usize, path: &std::path::Path| {
         eprintln!("{done}/{total} {}", path.display());
     };
-    // darktable s'il est là (sauf `--libraw`), sinon rendu de base par LibRaw.
-    let darktable = (!args.libraw && !args.embedded)
+    // Les photos par darktable s'il est là (sauf `--libraw` / `--embedded`), sinon rendu
+    // de base par LibRaw ; chaque développement par son logiciel (`Renderers`).
+    let developers = !args.libraw && !args.embedded;
+    let darktable = developers
         .then(|| tri::develop::find_darktable(&settings.develop.darktable))
         .flatten()
         .map(|cli| -> AnyResult<tri::develop::Darktable> {
@@ -1094,7 +1096,17 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             })
         })
         .transpose()?;
-    let renderer = match &darktable {
+    let rapidraw = developers
+        .then(|| tri::develop::find_rapidraw(&settings.develop.rapidraw))
+        .flatten()
+        .map(|cli| -> AnyResult<tri::develop::RapidRaw> {
+            Ok(tri::develop::RapidRaw {
+                cli,
+                work_dir: settings.open_cache()?.root().join("rapidraw-export"),
+            })
+        })
+        .transpose()?;
+    let photos = match &darktable {
         Some(dt) => tri::export::Renderer::Darktable(dt),
         None => {
             if !args.embedded && !batch.raws.is_empty() {
@@ -1107,9 +1119,12 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             })
         }
     };
+    let renderers = tri::export::Renderers::new(photos)
+        .darktable(darktable.as_ref())
+        .rapidraw(rapidraw.as_ref());
     let report = tri::export::run(
         &batch,
-        renderer,
+        renderers,
         &request,
         &settings.export.camera_suffix,
         &cancel,

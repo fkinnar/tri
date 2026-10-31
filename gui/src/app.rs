@@ -7115,6 +7115,19 @@ impl TriApp {
         Level::Developed(engine)
     }
 
+    /// Logiciel du rendu développé exporté pour `path` (celui de son développement, ou
+    /// celui qu'on regarde : [`Self::developed_level`]), s'il est trouvé ; sinon `None`,
+    /// rendu de base par LibRaw.
+    fn export_engine(&self, path: &Path) -> Option<tri::develop::Engine> {
+        let Level::Developed(engine) = self.developed_level(path) else {
+            return None;
+        };
+        self.developers
+            .engines()
+            .contains(&engine)
+            .then_some(engine)
+    }
+
     /// Niveau développé de l'image `index`, s'il y en a une.
     fn developed_level_at(&self, index: usize) -> Option<Level> {
         self.files.get(index).map(|f| self.developed_level(&f.path))
@@ -9683,14 +9696,13 @@ impl TriApp {
                 let Some((path, version)) = self.shown_version() else {
                     return;
                 };
-                let darktable =
-                    tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
+                let developer = !self.developers.is_empty();
                 let source = match version.source {
                     tri::versions::Source::Embedded => Source::Embedded,
                     tri::versions::Source::Raw => Source::Raw,
                     tri::versions::Source::Developed => Source::Developed,
                 };
-                let render = crate::export::Render::of(Some(source), darktable);
+                let render = crate::export::Render::of(Some(source), self.export_engine(&path));
                 let images = vec![path];
                 let flat = crate::export::exports_flat(render, &images);
                 // Son profil, sinon le dernier choisi, sinon celui des réglages.
@@ -9702,7 +9714,7 @@ impl TriApp {
                     &images,
                     &self.settings.export,
                     preferred.as_deref(),
-                    darktable,
+                    developer,
                     render,
                     at,
                 )
@@ -9714,16 +9726,18 @@ impl TriApp {
                 Ok(())
             }
             Action::FileExport => {
-                let darktable =
-                    tri::develop::find_darktable(&self.settings.develop.darktable).is_some();
-                // On exporte ce qu'on regarde : en plein écran, la source affichée.
-                let render = crate::export::Render::of(
-                    self.files
-                        .get(self.selected)
-                        .filter(|_| self.mode != Mode::Grid)
-                        .map(|f| self.source_for(f)),
-                    darktable,
-                );
+                let developer = !self.developers.is_empty();
+                // On exporte ce qu'on regarde : en plein écran, la source affichée, et le
+                // logiciel de son rendu développé ; en grille, celui de la première image.
+                let shown = self
+                    .files
+                    .get(self.selected)
+                    .filter(|_| self.mode != Mode::Grid);
+                let engine = shown
+                    .map(|f| f.path.as_path())
+                    .or(paths.first().map(PathBuf::as_path))
+                    .and_then(|p| self.export_engine(p));
+                let render = crate::export::Render::of(shown.map(|f| self.source_for(f)), engine);
                 // Un JPEG (boîtier ou d'origine) : « JPEG tel quel » proposé d'abord (retour
                 // du 19/10/2026) ; le choix de la séance est retenu à part de celui des rendus.
                 let jpeg = crate::export::exports_flat(render, &paths);
@@ -9734,7 +9748,7 @@ impl TriApp {
                     &paths,
                     &self.settings.export,
                     preferred.as_deref(),
-                    darktable,
+                    developer,
                     render,
                     at,
                 );
@@ -9935,21 +9949,26 @@ impl TriApp {
             return;
         }
         let Some(engine) = &self.engine else { return };
-        // Configuration à part de celle des rendus développés : deux darktable peuvent
-        // tourner en même temps (un rendu demandé par Maj+B pendant un export). Sans
-        // darktable : LibRaw (rendu de base).
-        let darktable = (render == crate::export::Render::Darktable)
-            .then(|| tri::develop::find_darktable(&self.settings.develop.darktable))
-            .flatten();
-        let local = match render {
-            crate::export::Render::Embedded => tri::export::Local::Embedded,
-            _ => tri::export::Local::LibRaw,
+        // Configuration et fichiers de travail à part de ceux des rendus développés : un
+        // rendu demandé par Maj+B pendant un export ne gêne pas. Les deux logiciels sont
+        // cherchés quel que soit `render` : chaque développement est rendu par le sien.
+        // Sans logiciel : LibRaw (rendu de base).
+        let tools = crate::export::Tools {
+            darktable: tri::develop::find_darktable(&self.settings.develop.darktable).map(|cli| {
+                tri::develop::Darktable {
+                    cli,
+                    config_dir: engine.cache.root().join("darktable-export"),
+                    high_quality: true,
+                }
+            }),
+            rapidraw: tri::develop::find_rapidraw(&self.settings.develop.rapidraw).map(|cli| {
+                tri::develop::RapidRaw {
+                    cli,
+                    work_dir: engine.cache.root().join("rapidraw-export"),
+                }
+            }),
+            render,
         };
-        let dt = darktable.map(|cli| tri::develop::Darktable {
-            cli,
-            config_dir: engine.cache.root().join("darktable-export"),
-            high_quality: true,
-        });
         trace(|| format!("export : {} images vers {folder}", images.len()));
         let order = crate::export::Order {
             images,
@@ -9960,7 +9979,7 @@ impl TriApp {
             render: self.settings.render.options(),
             pair_suffix: self.settings.export.camera_suffix.clone(),
         };
-        self.export_job = Some(crate::export::Job::start(dt, local, order, ctx));
+        self.export_job = Some(crate::export::Job::start(tools, order, ctx));
     }
 
     /// Export fini : bilan dans la barre d'état.
@@ -13827,9 +13846,10 @@ mod tests {
         settings.gui.key_ambiguous_timeout_ms = 0;
         // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
         settings.gui.profile = crate::actions::Profile::Both;
-        // Pas de darktable dans les tests (installé ou non sur la machine) : un test le
-        // simule là où il le faut.
+        // Ni darktable ni RapidRAW dans les tests (installés ou non sur la machine) : un
+        // test les simule là où il le faut.
         settings.develop.darktable = String::new();
+        settings.develop.rapidraw = String::new();
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
@@ -19171,8 +19191,8 @@ mod tests {
             h.state().file_dialog,
             Some(crate::files::FileDialog::Export(_))
         ));
-        // Sans darktable (tests) : rendu de base par LibRaw, dit dans la boîte.
-        h.get_by_label_contains("Darktable absent");
+        // Sans logiciel de développement (tests) : rendu de base par LibRaw, dit dans la boîte.
+        h.get_by_label_contains("Aucun logiciel de développement");
         // Des JPEG : « JPEG tel quel » proposé d'abord (liste déroulante).
         let Some(crate::files::FileDialog::Export(dialog)) = &h.state().file_dialog else {
             panic!("boîte d'export attendue");
