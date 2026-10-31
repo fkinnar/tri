@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- **Same keys for burst stacks and development stacks**: `s`, `(` `)`, `Shift+S`, `d)`
+  `y)` and the stack mode's arrows act on the burst when stacks are on and it holds
+  several photos, else on the photo's developments. New **`((`** opens the next level
+  (the folded burst, then the developments) and **`))`** closes the innermost one.
+  `Shift+V` and `Ctrl+Shift+V` lose their default keys (`core.dev.toggle`,
+  `core.dev.fold_all` stay bindable in `[keys]`). A photo's developments now always stay
+  in its burst stack (the similarity cut between them, and the development stack vanished
+  as soon as stacks were on). The "N dev." badge and the "fold" badge sit below the colour
+  labels instead of over them.
 - **Generate the missing rating sidecars from the interface** (follow-up to #253): a
   sidecar icon in a thumbnail's right-click dialog (the selection) and "Generate the
   sidecars…" in the open folder's right-click menu; the dialog offers every software or

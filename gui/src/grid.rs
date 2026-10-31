@@ -150,6 +150,8 @@ pub fn navigate(
         | Action::Redo
         | Action::History
         | Action::StackToggle
+        | Action::StackOpen
+        | Action::StackClose
         | Action::StacksAll
         | Action::GroupingWindow
         | Action::StackMode

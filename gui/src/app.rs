@@ -38,6 +38,34 @@ use crate::trace::trace;
 use crate::view::{self, Source};
 
 /// Ce qui occupe la fenêtre.
+/// Referme les coupes de `ranges` (piles de rafale, contiguës et ordonnées) qui tombent
+/// entre deux images de la même photo (`same_photo`) : ses développements restent avec
+/// elle.
+fn merge_split_photos(
+    ranges: Vec<std::ops::Range<usize>>,
+    same_photo: impl Fn(usize, usize) -> bool,
+) -> Vec<std::ops::Range<usize>> {
+    let mut merged: Vec<std::ops::Range<usize>> = Vec::with_capacity(ranges.len());
+    for r in ranges {
+        match merged.last_mut() {
+            Some(last) if last.end == r.start && same_photo(last.end - 1, r.start) => {
+                last.end = r.end;
+            }
+            _ => merged.push(r),
+        }
+    }
+    merged
+}
+
+/// Pile visée par un raccourci des piles ([`TriApp::applicable_stack`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum StackKind {
+    /// Pile de rafale (images semblables), indices dans la liste.
+    Burst(std::ops::Range<usize>),
+    /// Photo et ses développements.
+    Developments(std::ops::Range<usize>),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
     Grid,
@@ -4889,6 +4917,12 @@ impl TriApp {
             tri::similarity::group(&links, self.group_threshold(), self.group_gap)
         };
         let files = &self.files;
+        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
+        let same_photo = |i: usize, j: usize| photo(i) == photo(j);
+        // Une photo et ses développements ne se séparent jamais (31/10/2026) : un
+        // développement n'a pas d'empreinte, la similarité coupait entre eux et la pile de
+        // développements disparaissait dès que les piles étaient actives.
+        let ranges = merge_split_photos(ranges, same_photo);
         let notes = &self.folder.notes;
         let scores = &self.scores;
         // Couverture : l'acceptée, sinon la mieux notée, sinon la plus nette, sinon la
@@ -4935,8 +4969,6 @@ impl TriApp {
         let dev_shown = &self.dev_shown;
         let dev_preferred = &self.dev_preferred;
         let render = self.shown_render();
-        let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
-        let same_photo = |i: usize, j: usize| photo(i) == photo(j);
         let dev_cover = |r: &std::ops::Range<usize>| {
             use crate::grid_render::GridRender;
             if let Some(shown) = dev_shown.get(&photo(r.start))
@@ -5082,33 +5114,33 @@ impl TriApp {
         self.reveal = Some(Reveal::Minimal);
     }
 
-    /// Déplie ou replie la pile de développements de l'image sélectionnée (Maj+V).
+    /// Déplie ou replie la pile de développements de l'image sélectionnée
+    /// (`core.dev.toggle`, sans touche par défaut depuis le 31/10/2026 : `s` le fait).
     fn toggle_developments(&mut self) {
         let Some(range) = self.stacks.developments_of(self.selected).cloned() else {
             self.hint = Some(t!("dev-none"));
             return;
         };
-        let photo = tri::media::source(&self.files[range.start].path).into_owned();
-        if !self.dev_unfolded.remove(&photo) {
-            self.dev_unfolded.insert(photo);
-        }
-        self.stacks_dirty = true;
-        self.reveal = Some(Reveal::Minimal);
+        let on = !self.dev_unfolded.contains(&self.photo_of_range(&range));
+        self.set_developments_unfolded(&range, on);
     }
 
-    /// Développement suivant (`step` 1) ou précédent (-1) de la photo, en boucle ; dans la
-    /// grille, une pile repliée le montre à la place de sa couverture.
+    /// Développement suivant (`step` 1) ou précédent (-1) de la photo, en boucle.
     fn step_developments(&mut self, step: isize) {
         match self.stacks.step_in_developments(self.selected, step) {
-            Some(i) => {
-                let path = self.files[i].path.clone();
-                self.dev_shown
-                    .insert(tri::media::source(&path).into_owned(), path);
-                self.select(i);
-                self.stacks_dirty = true;
-            }
+            Some(i) => self.show_development(i),
             None => self.hint = Some(t!("dev-none")),
         }
+    }
+
+    /// Sélectionne l'image `index` d'une pile de développements ; dans la grille, une pile
+    /// repliée la montre à la place de sa couverture.
+    fn show_development(&mut self, index: usize) {
+        let path = self.files[index].path.clone();
+        self.dev_shown
+            .insert(tri::media::source(&path).into_owned(), path);
+        self.select(index);
+        self.stacks_dirty = true;
     }
 
     /// Étiquette courte d'un développement : « DT », « DT · clone 1 », « RR · copie 2 »
@@ -5124,32 +5156,145 @@ impl TriApp {
         })
     }
 
-    /// Déplie ou replie la pile de l'image sélectionnée.
-    fn toggle_stack(&mut self) {
-        let Some(range) = self.stacks.range_of(self.selected).cloned() else {
-            return;
-        };
-        if range.len() < 2 {
-            return;
+    /// Pile sur laquelle agissent les raccourcis des piles pour l'image `index`
+    /// (harmonisation du 31/10/2026, règle de `Maj+Entrée`) : la rafale si les piles sont
+    /// actives et qu'elle compte plusieurs photos, sinon la pile de développements de la
+    /// photo ; un développement vise toujours celle de sa photo.
+    fn applicable_stack(&self, index: usize) -> Option<StackKind> {
+        let developments = self.stacks.developments_of(index).cloned();
+        let is_development = self
+            .files
+            .get(index)
+            .is_some_and(|f| tri::media::is_development(&f.path));
+        if is_development && let Some(r) = developments.clone() {
+            return Some(StackKind::Developments(r));
         }
-        let paths: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
-        if paths.iter().any(|p| self.expanded.contains(p)) {
-            for p in &paths {
-                self.expanded.remove(p);
+        let burst = self
+            .stacks
+            .range_of(index)
+            .filter(|r| self.stacking && r.len() > 1)
+            .cloned();
+        match (burst, developments) {
+            (Some(b), Some(d)) if b == d => Some(StackKind::Developments(d)),
+            (Some(b), _) => Some(StackKind::Burst(b)),
+            (None, Some(d)) => Some(StackKind::Developments(d)),
+            (None, None) => None,
+        }
+    }
+
+    /// Photo d'une pile de développements `range` (sa clé dans `dev_unfolded`).
+    fn photo_of_range(&self, range: &std::ops::Range<usize>) -> PathBuf {
+        tri::media::source(&self.files[range.start].path).into_owned()
+    }
+
+    /// Vrai si la pile de rafale `range` est dépliée.
+    fn burst_unfolded(&self, range: &std::ops::Range<usize>) -> bool {
+        range
+            .clone()
+            .any(|i| self.expanded.contains(&self.files[i].path))
+    }
+
+    /// Déplie (`on`) ou replie la pile de rafale `range`.
+    fn set_burst_unfolded(&mut self, range: &std::ops::Range<usize>, on: bool) {
+        let paths: Vec<PathBuf> = range.clone().map(|i| self.files[i].path.clone()).collect();
+        for p in paths {
+            if on {
+                self.expanded.insert(p);
+            } else {
+                self.expanded.remove(&p);
             }
-        } else {
-            self.expanded.extend(paths);
         }
         self.stacks_dirty = true;
         self.reveal = Some(Reveal::Minimal);
     }
 
-    /// Déplie toutes les piles, ou les replie toutes si l'une est dépliée.
+    /// Déplie (`on`) ou replie la pile de développements `range`.
+    fn set_developments_unfolded(&mut self, range: &std::ops::Range<usize>, on: bool) {
+        let photo = self.photo_of_range(range);
+        if on {
+            self.dev_unfolded.insert(photo);
+        } else {
+            self.dev_unfolded.remove(&photo);
+        }
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
+    }
+
+    /// Déplie ou replie la pile qui s'applique à l'image sélectionnée (`s`).
+    fn toggle_stack(&mut self) {
+        match self.applicable_stack(self.selected) {
+            Some(StackKind::Burst(r)) => {
+                let on = !self.burst_unfolded(&r);
+                self.set_burst_unfolded(&r, on);
+            }
+            Some(StackKind::Developments(r)) => {
+                let on = !self.dev_unfolded.contains(&self.photo_of_range(&r));
+                self.set_developments_unfolded(&r, on);
+            }
+            None => {}
+        }
+    }
+
+    /// `((` : ouvre le niveau suivant — la pile de rafale si elle est repliée, sinon les
+    /// développements de la photo.
+    fn open_stack_level(&mut self) {
+        let developments = self.stacks.developments_of(self.selected).cloned();
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|r| self.stacking && r.len() > 1 && developments.as_ref() != Some(r))
+            .cloned();
+        if let Some(b) = burst
+            && !self.burst_unfolded(&b)
+        {
+            self.set_burst_unfolded(&b, true);
+            return;
+        }
+        if let Some(d) = developments
+            && !self.dev_unfolded.contains(&self.photo_of_range(&d))
+        {
+            self.set_developments_unfolded(&d, true);
+            return;
+        }
+        self.hint = Some(t!("stack-nothing-to-open"));
+    }
+
+    /// `))` : ferme le niveau le plus intérieur ouvert — les développements, sinon la
+    /// pile de rafale.
+    fn close_stack_level(&mut self) {
+        let developments = self.stacks.developments_of(self.selected).cloned();
+        let burst = self
+            .stacks
+            .range_of(self.selected)
+            .filter(|r| self.stacking && r.len() > 1 && developments.as_ref() != Some(r))
+            .cloned();
+        if let Some(d) = developments
+            && self.dev_unfolded.contains(&self.photo_of_range(&d))
+        {
+            self.set_developments_unfolded(&d, false);
+            return;
+        }
+        if let Some(b) = burst
+            && self.burst_unfolded(&b)
+        {
+            self.set_burst_unfolded(&b, false);
+            return;
+        }
+        self.hint = Some(t!("stack-nothing-to-close"));
+    }
+
+    /// Déplie toutes les piles — rafales et développements —, ou les replie toutes si
+    /// l'une est dépliée.
     fn toggle_all_stacks(&mut self) {
-        if self.expanded.is_empty() {
+        if self.expanded.is_empty() && self.dev_unfolded.is_empty() {
             self.expanded = self.files.iter().map(|f| f.path.clone()).collect();
+            self.dev_unfolded = (0..self.files.len())
+                .filter(|&i| self.stacks.developments_of(i).is_some())
+                .map(|i| tri::media::source(&self.files[i].path).into_owned())
+                .collect();
         } else {
             self.expanded.clear();
+            self.dev_unfolded.clear();
         }
         self.stacks_dirty = true;
         self.reveal = Some(Reveal::Minimal);
@@ -6043,8 +6188,23 @@ impl TriApp {
             Action::NavPrev | Action::NavNext if self.mode == Mode::View && self.stacking => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 let wrap = self.gui.view.stack_wrap;
-                if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
-                    self.select(i);
+                match self.applicable_stack(self.selected) {
+                    // Les développements de la photo, comme une pile (31/10/2026).
+                    Some(StackKind::Developments(r)) => {
+                        let len = r.len() as isize;
+                        let at = (self.selected - r.start) as isize + step;
+                        let at = if wrap {
+                            at.rem_euclid(len)
+                        } else {
+                            at.clamp(0, len - 1)
+                        };
+                        self.show_development(r.start + at as usize);
+                    }
+                    _ => {
+                        if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
+                            self.select(i);
+                        }
+                    }
                 }
             }
             Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stacking => {
@@ -6062,19 +6222,23 @@ impl TriApp {
             // Début / fin de la pile (issue n° 62) ; en grille, une pile repliée montre sa
             // couverture.
             Action::StackFirst | Action::StackLast => {
-                if let Some(r) = self.stacks.range_of(self.selected).cloned() {
-                    let at = if action == Action::StackFirst {
-                        r.start
-                    } else {
-                        r.end - 1
-                    };
-                    let browsing = self.mode == Mode::View && self.stacking;
-                    let at = if browsing {
-                        at
-                    } else {
-                        self.stacks.visible(at)
-                    };
-                    self.select(at);
+                let first = action == Action::StackFirst;
+                match self.applicable_stack(self.selected) {
+                    Some(StackKind::Burst(r)) => {
+                        let at = if first { r.start } else { r.end - 1 };
+                        let browsing = self.mode == Mode::View && self.stacking;
+                        let at = if browsing {
+                            at
+                        } else {
+                            self.stacks.visible(at)
+                        };
+                        self.select(at);
+                    }
+                    // La photo, ou son dernier développement (31/10/2026).
+                    Some(StackKind::Developments(r)) => {
+                        self.show_development(if first { r.start } else { r.end - 1 });
+                    }
+                    None => {}
                 }
             }
             Action::StackEnterToggle => {
@@ -6104,9 +6268,13 @@ impl TriApp {
             Action::Stars(_) | Action::Color(_) | Action::Flag(_) => self.rate_selected(action),
             Action::ToggleAutoAdvance => self.auto_advance = !self.auto_advance,
             Action::FileDeleteStack | Action::FileCopyStack => {
-                // Toute la pile de l'image (images cachées dans une pile repliée comprises).
-                let range = self.stacks.range_of(self.selected).cloned();
-                match range.filter(|_| self.stacking) {
+                // Toute la pile de l'image (images cachées dans une pile repliée comprises),
+                // ou la photo et ses développements (31/10/2026).
+                let range = match self.applicable_stack(self.selected) {
+                    Some(StackKind::Burst(r) | StackKind::Developments(r)) => Some(r),
+                    None => None,
+                };
+                match range {
                     Some(range) => {
                         let paths = self.files[range].iter().map(|f| f.path.clone()).collect();
                         let file_action = if action == Action::FileDeleteStack {
@@ -6339,6 +6507,8 @@ impl TriApp {
                 self.reveal_folder = self.folder_panel;
             }
             Action::StackToggle => self.toggle_stack(),
+            Action::StackOpen => self.open_stack_level(),
+            Action::StackClose => self.close_stack_level(),
             Action::StacksAll => self.toggle_all_stacks(),
             Action::DevToggle => self.toggle_developments(),
             Action::DevFoldAll => self.fold_all_developments(),
@@ -11445,6 +11615,15 @@ impl TriApp {
         }
         // Pile de développements repliée : le nombre de développements, en haut à droite
         // (le nombre d'images d'une pile de rafale est en haut à gauche).
+        // Badge « n dév. » et pastille « replier » sous les pastilles de couleur quand il y
+        // en a (retour du 31/10/2026 : ils se superposaient).
+        let has_colors = !self
+            .folder
+            .notes
+            .notes(&self.files[index].path)
+            .colors
+            .is_empty();
+        let below = if has_colors { g.marks + 6.0 } else { 0.0 };
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info
@@ -11462,7 +11641,7 @@ impl TriApp {
             );
             let at = pos2(
                 rect.max.x - g.padding - 2.0 - label.size().x,
-                rect.min.y + g.padding + 2.0,
+                rect.min.y + g.padding + 2.0 + below,
             );
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, dev_mark);
@@ -11488,7 +11667,7 @@ impl TriApp {
             let back = Rect::from_min_size(
                 pos2(
                     rect.max.x - g.padding - 2.0 - side,
-                    rect.min.y + g.padding + 2.0,
+                    rect.min.y + g.padding + 2.0 + below,
                 ),
                 vec2(side, side),
             );
@@ -14781,6 +14960,62 @@ mod tests {
     }
 
     #[test]
+    fn stack_keys_apply_to_the_developments_too() {
+        // Harmonisation du 31/10/2026 : sans pile de rafale, `s`, `((`, `))`, `(`, `)` et le
+        // mode pile visent la pile de développements de la photo.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().metadata_panel = false;
+        assert_eq!(selected_name(&h), "img0.jpg");
+        assert_eq!(h.state().stacks.shown.len(), 3, "pile repliée");
+        // `((` ouvre, `))` ferme ; `s` bascule.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::StackOpen);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 5, "développements dépliés");
+        h.state_mut().perform(&ctx, Action::StackOpen);
+        assert!(h.state().hint.is_some(), "plus rien à ouvrir");
+        h.state_mut().perform(&ctx, Action::StackClose);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "repliés");
+        press(&mut h, Key::S, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 5);
+        press(&mut h, Key::S, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3);
+        // `)` : le dernier développement, `(` : la photo (montrés à la place de la
+        // couverture).
+        h.state_mut().perform(&ctx, Action::StackLast);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg");
+        h.state_mut().perform(&ctx, Action::StackFirst);
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        // Plein écran, mode pile : → parcourt les développements, ← revient.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert!(h.state().stacking, "mode pile");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg");
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
     fn the_view_buttons_step_through_the_developments() {
         // #240 : en plein écran, les boutons ‹‹ ›› passent au développement précédent /
         // suivant de la photo, pas à la photo voisine ; absents sans développement.
@@ -14893,13 +15128,13 @@ mod tests {
         h.get_by_label(&badge);
         press(&mut h, Key::Q, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i);
-        // Maj+V déplie : les deux vignettes, cadrées.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        // `s` déplie (comme une pile, 31/10/2026) : les deux vignettes, cadrées.
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
         assert!(h.state().stacks.in_unfolded_developments(i));
         assert!(h.query_by_label(&badge).is_none());
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
         assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
@@ -14909,7 +15144,7 @@ mod tests {
             h.query_by_label(&fold_tip).is_none(),
             "repliée : pas de pastille"
         );
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(
             h.query_all_by_label(&fold_tip).count(),
@@ -14921,7 +15156,7 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 3, "repliée au clic");
         assert!(h.state().dev_preferred.is_empty());
         // Alt+clic : replier en gardant ce développement (le clone) comme couverture.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         h.get_all_by_label(&fold_tip)
             .nth(1)
@@ -14945,15 +15180,20 @@ mod tests {
             h.state().dev_preferred.is_empty(),
             "la photo : plus de préféré"
         );
-        // Ctrl+Maj+V replie toutes les piles de développements.
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        // Maj+S replie toutes les piles, développements compris (31/10/2026), puis les
+        // redéplie toutes.
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
-        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::S, Modifiers::SHIFT);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3, "tout replié");
-        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
-        assert!(h.state().hint.is_some(), "déjà tout replié : dit");
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 4, "tout déplié");
+        press(&mut h, Key::S, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3);
         press(&mut h, Key::Q, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i, "retour sur le clone");
         press(&mut h, Key::Num4, Modifiers::SHIFT);
@@ -18445,6 +18685,9 @@ mod tests {
         assert!(h.query_by_label_contains("3 images vers").is_some());
         press(&mut h, Key::Escape, Modifiers::NONE);
         // Plein écran, mode pile : `)` la dernière, `(` la première ; Maj+Fin, Maj+Début.
+        // `(` et `)` commencent aussi `((` / `))` (31/10/2026) : sans délai d'attente ici.
+        h.state_mut().sequencer =
+            crate::actions::Sequencer::new(Duration::from_secs(60)).with_ambiguous(Duration::ZERO);
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         bracket(&mut h);
@@ -18483,7 +18726,9 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         let cover = h.state().stacks.visible(h.state().selected);
         assert_eq!(h.state().selected, cover, "la couverture, visible");
-        // Piles désactivées : expliqué, rien d'autre.
+        // Piles désactivées : expliqué, rien d'autre (`d` attend de nouveau sa suite).
+        h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
+            .with_ambiguous(Duration::from_secs(60));
         h.state_mut().stacking = false;
         press(&mut h, Key::D, Modifiers::NONE);
         bracket(&mut h);
@@ -18494,7 +18739,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .0
-                .contains("Piles désactivées")
+                .contains("Pas de pile ici")
         );
     }
 

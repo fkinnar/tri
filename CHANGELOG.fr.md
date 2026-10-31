@@ -4,6 +4,16 @@
 
 ## À venir
 
+- **Mêmes touches pour les piles de rafale et de développements** : `s`, `(` `)`, `Maj+S`,
+  `d)` `y)` et les flèches du mode pile agissent sur la rafale si les piles sont actives
+  et qu'elle compte plusieurs photos, sinon sur les développements de la photo. Nouveaux
+  **`((`** : ouvre le niveau suivant (la rafale repliée, puis les développements) et
+  **`))`** : ferme le plus intérieur. `Maj+V` et `Ctrl+Maj+V` perdent leur touche par
+  défaut (`core.dev.toggle`, `core.dev.fold_all` restent réglables dans `[keys]`). Les
+  développements d'une photo restent désormais dans sa pile de rafale (la similarité
+  coupait entre eux, et la pile de développements disparaissait dès que les piles étaient
+  actives). Les pastilles « N dév. » et « replier » passent sous les pastilles de couleur
+  au lieu de les recouvrir.
 - **Générer les sidecars de notes manquants depuis l'interface** (suite de #253) : une
   icône « sidecar » dans la boîte du clic droit d'une vignette (la sélection) et « Générer
   les sidecars… » dans le menu du clic droit du dossier ouvert ; la boîte propose tous les

@@ -410,14 +410,22 @@ system one ("cold" measurements, experiments).
   the thumbnail info, Shift+T, where it was truncated: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
-  `Shift+V` unfolds / folds, `Shift+W` / `Shift+Q` go to the next / previous development
+  `s` unfolds / folds (like a stack: harmonisation of 2026-10-31, see below), `Shift+W` /
+  `Shift+Q` go to the next / previous development
   (wrapping; a folded stack shows it instead of its cover, in the grid as in full screen,
   ‹‹ ›› buttons of the bar); `Shift+Enter` on a development makes it the **preferred**
   one (cover; on the photo itself: no preferred one any more), **without toggling**
   (2026-10-31: doing it again removes nothing). Unfolded, each thumbnail carries a "fold"
   badge (`marks::fold`, 2026-10-31, user request: nothing folded with the mouse): click =
-  fold, **Alt+click** = fold and keep this development as the cover; `Ctrl+Shift+V`
-  (`core.dev.fold_all`) folds every development stack;
+  fold, **Alt+click** = fold and keep this development as the cover; `Shift+S` unfolds
+  or folds every stack, bursts and developments. **Same keys for both kinds of stacks**
+  (2026-10-31, user request: "the notions are close"): `s`, `(` `)`, `Shift+S`, `d)` `y)`
+  and the stack mode (`Ctrl+S`, ← →) target the burst when stacks are on and it holds
+  several photos, else the photo's developments (`TriApp::applicable_stack`, the
+  `Shift+Enter` rule). `((` opens the next level (the folded burst, else the
+  developments) and `))` closes the innermost one (user's idea: parentheses nest like
+  stacks; never `[` `]` nor `{` `}`, Alt+Shift on macOS). `core.dev.toggle` and
+  `core.dev.fold_all` keep no default key;
   **Two-level deletion** (2026-10-30): `x` / Delete on a development removes only it (a
   clone, a copy or the main RapidRAW one: its file to the trash; the main darktable one:
   its XMP rewritten without the history, notes kept, see `files.md`), the photo stays;
@@ -885,9 +893,10 @@ effect: they follow the chosen set.
 | `core.file.copy` / `core.file.move` | Ctrl+C / Ctrl+X | y / Ctrl+X |
 | `core.file.copy_stack` / `delete_stack` | Ctrl+Shift+C / Shift+Delete | y) / d) |
 | `core.stack.first` / `core.stack.last` | Shift+Home / Shift+End | ( / ) |
+| `core.stack.open` / `core.stack.close` | ( ( / ) ) | ( ( / ) ) |
 | `core.stack.enter` | Ctrl+Shift+S | Ctrl+Shift+S |
-| `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Shift+V / Shift+W / Shift+Q | Shift+V / Shift+W / Shift+Q |
-| `core.dev.fold_all` | Ctrl+Shift+V | Ctrl+Shift+V |
+| `core.dev.next` / `core.dev.prev` | Shift+W / Shift+Q | Shift+W / Shift+Q |
+| `core.dev.toggle` / `core.dev.fold_all` | — (`s`, `Shift+S` do it) | — |
 | `core.file.delete` | Delete, Backspace | x, Delete, Backspace |
 | `core.file.delete_photo` | Ctrl+Delete, Ctrl+Backspace | dd, Ctrl+Delete, Ctrl+Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Shift+Z |
