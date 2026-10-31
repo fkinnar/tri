@@ -44,5 +44,7 @@ lignes, commentaires et fins de ligne (`\r\n` sous Windows), est réécrit tel q
   `IMG.RAF.arp` comme développement principal (pas de clones dans ces logiciels) ;
 - [develop.md](develop.md) : le rendu par `rawtherapee-cli` / `ART-cli`.
 
-Vérifié sur les docs et pages de manuel (RawPedia, `ART.1`) ; à confirmer sur de vrais
-profils des deux logiciels (testeurs).
+Vérifié sur les docs et pages de manuel (RawPedia, `ART.1`), puis **par l'utilisateur
+sur RawTherapee 5.13** (Linux Mint, 31/10/2026) : étoiles, couleur et `InTrash` (rejet)
+écrits par `tri` sont lus par son explorateur, dans les deux sens. ART, même format :
+à confirmer à l'usage.

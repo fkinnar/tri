@@ -43,5 +43,7 @@ endings (`\r\n` on Windows), is written back as is.
   `IMG.RAF.arp` as the main development (no clones in these programs);
 - [develop.md](develop.md): the render by `rawtherapee-cli` / `ART-cli`.
 
-Checked against the docs and man pages (RawPedia, `ART.1`); to be confirmed on real
-profiles from both programs (testers).
+Checked against the docs and man pages (RawPedia, `ART.1`), then **by the user on
+RawTherapee 5.13** (Linux Mint, 2026-10-31): stars, colour and `InTrash` (rejection)
+written by `tri` are read by its browser, both ways. ART, same format: to be confirmed in
+use.

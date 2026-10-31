@@ -3564,10 +3564,10 @@ impl TriApp {
     /// Ouvre la boîte « Générer les sidecars » sur `images`, titrée `title`, avec la
     /// simulation pour « tous les logiciels ».
     fn open_sidecars_dialog(&mut self, images: Vec<PathBuf>, title: String, at: egui::Pos2) {
-        let preview =
-            self.folder
-                .notes
-                .generate(&images, &Self::sidecar_formats(None), true, false);
+        let preview = self
+            .folder
+            .notes
+            .generate(&images, &self.sidecar_formats(None), true, false);
         self.sidecars_dialog = Some(SidecarsDialog {
             images,
             title,
@@ -3578,11 +3578,20 @@ impl TriApp {
         });
     }
 
-    /// Formats visés par un choix de la boîte : un identifiant, ou tous.
-    fn sidecar_formats(choice: Option<&str>) -> Vec<&'static dyn tri::sidecars::Format> {
+    /// Formats visés par un choix de la boîte : un identifiant, ou tous ceux des
+    /// logiciels installés (le XMP toujours ; retour du 31/10/2026 : ART était proposé
+    /// sans être là, la liste suit celle des rendus).
+    fn sidecar_formats(&self, choice: Option<&str>) -> Vec<&'static dyn tri::sidecars::Format> {
         match choice {
             Some(id) => tri::sidecars::by_id(id).into_iter().collect(),
-            None => tri::sidecars::formats().to_vec(),
+            None => {
+                let installed = self.developers.engines();
+                tri::sidecars::formats()
+                    .iter()
+                    .copied()
+                    .filter(|f| f.engine().is_none_or(|e| installed.contains(&e)))
+                    .collect()
+            }
         }
     }
 
@@ -3605,6 +3614,7 @@ impl TriApp {
         };
         let mut go = false;
         let mut cancel = false;
+        let available = self.sidecar_formats(None);
         let modal = modal_at("sidecars_dialog", at)
             .title(title)
             .show(ctx, |ui| {
@@ -3612,7 +3622,7 @@ impl TriApp {
                     .selected_text(name(choice))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut choice, None, name(None));
-                        for f in tri::sidecars::formats() {
+                        for f in &available {
                             ui.selectable_value(&mut choice, Some(f.id()), name(Some(f.id())));
                         }
                     });
@@ -3651,7 +3661,7 @@ impl TriApp {
             let Some(dialog) = self.sidecars_dialog.take() else {
                 return;
             };
-            let formats = Self::sidecar_formats(dialog.choice);
+            let formats = self.sidecar_formats(dialog.choice);
             let done = self
                 .folder
                 .notes
@@ -3679,12 +3689,14 @@ impl TriApp {
         {
             d.choice = choice;
             d.rewrite = rewrite;
-            d.preview = self.folder.notes.generate(
-                &d.images,
-                &Self::sidecar_formats(choice),
-                true,
-                rewrite,
-            );
+            let formats = match choice {
+                Some(id) => tri::sidecars::by_id(id).into_iter().collect(),
+                None => available.clone(),
+            };
+            d.preview = self
+                .folder
+                .notes
+                .generate(&d.images, &formats, true, rewrite);
         }
     }
 
@@ -17343,9 +17355,14 @@ mod tests {
     #[test]
     fn the_sidecars_dialog_creates_the_missing_ones_for_the_chosen_software() {
         // Boîte « Générer les sidecars » (31/10/2026) : RapidRAW choisi, la photo notée
-        // reçoit son `.rrdata`, celle sans note non ; le compte est annoncé avant.
+        // reçoit son `.rrdata`, celle sans note non ; le compte est annoncé avant. La
+        // liste ne propose que les logiciels installés (ici RapidRAW et RawTherapee, pas
+        // ART), comme celle des rendus.
         let (mut h, dir) = harness();
         let photos = dir.path().join("photos");
+        h.state_mut().developers = tri::develop::Developers::none()
+            .with(Arc::new(FakeDeveloper(tri::develop::Engine::RapidRaw)))
+            .with(Arc::new(FakeDeveloper(tri::develop::Engine::RawTherapee)));
         press(&mut h, Key::Num3, Modifiers::NONE);
         // Une seule liste déroulante : celle de la boîte.
         h.state_mut().metadata_panel = false;
@@ -17362,11 +17379,16 @@ mod tests {
                 .preview
                 .created
                 .len(),
-            3,
-            "tous les logiciels : .rrdata, .pp3 et .arp de la photo notée"
+            2,
+            "tous les logiciels installés : .rrdata et .pp3 de la photo notée"
         );
         h.get_by_role(egui::accesskit::Role::ComboBox).click();
         h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("sidecars-format", engine = "ART", id = "arp"))
+                .is_none(),
+            "ART absent : pas proposé"
+        );
         h.get_by_label(&t!("sidecars-format", engine = "RapidRAW", id = "rrdata"))
             .click();
         h.run_steps(2);
@@ -17398,8 +17420,8 @@ mod tests {
                 .preview
                 .created
                 .len(),
-            2,
-            "il manque encore le .pp3 et le .arp"
+            1,
+            "il manque encore le .pp3"
         );
         h.get_by_label(&t!("sidecars-rewrite")).click();
         h.run_steps(2);
