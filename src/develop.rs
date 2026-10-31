@@ -188,12 +188,18 @@ impl DevelopedRule {
     /// Vrai si `image` vérifie le filtre : un développement d'un logiciel coché, ou,
     /// aucun coché, aucun développement des logiciels de `available`.
     pub fn accepts(&self, image: &Path, available: &[Engine]) -> bool {
+        // Un développement : son logiciel. Une photo : ses développements enregistrés
+        // (qui portent son sidecar : `Engine::sidecar` ne le lui rend plus, et le filtre
+        // ne gardait que le développement, orphelin dans la grille ; 31/10/2026), ou un
+        // sidecar à elle.
+        let developed_by = |e: Engine| match crate::developments::get(image) {
+            Some(d) => d.engine == e,
+            None => crate::developments::has(image, e) || e.sidecar(image).is_some(),
+        };
         if self.engines.is_empty() {
-            return !available.iter().any(|e| e.sidecar(image).is_some());
+            return !available.iter().any(|&e| developed_by(e));
         }
-        self.wanted(available)
-            .iter()
-            .any(|e| e.sidecar(image).is_some())
+        self.wanted(available).iter().any(|&e| developed_by(e))
     }
 
     /// Logiciel du développement à montrer pour `image` : le plus récent des logiciels
@@ -776,12 +782,10 @@ pub fn find_profile_cli(engine: Engine, setting: &str) -> Option<Cli> {
         .or_else(flatpak)
 }
 
-/// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il est de darktable : écrit par
-/// darktable (`darktable:xmp_version`), même sans historique, ou avec un historique non
-/// vide (`darktable:history_end` > 0). Retour du 30/10/2026 : une image importée dans
-/// darktable mais pas retouchée (un clone vierge) a son rendu darktable par défaut, qui
-/// n'est pas celui de LibRaw. Un sidecar écrit par `tri` seul (notes) ou par un autre
-/// logiciel n'en a pas.
+/// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il décrit un développement
+/// ([`crate::developments::is_darktable`] : un historique non vide). Revu le 31/10/2026 :
+/// une image importée dans darktable sans retouche (ou seulement notée) n'est plus
+/// « développée », la règle est la même partout.
 pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
     use std::sync::{Mutex, OnceLock};
     type Memo = std::collections::HashMap<PathBuf, ((u64, u128), bool)>;
@@ -804,9 +808,9 @@ pub fn darktable_sidecar(image: &Path) -> Option<PathBuf> {
         });
         return None;
     }
-    let developed = std::fs::read_to_string(&sidecar).is_ok_and(|text| {
-        text.contains("darktable:xmp_version") || history_end(&text).is_some_and(|end| end > 0)
-    });
+    // La même règle que les piles (`developments::is_darktable`, 31/10/2026).
+    let developed = std::fs::read_to_string(&sidecar)
+        .is_ok_and(|text| crate::developments::is_darktable(&text));
     if let Ok(mut m) = memo.lock() {
         m.insert(sidecar.clone(), (now, developed));
     }
@@ -820,15 +824,6 @@ pub fn darktable_sidecar_path(image: &Path) -> Option<PathBuf> {
     Some(image.with_file_name(name))
 }
 
-/// Valeur de `darktable:history_end`, en attribut ou en élément.
-fn history_end(xmp: &str) -> Option<u32> {
-    let tag = "darktable:history_end";
-    let at = xmp.find(tag)? + tag.len();
-    let rest = xmp[at..].trim_start_matches(['=', '"', '>', ' ']);
-    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-    digits.parse().ok()
-}
-
 /// Modules darktable qui changent la taille de l'image autrement qu'un recadrage simple
 /// (redressement et perspective, ancien recadrage, pixels pivotés ou mis à l'échelle de
 /// certains capteurs) : avec l'un d'eux actif, la taille du développé reste inconnue.
@@ -840,7 +835,7 @@ const RESIZING: [&str; 4] = ["ashift", "clipping", "rotatepixels", "scalepixels"
 /// l'orientation du module `flip`. `None` si un module de [`RESIZING`] est actif ou si un
 /// paramètre est illisible : rien plutôt qu'une taille fausse (demandé le 20/10/2026).
 pub fn developed_size(xmp: &str, size: (u32, u32)) -> Option<(u32, u32)> {
-    let end = history_end(xmp)?;
+    let end = crate::developments::history_end(xmp)?;
     // Dernier état de chaque module (instance principale), dans l'ordre de l'historique.
     let mut last: std::collections::HashMap<String, (u32, bool, String)> =
         std::collections::HashMap::new();
@@ -990,6 +985,15 @@ pub fn render_stamp(sidecar: &Path) -> String {
         String::from_utf8(bytes.clone())
             .ok()
             .map(|text| crate::pp3::development_content(&text).into_bytes())
+            .unwrap_or(bytes)
+    } else if extension("rrdata") {
+        // RapidRAW : les réglages seuls (`adjustments`) ; la note, le drapeau et les
+        // étiquettes que `tri` y écrit ne refont pas le rendu (retour du 31/10/2026 :
+        // noter vingt images relançait vingt développements en fond).
+        String::from_utf8(bytes.clone())
+            .ok()
+            .and_then(|text| crate::rrdata::adjustments(&text).ok())
+            .map(|adjustments| adjustments.to_string().into_bytes())
             .unwrap_or(bytes)
     } else {
         bytes
@@ -1592,7 +1596,11 @@ mod tests {
         let image = dir.path().join("DSCF0002.RAF");
         written(&image, b"raw").unwrap();
         let sidecar = dir.path().join("DSCF0002.RAF.xmp");
-        written(&sidecar, r#"<rdf:Description darktable:xmp_version="5"/>"#).unwrap();
+        written(
+            &sidecar,
+            r#"<rdf:Description darktable:xmp_version="5" darktable:history_end="1"/>"#,
+        )
+        .unwrap();
         assert_eq!(Engine::Darktable.sidecar(&image), Some(sidecar.clone()));
         let development = crate::developments::Development {
             engine: Engine::Darktable,
@@ -1626,18 +1634,15 @@ mod tests {
         assert_eq!(darktable_sidecar(&image), None);
         written(&sidecar, r#"<rdf:Description darktable:history_end="0"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), None, "historique vide");
-        // Écrit par darktable, sans historique (importée, clone vierge) : son rendu par
-        // défaut, différent de LibRaw (retour du 30/10/2026).
+        // Importé dans darktable sans retouche (31/10/2026) : pas un développement.
+        crate::cache::forget_stamps([sidecar.as_path()]);
         written(
             &sidecar,
             r#"<rdf:Description darktable:xmp_version="5" darktable:history_end="0"/>"#,
         )
         .unwrap();
-        assert_eq!(
-            darktable_sidecar(&image),
-            Some(sidecar.clone()),
-            "par défaut"
-        );
+        assert_eq!(darktable_sidecar(&image), None, "importé, non retouché");
+        crate::cache::forget_stamps([sidecar.as_path()]);
         written(&sidecar, r#"<rdf:Description darktable:history_end="27"/>"#).unwrap();
         assert_eq!(darktable_sidecar(&image), Some(sidecar.clone()));
         written(&sidecar, "<darktable:history_end>4</darktable:history_end>").unwrap();
@@ -1687,13 +1692,20 @@ mod tests {
             developed,
             "exposition changée : autre rendu"
         );
-        // Un autre format (RapidRAW) : tout le contenu.
+        // RapidRAW : les réglages seuls ; la note ne refait pas le rendu (31/10/2026).
         let rr = dir.path().join("DSCF0001.RAF.rrdata");
-        written(&rr, "{\"exposure\": 1}").unwrap();
+        written(&rr, r#"{"rating": 0, "adjustments": {"exposure": 1}}"#).unwrap();
         let before = render_stamp(&rr);
         std::thread::sleep(Duration::from_millis(10));
-        written(&rr, "{\"exposure\": 2}").unwrap();
-        assert_ne!(render_stamp(&rr), before);
+        written(
+            &rr,
+            r#"{"rating": 4, "flag": "pick", "adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
+        assert_eq!(render_stamp(&rr), before, "note posée : même rendu");
+        std::thread::sleep(Duration::from_millis(10));
+        written(&rr, r#"{"rating": 4, "adjustments": {"exposure": 2}}"#).unwrap();
+        assert_ne!(render_stamp(&rr), before, "réglage changé : autre rendu");
     }
 
     #[test]
@@ -1732,6 +1744,41 @@ mod tests {
         assert!(read("default = \"photoshop\"").is_err());
         assert_eq!(Preference::Engine(Engine::Darktable).id(), "darktable");
         assert_eq!(Engine::from_id("darktable"), Some(Engine::Darktable));
+    }
+
+    #[test]
+    fn the_developed_filter_keeps_the_photo_with_its_registered_developments() {
+        // 31/10/2026 : le développement enregistré porte le sidecar de la photo, et le
+        // filtre ne gardait que lui ; la photo doit passer avec lui.
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join("DSCF0001.RAF");
+        let sidecar = dir.path().join("DSCF0001.RAF.xmp");
+        written(&photo, b"raw").unwrap();
+        written(&sidecar, r#"<rdf:Description darktable:history_end="2"/>"#).unwrap();
+        let dev = crate::developments::Development {
+            engine: Engine::Darktable,
+            copy: crate::developments::Copy::Main,
+            photo: photo.clone(),
+            sidecar: sidecar.clone(),
+        };
+        crate::developments::set_for(&photo, std::slice::from_ref(&dev));
+        let all = [Engine::Darktable, Engine::RapidRaw];
+        let dt = DevelopedRule {
+            engines: vec![Engine::Darktable],
+        };
+        assert!(dt.accepts(&photo, &all), "la photo, par son développement");
+        assert!(dt.accepts(&dev.path(), &all), "le développement lui-même");
+        let rr = DevelopedRule {
+            engines: vec![Engine::RapidRaw],
+        };
+        assert!(!rr.accepts(&photo, &all));
+        assert!(!rr.accepts(&dev.path(), &all));
+        let none = DevelopedRule::default();
+        assert!(
+            !none.accepts(&photo, &all),
+            "développée : pas « sans développement »"
+        );
+        crate::developments::set_for(&photo, &[]);
     }
 
     #[test]

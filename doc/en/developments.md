@@ -36,7 +36,10 @@ on demand, `b` cycles through the renders).
 
 - `find(photo, names, images, is_darktable, is_rapidraw)`: a photo's developments from
   the names of its folder's files, in order: darktable main (if its XMP is darktable's:
-  `is_darktable` reads its head, `darktable:xmp_version` or a history), clones by number
+  `is_darktable` reads its head: a non-empty history, `darktable:history_end` > 0 as an
+  attribute or an element; **the only rule**, the same as the renderer and the filter
+  since 2026-10-31: an XMP merely imported into darktable or written by `tri` for the
+  ratings is not one), clones by number
   (darktable's too: an orphan `IMG_01.RAF.xmp` written by another software, digiKam for
   instance, is not a clone), RapidRAW main (if its `.rrdata` has adjustments:
   `is_rapidraw`, `rrdata::file_is_development`; without, it is a notes sidecar,

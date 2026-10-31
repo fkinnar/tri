@@ -4,6 +4,32 @@
 
 ## À venir
 
+- **Corrigé : le filtre « développées » montrait des photos seulement notées, comme des
+  développements darktable orphelins** (retour du jour). Deux causes : les piles et le
+  rendu / filtre n'avaient pas la même règle pour « un développement darktable », et le
+  filtre jugeait la photo et son développement séparément (le développement porte le
+  sidecar de la photo, seul lui passait). Une seule règle désormais, partout : un XMP
+  darktable n'est un développement qu'avec un **historique non vide**
+  (`darktable:history_end` > 0, en attribut ou en élément) ; un XMP seulement importé
+  dans darktable, ou écrit par `tri` pour les notes, n'en est pas un ; et le filtre garde
+  une photo avec ses développements des logiciels cochés.
+- **Corrigé : noter des photos relançait le lot de développements en fond** (retour du
+  jour : vingt notes, vingt relances). RapidRAW installé, une note crée un `.rrdata`, que
+  la surveillance du dossier prenait pour un nouveau développement : relecture du dossier
+  et relance du lot. Un `.rrdata` qui n'a que des notes ne compte plus.
+- **Corrigé : noter une photo développée dans RapidRAW refaisait son rendu en fond**
+  (retour du jour : vingt notes, vingt développements). La clé de cache du rendu d'un
+  `.rrdata` ne couvre plus que ses réglages, comme le XMP darktable ignore les étiquettes
+  de couleur et les profils RawTherapee / ART ignorent `[General]`.
+- **Infos des vignettes masquées d'elles-mêmes sur les petites cellules** (`[gui.grid]
+  info_min_cell`, 110 points) : nom, format et marques étaient illisibles ; le réglage
+  Maj+T ne bouge pas, les infos reviennent en agrandissant les vignettes.
+- **Vignettes : marques vides** (`[gui.grid] empty_marks`, remplace `neutral_flag`) : là
+  où rien n'est posé, un contour gris clair d'étoile, de pastille de couleur et du cercle
+  du drapeau neutre montre chaque information et où cliquer.
+- Vignettes : liseré sombre de 2 points uniforme autour des étoiles (un contour tracé,
+  une étoile agrandie amincissait les pointes) et des pastilles ; le sélecteur de marque
+  est à la largeur de son contenu.
 - **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
   nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,

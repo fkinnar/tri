@@ -399,7 +399,11 @@ mod tests {
         }
         // Le XMP de la photo : écrit par darktable, un développement ; par tri seul
         // (notes), non.
-        std::fs::write(d.join("IMG.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        std::fs::write(
+            d.join("IMG.RAF.xmp"),
+            r#"<x darktable:xmp_version="5" darktable:history_end="1"/>"#,
+        )
+        .unwrap();
         // Le `.rrdata` principal : avec des réglages, un développement (sans : des notes
         // seules, 31/10/2026) ; une copie virtuelle en est toujours un.
         std::fs::write(
@@ -408,7 +412,11 @@ mod tests {
         )
         .unwrap();
         for clone in ["IMG_01.RAF.xmp", "IMG_02.RAF.xmp"] {
-            std::fs::write(d.join(clone), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+            std::fs::write(
+                d.join(clone),
+                r#"<x darktable:xmp_version="5" darktable:history_end="1"/>"#,
+            )
+            .unwrap();
         }
         // Un sidecar orphelin d'un autre logiciel : pas un clone.
         std::fs::write(d.join("IMG_04.RAF.xmp"), r#"<x xmp:Rating="3"/>"#).unwrap();
@@ -445,7 +453,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let d = dir.path();
         image::RgbImage::new(6, 4).save(d.join("a.jpg")).unwrap();
-        std::fs::write(d.join("a_01.jpg.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        std::fs::write(
+            d.join("a_01.jpg.xmp"),
+            r#"<x darktable:xmp_version="5" darktable:history_end="1"/>"#,
+        )
+        .unwrap();
         scan(d, 1).unwrap();
         let clone = d.join("a@dt-01.jpg");
         let bitmap = crate::flat::decode(&clone).unwrap();
