@@ -424,8 +424,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   logiciel, son développement principal ; à défaut la photo), et la **bobine** des
   développements (l'icône du filtre « développées », dans la couleur du texte de la
   cellule, sans fond : retour du 31/10/2026, « N dév. » en pastille colorée accrochait
-  l'œil ; le nombre est dans sa bulle) en haut à droite, sous la rangée des couleurs (le
-  nombre d'images d'une rafale est en haut à gauche ; masquée avec les infos des
+  l'œil ; le nombre est dans sa bulle) en haut à droite, sous la première pastille de
+  couleur, centrée sur elle et de sa taille (`marks::development_mark_rect`, même
+  géométrie que la pastille ; le nombre d'images d'une rafale est en haut à gauche ;
+  masquée avec les infos des
   vignettes, Maj+T : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
   lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `s` déplie / replie (comme une pile :

@@ -11743,7 +11743,6 @@ impl TriApp {
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
-        let reel = g.marks * 1.4;
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11758,15 +11757,15 @@ impl TriApp {
         // des pastilles de couleur, toujours à la même hauteur (retours du 31/10/2026 :
         // elles se superposaient, puis sautaient selon qu'il y avait une couleur ou non ;
         // puis la pastille « n dév. » colorée accrochait : juste le dessin, le nombre dans
-        // la bulle).
-        let below = g.marks + 6.0;
-        let reel_rect = Rect::from_min_size(
-            pos2(
-                rect.max.x - g.padding - 2.0 - reel,
-                rect.min.y + g.padding + 2.0 + below,
-            ),
-            vec2(reel, reel),
+        // la bulle ; enfin centrée sur la pastille, de sa taille).
+        // Zone de la vignette dans la cellule (sous la bande d'infos quand elle est visible).
+        let info = self.grid_info_shown();
+        let bottom = if info { g.label + 4.0 } else { g.padding };
+        let image_area = Rect::from_min_max(
+            rect.min + vec2(g.padding, g.padding),
+            pos2(rect.max.x - g.padding, rect.max.y - bottom),
         );
+        let reel_rect = marks::development_mark_rect(image_area, g.marks);
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info_shown()
@@ -11850,12 +11849,6 @@ impl TriApp {
             painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
-        let info = self.grid_info_shown();
-        let bottom = if info { g.label + 4.0 } else { g.padding };
-        let image_area = Rect::from_min_max(
-            rect.min + vec2(g.padding, g.padding),
-            pos2(rect.max.x - g.padding, rect.max.y - bottom),
-        );
         let file = self.files[index].clone();
         match (
             self.thumbnail_texture(ctx, index, deadline),
@@ -14614,10 +14607,14 @@ mod tests {
         settings.gui.key_ambiguous_timeout_ms = 0;
         // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
         settings.gui.profile = crate::actions::Profile::Both;
-        // Ni darktable ni RapidRAW dans les tests (installés ou non sur la machine) : un
+        // Ni darktable, ni RapidRAW, ni RawTherapee, ni ART dans les tests (installés ou
+        // non sur la machine : RawTherapee et ART le sont sur celle de développement
+        // depuis le 31/10/2026, et leurs profils de notes se créaient d'eux-mêmes) : un
         // test les simule là où il le faut.
         settings.develop.darktable = String::new();
         settings.develop.rapidraw = String::new();
+        settings.develop.rawtherapee = String::new();
+        settings.develop.art = String::new();
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();

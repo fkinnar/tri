@@ -25,15 +25,17 @@
   info_min_cell`, 110 points) : nom, format et marques étaient illisibles ; le réglage
   Maj+T ne bouge pas, les infos reviennent en agrandissant les vignettes.
 - **Vignettes : marques vides** (`[gui.grid] empty_marks`, remplace `neutral_flag`) : là
-  où rien n'est posé, un contour gris clair d'étoile, de pastille de couleur et du cercle
-  du drapeau neutre montre chaque information et où cliquer.
+  où rien n'est posé, un contour sombre (`[gui.colors] empty_mark` ; gris clair d'abord,
+  invisible sur la case sélectionnée) d'étoile, de pastille de couleur et du cercle du
+  drapeau neutre montre chaque information et où cliquer.
 - Vignettes : liseré sombre de 2 points uniforme autour des étoiles (un contour tracé,
   une étoile agrandie amincissait les pointes) et des pastilles ; le sélecteur de marque
   est à la largeur de son contenu.
 - **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
   nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,
-  sans fond.
+  sans fond. Les deux sont centrées sur la pastille de couleur au-dessus, de sa taille
+  apparente.
 - Bandeau de notation et sélecteurs : plus de cercle d'accent autour de la couleur posée,
   la pastille pleine face aux autres fondues suffit, comme les étoiles et les drapeaux.
   L'anneau du drapeau neutre est dessiné un peu plus petit, pour paraître de la taille des

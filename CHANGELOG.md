@@ -24,13 +24,15 @@
   points): name, format and marks were unreadable; the Shift+T setting does not change,
   the info comes back when enlarging the thumbnails.
 - **Thumbnails: empty marks** (`[gui.grid] empty_marks`, replaces `neutral_flag`): where
-  nothing is set, a light grey outline of a star, a colour dot and the neutral flag's
-  circle show every piece of information and where to click.
+  nothing is set, a dark outline (`[gui.colors] empty_mark`; light grey at first,
+  invisible on the selected cell) of a star, a colour dot and the neutral flag's circle
+  shows every piece of information and where to click.
 - Thumbnails: a uniform two-point dark rim around the stars (a traced outline, the
   points thinned a scaled star) and the dots; the mark picker is as wide as its content.
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the
   cell's text colour, no coloured badge) replaces "N dev."; the count is in its tooltip;
-  the "fold" icon of an unfolded stack is drawn the same way, without background.
+  the "fold" icon of an unfolded stack is drawn the same way, without background. Both
+  are centred on the colour dot above them, at its apparent size.
 - Rating bar and pickers: no more accent ring around the chosen colour, the full dot
   against the faded ones is enough, like the stars and flags. The neutral flag's ring is
   drawn a little smaller, so that it looks the size of the accepted / rejected badges,
