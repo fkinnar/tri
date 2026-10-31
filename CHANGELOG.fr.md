@@ -11,6 +11,11 @@
   posée, annulée ou modifiée ailleurs retrie la grille aussitôt, la sélection suit
   l'image. Les couleurs s'écrivent `"red"`, `"yellow"`… en TOML et dans les vues par
   dossier enregistrées (l'ancien `"Red"` reste lu).
+- **RawTherapee / ART en AppImage sous Linux** : les AppImage récentes ne lancent que
+  l'interface ; `tri` extrait l'AppImage une fois dans son cache et lance le
+  `rawtherapee-cli` / `ART-cli` extrait avec ses bibliothèques. Une AppImage d'ART est
+  reconnue à son nom (`ART_*`), plus confondue avec celle de darktable (« art » est dans
+  « darktable »).
 - **Corrigé : le rendu RawTherapee / ART d'un développement échouait** (premier essai réel,
   31/10/2026) : le lot en fond passait à la ligne de commande le chemin virtuel du
   développement (`IMG@rt.RAF`) au lieu du fichier de la photo.
