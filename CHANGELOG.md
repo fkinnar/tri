@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Rating with the mouse on the thumbnail itself** (#257): clicking the stars, the flag or
+  the colour dots of a thumbnail opens a small picker of that group right there (the
+  rating bar's controls, split in three); a star or a flag closes it, colours stay open.
 - **RawTherapee and ART as development software**, on the same traits as darktable and
   RapidRAW: their main development (`IMG.RAF.pp3`, `IMG.RAF.arp`, no clones) shows in the
   photo's stack, is rendered on demand by `rawtherapee-cli` / `ART-cli` (found in the

@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Noter à la souris sur la vignette elle-même** (#257) : un clic sur les étoiles, le
+  drapeau ou les pastilles de couleur d'une vignette ouvre un petit sélecteur du groupe
+  concerné, à cet endroit (les contrôles du bandeau, scindés en trois) ; une étoile ou un
+  drapeau le ferme, les couleurs restent ouvertes.
 - **RawTherapee et ART comme logiciels de développement**, sur les mêmes traits que
   darktable et RapidRAW : leur développement principal (`IMG.RAF.pp3`, `IMG.RAF.arp`, sans
   clones) apparaît dans la pile de la photo, est rendu à la demande par `rawtherapee-cli`

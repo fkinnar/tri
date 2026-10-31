@@ -608,6 +608,12 @@ system one ("cold" measurements, experiments).
     it (hidden, or focus mode; issue #8: they showed twice). In full screen too, after the
     ratings: the grid's badges, blown / blocked (click: large histogram) and blurry
     (click: sharpness map; issue #9);
+  - **click on a thumbnail mark** (#257, 2026-10-31): the stars (bottom left, all five
+    slots even empty), the flag (bottom right, neutral ring included) or the colours (top
+    right) open a **small picker** of that group, right there (`mark_picker`,
+    `marks::thumbnail_mark_zones`, the bar's controls split into `flag_controls` /
+    `star_controls` / `color_controls`); a star or a flag closes it, colours stay open
+    (several to tick), Escape closes; hand cursor over the marks;
   - **right click** on a thumbnail or in full screen: **modal dialog** with the same
     controls, for the clicked (selected) image. A simple menu was not enough (feedback of
     2026-10-17): the mouse leaving the menu selected other thumbnails, while the rating
