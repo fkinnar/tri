@@ -436,6 +436,7 @@ impl NoteBook {
         images: &[PathBuf],
         formats: &[&'static dyn Format],
         dry_run: bool,
+        rewrite: bool,
     ) -> Generated {
         let mut report = Generated::default();
         for image in images {
@@ -454,23 +455,42 @@ impl NoteBook {
                 continue;
             }
             let notes = entry.notes.clone();
-            let missing: Vec<(&'static dyn Format, PathBuf)> = formats
-                .iter()
-                .copied()
-                .filter(|f| !entry.sidecars.iter().any(|s| f.owns(s)))
-                .map(|f| (f, f.new_path(image, self.convention)))
-                .collect();
-            if missing.is_empty() {
+            // Par format : le sidecar manquant à créer, ou l'existant à réécrire (`rewrite`,
+            // 31/10/2026 : « on a fait une bêtise, on veut régénérer »).
+            let mut todo: Vec<(&'static dyn Format, PathBuf, bool)> = Vec::new();
+            for &format in formats {
+                match entry.sidecars.iter().find(|s| format.owns(s)) {
+                    Some(existing) if rewrite => todo.push((format, existing.clone(), true)),
+                    Some(_) => {}
+                    None => todo.push((format, format.new_path(image, self.convention), false)),
+                }
+            }
+            if todo.is_empty() {
                 report.unchanged += 1;
                 continue;
             }
-            for (format, sidecar) in missing {
+            for (format, sidecar, existing) in todo {
+                let done = if existing {
+                    &mut report.rewritten
+                } else {
+                    &mut report.created
+                };
                 if dry_run {
-                    report.created.push(sidecar);
+                    done.push(sidecar);
                     continue;
                 }
-                match format.create(&sidecar, &notes) {
-                    Ok(()) => report.created.push(sidecar),
+                let result = if existing {
+                    // Les notes réécrites, le reste conservé (développement, mots-clés…) ;
+                    // un fichier illisible est recréé.
+                    format
+                        .write(&sidecar, &notes)
+                        .map(|_| ())
+                        .or_else(|_| format.create(&sidecar, &notes))
+                } else {
+                    format.create(&sidecar, &notes)
+                };
+                match result {
+                    Ok(()) => done.push(sidecar),
                     Err(e) => report.errors.push((image.clone(), e)),
                 }
             }
@@ -616,6 +636,8 @@ impl NoteBook {
 pub struct Generated {
     /// Sidecars créés (ou à créer, en simulation).
     pub created: Vec<PathBuf>,
+    /// Sidecars existants réécrits (ou à réécrire), mode `rewrite`.
+    pub rewritten: Vec<PathBuf>,
     /// Photos qui avaient déjà tous les sidecars demandés.
     pub unchanged: usize,
     /// Développements et photos sans notes : rien à créer.
@@ -998,22 +1020,47 @@ mod tests {
         let images: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
         let rrdata = crate::sidecars::by_id("rrdata").unwrap();
         // Simulation : A à créer ; B l'a déjà ; C sans notes, passée.
-        let dry = book.generate(&images, &[rrdata], true);
+        let dry = book.generate(&images, &[rrdata], true, false);
         assert_eq!(dry.created, [d.join("A.RAF.rrdata")]);
         assert_eq!((dry.unchanged, dry.skipped), (1, 1));
         assert!(
             !d.join("A.RAF.rrdata").exists(),
             "simulation : rien d'écrit"
         );
-        let done = book.generate(&images, &[rrdata], false);
+        let done = book.generate(&images, &[rrdata], false, false);
         assert_eq!(done.created, [d.join("A.RAF.rrdata")]);
         let created = crate::rrdata::read(&d.join("A.RAF.rrdata")).unwrap();
         assert_eq!(created, notes(3, Flag::None, &[Color::Red]));
         assert_eq!(book.sidecars(&d.join("A.RAF")).len(), 2, "relu");
         // Encore : plus rien à créer.
-        let again = book.generate(&images, &[rrdata], false);
+        let again = book.generate(&images, &[rrdata], false, false);
         assert!(again.created.is_empty());
         assert_eq!(again.unchanged, 2);
+        // Réécrire (31/10/2026) : la note remise dans les sidecars existants, le reste
+        // conservé ; un fichier illisible est recréé.
+        std::fs::write(
+            d.join("A.RAF.rrdata"),
+            br#"{"version": 1, "rating": 0, "adjustments": {"exposure": 0.7}, "extra": true}"#,
+        )
+        .unwrap();
+        std::fs::write(d.join("B.RAF.rrdata"), b"pas du JSON").unwrap();
+        crate::cache::forget_stamps([
+            d.join("A.RAF.rrdata").as_path(),
+            d.join("B.RAF.rrdata").as_path(),
+        ]);
+        let dry = book.generate(&images, &[rrdata], true, true);
+        assert_eq!(dry.rewritten.len(), 2, "A et B existent : à réécrire");
+        assert!(dry.created.is_empty());
+        let redone = book.generate(&images, &[rrdata], false, true);
+        assert_eq!(redone.rewritten.len(), 2);
+        assert!(redone.errors.is_empty(), "{:?}", redone.errors);
+        let a = std::fs::read_to_string(d.join("A.RAF.rrdata")).unwrap();
+        assert!(a.contains("\"rating\": 3") && a.contains("exposure") && a.contains("extra"));
+        assert_eq!(
+            crate::rrdata::read(&d.join("B.RAF.rrdata")).unwrap().stars,
+            5,
+            "recréé"
+        );
     }
 
     #[test]

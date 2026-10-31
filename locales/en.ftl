@@ -165,7 +165,7 @@ cli-usage =
       tri <folder> --cache-here|--cache-user [--cache FOLDER]
       tri --check-update
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
-      tri <folder> --sidecars rapidraw|xmp|all [--dry-run] [--raw|--flat] [--depth N]
+      tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
       tri <folder> --groups [--threshold X]
@@ -225,10 +225,17 @@ cli-xmp-summary = { $n } images: { $written } sidecars { $mode ->
 }, { $unchanged } unchanged, { $conflicts } conflicts, { $errors } errors
 cli-xmp-some-failed = some sidecars could not be converted
 cli-unknown-sidecar = unknown sidecar format: { $value } (rapidraw, xmp or all)
+cli-sidecar-rewritten = { $mode ->
+    [dry-run] to rewrite
+   *[write] rewritten
+}
 cli-sidecars-summary = { $n } images: { $created } sidecars { $mode ->
     [dry-run] to create
    *[write] created
-}, { $unchanged } already equipped, { $skipped } skipped (no notes, or developments), { $errors } errors
+}, { $rewritten } { $mode ->
+    [dry-run] to rewrite
+   *[write] rewritten
+}, { $unchanged } left alone (already provided), { $skipped } skipped (unrated, or developments), { $errors } errors
 cli-rename-shared-copy = (copy: shared)
 cli-delete-trash = trash:
 cli-delete-permanent = deleted:

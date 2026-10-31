@@ -862,17 +862,15 @@ sidecars-title-images = Sidecars of { $n ->
 }
 sidecars-all = Every software
 sidecars-format = { $engine } (.{ $id })
-sidecars-preview = { $created ->
-    [0] Nothing to create
-    [one] 1 sidecar to create
-   *[other] { $created } sidecars to create
-} · { $unchanged } already provided · { $skipped } skipped (unrated, or developments)
+sidecars-preview = { $created } to create · { $rewritten } to rewrite · { $unchanged } left alone (already there) · { $skipped } skipped (unrated, or developments)
+sidecars-rewrite = Also rewrite the existing sidecars
+sidecars-rewrite-tip = Their ratings are replaced by tri's; the rest (development, keywords…) is kept. An unreadable file is recreated.
+sidecars-rewrite-warning = Warning: { $n ->
+    [one] one existing sidecar will be rewritten
+   *[other] { $n } existing sidecars will be rewritten
+} (its ratings only, the rest is kept).
 sidecars-go = Generate
-sidecars-done = { $created ->
-    [0] No sidecar created
-    [one] 1 sidecar created
-   *[other] { $created } sidecars created
-}
+sidecars-done = Sidecars: { $created } created · { $rewritten } rewritten
 sidecars-done-errors = { " " }· { $n } errors: { $error }
 folder-menu-open-in = Open in { $name }
 folder-open-in-missing = { $name } cannot open a folder, or is not installed

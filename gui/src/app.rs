@@ -3528,15 +3528,16 @@ impl TriApp {
     /// Ouvre la boîte « Générer les sidecars » sur `images`, titrée `title`, avec la
     /// simulation pour « tous les logiciels ».
     fn open_sidecars_dialog(&mut self, images: Vec<PathBuf>, title: String, at: egui::Pos2) {
-        let preview = self
-            .folder
-            .notes
-            .generate(&images, &Self::sidecar_formats(None), true);
+        let preview =
+            self.folder
+                .notes
+                .generate(&images, &Self::sidecar_formats(None), true, false);
         self.sidecars_dialog = Some(SidecarsDialog {
             images,
             title,
             at,
             choice: None,
+            rewrite: false,
             preview,
         });
     }
@@ -3556,7 +3557,9 @@ impl TriApp {
             return;
         };
         let (at, title, mut choice) = (dialog.at, dialog.title.clone(), dialog.choice);
+        let mut rewrite = dialog.rewrite;
         let preview = dialog.preview.clone();
+        let warning = Color32::from(self.gui.colors.warning);
         let name = |c: Option<&'static str>| match c.and_then(tri::sidecars::by_id) {
             Some(f) => match f.engine() {
                 Some(e) => t!("sidecars-format", engine = e.name(), id = f.id()),
@@ -3578,17 +3581,30 @@ impl TriApp {
                         }
                     });
                 ui.add_space(6.0);
+                // Réécrire aussi les existants (31/10/2026 : « on a fait une bêtise, on veut
+                // régénérer ») : prévenu, rien de cassé (notes seules, fichier illisible
+                // recréé).
+                ui.checkbox(&mut rewrite, t!("sidecars-rewrite"))
+                    .on_hover_text(t!("sidecars-rewrite-tip"));
+                ui.add_space(6.0);
                 ui.weak(t!(
                     "sidecars-preview",
                     created = preview.created.len(),
+                    rewritten = preview.rewritten.len(),
                     unchanged = preview.unchanged,
                     skipped = preview.skipped
                 ));
+                if rewrite && !preview.rewritten.is_empty() {
+                    ui.colored_label(
+                        warning,
+                        t!("sidecars-rewrite-warning", n = preview.rewritten.len()),
+                    );
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     go = ui
                         .add_enabled(
-                            !preview.created.is_empty(),
+                            !preview.created.is_empty() || !preview.rewritten.is_empty(),
                             egui::Button::new(t!("sidecars-go")),
                         )
                         .clicked();
@@ -3600,11 +3616,18 @@ impl TriApp {
                 return;
             };
             let formats = Self::sidecar_formats(dialog.choice);
-            let done = self.folder.notes.generate(&dialog.images, &formats, false);
+            let done = self
+                .folder
+                .notes
+                .generate(&dialog.images, &formats, false, dialog.rewrite);
             // Le dossier a maintenant des sidecars de ce format : la politique « auto »
             // les créera aussi en notant.
             self.apply_sidecar_policy();
-            let mut text = t!("sidecars-done", created = done.created.len());
+            let mut text = t!(
+                "sidecars-done",
+                created = done.created.len(),
+                rewritten = done.rewritten.len()
+            );
             if let Some((_, error)) = done.errors.first() {
                 text.push_str(&t!(
                     "sidecars-done-errors",
@@ -3616,13 +3639,16 @@ impl TriApp {
         } else if cancel || modal.should_close() {
             self.sidecars_dialog = None;
         } else if let Some(d) = &mut self.sidecars_dialog
-            && d.choice != choice
+            && (d.choice != choice || d.rewrite != rewrite)
         {
             d.choice = choice;
-            d.preview = self
-                .folder
-                .notes
-                .generate(&d.images, &Self::sidecar_formats(choice), true);
+            d.rewrite = rewrite;
+            d.preview = self.folder.notes.generate(
+                &d.images,
+                &Self::sidecar_formats(choice),
+                true,
+                rewrite,
+            );
         }
     }
 
@@ -13979,6 +14005,8 @@ struct SidecarsDialog {
     at: egui::Pos2,
     /// Identifiant du format choisi (`None` : tous).
     choice: Option<&'static str>,
+    /// Réécrire aussi les sidecars existants (leurs notes ; le reste conservé).
+    rewrite: bool,
     /// Simulation pour le choix en cours.
     preview: tri::notes::Generated,
 }
@@ -17029,6 +17057,35 @@ mod tests {
         );
         assert!(!photos.join("img1.jpg.rrdata").exists());
         assert!(h.state().notice.is_some(), "bilan dans la barre d'état");
+        // Réécrire (31/10/2026) : les deux sidecars d'img0 existent, prévenu, réécrits.
+        let images: Vec<PathBuf> = h.state().files.iter().map(|f| f.path.clone()).collect();
+        h.state_mut()
+            .open_sidecars_dialog(images, "sidecars".into(), pos2(200.0, 200.0));
+        h.run_steps(2);
+        assert!(
+            h.state()
+                .sidecars_dialog
+                .as_ref()
+                .unwrap()
+                .preview
+                .created
+                .is_empty()
+        );
+        h.get_by_label(&t!("sidecars-rewrite")).click();
+        h.run_steps(2);
+        let dialog = h.state().sidecars_dialog.as_ref().unwrap();
+        assert!(dialog.rewrite);
+        assert_eq!(dialog.preview.rewritten.len(), 2, "XMP et .rrdata d'img0");
+        h.get_by_label(&t!("sidecars-rewrite-warning", n = 2));
+        h.get_by_label(&t!("sidecars-go")).click();
+        h.run_steps(2);
+        assert!(h.state().sidecars_dialog.is_none());
+        assert_eq!(
+            tri::rrdata::read(&photos.join("img0.jpg.rrdata"))
+                .unwrap()
+                .stars,
+            3
+        );
     }
 
     #[test]

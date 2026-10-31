@@ -20,7 +20,9 @@
 - **Generate the missing rating sidecars from the interface** (follow-up to #253): a
   sidecar icon in a thumbnail's right-click dialog (the selection) and "Generate the
   sidecars…" in the open folder's right-click menu; the dialog offers every software or
-  one format, says how many sidecars will be created before doing it, and reports in the
+  one format, can **also rewrite the existing sidecars** (their ratings only, the rest
+  kept, an unreadable file recreated; with a warning; `--rewrite` on the command line),
+  says how many sidecars will be created or rewritten before doing it, and reports in the
   status bar. Action `core.file.sidecars`, no default key.
 - **Right panel: air below each group of settings** (`[gui.metadata] group_gap`, in line
   heights), and the full screen's development buttons in reading order, previous on the

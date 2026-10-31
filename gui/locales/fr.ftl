@@ -861,17 +861,15 @@ sidecars-title-images = Sidecars de { $n ->
 }
 sidecars-all = Tous les logiciels
 sidecars-format = { $engine } (.{ $id })
-sidecars-preview = { $created ->
-    [0] Rien à créer
-    [one] 1 sidecar à créer
-   *[other] { $created } sidecars à créer
-} · { $unchanged } déjà pourvues · { $skipped } passées (sans notes, ou développements)
+sidecars-preview = { $created } à créer · { $rewritten } à réécrire · { $unchanged } laissées (déjà là) · { $skipped } passées (sans notes, ou développements)
+sidecars-rewrite = Réécrire aussi les sidecars existants
+sidecars-rewrite-tip = Leurs notes sont remplacées par celles de tri ; le reste (développement, mots-clés…) est conservé. Un fichier illisible est recréé.
+sidecars-rewrite-warning = Attention : { $n ->
+    [one] un sidecar existant sera réécrit
+   *[other] { $n } sidecars existants seront réécrits
+} (ses notes seulement, le reste est conservé).
 sidecars-go = Générer
-sidecars-done = { $created ->
-    [0] Aucun sidecar créé
-    [one] 1 sidecar créé
-   *[other] { $created } sidecars créés
-}
+sidecars-done = Sidecars : { $created } créés · { $rewritten } réécrits
 sidecars-done-errors = { " " }· { $n } erreurs : { $error }
 folder-menu-open-in = Ouvrir dans { $name }
 folder-open-in-missing = { $name } ne sait pas ouvrir un dossier, ou n'est pas installé

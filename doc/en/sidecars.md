@@ -45,12 +45,15 @@ when needed: `NoteBook::generate(images, formats, dry_run)` creates, for the pho
 have notes, the sidecars of the requested formats they do not have yet, with their notes;
 developments, images without notes and those already equipped are skipped (`Generated`:
 created, unchanged, skipped, errors). Command line: `tri <folder> --sidecars
-rapidraw|xmp|all [--dry-run]`. In the interface (2026-10-31): action `core.file.sidecars` (no
+rapidraw|xmp|all [--rewrite] [--dry-run]` (`--rewrite`: the ratings are also rewritten
+into the existing sidecars, the rest kept, an unreadable file recreated;
+`Generated::rewritten`). In the interface (2026-10-31): action `core.file.sidecars` (no
 default key), a "sidecar" icon in a thumbnail's right-click dialog (the selection) and
 "Generate the sidecars…" in the open folder's right-click menu; the dialog
-(`SidecarsDialog`) offers "every software" or one format ("RapidRAW (.rrdata)", "XMP"),
-announces how many will be created, skipped or are already provided (dry run), then
-creates; the summary goes to the status bar, and the "auto" policy is applied again (the
+(`SidecarsDialog`) offers "every software" or one format ("RapidRAW (.rrdata)", "XMP"), a
+check box "Also rewrite the existing sidecars" (with a warning: their ratings only, the
+rest is kept), announces how many will be created, rewritten, left alone or skipped (dry
+run), then writes; the summary goes to the status bar, and the "auto" policy is applied again (the
 folder now holds that format).
 
 ## A `.rrdata` without adjustments is not a development

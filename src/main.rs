@@ -117,6 +117,8 @@ struct Args {
     convert: Option<Convention>,
     /// `--sidecars <format|all>` : créer les sidecars manquants des photos notées.
     sidecars: Option<Vec<&'static dyn tri::sidecars::Format>>,
+    /// `--rewrite` : réécrire aussi les notes des sidecars existants.
+    rewrite: bool,
     dry_run: bool,
     exposure: bool,
     metadata: bool,
@@ -185,6 +187,7 @@ fn parse() -> AnyResult<Args> {
                 })
             }
             "--dry-run" => args.dry_run = true,
+            "--rewrite" => args.rewrite = true,
             "--sidecars" => {
                 let wanted = value()?;
                 args.sidecars = Some(if wanted == "all" {
@@ -915,13 +918,21 @@ fn generate_sidecars(
     files: &[tri::media::MediaFile],
     formats: &[&'static dyn tri::sidecars::Format],
     dry_run: bool,
+    rewrite: bool,
 ) -> AnyResult<()> {
     let mut book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
     let images: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
-    let report = book.generate(&images, formats, dry_run);
+    let report = book.generate(&images, formats, dry_run, rewrite);
     let mode = if dry_run { "dry-run" } else { "write" };
     for path in &report.created {
         println!("{}\t{}", t!("cli-xmp-written", mode = mode), path.display());
+    }
+    for path in &report.rewritten {
+        println!(
+            "{}\t{}",
+            t!("cli-sidecar-rewritten", mode = mode),
+            path.display()
+        );
     }
     for (image, error) in &report.errors {
         eprintln!("{}\t{} : {error}", t!("cli-error"), image.display());
@@ -932,6 +943,7 @@ fn generate_sidecars(
             "cli-sidecars-summary",
             n = images.len(),
             created = report.created.len(),
+            rewritten = report.rewritten.len(),
             mode = mode,
             unchanged = report.unchanged,
             skipped = report.skipped,
@@ -1307,7 +1319,7 @@ fn run() -> AnyResult<()> {
     }
     if let Some(formats) = &args.sidecars {
         let files: Vec<_> = groups.into_iter().flatten().collect();
-        return generate_sidecars(&settings, &files, formats, args.dry_run);
+        return generate_sidecars(&settings, &files, formats, args.dry_run, args.rewrite);
     }
     if args.previews {
         return previews(&settings, &dir, groups.into_iter().flatten().collect());
