@@ -422,7 +422,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   après coup ; « Couverture », le développement préféré, sinon le plus récent ; un
   logiciel, son développement principal ; à défaut la photo), et « N dév. » dans
   une pastille en haut à droite (`[gui.colors] development_mark` ; le nombre d'images
-  d'une rafale est en haut à gauche) ; dépliée, chaque vignette dans un cadre fin de la
+  d'une rafale est en haut à gauche ; masquée avec les infos des vignettes, Maj+T, où
+  elle était tronquée : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
   lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `Maj+V` déplie / replie, `Maj+W` /
   `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
@@ -686,11 +687,18 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     à gauche, « plus strict » à droite. La bulle des icônes de la barre dit où sont les
     réglages.
   - *Grille* : tri (liste et sens ; en tête de la section, retour du 27/10/2026 ; titre
-    « Ordre » jusqu'au 28/10/2026), rendu des vignettes en boutons radio (à la place de la
-    liste cachée dans le menu « … » des fenêtres étroites, qui disparaît), piles (case,
+    « Ordre » jusqu'au 28/10/2026), rendu des vignettes en liste déroulante (#246, 31/10/2026 ;
+    boutons radio avant, à la place de la liste cachée dans le menu « … » des fenêtres
+    étroites, qui disparaît), piles (case,
     similarité, tout déplier / replier, réglages fins). Restent dans la barre du bas
     (choix de l'utilisateur, 27/10/2026, pas de doublon) : taille et infos des
     vignettes, entrée dans une pile par la couverture ou la première photo.
+  - *Vue* (plein écran seulement, à la place de *Grille* : #239, 31/10/2026) : la
+    **source affichée** en liste déroulante (rendu boîtier, rendu RAW, chaque
+    développement déjà rendu ; sur un développement, une case « avant » : `b`), et
+    l'interrupteur des actions sur les fichiers. Les boutons de développement de la barre
+    du bas (‹‹ ›› : développement précédent / suivant de la photo) sont symétriques
+    (#240).
   - Libellés **« NOTE »** (barre du bas), **« FILTRE »** (barre du haut) et **« DOSSIERS
     »** (panneau de gauche), « FILTRE » au singulier comme le titre « FILTRE » du panneau
     : majuscules un peu plus petites que le texte, à l'accent (`bar_label`, `[gui.grid]

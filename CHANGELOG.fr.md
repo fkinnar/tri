@@ -4,6 +4,14 @@
 
 ## À venir
 
+- **Plein écran : une section « Vue » dans le panneau de droite** à la place de
+  « Grille » (#239) : la source affichée en liste déroulante (rendu boîtier, rendu RAW,
+  chaque développement déjà rendu ; sur un développement, une case « avant ») et
+  l'interrupteur des actions sur les fichiers. Le rendu des vignettes de la section Grille
+  est aussi une liste déroulante (#246). Les boutons de développement de la barre du bas
+  passent bien d'un développement à l'autre (ils partaient dans la notation et avançaient
+  d'une photo) et sont symétriques (#240), et la pastille « N dév. » disparaît avec les infos des
+  vignettes, où elle était tronquée (#243).
 - **Notes écrites dans tous les sidecars de la photo** (`tri::sidecars`, un format par
   logiciel) : le XMP et le `IMG.RAF.rrdata` de RapidRAW, lus dans le plus récent, tous
   écrits. Un `.rrdata` manquant est créé quand on note selon `[sidecars.rapidraw] create`

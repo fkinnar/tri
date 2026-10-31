@@ -1670,13 +1670,18 @@ impl TriApp {
             }
             ui.separator();
         }
-        // Filtres et grille en plein écran aussi (retour du 30/10/2026 : tout le panneau).
+        // Filtres en plein écran aussi (retour du 30/10/2026 : tout le panneau) ; la
+        // grille y laisse place à la vue (#239).
         if matches!(self.mode, Mode::Grid | Mode::View) {
             if self.panel_section(ui, "filters", t!("panel-section-filters")) {
                 self.filter_settings(ui);
             }
             ui.separator();
-            if self.panel_section(ui, "grid", t!("panel-section-grid")) {
+            if self.mode == Mode::View {
+                if self.panel_section(ui, "view", t!("panel-section-view")) {
+                    self.view_settings(ui);
+                }
+            } else if self.panel_section(ui, "grid", t!("panel-section-grid")) {
                 self.grid_settings(ui);
             }
             ui.separator();
@@ -1737,35 +1742,40 @@ impl TriApp {
         response
     }
 
-    /// Bouton radio pointable du panneau : choisit `choice` (souris ou clavier) ; ← / →
-    /// passent au choix précédent / suivant de `all`.
-    fn side_radio<T: PartialEq + Copy>(
+    /// Liste déroulante pointable du panneau (#246 : une liste de boutons radio prenait
+    /// trop de place pour un réglage accessoire) : ← / → passent au choix précédent /
+    /// suivant de `all`, Espace au suivant en boucle. Vrai si la valeur a changé.
+    fn side_combo<T: PartialEq + Copy>(
         &mut self,
         ui: &mut Ui,
+        id: &str,
         value: &mut T,
-        choice: T,
         all: &[T],
-        text: impl Into<egui::WidgetText>,
-    ) -> egui::Response {
+        name: impl Fn(T) -> String,
+        tip: Option<String>,
+    ) -> bool {
+        let before = *value;
         let (i, key) = self.side_begin(false);
-        let response = ui.radio_value(value, choice, text);
-        if let Some(key) = key {
-            let at = all.iter().position(|c| c == value).unwrap_or(0);
-            *value = match key {
-                SideKey::Activate => choice,
-                SideKey::Left => all[at.saturating_sub(1)],
-                SideKey::Right => all[(at + 1).min(all.len() - 1)],
-            };
-            // Le curseur suit le choix.
-            if key != SideKey::Activate {
-                let to = all.iter().position(|c| c == value).unwrap_or(0) as isize;
-                let me = all.iter().position(|&c| c == choice).unwrap_or(0) as isize;
-                self.side_cursor = Some((i as isize + to - me).max(0) as usize);
-            }
+        let at = all.iter().position(|c| c == value).unwrap_or(0);
+        match key {
+            Some(SideKey::Left) => *value = all[at.saturating_sub(1)],
+            Some(SideKey::Right) => *value = all[(at + 1).min(all.len() - 1)],
+            Some(SideKey::Activate) => *value = all[(at + 1) % all.len()],
+            None => {}
         }
-        let clicked = response.clicked();
-        self.side_end(ui, i, response.rect, clicked);
-        response
+        let mut response = egui::ComboBox::from_id_salt(id)
+            .selected_text(name(*value))
+            .show_ui(ui, |ui| {
+                for &c in all {
+                    ui.selectable_value(value, c, name(c));
+                }
+            })
+            .response;
+        if let Some(tip) = tip {
+            response = response.on_hover_text(tip);
+        }
+        self.side_end(ui, i, response.rect, response.clicked());
+        *value != before
     }
 
     /// Titre de section du panneau de droite, comme ceux du panneau des dossiers
@@ -2011,9 +2021,15 @@ impl TriApp {
         let engines = self.developers.engines();
         let mut render = self.grid_render;
         let choices = crate::grid_render::GridRender::choices(&engines, render);
-        for &choice in &choices {
-            self.side_radio(ui, &mut render, choice, &choices, choice.name());
-        }
+        let tip = self.action_tip(Action::GridRenderNext);
+        self.side_combo(
+            ui,
+            "grid_render",
+            &mut render,
+            &choices,
+            |c| c.name(),
+            Some(tip),
+        );
         if self.shown_render() != self.grid_render {
             ui.weak(t!("panel-grid-render-filtered"));
         }
@@ -2086,17 +2102,7 @@ impl TriApp {
                 });
             });
         }
-        // Actions sur les fichiers (30/10/2026) : interdites par défaut, une case pour les
-        // autoriser, écrite dans la configuration.
-        subheading(ui, t!("panel-grid-files"));
-        let mut allowed = self.settings.files.allow_actions;
-        if self
-            .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
-            .on_hover_text(t!("panel-grid-files-tip"))
-            .changed()
-        {
-            self.set_file_actions(allowed);
-        }
+        self.file_actions_switch(ui);
         if render != self.grid_render {
             self.set_grid_render(render);
         }
@@ -2155,6 +2161,81 @@ impl TriApp {
                 ui.weak(t!("histogram-computing"));
             }
         }
+    }
+
+    /// Sous-section « Fichiers » (30/10/2026) : les actions sur les fichiers, interdites
+    /// par défaut, une case pour les autoriser, écrite dans la configuration.
+    fn file_actions_switch(&mut self, ui: &mut Ui) {
+        subheading(ui, t!("panel-grid-files"));
+        let mut allowed = self.settings.files.allow_actions;
+        if self
+            .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
+            .on_hover_text(t!("panel-grid-files-tip"))
+            .changed()
+        {
+            self.set_file_actions(allowed);
+        }
+    }
+
+    /// Section « Vue » du panneau de droite, en plein écran (#239 : la section « Grille »
+    /// n'y avait pas de sens) : la source affichée — rendu boîtier, rendu RAW, chaque
+    /// développement déjà rendu ; sur un développement, « avant » —, et les actions sur
+    /// les fichiers.
+    fn view_settings(&mut self, ui: &mut Ui) {
+        let Some(file) = self.files.get(self.selected).cloned() else {
+            return;
+        };
+        let tip = self.action_tip(Action::ToggleSource);
+        subheading(ui, t!("panel-view-source")).on_hover_text(&tip);
+        if tri::media::is_development(&file.path) {
+            let mut before = self.dev_before;
+            if self
+                .side_checkbox(ui, &mut before, t!("panel-view-before"))
+                .on_hover_text(&tip)
+                .changed()
+            {
+                self.dev_before = before;
+                self.request_zoom();
+            }
+        } else {
+            let rendered = self.rendered_engines(self.selected);
+            let shown = match self.developed_level_at(self.selected) {
+                Some(Level::Developed(e)) => Some(e),
+                _ => None,
+            };
+            let mut choices = vec![(Source::Embedded, None)];
+            if file.kind == MediaKind::Raw {
+                choices.push((Source::Raw, None));
+            }
+            choices.extend(rendered.iter().map(|&e| (Source::Developed, Some(e))));
+            let current = match self.source {
+                Source::Developed => match shown {
+                    Some(e) if rendered.contains(&e) => (Source::Developed, Some(e)),
+                    _ => (self.base_source, None),
+                },
+                source => (source, None),
+            };
+            let mut choice = if choices.contains(&current) {
+                current
+            } else {
+                choices[0]
+            };
+            let raw = file.kind == MediaKind::Raw;
+            let name = move |c: (Source, Option<tri::develop::Engine>)| match c {
+                (Source::Developed, Some(e)) => t!("shown-developed", engine = e.name()),
+                (Source::Raw, _) => t!("shown-raw"),
+                _ if raw => t!("shown-embedded"),
+                _ => t!("shown-image"),
+            };
+            if self.side_combo(ui, "view_source", &mut choice, &choices, name, Some(tip)) {
+                if let Some(engine) = choice.1 {
+                    self.choose_developer(&file.path, engine);
+                }
+                self.set_source(choice.0);
+                self.request_zoom();
+            }
+        }
+        self.file_actions_switch(ui);
     }
 
     /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
@@ -10570,6 +10651,9 @@ impl TriApp {
                 | Action::StackMode
                 | Action::StackEnterToggle
                 | Action::Develop
+                // #240 : ils partaient dans la notation, et avançaient d'une photo.
+                | Action::DevPrev
+                | Action::DevNext
                 | Action::ToggleZoom
                 | Action::ToggleGridInfo
                 | Action::HistogramLarge
@@ -11191,7 +11275,10 @@ impl TriApp {
         }
         // Pile de développements repliée : le nombre de développements, en haut à droite
         // (le nombre d'images d'une pile de rafale est en haut à gauche).
-        if self.stacks.folded_count(index).is_some()
+        // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
+        // qui prend toute la case).
+        if self.grid_info
+            && self.stacks.folded_count(index).is_some()
             && let Some(range) = self.stacks.developments_of(index)
         {
             let n = range
@@ -14285,12 +14372,28 @@ mod tests {
             .into_iter()
             .find(|&k| k != current)
             .unwrap();
-        // La seule liste déroulante de la fenêtre (la barre des filtres n'en a plus).
-        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        // Deux listes déroulantes : l'ordre, puis le rendu des vignettes (#246 ; la barre
+        // des filtres n'en a plus).
+        let combo = |h: &Harness<'_, TriApp>, n: usize| {
+            h.get_all_by_role(egui::accesskit::Role::ComboBox)
+                .nth(n)
+                .unwrap()
+                .click()
+        };
+        combo(&h, 0);
         h.run_steps(2);
         h.get_by_label(&sort_name(other)).click();
         h.run_steps(2);
         assert_eq!(h.state().order.key, other);
+        combo(&h, 1);
+        h.run_steps(2);
+        h.get_by_label(&crate::grid_render::GridRender::LibRaw.name())
+            .click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().grid_render,
+            crate::grid_render::GridRender::LibRaw
+        );
         // Les piles : une case, et leurs réglages quand elles sont actives.
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_none());
         h.get_by_label(&t!("panel-grid-stacks-on")).click();
@@ -14487,6 +14590,51 @@ mod tests {
         assert_eq!(format_label(Path::new("a.tif"), MediaKind::Flat), "TIFF");
         assert_eq!(format_label(Path::new("a.heic"), MediaKind::Flat), "HEIF");
         assert_eq!(format_label(Path::new("a.png"), MediaKind::Flat), "PNG");
+    }
+
+    #[test]
+    fn the_view_buttons_step_through_the_developments() {
+        // #240 : en plein écran, les boutons ‹‹ ›› passent au développement précédent /
+        // suivant de la photo, pas à la photo voisine ; absents sans développement.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().metadata_panel = false;
+        // La pile de développements est repliée : → saute les clones cachés.
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img1.jpg");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&Action::DevNext.label()).is_none(),
+            "sans développement : pas de bouton"
+        );
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0.jpg");
+        h.run_steps(2);
+        h.get_by_label(&Action::DevNext.label()).click();
+        h.run_steps(3);
+        assert_eq!(selected_name(&h), "img0@dt-01.jpg", "suivant : le clone 1");
+        h.get_by_label(&Action::DevNext.label()).click();
+        h.run_steps(3);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg", "puis le clone 2");
+        h.get_by_label(&Action::DevPrev.label()).click();
+        h.run_steps(3);
+        assert_eq!(
+            selected_name(&h),
+            "img0@dt-01.jpg",
+            "précédent : le clone 1"
+        );
     }
 
     #[test]

@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Full screen: a "View" section in the right panel** in place of "Grid" (#239): the
+  shown source as a drop-down list (camera render, RAW render, each development already
+  rendered; on a development, a "before" check box) and the file actions switch. The grid
+  section's thumbnail render is a drop-down list too (#246). The bottom bar's development
+  buttons now step through the developments (they went to the rating code and moved
+  one photo) and are symmetric (#240), and the "N dev." badge is hidden with the thumbnail info,
+  where it was truncated (#243).
 - **Notes written to every sidecar of the photo** (`tri::sidecars`, a format per
   software): the XMP and RapidRAW's `IMG.RAF.rrdata`, read from the most recent, all
   written. A missing `.rrdata` is created when rating according to

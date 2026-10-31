@@ -406,7 +406,8 @@ system one ("cold" measurements, experiments).
   the photo itself, the grid no longer changes afterwards; "Cover", the preferred
   development, else the latest; a software, its main development; else the photo), and
   "N dev." in a badge at the top right
-  (`[gui.colors] development_mark`; a burst's image count is at the top left); unfolded,
+  (`[gui.colors] development_mark`; a burst's image count is at the top left; hidden with
+  the thumbnail info, Shift+T, where it was truncated: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
   `Shift+V` unfolds / folds, `Shift+W` / `Shift+Q` go to the next / previous development
@@ -506,7 +507,7 @@ system one ("cold" measurements, experiments).
   through the **settings** above the EXIF (section titles included), one at a time;
   **Space** / Enter use the pointed setting (check, choose, fold a section, slider to the
   centre, button); ← → / `h` `l` vary it (slider by a step, `[gui.metadata] slider_step`;
-  list and radio buttons to the next choice; title: fold /
+  lists to the next choice; title: fold /
   unfold); **Tab** / Shift+Tab (`)` / `(` in vim) go from one section title to the next,
   looping. The same keys go from section to section in the **folder panel** (first row of
   the section; in the middle of a section, Shift+Tab goes back to its start). Tab no longer
@@ -647,11 +648,16 @@ system one ("cold" measurements, experiments).
     Under each slider, "more lenient" on the left, "stricter" on the right. The tooltip of
     the bar icons says where the settings are.
   - *Grid*: sort (list and direction; at the top of the section, feedback of
-    2026-10-27; titled "Order" until 2026-10-28), thumbnail render as radio buttons (instead of the list
-    hidden in the "…" menu of narrow windows, which is gone), stacks (check box,
+    2026-10-27; titled "Order" until 2026-10-28), thumbnail render as a drop-down list (#246, 2026-10-31; radio
+    buttons before, instead of the list hidden in the "…" menu of narrow windows, which is gone), stacks (check box,
     similarity, unfold / fold all, fine settings). Staying in the bottom bar (the user's
     choice, 2026-10-27, no duplicates): thumbnail size and info, entering a stack by the
     cover or the first photo.
+  - *View* (full screen only, in place of *Grid*: #239, 2026-10-31): the **shown source**
+    as a drop-down list (camera render, RAW render, each development already rendered;
+    on a development, a "before" check box: `b`), and the file actions switch. The
+    bottom bar's development buttons (‹‹ ›› : previous / next development of the photo)
+    are symmetric (#240).
   - **"RATING"** (bottom bar), **"FILTER"** (top bar) and **"FOLDERS"** (left panel)
     labels, "FILTER" singular like the panel's "FILTER" title: capitals a bit smaller than
     the text, in the accent colour (`bar_label`, `[gui.grid] bar_label_scale`; feedback of
