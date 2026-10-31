@@ -873,12 +873,15 @@ filter-settings-in-panel = Settings: "Filters" section of the right panel ({ $ke
 panel-section-histogram = Histogram
 panel-section-filters = Filter
 panel-section-grid = Grid
+panel-section-view = View
 panel-section-exif = EXIF
 panel-filter-sharp = Sharp
 panel-filter-exposed = Well exposed
 panel-filter-developed = Developed
 panel-clip-over = Blown
 panel-clip-under = Crushed
+panel-view-source = Shown source
+panel-view-before = Before the development (camera render)
 panel-grid-render = Thumbnail render
 panel-grid-render-filtered = For now, the "Developed" filter chooses the render.
 panel-grid-sort = Sort
@@ -1004,8 +1007,8 @@ filter-bar-more = Sort and number of images (the bar lacks room)
 badge-blurry = Judged blurry (sharpness score)
 badge-blurry-view = Judged blurry (sharpness score); click: sharpness map
 panel-sharpness = Sharpness
-panel-sharpness-value = { $score } (× { $folder } the folder, × { $neighbours } the neighbours)
-panel-sharpness-value-stack = { $score } (× { $folder } the folder, × { $stack } the stack)
+panel-sharpness-note = × { $folder } the folder, × { $neighbours } the neighbours
+panel-sharpness-note-stack = × { $folder } the folder, × { $stack } the stack
 panel-sharpness-blurry = { " " }· blurry
 
 ## Histogram statistics

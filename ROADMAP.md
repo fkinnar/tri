@@ -50,11 +50,11 @@ README.
 | Folder merge [#134](https://github.com/fkinnar/tri/issues/134) | Move a folder into a folder of the same name |
 | Crop to development software [#135](https://github.com/fkinnar/tri/issues/135) | Write a version's crop into the sidecar, in the format of Lightroom (`crs:Crop…`), darktable, Capture One |
 | Offload [#136](https://github.com/fkinnar/tri/issues/136) | Folder and file name templates, multi-day cards |
-| Viewing adjustments [#137](https://github.com/fkinnar/tri/issues/137) | Exposure, black and white, contrast, exposure matching (non-destructive) |
+| Viewing adjustments [#137](https://github.com/fkinnar/tri/issues/137), [#247](https://github.com/fkinnar/tri/issues/247) | Exposure, white balance, black and white (colour filters), contrast, saturation, exposure matching across a series (non-destructive); named profiles, chained with a darktable preset, converted to a software's preset |
 | Complex filters [#138](https://github.com/fkinnar/tri/issues/138) | Dedicated window or panel |
 | EXIF filters [#4](https://github.com/fkinnar/tri/issues/4) | Camera, lens, focal length, aperture, shutter speed, ISO…: at least what the metadata panel shows (issue #4) |
 | Fuller vim [#139](https://github.com/fkinnar/tri/issues/139) | Counts before actions (`5j`, `3x`) |
-| AI sharpness [#140](https://github.com/fkinnar/tri/issues/140) | Faces, sharp eyes on a portrait |
+| AI sharpness [#140](https://github.com/fkinnar/tri/issues/140), [#248](https://github.com/fkinnar/tri/issues/248) | Faces, sharp eyes on a portrait; AI (local or not) for similarity stacking, subject detection for sharpness and exposure |
 | Icon set [#141](https://github.com/fkinnar/tri/issues/141) | Drawn icons (SVG) instead of simple shapes |
 | Target architecture [#142](https://github.com/fkinnar/tri/issues/142) | LibRaw as a dynamic library, terminal interface (TUI) |
 | Other development software [#115](https://github.com/fkinnar/tri/issues/115), [#143](https://github.com/fkinnar/tri/issues/143) | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`): render and export as with darktable |

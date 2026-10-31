@@ -566,15 +566,16 @@ pub fn bar_icon_on(
         }
         Action::DevPrev | Action::DevNext => {
             // Développement précédent / suivant : deux chevrons, comme ‹ › doublés.
+            // Symétriques (#240) : chaque chevron large de 0,26, la paire centrée.
             let thin = Stroke::new(stroke.width * 0.8, color);
-            let (tip, back) = if action == Action::DevNext {
-                (0.3, 0.0)
+            let (xs, tip): ([f32; 2], f32) = if action == Action::DevNext {
+                ([0.22, 0.52], 0.26)
             } else {
-                (-0.3, 0.0)
+                ([0.78, 0.48], -0.26)
             };
-            for x in [0.28, 0.58] {
+            for x in xs {
                 painter.add(Shape::line(
-                    vec![p(x + back, 0.22), p(x + tip + 0.12, 0.5), p(x + back, 0.78)],
+                    vec![p(x, 0.22), p(x + tip, 0.5), p(x, 0.78)],
                     thin,
                 ));
             }

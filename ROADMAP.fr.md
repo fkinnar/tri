@@ -51,11 +51,11 @@ marche à suivre est dans le README.
 | Fusion de dossiers [#134](https://github.com/fkinnar/tri/issues/134) | Déplacer un dossier dans un dossier du même nom |
 | Recadrage vers les logiciels de développement [#135](https://github.com/fkinnar/tri/issues/135) | Écrire le cadre d'une version dans le sidecar, au format de Lightroom (`crs:Crop…`), darktable, Capture One |
 | Déchargement [#136](https://github.com/fkinnar/tri/issues/136) | Gabarits de noms de dossier et de fichiers, cartes de plusieurs jours |
-| Réglages de visualisation [#137](https://github.com/fkinnar/tri/issues/137) | Exposition, noir et blanc, contraste, uniformisation d'exposition (non destructifs) |
+| Réglages de visualisation [#137](https://github.com/fkinnar/tri/issues/137), [#247](https://github.com/fkinnar/tri/issues/247) | Exposition, balance des blancs, noir et blanc (filtres colorés), contraste, saturation, uniformisation d'exposition sur une série (non destructifs) ; profils nommés, enchaînés avec un préréglage darktable, convertis en préréglage d'un logiciel |
 | Filtres complexes [#138](https://github.com/fkinnar/tri/issues/138) | Fenêtre ou panneau dédié |
 | Filtres sur les EXIF [#4](https://github.com/fkinnar/tri/issues/4) | Appareil, objectif, focale, ouverture, vitesse, ISO… : au moins ce que montre le panneau des métadonnées (issue n° 4) |
 | Vim plus complet [#139](https://github.com/fkinnar/tri/issues/139) | Nombres devant les actions (`5j`, `3x`) |
-| Netteté par IA [#140](https://github.com/fkinnar/tri/issues/140) | Visages, yeux nets sur un portrait |
+| Netteté par IA [#140](https://github.com/fkinnar/tri/issues/140), [#248](https://github.com/fkinnar/tri/issues/248) | Visages, yeux nets sur un portrait ; IA (locale ou non) pour l'empilement par similarité, la détection du sujet pour la netteté et l'exposition |
 | Jeu d'icônes [#141](https://github.com/fkinnar/tri/issues/141) | Icônes dessinées (SVG) à la place des formes simples |
 | Architecture cible [#142](https://github.com/fkinnar/tri/issues/142) | LibRaw en bibliothèque dynamique, interface en terminal (TUI) |
 | Autres logiciels de développement [#115](https://github.com/fkinnar/tri/issues/115), [#143](https://github.com/fkinnar/tri/issues/143) | RawTherapee (`rawtherapee-cli`), ART, vkdt (`vkdt-cli`) : rendu et export comme avec darktable |

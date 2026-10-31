@@ -872,12 +872,15 @@ filter-settings-in-panel = Réglages : section « Filtres » du panneau de droit
 panel-section-histogram = Histogramme
 panel-section-filters = Filtre
 panel-section-grid = Grille
+panel-section-view = Vue
 panel-section-exif = EXIF
 panel-filter-sharp = Nettes
 panel-filter-exposed = Bien exposées
 panel-filter-developed = Développées
 panel-clip-over = Brûlé
 panel-clip-under = Bouché
+panel-view-source = Source affichée
+panel-view-before = Avant le développement (rendu boîtier)
 panel-grid-render = Rendu des vignettes
 panel-grid-render-filtered = Pour l'instant, le filtre « Développées » choisit le rendu.
 panel-grid-sort = Tri
@@ -1006,8 +1009,8 @@ filter-bar-more = Tri et nombre d'images (la barre manque de place)
 badge-blurry = Jugée floue (score de netteté)
 badge-blurry-view = Jugée floue (score de netteté) ; clic : carte de netteté
 panel-sharpness = Netteté
-panel-sharpness-value = { $score } (× { $folder } le dossier, × { $neighbours } les voisines)
-panel-sharpness-value-stack = { $score } (× { $folder } le dossier, × { $stack } la pile)
+panel-sharpness-note = × { $folder } le dossier, × { $neighbours } les voisines
+panel-sharpness-note-stack = × { $folder } le dossier, × { $stack } la pile
 panel-sharpness-blurry = { " " }· floue
 
 ## Statistiques de l'histogramme

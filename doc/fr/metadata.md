@@ -26,7 +26,7 @@ regex, nom… ; licence « non standard » sur crates.io).
 
 ## Affichage
 
-`Metadata::rows()` : lignes (libellé, valeur) en français, dans l'ordre, champs inconnus
+`Metadata::rows()` : lignes `Row` (libellé, valeur, précision en gris à la ligne ou derrière un tiret : équivalent 24 × 36, mégapixels ; `Row::text` sur une ligne pour la ligne de commande) dans la langue de l'interface, dans l'ordre, champs inconnus
 omis — prêtes pour n'importe quelle interface : « Exposition : 1/250 s · f/2,8 ·
 ISO 400 », « Correction : +0,7 IL », « Focale : 5,7 mm (éq. 24 × 36 : 26 mm) »,
 « Date : 16/10/2026 à 14:32:05 », « Dimensions : 4160 × 6240 (26 Mpx) ». Aides :

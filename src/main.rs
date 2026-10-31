@@ -1280,8 +1280,8 @@ fn run() -> AnyResult<()> {
                         "== {name} ({:.0} ms)",
                         start.elapsed().as_secs_f64() * 1000.0
                     );
-                    for (label, value) in m.rows() {
-                        println!("  {label:<11} {value}");
+                    for row in m.rows() {
+                        println!("  {:<11} {}", row.label, row.text());
                     }
                 }
                 Err(e) => eprintln!("== {name} : {e}"),

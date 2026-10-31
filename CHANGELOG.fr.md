@@ -4,6 +4,25 @@
 
 ## À venir
 
+- **Barre des filtres : la recherche par nom est à droite**, juste avant le compteur
+  d'images (#241).
+- **Aide : « Signaler un problème » en bordeaux** (#242), et **la fenêtre d'aide se
+  déplace** (#251). La **boîte de déchargement s'ouvre au centre** comme les autres
+  (#252).
+- **`q q` quitte** au lieu de `q` seul, trop immédiat à côté de `Maj+Q` (#244).
+- **`tri-gui <image>` ouvre le dossier de l'image, sur elle** (#250).
+- **Panneau EXIF : précisions en gris** (#249) : la focale équivalente 24 × 36 et les
+  coefficients de netteté à la ligne, les mégapixels derrière un tiret, sans parenthèses.
+  `Metadata::rows` renvoie des `Row` (libellé, valeur, précision) ; `tri --metadata` écrit
+  « valeur – précision ».
+- **Plein écran : une section « Vue » dans le panneau de droite** à la place de
+  « Grille » (#239) : la source affichée en liste déroulante (rendu boîtier, rendu RAW,
+  chaque développement déjà rendu ; sur un développement, une case « avant ») et
+  l'interrupteur des actions sur les fichiers. Le rendu des vignettes de la section Grille
+  est aussi une liste déroulante (#246). Les boutons de développement de la barre du bas
+  passent bien d'un développement à l'autre (ils partaient dans la notation et avançaient
+  d'une photo) et sont symétriques (#240), et la pastille « N dév. » disparaît avec les infos des
+  vignettes, où elle était tronquée (#243).
 - **Notes écrites dans tous les sidecars de la photo** (`tri::sidecars`, un format par
   logiciel) : le XMP et le `IMG.RAF.rrdata` de RapidRAW, lus dans le plus récent, tous
   écrits. Un `.rrdata` manquant est créé quand on note selon `[sidecars.rapidraw] create`
