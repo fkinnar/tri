@@ -363,7 +363,7 @@ pub struct TriApp {
     grid_fit_pending: bool,
     /// Clic sur un badge d'une vignette (versions, écrêtage) : l'image et l'action,
     /// faite après la grille.
-    cell_action: Option<(usize, Action)>,
+    cell_action: Option<(usize, Vec<Action>)>,
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
@@ -4753,14 +4753,15 @@ impl TriApp {
     }
 
     /// Fait de l'image `index` le développement préféré de sa photo (couverture de sa pile
-    /// de développements), ou l'oublie si elle l'était ; une photo (pas un développement)
-    /// préférée veut dire « aucun » : la pile se replie sur son JPEG boîtier.
+    /// de développements) ; une photo (pas un développement) veut dire « aucun » : la pile
+    /// se replie sur le plus récent. Sans bascule (31/10/2026, demande de l'utilisateur :
+    /// « mettre en couverture si ce n'est déjà fait ») : refaire ne retire rien.
     fn prefer_development(&mut self, index: usize) {
         let path = self.files[index].path.clone();
         let Some(range) = self.stacks.developments_of(index).cloned() else {
             return;
         };
-        let on = !self.dev_preferred.contains(&path);
+        let on = tri::media::is_development(&path);
         let others: Vec<PathBuf> = range.map(|i| self.files[i].path.clone()).collect();
         for o in &others {
             self.dev_preferred.remove(o);
@@ -4768,6 +4769,8 @@ impl TriApp {
         if on {
             self.dev_preferred.insert(path.clone());
             self.notice = Some((t!("dev-preferred", name = development_label(&path)), false));
+        } else {
+            self.notice = Some((t!("dev-preferred-none"), false));
         }
         if let Some(data) = self.settings.data_dir() {
             let result = if tri::media::is_development(&path) {
@@ -4784,6 +4787,17 @@ impl TriApp {
             }
         }
         self.stacks_dirty = true;
+    }
+
+    /// Replie toutes les piles de développements (Ctrl+Maj+V, 31/10/2026).
+    fn fold_all_developments(&mut self) {
+        if self.dev_unfolded.is_empty() {
+            self.hint = Some(t!("dev-folded-already"));
+            return;
+        }
+        self.dev_unfolded.clear();
+        self.stacks_dirty = true;
+        self.reveal = Some(Reveal::Minimal);
     }
 
     /// Déplie ou replie la pile de développements de l'image sélectionnée (Maj+V).
@@ -6038,6 +6052,7 @@ impl TriApp {
             Action::StackToggle => self.toggle_stack(),
             Action::StacksAll => self.toggle_all_stacks(),
             Action::DevToggle => self.toggle_developments(),
+            Action::DevFoldAll => self.fold_all_developments(),
             Action::DevNext => self.step_developments(1),
             Action::DevPrev => self.step_developments(-1),
             Action::GroupingWindow => {
@@ -11002,15 +11017,18 @@ impl TriApp {
         if self.grid_fit_pending {
             self.grid_fit_all();
         }
-        // Badge cliqué : l'image est choisie, puis recadrage ou grand histogramme.
-        if let Some((index, action)) = self.cell_action.take() {
+        // Badge cliqué : l'image est choisie, puis recadrage, grand histogramme, pile de
+        // développements (dépliée, repliée, ou gardée en couverture puis repliée).
+        if let Some((index, actions)) = self.cell_action.take() {
             if !self.selection.is_visual() {
                 self.selection.clear();
             }
             self.select(index);
-            match action {
-                Action::HistogramLarge => self.histogram_large = true,
-                _ => self.perform(&ctx, action),
+            for action in actions {
+                match action {
+                    Action::HistogramLarge => self.histogram_large = true,
+                    _ => self.perform(&ctx, action),
+                }
             }
         }
         // Clic dans le vide (entre ou après les vignettes) : curseur masqué et sélection
@@ -11157,7 +11175,42 @@ impl TriApp {
                 .on_hover_text(&tip)
                 .clicked()
             {
-                self.cell_action = Some((index, Action::DevToggle));
+                self.cell_action = Some((index, vec![Action::DevToggle]));
+            }
+        } else if self.stacks.in_unfolded_developments(index) {
+            // Pile dépliée (31/10/2026, demande de l'utilisateur : rien ne la repliait à
+            // la souris) : une pastille « replier » au même endroit ; Alt+clic replie en
+            // gardant ce développement comme couverture (sa préférée).
+            let side = 16.0;
+            let back = Rect::from_min_size(
+                pos2(
+                    rect.max.x - g.padding - 2.0 - side,
+                    rect.min.y + g.padding + 2.0,
+                ),
+                vec2(side, side),
+            );
+            painter.rect_filled(back, 6.0, dev_mark);
+            marks::fold(painter, back, Color32::BLACK);
+            let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
+            let tip = t!("dev-fold-tip", keys = keys);
+            let badge = ui.interact(back, response.id.with("fold"), Sense::click());
+            badge.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::accesskit::Role::Button, true, &tip)
+            });
+            if badge
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(&tip)
+                .clicked()
+            {
+                let keep = ui.input(|i| i.modifiers.alt);
+                self.cell_action = Some((
+                    index,
+                    if keep {
+                        vec![Action::StackChoose, Action::DevToggle]
+                    } else {
+                        vec![Action::DevToggle]
+                    },
+                ));
             }
         }
         // Pile repliée : des feuilles derrière la vignette, et le nombre d'images (pile
@@ -11359,7 +11412,7 @@ impl TriApp {
                 .on_hover_text(&tip)
                 .clicked();
             if clicked {
-                self.cell_action = Some((index, Action::Crop));
+                self.cell_action = Some((index, vec![Action::Crop]));
             }
             caption_left = icon.min.x;
         }
@@ -11418,7 +11471,7 @@ impl TriApp {
                         .on_hover_text(&tip)
                         .clicked();
                     if clicked {
-                        self.cell_action = Some((index, Action::HistogramLarge));
+                        self.cell_action = Some((index, vec![Action::HistogramLarge]));
                     }
                 }
             }
@@ -14443,7 +14496,7 @@ mod tests {
         press(&mut h, Key::W, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i - 1, "en boucle : la photo");
         let keys = h.state().keymap.keys_for(Action::DevToggle).join(" / ");
-        let badge = t!("dev-count-tip", n = 1, keys = keys);
+        let badge = t!("dev-count-tip", n = 1, keys = keys.clone());
         h.get_by_label(&badge);
         press(&mut h, Key::Q, Modifiers::SHIFT);
         assert_eq!(h.state().selected, i);
@@ -14457,6 +14510,59 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
         assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
+        // Pastille « replier » sur chaque vignette dépliée (31/10/2026) : clic = replier.
+        let fold_tip = t!("dev-fold-tip", keys = keys);
+        assert!(
+            h.query_by_label(&fold_tip).is_none(),
+            "repliée : pas de pastille"
+        );
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(
+            h.query_all_by_label(&fold_tip).count(),
+            2,
+            "une par vignette"
+        );
+        h.get_all_by_label(&fold_tip).next().unwrap().click();
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "repliée au clic");
+        assert!(h.state().dev_preferred.is_empty());
+        // Alt+clic : replier en gardant ce développement (le clone) comme couverture.
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        h.run_steps(2);
+        h.get_all_by_label(&fold_tip)
+            .nth(1)
+            .unwrap()
+            .click_modifiers(Modifiers::ALT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "repliée");
+        assert!(
+            h.state().dev_preferred.contains(&clone),
+            "le clone en couverture"
+        );
+        assert_eq!(h.state().selected, i);
+        // Maj+Entrée sans bascule : sur le clone, il reste la couverture ; sur la photo,
+        // plus de préféré.
+        press(&mut h, Key::Enter, Modifiers::SHIFT);
+        assert!(h.state().dev_preferred.contains(&clone), "pas une bascule");
+        press(&mut h, Key::W, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, i - 1, "la photo");
+        press(&mut h, Key::Enter, Modifiers::SHIFT);
+        assert!(
+            h.state().dev_preferred.is_empty(),
+            "la photo : plus de préféré"
+        );
+        // Ctrl+Maj+V replie toutes les piles de développements.
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 4);
+        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
+        h.run_steps(2);
+        assert_eq!(h.state().stacks.shown.len(), 3, "tout replié");
+        press(&mut h, Key::V, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(h.state().hint.is_some(), "déjà tout replié : dit");
+        press(&mut h, Key::Q, Modifiers::SHIFT);
+        assert_eq!(h.state().selected, i, "retour sur le clone");
         press(&mut h, Key::Num4, Modifiers::SHIFT);
         assert_eq!(
             tri::xmp::read_sidecar(&photos.join("img0_01.jpg.xmp"))

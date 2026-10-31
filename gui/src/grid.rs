@@ -156,6 +156,7 @@ pub fn navigate(
         | Action::DevToggle
         | Action::DevNext
         | Action::DevPrev
+        | Action::DevFoldAll
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit

@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Replier les piles de développements à la souris** : chaque vignette d'une pile
+  dépliée porte une pastille « replier » (clic : replier ; Alt+clic : replier en gardant ce
+  développement en couverture). `Ctrl+Maj+V` replie toutes les piles de développements.
+  `Maj+Entrée` met désormais toujours le développement en couverture (sur la photo : plus
+  de préféré) au lieu de basculer.
 - **Corrigé : les notes n'atteignaient RapidRAW que posées sur son développement** (#234).
   Une photo et ses développements principaux (darktable, RapidRAW) ont désormais les
   mêmes notes : noter l'un d'eux écrit le XMP de la photo (darktable, la paire RAW+JPEG)

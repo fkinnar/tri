@@ -421,7 +421,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
   montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
-  photo elle-même : plus de préféré ; `preferred-developments.txt` des données).
+  photo elle-même : plus de préféré ; `preferred-developments.txt` des données), **sans
+  bascule** (31/10/2026 : refaire ne retire rien). Dépliée, chaque vignette porte une
+  pastille « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
+  repliait à la souris) : clic = replier, **Alt+clic** = replier en gardant ce
+  développement en couverture ; `Ctrl+Maj+V` (`core.dev.fold_all`) replie toutes les
+  piles de développements.
   **Double suppression** (30/10/2026) : `x` / Suppr sur un développement ne retire que
   lui (clone, copie, principal RapidRAW : son fichier à la corbeille ; principal
   darktable : son XMP réécrit sans l'historique, notes gardées, voir `files.md`), la photo
@@ -910,6 +915,7 @@ suivent le jeu choisi.
 | `core.stack.first` / `core.stack.last` | Maj+Début / Maj+Fin | ( / ) |
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
 | `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Maj+V / Maj+W / Maj+Q | Maj+V / Maj+W / Maj+Q |
+| `core.dev.fold_all` | Ctrl+Maj+V | Ctrl+Maj+V |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
 | `core.file.delete_photo` | Ctrl+Suppr, Ctrl+Backspace | dd, Ctrl+Suppr, Ctrl+Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |
