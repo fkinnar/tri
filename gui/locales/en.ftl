@@ -19,6 +19,9 @@ action-core-filter-stars-3 = Filter: 3 stars (at least, exactly or at most: f =)
 action-core-filter-stars-4 = Filter: 4 stars (at least, exactly or at most: f =)
 action-core-filter-stars-5 = Filter: 5 stars (at least, exactly or at most: f =)
 action-core-filter-stars-op = Star filter: at least, exactly, at most
+filter-flag-toggle-accepted = Filter: keep the accepted ones (combines with the other flags)
+filter-flag-toggle-neutral = Filter: keep the neutral ones, without a flag (combines)
+filter-flag-toggle-rejected = Filter: keep the rejected ones (combines)
 action-core-filter-flag-accepted = Filter: picked only
 action-core-filter-flag-not_rejected = Filter: hide rejected
 volume-back = Drive back: folder read again, computations resumed.

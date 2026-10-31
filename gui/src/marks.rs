@@ -101,20 +101,46 @@ pub fn neutral_ring(painter: &Painter, center: Pos2, radius: f32, color: Color32
     painter.circle_stroke(center, radius - width / 2.0, Stroke::new(width, color));
 }
 
-/// Icône d'un filtre sur le drapeau, dans `rect` : coche verte (acceptées), croix rouge
-/// (rejetées seulement), un cercle vide gris (masquer les rejetées).
-pub fn flag_filter(
-    painter: &Painter,
-    rect: Rect,
-    choice: crate::actions::FlagFilter,
-    colors: &Colors,
-) {
-    use crate::actions::FlagFilter;
+/// Pastille de couleur d'un contrôle (bandeau de notation, sélecteur, barre des filtres) :
+/// pleine quand elle est posée ou active, plus petite et fondue sinon (même effet
+/// partout, retour du 31/10/2026).
+pub fn color_dot(painter: &Painter, center: Pos2, size: f32, fill: Color32, active: bool) {
+    if active {
+        painter.circle_filled(center, size * 0.4, fill);
+    } else {
+        painter.circle_filled(center, size * 0.3, fill.gamma_multiply(FADED));
+    }
+}
+
+/// Couleur d'un contrôle non choisi ou d'un filtre éteint : la même, fondue.
+pub fn faded(color: Color32) -> Color32 {
+    color.gamma_multiply(FADED)
+}
+
+/// Bouton d'un drapeau dans la barre des filtres (31/10/2026 : trois boutons combinables,
+/// acceptées / neutres / rejetées), dans `rect` : la pastille du drapeau, ou le cercle du
+/// neutre, en couleur si `active`, fondu sinon.
+pub fn flag_toggle(painter: &Painter, rect: Rect, flag: Flag, colors: &Colors, active: bool) {
     let (center, radius) = (rect.center(), rect.width() * 0.4);
-    match choice {
-        FlagFilter::Accepted => flag(painter, center, radius, Flag::Accepted, colors),
-        FlagFilter::Rejected => flag(painter, center, radius, Flag::Rejected, colors),
-        FlagFilter::NotRejected => neutral_ring(painter, center, radius, Color32::from_gray(120)),
+    let fade = |c: Color32| if active { c } else { faded(c) };
+    match flag {
+        Flag::Accepted => badge_with_glyph(
+            painter,
+            center,
+            radius,
+            true,
+            fade(Color32::from(colors.accepted)),
+            fade(Color32::WHITE),
+        ),
+        Flag::Rejected => badge_with_glyph(
+            painter,
+            center,
+            radius,
+            false,
+            fade(Color32::from(colors.rejected)),
+            fade(Color32::WHITE),
+        ),
+        Flag::None => neutral_ring(painter, center, radius, fade(Color32::from_gray(230))),
     }
 }
 
@@ -1253,17 +1279,16 @@ pub fn color_controls(
     for color in Color::ALL {
         let action = Action::Color(color);
         let (rect, hit) = cell(ui, action);
-        let active = notes.has_color(color);
-        let fill = color_of(colors, color);
-        let painter = ui.painter();
         // Posée : pleine ; sinon plus petite et fondue. Plus de cercle d'accent autour de
         // la couleur posée (retour du 31/10/2026 : les étoiles et les drapeaux n'en ont
         // pas, le fondu suffit).
-        if active {
-            painter.circle_filled(rect.center(), size * 0.4, fill);
-        } else {
-            painter.circle_filled(rect.center(), size * 0.3, fill.gamma_multiply(FADED));
-        }
+        color_dot(
+            ui.painter(),
+            rect.center(),
+            size,
+            color_of(colors, color),
+            notes.has_color(color),
+        );
         if hit {
             clicked = Some(action);
         }
