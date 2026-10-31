@@ -11721,7 +11721,8 @@ impl TriApp {
 
         // Pile de développements dépliée (30/10/2026) : un cadre fin de la couleur des
         // développements autour de chacune de ses vignettes.
-        let dev_mark = Color32::from(colors.development_mark);
+        let dev_mark = self.gui.theme.development_mark(&colors, ui.visuals());
+        let on_mark = marks::on_color(dev_mark);
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11746,18 +11747,15 @@ impl TriApp {
                 .clone()
                 .filter(|&i| tri::media::is_development(&self.files[i].path))
                 .count();
-            let label = painter.layout_no_wrap(
-                t!("dev-count", n = n),
-                FontId::proportional(12.0),
-                Color32::BLACK,
-            );
+            let label =
+                painter.layout_no_wrap(t!("dev-count", n = n), FontId::proportional(12.0), on_mark);
             let at = pos2(
                 rect.max.x - g.padding - 2.0 - label.size().x,
                 rect.min.y + g.padding + 2.0 + below,
             );
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, dev_mark);
-            painter.galley(at, label, Color32::BLACK);
+            painter.galley(at, label, on_mark);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-count-tip", n = n, keys = keys);
             let badge = ui.interact(back, response.id.with("developments"), Sense::click());
@@ -11784,7 +11782,7 @@ impl TriApp {
                 vec2(side, side),
             );
             painter.rect_filled(back, 6.0, dev_mark);
-            marks::fold(painter, back, Color32::BLACK);
+            marks::fold(painter, back, on_mark);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-fold-tip", keys = keys);
             let badge = ui.interact(back, response.id.with("fold"), Sense::click());
@@ -11820,15 +11818,13 @@ impl TriApp {
                     egui::StrokeKind::Inside,
                 );
             }
-            let label = painter.layout_no_wrap(
-                count.to_string(),
-                FontId::proportional(12.0),
-                Color32::BLACK,
-            );
+            let on_accent = marks::on_color(accent);
+            let label =
+                painter.layout_no_wrap(count.to_string(), FontId::proportional(12.0), on_accent);
             let at = rect.min + vec2(g.padding + 2.0, g.padding + 2.0);
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, accent);
-            painter.galley(at, label, Color32::BLACK);
+            painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
         let info = self.grid_info;

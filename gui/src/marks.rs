@@ -112,6 +112,18 @@ pub fn color_dot(painter: &Painter, center: Pos2, size: f32, fill: Color32, acti
     }
 }
 
+/// Couleur du texte ou du signe posé sur un fond `fill` : blanc sur un fond sombre, noir
+/// sur un fond clair.
+pub fn on_color(fill: Color32) -> Color32 {
+    let luminance =
+        0.2126 * f32::from(fill.r()) + 0.7152 * f32::from(fill.g()) + 0.0722 * f32::from(fill.b());
+    if luminance < 140.0 {
+        Color32::WHITE
+    } else {
+        Color32::BLACK
+    }
+}
+
 /// Couleur d'un contrôle non choisi ou d'un filtre éteint : la même, fondue.
 pub fn faded(color: Color32) -> Color32 {
     color.gamma_multiply(FADED)
