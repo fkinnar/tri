@@ -408,8 +408,9 @@ system one ("cold" measurements, experiments).
   the developments **reel** (the
   "developed" filter's icon, in the cell's text colour, no background: feedback of
   2026-10-31, the coloured "N dev." badge caught the eye; the count is in its tooltip) at
-  the top right, below the colour row (a burst's image count is at the top left; hidden
-  with the thumbnail info, Shift+T: #243); unfolded,
+  the top right, below the first colour dot, centred on it and of its size
+  (`marks::development_mark_rect`, the dot's own geometry; a burst's image count is at
+  the top left; hidden with the thumbnail info, Shift+T: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
   `s` unfolds / folds (like a stack: harmonisation of 2026-10-31, see below), `Shift+W` /
@@ -596,8 +597,10 @@ system one ("cold" measurements, experiments).
   stack to stack (↑ / ↓), as when entering a folded stack from the grid (Enter,
   double click; 2026-10-26), we land on its cover or, with `[gui.view] stack_enter =
   "first"`, on its first photo: "|‹" button of the full screen bar, next to the stacks
-  switch (always there since 2026-10-25; in the grid too, with stacks on, to see its
-  state, since 2026-10-26), or Ctrl+Shift+S, remembered from one launch
+  switch (always there since 2026-10-25, in the grid as in full screen: it left the
+  filter bar with its reorganisation of 2026-10-27 and came back to the bottom bar on
+  2026-10-31; "|‹" in the grid too, with stacks on, to see its state, since
+  2026-10-26), or Ctrl+Shift+S, remembered from one launch
   to the next (issue #62); a message says which one is on (nothing moves on screen).
   Sidecar write failure: we stay on the image (the error is in the status bar).
 - **Rating with the mouse** (2026-10-17, requested by the user: not everyone wants to do
@@ -672,7 +675,8 @@ system one ("cold" measurements, experiments).
     cover or the first photo.
   - *View* (full screen only, in place of *Grid*: #239, 2026-10-31): the **shown source**
     as a drop-down list (camera render, RAW render, each development already rendered;
-    on a development, a "before" check box: `b`), and the file actions switch. The
+    on a development, a "before" check box: `b`), the stacks switch (as in *Grid*;
+    feedback of 2026-10-31) and the file actions switch. The
     bottom bar's development buttons (‹‹ ›› : previous / next development of the photo)
     are symmetric (#240).
   - **"RATING"** (bottom bar), **"FILTER"** (top bar) and **"FOLDERS"** (left panel)

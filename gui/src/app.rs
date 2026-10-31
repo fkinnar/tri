@@ -2114,17 +2114,7 @@ impl TriApp {
             ui.weak(t!("panel-grid-render-filtered"));
         }
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        self.subheading(ui, t!("panel-grid-stacks"));
-        let mut stacking = self.stacking;
-        if self
-            .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
-            .on_hover_text(format!(
-                "{}\n{}",
-                t!("panel-grid-stacks-tip"),
-                self.action_tip(Action::StackMode)
-            ))
-            .changed()
-        {
+        if self.stacks_switch(ui) {
             clicked.push(Action::StackMode);
         }
         if self.stacking {
@@ -2316,7 +2306,27 @@ impl TriApp {
                 self.request_zoom();
             }
         }
+        if self.stacks_switch(ui) {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, Action::StackMode);
+        }
         self.file_actions_switch(ui);
+    }
+
+    /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
+    /// et « Vue » du panneau de droite : retour du 31/10/2026, elle manquait en plein
+    /// écran). Vrai quand la case vient d'être cochée ou décochée : à l'appelant de
+    /// déclencher `Action::StackMode`.
+    fn stacks_switch(&mut self, ui: &mut Ui) -> bool {
+        self.subheading(ui, t!("panel-grid-stacks"));
+        let mut stacking = self.stacking;
+        self.side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
+            .on_hover_text(format!(
+                "{}\n{}",
+                t!("panel-grid-stacks-tip"),
+                self.action_tip(Action::StackMode)
+            ))
+            .changed()
     }
 
     /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
@@ -10985,11 +10995,15 @@ impl TriApp {
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
                     actions.extend([Action::StackEnterToggle, Action::StackMode]);
-                } else if self.stacking {
+                } else {
                     // En grille, piles actives : au même endroit, pour voir l'état du
-                    // réglage (retour du 26/10/2026) ; l'interrupteur des piles, lui, est
-                    // dans la barre des filtres.
-                    actions.push(Action::StackEnterToggle);
+                    // réglage (retour du 26/10/2026). L'interrupteur des piles, parti de
+                    // la barre des filtres avec sa réorganisation (#199), revient ici
+                    // (retour du 31/10/2026 : « disparu de la barre » en grille).
+                    if self.stacking {
+                        actions.push(Action::StackEnterToggle);
+                    }
+                    actions.push(Action::StackMode);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && !self.developers.is_empty() {
@@ -11743,7 +11757,6 @@ impl TriApp {
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
-        let reel = g.marks * 1.4;
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11758,15 +11771,15 @@ impl TriApp {
         // des pastilles de couleur, toujours à la même hauteur (retours du 31/10/2026 :
         // elles se superposaient, puis sautaient selon qu'il y avait une couleur ou non ;
         // puis la pastille « n dév. » colorée accrochait : juste le dessin, le nombre dans
-        // la bulle).
-        let below = g.marks + 6.0;
-        let reel_rect = Rect::from_min_size(
-            pos2(
-                rect.max.x - g.padding - 2.0 - reel,
-                rect.min.y + g.padding + 2.0 + below,
-            ),
-            vec2(reel, reel),
+        // la bulle ; enfin centrée sur la pastille, de sa taille).
+        // Zone de la vignette dans la cellule (sous la bande d'infos quand elle est visible).
+        let info = self.grid_info_shown();
+        let bottom = if info { g.label + 4.0 } else { g.padding };
+        let image_area = Rect::from_min_max(
+            rect.min + vec2(g.padding, g.padding),
+            pos2(rect.max.x - g.padding, rect.max.y - bottom),
         );
+        let reel_rect = marks::development_mark_rect(image_area, g.marks);
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
         if self.grid_info_shown()
@@ -11850,12 +11863,6 @@ impl TriApp {
             painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
-        let info = self.grid_info_shown();
-        let bottom = if info { g.label + 4.0 } else { g.padding };
-        let image_area = Rect::from_min_max(
-            rect.min + vec2(g.padding, g.padding),
-            pos2(rect.max.x - g.padding, rect.max.y - bottom),
-        );
         let file = self.files[index].clone();
         match (
             self.thumbnail_texture(ctx, index, deadline),
@@ -14614,10 +14621,14 @@ mod tests {
         settings.gui.key_ambiguous_timeout_ms = 0;
         // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
         settings.gui.profile = crate::actions::Profile::Both;
-        // Ni darktable ni RapidRAW dans les tests (installés ou non sur la machine) : un
+        // Ni darktable, ni RapidRAW, ni RawTherapee, ni ART dans les tests (installés ou
+        // non sur la machine : RawTherapee et ART le sont sur celle de développement
+        // depuis le 31/10/2026, et leurs profils de notes se créaient d'eux-mêmes) : un
         // test les simule là où il le faut.
         settings.develop.darktable = String::new();
         settings.develop.rapidraw = String::new();
+        settings.develop.rawtherapee = String::new();
+        settings.develop.art = String::new();
         // Déchargements : historique et racine dans le dossier temporaire.
         settings.offload.history = dir.path().join("history.tsv").display().to_string();
         settings.offload.destination = dir.path().join("photos-local").display().to_string();
@@ -16432,8 +16443,12 @@ mod tests {
         h.run_steps(3);
         let label = Action::StackEnterToggle.label();
         assert!(h.query_by_label(&label).is_none(), "sans les piles");
-        h.state_mut().stacking = true;
+        // L'interrupteur des piles, lui, est toujours dans le bandeau (retour du
+        // 31/10/2026 : parti de la barre des filtres avec #199, il manquait en grille).
+        assert!(!h.state().stacking);
+        h.get_by_label(&Action::StackMode.label()).click();
         h.run_steps(3);
+        assert!(h.state().stacking, "le bandeau allume les piles en grille");
         let before = h.state().stack_enter;
         h.get_by_label(&label).click();
         h.run_steps(3);
@@ -17423,6 +17438,11 @@ mod tests {
                 .is_none()
         );
         assert!(h.query_by_label(&t!("panel-grid-files-allow")).is_some());
+        // Et l'interrupteur des piles (retour du 31/10/2026 : il manquait dans « Vue »).
+        assert!(!h.state().stacking);
+        h.get_by_label(&t!("panel-grid-stacks-on")).click();
+        h.run_steps(3);
+        assert!(h.state().stacking, "la section « Vue » allume les piles");
         press(&mut h, Key::F, Modifiers::SHIFT);
         assert!(h.query_by_label("Effacer").is_none(), "Maj+F la masque");
     }

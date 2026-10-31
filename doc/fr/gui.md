@@ -424,8 +424,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   logiciel, son développement principal ; à défaut la photo), et la **bobine** des
   développements (l'icône du filtre « développées », dans la couleur du texte de la
   cellule, sans fond : retour du 31/10/2026, « N dév. » en pastille colorée accrochait
-  l'œil ; le nombre est dans sa bulle) en haut à droite, sous la rangée des couleurs (le
-  nombre d'images d'une rafale est en haut à gauche ; masquée avec les infos des
+  l'œil ; le nombre est dans sa bulle) en haut à droite, sous la première pastille de
+  couleur, centrée sur elle et de sa taille (`marks::development_mark_rect`, même
+  géométrie que la pastille ; le nombre d'images d'une rafale est en haut à gauche ;
+  masquée avec les infos des
   vignettes, Maj+T : #243) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit
   lequel : « DT », « DT · clone 1 », « RR · copie 2 ». `s` déplie / replie (comme une pile :
@@ -630,8 +632,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   De pile en pile (↑ / ↓), comme en entrant dans une pile repliée depuis la grille
   (Entrée, double-clic ; 26/10/2026), on arrive sur sa couverture ou, avec `[gui.view] stack_enter =
   "first"`, sur sa première photo : bouton « |‹ » du bandeau du plein écran, près de
-  l'interrupteur des piles (toujours là depuis le 25/10/2026 ; en grille aussi, piles
-  actives, pour en voir l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu
+  l'interrupteur des piles (toujours là depuis le 25/10/2026, en grille comme en plein
+  écran : parti de la barre des filtres avec sa réorganisation du 27/10/2026, revenu
+  dans le bandeau le 31/10/2026 ; « |‹ » en grille aussi, piles actives, pour en voir
+  l'état, depuis le 26/10/2026), ou Ctrl+Maj+S, retenu
   d'un lancement à l'autre (issue n° 62) ; un message dit lequel est actif (rien ne
   bouge à l'écran).
   Échec d'écriture du sidecar : on reste sur l'image (l'erreur est dans la barre d'état).
@@ -714,7 +718,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     vignettes, entrée dans une pile par la couverture ou la première photo.
   - *Vue* (plein écran seulement, à la place de *Grille* : #239, 31/10/2026) : la
     **source affichée** en liste déroulante (rendu boîtier, rendu RAW, chaque
-    développement déjà rendu ; sur un développement, une case « avant » : `b`), et
+    développement déjà rendu ; sur un développement, une case « avant » : `b`),
+    l'interrupteur des piles (comme dans *Grille* ; retour du 31/10/2026) et
     l'interrupteur des actions sur les fichiers. Les boutons de développement de la barre
     du bas (‹‹ ›› : développement précédent / suivant de la photo) sont symétriques
     (#240).

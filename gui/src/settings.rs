@@ -1142,6 +1142,9 @@ pub struct Colors {
     /// Développements d'une photo : pastille du nombre (pile repliée) et cadre fin des
     /// vignettes d'une pile dépliée.
     pub development_mark: Color,
+    /// Marques vides des vignettes (`[gui.grid] empty_marks`) : contour de l'étoile, de
+    /// la pastille et du cercle du neutre quand rien n'est posé.
+    pub empty_mark: Color,
     /// Badge « RAW » des cellules ; absent : couleur d'accent du thème.
     pub badge: Option<Color>,
     /// Icône d'une vignette impossible à calculer.
@@ -1220,6 +1223,7 @@ impl Default for Colors {
             neutral_stack_band_alt: Color([106, 106, 106]),
             stack_mark: Color([140, 140, 140]),
             development_mark: Color([88, 88, 88]),
+            empty_mark: Color([60, 60, 60]),
             badge: None,
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
