@@ -32,6 +32,8 @@ pub struct AppSettings {
     pub scheduler: SchedulerSection,
     /// `[xmp]` (moteur).
     pub xmp: XmpSection,
+    /// `[sidecars]` (moteur) : création des sidecars des logiciels quand on note.
+    pub sidecars: tri::sidecars::SidecarSettings,
     /// `[places]` (moteur).
     pub places: tri::places::PlaceSettings,
     /// `[watch]` (moteur) : surveillance du dossier ouvert.
@@ -78,6 +80,7 @@ impl AppSettings {
             cache: self.cache.clone(),
             scheduler: self.scheduler,
             xmp: self.xmp,
+            sidecars: self.sidecars,
             places: self.places.clone(),
             watch: self.watch,
             develop: self.develop.clone(),

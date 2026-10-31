@@ -97,6 +97,8 @@ pub struct EngineSettings {
     pub scheduler: SchedulerSection,
     /// Notes dans les sidecars XMP.
     pub xmp: XmpSection,
+    /// Sidecars des logiciels de développement (`.rrdata`) : création quand on note.
+    pub sidecars: crate::sidecars::SidecarSettings,
     /// Emplacements proposés pour choisir un dossier.
     pub places: crate::places::PlaceSettings,
     /// Surveillance du dossier ouvert.

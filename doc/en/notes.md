@@ -1,7 +1,10 @@
 # Module `tri::notes`
 
 The culling ratings of a folder **in memory**, how they are changed, and the filters on
-these ratings. The sidecar format is the business of [xmp.md](xmp.md).
+these ratings. The sidecar formats are the business of [sidecars.md](sidecars.md) (XMP:
+[xmp.md](xmp.md); RapidRAW: [rrdata.md](rrdata.md)): since 2026-10-31 a photo has **all
+its sidecars** (read from the most recent, all written, the missing ones created according
+to `[sidecars]`); `sidecars(image)` gives them, `sidecar(image)` the first.
 
 ## `NoteBook`: the ratings of a folder
 

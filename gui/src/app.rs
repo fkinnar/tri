@@ -1273,6 +1273,7 @@ impl TriApp {
         };
         self.loading = None;
         self.folder.notes.adopt(loaded.notes);
+        self.apply_sidecar_policy();
         self.watch_snapshot = loaded.snapshot;
         trace(|| format!("notes lues : {}", self.folder.notes.len()));
         if !self.notes_rule.is_empty() {
@@ -1617,6 +1618,7 @@ impl TriApp {
                 self.apply_cache_location(&folder.dir);
                 self.restore_folder_view(&folder.dir);
                 self.folder = folder;
+                self.apply_sidecar_policy();
                 self.start_loading();
                 self.apply_sort();
                 self.error = None;
@@ -4493,6 +4495,18 @@ impl TriApp {
             self.stacks_dirty = true;
         }
         self.folder_view = Some(self.current_folder_view());
+    }
+
+    /// Formats de sidecars créés quand on note (`[sidecars]`, 31/10/2026) : d'après les
+    /// logiciels installés et ceux dont le dossier a déjà des sidecars.
+    fn apply_sidecar_policy(&mut self) {
+        let installed = self.developers.engines();
+        let notes = &self.folder.notes;
+        let creates = self
+            .settings
+            .sidecars
+            .creates(&installed, |f| notes.has_format(f));
+        self.folder.notes.set_creates(creates);
     }
 
     /// Filtres ou tri changés depuis la dernière fois : retenus pour le dossier ouvert.
@@ -10150,6 +10164,7 @@ impl TriApp {
                 // Les notes connues en attendant la relecture en fond.
                 folder.notes.seed(&self.folder.notes);
                 self.folder = folder;
+                self.apply_sidecar_policy();
                 self.start_loading();
                 self.apply_sort();
             }
@@ -14143,7 +14158,11 @@ mod tests {
         h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
         let raw = h.state().files[0].path.with_file_name("a.RAF");
         std::fs::write(&raw, b"raw").unwrap();
-        std::fs::write(raw.with_file_name("a.RAF.rrdata"), b"{}").unwrap();
+        std::fs::write(
+            raw.with_file_name("a.RAF.rrdata"),
+            br#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
         // darktable ensuite : le plus récent.
         std::thread::sleep(Duration::from_millis(20));
         std::fs::write(
@@ -19931,7 +19950,11 @@ mod tests {
             r#"<rdf:Description darktable:history_end="3"/>"#,
         )
         .unwrap();
-        std::fs::write(file.path.with_file_name(format!("{name}.rrdata")), "{}").unwrap();
+        std::fs::write(
+            file.path.with_file_name(format!("{name}.rrdata")),
+            r#"{"adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
         // Le sidecar darktable nettement plus ancien (précision des dates selon le système).
         std::fs::File::options()
             .write(true)

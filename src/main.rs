@@ -115,6 +115,8 @@ struct Args {
     cache: Option<PathBuf>,
     config: Option<PathBuf>,
     convert: Option<Convention>,
+    /// `--sidecars <format|all>` : créer les sidecars manquants des photos notées.
+    sidecars: Option<Vec<&'static dyn tri::sidecars::Format>>,
     dry_run: bool,
     exposure: bool,
     metadata: bool,
@@ -183,6 +185,20 @@ fn parse() -> AnyResult<Args> {
                 })
             }
             "--dry-run" => args.dry_run = true,
+            "--sidecars" => {
+                let wanted = value()?;
+                args.sidecars = Some(if wanted == "all" {
+                    tri::sidecars::formats().to_vec()
+                } else {
+                    match tri::sidecars::by_id(&wanted) {
+                        Some(format) => vec![format],
+                        None => {
+                            let message = t!("cli-unknown-sidecar", value = wanted);
+                            return Err(format!("{message}\n{}", usage()).into());
+                        }
+                    }
+                });
+            }
             "--rename" => args.file_action = Some(FileAction::Rename),
             "--delete" => args.file_action = Some(FileAction::Delete),
             "--reveal" => args.file_action = Some(FileAction::Reveal),
@@ -892,6 +908,43 @@ fn convert_xmp(
     }
 }
 
+/// `--sidecars <format|all>` : crée les sidecars manquants des photos notées, pour
+/// garder leurs notes dans un logiciel (voir `tri::sidecars`).
+fn generate_sidecars(
+    settings: &EngineSettings,
+    files: &[tri::media::MediaFile],
+    formats: &[&'static dyn tri::sidecars::Format],
+    dry_run: bool,
+) -> AnyResult<()> {
+    let mut book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
+    let images: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
+    let report = book.generate(&images, formats, dry_run);
+    let mode = if dry_run { "dry-run" } else { "write" };
+    for path in &report.created {
+        println!("{}\t{}", t!("cli-xmp-written", mode = mode), path.display());
+    }
+    for (image, error) in &report.errors {
+        eprintln!("{}\t{} : {error}", t!("cli-error"), image.display());
+    }
+    println!(
+        "{}",
+        t!(
+            "cli-sidecars-summary",
+            n = images.len(),
+            created = report.created.len(),
+            mode = mode,
+            unchanged = report.unchanged,
+            skipped = report.skipped,
+            errors = report.errors.len()
+        )
+    );
+    if report.errors.is_empty() {
+        Ok(())
+    } else {
+        Err(t!("cli-xmp-some-failed").into())
+    }
+}
+
 /// `--rename`, `--delete`, `--reveal`, `--edit` : voir `tri::files`.
 fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> AnyResult<()> {
     let s = &settings.files;
@@ -1251,6 +1304,10 @@ fn run() -> AnyResult<()> {
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return convert_xmp(&files, target, args.dry_run);
+    }
+    if let Some(formats) = &args.sidecars {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return generate_sidecars(&settings, &files, formats, args.dry_run);
     }
     if args.previews {
         return previews(&settings, &dir, groups.into_iter().flatten().collect());

@@ -104,6 +104,45 @@ pub fn apply(json: &str, notes: &Notes) -> io::Result<String> {
     serde_json::to_string_pretty(&Value::Object(map)).map_err(invalid)
 }
 
+/// Le sidecar RapidRAW de `image` : `IMG.RAF.rrdata`.
+pub fn path(image: &Path) -> std::path::PathBuf {
+    let mut name = image.file_name().unwrap_or_default().to_os_string();
+    name.push(".rrdata");
+    image.with_file_name(name)
+}
+
+/// Clé que RapidRAW pose dans des réglages par ailleurs vides (`baselineExposure`, vérifié
+/// dans son code le 31/10/2026) : des réglages réduits à elle ne développent rien.
+const BASELINE_KEY: &str = "baselineExposure";
+
+/// Vrai si le contenu `json` d'un `.rrdata` développe l'image : des réglages
+/// (`adjustments`) autres que vides ou réduits au marqueur de RapidRAW. Un `.rrdata` sans
+/// réglages n'est qu'un sidecar de notes (RapidRAW en écrit un pour une image seulement
+/// notée ; `tri` aussi, voir [`crate::sidecars`]), pas un développement.
+pub fn is_development(json: &str) -> bool {
+    let Ok(map) = object(json) else {
+        return false;
+    };
+    match map.get("adjustments") {
+        Some(Value::Object(adjustments)) => adjustments.keys().any(|k| k != BASELINE_KEY),
+        _ => false,
+    }
+}
+
+/// [`is_development`] pour le fichier `path` (faux s'il est illisible).
+pub fn file_is_development(path: &Path) -> bool {
+    std::fs::read_to_string(path).is_ok_and(|json| is_development(&json))
+}
+
+/// Crée le sidecar `path` avec `notes` seules (réglages nuls, comme RapidRAW pour une
+/// image notée sans être développée).
+pub fn create(path: &Path, notes: &Notes) -> io::Result<()> {
+    let empty = r#"{"version": 1, "rating": 0, "adjustments": null}"#;
+    std::fs::write(path, apply(empty, notes)?)?;
+    crate::cache::forget_stamps([path]);
+    Ok(())
+}
+
 /// Notes du sidecar RapidRAW `path`.
 pub fn read(path: &Path) -> io::Result<Notes> {
     parse(&std::fs::read_to_string(path)?)

@@ -1,7 +1,10 @@
 # Module `tri::notes`
 
 Notes de tri d'un dossier **en mémoire**, leur modification, et les filtres sur ces notes.
-Le format des sidecars est l'affaire de [xmp.md](xmp.md).
+Les formats des sidecars sont l'affaire de [sidecars.md](sidecars.md) (XMP :
+[xmp.md](xmp.md) ; RapidRAW : [rrdata.md](rrdata.md)) : depuis le 31/10/2026, une photo
+a **tous ses sidecars** (lus dans le plus récent, tous écrits, les manquants créés selon
+`[sidecars]`) ; `sidecars(image)` les donne, `sidecar(image)` le premier.
 
 ## `NoteBook` : les notes d'un dossier
 

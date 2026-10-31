@@ -4,6 +4,14 @@
 
 ## À venir
 
+- **Notes écrites dans tous les sidecars de la photo** (`tri::sidecars`, un format par
+  logiciel) : le XMP et le `IMG.RAF.rrdata` de RapidRAW, lus dans le plus récent, tous
+  écrits. Un `.rrdata` manquant est créé quand on note selon `[sidecars.rapidraw] create`
+  (`auto` : RapidRAW installé ou dossier qui en contient déjà ; `always` ; `never`) :
+  une note posée dans `tri` se voit dans RapidRAW même sur une image jamais ouverte
+  dedans ; `tri <dossier> --sidecars rapidraw|xmp|all [--dry-run]` les crée à la demande
+  pour les photos notées. Un `.rrdata` sans réglages (image seulement notée) n'est plus
+  un développement : pas de pile « 1 dév. » pour elle.
 - **Rendu des vignettes retenu par dossier**, comme les filtres et le tri (`f d`, panneau
   de droite) : un dossier jamais réglé prend `[gui.grid] render`. Le rendu décide désormais
   de la **couverture** d'une photo développée : « JPEG boîtier » et « LibRaw » montrent la

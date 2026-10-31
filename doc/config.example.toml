@@ -76,6 +76,13 @@ sidecar = "darktable"
 # remplace la précédente (comme Lightroom).
 multiple_colors = false
 
+# Sidecars des logiciels de développement (31/10/2026) : une sous-section par logiciel qui
+# a le sien. Un sidecar existant reçoit toujours les notes ; un sidecar manquant est créé
+# selon "create" : "auto" (le logiciel est installé, ou le dossier en contient déjà),
+# "always", "never" (à la demande : tri --sidecars). Le XMP est toujours créé ([xmp]).
+[sidecars.rapidraw]
+create = "auto"
+
 [places]
 # Emplacements proposés par le panneau des dossiers. Masquer les sauvegardes Time Machine,
 # reconnues à leur contenu (pas à leur nom) :

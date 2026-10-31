@@ -5,8 +5,12 @@ for the main development, `IMAGE.RAF.<id>.rrdata` for each virtual copy (interna
 RapidRAW calls it `IMAGE.RAF?vc=<id>`). Checked in its source code on 2026-10-30.
 
 Each development keeps its notes where its software reads them (decided on 2026-10-30):
-a virtual copy has its own in its `.rrdata`; the main development has the photo's,
-written to `IMAGE.RAF.rrdata` as well (issue #234, 2026-10-31; see `developments.md`).
+a virtual copy has its own in its `.rrdata`; the main `IMAGE.RAF.rrdata` carries the
+photo's, like its XMP (issue #234, 2026-10-31; since then one of `tri`'s **sidecar
+formats**, created when rating according to `[sidecars.rapidraw]`, see `sidecars.md`).
+Without adjustments (`adjustments` null, empty or reduced to RapidRAW's
+`baselineExposure` marker), it is only a notes sidecar, not a development
+(`is_development`, `file_is_development`).
 
 ## Fields
 
@@ -27,7 +31,9 @@ if the notes did not change.
 ## Functions
 
 - `parse(json)` / `read(path)`: the notes.
-- `apply(json, notes)` / `write(path, notes)`: the notes written, the rest kept.
+- `apply(json, notes)` / `write(path, notes)`: the notes written, the rest kept;
+  `create(path, notes)`: a new sidecar, notes only, null adjustments; `path(image)`.
+- `is_development(json)` / `file_is_development(path)`: adjustments that develop.
 - `adjustments(json)`: the settings, to render a virtual copy.
 
 ## Files

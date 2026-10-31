@@ -355,6 +355,7 @@ pub fn find(
     names: &[String],
     images: &dyn Fn(&str) -> bool,
     is_darktable: &dyn Fn(&Path) -> bool,
+    is_rapidraw: &dyn Fn(&Path) -> bool,
 ) -> Vec<Development> {
     let Some(name) = photo.file_name().map(|n| n.to_string_lossy().into_owned()) else {
         return Vec::new();
@@ -391,7 +392,12 @@ pub fn find(
         {
             clones.push(new(Engine::Darktable, Copy::Clone(number), file));
         } else if l == format!("{lower}.rrdata") {
-            rapidraw.push(new(Engine::RapidRaw, Copy::Main, file));
+            // Un `.rrdata` sans réglages n'est qu'un sidecar de notes (31/10/2026,
+            // `rrdata::is_development`) : la photo notée dans RapidRAW, ou par `tri` pour
+            // lui, sans développement.
+            if is_rapidraw(&sidecar(file)) {
+                rapidraw.push(new(Engine::RapidRaw, Copy::Main, file));
+            }
         } else if let Some(id) = l
             .strip_prefix(&format!("{lower}."))
             .and_then(|r| r.strip_suffix(".rrdata"))
@@ -437,7 +443,7 @@ mod tests {
             "IMG_03.RAF.xmp",
             "AUTRE.RAF.xmp",
         ]);
-        let found = find(photo, &files, &|n| n == "img_03.raf", &|_| true);
+        let found = find(photo, &files, &|n| n == "img_03.raf", &|_| true, &|_| true);
         let paths: Vec<String> = found
             .iter()
             .map(|d| d.path().file_name().unwrap().to_string_lossy().into_owned())
@@ -468,7 +474,7 @@ mod tests {
         );
         // Un XMP écrit par tri seul ou par un autre logiciel (notes digiKam…) : pas de
         // développement darktable, clones compris ; RapidRAW reste.
-        let none = find(photo, &files, &|_| false, &|_| false);
+        let none = find(photo, &files, &|_| false, &|_| false, &|_| true);
         assert_eq!(none.len(), 2);
         assert_eq!(none[0].engine, Engine::RapidRaw);
     }
