@@ -329,18 +329,32 @@ pub fn prefer(data: &Path, development: &Path, on: bool) -> std::io::Result<()> 
     std::fs::write(data.join(PREFERRED), lines.join("\n") + "\n")
 }
 
-/// Vrai si le XMP de contenu `text` est de darktable : écrit par darktable
-/// (`darktable:xmp_version`), ou avec un historique. Un XMP écrit par `tri` seul (notes)
-/// ne l'est pas.
+/// Valeur de `darktable:history_end`, en attribut ou en élément (`None` : absent ou
+/// illisible).
+pub fn history_end(xmp: &str) -> Option<u32> {
+    let tag = "darktable:history_end";
+    let at = xmp.find(tag)? + tag.len();
+    let rest = xmp[at..].trim_start_matches(['=', '"', '>', ' ']);
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
+/// Vrai si le XMP `text` décrit un **développement** darktable : un historique non vide
+/// (`darktable:history_end` > 0, en attribut ou en élément). **La seule règle**, pour les
+/// piles, la surveillance, le rendu et le filtre (retour du 31/10/2026 : deux règles
+/// différentes faisaient passer pour développées des photos seulement notées). Un XMP
+/// seulement importé dans darktable (`darktable:xmp_version`, historique vide), ou écrit
+/// par `tri` (notes) ou un autre logiciel, n'en est pas un ; un clone vierge non plus.
 pub fn is_darktable(text: &str) -> bool {
-    text.contains("darktable:xmp_version") || text.contains("darktable:history_end=\"")
+    history_end(text).is_some_and(|end| end > 0)
 }
 
 /// Vrai si le XMP `path` est de darktable ([`is_darktable`]) : seul son début est lu
 /// (darktable écrit ses attributs en tête).
 pub fn file_is_darktable(path: &Path) -> bool {
     use std::io::Read;
-    let mut head = vec![0; 16 * 1024];
+    // 64 Ko : `history_end` est en tête en attribut, un peu plus loin en élément.
+    let mut head = vec![0; 64 * 1024];
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
@@ -520,11 +534,19 @@ mod tests {
 
     #[test]
     fn darktable_xmp_are_told_from_notes_written_by_tri() {
-        assert!(is_darktable(r#"<x darktable:xmp_version="5"/>"#));
-        assert!(is_darktable(r#"<x darktable:history_end="0"/>"#));
+        // Un historique non vide seulement (31/10/2026) : importé sans retouche, non.
+        assert!(is_darktable(
+            r#"<x darktable:xmp_version="5" darktable:history_end="3"/>"#
+        ));
+        assert!(is_darktable(
+            "<x><darktable:history_end>2</darktable:history_end></x>"
+        ));
+        assert!(!is_darktable(r#"<x darktable:xmp_version="5"/>"#));
+        assert!(!is_darktable(r#"<x darktable:history_end="0"/>"#));
         assert!(!is_darktable(
             r#"<x xmp:Rating="3" darktable:colorlabels="1"/>"#
         ));
+        assert_eq!(history_end(r#"<x darktable:history_end="27"/>"#), Some(27));
     }
 
     #[test]

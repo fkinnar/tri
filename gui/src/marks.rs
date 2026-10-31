@@ -33,15 +33,34 @@ pub fn star(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
     // points sont visibles depuis son centre.
     let mut mesh = Mesh::default();
     mesh.colored_vertex(center, color);
-    for i in 0..10 {
-        let r = if i % 2 == 0 { radius } else { radius * 0.45 };
-        let angle = -FRAC_PI_2 + i as f32 * PI / 5.0;
-        mesh.colored_vertex(center + vec2(angle.cos(), angle.sin()) * r, color);
+    for p in star_points(center, radius) {
+        mesh.colored_vertex(p, color);
     }
     for i in 0..10u32 {
         mesh.add_triangle(0, 1 + i, 1 + (i + 1) % 10);
     }
     painter.add(Shape::mesh(mesh));
+}
+
+/// Les dix sommets d'une étoile à cinq branches, en commençant en haut.
+fn star_points(center: Pos2, radius: f32) -> Vec<Pos2> {
+    (0..10)
+        .map(|i| {
+            let r = if i % 2 == 0 { radius } else { radius * 0.45 };
+            let angle = -FRAC_PI_2 + i as f32 * PI / 5.0;
+            center + vec2(angle.cos(), angle.sin()) * r
+        })
+        .collect()
+}
+
+/// Liseré sombre d'une étoile de vignette, de `width` points tout autour (un contour
+/// tracé, pas une étoile plus grande : les pointes amincissaient le trait ; retour du
+/// 31/10/2026).
+fn star_rim(painter: &Painter, center: Pos2, radius: f32, width: f32, color: Color32) {
+    painter.add(Shape::closed_line(
+        star_points(center, radius),
+        Stroke::new(width * 2.0, color),
+    ));
 }
 
 /// Pastille du drapeau : coche verte (acceptée) ou croix rouge (rejetée).
@@ -201,6 +220,9 @@ pub fn sharp_triangle(painter: &Painter, rect: Rect, color: Color32) {
 /// sombre.
 const RIM: Color32 = Color32::from_black_alpha(170);
 
+/// Gris clair des marques vides d'une vignette (rien de posé : où cliquer).
+const PLACEHOLDER: Color32 = Color32::from_gray(185);
+
 /// Notes posées sur une vignette de la grille, dans `area` (retour du 21/10/2026 : plus de
 /// rectangle sombre, chaque marque cerclée de sombre comme les pastilles) : étoiles en bas
 /// à gauche, drapeau en bas à droite, couleurs en haut à droite. `size` : taille d'une
@@ -211,39 +233,53 @@ pub fn thumbnail_notes(
     notes: &Notes,
     size: f32,
     colors: &Colors,
-    neutral: bool,
+    placeholders: bool,
 ) {
     let radius = size / 2.0;
     let gap = size * 0.25;
     let inset = radius + 3.0;
     let star_fill = chip_star_color(painter.ctx(), colors);
-    let rim = (radius * 0.18).max(1.2);
-    for k in 0..notes.stars {
-        let c = pos2(
+    // Liseré de 2 points partout (retour du 31/10/2026 : il paraissait plus fin autour
+    // des étoiles qu'autour des pastilles).
+    let rim = (radius * 0.3).max(2.0);
+    // Marques vides (`[gui.grid] empty_marks`, 31/10/2026) : là où rien n'est posé, un
+    // contour gris clair montre où cliquer (une étoile, une pastille, le cercle du
+    // neutre), et chaque vignette montre toutes ses informations.
+    let empty = Stroke::new(1.5, PLACEHOLDER);
+    let star_at = |k: u8| {
+        pos2(
             area.min.x + inset + k as f32 * (size + gap),
             area.max.y - inset,
-        );
-        star(painter, c, radius + rim * 1.6, RIM);
+        )
+    };
+    for k in 0..notes.stars {
+        let c = star_at(k);
+        star_rim(painter, c, radius, rim, RIM);
         star(painter, c, radius, star_fill);
     }
-    if notes.flag != Flag::None {
-        let c = pos2(area.max.x - inset, area.max.y - inset);
-        painter.circle_filled(c, radius + rim, RIM);
-        flag(painter, c, radius, notes.flag, colors);
-    } else if neutral {
-        // Neutre : un seul cercle sombre à la même place (`[gui.grid] neutral_flag`,
-        // 31/10/2026 : chaque vignette montre toutes ses informations ; retour du même
-        // jour : juste un cercle, sans blanc), de la couleur du liseré des autres marques.
-        let c = pos2(area.max.x - inset, area.max.y - inset);
-        neutral_ring(painter, c, radius + rim, RIM);
+    if notes.stars == 0 && placeholders {
+        painter.add(Shape::closed_line(star_points(star_at(0), radius), empty));
     }
-    for (k, &color) in notes.colors.iter().enumerate() {
-        let c = pos2(
+    let flag_at = pos2(area.max.x - inset, area.max.y - inset);
+    if notes.flag != Flag::None {
+        painter.circle_filled(flag_at, radius + rim, RIM);
+        flag(painter, flag_at, radius, notes.flag, colors);
+    } else if placeholders {
+        neutral_ring(painter, flag_at, radius + rim, PLACEHOLDER);
+    }
+    let color_at = |k: usize| {
+        pos2(
             area.max.x - inset - k as f32 * (size + gap),
             area.min.y + inset,
-        );
+        )
+    };
+    for (k, &color) in notes.colors.iter().enumerate() {
+        let c = color_at(k);
         painter.circle_filled(c, radius * 0.8 + rim, RIM);
         painter.circle_filled(c, radius * 0.8, color_of(colors, color));
+    }
+    if notes.colors.is_empty() && placeholders {
+        painter.circle_stroke(color_at(0), radius * 0.8 + rim / 2.0, empty);
     }
 }
 

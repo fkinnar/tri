@@ -1815,6 +1815,13 @@ impl TriApp {
         ui.label(egui::RichText::new(text).weak())
     }
 
+    /// Infos des vignettes dessinées : le réglage (Maj+T), sauf sous `[gui.grid]
+    /// info_min_cell` de côté de cellule, où elles sont illisibles (retour du 31/10/2026) ;
+    /// le réglage ne bouge pas, elles reviennent en agrandissant.
+    fn grid_info_shown(&self) -> bool {
+        self.grid_info && self.grid_cell >= self.gui.grid.info_min_cell
+    }
+
     /// Liste déroulante pointable du panneau (#246 : une liste de boutons radio prenait
     /// trop de place pour un réglage accessoire) : ← / → passent au choix précédent /
     /// suivant de `all`, Espace au suivant en boucle. Vrai si la valeur a changé.
@@ -10675,7 +10682,9 @@ impl TriApp {
         let notes = self.folder.notes.notes(&path).clone();
         let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
         let mut clicked = None;
-        let modal = modal_at("mark_picker", at).show(ctx, |ui| {
+        // À la largeur de son contenu (retour du 31/10/2026 : la largeur minimale des
+        // boîtes laissait un grand vide à droite des cinq pastilles).
+        let modal = modal_at("mark_picker", at).free_width().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let tip = |a: Action| self.action_tip(a);
                 clicked = match kind {
@@ -11760,7 +11769,7 @@ impl TriApp {
         );
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
-        if self.grid_info
+        if self.grid_info_shown()
             && self.stacks.folded_count(index).is_some()
             && let Some(range) = self.stacks.developments_of(index)
         {
@@ -11841,7 +11850,7 @@ impl TriApp {
             painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
-        let info = self.grid_info;
+        let info = self.grid_info_shown();
         let bottom = if info { g.label + 4.0 } else { g.padding };
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),
@@ -12052,7 +12061,7 @@ impl TriApp {
             notes,
             g.marks,
             &colors,
-            g.neutral_flag,
+            g.empty_marks,
         );
         // Noter à la souris sur la vignette (#257, 31/10/2026) : un clic sur les étoiles,
         // le drapeau ou les couleurs ouvre un petit sélecteur du groupe concerné, là.
@@ -15131,7 +15140,7 @@ mod tests {
         for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
             std::fs::write(
                 photos.join(name),
-                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
             )
             .unwrap();
         }
@@ -15187,7 +15196,7 @@ mod tests {
         for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
             std::fs::write(
                 photos.join(name),
-                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
             )
             .unwrap();
         }
@@ -15248,7 +15257,7 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::write(
             photos.join("img0_01.jpg.xmp"),
-            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
         h.state_mut().reload_folder(None);
@@ -15380,7 +15389,7 @@ mod tests {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let photos = dir.path().join("photos");
-        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#;
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#;
         std::fs::write(photos.join("img0_01.jpg.xmp"), darktable).unwrap();
         std::fs::write(photos.join("img0.jpg.xmp"), darktable).unwrap();
         h.state_mut().reload_folder(None);
@@ -19115,7 +19124,7 @@ mod tests {
         let photos = dir.path().join("photos");
         std::fs::write(
             photos.join("img0_01.jpg.xmp"),
-            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
         h.state_mut().reload_folder(None);

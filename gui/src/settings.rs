@@ -449,6 +449,10 @@ pub struct GridSettings {
     /// Bornes du curseur de taille des vignettes.
     pub cell_min: f32,
     pub cell_max: f32,
+    /// Côté de cellule (points) sous lequel les infos des vignettes (nom, format, notes)
+    /// sont masquées d'elles-mêmes, sans toucher au réglage : trop petites pour être
+    /// lisibles (demandé le 31/10/2026), elles reviennent en agrandissant.
+    pub info_min_cell: f32,
     /// Espace entre les cellules.
     pub gap: f32,
     /// Infos sur les vignettes (nom, format, notes, badges) au démarrage (Maj+T).
@@ -463,9 +467,10 @@ pub struct GridSettings {
     pub textures: usize,
     /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
     pub marks: f32,
-    /// Drapeau « neutre » dessiné aussi (cercle vide), pour que chaque vignette montre
-    /// toutes ses informations (demandé le 31/10/2026).
-    pub neutral_flag: bool,
+    /// Marques vides dessinées en gris clair là où rien n'est posé (une étoile, une
+    /// pastille de couleur, le cercle du drapeau neutre) : chaque vignette montre toutes
+    /// ses informations et où cliquer (demandé le 31/10/2026).
+    pub empty_marks: bool,
     /// Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
     pub rejected_opacity: f32,
     /// Épaisseur du cadre de la vignette survolée par la souris.
@@ -517,6 +522,7 @@ impl Default for GridSettings {
             cell: 200.0,
             cell_min: 60.0,
             cell_max: 600.0,
+            info_min_cell: 110.0,
             gap: 8.0,
             info: true,
             label: 18.0,
@@ -524,7 +530,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
-            neutral_flag: true,
+            empty_marks: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
             marked_frame: 3.0,

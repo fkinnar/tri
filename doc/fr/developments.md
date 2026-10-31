@@ -37,8 +37,10 @@ demande, `b` fait le tour des rendus).
 
 - `find(photo, names, images, is_darktable, is_rapidraw)` : les développements d'une
   photo d'après les noms des fichiers de son dossier, dans l'ordre : principal darktable
-  (si son XMP est de darktable : `is_darktable` lit son début, `darktable:xmp_version`
-  ou un historique), clones par numéro (de darktable aussi : un `IMG_01.RAF.xmp`
+  (si son XMP décrit un développement : `is_darktable` lit son début, un historique non
+  vide, `darktable:history_end` > 0 en attribut ou en élément ; **la seule règle**, la
+  même que le rendu et le filtre depuis le 31/10/2026 : un XMP seulement importé dans
+  darktable ou écrit par `tri` pour les notes n'en est pas un), clones par numéro (de darktable aussi : un `IMG_01.RAF.xmp`
   orphelin écrit par un autre logiciel, digiKam par exemple, n'est pas un clone),
   principal RapidRAW (si son `.rrdata` a des réglages : `is_rapidraw`,
   `rrdata::file_is_development` ; sans, c'est un sidecar de notes, 31/10/2026, voir

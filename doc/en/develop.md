@@ -42,11 +42,11 @@ choice: someone working in darktable who tries another software sets
   exported launcher opens the interface, not `darktable-cli`). The Flatpak must be able to
   read `tri`'s images and cache (home folder): to be checked for images outside the home
   folder.
-- `darktable_sidecar(image)`: `IMAGE.RAF.xmp`, **only if it is darktable's**: written
-  by darktable (`darktable:xmp_version`), or with a history (`darktable:history_end` >
-  0). An image imported but not edited (virgin clone) thus has its default darktable
-  render, which is not LibRaw's (feedback of 2026-10-30). A sidecar written by `tri`
-  alone (notes) has none.
+- `darktable_sidecar(image)`: `IMAGE.RAF.xmp`, **only if it describes a development**
+  (`developments::is_darktable`: a non-empty history, `darktable:history_end` > 0).
+  Revised on 2026-10-31: an image imported into darktable without edits is no longer
+  "developed" (the "developed" filter showed merely rated photos), the rule is the same
+  as for the stacks. A sidecar written by `tri` alone (notes) has none either.
 - `Engine::sidecar(image)`: for a development (`developments.md`), its sidecar if it is
   this software's; for a photo that has developments of this software, **nothing**: the
   sidecar is theirs (they have their thumbnail), the photo remains the neutral render.
