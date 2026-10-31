@@ -62,8 +62,9 @@ conversion ; `export_rapidraw`, voir `export.md`, « Par RapidRAW »).
 RapidRAW (AGPL-3.0, appelé en processus séparé) a une commande sans interface depuis
 la version 1.6 : `rapidraw export <image> --output <fichier> --format jpeg --quality 95`,
 qui applique d'elle-même les réglages du sidecar **`IMAGE.RAF.rrdata`** posé à côté de
-l'image (`rapidraw_sidecar` ; ses copies virtuelles `IMAGE.RAF.<id>.rrdata` ne sont
-pas lues). Elle exporte à pleine taille, sans option de taille : `tri` réduit ensuite
+l'image (`rapidraw_sidecar`, s'il porte de vrais réglages : un sidecar qui ne contient
+qu'une note, écrit par `tri`, n'est pas un développement et n'est pas rendu, 31/10/2026 ;
+ses copies virtuelles `IMAGE.RAF.<id>.rrdata` ne sont pas lues). Elle exporte à pleine taille, sans option de taille : `tri` réduit ensuite
 au côté de l'aperçu standard (`shrink`). **Interface de RapidRAW ouverte** : l'export
 sans interface tourne quand même (il ne passe pas par l'instance unique), mais a rendu
 une **image toute noire** sans erreur (essai du 26/10/2026). `shrink` refuse une image

@@ -932,6 +932,7 @@ filter-developed-none-hint = None checked: not developed (LibRaw)
 develop-with = Develop with
 develop-with-choose = choose…
 develop-with-libraw = RAW render (LibRaw)
+develop-with-not-developed = Not developed in { $engine }: nothing to render (a sidecar holding only a rating is not a development)
 develop-folder-title = Develop "{ $folder }"
 develop-folder-each = Each image's own development (otherwise the RAW render)
 develop-folder-only = All in { $engine } (the images it developed)

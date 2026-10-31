@@ -10689,9 +10689,23 @@ impl TriApp {
                             .show_ui(ui, |ui| {
                                 for &engine in &engines {
                                     let action = Action::DevelopWith(engine);
+                                    // RapidRAW ne rend que ce qu'on y a développé (un
+                                    // `.rrdata` de notes seules donnait un rendu orphelin,
+                                    // hors de la pile : retour du 31/10/2026) ; darktable
+                                    // rend aussi par défaut.
+                                    let developable = engine != tri::develop::Engine::RapidRaw
+                                        || engine.sidecar(&path).is_some();
+                                    let tip = if developable {
+                                        self.action_tip(action)
+                                    } else {
+                                        t!("develop-with-not-developed", engine = engine.name())
+                                    };
                                     if ui
-                                        .selectable_label(false, engine.name())
-                                        .on_hover_text(self.action_tip(action))
+                                        .add_enabled(
+                                            developable,
+                                            egui::Button::selectable(false, engine.name()),
+                                        )
+                                        .on_hover_text(tip)
                                         .clicked()
                                     {
                                         develop = Some(Some(engine));

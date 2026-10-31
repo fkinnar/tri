@@ -14,6 +14,9 @@
   as soon as stacks were on). The "N dev." badge and the "fold" badge sit below the colour
   labels instead of over them. The **neutral flag is drawn too** (an empty circle at the
   flag's place, `[gui.grid] neutral_flag`), so every thumbnail shows all its information.
+- **Fixed: "Develop with RapidRAW" on a photo whose `.rrdata` holds only a rating** rendered
+  an orphan development, outside the stack: such a sidecar is no longer a RapidRAW
+  development for the renderer either, and the entry is greyed in the right-click dialog.
 - **Generate the missing rating sidecars from the interface** (follow-up to #253): a
   sidecar icon in a thumbnail's right-click dialog (the selection) and "Generate the
   sidecars…" in the open folder's right-click menu; the dialog offers every software or

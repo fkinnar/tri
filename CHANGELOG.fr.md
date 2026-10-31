@@ -16,6 +16,10 @@
   au lieu de les recouvrir. Le **drapeau neutre est dessiné aussi** (un cercle vide à la
   place du drapeau, `[gui.grid] neutral_flag`) : chaque vignette montre toutes ses
   informations.
+- **Corrigé : « Développer avec RapidRAW » sur une photo dont le `.rrdata` ne porte qu'une
+  note** rendait un développement orphelin, hors de la pile : un tel sidecar n'est plus un
+  développement RapidRAW pour le rendu non plus, et l'entrée est grisée dans la boîte du
+  clic droit.
 - **Générer les sidecars de notes manquants depuis l'interface** (suite de #253) : une
   icône « sidecar » dans la boîte du clic droit d'une vignette (la sélection) et « Générer
   les sidecars… » dans le menu du clic droit du dossier ouvert ; la boîte propose tous les
