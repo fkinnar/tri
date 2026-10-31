@@ -12829,7 +12829,7 @@ impl TriApp {
             - style.spacing.scroll.bar_width
             - style.spacing.scroll.bar_outer_margin)
             .max(width / 2.0);
-        egui::Window::new(t!("help-title"))
+        let shown = egui::Window::new(t!("help-title"))
             .open(&mut open)
             .min_width(width)
             .max_width(width)
@@ -12985,6 +12985,22 @@ impl TriApp {
                 ui.add_space(6.0);
                 ui.weak(t!("help-close-hint"));
             });
+        // Main « saisir » sur la barre de titre, comme sur le fond des autres boîtes (retour
+        // du 31/10/2026) ; la barre d'egui ne la met pas d'elle-même.
+        if let Some(shown) = shown
+            && let Some(pos) = ctx.pointer_hover_pos()
+            && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
+        {
+            let style = ctx.style();
+            let heading = egui::TextStyle::Heading.resolve(&style).size;
+            let margin = style.spacing.window_margin.top as f32;
+            let frame = shown.response.rect;
+            let title_bar =
+                Rect::from_min_size(frame.min, vec2(frame.width(), heading + 2.0 * margin));
+            if title_bar.contains(pos) {
+                ctx.set_cursor_icon(egui::CursorIcon::Grab);
+            }
+        }
         self.help_lines = Some(lines);
         self.help_search = Some(query);
         self.help = open;

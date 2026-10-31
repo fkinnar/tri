@@ -33,7 +33,7 @@
 - **Barre des filtres : la recherche par nom est à droite**, juste avant le compteur
   d'images (#241).
 - **Aide : « Signaler un problème » en bordeaux** (#242), et **la fenêtre d'aide se
-  déplace** (#251). La **boîte de déchargement s'ouvre au centre** comme les autres
+  déplace** (#251 ; main « saisir » sur sa barre de titre). La **boîte de déchargement s'ouvre au centre** comme les autres
   (#252).
 - **`q q` quitte** au lieu de `q` seul, trop immédiat à côté de `Maj+Q` (#244).
 - **`tri-gui <image>` ouvre le dossier de l'image, sur elle** (#250).
