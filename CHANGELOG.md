@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Sidecars dialog: installed software only** (XMP always), like the render list; ART
+  was offered without being there (feedback of 2026-10-31).
 - **RawTherapee / ART as an AppImage on Linux**: recent AppImages only launch the
   interface, so `tri` extracts the AppImage once into its cache and runs the extracted
   `rawtherapee-cli` / `ART-cli` with the bundled libraries. An ART AppImage is recognised

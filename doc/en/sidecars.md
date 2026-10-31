@@ -51,7 +51,8 @@ into the existing sidecars, the rest kept, an unreadable file recreated;
 `Generated::rewritten`). In the interface (2026-10-31): action `core.file.sidecars` (no
 default key), a "sidecar" icon in a thumbnail's right-click dialog (the selection) and
 "Generate the sidecars…" in the open folder's right-click menu; the dialog
-(`SidecarsDialog`) offers "every software" or one format ("RapidRAW (.rrdata)", "XMP"), a
+(`SidecarsDialog`) offers "every software" or one format ("RapidRAW (.rrdata)", "XMP"),
+**installed software only** (XMP always; feedback of 2026-10-31, like the render list), a
 check box "Also rewrite the existing sidecars" (with a warning: their ratings only, the
 rest is kept), announces how many will be created, rewritten, left alone or skipped (dry
 run), then writes; the summary goes to the status bar, and the "auto" policy is applied again (the
