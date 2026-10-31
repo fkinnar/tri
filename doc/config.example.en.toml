@@ -597,9 +597,10 @@ search_min_width = 80.0
 # "rapidraw" (always this software), "libraw" (RAW render). An image without the wanted
 # development shows its LibRaw render, computed in the background.
 render = "embedded"
-# Developments shown by the grid but not rendered yet: "auto" (rendered in the
-# background, one image after another) or "manual" (Ctrl+Shift+B on the folder; LibRaw
-# meanwhile).
+# Photos to develop for the chosen render: "auto" (rendered in the background, one
+# image after another) or "manual" (Ctrl+Shift+B on the folder; LibRaw meanwhile).
+# Developments (clones, copies) are always rendered in the background: it is their
+# thumbnail.
 develop = "auto"
 # Thumbnail whose render is awaited: the cache is read again at most once per this
 # interval (ms).

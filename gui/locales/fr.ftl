@@ -375,7 +375,10 @@ status-no-folder = aucun dossier
 status-images = { $n ->
     [one] { $n } image
    *[other] { $n } images
-} ({ $raws } RAW) · filtre : { $filter }
+} ({ $raws } RAW{ $devs ->
+    [0] { "" }
+   *[other] , { $devs } dév.
+}) · filtre : { $filter }
 status-selected = { $n ->
     [one] { $n } sélectionnée
    *[other] { $n } sélectionnées

@@ -143,12 +143,74 @@ pub enum GridDevelop {
     Manual,
 }
 
+/// Ce que le lot de la grille rend en fond parmi `files` : les développements (leur
+/// vignette est leur rendu, dans leur logiciel : `force` à `None`, « chacun dans le
+/// sien ») toujours ; avec `develop` à `Auto` et un rendu `shown` développé, toutes les
+/// images, dans le logiciel que `shown` impose (`Some(e)`) ou celui de leur dernier
+/// développement (`None`).
+pub fn to_render(
+    files: &[MediaFile],
+    develop: GridDevelop,
+    shown: GridRender,
+) -> (Vec<MediaFile>, Option<Engine>) {
+    match shown.to_develop() {
+        Some(force) if develop == GridDevelop::Auto => (files.to_vec(), force),
+        _ => (
+            files
+                .iter()
+                .filter(|f| tri::media::is_development(&f.path))
+                .cloned()
+                .collect(),
+            None,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const DT: Engine = Engine::Darktable;
     const RR: Engine = Engine::RapidRaw;
+
+    #[test]
+    fn the_grid_always_renders_its_developments_and_the_photos_only_automatically() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = |name: &str| MediaFile {
+            path: dir.path().join(name),
+            kind: MediaKind::Raw,
+        };
+        // Le clone, connu du registre (c'est lui qui fait d'un chemin un développement).
+        tri::developments::set_for(
+            &file("a.RAF").path,
+            &[tri::developments::Development {
+                engine: DT,
+                copy: tri::developments::Copy::Clone(1),
+                photo: file("a.RAF").path,
+                sidecar: dir.path().join("a_01.RAF.xmp"),
+            }],
+        );
+        let files = vec![file("a.RAF"), file("a@dt-01.RAF"), file("b.RAF")];
+        // Développements seuls, chacun dans son logiciel : en manuel, ou en JPEG boîtier.
+        for (develop, shown) in [
+            (GridDevelop::Manual, GridRender::Latest),
+            (GridDevelop::Manual, GridRender::Engine(DT)),
+            (GridDevelop::Auto, GridRender::Embedded),
+            (GridDevelop::Auto, GridRender::LibRaw),
+        ] {
+            let (to_do, force) = to_render(&files, develop, shown);
+            assert_eq!(to_do, vec![file("a@dt-01.RAF")], "{develop:?} {shown:?}");
+            assert_eq!(force, None);
+        }
+        // Automatique et rendu développé : tout le dossier, dans le logiciel du rendu.
+        let (to_do, force) = to_render(&files, GridDevelop::Auto, GridRender::Engine(RR));
+        assert_eq!(to_do.len(), 3);
+        assert_eq!(force, Some(RR));
+        assert_eq!(
+            to_render(&files, GridDevelop::Auto, GridRender::Latest).1,
+            None
+        );
+    }
 
     #[test]
     fn ids_round_trip_and_choices_follow_what_is_installed() {

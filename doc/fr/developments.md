@@ -84,8 +84,8 @@ RapidRAW par RapidRAW, les clones par darktable, quoi qu'on regarde), sous le no
 logiciel donne à ses exports (`IMG_01`, `IMG_VC01`) ; voir `export.md`, « On exporte ce
 qu'on regarde » et « Par RapidRAW ».
 
-## À venir
+## Dans la barre d'état et en fond
 
-Le compte « N images » de la barre d'état
-compte les développements ; leurs vignettes ne se calculent en fond qu'avec
-`[gui.grid] develop = "auto"`.
+La barre d'état compte les photos et, à part, leurs développements (« 12 images (10 RAW,
+3 dév.) », 31/10/2026) ; les vignettes des développements se calculent en fond quel que
+soit `[gui.grid] develop` (voir `gui.md`).

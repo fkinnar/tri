@@ -376,7 +376,10 @@ status-no-folder = no folder
 status-images = { $n ->
     [one] { $n } image
    *[other] { $n } images
-} ({ $raws } RAW) · filter: { $filter }
+} ({ $raws } RAW{ $devs ->
+    [0] { "" }
+   *[other] , { $devs } dev.
+}) · filter: { $filter }
 status-selected = { $n } selected
 status-visual-mode = { " " }· visual mode
 progress-notes = ratings

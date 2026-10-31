@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Developments counted apart** in the status bar ("12 images (10 RAW, 3 dev.)": a photo
+  and its two copies are no longer "3 images"), and **their thumbnails always rendered in
+  the background**, each by its software, even with `[gui.grid] develop = "manual"`
+  (which now only concerns the photos to develop for the chosen render).
 - **Comparing a photo's developments** (`c` on a photo with developments, no selection):
   the camera JPEG, the darktable development, its clones and the RapidRAW copies side by
   side, like a burst; on a development, `b` shows the camera JPEG before / after. A collapsed

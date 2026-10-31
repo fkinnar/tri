@@ -83,8 +83,8 @@ through RapidRAW, clones through darktable, whatever is being looked at), under 
 that software gives to its exports (`IMG_01`, `IMG_VC01`); see `export.md`, "We export
 what we are looking at" and "Through RapidRAW".
 
-## Next
+## In the status bar and in the background
 
-The status bar's "N images" count includes
-developments; their thumbnails are only computed in the background with
-`[gui.grid] develop = "auto"`.
+The status bar counts the photos and, apart, their developments ("12 images (10 RAW,
+3 dev.)", 2026-10-31); development thumbnails are computed in the background whatever
+`[gui.grid] develop` says (see `gui.md`).
