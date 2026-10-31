@@ -56,6 +56,9 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
 
 ## RapidRAW (26/10/2026, #114)
 
+L'export des développements RapidRAW passe par la même commande (TIFF 16 bits sRGB, puis
+conversion ; `export_rapidraw`, voir `export.md`, « Par RapidRAW »).
+
 RapidRAW (AGPL-3.0, appelé en processus séparé) a une commande sans interface depuis
 la version 1.6 : `rapidraw export <image> --output <fichier> --format jpeg --quality 95`,
 qui applique d'elle-même les réglages du sidecar **`IMAGE.RAF.rrdata`** posé à côté de

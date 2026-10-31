@@ -56,6 +56,9 @@ choice: someone working in darktable who tries another software sets
 
 ## RapidRAW (2026-10-26, #114)
 
+Exporting RapidRAW developments goes through the same command (16-bit sRGB TIFF, then
+conversion; `export_rapidraw`, see `export.md`, "Through RapidRAW").
+
 RapidRAW (AGPL-3.0, called as a separate process) has a command without interface since
 version 1.6: `rapidraw export <image> --output <file> --format jpeg --quality 95`, which
 applies by itself the settings of the **`IMAGE.RAF.rrdata`** sidecar next to the image

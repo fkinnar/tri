@@ -8,14 +8,17 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 
 use eframe::egui::{self, Key, Modifiers, Pos2};
-use tri::develop::{Darktable, DevelopError};
+use tri::develop::{Darktable, DevelopError, Engine, RapidRaw};
 use tri::export::{Format, Profile, Report};
 
 /// Image exportée : on exporte ce qu'on regarde (idée de l'utilisateur, 19/10/2026).
+/// Vaut pour les photos ; un développement est toujours rendu par son logiciel, s'il est
+/// là ([`tri::export::Renderers`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Render {
-    /// Développée par darktable (son `.xmp`).
-    Darktable,
+    /// Développée par ce logiciel (darktable d'après son `.xmp`, RapidRAW d'après son
+    /// `.rrdata`).
+    Developed(Engine),
     /// Rendu de base par LibRaw (« rendu RAW »).
     LibRaw,
     /// JPEG boîtier (aperçu embarqué du RAW).
@@ -23,15 +26,15 @@ pub enum Render {
 }
 
 impl Render {
-    /// Ce qu'on regarde : en plein écran, la source affichée ; en grille (`None`),
-    /// darktable s'il est là, sinon LibRaw.
-    pub fn of(viewing: Option<crate::view::Source>, darktable: bool) -> Render {
+    /// Ce qu'on regarde : en plein écran, la source affichée ; en grille (`None`), le
+    /// développé. `engine` : le logiciel du rendu développé, parmi ceux trouvés ; sans
+    /// logiciel, LibRaw.
+    pub fn of(viewing: Option<crate::view::Source>, engine: Option<Engine>) -> Render {
         use crate::view::Source;
         match viewing {
             Some(Source::Raw) => Render::LibRaw,
             Some(Source::Embedded) => Render::Embedded,
-            Some(Source::Developed) | None if darktable => Render::Darktable,
-            _ => Render::LibRaw,
+            Some(Source::Developed) | None => engine.map_or(Render::LibRaw, Render::Developed),
         }
     }
 }
@@ -88,9 +91,9 @@ pub struct ExportDialog {
     at: Pos2,
     /// Première image : le champ prend le focus.
     fresh: bool,
-    /// darktable trouvé ; sinon export par LibRaw (rendu de base), voir
+    /// Un logiciel de développement trouvé ; sinon export par LibRaw (rendu de base), voir
     /// [`tri::export::export_libraw`].
-    darktable: bool,
+    developer: bool,
     /// Image exportée : selon ce qu'on regarde, modifiable ici (voir [`Render::of`]).
     render: Render,
     /// Version exportée (recadrage), sinon l'image entière.
@@ -179,7 +182,7 @@ impl ExportDialog {
         images: &[PathBuf],
         settings: &tri::export::ExportSettings,
         preferred: Option<&str>,
-        darktable: bool,
+        developer: bool,
         render: Render,
         at: Pos2,
     ) -> ExportDialog {
@@ -205,7 +208,7 @@ impl ExportDialog {
                 .unwrap_or_default(),
             edited: false,
             passthrough: (profiles.get(choice).is_some_and(|p| p.passthrough), choice),
-            darktable,
+            developer,
             render,
             cut: None,
             batch,
@@ -351,13 +354,21 @@ impl ExportDialog {
                 ui.add_space(6.0);
                 // L'image exportée est celle qu'on regarde (retour du 19/10/2026 : pas de
                 // choix dans la boîte, Ctrl+E sur l'image voulue) ; dite ci-dessous.
-                if !self.darktable && self.render == Render::LibRaw {
-                    ui.weak(t!("export-no-darktable"));
+                if !self.developer && self.render == Render::LibRaw {
+                    ui.weak(t!("export-no-developer"));
                 }
-                // Sans darktable : ce que LibRaw et le JPEG boîtier ne savent pas faire.
+                // RapidRAW rend en sRGB : un autre espace est une conversion depuis sRGB.
+                if self.render == Render::Developed(Engine::RapidRaw)
+                    && let Some(p) = self.profiles.get(self.choice)
+                    && !matches!(p.color.as_str(), "" | "srgb")
+                {
+                    ui.weak(t!("export-rapidraw-srgb", color = p.color.as_str()));
+                }
+                // Sans darktable : ce que LibRaw et le JPEG boîtier ne savent pas faire
+                // (RapidRAW passe par les mêmes conversions que LibRaw).
                 let local = match self.render {
-                    Render::Darktable => None,
-                    Render::LibRaw => Some(tri::export::Local::LibRaw),
+                    Render::Developed(Engine::Darktable) => None,
+                    Render::Developed(_) | Render::LibRaw => Some(tri::export::Local::LibRaw),
                     Render::Embedded => Some(tri::export::Local::Embedded),
                 };
                 let unsupported = local
@@ -419,7 +430,7 @@ impl ExportDialog {
             parts.push(match self.render {
                 Render::Embedded => t!("export-contents-embedded", n = n),
                 Render::LibRaw => t!("export-contents-libraw", n = n),
-                Render::Darktable => t!("export-contents-darktable", n = n),
+                Render::Developed(e) => t!("export-contents-developed", n = n, engine = e.name()),
             });
         }
         let alone = b.flats.len() - b.paired.len();
@@ -511,15 +522,20 @@ pub struct Job {
     handle: Option<JoinHandle<Result<Report, DevelopError>>>,
 }
 
+/// Les logiciels d'un export ([`tri::export::Renderers`]) : chaque développement par le
+/// sien, les photos selon `render`.
+pub struct Tools {
+    /// darktable, configuration à part de celle des rendus développés.
+    pub darktable: Option<Darktable>,
+    /// RapidRAW, fichiers de travail à part de ceux des rendus.
+    pub rapidraw: Option<RapidRaw>,
+    /// L'image exportée pour les photos (ce qu'on regarde).
+    pub render: Render,
+}
+
 impl Job {
-    /// Lance l'export : par darktable (`dt`), sinon depuis `local` ; `ctx` est redessiné à
-    /// chaque fichier écrit.
-    pub fn start(
-        dt: Option<Darktable>,
-        local: tri::export::Local,
-        order: Order,
-        ctx: &egui::Context,
-    ) -> Job {
+    /// Lance l'export avec `tools` ; `ctx` est redessiné à chaque fichier écrit.
+    pub fn start(tools: Tools, order: Order, ctx: &egui::Context) -> Job {
         let Order {
             images,
             profile,
@@ -550,14 +566,23 @@ impl Job {
                     .cut(cut.as_ref())
                     .sharpening(sharpening)
                     .render(render);
-                let embedded = local == tri::export::Local::Embedded && dt.is_none();
-                let batch = tri::export::Batch::new(&images, embedded);
-                let renderer = match &dt {
-                    Some(dt) => tri::export::Renderer::Darktable(dt),
-                    None => tri::export::Renderer::Local(local),
+                use tri::export::{Local, Renderer, Renderers};
+                let local = match tools.render {
+                    Render::Embedded => Local::Embedded,
+                    _ => Local::LibRaw,
                 };
+                let photos = match (tools.render, &tools.darktable, &tools.rapidraw) {
+                    (Render::Developed(Engine::Darktable), Some(dt), _) => Renderer::Darktable(dt),
+                    (Render::Developed(Engine::RapidRaw), _, Some(rr)) => Renderer::RapidRaw(rr),
+                    _ => Renderer::Local(local),
+                };
+                let embedded = matches!(photos, Renderer::Local(Local::Embedded));
+                let batch = tri::export::Batch::new(&images, embedded);
+                let renderers = Renderers::new(photos)
+                    .darktable(tools.darktable.as_ref())
+                    .rapidraw(tools.rapidraw.as_ref());
                 let result =
-                    tri::export::run(&batch, renderer, &req, &pair_suffix, &cancel, progress);
+                    tri::export::run(&batch, renderers, &req, &pair_suffix, &cancel, progress);
                 ctx.request_repaint();
                 result
             })
@@ -773,25 +798,33 @@ mod tests {
     #[test]
     fn what_is_exported_is_what_is_looked_at() {
         // Grille : darktable s'il est là, sinon LibRaw.
-        assert_eq!(Render::of(None, true), Render::Darktable);
-        assert_eq!(Render::of(None, false), Render::LibRaw);
+        let dt = Some(Engine::Darktable);
+        assert_eq!(Render::of(None, dt), Render::Developed(Engine::Darktable));
+        assert_eq!(Render::of(None, None), Render::LibRaw);
         // Plein écran : la source affichée.
-        assert_eq!(Render::of(Some(Source::Embedded), true), Render::Embedded);
-        assert_eq!(Render::of(Some(Source::Raw), true), Render::LibRaw);
-        assert_eq!(Render::of(Some(Source::Developed), true), Render::Darktable);
-        assert_eq!(Render::of(Some(Source::Developed), false), Render::LibRaw);
+        assert_eq!(Render::of(Some(Source::Embedded), dt), Render::Embedded);
+        assert_eq!(Render::of(Some(Source::Raw), dt), Render::LibRaw);
+        assert_eq!(
+            Render::of(Some(Source::Developed), dt),
+            Render::Developed(Engine::Darktable)
+        );
+        assert_eq!(
+            Render::of(None, Some(Engine::RapidRaw)),
+            Render::Developed(Engine::RapidRaw)
+        );
+        assert_eq!(Render::of(Some(Source::Developed), None), Render::LibRaw);
         // « JPEG tel quel » (`applies_to = "flat"`) : seulement pour des images développées.
         let raw = [PathBuf::from("a/DSCF1.RAF")];
         let jpeg = [PathBuf::from("a/DSCF1.JPG")];
         assert!(!exports_flat(Render::LibRaw, &raw));
-        assert!(!exports_flat(Render::Darktable, &raw));
+        assert!(!exports_flat(Render::Developed(Engine::Darktable), &raw));
         assert!(exports_flat(Render::Embedded, &raw));
         assert!(exports_flat(Render::LibRaw, &jpeg));
         let settings = tri::export::ExportSettings::default();
         let dialog = |render, images: &[PathBuf]| {
             ExportDialog::new(images, &settings, None, true, render, Pos2::ZERO)
         };
-        assert!(!dialog(Render::Darktable, &raw).lists_as_is());
+        assert!(!dialog(Render::Developed(Engine::Darktable), &raw).lists_as_is());
         assert!(dialog(Render::Embedded, &raw).lists_as_is());
     }
 

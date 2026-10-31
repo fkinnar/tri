@@ -535,9 +535,9 @@ export-title = { $n ->
    *[other] Exporter { $n } images
 }
 export-title-version = Exporter la version « { $name } »
-export-contents-darktable = { $n ->
-    [one] 1 RAW, développé par Darktable
-   *[other] { $n } RAW, développés par Darktable
+export-contents-developed = { $n ->
+    [one] 1 RAW, développé par { $engine }
+   *[other] { $n } RAW, développés par { $engine }
 }
 export-contents-libraw = { $n ->
     [one] 1 RAW, rendu de base (LibRaw)
@@ -560,7 +560,8 @@ export-profile-tip = Flèches haut / bas : préréglage · Tab : dossier · Entr
 export-destination = Dossier
 export-create = sera créé
 export-goes-to = Destination : { $dest }
-export-no-darktable = Darktable absent : rendu de base par LibRaw.
+export-no-developer = Aucun logiciel de développement trouvé : rendu de base par LibRaw.
+export-rapidraw-srgb = RapidRAW rend en sRGB : l'espace « { $color } » est converti depuis sRGB.
 export-passthrough = Sans recompression
 export-passthrough-tip = JPEG d'origine copié tel quel, rendu boîtier écrit tel quel (orientation dans l'EXIF). Une image à réduire (taille du préréglage) est réencodée.
 export-button = Exporter

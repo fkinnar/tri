@@ -533,9 +533,9 @@ export-title = { $n ->
    *[other] Export { $n } images
 }
 export-title-version = Export the "{ $name }" version
-export-contents-darktable = { $n ->
-    [one] 1 RAW, developed by Darktable
-   *[other] { $n } RAW, developed by Darktable
+export-contents-developed = { $n ->
+    [one] 1 RAW, developed by { $engine }
+   *[other] { $n } RAW, developed by { $engine }
 }
 export-contents-libraw = { $n ->
     [one] 1 RAW, basic rendering (LibRaw)
@@ -558,7 +558,8 @@ export-profile-tip = Up / down arrows: preset · Tab: folder · Enter: export
 export-destination = Folder
 export-create = will be created
 export-goes-to = Destination: { $dest }
-export-no-darktable = Darktable missing: basic LibRaw rendering.
+export-no-developer = No development software found: base render by LibRaw.
+export-rapidraw-srgb = RapidRAW renders in sRGB: the “{ $color }” space is converted from sRGB.
 export-passthrough = Without recompression
 export-passthrough-tip = Original JPEG copied as is, camera render written as is (orientation in the EXIF). An image to shrink (preset size) is re-encoded.
 export-button = Export

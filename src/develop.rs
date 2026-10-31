@@ -1125,7 +1125,7 @@ impl Developer for RapidRaw {
 }
 
 /// Attend la fin de `child` ; `cancel` l'arrête.
-fn wait(
+pub(crate) fn wait(
     mut child: std::process::Child,
     engine: Engine,
     cancel: &AtomicBool,

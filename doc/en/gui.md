@@ -264,8 +264,10 @@ system one ("cold" measurements, experiments).
   the export presets (up / down arrows on the list only, summary of each; Tab moves to the
   folder) and the folder (Tab completion); export in the background, progress bar and ×
   button in the status bar, summary at the end. Chosen profile remembered for the
-  session. Exported image: what you are looking at (grid: darktable, otherwise LibRaw;
-  full screen: the displayed source), changeable in the dialog (`export::Render`).
+  session. Exported image: what you are looking at (grid: the software of the developed
+  render, otherwise LibRaw; full screen: the displayed source; a development, always by
+  its own software), changeable in the dialog (`export::Render`,
+  `TriApp::export_engine`).
   Pared-down dialog (feedback of 2026-10-19): profiles, folder and actual destination
   only; the explanations (arrows, folder rule, render) are in the docs.
 - **Export report** (2026-10-20, see `export.md`): `Ctrl+Shift+E` or "Export report"
