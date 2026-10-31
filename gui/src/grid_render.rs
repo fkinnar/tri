@@ -15,8 +15,10 @@ pub enum GridRender {
     /// Le JPEG boîtier (vignette embarquée), comme au tri.
     #[default]
     Embedded,
-    /// Le développement le plus récent de l'image, quel que soit le logiciel.
-    Latest,
+    /// La couverture de la photo (31/10/2026, décidé avec l'utilisateur) : son
+    /// développement préféré, sinon le plus récent, sinon la photo (rendu LibRaw) ;
+    /// « latest » avant, encore accepté dans la configuration.
+    Cover,
     /// Toujours ce logiciel.
     Engine(Engine),
     /// Toujours le rendu LibRaw.
@@ -28,7 +30,7 @@ impl GridRender {
     pub fn id(self) -> &'static str {
         match self {
             GridRender::Embedded => "embedded",
-            GridRender::Latest => "latest",
+            GridRender::Cover => "cover",
             GridRender::Engine(e) => e.id(),
             GridRender::LibRaw => "libraw",
         }
@@ -37,7 +39,7 @@ impl GridRender {
     pub fn from_id(id: &str) -> Option<GridRender> {
         match id {
             "embedded" => Some(GridRender::Embedded),
-            "latest" => Some(GridRender::Latest),
+            "cover" | "latest" => Some(GridRender::Cover),
             "libraw" => Some(GridRender::LibRaw),
             id => Engine::from_id(id).map(GridRender::Engine),
         }
@@ -47,7 +49,7 @@ impl GridRender {
     pub fn name(self) -> String {
         match self {
             GridRender::Embedded => t!("grid-render-embedded"),
-            GridRender::Latest => t!("grid-render-latest"),
+            GridRender::Cover => t!("grid-render-cover"),
             GridRender::Engine(e) => e.name().to_string(),
             GridRender::LibRaw => t!("grid-render-libraw"),
         }
@@ -58,7 +60,7 @@ impl GridRender {
     pub fn choices(engines: &[Engine], current: GridRender) -> Vec<GridRender> {
         let mut list = vec![GridRender::Embedded];
         if !engines.is_empty() {
-            list.push(GridRender::Latest);
+            list.push(GridRender::Cover);
         }
         list.extend(engines.iter().map(|&e| GridRender::Engine(e)));
         if let GridRender::Engine(e) = current
@@ -81,7 +83,7 @@ impl GridRender {
     /// s'il a développé l'image ; `None` : rendu LibRaw.
     pub fn engine_for(self, image: &Path, engines: &[Engine]) -> Option<Engine> {
         match self {
-            GridRender::Latest => tri::develop::resolve(image, Preference::Auto, engines),
+            GridRender::Cover => tri::develop::resolve(image, Preference::Auto, engines),
             GridRender::Engine(e) if engines.contains(&e) && e.sidecar(image).is_some() => Some(e),
             _ => None,
         }
@@ -109,7 +111,7 @@ impl GridRender {
     /// toujours `e` ; `None` : rien à développer.
     pub fn to_develop(self) -> Option<Option<Engine>> {
         match self {
-            GridRender::Latest => Some(None),
+            GridRender::Cover => Some(None),
             GridRender::Engine(e) => Some(Some(e)),
             GridRender::Embedded | GridRender::LibRaw => None,
         }
@@ -121,7 +123,7 @@ impl<'de> serde::Deserialize<'de> for GridRender {
         let id = String::deserialize(d)?;
         GridRender::from_id(&id).ok_or_else(|| {
             serde::de::Error::custom(format!(
-                "« {id} » : embedded, latest, libraw ou un logiciel (darktable, rapidraw)"
+                "« {id} » : embedded, cover, libraw ou un logiciel (darktable, rapidraw)"
             ))
         })
     }
@@ -193,7 +195,7 @@ mod tests {
         let files = vec![file("a.RAF"), file("a@dt-01.RAF"), file("b.RAF")];
         // Développements seuls, chacun dans son logiciel : en manuel, ou en JPEG boîtier.
         for (develop, shown) in [
-            (GridDevelop::Manual, GridRender::Latest),
+            (GridDevelop::Manual, GridRender::Cover),
             (GridDevelop::Manual, GridRender::Engine(DT)),
             (GridDevelop::Auto, GridRender::Embedded),
             (GridDevelop::Auto, GridRender::LibRaw),
@@ -207,7 +209,7 @@ mod tests {
         assert_eq!(to_do.len(), 3);
         assert_eq!(force, Some(RR));
         assert_eq!(
-            to_render(&files, GridDevelop::Auto, GridRender::Latest).1,
+            to_render(&files, GridDevelop::Auto, GridRender::Cover).1,
             None
         );
     }
@@ -216,7 +218,7 @@ mod tests {
     fn ids_round_trip_and_choices_follow_what_is_installed() {
         for r in [
             GridRender::Embedded,
-            GridRender::Latest,
+            GridRender::Cover,
             GridRender::Engine(DT),
             GridRender::Engine(RR),
             GridRender::LibRaw,
@@ -232,7 +234,7 @@ mod tests {
             GridRender::choices(&[DT], GridRender::Engine(RR)),
             [
                 GridRender::Embedded,
-                GridRender::Latest,
+                GridRender::Cover,
                 GridRender::Engine(DT),
                 GridRender::Engine(RR),
                 GridRender::LibRaw
@@ -240,7 +242,7 @@ mod tests {
             "la valeur en place reste visible"
         );
         assert_eq!(GridRender::LibRaw.next(&[DT]), GridRender::Embedded);
-        assert_eq!(GridRender::Embedded.next(&[DT]), GridRender::Latest);
+        assert_eq!(GridRender::Embedded.next(&[DT]), GridRender::Cover);
     }
 
     #[test]
@@ -264,7 +266,7 @@ mod tests {
             kind: MediaKind::Flat,
         };
         let engines = [DT, RR];
-        for r in [GridRender::Latest, GridRender::Engine(DT)] {
+        for r in [GridRender::Cover, GridRender::Engine(DT)] {
             assert_eq!(r.level(&a, &engines), Level::Developed(DT), "{r:?}");
             assert_eq!(r.level(&b, &engines), Level::Standard, "{r:?}");
         }
@@ -274,6 +276,6 @@ mod tests {
         assert_eq!(GridRender::Engine(DT).level(&a, &[RR]), Level::Standard);
         assert_eq!(GridRender::LibRaw.level(&a, &engines), Level::Standard);
         assert_eq!(GridRender::Embedded.level(&a, &engines), Level::Thumbnail);
-        assert_eq!(GridRender::Latest.level(&flat, &engines), Level::Thumbnail);
+        assert_eq!(GridRender::Cover.level(&flat, &engines), Level::Thumbnail);
     }
 }

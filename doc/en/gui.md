@@ -129,10 +129,13 @@ system one ("cold" measurements, experiments).
   stay visible on any background.
 - **Filters and sort per folder** (2026-10-30, `state::FolderView`): each folder's
   filters (RAW / JPEG, stars and their comparison, colours, flags, sharpness, exposure,
-  developed, inversion) and sort order are kept in `folder-views` in the data folder (one
-  JSON line per folder, written when they change) and restored when it opens, at launch
-  too; a folder with nothing kept opens without filters, in the order kept for all. The
-  name search is not part of it. `[gui] remember_folder_view = false`: as before, the
+  developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
+  (`f d`: camera JPEG, cover, a software, LibRaw; `[gui.grid] render` is the value of a
+  folder never set, not the previous folder's: one culls in camera JPEG and comes back to
+  a processed folder in cover) are kept in `folder-views` in the data folder (one JSON
+  line per folder, written when they change) and restored when it opens, at launch too;
+  a folder with nothing kept opens without filters, in the order kept for all. The name
+  search is not part of it. `[gui] remember_folder_view = false`: as before, the
   previous folder's filters stay. **In full screen too**, the filter bar (Shift+F) and the
   whole right panel (filters, grid): ratings are given in passes (1 star, filter, 2
   stars…) without going back to the grid.
@@ -398,8 +401,11 @@ system one ("cold" measurements, experiments).
   and its clones, RapidRAW and its virtual copies) form a stack, **below** the burst
   stacks (an expanded burst stack shows its photos, each folded or not; a collapsed burst
   stack never shows a hidden development). Folded by default: one thumbnail, the
-  **cover** (the selected development, else the preferred one, else the latest, else the
-  photo: its camera JPEG), and "N dev." in a badge at the top right
+  **cover** (the development stepped to in place, else **according to the thumbnail
+  render**, decided with the user on 2026-10-31: "camera JPEG" and "RAW render (LibRaw)",
+  the photo itself, the grid no longer changes afterwards; "Cover", the preferred
+  development, else the latest; a software, its main development; else the photo), and
+  "N dev." in a badge at the top right
   (`[gui.colors] development_mark`; a burst's image count is at the top left); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
   the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".

@@ -133,10 +133,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pour rester visible sur tout fond.
 - **Filtres et tri par dossier** (30/10/2026, `state::FolderView`) : les filtres (RAW /
   JPEG, étoiles et leur comparaison, couleurs, drapeaux, netteté, exposition,
-  développées, inversion) et le tri de chaque dossier sont retenus dans `folder-views` du
-  dossier de données (une ligne JSON par dossier, écrite quand ils changent) et repris à
-  son ouverture, au lancement compris ; un dossier sans rien de retenu s'ouvre sans
-  filtre, dans l'ordre retenu pour tous. La recherche par nom n'en fait pas partie.
+  développées, inversion), le tri et, depuis le 31/10/2026, le **rendu des vignettes**
+  (`f d` : JPEG boîtier, couverture, un logiciel, LibRaw ; `[gui.grid] render` est la
+  valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
+  boîtier, on revient sur un dossier traité en couverture) de chaque dossier sont retenus
+  dans `folder-views` du dossier de données (une ligne JSON par dossier, écrite quand ils
+  changent) et repris à son ouverture, au lancement compris ; un dossier sans rien de
+  retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
+  fait pas partie.
   `[gui] remember_folder_view = false` : comme avant, les filtres du dossier précédent
   restent. **En plein écran aussi**, la barre des filtres (Maj+F) et tout le panneau de
   droite (filtres, grille) : on note par passes (1 étoile, filtre, 2 étoiles…) sans
@@ -412,8 +416,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (darktable et ses clones, RapidRAW et ses copies virtuelles) forment une pile, **sous**
   les piles de rafales (une pile de rafale dépliée montre ses photos, chacune repliée ou
   non ; une pile de rafale repliée ne montre jamais un développement caché). Repliée par
-  défaut : une vignette, la **couverture** (le développement sélectionné, sinon le
-  préféré, sinon le plus récent, sinon la photo : son JPEG boîtier), et « N dév. » dans
+  défaut : une vignette, la **couverture** (le développement qu'on a fait défiler sur
+  place, sinon **selon le rendu des vignettes**, décidé le 31/10/2026 avec l'utilisateur :
+  « JPEG boîtier » et « Rendu RAW (LibRaw) », la photo elle-même, la grille ne change plus
+  après coup ; « Couverture », le développement préféré, sinon le plus récent ; un
+  logiciel, son développement principal ; à défaut la photo), et « N dév. » dans
   une pastille en haut à droite (`[gui.colors] development_mark` ; le nombre d'images
   d'une rafale est en haut à gauche) ; dépliée, chaque vignette dans un cadre fin de la
   même couleur. Le nom affiché est celui de la photo, la pastille à côté du format dit

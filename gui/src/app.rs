@@ -4453,6 +4453,7 @@ impl TriApp {
             developed: self.developed_on,
             inverted: self.filter_inverted,
             order: Some(self.order),
+            render: Some(self.grid_render),
         }
     }
 
@@ -4478,6 +4479,18 @@ impl TriApp {
         self.filter_inverted = view.inverted;
         if let Some(order) = view.order {
             self.order = order;
+        }
+        // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
+        // configuration (pas celui du dossier précédent : on trie en JPEG boîtier, on
+        // revient sur un dossier traité en couverture).
+        let render = view.render.unwrap_or(self.gui.grid.render);
+        if render != self.grid_render {
+            self.grid_render = render;
+            if let Some(engine) = &self.engine {
+                engine.scheduler.set_raw_previews(self.raw_policy());
+            }
+            self.auto_develop_pending = true;
+            self.stacks_dirty = true;
         }
         self.folder_view = Some(self.current_folder_view());
     }
@@ -4661,34 +4674,50 @@ impl TriApp {
         };
         // Piles de développements (30/10/2026) : la photo et ses développements, repliées
         // sauf demande (Maj+V). Couverture : le développement qu'on a fait défiler sur
-        // place (Maj+W / Maj+Q), sinon le préféré, sinon le plus récent, sinon la photo
-        // (son JPEG boîtier).
+        // place (Maj+W / Maj+Q), sinon selon le rendu de la grille (31/10/2026, décidé
+        // avec l'utilisateur) : JPEG boîtier et LibRaw, la photo (rien ne change après
+        // coup) ; « Couverture », le préféré, sinon le plus récent ; un logiciel, son
+        // développement principal ; sinon la photo.
         let dev_unfolded = &self.dev_unfolded;
         let dev_shown = &self.dev_shown;
         let dev_preferred = &self.dev_preferred;
+        let render = self.shown_render();
         let photo = |i: usize| tri::media::source(&files[i].path).into_owned();
         let same_photo = |i: usize, j: usize| photo(i) == photo(j);
         let dev_cover = |r: &std::ops::Range<usize>| {
+            use crate::grid_render::GridRender;
             if let Some(shown) = dev_shown.get(&photo(r.start))
                 && let Some(i) = r.clone().find(|&i| &files[i].path == shown)
             {
                 return i;
             }
-            if let Some(i) = r.clone().find(|&i| dev_preferred.contains(&files[i].path)) {
-                return i;
-            }
-            let developments: Vec<tri::developments::Development> = r
+            let the_photo = r
                 .clone()
-                .filter_map(|i| tri::developments::get(&files[i].path))
-                .collect();
-            if let Some(latest) = tri::developments::latest(&developments)
-                && let Some(i) = r.clone().find(|&i| files[i].path == latest.path())
-            {
-                return i;
-            }
-            r.clone()
                 .find(|&i| !tri::media::is_development(&files[i].path))
-                .unwrap_or(r.start)
+                .unwrap_or(r.start);
+            match render {
+                GridRender::Embedded | GridRender::LibRaw => the_photo,
+                GridRender::Engine(engine) => r
+                    .clone()
+                    .find(|&i| {
+                        tri::developments::get(&files[i].path).is_some_and(|d| {
+                            d.engine == engine && d.copy == tri::developments::Copy::Main
+                        })
+                    })
+                    .unwrap_or(the_photo),
+                GridRender::Cover => {
+                    if let Some(i) = r.clone().find(|&i| dev_preferred.contains(&files[i].path)) {
+                        return i;
+                    }
+                    let developments: Vec<tri::developments::Development> = r
+                        .clone()
+                        .filter_map(|i| tri::developments::get(&files[i].path))
+                        .collect();
+                    tri::developments::latest(&developments)
+                        .and_then(|latest| r.clone().find(|&i| files[i].path == latest.path()))
+                        .unwrap_or(the_photo)
+                }
+            }
         };
         let dev_unfolded_in =
             |r: &std::ops::Range<usize>| r.clone().any(|i| dev_unfolded.contains(&photo(i)));
@@ -8813,7 +8842,7 @@ impl TriApp {
         match rule.wanted(&self.developers.engines())[..] {
             [] if rule.engines.is_empty() => GridRender::LibRaw,
             [e] => GridRender::Engine(e),
-            _ => GridRender::Latest,
+            _ => GridRender::Cover,
         }
     }
 
@@ -8827,6 +8856,8 @@ impl TriApp {
             engine.scheduler.set_raw_previews(self.raw_policy());
         }
         self.auto_develop_pending = true;
+        // La couverture des piles de développements en dépend (31/10/2026).
+        self.stacks_dirty = true;
         self.refilter(Reveal::Minimal);
     }
 
@@ -14018,8 +14049,8 @@ mod tests {
             press(h, key, Modifiers::NONE);
         };
         f_then(&mut h, Key::D);
-        assert_eq!(h.state().grid_render, GridRender::Latest);
-        assert_eq!(h.state().display().grid_render, Some(GridRender::Latest));
+        assert_eq!(h.state().grid_render, GridRender::Cover);
+        assert_eq!(h.state().display().grid_render, Some(GridRender::Cover));
         assert_eq!(h.state().raw_policy(), RawPreviews::Background);
         f_then(&mut h, Key::D);
         assert_eq!(
@@ -14134,7 +14165,7 @@ mod tests {
         app.developed_on = true;
         // Tous cochés : le plus récent.
         assert_eq!(level(app), Level::Developed(Engine::Darktable));
-        assert_eq!(app.shown_render(), GridRender::Latest);
+        assert_eq!(app.shown_render(), GridRender::Cover);
         app.developed_checked = Some(vec![Engine::RapidRaw]);
         assert_eq!(level(app), Level::Developed(Engine::RapidRaw));
         assert_eq!(app.shown_render(), GridRender::Engine(Engine::RapidRaw));
@@ -14148,7 +14179,10 @@ mod tests {
         // Inversé : le choix de la grille.
         app.filter_inverted = true;
         assert_eq!(level(app), Level::Developed(Engine::Darktable));
-        assert_eq!(app.shown_render(), GridRender::Engine(Engine::Darktable));
+        assert_eq!(
+            app.shown_render(),
+            GridRender::Engine(tri::develop::Engine::Darktable)
+        );
         // Repliée, la liste nomme le logiciel seul, ou les sigles.
         let rule = |engines: &[Engine]| tri::develop::DevelopedRule {
             engines: engines.to_vec(),
@@ -14466,6 +14500,10 @@ mod tests {
         )
         .unwrap();
         h.state_mut().reload_folder(None);
+        // Rendu « Couverture » (31/10/2026) : la pile se replie sur le développement
+        // préféré, sinon le plus récent (en JPEG boîtier, sur la photo).
+        h.state_mut()
+            .set_grid_render(crate::grid_render::GridRender::Cover);
         // Son chemin propre (`tri::developments`), jamais sur le disque.
         let clone = photos.join("img0@dt-01.jpg");
         run_until(&mut h, |app| {
@@ -14575,6 +14613,57 @@ mod tests {
             0,
             "l'original garde ses notes"
         );
+    }
+
+    #[test]
+    fn the_grid_render_decides_the_cover_of_a_photo() {
+        // Décidé le 31/10/2026 : JPEG boîtier et LibRaw, la photo ; « Couverture », le
+        // préféré sinon le plus récent ; un logiciel, son développement principal.
+        use crate::grid_render::GridRender;
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#;
+        std::fs::write(photos.join("img0_01.jpg.xmp"), darktable).unwrap();
+        std::fs::write(photos.join("img0.jpg.xmp"), darktable).unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.run_steps(2);
+        let (photo, main, clone) = (
+            photos.join("img0.jpg"),
+            photos.join("img0@dt.jpg"),
+            photos.join("img0@dt-01.jpg"),
+        );
+        let cover = |h: &mut Harness<'_, TriApp>| {
+            h.run_steps(2);
+            let app = h.state();
+            let i = app.files.iter().position(|f| f.path == photo).unwrap();
+            let range = app.stacks.developments_of(i).unwrap().clone();
+            let c = range
+                .clone()
+                .find(|&i| app.stacks.folded_count(i).is_some())
+                .expect("une pile repliée");
+            file_name(&app.files[c].path)
+        };
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        assert_eq!(cover(&mut h), "img0.jpg", "JPEG boîtier : la photo");
+        h.state_mut().set_grid_render(GridRender::LibRaw);
+        assert_eq!(cover(&mut h), "img0.jpg", "LibRaw : la photo");
+        h.state_mut()
+            .set_grid_render(GridRender::Engine(tri::develop::Engine::Darktable));
+        assert_eq!(cover(&mut h), "img0@dt.jpg", "darktable : son principal");
+        h.state_mut().set_grid_render(GridRender::Cover);
+        h.state_mut().dev_preferred.insert(clone.clone());
+        h.state_mut().stacks_dirty = true;
+        assert_eq!(cover(&mut h), "img0@dt-01.jpg", "Couverture : le préféré");
+        h.state_mut().dev_preferred.clear();
+        h.state_mut().stacks_dirty = true;
+        let latest = cover(&mut h);
+        assert!(
+            latest == "img0@dt.jpg" || latest == "img0@dt-01.jpg",
+            "sans préféré : le plus récent, {latest}"
+        );
+        assert!(main != clone);
     }
 
     #[test]
@@ -16347,6 +16436,15 @@ mod tests {
         assert_eq!(h.state().notes_rule, rule, "repris");
         assert_eq!(h.state().order.key, tri::sort::SortKey::Modified);
         assert!(h.state().order.descending);
+        // Rendu des vignettes par dossier (31/10/2026) : un dossier sans rien de retenu
+        // reprend celui de la configuration, pas celui du dossier précédent.
+        use crate::grid_render::GridRender;
+        h.state_mut().set_grid_render(GridRender::Cover);
+        h.run_steps(2);
+        open(&mut h, &other);
+        assert_eq!(h.state().grid_render, GridRender::Embedded, "configuration");
+        open(&mut h, &photos);
+        assert_eq!(h.state().grid_render, GridRender::Cover, "repris");
         // Réglage coupé : rien de repris, les filtres restent ceux du moment.
         h.state_mut().gui.remember_folder_view = false;
         press(&mut h, Key::F, Modifiers::NONE);
@@ -17995,6 +18093,8 @@ mod tests {
         )
         .unwrap();
         h.state_mut().reload_folder(None);
+        h.state_mut()
+            .set_grid_render(crate::grid_render::GridRender::Cover);
         let clone = photos.join("img0@dt-01.jpg");
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
         h.run_steps(2);

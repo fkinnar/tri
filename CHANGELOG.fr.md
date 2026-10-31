@@ -4,6 +4,13 @@
 
 ## À venir
 
+- **Rendu des vignettes retenu par dossier**, comme les filtres et le tri (`f d`, panneau
+  de droite) : un dossier jamais réglé prend `[gui.grid] render`. Le rendu décide désormais
+  de la **couverture** d'une photo développée : « JPEG boîtier » et « LibRaw » montrent la
+  photo elle-même (la grille ne change plus après quelques secondes), **« Couverture »**
+  (remplace « Dernier développement ») montre le développement préféré, sinon le plus
+  récent, un logiciel son développement principal. `render = "latest"` reste accepté dans
+  la configuration.
 - **Replier les piles de développements à la souris** : chaque vignette d'une pile
   dépliée porte une pastille « replier » (clic : replier ; Alt+clic : replier en gardant ce
   développement en couverture). `Ctrl+Maj+V` replie toutes les piles de développements.
