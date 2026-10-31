@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Folding development stacks with the mouse**: each thumbnail of an unfolded stack
+  carries a "fold" badge (click: fold; Alt+click: fold and keep this development as the
+  cover). `Ctrl+Shift+V` folds every development stack. `Shift+Enter` now always makes
+  the development the cover (on the photo: no preferred one) instead of toggling.
 - **Fixed: ratings reached RapidRAW only when set on its development** (#234). A photo
   and its main developments (darktable, RapidRAW) now share the same notes: rating any
   of them writes the photo's XMP (darktable, the RAW+JPEG pair) and RapidRAW's

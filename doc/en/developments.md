@@ -74,7 +74,9 @@ order (not the order of the paths of their own: `IMG@dt-01` would come before `I
 
 See `gui.md`, "Development stacks": a photo is a stack of its developments, folded by
 default (cover and "N dev."), unfoldable (`Shift+V`); `Shift+W` / `Shift+Q` step from one
-to the next; in full screen a development shows its render, `b` shows the camera JPEG
+to the next, `Ctrl+Shift+V` folds every stack, a badge on each unfolded thumbnail folds
+with the mouse (Alt+click: keeping this development as the cover, 2026-10-31); in full
+screen a development shows its render, `b` shows the camera JPEG
 instead (before / after); `c` on the photo (2026-10-31) compares it side by side with its
 developments (see "Side-by-side comparison").
 

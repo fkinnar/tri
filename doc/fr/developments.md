@@ -76,7 +76,9 @@ après `IMG2`). Les tris par date (`sort`) donnent au développement la clé de 
 
 Voir `gui.md`, « Piles de développements » : une photo est une pile de ses développements,
 repliée par défaut (couverture et « N dév. »), dépliable (`Maj+V`) ; `Maj+W` / `Maj+Q`
-passent de l'un à l'autre ; en plein écran un développement montre son rendu, `b` montre
+passent de l'un à l'autre, `Ctrl+Maj+V` replie toutes les piles, une pastille sur chaque
+vignette dépliée replie à la souris (Alt+clic : en gardant ce développement en
+couverture, 31/10/2026) ; en plein écran un développement montre son rendu, `b` montre
 le JPEG boîtier à sa place (avant / après) ; `c` sur la photo (31/10/2026) la compare
 côte à côte avec ses développements (voir « Comparaison côte à côte »).
 

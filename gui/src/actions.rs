@@ -239,6 +239,8 @@ pub enum Action {
     DevNext,
     /// Développement précédent de la photo.
     DevPrev,
+    /// Replier toutes les piles de développements (31/10/2026).
+    DevFoldAll,
     /// Zoom : palier supérieur.
     ZoomIn,
     /// Zoom : palier inférieur (jusqu'à l'ajusté).
@@ -448,7 +450,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 186] = [
+    pub const ALL: [Action; 187] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -543,6 +545,7 @@ impl Action {
         Action::DevToggle,
         Action::DevNext,
         Action::DevPrev,
+        Action::DevFoldAll,
         Action::ZoomIn,
         Action::ZoomOut,
         Action::ZoomFit,
@@ -712,7 +715,9 @@ impl Action {
             | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StacksAll | GroupingWindow | StackMode | StackChoose | StackFirst
-            | StackLast | StackEnterToggle | DevToggle | DevNext | DevPrev => Group::Selection,
+            | StackLast | StackEnterToggle | DevToggle | DevNext | DevPrev | DevFoldAll => {
+                Group::Selection
+            }
             FocusLeft | FocusRight | FocusNext | FolderUp | FolderDown | FolderExpand
             | FolderCollapse | FolderOpen | FolderFirst | FolderLast | FolderOffload
             | FolderEject | FolderCreate | FolderRename | FolderDelete | FolderFavorite
@@ -855,6 +860,7 @@ impl Action {
             Action::StackMode => "core.stack.mode",
             Action::DevToggle => "core.dev.toggle",
             Action::DevNext => "core.dev.next",
+            Action::DevFoldAll => "core.dev.fold_all",
             Action::DevPrev => "core.dev.prev",
             Action::ZoomIn => "core.view.zoom_in",
             Action::ZoomOut => "core.view.zoom_out",
@@ -1411,10 +1417,12 @@ const FILES: &[Binding] = {
         (&[shifted(Key::S)], StacksAll),
         (&[ctrl(Key::G)], GroupingWindow),
         // Développements d'une photo (30/10/2026) : Maj+V déplie / replie, Maj+W / Maj+Q
-        // le suivant / le précédent (grille et plein écran).
+        // le suivant / le précédent (grille et plein écran) ; Ctrl+Maj+V replie toutes
+        // les piles (31/10/2026).
         (&[shifted(Key::V)], DevToggle),
         (&[shifted(Key::W)], DevNext),
         (&[shifted(Key::Q)], DevPrev),
+        (&[ctrl_shift(Key::V)], DevFoldAll),
         // Zoom par paliers, comme Lightroom : des caractères, pour la rangée du haut comme
         // pour le pavé numérique, quelle que soit la disposition du clavier.
         (&[Chord::char('+')], ZoomIn),
