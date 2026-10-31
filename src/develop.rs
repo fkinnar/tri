@@ -612,9 +612,71 @@ fn appimage(home: Option<&Path>, name: &str) -> Option<PathBuf> {
             is_appimage(p)
                 && p.is_file()
                 && p.file_name()
-                    .is_some_and(|n| n.to_string_lossy().to_lowercase().contains(name))
+                    .is_some_and(|n| appimage_name_matches(&n.to_string_lossy(), name))
         })
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// Le nom de fichier `file` d'une AppImage désigne-t-il le logiciel `name` ? `art` est
+/// contenu dans « d**art**able » : pour ART, le nom doit commencer par `art` suivi d'un
+/// séparateur (`ART_1.26.10_release.AppImage`, `ART.AppImage`).
+fn appimage_name_matches(file: &str, name: &str) -> bool {
+    let file = file.to_lowercase();
+    if name == "art" {
+        let rest = file.strip_prefix("art").unwrap_or("");
+        return !rest.is_empty() && !rest.starts_with(|c: char| c.is_ascii_alphanumeric());
+    }
+    file.contains(name)
+}
+
+/// La commande `cli` (« rawtherapee-cli », « ART-cli ») d'une AppImage, extraite une fois
+/// dans `dir` (dossier nommé d'après l'AppImage, sa taille et sa date : une nouvelle
+/// version est extraite à son tour) : `squashfs-root/usr/bin/<cli>`, et le dossier des
+/// bibliothèques embarquées à mettre dans `LD_LIBRARY_PATH`. Les AppImage récentes de
+/// RawTherapee et d'ART ne lancent que l'interface (`--cli` des anciennes n'existe
+/// plus ; `./RawTherapee.AppImage --appimage-extract` puis le binaire extrait, méthode du
+/// forum pixls.us, 2023).
+pub fn appimage_cli(appimage: &Path, cli: &str, dir: &Path) -> std::io::Result<(PathBuf, PathBuf)> {
+    let meta = std::fs::metadata(appimage)?;
+    let modified = meta
+        .modified()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let stem = appimage
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let target = dir.join(format!("{stem}-{}-{modified}", meta.len()));
+    let root = target.join("squashfs-root");
+    let bin = root.join("usr").join("bin").join(cli);
+    let lib = root.join("usr").join("lib");
+    if bin.is_file() {
+        return Ok((bin, lib));
+    }
+    // Reprise d'une extraction interrompue : on repart de zéro.
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&target)?;
+    let status = crate::process::command(appimage)
+        .arg("--appimage-extract")
+        .current_dir(&target)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()?;
+    if !status.success() {
+        return Err(std::io::Error::other(format!(
+            "{} --appimage-extract : {status}",
+            appimage.display()
+        )));
+    }
+    if bin.is_file() {
+        Ok((bin, lib))
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{cli} absent de {}", appimage.display()),
+        ))
+    }
 }
 
 /// Identifiant Flatpak de RapidRAW (Flathub).
@@ -1333,9 +1395,25 @@ impl Developer for ProfileTool {
         std::fs::create_dir_all(&export_dir).map_err(|e| failed(&e))?;
         let log = self.work_dir.join(format!("export-{id}.log"));
         let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
-        let child = self
-            .cli
-            .command()
+        // Une AppImage (le nom de la commande en argument, [`find_profile_cli`]) : son
+        // binaire extrait, avec ses bibliothèques.
+        let mut command = if is_appimage(&self.cli.program) {
+            let name = self.cli.args.first().cloned().unwrap_or_default();
+            let (bin, lib) =
+                appimage_cli(&self.cli.program, &name, &self.work_dir.join("appimage"))
+                    .map_err(|e| failed(&e))?;
+            let mut command = crate::process::command(&bin);
+            let path = std::env::var_os("LD_LIBRARY_PATH").unwrap_or_default();
+            let mut paths = vec![lib];
+            paths.extend(std::env::split_paths(&path));
+            if let Ok(joined) = std::env::join_paths(paths) {
+                command.env("LD_LIBRARY_PATH", joined);
+            }
+            command
+        } else {
+            self.cli.command()
+        };
+        let child = command
             .arg("-o")
             .arg(&export_dir)
             .arg("-p")
@@ -1944,6 +2022,90 @@ mod tests {
             crate::cache::forget_stamps([profile.as_path()]);
             assert_eq!(engine.sidecar(&image), None, "notes seules : rien à rendre");
         }
+    }
+
+    #[test]
+    fn art_appimage_is_not_darktable() {
+        assert!(appimage_name_matches("ART_1.26.10_release.AppImage", "art"));
+        assert!(appimage_name_matches("ART.AppImage", "art"));
+        assert!(appimage_name_matches("art-1.26.appimage", "art"));
+        assert!(!appimage_name_matches("darktable.appimage", "art"));
+        assert!(!appimage_name_matches("artisan.AppImage", "art"));
+        assert!(appimage_name_matches("darktable-5.0.AppImage", "darktable"));
+        assert!(appimage_name_matches(
+            "RawTherapee_5.13_release.AppImage",
+            "rawtherapee"
+        ));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_rawtherapee_appimage_is_extracted_once_then_its_cli_renders() {
+        // 31/10/2026 : les AppImage récentes n'ont plus `--cli` ; `--appimage-extract` une
+        // fois (dossier clé : nom, taille, date), puis `squashfs-root/usr/bin/rawtherapee-cli`.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.jpg");
+        let bitmap = crate::bitmap::Bitmap {
+            width: 400,
+            height: 300,
+            data: vec![128; 400 * 300 * 3],
+        };
+        let bytes = crate::jpeg::encode(&bitmap, 90, crate::jpeg::Chroma::Half).unwrap();
+        std::fs::write(&big, bytes).unwrap();
+        let executable = std::fs::Permissions::from_mode(0o755);
+        // Une fausse AppImage : `--appimage-extract` dépose un faux `rawtherapee-cli` dans
+        // `squashfs-root/usr/bin` du dossier courant et compte ses passages.
+        let appimage = dir.path().join("RawTherapee_5.13_release.AppImage");
+        let counter = dir.path().join("extractions");
+        let cli_body = format!(
+            "#!/bin/sh\n[ \"$1\" = -o ] || exit 2\n[ \"$3\" = -p ] || exit 3\ncp '{}' \"$2/photo.jpg\"\n",
+            big.display()
+        );
+        std::fs::write(
+            &appimage,
+            format!(
+                "#!/bin/sh\n[ \"$1\" = --appimage-extract ] || exit 9\nmkdir -p squashfs-root/usr/bin squashfs-root/usr/lib\nprintf '%b' '{}' > squashfs-root/usr/bin/rawtherapee-cli\nchmod 755 squashfs-root/usr/bin/rawtherapee-cli\necho x >> '{}'\n",
+                cli_body.replace('\n', "\\n").replace('\'', "'\\''"),
+                counter.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&appimage, executable).unwrap();
+        let work = dir.path().join("work");
+        let (bin, lib) =
+            appimage_cli(&appimage, "rawtherapee-cli", &work.join("appimage")).unwrap();
+        assert!(bin.ends_with("squashfs-root/usr/bin/rawtherapee-cli"));
+        assert!(lib.ends_with("squashfs-root/usr/lib"));
+        // Déjà extraite : pas de nouveau passage.
+        appimage_cli(&appimage, "rawtherapee-cli", &work.join("appimage")).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&counter).unwrap().lines().count(),
+            1
+        );
+        // Le rendu passe par le binaire extrait.
+        let tool = ProfileTool {
+            engine: Engine::RawTherapee,
+            cli: Cli {
+                program: appimage.clone(),
+                args: vec!["rawtherapee-cli".into()],
+            },
+            work_dir: work.clone(),
+        };
+        let image = dir.path().join("photo.RAF");
+        let profile = crate::pp3::path(&image, "pp3");
+        std::fs::write(&profile, "[Exposure]\nCompensation=1\n").unwrap();
+        let out = dir.path().join("out.jpg");
+        tool.render(&image, &profile, &out, 100, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(image::image_dimensions(&out).unwrap(), (100, 75));
+        assert_eq!(
+            std::fs::read_to_string(&counter).unwrap().lines().count(),
+            1
+        );
+        // Une commande absente de l'AppImage : erreur claire.
+        let err = appimage_cli(&appimage, "ART-cli", &work.join("appimage")).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
     }
 
     #[test]

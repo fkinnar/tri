@@ -237,9 +237,15 @@ profile (`IMAGE.RAF.pp3` / `.arp`, [pp3.md](pp3.md)) and writes `<folder>/<name>
 size option: `tri` then shrinks, `shrink`); one output folder per render, in the cache.
 Executables (`find_profile_cli`, `[develop] rawtherapee` / `art`): `PATH`,
 `/Applications/<App>.app/Contents/MacOS/…`, `C:\Program Files\RawTherapee\<version>\`,
-and on Linux an AppImage (run with the command name as first argument) or the
-`com.rawtherapee.RawTherapee` Flatpak (no known Flatpak for ART). "Open the folder in…"
-launches the interface next to the command line (`rawtherapee` / `ART <folder>`).
+and on Linux an AppImage (`*rawtherapee*`, `ART_*` / `ART.AppImage`: "art" alone is
+contained in "darktable") or the `com.rawtherapee.RawTherapee` Flatpak (no known Flatpak
+for ART). **AppImage**: recent ones only launch the interface (the `--cli` of the old
+ones is gone, pixls.us thread of 2023); `tri` extracts it once (`appimage_cli`:
+`--appimage-extract` into `<cache>/develop/<software>/appimage/<name>-<size>-<date>/`, a
+new version is extracted in turn) and runs `squashfs-root/usr/bin/rawtherapee-cli` /
+`ART-cli` with its libraries (`LD_LIBRARY_PATH`). Not yet checked on a real AppImage
+(2026-10-31). "Open the folder in…" launches the interface next to the command line
+(`rawtherapee` / `ART <folder>`; an AppImage, itself).
 
 The profile is a development (`Engine::sidecar`, `profile_sidecar`) only when it has a
 section other than `[Version]` and `[General]`: a ratings-only profile (written by their
