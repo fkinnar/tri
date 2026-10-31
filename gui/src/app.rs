@@ -2114,17 +2114,7 @@ impl TriApp {
             ui.weak(t!("panel-grid-render-filtered"));
         }
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        self.subheading(ui, t!("panel-grid-stacks"));
-        let mut stacking = self.stacking;
-        if self
-            .side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
-            .on_hover_text(format!(
-                "{}\n{}",
-                t!("panel-grid-stacks-tip"),
-                self.action_tip(Action::StackMode)
-            ))
-            .changed()
-        {
+        if self.stacks_switch(ui) {
             clicked.push(Action::StackMode);
         }
         if self.stacking {
@@ -2316,7 +2306,27 @@ impl TriApp {
                 self.request_zoom();
             }
         }
+        if self.stacks_switch(ui) {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, Action::StackMode);
+        }
         self.file_actions_switch(ui);
+    }
+
+    /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
+    /// et « Vue » du panneau de droite : retour du 31/10/2026, elle manquait en plein
+    /// écran). Vrai quand la case vient d'être cochée ou décochée : à l'appelant de
+    /// déclencher `Action::StackMode`.
+    fn stacks_switch(&mut self, ui: &mut Ui) -> bool {
+        self.subheading(ui, t!("panel-grid-stacks"));
+        let mut stacking = self.stacking;
+        self.side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
+            .on_hover_text(format!(
+                "{}\n{}",
+                t!("panel-grid-stacks-tip"),
+                self.action_tip(Action::StackMode)
+            ))
+            .changed()
     }
 
     /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
@@ -10985,11 +10995,15 @@ impl TriApp {
                     // toujours là, à côté de l'interrupteur des piles (retour du 25/10/2026 :
                     // caché sans les piles, on ne le trouvait pas).
                     actions.extend([Action::StackEnterToggle, Action::StackMode]);
-                } else if self.stacking {
+                } else {
                     // En grille, piles actives : au même endroit, pour voir l'état du
-                    // réglage (retour du 26/10/2026) ; l'interrupteur des piles, lui, est
-                    // dans la barre des filtres.
-                    actions.push(Action::StackEnterToggle);
+                    // réglage (retour du 26/10/2026). L'interrupteur des piles, parti de
+                    // la barre des filtres avec sa réorganisation (#199), revient ici
+                    // (retour du 31/10/2026 : « disparu de la barre » en grille).
+                    if self.stacking {
+                        actions.push(Action::StackEnterToggle);
+                    }
+                    actions.push(Action::StackMode);
                 }
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && !self.developers.is_empty() {
@@ -16429,8 +16443,12 @@ mod tests {
         h.run_steps(3);
         let label = Action::StackEnterToggle.label();
         assert!(h.query_by_label(&label).is_none(), "sans les piles");
-        h.state_mut().stacking = true;
+        // L'interrupteur des piles, lui, est toujours dans le bandeau (retour du
+        // 31/10/2026 : parti de la barre des filtres avec #199, il manquait en grille).
+        assert!(!h.state().stacking);
+        h.get_by_label(&Action::StackMode.label()).click();
         h.run_steps(3);
+        assert!(h.state().stacking, "le bandeau allume les piles en grille");
         let before = h.state().stack_enter;
         h.get_by_label(&label).click();
         h.run_steps(3);
@@ -17420,6 +17438,11 @@ mod tests {
                 .is_none()
         );
         assert!(h.query_by_label(&t!("panel-grid-files-allow")).is_some());
+        // Et l'interrupteur des piles (retour du 31/10/2026 : il manquait dans « Vue »).
+        assert!(!h.state().stacking);
+        h.get_by_label(&t!("panel-grid-stacks-on")).click();
+        h.run_steps(3);
+        assert!(h.state().stacking, "la section « Vue » allume les piles");
         press(&mut h, Key::F, Modifiers::SHIFT);
         assert!(h.query_by_label("Effacer").is_none(), "Maj+F la masque");
     }
