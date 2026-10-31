@@ -1338,9 +1338,9 @@ impl TriApp {
         self.apply_sidecar_policy();
         self.watch_snapshot = loaded.snapshot;
         trace(|| format!("notes lues : {}", self.folder.notes.len()));
-        if !self.notes_rule.is_empty() {
-            self.refilter(Reveal::Minimal);
-        }
+        // Filtre sur les notes : à refaire ; tri par note : à refaire aussi (31/10/2026 :
+        // le dossier était trié à l'ouverture, sur des notes pas encore lues).
+        self.notes_changed();
         self.stacks_dirty = true;
     }
 
@@ -16499,6 +16499,40 @@ mod tests {
         h.get_by_label(&label).click();
         h.run_steps(3);
         assert_ne!(h.state().stack_enter, before);
+    }
+
+    #[test]
+    fn the_sort_by_ratings_waits_for_the_notes_at_launch() {
+        // 31/10/2026 : au lancement, le dossier était trié avant la lecture des notes en
+        // fond (sur des notes vides : l'ordre des noms) ; retrié une fois les notes lues.
+        let (mut h, dir) = harness();
+        let photos = dir.path().join("photos");
+        h.run_steps(3);
+        press(&mut h, Key::Num8, Modifiers::NONE); // img0 vert
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::Num6, Modifiers::NONE); // img1 rouge
+        h.state_mut().set_order(tri::sort::Order {
+            key: tri::sort::SortKey::Color,
+            descending: false,
+        });
+        h.run_steps(2);
+        let names = |h: &Harness<'_, TriApp>| -> Vec<String> {
+            h.state()
+                .files
+                .iter()
+                .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(names(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
+        // Dossier rouvert (comme au lancement) : les notes arrivent après la liste.
+        h.state_mut().open_folder(&photos);
+        run_until(&mut h, |app| app.loading.is_none() && app.opening.is_none());
+        h.run_steps(2);
+        assert_eq!(
+            names(&h),
+            ["img1.jpg", "img0.jpg", "img2.jpg"],
+            "retrié une fois les notes lues"
+        );
     }
 
     #[test]
