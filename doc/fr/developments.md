@@ -78,8 +78,6 @@ Voir `gui.md`, « Piles de développements » : une photo est une pile de ses d�
 repliée par défaut (couverture selon le rendu des vignettes du dossier, 31/10/2026 : la
 photo en JPEG boîtier, le préféré ou le plus récent en « Couverture », le développement
 principal d'un logiciel ; et « N dév. »), dépliable (`Maj+V`) ; `Maj+W` / `Maj+Q`
-passent de l'un à l'autre ; en plein écran un développement montre son rendu, `b` montre
-repliée par défaut (couverture et « N dév. »), dépliable (`Maj+V`) ; `Maj+W` / `Maj+Q`
 passent de l'un à l'autre, `Ctrl+Maj+V` replie toutes les piles, une pastille sur chaque
 vignette dépliée replie à la souris (Alt+clic : en gardant ce développement en
 couverture, 31/10/2026) ; en plein écran un développement montre son rendu, `b` montre
