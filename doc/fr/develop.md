@@ -256,7 +256,8 @@ récentes ne lancent que l'interface (le `--cli` des anciennes n'existe plus, fi
 pixls.us de 2023) ; `tri` l'extrait une fois (`appimage_cli` : `--appimage-extract` dans
 `<cache>/develop/<logiciel>/appimage/<nom>-<taille>-<date>/`, une nouvelle version est
 extraite à son tour) et lance `squashfs-root/usr/bin/rawtherapee-cli` / `ART-cli` avec
-ses bibliothèques (`LD_LIBRARY_PATH`). Pas encore vérifié sur une vraie AppImage (31/10/2026).
+ses bibliothèques (`LD_LIBRARY_PATH`). **Vérifié par l'utilisateur** sur Linux Mint avec
+l'AppImage de RawTherapee 5.13 (31/10/2026) : notes dans les deux sens et rendu.
 « Ouvrir le dossier dans… » lance l'interface à côté de la ligne de commande
 (`rawtherapee` / `ART <dossier>` ; une AppImage, elle-même).
 

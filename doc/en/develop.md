@@ -246,8 +246,9 @@ for ART). **AppImage**: recent ones only launch the interface (the `--cli` of th
 ones is gone, pixls.us thread of 2023); `tri` extracts it once (`appimage_cli`:
 `--appimage-extract` into `<cache>/develop/<software>/appimage/<name>-<size>-<date>/`, a
 new version is extracted in turn) and runs `squashfs-root/usr/bin/rawtherapee-cli` /
-`ART-cli` with its libraries (`LD_LIBRARY_PATH`). Not yet checked on a real AppImage
-(2026-10-31). "Open the folder in…" launches the interface next to the command line
+`ART-cli` with its libraries (`LD_LIBRARY_PATH`). **Checked by the user** on Linux Mint
+with the RawTherapee 5.13 AppImage (2026-10-31): ratings both ways and render. "Open the
+folder in…" launches the interface next to the command line
 (`rawtherapee` / `ART <folder>`; an AppImage, itself).
 
 The profile is a development (`Engine::sidecar`, `profile_sidecar`) only when it has a
