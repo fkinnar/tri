@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Interrupteur des piles de retour dans le bandeau de la grille** (parti de la barre
+  des filtres avec sa réorganisation, #199) et **dans la section « Vue »** du panneau de
+  droite en plein écran, à côté de la source affichée (retour du 31/10/2026).
 - **Corrigé : le filtre « développées » montrait des photos seulement notées, comme des
   développements darktable orphelins** (retour du jour). Deux causes : les piles et le
   rendu / filtre n'avaient pas la même règle pour « un développement darktable », et le

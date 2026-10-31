@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Stacks switch back in the bottom bar of the grid** (it had left the filter bar with
+  its reorganisation, #199) and **in the "View" section** of the right panel in full
+  screen, next to the shown source (feedback of 2026-10-31).
 - **Fixed: the "developed" filter showed photos that were only rated, as orphan darktable
   developments** (same-day feedback). Two causes: the stacks and the renderer / filter
   had two different rules for "a darktable development", and the filter judged the photo
