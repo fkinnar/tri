@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Corrigé : le rendu RawTherapee / ART d'un développement échouait** (premier essai réel,
+  31/10/2026) : le lot en fond passait à la ligne de commande le chemin virtuel du
+  développement (`IMG@rt.RAF`) au lieu du fichier de la photo.
 - **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
   nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,

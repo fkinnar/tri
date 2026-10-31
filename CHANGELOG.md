@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Fixed: the RawTherapee / ART render of a development failed** (first real run,
+  2026-10-31): the background batch handed the development's virtual path (`IMG@rt.RAF`)
+  to the command line instead of the photo's file.
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the
   cell's text colour, no coloured badge) replaces "N dev."; the count is in its tooltip;
   the "fold" icon of an unfolded stack is drawn the same way, without background.
