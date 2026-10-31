@@ -26,7 +26,13 @@ hidden folders excluded as in `media::scan`.
 A change is only signalled when two successive reads are identical: a copy of 500 files
 in progress, or a file whose size is growing, gives only one signal, at the end. The
 signal (`Changes`) lists the images and sidecars added, removed or modified since the
-previous signal.
+previous signal. A sidecar that adds or removes a **development** counts as an image (the
+list is to be read again: one thumbnail more or less): a darktable clone, a RapidRAW
+virtual copy, a main `.rrdata` or a `.pp3` / `.arp` profile created with adjustments
+(`development_photo`); and a main sidecar **modified** into one (`became_development`,
+2026-10-31: the XMP rewritten by darktable, then `.rrdata` and RawTherapee / ART profiles
+filled after the rating that created them; without it the stack only saw them when the
+folder was reopened). A ratings-only sidecar stays a plain sidecar change.
 
 `FolderWatch::sync()` takes the current state as reference without signalling anything:
 after a change made by `tri` itself (rename, trash, folder reread), already taken into
