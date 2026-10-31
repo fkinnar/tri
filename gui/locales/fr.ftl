@@ -902,7 +902,6 @@ grid-render-cover = Couverture
 grid-render-libraw = Rendu RAW (LibRaw)
 grid-render-libraw-short = LibRaw
 grid-render-badge = Développé dans { $engine }
-grid-render-badge-libraw = Rendu RAW (LibRaw) : pas de développement de ce logiciel
 grid-render-tip = Rendu des vignettes
 filter-settings-in-panel = Réglages : section « Filtres » du panneau de droite ({ $keys })
 panel-section-histogram = Histogramme

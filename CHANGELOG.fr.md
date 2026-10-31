@@ -4,6 +4,9 @@
 
 ## À venir
 
+- Vignettes : plus de pastille « LibRaw » sur une photo montrée dans le rendu interne
+  (retour du 31/10/2026 : elle ne servait à rien) ; seul le rendu d'un logiciel porte
+  une pastille.
 - **Corrigé : un profil RawTherapee / ART (ou un `.rrdata` RapidRAW) rempli après la note
   qui l'avait créé n'entrait pas dans la pile des développements** avant la réouverture
   du dossier (retour du 31/10/2026) : la surveillance traite un sidecar principal qui

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Thumbnails: no more "LibRaw" chip on a photo shown in the internal render (feedback of
+  2026-10-31: it said nothing); only a software's render carries a chip.
 - **Fixed: a RawTherapee / ART profile (or a RapidRAW `.rrdata`) filled after the rating
   that created it did not enter the development stack** until the folder was reopened
   (feedback of 2026-10-31): the folder watcher now treats a main sidecar that becomes a

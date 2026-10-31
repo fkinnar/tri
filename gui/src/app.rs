@@ -11942,13 +11942,14 @@ impl TriApp {
         // De droite à gauche après le format : rendu développé, goutte (floue), puis
         // versions.
         let mut caption_left = badge_rect.min.x;
-        // Rendu montré (#114) : le nom du logiciel (ou LibRaw) si la vignette n'est pas le
-        // JPEG boîtier (retour du 26/10/2026 : « DEV » ne disait rien).
-        // Un développement : lequel (« DT · clone 1 »), toujours ; en attendant son rendu,
-        // la vignette est celle de la photo.
+        // Rendu montré (#114) : le nom du logiciel si la vignette n'est pas le JPEG
+        // boîtier (retour du 26/10/2026 : « DEV » ne disait rien) ; rien pour le rendu
+        // LibRaw, le rendu interne (retour du 31/10/2026 : « LibRaw » ne servait à rien).
+        // Un développement : lequel (« DT · 1 »), toujours ; en attendant son rendu, la
+        // vignette est celle de la photo.
         let shown = self.texture_levels.get(&file.path).copied();
         let development = self.development_badge(&file.path);
-        if let Some(level @ (Level::Developed(_) | Level::Standard)) =
+        if let Some(level @ Level::Developed(_)) =
             shown.filter(|_| development.is_none() && file.kind == MediaKind::Raw)
         {
             let side = badge_rect.height();
@@ -11957,7 +11958,7 @@ impl TriApp {
                     // Le nom court, comme la pastille d'un développement (retour du
                     // 31/10/2026 : « RawTherapee » ici, « RT » là) ; la bulle a le long.
                     Level::Developed(engine) => engine.short().to_string(),
-                    _ => t!("grid-render-libraw-short"),
+                    _ => String::new(),
                 },
                 // Un peu plus petit que la légende : de l'air dans le cadre (retour du
                 // 26/10/2026).
@@ -11979,10 +11980,9 @@ impl TriApp {
             ui.painter()
                 .galley(chip.center() - galley.size() / 2.0, galley, text_color);
             caption_left = chip.min.x;
-            tips.push(match level {
-                Level::Developed(engine) => t!("grid-render-badge", engine = engine.name()),
-                _ => t!("grid-render-badge-libraw"),
-            });
+            if let Level::Developed(engine) = level {
+                tips.push(t!("grid-render-badge", engine = engine.name()));
+            }
         } else if let Some(badge) = development {
             let side = badge_rect.height();
             let galley =
