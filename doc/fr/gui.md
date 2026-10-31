@@ -643,6 +643,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     concentration ; issue n° 8 : elles apparaissaient deux fois). En plein écran aussi,
     après les notes : les badges de la grille, brûlée / bouchée (clic : grand
     histogramme) et floue (clic : carte de netteté ; issue n° 9) ;
+  - **clic sur une marque de la vignette** (#257, 31/10/2026) : les étoiles (en bas à
+    gauche, les cinq emplacements même vides), le drapeau (en bas à droite, cercle du
+    neutre compris) ou les couleurs (en haut à droite) ouvrent un **petit sélecteur** du
+    groupe concerné, à cet endroit (`mark_picker`, `marks::thumbnail_mark_zones`,
+    contrôles du bandeau scindés en `flag_controls` / `star_controls` / `color_controls`) ;
+    une étoile ou un drapeau posé le ferme, les couleurs restent ouvertes (plusieurs à
+    cocher), Échap ferme ; main au survol des marques ;
   - **clic droit** sur une vignette ou en plein écran : **boîte modale** avec les mêmes
     contrôles, pour l'image cliquée (sélectionnée). Un simple menu ne suffisait pas
     (retour du 17/10/2026) : la souris qui sortait du menu sélectionnait d'autres

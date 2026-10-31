@@ -400,6 +400,9 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
+    /// Sélecteur ouvert par un clic sur une marque de la vignette (#257) : image, groupe
+    /// (étoiles, drapeau, couleurs), coin de la boîte.
+    mark_picker: Option<(PathBuf, marks::MarkKind, egui::Pos2)>,
     /// Scores de netteté connus (cache d'analyse), par chemin.
     scores: HashMap<PathBuf, f32>,
     /// Jugement de chaque photo notée (dossier et voisines, voir `tri::sharpness::judge`).
@@ -1017,6 +1020,7 @@ impl TriApp {
             grid_fit_pending: false,
             cell_action: None,
             rating_dialog: None,
+            mark_picker: None,
             file_dialog: None,
             background_transfers: Vec::new(),
             crop: None,
@@ -10661,6 +10665,38 @@ impl TriApp {
 
     /// Boîte de notation (clic droit) : modale, pour l'image cliquée. Se ferme par Échap,
     /// un clic à côté ou « Fermer » ; reste ouverte pour poser plusieurs notes.
+    /// Petit sélecteur d'une marque de la vignette (#257) : les étoiles, les drapeaux ou
+    /// les couleurs seuls, à l'endroit du clic. Une étoile ou un drapeau posé ferme la
+    /// boîte ; les couleurs restent ouvertes (on peut en cocher plusieurs).
+    fn mark_picker(&mut self, ctx: &egui::Context) {
+        let Some((path, kind, at)) = self.mark_picker.clone() else {
+            return;
+        };
+        let notes = self.folder.notes.notes(&path).clone();
+        let (colors, size) = (self.gui.colors.clone(), self.gui.grid.marks + 8.0);
+        let mut clicked = None;
+        let modal = modal_at("mark_picker", at).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                let tip = |a: Action| self.action_tip(a);
+                clicked = match kind {
+                    marks::MarkKind::Stars => marks::star_controls(ui, &notes, &colors, size, &tip),
+                    marks::MarkKind::Flag => marks::flag_controls(ui, &notes, &colors, size, &tip),
+                    marks::MarkKind::Colors => {
+                        marks::color_controls(ui, &notes, &colors, size, &tip)
+                    }
+                };
+            });
+        });
+        if let Some(action) = clicked {
+            self.rate_path(path, action);
+            if kind != marks::MarkKind::Colors {
+                self.mark_picker = None;
+            }
+        } else if modal.should_close() {
+            self.mark_picker = None;
+        }
+    }
+
     fn rating_dialog(&mut self, ctx: &egui::Context) {
         let Some((path, at)) = self.rating_dialog.clone() else {
             return;
@@ -11984,6 +12020,17 @@ impl TriApp {
             &colors,
             g.neutral_flag,
         );
+        // Noter à la souris sur la vignette (#257, 31/10/2026) : un clic sur les étoiles,
+        // le drapeau ou les couleurs ouvre un petit sélecteur du groupe concerné, là.
+        let zones = marks::thumbnail_mark_zones(image_area, notes, g.marks);
+        for (kind, zone) in zones {
+            let hit = ui
+                .interact(zone, response.id.with(("mark", kind)), Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if hit.clicked() {
+                self.mark_picker = Some((file.path.clone(), kind, zone.left_top()));
+            }
+        }
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
         // Pas sur une pile repliée (issue n° 75) : son nombre d'images est à cette place,
@@ -13379,6 +13426,7 @@ impl eframe::App for TriApp {
         self.export_report_dialog(&ctx);
         self.group_window(&ctx);
         self.rating_dialog(&ctx);
+        self.mark_picker(&ctx);
         self.develop_folder_dialog(&ctx);
         self.sidecars_dialog(&ctx);
         self.file_dialog(&ctx);
@@ -16594,6 +16642,91 @@ mod tests {
             _ => panic!("boîte « Renommer » attendue"),
         }
         assert!(h.query_by_label("Mettre à la corbeille…").is_none());
+    }
+
+    #[test]
+    fn clicking_a_mark_on_the_thumbnail_opens_its_picker() {
+        // #257 : un clic sur les étoiles de la vignette ouvre le sélecteur des étoiles,
+        // qui note l'image cliquée et se ferme ; le drapeau et les couleurs de même.
+        let (mut h, dir) = harness();
+        h.run_steps(5);
+        // Le bandeau propose les mêmes contrôles : masqué, ceux du sélecteur sont seuls.
+        h.state_mut().rating_bar = false;
+        let image = dir.path().join("photos").join("img1.jpg");
+        let rect = h
+            .state()
+            .cell_rects
+            .iter()
+            .find(|(i, _)| *i == 1)
+            .unwrap()
+            .1;
+        let g = h.state().gui.grid;
+        // Géométrie de la vignette (`image_area`, `thumbnail_mark_zones`) : la première
+        // étoile, en bas à gauche de la zone image.
+        let inset = g.marks / 2.0 + 3.0;
+        let bottom = rect.max.y - (g.label + 4.0);
+        let star = pos2(rect.min.x + g.padding + inset, bottom - inset);
+        h.event(UiEvent::PointerMoved(star));
+        h.run_steps(1);
+        h.event(UiEvent::PointerButton {
+            pos: star,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.event(UiEvent::PointerButton {
+            pos: star,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        let picker = h.state().mark_picker.clone().expect("sélecteur ouvert");
+        assert_eq!(
+            (picker.0.as_path(), picker.1),
+            (image.as_path(), marks::MarkKind::Stars)
+        );
+        h.get_by_label("3 étoiles").click();
+        h.run_steps(3);
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
+        assert!(h.state().mark_picker.is_none(), "fermé après l'étoile");
+        // Le drapeau : même chose, en bas à droite.
+        let flag = pos2(rect.max.x - g.padding - inset, bottom - inset);
+        h.event(UiEvent::PointerMoved(flag));
+        h.run_steps(1);
+        h.event(UiEvent::PointerButton {
+            pos: flag,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        h.event(UiEvent::PointerButton {
+            pos: flag,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        assert_eq!(
+            h.state().mark_picker.as_ref().map(|p| p.1),
+            Some(marks::MarkKind::Flag)
+        );
+        h.get_by_label("Accepter").click();
+        h.run_steps(3);
+        assert_eq!(tri::xmp::read(&image).unwrap().flag, Flag::Accepted);
+        assert!(h.state().mark_picker.is_none());
+        // Les couleurs : la boîte reste ouverte pour en cocher plusieurs, Échap la ferme.
+        h.state_mut().mark_picker = Some((image.clone(), marks::MarkKind::Colors, flag));
+        h.run_steps(2);
+        h.get_by_label("Couleur rouge (ajouter / retirer)").click();
+        h.run_steps(3);
+        assert!(h.state().mark_picker.is_some(), "reste ouvert");
+        assert_eq!(
+            tri::xmp::read(&image).unwrap().colors,
+            [tri::xmp::Color::Red]
+        );
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().mark_picker.is_none());
     }
 
     #[test]

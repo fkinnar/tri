@@ -207,6 +207,51 @@ pub fn thumbnail_notes(
     }
 }
 
+/// Groupe de marques d'une vignette qu'un clic peut modifier (#257, 31/10/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MarkKind {
+    /// Les étoiles, en bas à gauche.
+    Stars,
+    /// Le drapeau, en bas à droite.
+    Flag,
+    /// Les couleurs, en haut à droite.
+    Colors,
+}
+
+/// Zones cliquables des marques d'une vignette (même géométrie que
+/// [`thumbnail_notes`]) : les cinq emplacements d'étoiles, qu'elles soient posées ou non,
+/// le drapeau (posé ou cercle du neutre), les couleurs (au moins un emplacement).
+pub fn thumbnail_mark_zones(area: Rect, notes: &Notes, size: f32) -> [(MarkKind, Rect); 3] {
+    let radius = size / 2.0;
+    let gap = size * 0.25;
+    let inset = radius + 3.0;
+    let slot = size + gap;
+    let stars = Rect::from_min_max(
+        pos2(area.min.x + inset - radius, area.max.y - inset - radius),
+        pos2(
+            area.min.x + inset + 4.0 * slot + radius,
+            area.max.y - inset + radius,
+        ),
+    );
+    let flag = Rect::from_center_size(
+        pos2(area.max.x - inset, area.max.y - inset),
+        vec2(size, size),
+    );
+    let n = notes.colors.len().max(1) as f32;
+    let colors = Rect::from_min_max(
+        pos2(
+            area.max.x - inset - (n - 1.0) * slot - radius,
+            area.min.y + inset - radius,
+        ),
+        pos2(area.max.x - inset + radius, area.min.y + inset + radius),
+    );
+    [
+        (MarkKind::Stars, stars),
+        (MarkKind::Flag, flag),
+        (MarkKind::Colors, colors),
+    ]
+}
+
 /// Badge d'écrêtage d'une vignette, dans le carré `rect` : un triangle rectangle (angle
 /// droit en bas à droite) cerclé de sombre, moitié droite blanche et gauche noire pour une
 /// photo brûlée (`over`), l'inverse pour une photo bouchée. Retour du 21/10/2026 : la
@@ -1084,13 +1129,35 @@ pub fn controls(
     size: f32,
     tip: &dyn Fn(Action) -> String,
 ) -> Option<Action> {
-    let weak = ui.visuals().weak_text_color();
+    let mut clicked = flag_controls(ui, notes, colors, size, tip);
+    ui.add_space(size * 0.5);
+    clicked = star_controls(ui, notes, colors, size, tip).or(clicked);
+    ui.add_space(size * 0.5);
+    color_controls(ui, notes, colors, size, tip).or(clicked)
+}
+
+/// Un contrôle de notation : son carré et vrai s'il est cliqué.
+fn control_cell(
+    ui: &mut Ui,
+    size: f32,
+    action: Action,
+    tip: &dyn Fn(Action) -> String,
+) -> (Rect, bool) {
+    let (rect, response) = clickable_named(ui, size, &action.label(), &tip(action));
+    (rect, response.clicked())
+}
+
+/// Les trois drapeaux ([`controls`], et le sélecteur d'une vignette : #257).
+pub fn flag_controls(
+    ui: &mut Ui,
+    notes: &Notes,
+    colors: &Colors,
+    size: f32,
+    tip: &dyn Fn(Action) -> String,
+) -> Option<Action> {
     let strong = ui.visuals().strong_text_color();
     let mut clicked = None;
-    let cell = |ui: &mut Ui, action: Action| {
-        let (rect, response) = clickable_named(ui, size, &action.label(), &tip(action));
-        (rect, response.clicked())
-    };
+    let cell = |ui: &mut Ui, action: Action| control_cell(ui, size, action, tip);
     // Drapeau : trois contrôles, comme les touches Maj+P / Maj+X / Maj+U. Recliquer le
     // drapeau posé ne le retire pas (retour du 17/10/2026 : un double clic involontaire
     // effaçait une note).
@@ -1133,7 +1200,20 @@ pub fn controls(
     if hit {
         clicked = Some(action);
     }
-    ui.add_space(size * 0.5);
+    clicked
+}
+
+/// Les cinq étoiles ([`controls`], et le sélecteur d'une vignette : #257).
+pub fn star_controls(
+    ui: &mut Ui,
+    notes: &Notes,
+    colors: &Colors,
+    size: f32,
+    tip: &dyn Fn(Action) -> String,
+) -> Option<Action> {
+    let weak = ui.visuals().weak_text_color();
+    let mut clicked = None;
+    let cell = |ui: &mut Ui, action: Action| control_cell(ui, size, action, tip);
     // Étoiles : recliquer l'étoile posée remet à zéro, comme le filtre des étoiles
     // (retour du 21/10/2026 : à la souris, pas de double clic involontaire à craindre ;
     // le contrôle « ⊘ » est retiré). Au clavier, la touche 0 seule remet à zéro.
@@ -1155,7 +1235,19 @@ pub fn controls(
             clicked = Some(action);
         }
     }
-    ui.add_space(size * 0.5);
+    clicked
+}
+
+/// Les cinq couleurs ([`controls`], et le sélecteur d'une vignette : #257).
+pub fn color_controls(
+    ui: &mut Ui,
+    notes: &Notes,
+    colors: &Colors,
+    size: f32,
+    tip: &dyn Fn(Action) -> String,
+) -> Option<Action> {
+    let mut clicked = None;
+    let cell = |ui: &mut Ui, action: Action| control_cell(ui, size, action, tip);
     for color in Color::ALL {
         let action = Action::Color(color);
         let (rect, hit) = cell(ui, action);
