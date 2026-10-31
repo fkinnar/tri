@@ -1480,9 +1480,10 @@ mod tests {
         let d = dir.path();
         developed(d);
         std::fs::write(d.join("IMG.RAF.xmp"), DT_XMP).unwrap();
+        // Des réglages : un développement (sans, un simple sidecar de notes, 31/10/2026).
         std::fs::write(
             d.join("IMG.RAF.rrdata"),
-            r#"{"rating": 2, "adjustments": {}}"#,
+            r#"{"rating": 2, "adjustments": {"exposure": 1}}"#,
         )
         .unwrap();
         crate::media::scan(d, 1).unwrap();

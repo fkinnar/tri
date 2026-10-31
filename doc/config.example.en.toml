@@ -76,6 +76,13 @@ sidecar = "darktable"
 # previous one (like Lightroom).
 multiple_colors = false
 
+# Sidecars of the development software (2026-10-31): one subsection per software that has
+# its own. An existing sidecar always receives the notes; a missing one is created
+# according to "create": "auto" (the software is installed, or the folder already has
+# some), "always", "never" (on demand: tri --sidecars). The XMP is always created ([xmp]).
+[sidecars.rapidraw]
+create = "auto"
+
 [places]
 # Locations offered by the folders panel. Hide Time Machine backups, recognised by their
 # content (not by their name):

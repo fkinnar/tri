@@ -49,6 +49,7 @@ existe.
 | [metadata.md](metadata.md) | Module `tri::metadata` : métadonnées de prise de vue (LibRaw, EXIF), lignes à afficher |
 | [notes.md](notes.md) | Module `tri::notes` : notes d'un dossier en mémoire, modification, filtres sur les notes |
 | [rrdata.md](rrdata.md) | Module `tri::rrdata` : notes dans les sidecars de RapidRAW (`.rrdata`, copies virtuelles comprises) |
+| [sidecars.md](sidecars.md) | Module `tri::sidecars` : les formats de sidecars de notes (XMP, `.rrdata`), tous écrits, les manquants créés selon `[sidecars]` ou à la demande |
 | [xmp.md](xmp.md) | Module `tri::xmp` : notes (étoiles, couleurs, accepté/rejeté) dans les sidecars XMP |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |

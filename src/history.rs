@@ -840,12 +840,14 @@ mod tests {
         touch(d, &["A.RAF"]);
         std::fs::write(
             d.join("A.RAF.xmp"),
-            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" xmp:Rating="1" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // Les deux sidecars de la photo d'accord (une étoile) : la photo a une seule
+        // note, écrite partout (31/10/2026, `sidecars.md`).
         std::fs::write(
             d.join("A.RAF.rrdata"),
-            r#"{"rating": 1, "adjustments": {}}"#,
+            r#"{"rating": 1, "adjustments": {"exposure": 0.5}}"#,
         )
         .unwrap();
         let files = crate::media::scan(d, 1).unwrap();
@@ -871,8 +873,9 @@ mod tests {
             1
         );
         assert_eq!(book.notes(&rr).stars, 1, "le .rrdata retrouve sa note");
-        assert_eq!(book.notes(&raf).stars, 0);
-        assert_eq!(book.notes(&dt).stars, 0);
+        assert_eq!(crate::xmp::read(&raf).unwrap().stars, 1, "le XMP aussi");
+        assert_eq!(book.notes(&raf).stars, 1);
+        assert_eq!(book.notes(&dt).stars, 1);
         history.redo(Convention::Darktable).unwrap();
         book.reload();
         assert_eq!(book.notes(&rr).stars, 4);

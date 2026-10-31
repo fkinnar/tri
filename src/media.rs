@@ -198,9 +198,13 @@ fn walk(
             .to_lowercase();
         let names = by_image.remove(&image).unwrap_or_default();
         let is_image = |n: &str| images.contains_key(n);
-        let developments = crate::developments::find(photo, &names, &is_image, &|xmp| {
-            crate::developments::file_is_darktable(xmp)
-        });
+        let developments = crate::developments::find(
+            photo,
+            &names,
+            &is_image,
+            &|xmp| crate::developments::file_is_darktable(xmp),
+            &|rrdata| crate::rrdata::file_is_development(rrdata),
+        );
         crate::developments::set_for(photo, &developments);
         for development in developments {
             files.push(MediaFile {
@@ -385,6 +389,13 @@ mod tests {
         // Le XMP de la photo : écrit par darktable, un développement ; par tri seul
         // (notes), non.
         std::fs::write(d.join("IMG.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        // Le `.rrdata` principal : avec des réglages, un développement (sans : des notes
+        // seules, 31/10/2026) ; une copie virtuelle en est toujours un.
+        std::fs::write(
+            d.join("IMG.RAF.rrdata"),
+            r#"{"rating": 0, "adjustments": {"exposure": 1}}"#,
+        )
+        .unwrap();
         for clone in ["IMG_01.RAF.xmp", "IMG_02.RAF.xmp"] {
             std::fs::write(d.join(clone), r#"<x darktable:xmp_version="5"/>"#).unwrap();
         }

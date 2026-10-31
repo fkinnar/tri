@@ -56,6 +56,7 @@ pub mod send;
 pub mod servers;
 pub mod settings;
 pub mod sharpness;
+pub mod sidecars;
 pub mod similarity;
 pub mod sort;
 pub mod update;

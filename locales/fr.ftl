@@ -165,6 +165,7 @@ cli-usage =
       tri <dossier> --cache-here|--cache-user [--cache DOSSIER]
       tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --sidecars rapidraw|xmp|all [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
       tri <dossier> --metadata [--raw|--flat] [--depth N]
       tri <dossier> --groups [--threshold X]
@@ -223,6 +224,11 @@ cli-xmp-summary = { $n } images : { $written } sidecars { $mode ->
    *[write] écrits
 }, { $unchanged } inchangées, { $conflicts } conflits, { $errors } erreurs
 cli-xmp-some-failed = certains sidecars n'ont pas pu être convertis
+cli-unknown-sidecar = format de sidecar inconnu : { $value } (rapidraw, xmp ou all)
+cli-sidecars-summary = { $n } images : { $created } sidecars { $mode ->
+    [dry-run] à créer
+   *[write] créés
+}, { $unchanged } déjà pourvues, { $skipped } passées (sans notes, ou développements), { $errors } erreurs
 cli-rename-shared-copy = (copie : partagé)
 cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :

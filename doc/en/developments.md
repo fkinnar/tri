@@ -32,12 +32,14 @@ on demand, `b` cycles through the renders).
 
 ## Functions
 
-- `find(photo, names, images, is_darktable)`: a photo's developments from the names of
-  its folder's files, in order: darktable main (if its XMP is darktable's: `is_darktable`
-  reads its head, `darktable:xmp_version` or a history), clones by number (darktable's
-  too: an orphan `IMG_01.RAF.xmp` written by another software, digiKam for instance, is
-  not a clone), RapidRAW main, copies by identifier. A Lightroom, Capture One or digiKam
-  XMP therefore triggers nothing.
+- `find(photo, names, images, is_darktable, is_rapidraw)`: a photo's developments from
+  the names of its folder's files, in order: darktable main (if its XMP is darktable's:
+  `is_darktable` reads its head, `darktable:xmp_version` or a history), clones by number
+  (darktable's too: an orphan `IMG_01.RAF.xmp` written by another software, digiKam for
+  instance, is not a clone), RapidRAW main (if its `.rrdata` has adjustments:
+  `is_rapidraw`, `rrdata::file_is_development`; without, it is a notes sidecar,
+  2026-10-31, see `sidecars.md`), copies by identifier. A Lightroom, Capture One or
+  digiKam XMP, or the `.rrdata` of a merely rated image, therefore triggers nothing.
 - **Registry** (global, filled by `media::scan`): `set_for(photo, developments)` replaces
   a photo's known developments (a deleted clone is no longer known), `register` adds one;
   `get(path)` gives the development of a path of its own, `of(photo)` a photo's in order,

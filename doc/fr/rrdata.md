@@ -6,9 +6,12 @@ copie virtuelle (en interne, RapidRAW la désigne par `IMAGE.RAF?vc=<id>`). Vér
 son code source le 30/10/2026.
 
 Chaque développement garde ses notes là où son logiciel les lit (décidé le 30/10/2026) :
-une copie virtuelle a les siennes dans son `.rrdata` ; le développement principal a
-celles de la photo, écrites aussi dans `IMAGE.RAF.rrdata` (issue n° 234, 31/10/2026 ;
-voir `developments.md`).
+une copie virtuelle a les siennes dans son `.rrdata` ; le `IMAGE.RAF.rrdata` principal
+porte celles de la photo, comme son XMP (issue n° 234, 31/10/2026 ; depuis, un des
+**formats de sidecars** de `tri`, créé quand on note selon `[sidecars.rapidraw]`, voir
+`sidecars.md`). Sans réglages (`adjustments` nuls, vides ou réduits au marqueur
+`baselineExposure` de RapidRAW), il n'est qu'un sidecar de notes, pas un développement
+(`is_development`, `file_is_development`).
 
 ## Champs
 
@@ -29,7 +32,9 @@ n'est pas réécrit si les notes n'ont pas changé.
 ## Fonctions
 
 - `parse(json)` / `read(path)` : les notes.
-- `apply(json, notes)` / `write(path, notes)` : les notes écrites, le reste gardé.
+- `apply(json, notes)` / `write(path, notes)` : les notes écrites, le reste gardé ;
+  `create(path, notes)` : un sidecar neuf, notes seules, réglages nuls ; `path(image)`.
+- `is_development(json)` / `file_is_development(path)` : des réglages qui développent.
 - `adjustments(json)` : les réglages, pour rendre une copie virtuelle.
 
 ## Fichiers

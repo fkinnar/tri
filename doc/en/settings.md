@@ -35,6 +35,7 @@ cannot change without updating its documentation.
 | `[cache]` | Folder, JPEG quality, maximum size of 1:1 previews (least recently used eviction) | engine |
 | `[scheduler]` | Light workers ("auto" = half the cores), thumbnails first, background exposure analysis | engine |
 | `[xmp]` | Convention for a new sidecar (`darktable` / `adobe`), one or several colors | engine |
+| `[sidecars.<software>]` | Creation of a software's missing sidecar when rating (`auto` / `always` / `never`, `sidecars.md`) | engine |
 | `[places]` | Places in the folders panel: hide Time Machine, patterns to exclude, fixed volumes (no ejection), volume monitoring interval | engine |
 | `[exposure]` | Saturation and crushed-shadow thresholds (EV), histogram bins, mask size | engine |
 | `[offload]` | Card offloading: root, verification, already offloaded files, history | engine |

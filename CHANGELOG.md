@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- **Notes written to every sidecar of the photo** (`tri::sidecars`, a format per
+  software): the XMP and RapidRAW's `IMG.RAF.rrdata`, read from the most recent, all
+  written. A missing `.rrdata` is created when rating according to
+  `[sidecars.rapidraw] create` (`auto`: RapidRAW installed or the folder already has
+  some; `always`; `never`), so a note set in `tri` shows in RapidRAW even on an image
+  never opened there; `tri <folder> --sidecars rapidraw|xmp|all [--dry-run]` creates
+  them on demand for the rated photos. A `.rrdata` without adjustments (a merely rated
+  image) is no longer a development: no "1 dev." stack for it.
 - **Thumbnail render kept per folder**, like the filters and the sort (`f d`, right panel):
   a folder never set uses `[gui.grid] render`. The render now decides the **cover** of a
   photo with developments: "camera JPEG" and "LibRaw" show the photo itself (the grid no

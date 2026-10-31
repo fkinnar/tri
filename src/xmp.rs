@@ -407,6 +407,15 @@ impl SidecarIndex {
         clones
     }
 
+    /// Le fichier de réglages d'un autre logiciel pour `image`, s'il existe : `IMG.RAF` +
+    /// `extension` (`".rrdata"`, `".pp3"`), quelle que soit la casse du nom.
+    pub fn setting_file(&self, image: &Path, extension: &str) -> Option<PathBuf> {
+        let name = image.file_name()?.to_string_lossy().to_lowercase();
+        self.others
+            .get(&format!("{name}{extension}"))
+            .and_then(|found| found.first().cloned())
+    }
+
     /// Sidecars existants de `image` (dans ce dossier), des deux conventions.
     pub fn sidecars(&self, image: &Path) -> Vec<PathBuf> {
         let mut found = Vec::new();

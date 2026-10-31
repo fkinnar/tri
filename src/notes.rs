@@ -11,25 +11,40 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::filter::{Filter, Groups, retain};
 use crate::media::MediaFile;
-use crate::xmp::{self, Color, Convention, Flag, Notes, SidecarIndex, XmpError};
+use crate::sidecars::{self, Format};
+use crate::xmp::{Color, Convention, Flag, Notes, SidecarIndex, XmpError};
 
 /// Notes d'une image inconnue (une `const` contenant un `Vec` ne se prête pas en `&'static`).
 static EMPTY: Notes = Notes::EMPTY;
 
-/// Notes d'une image et sidecar d'où elles viennent.
+/// Notes d'une image et sidecars d'où elles viennent.
 #[derive(Clone, Debug)]
 struct Entry {
     notes: Notes,
-    /// Sidecar lu et à écrire (le plus récent, sinon celui de la convention).
-    sidecar: PathBuf,
+    /// Sidecars existants, tous formats ([`crate::sidecars`]), le plus récent en tête :
+    /// lu, et tous écrits. Vide : aucun, le XMP de la convention sera créé.
+    sidecars: Vec<PathBuf>,
     /// Sidecar illisible ou mal formé : notes vides, et jamais réécrit.
     error: Option<String>,
+}
+
+impl Entry {
+    /// Le sidecar lu (le plus récent), ou celui qui sera créé.
+    fn primary(&self, image: &Path, convention: Convention) -> PathBuf {
+        self.sidecars
+            .first()
+            .cloned()
+            .unwrap_or_else(|| convention.sidecar(image))
+    }
 }
 
 /// Notes des images d'un ou plusieurs dossiers.
 #[derive(Debug, Default)]
 pub struct NoteBook {
     convention: Convention,
+    /// Formats créés quand on note une photo qui n'en a pas (identifiants,
+    /// [`crate::sidecars::SidecarSettings::creates`]) ; vide : le XMP seul.
+    creates: Vec<&'static str>,
     entries: HashMap<PathBuf, Entry>,
     /// Images de chaque dossier, pour retrouver celles qui partagent un sidecar (convention
     /// Adobe : `IMG.xmp` pour `IMG.RAF` et `IMG.JPG`).
@@ -44,79 +59,65 @@ pub struct NoteBook {
 fn read_entries(
     dir: &Path,
     images: &[PathBuf],
-    convention: Convention,
     done: Option<&AtomicUsize>,
 ) -> Vec<(PathBuf, Entry)> {
     let index = SidecarIndex::new(dir);
     images
         .iter()
         .map(|image| {
-            let (notes, sidecar, error) = read_notes(image, &index, convention);
+            let entry = read_notes(image, &index);
             if let Some(done) = done {
                 done.fetch_add(1, Ordering::Relaxed);
             }
-            (
-                image.clone(),
-                Entry {
-                    notes,
-                    sidecar,
-                    error,
-                },
-            )
+            (image.clone(), entry)
         })
         .collect()
 }
 
-/// Notes de `image`, le sidecar qui les porte (lu, ou à créer selon `convention`) et
-/// l'erreur de lecture. Un développement ([`crate::developments`]) a les siennes dans
-/// son sidecar : XMP de darktable, `.rrdata` de RapidRAW ([`crate::rrdata`]).
-fn read_notes(
-    image: &Path,
-    index: &SidecarIndex,
-    convention: Convention,
-) -> (Notes, PathBuf, Option<String>) {
-    let existing = match crate::developments::get(image) {
-        Some(development) => Some(development.sidecar),
-        None => index.existing_sidecar(image),
+/// Notes de `image` et les sidecars qui les portent. Un développement
+/// ([`crate::developments`]) a les siennes dans son sidecar : XMP de darktable, `.rrdata`
+/// de RapidRAW ([`crate::rrdata`]) ; une photo, dans tous ses sidecars
+/// ([`crate::sidecars`]), lues dans le plus récent.
+fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
+    let mut sidecars: Vec<PathBuf> = match crate::developments::get(image) {
+        Some(development) => vec![development.sidecar],
+        None => sidecars::formats()
+            .iter()
+            .filter_map(|f| f.existing(image, index))
+            .collect(),
     };
-    let (notes, error) = match &existing {
+    if sidecars.len() > 1 {
+        // Le plus récent en tête (noté ailleurs entre-temps : c'est lui qui a raison).
+        sidecars.sort_by_key(|p| {
+            std::cmp::Reverse(
+                std::fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            )
+        });
+    }
+    let (notes, error) = match sidecars.first() {
         None => (Notes::default(), None),
         Some(sidecar) => match read_sidecar(sidecar) {
             Ok(notes) => (notes, None),
             Err(e) => (Notes::default(), Some(e)),
         },
     };
-    let sidecar = existing.unwrap_or_else(|| convention.sidecar(image));
-    (notes, sidecar, error)
+    Entry {
+        notes,
+        sidecars,
+        error,
+    }
 }
 
-/// Vrai si `sidecar` est un `.rrdata` de RapidRAW.
-fn is_rrdata(sidecar: &Path) -> bool {
-    sidecar
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("rrdata"))
-}
-
-/// Notes du sidecar `sidecar`, XMP ou RapidRAW.
+/// Notes du sidecar `sidecar`, de son format.
 fn read_sidecar(sidecar: &Path) -> Result<Notes, String> {
-    if is_rrdata(sidecar) {
-        crate::rrdata::read(sidecar).map_err(|e| e.to_string())
-    } else {
-        xmp::read_sidecar(sidecar).map_err(|e| e.to_string())
-    }
+    sidecars::of(sidecar).read(sidecar)
 }
 
-/// Écrit `notes` dans `sidecar`, XMP ou RapidRAW (le reste du fichier gardé).
+/// Écrit `notes` dans `sidecar`, de son format (le reste du fichier gardé).
 fn write_sidecar(sidecar: &Path, notes: &Notes) -> Result<(), String> {
-    if is_rrdata(sidecar) {
-        crate::rrdata::write(sidecar, notes)
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    } else {
-        xmp::write_sidecar(sidecar, notes)
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
+    sidecars::of(sidecar).write(sidecar, notes).map(|_| ())
 }
 
 fn dir_of(image: &Path) -> PathBuf {
@@ -152,7 +153,7 @@ impl NoteBook {
         let mut book = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         book.touched = None;
         for (dir, images) in &book.by_dir {
-            let entries = read_entries(dir, images, convention, Some(done));
+            let entries = read_entries(dir, images, Some(done));
             book.entries.extend(entries);
         }
         book
@@ -182,6 +183,39 @@ impl NoteBook {
     /// Convention des sidecars créés par une écriture.
     pub fn convention(&self) -> Convention {
         self.convention
+    }
+
+    /// Formats créés quand on note une photo qui n'en a pas (identifiants,
+    /// [`crate::sidecars::SidecarSettings::creates`]).
+    pub fn set_creates(&mut self, creates: Vec<&'static str>) {
+        self.creates = creates;
+    }
+
+    /// Vrai si une image suivie a déjà un sidecar du format `format` (le dossier en
+    /// contient : le logiciel y est utilisé).
+    pub fn has_format(&self, format: &dyn Format) -> bool {
+        self.entries
+            .values()
+            .any(|e| e.sidecars.iter().any(|s| format.owns(s)))
+    }
+
+    /// Sidecars à créer pour `image` quand on la note : ceux des formats de
+    /// [`NoteBook::set_creates`] qu'elle n'a pas (jamais pour un développement, qui n'a
+    /// que le sien ; le XMP toujours).
+    fn missing(&self, image: &Path) -> Vec<(&'static dyn Format, PathBuf)> {
+        let Some(entry) = self.entries.get(image) else {
+            return Vec::new();
+        };
+        if crate::developments::get(image).is_some() {
+            return Vec::new();
+        }
+        sidecars::formats()
+            .iter()
+            .copied()
+            .filter(|f| f.id() == "xmp" || self.creates.contains(&f.id()))
+            .filter(|f| !entry.sidecars.iter().any(|s| f.owns(s)))
+            .map(|f| (f, f.new_path(image, self.convention)))
+            .collect()
     }
 
     /// Vrai si des notes sont attendues d'une lecture en fond ([`NoteBook::pending`]).
@@ -219,7 +253,7 @@ impl NoteBook {
             by_dir.entry(dir_of(image)).or_default().push(image.clone());
         }
         for (dir, images) in by_dir {
-            for (image, entry) in read_entries(&dir, &images, self.convention, None) {
+            for (image, entry) in read_entries(&dir, &images, None) {
                 if let Some(touched) = &mut self.touched {
                     touched.insert(image.clone());
                 }
@@ -278,11 +312,11 @@ impl NoteBook {
             let lower = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().to_lowercase());
             for image in images {
                 let (name, stem) = (lower(image.file_name()), lower(image.file_stem()));
-                // Son sidecar, ou (développements) celui qu'il a lu.
+                // Ses sidecars, ou (développements) celui qu'il a lu.
                 let own = self
                     .entries
                     .get(&image)
-                    .is_some_and(|e| sidecars.contains(&e.sidecar));
+                    .is_some_and(|e| e.sidecars.iter().any(|s| sidecars.contains(s)));
                 if !own
                     && !stems
                         .iter()
@@ -290,29 +324,15 @@ impl NoteBook {
                 {
                     continue;
                 }
-                let sidecar = match crate::developments::get(&image) {
-                    Some(development) => development.sidecar,
-                    None => index.sidecar_path(&image, self.convention),
-                };
-                let (notes, error) = match read_sidecar(&sidecar) {
-                    Ok(notes) => (notes, None),
-                    Err(e) => (Notes::default(), Some(e)),
-                };
+                let entry = read_notes(&image, &index);
                 let old = self.entries.get(&image);
-                if old.is_none_or(|e| e.notes != notes || e.error != error) {
+                if old.is_none_or(|e| e.notes != entry.notes || e.error != entry.error) {
                     changed.push(image.clone());
                 }
                 if let Some(touched) = &mut self.touched {
                     touched.insert(image.clone());
                 }
-                self.entries.insert(
-                    image,
-                    Entry {
-                        notes,
-                        sidecar,
-                        error,
-                    },
-                );
+                self.entries.insert(image, entry);
             }
         }
         changed.sort();
@@ -329,9 +349,18 @@ impl NoteBook {
         self.entries.get(image).and_then(|e| e.error.as_deref())
     }
 
-    /// Sidecar de `image` : celui qui a été lu, ou celui qui sera créé.
-    pub fn sidecar(&self, image: &Path) -> Option<&Path> {
-        self.entries.get(image).map(|e| e.sidecar.as_path())
+    /// Sidecar de `image` : celui qui a été lu (le plus récent), ou celui qui sera créé.
+    pub fn sidecar(&self, image: &Path) -> Option<PathBuf> {
+        self.entries
+            .get(image)
+            .map(|e| e.primary(image, self.convention))
+    }
+
+    /// Tous les sidecars existants de `image` (le plus récent en tête).
+    pub fn sidecars(&self, image: &Path) -> &[PathBuf] {
+        self.entries
+            .get(image)
+            .map_or(&[], |e| e.sidecars.as_slice())
     }
 
     /// Nombre d'images suivies.
@@ -397,6 +426,61 @@ impl NoteBook {
             .collect()
     }
 
+    /// Crée, pour les photos `images` qui ont des notes, les sidecars des formats `formats`
+    /// qu'elles n'ont pas encore, avec leurs notes (à la demande : `tri --sidecars`, pour
+    /// garder les notes dans un logiciel qu'on n'utilise qu'à l'occasion). Les
+    /// développements, les images sans notes et celles qui ont déjà le sidecar sont
+    /// passés. `dry_run` : rien n'est écrit, le bilan dit ce qui le serait.
+    pub fn generate(
+        &mut self,
+        images: &[PathBuf],
+        formats: &[&'static dyn Format],
+        dry_run: bool,
+    ) -> Generated {
+        let mut report = Generated::default();
+        for image in images {
+            if !self.entries.contains_key(image) {
+                self.add(image);
+            }
+            if crate::developments::get(image).is_some() {
+                report.skipped += 1;
+                continue;
+            }
+            let Some(entry) = self.entries.get(image) else {
+                continue;
+            };
+            if entry.notes == Notes::default() {
+                report.skipped += 1;
+                continue;
+            }
+            let notes = entry.notes.clone();
+            let missing: Vec<(&'static dyn Format, PathBuf)> = formats
+                .iter()
+                .copied()
+                .filter(|f| !entry.sidecars.iter().any(|s| f.owns(s)))
+                .map(|f| (f, f.new_path(image, self.convention)))
+                .collect();
+            if missing.is_empty() {
+                report.unchanged += 1;
+                continue;
+            }
+            for (format, sidecar) in missing {
+                if dry_run {
+                    report.created.push(sidecar);
+                    continue;
+                }
+                match format.create(&sidecar, &notes) {
+                    Ok(()) => report.created.push(sidecar),
+                    Err(e) => report.errors.push((image.clone(), e)),
+                }
+            }
+            if !dry_run {
+                self.reload_images(std::slice::from_ref(image));
+            }
+        }
+        report
+    }
+
     /// Écrit `notes` pour `image` seule, sans toucher à sa paire (annulation : chaque
     /// image de la paire retrouve ses propres notes d'avant). Relit ensuite le dossier.
     pub fn write_only(&mut self, image: &Path, notes: &Notes) -> Result<(), XmpError> {
@@ -411,10 +495,18 @@ impl NoteBook {
             });
         }
         if entry.notes != *notes {
-            write_sidecar(&entry.sidecar, notes).map_err(|message| XmpError::Image {
-                image: image.to_path_buf(),
-                message,
-            })?;
+            // Les sidecars existants seulement : rien n'est créé en annulant.
+            let targets = if entry.sidecars.is_empty() {
+                vec![entry.primary(image, self.convention)]
+            } else {
+                entry.sidecars.clone()
+            };
+            for sidecar in &targets {
+                write_sidecar(sidecar, notes).map_err(|message| XmpError::Image {
+                    image: image.to_path_buf(),
+                    message,
+                })?;
+            }
         }
         // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
         // tout le dossier coûtait cher sur un disque lent ou un NAS (issue n° 15).
@@ -455,21 +547,45 @@ impl NoteBook {
         let mut failure = None;
         for target in &targets {
             let entry = &self.entries[target];
-            // Sidecar partagé (convention Adobe) : déjà écrit pour l'autre image.
-            if entry.notes == notes || written.contains(&entry.sidecar) {
+            if entry.notes == notes && !entry.sidecars.is_empty() {
                 continue;
             }
-            let result = match &entry.error {
-                Some(error) => Err(error.clone()),
-                None => write_sidecar(&entry.sidecar, &notes),
-            };
-            match result {
-                Ok(()) => written.push(entry.sidecar.clone()),
-                Err(message) => {
-                    failure.get_or_insert(XmpError::Image {
-                        image: target.clone(),
-                        message,
-                    });
+            if let Some(error) = &entry.error {
+                failure.get_or_insert(XmpError::Image {
+                    image: target.clone(),
+                    message: error.clone(),
+                });
+                continue;
+            }
+            // Tous ses sidecars existants (un sidecar partagé, convention Adobe ou
+            // `.rrdata` du développement principal : écrit une fois), puis ceux à créer.
+            let mut planned: Vec<(&'static dyn Format, PathBuf, bool)> = entry
+                .sidecars
+                .iter()
+                .map(|s| (sidecars::of(s), s.clone(), false))
+                .collect();
+            planned.extend(
+                self.missing(target)
+                    .into_iter()
+                    .map(|(f, path)| (f, path, true)),
+            );
+            for (format, sidecar, create) in planned {
+                if written.contains(&sidecar) {
+                    continue;
+                }
+                let result = if create {
+                    format.create(&sidecar, &notes)
+                } else {
+                    format.write(&sidecar, &notes).map(|_| ())
+                };
+                match result {
+                    Ok(()) => written.push(sidecar),
+                    Err(message) => {
+                        failure.get_or_insert(XmpError::Image {
+                            image: target.clone(),
+                            message,
+                        });
+                    }
                 }
             }
         }
@@ -493,6 +609,19 @@ impl NoteBook {
             .map(|(p, _)| p)
             .collect())
     }
+}
+
+/// Bilan de [`NoteBook::generate`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Generated {
+    /// Sidecars créés (ou à créer, en simulation).
+    pub created: Vec<PathBuf>,
+    /// Photos qui avaient déjà tous les sidecars demandés.
+    pub unchanged: usize,
+    /// Développements et photos sans notes : rien à créer.
+    pub skipped: usize,
+    /// Photos dont un sidecar n'a pas pu être créé.
+    pub errors: Vec<(PathBuf, String)>,
 }
 
 /// Règle sur les étoiles.
@@ -642,6 +771,7 @@ impl Filter for NotesFilter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xmp;
 
     #[test]
     fn notes_read_in_the_background_keep_those_set_meanwhile() {
@@ -792,6 +922,101 @@ mod tests {
     }
 
     #[test]
+    fn a_photo_is_noted_in_every_sidecar_and_the_missing_ones_follow_the_policy() {
+        // 31/10/2026 (`sidecars.md`) : le `.rrdata` d'une photo seulement notée n'est pas
+        // un développement, mais un de ses sidecars ; noter écrit tous les existants et
+        // crée les manquants des formats actifs.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.RAF"), b"x").unwrap();
+        std::fs::write(d.join("B.RAF"), b"x").unwrap();
+        std::fs::write(
+            d.join("A.RAF.rrdata"),
+            r#"{"rating": 2, "adjustments": null}"#,
+        )
+        .unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["A.RAF", "B.RAF"], "pas de développement A@rr");
+        let mut book = NoteBook::load_files(&files, Convention::Darktable);
+        let (a, b) = (d.join("A.RAF"), d.join("B.RAF"));
+        assert_eq!(book.notes(&a).stars, 2, "lu dans le .rrdata, seul sidecar");
+        assert_eq!(book.sidecars(&a), [d.join("A.RAF.rrdata")]);
+        // Politique par défaut (XMP seul) : A écrit son .rrdata existant et crée son XMP ;
+        // B n'a que son XMP.
+        book.edit(&a, |n| n.set_stars(4)).unwrap();
+        assert_eq!(
+            crate::rrdata::read(&d.join("A.RAF.rrdata")).unwrap().stars,
+            4
+        );
+        assert_eq!(xmp::read_sidecar(&d.join("A.RAF.xmp")).unwrap().stars, 4);
+        assert_eq!(book.sidecars(&a).len(), 2, "les deux, désormais");
+        book.edit(&b, |n| n.set_stars(1)).unwrap();
+        assert!(d.join("B.RAF.xmp").is_file());
+        assert!(
+            !d.join("B.RAF.rrdata").exists(),
+            "pas de .rrdata sans politique"
+        );
+        // RapidRAW actif : le .rrdata manquant est créé, notes seules, pas de développement.
+        book.set_creates(vec!["xmp", "rrdata"]);
+        book.edit(&b, |n| n.flag = Flag::Accepted).unwrap();
+        let created = std::fs::read_to_string(d.join("B.RAF.rrdata")).unwrap();
+        assert_eq!(
+            crate::rrdata::parse(&created).unwrap(),
+            notes(1, Flag::Accepted, &[]),
+            "la note et le drapeau, dans un sidecar neuf"
+        );
+        assert!(!crate::rrdata::is_development(&created));
+        assert_eq!(book.sidecars(&b).len(), 2);
+        // Annuler n'écrit que les existants (ici les deux).
+        book.write_only(&b, &notes(1, Flag::None, &[])).unwrap();
+        assert_eq!(
+            crate::rrdata::read(&d.join("B.RAF.rrdata")).unwrap().flag,
+            Flag::None
+        );
+    }
+
+    #[test]
+    fn generating_sidecars_covers_the_rated_photos_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        for name in ["A.RAF", "B.RAF", "C.RAF"] {
+            std::fs::write(d.join(name), b"x").unwrap();
+        }
+        xmp::write_sidecar(&d.join("A.RAF.xmp"), &notes(3, Flag::None, &[Color::Red])).unwrap();
+        xmp::write_sidecar(&d.join("B.RAF.xmp"), &notes(5, Flag::None, &[])).unwrap();
+        std::fs::write(
+            d.join("B.RAF.rrdata"),
+            r#"{"rating": 5, "adjustments": null}"#,
+        )
+        .unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let mut book = NoteBook::load_files(&files, Convention::Darktable);
+        let images: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
+        let rrdata = crate::sidecars::by_id("rrdata").unwrap();
+        // Simulation : A à créer ; B l'a déjà ; C sans notes, passée.
+        let dry = book.generate(&images, &[rrdata], true);
+        assert_eq!(dry.created, [d.join("A.RAF.rrdata")]);
+        assert_eq!((dry.unchanged, dry.skipped), (1, 1));
+        assert!(
+            !d.join("A.RAF.rrdata").exists(),
+            "simulation : rien d'écrit"
+        );
+        let done = book.generate(&images, &[rrdata], false);
+        assert_eq!(done.created, [d.join("A.RAF.rrdata")]);
+        let created = crate::rrdata::read(&d.join("A.RAF.rrdata")).unwrap();
+        assert_eq!(created, notes(3, Flag::None, &[Color::Red]));
+        assert_eq!(book.sidecars(&d.join("A.RAF")).len(), 2, "relu");
+        // Encore : plus rien à créer.
+        let again = book.generate(&images, &[rrdata], false);
+        assert!(again.created.is_empty());
+        assert_eq!(again.unchanged, 2);
+    }
+
+    #[test]
     fn each_development_keeps_its_notes_where_its_software_reads_them() {
         // Décidé le 30/10/2026 : la photo et son développement darktable principal
         // partagent `IMG.RAF.xmp` ; un clone a son XMP ; RapidRAW, son `.rrdata`. Issue
@@ -806,7 +1031,7 @@ mod tests {
         std::fs::write(d.join("IMG_01.RAF.xmp"), darktable).unwrap();
         std::fs::write(
             d.join("IMG.RAF.rrdata"),
-            r#"{"rating": 1, "adjustments": {}}"#,
+            r#"{"rating": 1, "adjustments": {"exposure": 0.5}}"#,
         )
         .unwrap();
         std::fs::write(
