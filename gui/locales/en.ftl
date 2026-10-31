@@ -115,6 +115,7 @@ action-core-crop-save = Crop: save the version
 action-core-crop-preset = Crop: next preset
 action-core-crop-preset_prev = Crop: previous preset
 action-core-file-delete_stack = Delete the whole stack
+action-core-file-delete_photo = Delete the photo with its developments…
 action-core-file-copy_stack = Copy the whole stack to…
 stack-actions-need-stacks = Stacks are off ({ $keys }): this action is for a whole stack
 action-plugin-airdrop-send = Send with AirDrop
@@ -759,6 +760,12 @@ delete-permanently-question = { $n ->
 delete-kept-shared = { $name } kept (shared with the pair)
 delete-irreversible = Cannot be undone.
 delete-failed = cannot delete: { $error }
+delete-developments = Remove
+delete-developments-question = { $n ->
+    [one] Remove the development from its XMP?
+   *[other] Remove { $n } developments from their XMP?
+}
+delete-stripped = { $name }: darktable history removed, notes kept
 folder-new-title = New folder in "{ $name }"
 folder-new-button = Create
 folder-rename-title = Rename the folder "{ $name }"
@@ -1101,6 +1108,7 @@ kw-core-view-focus-mode = full screen focus
 kw-core-view-focus-point = focus point autofocus af
 kw-core-view-grid-info = name format badges hide caption thumbnails
 kw-core-file-delete = delete trash remove
+kw-core-file-delete-photo = delete photo developments trash
 kw-core-file-move = move
 kw-core-file-copy = copy duplicate
 kw-core-file-export = export jpeg tiff output

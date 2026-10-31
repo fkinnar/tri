@@ -4,6 +4,14 @@
 
 ## À venir
 
+- **Supprimer un développement** (Suppr / `x` sur un développement) ne retire que lui : un
+  clone darktable, une copie RapidRAW ou le développement principal RapidRAW perdent leur
+  sidecar, le développement principal darktable voit son XMP réécrit sans l'historique
+  (notes gardées) ; la photo reste. **Ctrl+Suppr** / `dd` supprime la photo avec tous ses
+  développements, même depuis un développement ; Maj+Suppr / `d)` supprime toujours
+  toute la pile. Plusieurs développements sélectionnés : une case cochée par
+  développement. Annulable (`u`) ; un sidecar modifié par darktable entre-temps n'est
+  jamais écrasé. En ligne de commande, `tri --delete` fait de même.
 - **Développements d'une photo** (darktable et ses clones, RapidRAW et ses copies
   virtuelles) : chacun est une image de la grille, avec sa vignette (son rendu), ses notes
   et son export, empilée sous sa photo (repliée par défaut, pastille « N dév. » ; `Maj+V`

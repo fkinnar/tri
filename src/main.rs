@@ -921,9 +921,16 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
             let images: Vec<PathBuf> = std::iter::once(first)
                 .chain(args.rest.iter().map(PathBuf::from))
                 .collect();
-            let group = tri::files::plan_delete(&images, s);
+            let plan = tri::files::plan_delete(&images, s);
             let trash = s.trash && !args.permanent;
-            for file in group.files() {
+            for rewrite in &plan.stripped {
+                println!(
+                    "{} {}",
+                    t!("cli-delete-stripped"),
+                    rewrite.sidecar.display()
+                );
+            }
+            for file in plan.group.files() {
                 let what = if trash {
                     t!("cli-delete-trash")
                 } else {
@@ -931,11 +938,11 @@ fn file_action(settings: &EngineSettings, args: &Args, action: FileAction) -> An
                 };
                 println!("{what} {}", file.display());
             }
-            for file in &group.shared {
+            for file in &plan.group.shared {
                 println!("{} {}", t!("cli-delete-kept"), file.display());
             }
             if !args.dry_run {
-                tri::files::delete(&group, trash)?;
+                tri::files::delete_plan(&plan, trash, |_, _| {})?;
             }
         }
         FileAction::Copy | FileAction::Move => {

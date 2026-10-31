@@ -415,7 +415,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `Maj+Q` passent au développement suivant / précédent (en boucle ; une pile repliée le
   montre à la place de sa couverture, en grille comme en plein écran, boutons ‹‹ ›› du
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
-  photo elle-même : plus de préféré ; `preferred-developments.txt` des données). En plein
+  photo elle-même : plus de préféré ; `preferred-developments.txt` des données).
+  **Double suppression** (30/10/2026) : `x` / Suppr sur un développement ne retire que
+  lui (clone, copie, principal RapidRAW : son fichier à la corbeille ; principal
+  darktable : son XMP réécrit sans l'historique, notes gardées, voir `files.md`), la photo
+  reste ; **Ctrl+Suppr** / `dd` (`core.file.delete_photo`) supprime la photo avec tous ses
+  développements, même depuis un développement ; `Maj+Suppr` / `d)` toute la pile. Même
+  boîte de confirmation ; plusieurs développements choisis : une case cochée par
+  développement, à décocher pour en garder. Sans développement, Suppr et Ctrl+Suppr
+  font la même chose. En plein
   écran, un développement montre **son rendu** (demandé de lui-même s'il manque, le JPEG
   boîtier en attendant, étiqueté « · clone 1 » et « avant (… en cours) ») ; `b` y bascule
   avant / après (le JPEG boîtier à sa place) sans toucher à la source des photos. Dans la
@@ -893,6 +901,7 @@ suivent le jeu choisi.
 | `core.stack.enter` | Ctrl+Maj+S | Ctrl+Maj+S |
 | `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Maj+V / Maj+W / Maj+Q | Maj+V / Maj+W / Maj+Q |
 | `core.file.delete` | Suppr, Backspace | x, Suppr, Backspace |
+| `core.file.delete_photo` | Ctrl+Suppr, Ctrl+Backspace | dd, Ctrl+Suppr, Ctrl+Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Maj+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Maj+Z |
 | panneaux (dossiers, métadonnées) | flèches, Début / Fin, Maj + flèches | j k h l, gg / G, Maj + j k, y |
 

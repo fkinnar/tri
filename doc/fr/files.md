@@ -21,8 +21,17 @@ commande offre les mêmes actions.
 - Un **clone darktable** affiché dans la grille (voir `media.md`) ne se sépare jamais de
   son image (choix de l'utilisateur, 30/10/2026 : « tri ne peut pas scinder les
   versions ») : le copier, le déplacer ou le renommer agit sur l'original, et tous ses
-  clones suivent (`Mer_01.RAF.xmp` après avoir renommé `IMG_01.RAF` en « Mer »). Le
-  **supprimer** ne supprime que son sidecar, comme dans darktable ; l'original reste.
+  clones suivent (`Mer_01.RAF.xmp` après avoir renommé `IMG_01.RAF` en « Mer »).
+- **Double suppression** (décidée le 30/10/2026, voir `developments.md`) : supprimer un
+  **développement** (chemin propre, `developments::get`) ne touche pas la photo. Un clone
+  darktable, une copie virtuelle ou le développement principal RapidRAW perdent leur
+  fichier (`Development::own_file`, corbeille) ; le développement principal darktable
+  partage `IMG.RAF.xmp` avec la photo : le XMP est **réécrit sans l'historique**
+  (`xmp::strip_darktable`, `developments::Rewrite`), les notes restent, et la photo
+  redevient une image sans développement. Supprimer la **photo** (Ctrl+Suppr, `dd` ;
+  depuis un développement, `media::source`) emporte tout : paire, sidecars, clones et
+  copies. La photo et son développement principal demandés ensemble : rien à réécrire, le
+  XMP part avec elle.
 - L'autre image de sa **paire RAW+JPEG** (même nom à l'extension près, sans tenir compte de
   la casse) la suit aussi, par défaut (`[files] pairs = true`), comme pour les notes : on
   rejette une photo, pas un fichier. Les boîtes **Supprimer** et **Copier / déplacer
@@ -45,7 +54,8 @@ et pour que les erreurs prévisibles arrivent avant la première modification.
 | `group(images, pairs) -> Group` | images (paires comprises), sidecars, clones et réglages à elles seules (`sidecars`), sidecars partagés laissés (`shared`) |
 | `plan_rename(image, new_stem, settings) -> Result<Rename>` | nouveaux chemins (`moves`) et copies de sidecars partagés (`copies`) ; refuse un nom vide, avec `/` ou `\`, `.` / `..` (`InvalidName`) ou déjà pris (`Exists`) ; changer seulement la casse est permis |
 | `rename(&Rename)` | exécute ; jamais d'écrasement (revérifié juste avant chaque fichier) ; sur une erreur, ce qui a été renommé est remis en place et les copies effacées |
-| `plan_delete(images, settings) -> Group` | fichiers à supprimer |
+| `plan_delete(images, settings) -> DeletePlan` | fichiers à supprimer (`group`) et XMP darktable à réécrire sans leur développement (`stripped`) |
+| `delete_plan(&DeletePlan, trash, progression) -> Deleted` | réécritures puis suppressions ; `Deleted` : fichiers mis à la corbeille et sidecars réécrits (`history::Step::Developments`) |
 | `delete(&Group, trash)` | corbeille (crate [`trash`](https://crates.io/crates/trash)) ou suppression définitive |
 | `reveal(path)` | gestionnaire de fichiers, fichier sélectionné |
 | `editor_command(editor, files)` / `open_with(editor, files)` | éditeur externe (commande construite à part, pour être testée sans rien lancer) ; programmes lancés sans entrée ni sorties (leurs traces ne vont pas dans le terminal de `tri`) |
@@ -186,6 +196,11 @@ source est supprimé.
 de quoi les retrouver), `untrash` les remet en place (voir `history.md`). Sur macOS, la
 mise à la corbeille passe par `NSFileManager` (emplacement exact renvoyé) plutôt que par
 le crate `trash`, qui ne le donne pas.
+
+`delete_plan` réécrit d'abord les XMP (`Rewrite::apply` : relu juste avant, un sidecar
+modifié entre la boîte et la confirmation, par darktable par exemple, arrête tout avec
+`FileError::Changed` et remet ceux déjà réécrits), puis supprime les fichiers. La
+progression compte les deux.
 
 `delete_with_progress(&Group, corbeille, progression)` : la même, avec (faits, total)
 après chaque fichier. L'interface la lance dans un fil à part, avec une barre dans la

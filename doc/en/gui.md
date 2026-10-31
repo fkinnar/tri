@@ -400,6 +400,13 @@ system one ("cold" measurements, experiments).
   (wrapping; a folded stack shows it instead of its cover, in the grid as in full screen,
   ‹‹ ›› buttons of the bar); `Shift+Enter` on a development makes it the **preferred**
   one (cover; on the photo itself: no preferred one any more;
+  **Two-level deletion** (2026-10-30): `x` / Delete on a development removes only it (a
+  clone, a copy or the main RapidRAW one: its file to the trash; the main darktable one:
+  its XMP rewritten without the history, notes kept, see `files.md`), the photo stays;
+  **Ctrl+Delete** / `dd` (`core.file.delete_photo`) deletes the photo with all its
+  developments, even from a development; `Shift+Delete` / `d)` the whole stack. Same
+  confirmation dialog; several developments chosen: one ticked checkbox per development,
+  untick to keep one. Without developments, Delete and Ctrl+Delete do the same thing.
   `preferred-developments.txt` of the data). In full screen, a development shows **its
   render** (requested by itself when missing, the camera JPEG meanwhile, labelled
   "· clone 1" and "before (… pending)"); `b` toggles before / after there (the camera
@@ -854,6 +861,7 @@ effect: they follow the chosen set.
 | `core.stack.enter` | Ctrl+Shift+S | Ctrl+Shift+S |
 | `core.dev.toggle` / `core.dev.next` / `core.dev.prev` | Shift+V / Shift+W / Shift+Q | Shift+V / Shift+W / Shift+Q |
 | `core.file.delete` | Delete, Backspace | x, Delete, Backspace |
+| `core.file.delete_photo` | Ctrl+Delete, Ctrl+Backspace | dd, Ctrl+Delete, Ctrl+Backspace |
 | `core.edit.undo` / `redo` | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | u, Ctrl+Z / Ctrl+R, Ctrl+Shift+Z |
 | panels (folders, metadata) | arrows, Home / End, Shift + arrows | j k h l, gg / G, Shift + j k, y |
 

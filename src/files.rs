@@ -16,6 +16,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+use crate::developments::{self, Rewrite};
 use crate::media;
 use crate::xmp::SidecarIndex;
 
@@ -76,6 +77,9 @@ pub enum FileError {
     Mismatch(PathBuf),
     /// Dossier copié ou déplacé dans lui-même (ou un de ses sous-dossiers).
     IntoItself(PathBuf),
+    /// Fichier modifié entre la préparation et l'action (un sidecar réécrit par un autre
+    /// logiciel) : rien n'a été fait.
+    Changed(PathBuf),
 }
 
 impl fmt::Display for FileError {
@@ -113,6 +117,11 @@ impl fmt::Display for FileError {
                 f,
                 "{}",
                 crate::t!("files-into-itself", path = p.display().to_string())
+            ),
+            Self::Changed(p) => write!(
+                f,
+                "{}",
+                crate::t!("files-changed", path = p.display().to_string())
             ),
         }
     }
@@ -376,23 +385,52 @@ pub fn rename(plan: &Rename) -> Result<()> {
     Ok(())
 }
 
+/// Suppression prévue ([`plan_delete`]) : les fichiers qui partent (`group`), et les
+/// développements principaux darktable retirés de leur XMP (`stripped` : réécrits sans
+/// l'historique, notes gardées, [`developments::Removal`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DeletePlan {
+    /// Fichiers supprimés (images, paires, sidecars).
+    pub group: Group,
+    /// Sidecars réécrits sans leur développement.
+    pub stripped: Vec<Rewrite>,
+}
+
+impl DeletePlan {
+    /// Nombre d'opérations : fichiers supprimés et sidecars réécrits.
+    pub fn count(&self) -> usize {
+        self.group.files().count() + self.stripped.len()
+    }
+}
+
 /// Prépare la suppression de `images` : les fichiers à supprimer (paires et sidecars
-/// compris), à montrer avant de confirmer.
-pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> Group {
-    // Supprimer un clone darktable ou une copie virtuelle RapidRAW, c'est supprimer son
-    // sidecar (comme ces logiciels) ; la photo reste. Un développement principal : la
-    // photo (en attendant « supprimer le développement »).
+/// compris) et les sidecars à réécrire, à montrer avant de confirmer.
+///
+/// Un développement (chemin propre, [`developments::get`]) est supprimé **seul** : son
+/// fichier propre part (clone, copie virtuelle, `.rrdata` principal), ou son XMP est
+/// réécrit sans l'historique (principal darktable) ; la photo reste, avec ses notes. Une
+/// photo part avec tous ses développements (sidecars compagnons). Supprimer la photo d'un
+/// développement affiché, c'est donc demander `media::source(path)`.
+pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> DeletePlan {
     let mut own = Vec::new();
+    let mut stripped: Vec<Rewrite> = Vec::new();
     let mut images: Vec<PathBuf> = images
         .iter()
-        .filter_map(|i| match crate::developments::get(i) {
-            Some(d) => match d.own_file() {
-                Some(file) => {
-                    own.push(file.to_path_buf());
-                    None
+        .filter_map(|i| match developments::get(i) {
+            Some(d) => {
+                match d.removal() {
+                    developments::Removal::File(file) => own.push(file.to_path_buf()),
+                    developments::Removal::Strip(_) => {
+                        // Illisible : rien à retirer (il n'aurait pas été reconnu).
+                        if let Ok(rewrite) = Rewrite::strip(&d)
+                            && !stripped.iter().any(|s| s.sidecar == rewrite.sidecar)
+                        {
+                            stripped.push(rewrite);
+                        }
+                    }
                 }
-                None => Some(d.photo),
-            },
+                None
+            }
             None => Some(i.clone()),
         })
         .collect();
@@ -403,7 +441,50 @@ pub fn plan_delete(images: &[PathBuf], settings: &FileSettings) -> Group {
             group.sidecars.push(file);
         }
     }
-    group
+    // La photo part aussi : son XMP avec elle, rien à réécrire.
+    stripped.retain(|r| !group.sidecars.contains(&r.sidecar));
+    DeletePlan { group, stripped }
+}
+
+/// Ce qu'une suppression a fait ([`delete_plan`]) : de quoi l'annuler
+/// ([`crate::history::Step::Developments`]).
+#[derive(Clone, Debug, Default)]
+pub struct Deleted {
+    /// Fichiers mis à la corbeille (vide pour une suppression définitive).
+    pub trashed: Vec<Trashed>,
+    /// Sidecars réécrits sans leur développement.
+    pub rewritten: Vec<Rewrite>,
+}
+
+/// Exécute `plan` : sidecars réécrits d'abord, puis les fichiers supprimés comme
+/// [`delete_with_progress`] ; `progress` reçoit (faits, total) sur l'ensemble. Un sidecar
+/// modifié entre-temps ([`Rewrite::apply`] faux) arrête tout : [`FileError::Changed`], les
+/// sidecars déjà réécrits remis comme avant.
+pub fn delete_plan(
+    plan: &DeletePlan,
+    trash: bool,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<Deleted> {
+    let total = plan.count();
+    let mut rewritten: Vec<Rewrite> = Vec::new();
+    for (i, rewrite) in plan.stripped.iter().enumerate() {
+        let result = match rewrite.apply() {
+            Ok(true) => {
+                rewritten.push(rewrite.clone());
+                progress(i + 1, total);
+                continue;
+            }
+            Ok(false) => FileError::Changed(rewrite.sidecar.clone()),
+            Err(e) => FileError::Io(rewrite.sidecar.clone(), e),
+        };
+        for done in &rewritten {
+            let _ = done.revert();
+        }
+        return Err(result);
+    }
+    let offset = rewritten.len();
+    let trashed = delete_with_progress(&plan.group, trash, |n, _| progress(offset + n, total))?;
+    Ok(Deleted { trashed, rewritten })
 }
 
 /// Un fichier mis à la corbeille, et de quoi l'en ressortir ([`untrash`]).
@@ -1382,6 +1463,98 @@ mod tests {
         );
     }
 
+    /// XMP darktable minimal avec un historique et une note.
+    const DT_XMP: &str = concat!(
+        r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">"#,
+        r#"<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" "#,
+        r#"xmp:Rating="3" darktable:xmp_version="5" darktable:history_end="1"><darktable:history><rdf:Seq><rdf:li darktable:operation="exposure"/></rdf:Seq></darktable:history>"#,
+        r#"</rdf:Description></rdf:RDF></x:xmpmeta>"#
+    );
+
+    #[test]
+    fn deleting_a_development_leaves_the_photo_and_deleting_the_photo_takes_all() {
+        // Décidé le 30/10/2026 : le développement principal darktable se retire de son
+        // XMP (notes gardées) ; un `.rrdata` principal ou une copie part ; la photo part
+        // avec tout.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        developed(d);
+        std::fs::write(d.join("IMG.RAF.xmp"), DT_XMP).unwrap();
+        std::fs::write(
+            d.join("IMG.RAF.rrdata"),
+            r#"{"rating": 2, "adjustments": {}}"#,
+        )
+        .unwrap();
+        crate::media::scan(d, 1).unwrap();
+        let settings = FileSettings::default();
+        let main = d.join("IMG@dt.RAF");
+        let plan = plan_delete(std::slice::from_ref(&main), &settings);
+        assert_eq!(plan.group, Group::default(), "aucun fichier ne part");
+        assert_eq!(
+            names(
+                &plan
+                    .stripped
+                    .iter()
+                    .map(|r| r.sidecar.clone())
+                    .collect::<Vec<_>>()
+            ),
+            ["IMG.RAF.xmp"]
+        );
+        assert_eq!(plan.count(), 1);
+        let rr = d.join("IMG@rr.RAF");
+        let plan_rr = plan_delete(std::slice::from_ref(&rr), &settings);
+        assert_eq!(names(&plan_rr.group.sidecars), ["IMG.RAF.rrdata"]);
+        assert!(plan_rr.group.images.is_empty() && plan_rr.stripped.is_empty());
+        // Les deux à la fois : un fichier et une réécriture, dans cet ordre de progression.
+        let both = plan_delete(&[main.clone(), rr.clone()], &settings);
+        assert_eq!(both.count(), 2);
+        let mut steps = Vec::new();
+        let done = delete_plan(&both, false, |n, total| steps.push((n, total))).unwrap();
+        assert_eq!(steps, [(1, 2), (2, 2)]);
+        assert_eq!(done.rewritten.len(), 1);
+        assert!(
+            done.trashed.is_empty(),
+            "suppression définitive : rien à ressortir"
+        );
+        assert!(!d.join("IMG.RAF.rrdata").exists());
+        assert!(d.join("IMG.RAF").exists() && d.join("IMG.RAF.xmp").exists());
+        assert!(!crate::developments::file_is_darktable(
+            &d.join("IMG.RAF.xmp")
+        ));
+        assert_eq!(
+            crate::xmp::read_sidecar(&d.join("IMG.RAF.xmp"))
+                .unwrap()
+                .stars,
+            3
+        );
+        // Un XMP modifié entre la boîte et la confirmation : refusé, rien d'écrit.
+        std::fs::write(d.join("IMG.RAF.xmp"), DT_XMP).unwrap();
+        crate::media::scan(d, 1).unwrap();
+        let plan = plan_delete(std::slice::from_ref(&main), &settings);
+        std::fs::write(
+            d.join("IMG.RAF.xmp"),
+            DT_XMP.replace("Rating=\"3\"", "Rating=\"5\""),
+        )
+        .unwrap();
+        assert!(matches!(
+            delete_plan(&plan, false, |_, _| {}),
+            Err(FileError::Changed(_))
+        ));
+        assert!(crate::developments::file_is_darktable(
+            &d.join("IMG.RAF.xmp")
+        ));
+        // La photo : tout part, rien à réécrire (son XMP est dans le lot).
+        let photo = plan_delete(&[d.join("IMG.RAF")], &settings);
+        assert_eq!(names(&photo.group.images), ["IMG.RAF"]);
+        assert!(photo.group.sidecars.contains(&d.join("IMG.RAF.xmp")));
+        assert!(photo.group.sidecars.contains(&d.join("IMG_01.RAF.xmp")));
+        assert!(photo.stripped.is_empty());
+        // Photo et son développement principal demandés ensemble : pareil.
+        let together = plan_delete(&[main, d.join("IMG.RAF")], &settings);
+        assert_eq!(together.group, photo.group);
+        assert!(together.stripped.is_empty());
+    }
+
     #[test]
     fn a_clone_is_deleted_alone_but_never_moved_or_renamed_alone() {
         // Choix de l'utilisateur (30/10/2026) : supprimer un clone, c'est supprimer son
@@ -1403,8 +1576,9 @@ mod tests {
         assert!(crate::media::is_development(&clone));
         let settings = FileSettings::default();
         let deleted = plan_delete(std::slice::from_ref(&clone), &settings);
-        assert!(deleted.images.is_empty(), "l'image d'origine reste");
-        assert_eq!(names(&deleted.sidecars), ["IMG_01.RAF.xmp"]);
+        assert!(deleted.group.images.is_empty(), "l'image d'origine reste");
+        assert_eq!(names(&deleted.group.sidecars), ["IMG_01.RAF.xmp"]);
+        assert!(deleted.stripped.is_empty());
         let moved = plan_transfer(
             std::slice::from_ref(&clone),
             &dest,
