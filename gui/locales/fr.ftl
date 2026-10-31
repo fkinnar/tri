@@ -19,6 +19,9 @@ action-core-filter-stars-3 = Filtre : 3 étoiles (au moins, exactement ou au plu
 action-core-filter-stars-4 = Filtre : 4 étoiles (au moins, exactement ou au plus : f =)
 action-core-filter-stars-5 = Filtre : 5 étoiles (au moins, exactement ou au plus : f =)
 action-core-filter-stars-op = Filtre d'étoiles : au moins, exactement, au plus
+filter-flag-toggle-accepted = Filtre : garder les acceptées (cumulable avec les autres drapeaux)
+filter-flag-toggle-neutral = Filtre : garder les neutres, sans drapeau (cumulable)
+filter-flag-toggle-rejected = Filtre : garder les rejetées (cumulable)
 action-core-filter-flag-accepted = Filtre : acceptées seulement
 action-core-filter-flag-not_rejected = Filtre : masquer les rejetées
 volume-back = Disque revenu : dossier relu, calculs repris.

@@ -11281,8 +11281,23 @@ impl TriApp {
     }
 
     /// Barre de filtres, à la souris : chaque clic déclenche la même action que le clavier.
+    /// Bouton d'un drapeau de la barre des filtres (31/10/2026) : ajoute ou retire `flag`
+    /// des drapeaux gardés ; aucun ou les trois : plus de filtre.
+    fn toggle_flag_filter(&mut self, flag: Flag) {
+        let mut flags = self.notes_rule.flags.clone().unwrap_or_default();
+        match flags.iter().position(|&f| f == flag) {
+            Some(i) => {
+                flags.remove(i);
+            }
+            None => flags.push(flag),
+        }
+        self.notes_rule.flags = (!flags.is_empty() && flags.len() < 3).then_some(flags);
+        self.apply_filter();
+    }
+
     fn filter_bar(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
+        let mut flag_toggle: Option<Flag> = None;
         let mut refilter = false;
         let colors = self.gui.colors.clone();
         // Passe à la ligne si la fenêtre est étroite (panneau des dossiers ouvert).
@@ -11323,17 +11338,25 @@ impl TriApp {
                 }
             }
             ui.separator();
-            for choice in FlagFilter::ALL {
-                let active = self.notes_rule.flags.as_ref() == Some(&choice.flags());
-                let tip = self.action_tip(Action::FilterFlag(choice));
+            // Drapeaux : trois boutons combinables (acceptées, neutres, rejetées ;
+            // retour du 31/10/2026), en couleur quand le filtre les garde, fondus sinon,
+            // comme le bandeau de notation. Au clavier, `f` + touche pose un filtre entier
+            // (acceptées seulement, masquer les rejetées, rejetées seulement).
+            for (flag, key) in [
+                (Flag::Accepted, "accepted"),
+                (Flag::None, "neutral"),
+                (Flag::Rejected, "rejected"),
+            ] {
+                let active = self
+                    .notes_rule
+                    .flags
+                    .as_ref()
+                    .is_some_and(|f| f.contains(&flag));
+                let tip = t!(&format!("filter-flag-toggle-{key}"));
                 let (rect, response) = marks::clickable(ui, size, &tip);
-                if active {
-                    ui.painter()
-                        .rect_filled(rect.expand(2.0), 4.0, ui.visuals().selection.bg_fill);
-                }
-                marks::flag_filter(ui.painter(), rect, choice, &colors);
+                marks::flag_toggle(ui.painter(), rect, flag, &colors, active);
                 if response.clicked() {
-                    clicked.push(Action::FilterFlag(choice));
+                    flag_toggle = Some(flag);
                 }
             }
             ui.separator();
@@ -11349,11 +11372,10 @@ impl TriApp {
             for (action, on) in self.content_toggles() {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
-                let color = if on {
-                    marks::accent_mark(ui.ctx())
-                } else {
-                    ui.visuals().weak_text_color()
-                };
+                // Allumé à l'accent, éteint fondu (retour du 31/10/2026 : même logique que
+                // les autres contrôles).
+                let accent = marks::accent_mark(ui.ctx());
+                let color = if on { accent } else { marks::faded(accent) };
                 filter_icon(ui.painter(), rect, action, color);
                 if response.clicked() {
                     clicked.push(action);
@@ -11368,15 +11390,14 @@ impl TriApp {
                     .colors
                     .as_ref()
                     .is_some_and(|r| r.any_of.contains(&color));
-                let painter = ui.painter();
-                painter.circle_filled(rect.center(), size * 0.35, marks::color_of(&colors, color));
-                if active {
-                    painter.circle_stroke(
-                        rect.center(),
-                        size * 0.48,
-                        egui::Stroke::new(2.0, marks::accent_mark(ui.ctx())),
-                    );
-                }
+                // Même pastille que le bandeau : pleine si le filtre est posé, fondue sinon.
+                marks::color_dot(
+                    ui.painter(),
+                    rect.center(),
+                    size,
+                    marks::color_of(&colors, color),
+                    active,
+                );
                 if response.clicked() {
                     clicked.push(Action::FilterColor(color));
                 }
@@ -11451,6 +11472,9 @@ impl TriApp {
                 }
             });
         });
+        if let Some(flag) = flag_toggle {
+            self.toggle_flag_filter(flag);
+        }
         if refilter {
             self.refilter(Reveal::Minimal);
         }
@@ -11697,7 +11721,8 @@ impl TriApp {
 
         // Pile de développements dépliée (30/10/2026) : un cadre fin de la couleur des
         // développements autour de chacune de ses vignettes.
-        let dev_mark = Color32::from(colors.development_mark);
+        let dev_mark = self.gui.theme.development_mark(&colors, ui.visuals());
+        let on_mark = marks::on_color(dev_mark);
         if self.stacks.in_unfolded_developments(index) && !selected && !marked {
             painter.rect_stroke(
                 rect.shrink(0.5),
@@ -11722,18 +11747,15 @@ impl TriApp {
                 .clone()
                 .filter(|&i| tri::media::is_development(&self.files[i].path))
                 .count();
-            let label = painter.layout_no_wrap(
-                t!("dev-count", n = n),
-                FontId::proportional(12.0),
-                Color32::BLACK,
-            );
+            let label =
+                painter.layout_no_wrap(t!("dev-count", n = n), FontId::proportional(12.0), on_mark);
             let at = pos2(
                 rect.max.x - g.padding - 2.0 - label.size().x,
                 rect.min.y + g.padding + 2.0 + below,
             );
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, dev_mark);
-            painter.galley(at, label, Color32::BLACK);
+            painter.galley(at, label, on_mark);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-count-tip", n = n, keys = keys);
             let badge = ui.interact(back, response.id.with("developments"), Sense::click());
@@ -11760,7 +11782,7 @@ impl TriApp {
                 vec2(side, side),
             );
             painter.rect_filled(back, 6.0, dev_mark);
-            marks::fold(painter, back, Color32::BLACK);
+            marks::fold(painter, back, on_mark);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-fold-tip", keys = keys);
             let badge = ui.interact(back, response.id.with("fold"), Sense::click());
@@ -11796,15 +11818,13 @@ impl TriApp {
                     egui::StrokeKind::Inside,
                 );
             }
-            let label = painter.layout_no_wrap(
-                count.to_string(),
-                FontId::proportional(12.0),
-                Color32::BLACK,
-            );
+            let on_accent = marks::on_color(accent);
+            let label =
+                painter.layout_no_wrap(count.to_string(), FontId::proportional(12.0), on_accent);
             let at = rect.min + vec2(g.padding + 2.0, g.padding + 2.0);
             let back = Rect::from_min_size(at, label.size()).expand2(vec2(5.0, 2.0));
             painter.rect_filled(back, 6.0, accent);
-            painter.galley(at, label, Color32::BLACK);
+            painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
         let info = self.grid_info;

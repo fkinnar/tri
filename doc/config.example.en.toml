@@ -909,9 +909,10 @@ neutral_stack_band = "#848484"
 neutral_stack_band_alt = "#6a6a6a"
 # Collapsed stacks: sheets behind the cover and image-count badge.
 stack_mark = "#8c8c8c"
-# A photo's developments: count badge (folded stack) and thin frame of the thumbnails
-# of an unfolded stack.
-development_mark = "#2bb3c0"
+# A photo's developments: count badge (folded stack), "fold" badge and thin frame of the
+# thumbnails of an unfolded stack; a dark grey, a bit darker in the light theme (the text
+# on it adapts: white on dark, black on light).
+development_mark = "#585858"
 # "RAW" badge of the cells (absent: the theme's accent colour).
 # badge = "#78aae6"
 warning = "#e6a03c"

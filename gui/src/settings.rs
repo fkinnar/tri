@@ -366,6 +366,18 @@ impl Theme {
         }
     }
 
+    /// Couleur des marques de développement (pastille « n dév. », icône « replier », cadre
+    /// d'une pile dépliée) : `development_mark`, un peu plus sombre en thème clair (retour
+    /// du 31/10/2026 : le bleu clair distrayait, un gris foncé adapté au thème).
+    pub fn development_mark(self, colors: &Colors, visuals: &egui::Visuals) -> Color32 {
+        let mark = Color32::from(colors.development_mark);
+        if visuals.dark_mode {
+            mark
+        } else {
+            mark.lerp_to_gamma(Color32::BLACK, 0.2)
+        }
+    }
+
     /// Couleur de sélection (fond de la cellule, cadre de l'image active en comparaison) :
     /// `selection` si elle est donnée, sinon `neutral_selection` pour ce thème, sinon
     /// celle du thème.
@@ -1201,7 +1213,7 @@ impl Default for Colors {
             neutral_stack_band: Color([132, 132, 132]),
             neutral_stack_band_alt: Color([106, 106, 106]),
             stack_mark: Color([140, 140, 140]),
-            development_mark: Color([43, 179, 192]),
+            development_mark: Color([88, 88, 88]),
             badge: None,
             warning: Color([230, 160, 60]),
             error: Color([230, 90, 90]),
