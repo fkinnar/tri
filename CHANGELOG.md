@@ -6,6 +6,10 @@
 
 - Thumbnails: no more "LibRaw" chip on a photo shown in the internal render (feedback of
   2026-10-31: it said nothing); only a software's render carries a chip.
+- **"Develop with": every software is greyed until the photo is developed there**,
+  darktable included (it would render by default, but there is nothing to see); only the
+  LibRaw render is always offered. The keyboard shortcuts say so too (user's rule,
+  2026-10-31: "c'est moi qui développe").
 - **Fixed: a RawTherapee / ART profile (or a RapidRAW `.rrdata`) filled after the rating
   that created it did not enter the development stack** until the folder was reopened
   (feedback of 2026-10-31): the folder watcher now treats a main sidecar that becomes a

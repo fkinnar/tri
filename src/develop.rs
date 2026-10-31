@@ -188,14 +188,7 @@ impl DevelopedRule {
     /// Vrai si `image` vérifie le filtre : un développement d'un logiciel coché, ou,
     /// aucun coché, aucun développement des logiciels de `available`.
     pub fn accepts(&self, image: &Path, available: &[Engine]) -> bool {
-        // Un développement : son logiciel. Une photo : ses développements enregistrés
-        // (qui portent son sidecar : `Engine::sidecar` ne le lui rend plus, et le filtre
-        // ne gardait que le développement, orphelin dans la grille ; 31/10/2026), ou un
-        // sidecar à elle.
-        let developed_by = |e: Engine| match crate::developments::get(image) {
-            Some(d) => d.engine == e,
-            None => crate::developments::has(image, e) || e.sidecar(image).is_some(),
-        };
+        let developed_by = |e: Engine| is_developed_in(image, e);
         if self.engines.is_empty() {
             return !available.iter().any(|&e| developed_by(e));
         }
@@ -842,6 +835,20 @@ pub fn find_profile_cli(engine: Engine, setting: &str) -> Option<Cli> {
             args: vec![cli.into()],
         })
         .or_else(flatpak)
+}
+
+/// Vrai si `image` est développée dans `engine` : un développement, son logiciel ; une
+/// photo, ses développements enregistrés (qui portent son sidecar : `Engine::sidecar` ne
+/// le lui rend plus, et le filtre ne gardait que le développement, orphelin dans la
+/// grille ; 31/10/2026), ou un sidecar à elle qui soit un vrai développement (pas des
+/// notes seules). Même règle pour le filtre « développées » et « Développer avec »
+/// (décidé le 31/10/2026 : tous les logiciels grisés sans développement, darktable
+/// compris ; seul le rendu LibRaw est toujours là, « c'est moi qui développe »).
+pub fn is_developed_in(image: &Path, engine: Engine) -> bool {
+    match crate::developments::get(image) {
+        Some(d) => d.engine == engine,
+        None => crate::developments::has(image, engine) || engine.sidecar(image).is_some(),
+    }
 }
 
 /// Sidecar darktable de `image` (`IMAGE.RAF.xmp`), s'il décrit un développement
