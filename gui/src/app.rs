@@ -12991,7 +12991,7 @@ impl TriApp {
             && let Some(pos) = ctx.pointer_hover_pos()
             && ctx.output(|o| o.cursor_icon) == egui::CursorIcon::Default
         {
-            let style = ctx.style();
+            let style = ctx.global_style();
             let heading = egui::TextStyle::Heading.resolve(&style).size;
             let margin = style.spacing.window_margin.top as f32;
             let frame = shown.response.rect;
