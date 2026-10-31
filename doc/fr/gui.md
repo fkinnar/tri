@@ -434,7 +434,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   boîtier en attendant, étiqueté « · clone 1 » et « avant (… en cours) ») ; `b` y bascule
   avant / après (le JPEG boîtier à sa place) sans toucher à la source des photos. Dans la
   grille, la vignette d'un développement est toujours son rendu, quel que soit le rendu
-  choisi pour la grille (`[gui.grid] develop = "auto"` les calcule en fond).
+  choisi pour la grille, calculé en fond même avec `[gui.grid] develop = "manual"`
+  (31/10/2026, `grid_render::to_render` : les développements toujours, chacun dans son
+  logiciel ; les photos seulement en `"auto"`, dans le logiciel du rendu choisi). La
+  barre d'état compte les photos et, à part, les développements (« 12 images (10 RAW,
+  3 dév.) »).
 - **Piles** (18/10/2026, `gui/src/stacks.rs`, moteur `tri::similarity`, voir
   `similarity.md`) : les images semblables voisines (rafales, séries) forment des piles,
   repliées par défaut : une vignette, la **couverture** (l'acceptée, sinon la mieux notée,

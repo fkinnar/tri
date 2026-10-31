@@ -418,8 +418,11 @@ system one ("cold" measurements, experiments).
   render** (requested by itself when missing, the camera JPEG meanwhile, labelled
   "· clone 1" and "before (… pending)"); `b` toggles before / after there (the camera
   JPEG instead) without touching the photos' source. In the grid, a development's
-  thumbnail is always its render, whatever the render chosen for the grid
-  (`[gui.grid] develop = "auto"` computes them in the background).
+  thumbnail is always its render, whatever the render chosen for the grid, computed in
+  the background even with `[gui.grid] develop = "manual"` (2026-10-31,
+  `grid_render::to_render`: developments always, each in its software; photos only with
+  `"auto"`, in the software of the chosen render). The status bar counts the photos
+  and, apart, the developments ("12 images (10 RAW, 3 dev.)").
 - **Stacks** (2026-10-18, `gui/src/stacks.rs`, engine `tri::similarity`, see
   `similarity.md`): similar neighbouring images (bursts, series) form stacks, collapsed
   by default: one thumbnail, the **cover** (the picked one, otherwise the best rated,

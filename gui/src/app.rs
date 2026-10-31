@@ -8814,37 +8814,27 @@ impl TriApp {
         self.refilter(Reveal::Minimal);
     }
 
-    /// Lance le lot de la grille (`[gui.grid] develop = "auto"`) : les développements
-    /// qu'elle montre, pas encore rendus, rendus en fond. Attend la fin d'un autre lot.
+    /// Lance le lot de la grille : les développements qu'elle montre, pas encore rendus,
+    /// rendus en fond, chacun dans son logiciel (toujours : un développement n'a pas
+    /// d'autre vignette, 31/10/2026) ; avec `[gui.grid] develop = "auto"`, aussi les
+    /// photos dans le rendu choisi. Attend la fin d'un autre lot.
     fn auto_develop(&mut self, ctx: &egui::Context) {
         if !self.auto_develop_pending || self.develop_batch.is_some() || self.loading.is_some() {
             return;
         }
         self.auto_develop_pending = false;
-        // Les développements de la grille (une vignette chacun) sont toujours à rendre,
-        // chacun dans son logiciel ; le reste selon le rendu choisi.
-        let force = self.shown_render().to_develop();
-        let files: Vec<MediaFile> = match force {
-            Some(_) => self.folder.files.clone(),
-            None => self
-                .folder
-                .files
-                .iter()
-                .filter(|f| tri::media::is_development(&f.path))
-                .cloned()
-                .collect(),
-        };
+        if self.developers.is_empty() || self.folder.is_none() {
+            return;
+        }
+        let (files, force) = crate::grid_render::to_render(
+            &self.folder.files,
+            self.gui.grid.develop,
+            self.shown_render(),
+        );
         if files.is_empty() {
             return;
         }
-        let force = force.unwrap_or(None);
         let Some(engine) = &self.engine else { return };
-        if self.gui.grid.develop != crate::grid_render::GridDevelop::Auto
-            || self.developers.is_empty()
-            || self.folder.is_none()
-        {
-            return;
-        }
         // « Dernier développement » : chaque image dans le logiciel de son plus récent.
         let mut developers = self.developers.clone();
         developers.preference = tri::develop::Preference::Auto;
@@ -9120,10 +9110,17 @@ impl TriApp {
                 clicked = Some(c);
             }
             ui.separator();
+            // Les photos, sans leurs développements (comptés à part, 31/10/2026 : une
+            // photo et ses deux copies ne font pas « 3 images »).
+            let developments = self
+                .files
+                .iter()
+                .filter(|f| tri::media::is_development(&f.path))
+                .count();
             let raws = self
                 .files
                 .iter()
-                .filter(|f| f.kind == MediaKind::Raw)
+                .filter(|f| f.kind == MediaKind::Raw && !tri::media::is_development(&f.path))
                 .count();
             ui.label(if self.folder.is_none() {
                 t!("status-no-folder")
@@ -9133,8 +9130,9 @@ impl TriApp {
             ui.separator();
             ui.label(t!(
                 "status-images",
-                n = self.files.len(),
+                n = self.files.len() - developments,
                 raws = raws,
+                devs = developments,
                 filter = self.filter_summary()
             ));
             let marked = self.selection.visible(&self.files);
@@ -14429,6 +14427,8 @@ mod tests {
             .expect("le clone dans la liste, juste après son original");
         assert_eq!(h.state().files[i - 1].path, photos.join("img0.jpg"));
         assert_eq!(h.state().folder.notes.notes(&clone).stars, 2);
+        // Barre d'état : les photos, le développement compté à part (31/10/2026).
+        h.get_by_label_contains("3 images (0 RAW, 1 dév.)");
         // Pile de développements repliée (30/10/2026) : la grille montre la photo (sa
         // couverture, sans préféré : le clone, le plus récent) et « 1 dév. » ; Maj+W passe
         // au développement suivant, sur place.

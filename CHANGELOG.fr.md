@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Développements comptés à part** dans la barre d'état (« 12 images (10 RAW, 3 dév.) » :
+  une photo et ses deux copies ne font plus « 3 images »), et **leurs vignettes toujours
+  rendues en fond**, chacune par son logiciel, même avec `[gui.grid] develop = "manual"`
+  (qui ne concerne plus que les photos à développer pour le rendu choisi).
 - **Comparaison des développements d'une photo** (`c` sur une photo développée, sans
   sélection) : le JPEG boîtier, le développement darktable, ses clones et les copies
   RapidRAW côte à côte, comme une rafale ; sur un développement, `b` montre le JPEG boîtier
