@@ -412,7 +412,8 @@ system one ("cold" measurements, experiments).
   (`marks::development_mark_rect`, the dot's own geometry; a burst's image count is at
   the top left; hidden with the thumbnail info, Shift+T: #243); unfolded,
   each thumbnail in a thin frame of the same colour. The displayed name is the photo's,
-  the chip next to the format says which one: "DT", "DT · clone 1", "RR · copy 2".
+  the chip next to the format says which one: "DT", "DT · 1", "RR · 2" (the number
+  alone, feedback of 2026-10-31).
   `s` unfolds / folds (like a stack: harmonisation of 2026-10-31, see below), `Shift+W` /
   `Shift+Q` go to the next / previous development
   (wrapping; a folded stack shows it instead of its cover, in the grid as in full screen,
