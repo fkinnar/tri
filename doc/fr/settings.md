@@ -45,7 +45,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[files]` | Actions sur les fichiers : autorisées ou non, paires qui suivent, corbeille ou suppression définitive, éditeur externe (`files.md`) | moteur |
 | `[data]` | Dossier des données (historique des déchargements, dernier dossier ouvert) | moteur |
 | `[gui]` | Thème, profils de raccourcis, délai des séquences de touches (`gg`), fenêtre, politique des rendus RAW, budget de chargement, mode concentration pour une image en argument (`image_focus`) | interface |
-| `[gui.grid]` | Dimensions de la grille, vignettes en mémoire, taille des notes, marques vides dessinées (`empty_marks`), opacité d'une photo rejetée, cadre du survol | interface |
+| `[gui.grid]` | Dimensions de la grille (dont `info_min_cell`, sous lequel les infos se masquent), vignettes en mémoire, taille des notes, marques vides dessinées (`empty_marks`), opacité d'une photo rejetée, cadre du survol | interface |
 | `[gui.view]` | Attente avant un 100 % RAW, grandes textures en mémoire, pas du déplacement clavier, taille des notes | interface |
 | `[gui.folders]` | Panneau des dossiers : affiché, largeur, retrait, dossiers cachés | interface |
 | `[gui.histogram]` | Histogramme (affiché, échelle IL / linéaire, taille du grand histogramme, IL montrés), zones (affichées, opacité), seuils des badges | interface |

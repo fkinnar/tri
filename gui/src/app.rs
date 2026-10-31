@@ -1815,6 +1815,13 @@ impl TriApp {
         ui.label(egui::RichText::new(text).weak())
     }
 
+    /// Infos des vignettes dessinées : le réglage (Maj+T), sauf sous `[gui.grid]
+    /// info_min_cell` de côté de cellule, où elles sont illisibles (retour du 31/10/2026) ;
+    /// le réglage ne bouge pas, elles reviennent en agrandissant.
+    fn grid_info_shown(&self) -> bool {
+        self.grid_info && self.grid_cell >= self.gui.grid.info_min_cell
+    }
+
     /// Liste déroulante pointable du panneau (#246 : une liste de boutons radio prenait
     /// trop de place pour un réglage accessoire) : ← / → passent au choix précédent /
     /// suivant de `all`, Espace au suivant en boucle. Vrai si la valeur a changé.
@@ -11762,7 +11769,7 @@ impl TriApp {
         );
         // Infos masquées (Maj+T) : pas de badge non plus (#243 : tronqué par la vignette
         // qui prend toute la case).
-        if self.grid_info
+        if self.grid_info_shown()
             && self.stacks.folded_count(index).is_some()
             && let Some(range) = self.stacks.developments_of(index)
         {
@@ -11843,7 +11850,7 @@ impl TriApp {
             painter.galley(at, label, on_accent);
         }
         // Infos masquées (Maj+T) : la vignette prend aussi la place du texte.
-        let info = self.grid_info;
+        let info = self.grid_info_shown();
         let bottom = if info { g.label + 4.0 } else { g.padding };
         let image_area = Rect::from_min_max(
             rect.min + vec2(g.padding, g.padding),

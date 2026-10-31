@@ -12,6 +12,9 @@
   with a **non-empty history** (`darktable:history_end` > 0, attribute or element); an
   XMP merely imported into darktable, or written by `tri` for the ratings, is not; and
   the filter keeps a photo with its developments of the checked software.
+- **Thumbnail info hidden by itself on small cells** (`[gui.grid] info_min_cell`, 110
+  points): name, format and marks were unreadable; the Shift+T setting does not change,
+  the info comes back when enlarging the thumbnails.
 - **Thumbnails: empty marks** (`[gui.grid] empty_marks`, replaces `neutral_flag`): where
   nothing is set, a light grey outline of a star, a colour dot and the neutral flag's
   circle show every piece of information and where to click.

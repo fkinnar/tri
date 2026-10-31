@@ -568,6 +568,10 @@ history = 200
 cell = 200.0
 cell_min = 60.0
 cell_max = 600.0
+# Côté de cellule sous lequel les infos des vignettes (nom, format, notes) se masquent
+# d'elles-mêmes, illisibles ; le réglage des infos ne bouge pas, elles reviennent en
+# agrandissant.
+info_min_cell = 110.0
 gap = 8.0
 # Infos sur les vignettes (nom, format, notes, badges) au démarrage ; Maj+T ou le bouton
 # du bas les masquent pour laisser toute la place à l'image (choix ensuite retenu).

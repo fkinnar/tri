@@ -449,6 +449,10 @@ pub struct GridSettings {
     /// Bornes du curseur de taille des vignettes.
     pub cell_min: f32,
     pub cell_max: f32,
+    /// Côté de cellule (points) sous lequel les infos des vignettes (nom, format, notes)
+    /// sont masquées d'elles-mêmes, sans toucher au réglage : trop petites pour être
+    /// lisibles (demandé le 31/10/2026), elles reviennent en agrandissant.
+    pub info_min_cell: f32,
     /// Espace entre les cellules.
     pub gap: f32,
     /// Infos sur les vignettes (nom, format, notes, badges) au démarrage (Maj+T).
@@ -518,6 +522,7 @@ impl Default for GridSettings {
             cell: 200.0,
             cell_min: 60.0,
             cell_max: 600.0,
+            info_min_cell: 110.0,
             gap: 8.0,
             info: true,
             label: 18.0,

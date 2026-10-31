@@ -569,6 +569,9 @@ history = 200
 cell = 200.0
 cell_min = 60.0
 cell_max = 600.0
+# Cell side below which the thumbnail info (name, format, ratings) hides by itself,
+# unreadable; the info setting does not change, it comes back when enlarging.
+info_min_cell = 110.0
 gap = 8.0
 # Info on the thumbnails (name, format, ratings, badges) at startup; Shift+T or the
 # button at the bottom hides it to give all the room to the image (choice then remembered).

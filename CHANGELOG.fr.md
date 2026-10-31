@@ -13,6 +13,9 @@
   (`darktable:history_end` > 0, en attribut ou en élément) ; un XMP seulement importé
   dans darktable, ou écrit par `tri` pour les notes, n'en est pas un ; et le filtre garde
   une photo avec ses développements des logiciels cochés.
+- **Infos des vignettes masquées d'elles-mêmes sur les petites cellules** (`[gui.grid]
+  info_min_cell`, 110 points) : nom, format et marques étaient illisibles ; le réglage
+  Maj+T ne bouge pas, les infos reviennent en agrandissant les vignettes.
 - **Vignettes : marques vides** (`[gui.grid] empty_marks`, remplace `neutral_flag`) : là
   où rien n'est posé, un contour gris clair d'étoile, de pastille de couleur et du cercle
   du drapeau neutre montre chaque information et où cliquer.
