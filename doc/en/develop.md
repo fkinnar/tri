@@ -179,8 +179,11 @@ develop_toast_ms`, 6 s; 0: never). Progress stays in the status bar.
 see `[develop] default`), `<leader>d` in darktable, `<leader>p` in RapidRAW
 (`Action::DevelopWith`, identifiers `plugin.darktable.develop`,
 `plugin.rapidraw.develop`; `core.develop.render` and `core.develop.folder` for the other
-two). Right click on an image, "Develop with": the installed software, or the RAW render
-(LibRaw). The chosen software takes over the development's one for that image, for the
+two). Right click on an image, "Develop with": the installed software, **greyed until the
+image is developed there** (`is_developed_in`, the "developed" filter's rule; decided on
+2026-10-31: darktable would render by default, but without a development there is
+nothing to see), or the RAW render (LibRaw), always there. The chosen software takes over
+the development's one for that image, for the
 session (`develop_choice`). Right click on a folder, "Develop the whole folder…" opens a
 dialog: each image in the software of its development (otherwise it keeps the RAW
 render), or all in one software (the images it developed). `Ctrl+Shift+B`: each image in
@@ -243,13 +246,15 @@ for ART). **AppImage**: recent ones only launch the interface (the `--cli` of th
 ones is gone, pixls.us thread of 2023); `tri` extracts it once (`appimage_cli`:
 `--appimage-extract` into `<cache>/develop/<software>/appimage/<name>-<size>-<date>/`, a
 new version is extracted in turn) and runs `squashfs-root/usr/bin/rawtherapee-cli` /
-`ART-cli` with its libraries (`LD_LIBRARY_PATH`). Not yet checked on a real AppImage
-(2026-10-31). "Open the folder in…" launches the interface next to the command line
+`ART-cli` with its libraries (`LD_LIBRARY_PATH`). **Checked by the user** on Linux Mint
+with the RawTherapee 5.13 AppImage (2026-10-31): ratings both ways and render. "Open the
+folder in…" launches the interface next to the command line
 (`rawtherapee` / `ART <folder>`; an AppImage, itself).
 
 The profile is a development (`Engine::sidecar`, `profile_sidecar`) only when it has a
 section other than `[Version]` and `[General]`: a ratings-only profile (written by their
-browser or by `tri`) is not rendered, and "Develop with" greys it like RapidRAW. The
+browser or by `tri`) is not rendered, and "Develop with" greys it like any software
+without a development. The
 render cache key ignores `[General]` (`render_stamp`): rating does not redo the render.
 No clones nor virtual copies in these programs. Checked against docs and man pages, not
 yet on a real installation (testers).

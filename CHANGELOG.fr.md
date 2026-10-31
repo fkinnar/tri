@@ -11,6 +11,10 @@
   **Corrigé : au lancement, un tri par note était appliqué avant la lecture des notes**
   (ordre des noms jusqu'au changement suivant) : la grille est retriée à la fin de la
   lecture en fond.
+- **« Développer avec » : tout logiciel est grisé tant que la photo n'y est pas
+  développée**, darktable compris (il rendrait par défaut, mais il n'y a rien à voir) ;
+  seul le rendu LibRaw est toujours proposé. Les raccourcis le disent aussi (règle de
+  l'utilisateur, 31/10/2026 : « c'est moi qui développe »).
 - **Corrigé : un profil RawTherapee / ART (ou un `.rrdata` RapidRAW) rempli après la note
   qui l'avait créé n'entrait pas dans la pile des développements** avant la réouverture
   du dossier (retour du 31/10/2026) : la surveillance traite un sidecar principal qui
