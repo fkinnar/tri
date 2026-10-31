@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **RawTherapee / ART as an AppImage on Linux**: recent AppImages only launch the
+  interface, so `tri` extracts the AppImage once into its cache and runs the extracted
+  `rawtherapee-cli` / `ART-cli` with the bundled libraries. An ART AppImage is recognised
+  by its name (`ART_*`), no longer confused with darktable's ("art" is in "darktable").
 - **Stacks switch back in the bottom bar of the grid** (it had left the filter bar with
   its reorganisation, #199) and **in the "View" section** of the right panel in full
   screen, next to the shown source (feedback of 2026-10-31).

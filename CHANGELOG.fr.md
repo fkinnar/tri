@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **RawTherapee / ART en AppImage sous Linux** : les AppImage récentes ne lancent que
+  l'interface ; `tri` extrait l'AppImage une fois dans son cache et lance le
+  `rawtherapee-cli` / `ART-cli` extrait avec ses bibliothèques. Une AppImage d'ART est
+  reconnue à son nom (`ART_*`), plus confondue avec celle de darktable (« art » est dans
+  « darktable »).
 - **Interrupteur des piles de retour dans le bandeau de la grille** (parti de la barre
   des filtres avec sa réorganisation, #199) et **dans la section « Vue »** du panneau de
   droite en plein écran, à côté de la source affichée (retour du 31/10/2026).
