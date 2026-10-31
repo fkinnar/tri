@@ -13,7 +13,9 @@
   développements d'une photo restent désormais dans sa pile de rafale (la similarité
   coupait entre eux, et la pile de développements disparaissait dès que les piles étaient
   actives). Les pastilles « N dév. » et « replier » passent sous les pastilles de couleur
-  au lieu de les recouvrir.
+  au lieu de les recouvrir. Le **drapeau neutre est dessiné aussi** (un cercle vide à la
+  place du drapeau, `[gui.grid] neutral_flag`) : chaque vignette montre toutes ses
+  informations.
 - **Générer les sidecars de notes manquants depuis l'interface** (suite de #253) : une
   icône « sidecar » dans la boîte du clic droit d'une vignette (la sélection) et « Générer
   les sidecars… » dans le menu du clic droit du dossier ouvert ; la boîte propose tous les

@@ -447,6 +447,9 @@ pub struct GridSettings {
     pub textures: usize,
     /// Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
     pub marks: f32,
+    /// Drapeau « neutre » dessiné aussi (cercle vide), pour que chaque vignette montre
+    /// toutes ses informations (demandé le 31/10/2026).
+    pub neutral_flag: bool,
     /// Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
     pub rejected_opacity: f32,
     /// Épaisseur du cadre de la vignette survolée par la souris.
@@ -505,6 +508,7 @@ impl Default for GridSettings {
             name_chars: 24,
             textures: 600,
             marks: 12.0,
+            neutral_flag: true,
             rejected_opacity: 0.35,
             hover_frame: 2.0,
             marked_frame: 3.0,

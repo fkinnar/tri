@@ -566,6 +566,9 @@ name_chars = 24
 textures = 600
 # Taille des notes (étoiles, couleurs, drapeau) sur les vignettes.
 marks = 12.0
+# Drapeau « neutre » dessiné aussi (cercle vide), pour que chaque vignette montre toutes
+# ses informations.
+neutral_flag = true
 # Opacité de la vignette d'une photo rejetée (0 : invisible, 1 : normale).
 rejected_opacity = 0.35
 # Épaisseur du cadre de la vignette survolée par la souris.

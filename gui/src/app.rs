@@ -11924,7 +11924,14 @@ impl TriApp {
         // Notes sur la vignette : étoiles en bas à gauche, drapeau en bas à droite,
         // couleurs en haut à droite, chaque marque cerclée de sombre.
         let notes = self.folder.notes.notes(&file.path);
-        marks::thumbnail_notes(ui.painter(), image_area, notes, g.marks, &colors);
+        marks::thumbnail_notes(
+            ui.painter(),
+            image_area,
+            notes,
+            g.marks,
+            &colors,
+            g.neutral_flag,
+        );
         // Écrêtage en haut à gauche : triangles mi-blanc mi-noir (retour du 21/10/2026 :
         // les petits histogrammes ne se lisaient pas) ; un clic ouvre le grand histogramme.
         // Pas sur une pile repliée (issue n° 75) : son nombre d'images est à cette place,

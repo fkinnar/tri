@@ -12,7 +12,8 @@
   `core.dev.fold_all` stay bindable in `[keys]`). A photo's developments now always stay
   in its burst stack (the similarity cut between them, and the development stack vanished
   as soon as stacks were on). The "N dev." badge and the "fold" badge sit below the colour
-  labels instead of over them.
+  labels instead of over them. The **neutral flag is drawn too** (an empty circle at the
+  flag's place, `[gui.grid] neutral_flag`), so every thumbnail shows all its information.
 - **Generate the missing rating sidecars from the interface** (follow-up to #253): a
   sidecar icon in a thumbnail's right-click dialog (the selection) and "Generate the
   sidecars…" in the open folder's right-click menu; the dialog offers every software or
