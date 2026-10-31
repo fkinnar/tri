@@ -132,6 +132,38 @@ fn development_photo(
     (!created || crate::developments::file_is_darktable(sidecar)).then_some(photo)
 }
 
+/// Un sidecar modifié qui décrit maintenant le développement principal d'une photo de
+/// `images`, pas encore enregistré : la photo. XMP de darktable (historique non vide),
+/// `.rrdata` principal avec réglages, profil `.pp3` / `.arp` avec une section de réglages.
+fn became_development(sidecar: &Path, images: &HashMap<PathBuf, Stamp>) -> Option<PathBuf> {
+    use crate::develop::Engine;
+    let name = sidecar.file_name()?.to_string_lossy().to_lowercase();
+    let (engine, developed): (Engine, fn(&Path) -> bool) = if name.ends_with(".xmp") {
+        (Engine::Darktable, crate::developments::file_is_darktable)
+    } else if name.ends_with(".rrdata") {
+        (Engine::RapidRaw, crate::rrdata::file_is_development)
+    } else if name.ends_with(".pp3") {
+        (Engine::RawTherapee, crate::pp3::file_is_development)
+    } else if name.ends_with(".arp") {
+        (Engine::Art, crate::pp3::file_is_development)
+    } else {
+        return None;
+    };
+    // Le sidecar principal : `IMG.RAF.<ext>` d'une image du dossier (pas un clone
+    // `IMG_01.RAF.xmp` ni une copie virtuelle `IMG.RAF.<id>.rrdata`).
+    let photo = sidecar.with_extension("");
+    if !images.contains_key(&photo) {
+        return None;
+    }
+    let known = crate::developments::Development {
+        engine,
+        copy: crate::developments::Copy::Main,
+        photo: photo.clone(),
+        sidecar: sidecar.to_path_buf(),
+    };
+    (crate::developments::get(&known.path()).is_none() && developed(sidecar)).then_some(photo)
+}
+
 /// Vrai si `path` est un sidecar : XMP, RapidRAW (`.rrdata`), RawTherapee (`.pp3`) ou
 /// ART (`.arp`), casse ignorée.
 fn is_sidecar(path: &Path) -> bool {
@@ -210,29 +242,14 @@ impl Snapshot {
                 images.push(photo);
             }
         }
-        // Le XMP de notes d'une photo réécrit par darktable (importée après le tri) : son
-        // développement darktable apparaît.
+        // Le sidecar de notes d'une photo réécrit par son logiciel (importée après le
+        // tri) : son développement apparaît. XMP de darktable d'abord ; puis (retour du
+        // 31/10/2026 : un profil RawTherapee créé par la note, rempli ensuite dans
+        // RawTherapee, n'entrait pas dans la pile tant que le dossier n'était pas
+        // rouvert) le `.rrdata` principal et les profils `.pp3` / `.arp`.
         for (sidecar, stamp) in &newer.sidecars {
             let changed = self.sidecars.get(sidecar).is_some_and(|old| old != stamp);
-            let xmp = sidecar
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("xmp"));
-            if !changed || !xmp {
-                continue;
-            }
-            let Some(photo) = sidecar.file_stem().map(|_| sidecar.with_extension("")) else {
-                continue;
-            };
-            let known = crate::developments::Development {
-                engine: crate::develop::Engine::Darktable,
-                copy: crate::developments::Copy::Main,
-                photo: photo.clone(),
-                sidecar: sidecar.clone(),
-            };
-            if newer.images.contains_key(&photo)
-                && crate::developments::get(&known.path()).is_none()
-                && crate::developments::file_is_darktable(sidecar)
-            {
+            if changed && let Some(photo) = became_development(sidecar, &newer.images) {
                 images.push(photo);
             }
         }
@@ -504,6 +521,49 @@ mod tests {
             before.changes(&Snapshot::of(d).unwrap()).images,
             [d.join("A.RAF")]
         );
+    }
+
+    #[test]
+    fn a_profile_filled_by_its_software_becomes_a_development() {
+        // 31/10/2026 : le `.pp3` créé par la note (notes seules), puis rempli dans
+        // RawTherapee : un développement de plus sans rouvrir le dossier. Même chose pour
+        // le `.rrdata` principal ; un profil qui reste réduit aux notes ne compte pas.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.RAF"), b"x").unwrap();
+        std::fs::write(d.join("B.RAF"), b"x").unwrap();
+        std::fs::write(d.join("A.RAF.pp3"), b"[General]\nRank=2\n").unwrap();
+        std::fs::write(
+            d.join("B.RAF.rrdata"),
+            br#"{"rating": 1, "adjustments": null}"#,
+        )
+        .unwrap();
+        let before = Snapshot::of(d).unwrap();
+        // Même seconde possible : une taille différente suffit à l'empreinte.
+        std::fs::write(
+            d.join("A.RAF.pp3"),
+            b"[General]\nRank=2\n\n[Exposure]\nCompensation=1.5\n",
+        )
+        .unwrap();
+        std::fs::write(
+            d.join("B.RAF.rrdata"),
+            br#"{"rating": 1, "adjustments": {"exposure": 0.5}}"#,
+        )
+        .unwrap();
+        let changes = before.changes(&Snapshot::of(d).unwrap());
+        assert_eq!(changes.images, [d.join("A.RAF"), d.join("B.RAF")]);
+        // Encore des notes seules (autre note) : un simple changement de sidecar.
+        let before = Snapshot::of(d).unwrap();
+        std::fs::write(d.join("A.RAF.arp"), b"[General]\nRank=1\n").unwrap();
+        let before2 = Snapshot::of(d).unwrap();
+        assert!(
+            before.changes(&before2).images.is_empty(),
+            "profil de notes créé"
+        );
+        std::fs::write(d.join("A.RAF.arp"), b"[General]\nRank=5\nColorLabel=1\n").unwrap();
+        let changes = before2.changes(&Snapshot::of(d).unwrap());
+        assert!(changes.images.is_empty(), "toujours des notes seules");
+        assert_eq!(changes.sidecars, [d.join("A.RAF.arp")]);
     }
 
     #[test]

@@ -4,6 +4,13 @@
 
 ## À venir
 
+- **Corrigé : un profil RawTherapee / ART (ou un `.rrdata` RapidRAW) rempli après la note
+  qui l'avait créé n'entrait pas dans la pile des développements** avant la réouverture
+  du dossier (retour du 31/10/2026) : la surveillance traite un sidecar principal qui
+  devient un développement comme le XMP réécrit par darktable.
+- Pastilles des clones et copies sur les vignettes : le numéro seul (« DT · 1 »,
+  « RR · 2 ») ; une photo montrée dans le rendu d'un logiciel porte aussi le nom court
+  (« RT », pas « RawTherapee »).
 - **Tri par note** (`f s`, liste des tris de la section « Grille », `[gui] sort`) : par
   **étoiles** (une rejetée sous 0 étoile), par **couleur** (ordre du nouveau
   `[sort] color_order`, qui peut ne citer que quelques couleurs : les autres et les sans

@@ -5234,16 +5234,18 @@ impl TriApp {
         self.stacks_dirty = true;
     }
 
-    /// Étiquette courte d'un développement : « DT », « DT · clone 1 », « RR · copie 2 »
-    /// (`None` pour une photo).
+    /// Étiquette courte d'un développement : « DT », « DT · 1 », « RR · 2 » (le numéro du
+    /// clone ou de la copie, sans le mot : retour du 31/10/2026 ; le nom complet
+    /// « Darktable · clone 1 » reste ailleurs) ; `None` pour une photo.
     fn development_badge(&self, path: &Path) -> Option<String> {
         let development = tri::developments::get(path)?;
         let siblings = tri::developments::of(&development.photo);
         let short = development.engine.short();
         Some(match development.rank(&siblings) {
             tri::developments::Rank::Main => short.to_string(),
-            tri::developments::Rank::Clone(n) => format!("{short} · {}", t!("dev-clone", n = n)),
-            tri::developments::Rank::Copy(n) => format!("{short} · {}", t!("dev-copy", n = n)),
+            tri::developments::Rank::Clone(n) | tri::developments::Rank::Copy(n) => {
+                format!("{short} · {n}")
+            }
         })
     }
 
@@ -11952,7 +11954,9 @@ impl TriApp {
             let side = badge_rect.height();
             let galley = ui.painter().layout_no_wrap(
                 match level {
-                    Level::Developed(engine) => engine.name().to_string(),
+                    // Le nom court, comme la pastille d'un développement (retour du
+                    // 31/10/2026 : « RawTherapee » ici, « RT » là) ; la bulle a le long.
+                    Level::Developed(engine) => engine.short().to_string(),
                     _ => t!("grid-render-libraw-short"),
                 },
                 // Un peu plus petit que la légende : de l'air dans le cadre (retour du
