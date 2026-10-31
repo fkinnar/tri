@@ -185,7 +185,10 @@ développement, voir `[develop] default`), `<leader>d` dans darktable, `<leader>
 RapidRAW (`Action::DevelopWith`, identifiants `plugin.darktable.develop`,
 `plugin.rapidraw.develop` ; `core.develop.render` et `core.develop.folder` pour les
 deux autres). Au clic droit sur une image, « Développer avec » : les logiciels
-installés, ou le rendu RAW (LibRaw). Le logiciel choisi passe devant celui du
+installés, **grisés tant que l'image n'y est pas développée** (`is_developed_in`,
+même règle que le filtre « développées » ; décidé le 31/10/2026 : darktable rendrait
+par défaut, mais sans développement il n'y a rien à voir), ou le rendu RAW (LibRaw),
+toujours là. Le logiciel choisi passe devant celui du
 développement pour cette image, le temps de la session (`develop_choice`). Au clic
 droit sur un dossier, « Développer tout le dossier… » ouvre une boîte : chaque image
 dans le logiciel de son développement (sinon elle garde le rendu RAW), ou tout dans un
@@ -260,7 +263,7 @@ ses bibliothèques (`LD_LIBRARY_PATH`). Pas encore vérifié sur une vraie AppIm
 Le profil n'est un développement (`Engine::sidecar`, `profile_sidecar`) que s'il a une
 section autre que `[Version]` et `[General]` : un profil réduit aux notes (écrit par
 leur explorateur ou par `tri`) ne se rend pas, et « Développer avec » le grise comme
-pour RapidRAW. La clé de cache du rendu ignore `[General]` (`render_stamp`) : noter ne
+tout logiciel sans développement. La clé de cache du rendu ignore `[General]` (`render_stamp`) : noter ne
 refait pas le rendu. Pas de clones ni de copies virtuelles dans ces logiciels. Vérifié
 sur les docs et pages de manuel, pas encore sur une installation réelle (testeurs).
 

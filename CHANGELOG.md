@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **"Develop with": every software is greyed until the photo is developed there**,
+  darktable included (it would render by default, but there is nothing to see); only the
+  LibRaw render is always offered. The keyboard shortcuts say so too (user's rule,
+  2026-10-31: "c'est moi qui développe").
 - **RawTherapee / ART as an AppImage on Linux**: recent AppImages only launch the
   interface, so `tri` extracts the AppImage once into its cache and runs the extracted
   `rawtherapee-cli` / `ART-cli` with the bundled libraries. An ART AppImage is recognised

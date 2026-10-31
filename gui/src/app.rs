@@ -8162,6 +8162,14 @@ impl TriApp {
         }
         if let Some(file) = self.files.get(self.selected) {
             let path = file.path.clone();
+            // Même règle que la liste du clic droit : rien à rendre sans développement.
+            if !tri::develop::is_developed_in(&path, engine) {
+                self.notice = Some((
+                    t!("develop-with-not-developed", engine = engine.name()),
+                    true,
+                ));
+                return;
+            }
             self.choose_developer(&path, engine);
         }
         self.develop_current();
@@ -10787,12 +10795,12 @@ impl TriApp {
                             .show_ui(ui, |ui| {
                                 for &engine in &engines {
                                     let action = Action::DevelopWith(engine);
-                                    // RapidRAW ne rend que ce qu'on y a développé (un
-                                    // `.rrdata` de notes seules donnait un rendu orphelin,
-                                    // hors de la pile : retour du 31/10/2026) ; darktable
-                                    // rend aussi par défaut.
-                                    let developable = engine != tri::develop::Engine::RapidRaw
-                                        || engine.sidecar(&path).is_some();
+                                    // Seulement ce qu'on y a développé (un `.rrdata` de
+                                    // notes seules donnait un rendu orphelin, hors de la
+                                    // pile : retour du 31/10/2026 ; puis darktable aussi,
+                                    // le soir : sans développement, rien à voir ; seul le
+                                    // rendu LibRaw est toujours là).
+                                    let developable = tri::develop::is_developed_in(&path, engine);
                                     let tip = if developable {
                                         self.action_tip(action)
                                     } else {
@@ -20941,6 +20949,25 @@ mod tests {
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error && text.contains("RapidRAW"), "{text}");
         assert!(h.state().develop_choice.is_empty());
+        // darktable installé mais rien développé : refusé aussi (décidé le 31/10/2026 au
+        // soir : tous les logiciels, pas seulement RapidRAW ; seul LibRaw est toujours là).
+        lead(&mut h);
+        press(&mut h, Key::D, Modifiers::NONE);
+        let (text, error) = h.state().notice.clone().expect("message");
+        assert!(error && text.contains("Darktable"), "{text}");
+        assert!(h.state().develop_choice.is_empty());
+        assert_eq!(h.state().mode, Mode::Grid);
+        // Les deux premières images développées dans darktable (historique non vide) ;
+        // l'absence du sidecar vient d'être mémorisée (`cache::stamp`) : oubliée.
+        let mut sidecars = Vec::new();
+        for i in 0..2 {
+            let path = h.state().files[i].path.clone();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let sidecar = path.with_file_name(format!("{name}.xmp"));
+            std::fs::write(&sidecar, r#"<rdf:Description darktable:history_end="3"/>"#).unwrap();
+            sidecars.push(sidecar);
+        }
+        tri::cache::forget_stamps(sidecars.iter().map(|p| p.as_path()));
         // darktable : choisi pour l'image, rendu demandé, source « développé ».
         lead(&mut h);
         press(&mut h, Key::D, Modifiers::NONE);
@@ -20965,6 +20992,27 @@ mod tests {
             h.state().develop_choice.get(&other),
             Some(&tri::develop::Engine::Darktable)
         );
+        assert!(h.state().rating_dialog.is_none());
+        // La troisième, sans développement : « Darktable » grisé dans sa liste, le rendu
+        // LibRaw reste proposé.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        let third = h.state().files[2].path.clone();
+        h.state_mut().rating_dialog = Some((third.clone(), pos2(200.0, 200.0)));
+        h.run_steps(2);
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
+        h.get_by_label("Darktable").click();
+        h.run_steps(2);
+        assert!(
+            !h.state().develop_choice.contains_key(&third),
+            "grisé : sans effet"
+        );
+        assert!(h.state().rating_dialog.is_some(), "la boîte reste ouverte");
+        // La liste s'est refermée sur le clic : rouverte pour le rendu LibRaw.
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run_steps(2);
+        h.get_by_label(&t!("develop-with-libraw")).click();
+        h.run_steps(2);
         assert!(h.state().rating_dialog.is_none());
     }
 
