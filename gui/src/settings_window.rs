@@ -229,7 +229,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
     Some(match (section, key) {
         ("gui", "profile") => &["classic", "vim", "both"],
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
-        ("gui", "sort") => &["name", "captured", "modified"],
+        ("gui", "sort") => &["name", "captured", "modified", "stars", "color", "flag"],
         ("gui", "raw_previews") => &["on-demand", "background"],
         ("xmp", "sidecar") => &["darktable", "adobe"],
         ("sidecars.rapidraw", "create") => &["auto", "always", "never"],

@@ -3,7 +3,8 @@
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use tri::sort::{Order, SortKey, sort};
+use tri::sort::{Order, SortKey, SortSettings, sort};
+use tri::xmp::{Flag, Notes};
 
 #[test]
 fn a_scanned_folder_sorts_by_name_date_and_modification() {
@@ -30,7 +31,8 @@ fn a_scanned_folder_sorts_by_name_date_and_modification() {
         key: SortKey::Modified,
         descending: false,
     };
-    sort(&mut files, modified, |_| None);
+    let s = SortSettings::default();
+    sort(&mut files, modified, |_| None, |_| Notes::EMPTY, &s);
     assert_eq!(names(&files)[0], "C.JPG");
     // Prise de vue : B avant A ; C sans date, à la fin.
     let captured = |p: &Path| match p.file_stem()?.to_str()? {
@@ -42,6 +44,24 @@ fn a_scanned_folder_sorts_by_name_date_and_modification() {
         key: SortKey::Captured,
         descending: false,
     };
-    sort(&mut files, by_date, captured);
+    sort(&mut files, by_date, captured, |_| Notes::EMPTY, &s);
     assert_eq!(names(&files), ["B.RAF", "B.JPG", "A.JPG", "C.JPG"]);
+    // Notes (31/10/2026) : lues dans les sidecars du dossier, la paire d'après son RAW.
+    let mut book = tri::notes::NoteBook::load_files(&files, tri::xmp::Convention::Darktable);
+    book.edit(&dir.path().join("C.JPG"), |n| n.stars = 4)
+        .unwrap();
+    book.edit(&dir.path().join("B.RAF"), |n| n.flag = Flag::Rejected)
+        .unwrap();
+    let by_stars = Order {
+        key: SortKey::Stars,
+        descending: true,
+    };
+    sort(
+        &mut files,
+        by_stars,
+        |_| None,
+        |p| book.notes(p).clone(),
+        &s,
+    );
+    assert_eq!(names(&files), ["C.JPG", "A.JPG", "B.RAF", "B.JPG"]);
 }
