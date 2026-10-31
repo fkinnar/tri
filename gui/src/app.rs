@@ -12054,7 +12054,7 @@ impl TriApp {
             notes,
             g.marks,
             &colors,
-            g.neutral_flag,
+            g.empty_marks,
         );
         // Noter à la souris sur la vignette (#257, 31/10/2026) : un clic sur les étoiles,
         // le drapeau ou les couleurs ouvre un petit sélecteur du groupe concerné, là.

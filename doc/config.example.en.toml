@@ -583,9 +583,9 @@ name_chars = 24
 textures = 600
 # Size of the ratings (stars, colours, flag) on the thumbnails.
 marks = 12.0
-# Draw the "neutral" flag too (an empty circle), so that every thumbnail shows all its
-# information.
-neutral_flag = true
+# Draw empty marks in light grey where nothing is set (a star, a colour dot, the neutral
+# flag's circle): every thumbnail shows all its information, and where to click.
+empty_marks = true
 # Opacity of a rejected photo's thumbnail (0: invisible, 1: normal).
 rejected_opacity = 0.35
 # Thickness of the frame of the thumbnail hovered by the mouse.

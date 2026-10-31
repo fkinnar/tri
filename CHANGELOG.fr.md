@@ -13,6 +13,9 @@
   (`darktable:history_end` > 0, en attribut ou en élément) ; un XMP seulement importé
   dans darktable, ou écrit par `tri` pour les notes, n'en est pas un ; et le filtre garde
   une photo avec ses développements des logiciels cochés.
+- **Vignettes : marques vides** (`[gui.grid] empty_marks`, remplace `neutral_flag`) : là
+  où rien n'est posé, un contour gris clair d'étoile, de pastille de couleur et du cercle
+  du drapeau neutre montre chaque information et où cliquer.
 - Vignettes : liseré sombre de 2 points uniforme autour des étoiles (un contour tracé,
   une étoile agrandie amincissait les pointes) et des pastilles ; le sélecteur de marque
   est à la largeur de son contenu.

@@ -12,6 +12,9 @@
   with a **non-empty history** (`darktable:history_end` > 0, attribute or element); an
   XMP merely imported into darktable, or written by `tri` for the ratings, is not; and
   the filter keeps a photo with its developments of the checked software.
+- **Thumbnails: empty marks** (`[gui.grid] empty_marks`, replaces `neutral_flag`): where
+  nothing is set, a light grey outline of a star, a colour dot and the neutral flag's
+  circle show every piece of information and where to click.
 - Thumbnails: a uniform two-point dark rim around the stars (a traced outline, the
   points thinned a scaled star) and the dots; the mark picker is as wide as its content.
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the
