@@ -10,6 +10,13 @@
   development like the darktable XMP rewritten by darktable.
 - Thumbnail chips of clones and copies: the number alone ("DT · 1", "RR · 2"); a photo
   shown in a software's render carries the short name too ("RT", not "RawTherapee").
+- **Sort by ratings** (`f s`, the sort list of the "Grid" section, `[gui] sort`): by
+  **stars** (a rejected photo below 0 stars), by **colour** (order of the new
+  `[sort] color_order`, which may name only a few colours: the others and the uncoloured
+  go last) or by **flag** (accepted, no flag, rejected). A rating set, undone or changed
+  elsewhere sorts the grid again at once, the selection follows the image. Colours are
+  written `"red"`, `"yellow"`… in TOML and in the saved folder views (the former
+  `"Red"` is still read).
 - **Sidecars dialog: installed software only** (XMP always), like the render list; ART
   was offered without being there (feedback of 2026-10-31).
 - **RawTherapee / ART as an AppImage on Linux**: recent AppImages only launch the
