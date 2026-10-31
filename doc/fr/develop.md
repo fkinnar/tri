@@ -42,11 +42,12 @@ règle `default = "darktable"`, sans que le plus récent passe devant.
   lanceur exporté ouvre l'interface, pas `darktable-cli`). Le Flatpak doit pouvoir lire
   les images et le cache de `tri` (dossier personnel) : à vérifier pour des images hors
   du dossier personnel.
-- `darktable_sidecar(image)` : `IMAGE.RAF.xmp`, **seulement s'il est de darktable** :
-  écrit par darktable (`darktable:xmp_version`), ou avec un historique
-  (`darktable:history_end` > 0). Une image importée mais pas retouchée (clone vierge) a
-  donc son rendu darktable par défaut, qui n'est pas celui de LibRaw (retour du
-  30/10/2026). Un sidecar écrit par `tri` seul (notes) n'en a pas.
+- `darktable_sidecar(image)` : `IMAGE.RAF.xmp`, **seulement s'il décrit un
+  développement** (`developments::is_darktable` : un historique non vide,
+  `darktable:history_end` > 0). Revu le 31/10/2026 : une image importée dans darktable
+  sans retouche n'est plus « développée » (le filtre « développées » montrait des photos
+  seulement notées), la règle est la même que pour les piles. Un sidecar écrit par `tri`
+  seul (notes) n'en a pas non plus.
 - `Engine::sidecar(image)` : pour un développement (`developments.md`), son sidecar s'il
   est de ce logiciel ; pour une photo qui a des développements de ce logiciel, **rien** :
   le sidecar est le leur (ils ont leur vignette), la photo reste le rendu neutre.

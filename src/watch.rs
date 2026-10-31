@@ -438,7 +438,11 @@ mod tests {
         assert!(before.changes(&Snapshot::of(d).unwrap()).images.is_empty());
         std::fs::remove_file(d.join("A_02.RAF.xmp")).unwrap();
         let before = Snapshot::of(d).unwrap();
-        std::fs::write(d.join("A_01.RAF.xmp"), r#"<x darktable:xmp_version="5"/>"#).unwrap();
+        std::fs::write(
+            d.join("A_01.RAF.xmp"),
+            r#"<x darktable:xmp_version="5" darktable:history_end="1"/>"#,
+        )
+        .unwrap();
         let after = Snapshot::of(d).unwrap();
         let changes = before.changes(&after);
         assert_eq!(

@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- **Fixed: the "developed" filter showed photos that were only rated, as orphan darktable
+  developments** (same-day feedback). Two causes: the stacks and the renderer / filter
+  had two different rules for "a darktable development", and the filter judged the photo
+  and its development separately (the development owns the photo's sidecar, so only the
+  development passed). One rule now, everywhere: a darktable XMP is a development only
+  with a **non-empty history** (`darktable:history_end` > 0, attribute or element); an
+  XMP merely imported into darktable, or written by `tri` for the ratings, is not; and
+  the filter keeps a photo with its developments of the checked software.
+- Thumbnails: a uniform two-point dark rim around the stars (a traced outline, the
+  points thinned a scaled star) and the dots; the mark picker is as wide as its content.
 - **Developments on the thumbnail: a reel icon** (the "developed" filter's icon, in the
   cell's text colour, no coloured badge) replaces "N dev."; the count is in its tooltip;
   the "fold" icon of an unfolded stack is drawn the same way, without background.

@@ -1073,7 +1073,7 @@ mod tests {
         let d = dir.path();
         std::fs::write(d.join("IMG.RAF"), b"x").unwrap();
         std::fs::write(d.join("IMG.JPG"), b"x").unwrap();
-        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5"/></rdf:RDF></x:xmpmeta>"#;
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#;
         std::fs::write(d.join("IMG.RAF.xmp"), darktable).unwrap();
         std::fs::write(d.join("IMG_01.RAF.xmp"), darktable).unwrap();
         std::fs::write(

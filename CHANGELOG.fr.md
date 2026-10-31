@@ -4,6 +4,18 @@
 
 ## À venir
 
+- **Corrigé : le filtre « développées » montrait des photos seulement notées, comme des
+  développements darktable orphelins** (retour du jour). Deux causes : les piles et le
+  rendu / filtre n'avaient pas la même règle pour « un développement darktable », et le
+  filtre jugeait la photo et son développement séparément (le développement porte le
+  sidecar de la photo, seul lui passait). Une seule règle désormais, partout : un XMP
+  darktable n'est un développement qu'avec un **historique non vide**
+  (`darktable:history_end` > 0, en attribut ou en élément) ; un XMP seulement importé
+  dans darktable, ou écrit par `tri` pour les notes, n'en est pas un ; et le filtre garde
+  une photo avec ses développements des logiciels cochés.
+- Vignettes : liseré sombre de 2 points uniforme autour des étoiles (un contour tracé,
+  une étoile agrandie amincissait les pointes) et des pastilles ; le sélecteur de marque
+  est à la largeur de son contenu.
 - **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
   nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,

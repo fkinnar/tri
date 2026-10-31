@@ -33,15 +33,34 @@ pub fn star(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
     // points sont visibles depuis son centre.
     let mut mesh = Mesh::default();
     mesh.colored_vertex(center, color);
-    for i in 0..10 {
-        let r = if i % 2 == 0 { radius } else { radius * 0.45 };
-        let angle = -FRAC_PI_2 + i as f32 * PI / 5.0;
-        mesh.colored_vertex(center + vec2(angle.cos(), angle.sin()) * r, color);
+    for p in star_points(center, radius) {
+        mesh.colored_vertex(p, color);
     }
     for i in 0..10u32 {
         mesh.add_triangle(0, 1 + i, 1 + (i + 1) % 10);
     }
     painter.add(Shape::mesh(mesh));
+}
+
+/// Les dix sommets d'une étoile à cinq branches, en commençant en haut.
+fn star_points(center: Pos2, radius: f32) -> Vec<Pos2> {
+    (0..10)
+        .map(|i| {
+            let r = if i % 2 == 0 { radius } else { radius * 0.45 };
+            let angle = -FRAC_PI_2 + i as f32 * PI / 5.0;
+            center + vec2(angle.cos(), angle.sin()) * r
+        })
+        .collect()
+}
+
+/// Liseré sombre d'une étoile de vignette, de `width` points tout autour (un contour
+/// tracé, pas une étoile plus grande : les pointes amincissaient le trait ; retour du
+/// 31/10/2026).
+fn star_rim(painter: &Painter, center: Pos2, radius: f32, width: f32, color: Color32) {
+    painter.add(Shape::closed_line(
+        star_points(center, radius),
+        Stroke::new(width * 2.0, color),
+    ));
 }
 
 /// Pastille du drapeau : coche verte (acceptée) ou croix rouge (rejetée).
@@ -217,13 +236,15 @@ pub fn thumbnail_notes(
     let gap = size * 0.25;
     let inset = radius + 3.0;
     let star_fill = chip_star_color(painter.ctx(), colors);
-    let rim = (radius * 0.18).max(1.2);
+    // Liseré de 2 points partout (retour du 31/10/2026 : il paraissait plus fin autour
+    // des étoiles qu'autour des pastilles).
+    let rim = (radius * 0.3).max(2.0);
     for k in 0..notes.stars {
         let c = pos2(
             area.min.x + inset + k as f32 * (size + gap),
             area.max.y - inset,
         );
-        star(painter, c, radius + rim * 1.6, RIM);
+        star_rim(painter, c, radius, rim, RIM);
         star(painter, c, radius, star_fill);
     }
     if notes.flag != Flag::None {
