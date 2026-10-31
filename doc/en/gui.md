@@ -418,7 +418,7 @@ system one ("cold" measurements, experiments).
   ‹‹ ›› buttons of the bar); `Shift+Enter` on a development makes it the **preferred**
   one (cover; on the photo itself: no preferred one any more), **without toggling**
   (2026-10-31: doing it again removes nothing). Unfolded, each thumbnail carries a "fold"
-  reel (`marks::film_reel`, 2026-10-31, user request: nothing folded with the mouse): click =
+  badge (`marks::fold`, 2026-10-31, user request: nothing folded with the mouse; the drawing alone, in the text colour): click =
   fold, **Alt+click** = fold and keep this development as the cover; `Shift+S` unfolds
   or folds every stack, bursts and developments. **Same keys for both kinds of stacks**
   (2026-10-31, user request: "the notions are close"): `s`, `(` `)`, `Shift+S`, `d)` `y)`

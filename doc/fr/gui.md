@@ -434,7 +434,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   bandeau) ; `Maj+Entrée` sur un développement en fait le **préféré** (couverture ; sur la
   photo elle-même : plus de préféré ; `preferred-developments.txt` des données), **sans
   bascule** (31/10/2026 : refaire ne retire rien). Dépliée, chaque vignette porte une
-  bobine « replier » (`marks::film_reel`, 31/10/2026, demande de l'utilisateur : rien ne
+  icône « replier » (`marks::fold`, 31/10/2026, demande de l'utilisateur : rien ne
   repliait à la souris) : clic = replier, **Alt+clic** = replier en gardant ce
   développement en couverture ; `Maj+S` déplie ou replie toutes les piles, rafales et
   développements. **Mêmes touches pour les deux sortes de piles** (31/10/2026, demande de

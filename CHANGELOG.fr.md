@@ -6,7 +6,8 @@
 
 - **Développements sur la vignette : une bobine** (l'icône du filtre « développées », dans
   la couleur du texte de la cellule, sans pastille colorée) remplace « n dév. » ; le
-  nombre est dans sa bulle, et la même bobine replie une pile dépliée.
+  nombre est dans sa bulle ; l'icône « replier » d'une pile dépliée est dessinée de même,
+  sans fond.
 - Bandeau de notation et sélecteurs : plus de cercle d'accent autour de la couleur posée,
   la pastille pleine face aux autres fondues suffit, comme les étoiles et les drapeaux.
   L'anneau du drapeau neutre est dessiné un peu plus petit, pour paraître de la taille des

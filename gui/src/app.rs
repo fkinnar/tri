@@ -11790,8 +11790,9 @@ impl TriApp {
             // Pile dépliée (31/10/2026, demande de l'utilisateur : rien ne la repliait à
             // la souris) : une pastille « replier » au même endroit ; Alt+clic replie en
             // gardant ce développement comme couverture (sa préférée).
-            // La même bobine (retour du 31/10/2026), le dessin seul.
-            marks::film_reel(painter, reel_rect, mark_color);
+            // L'icône « replier », le dessin seul dans la couleur du texte (retour du
+            // 31/10/2026).
+            marks::fold(painter, reel_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
             let tip = t!("dev-fold-tip", keys = keys);
             let badge = ui.interact(
