@@ -50,6 +50,8 @@ Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
 
 ## First steps
 
+- [Long story short](doc/en/long-story-short.md): why `tri`, the workflow it is
+  made for, its principles; [en français](doc/fr/long-story-short.md).
 - [First steps](doc/en/manual.md) (short on purpose: the rest is yours to discover),
   [premiers pas](doc/fr/manual.md) in French.
 - `F1` or `?`: every key, with a search. `Ctrl+,`: the settings (key set, "neutral grey"

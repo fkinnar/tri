@@ -52,6 +52,8 @@ Détails (Windows, options, HEIC) : [doc/fr/build.md](doc/fr/build.md).
 
 ## Premiers pas
 
+- [Long story short](doc/fr/long-story-short.md) : pourquoi `tri`, le flux de
+  travail visé, ses principes ; [in English](doc/en/long-story-short.md).
 - [Premiers pas](doc/fr/manual.md) (court exprès : le reste est à découvrir),
   [first steps](doc/en/manual.md) en anglais.
 - `F1` ou `?` : toutes les touches, avec une recherche. `Ctrl+,` : les réglages (dont le
