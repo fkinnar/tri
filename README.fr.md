@@ -42,6 +42,10 @@ préversion **`nightly`** porte les paquets du `main` de la nuit :
    - macOS : `brew install libraw libheif cmake pkg-config`
    - Linux Mint 22 / Ubuntu 24.04 : `sudo apt install libraw-dev libheif-dev
      libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential`
+   - Windows : les Build Tools C++ de Visual Studio (demandés par rustup), CMake, NASM
+     (`winget install NASM.NASM`) et LibRaw par vcpkg
+     (`vcpkg install libraw:x64-windows`), puis `LIBRAW_DIR` et `LIBRAW_LIB` ;
+     compilation sans HEIC. Pas à pas dans [doc/fr/build.md](doc/fr/build.md#windows).
 3. `cargo build --release -p tri-gui`, puis `target/release/tri-gui [dossier|image] [--focus]`.
 
 Détails (Windows, options, HEIC) : [doc/fr/build.md](doc/fr/build.md).
