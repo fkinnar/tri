@@ -40,6 +40,10 @@ histogram, zoom and loupe, memory card offloading. Fully keyboard driven ("class
    - macOS: `brew install libraw libheif cmake pkg-config`
    - Linux Mint 22 / Ubuntu 24.04: `sudo apt install libraw-dev libheif-dev
      libheif-plugin-libde265 zlib1g-dev cmake nasm pkg-config build-essential`
+   - Windows: the Visual Studio C++ Build Tools (asked by rustup), CMake, NASM
+     (`winget install NASM.NASM`) and LibRaw through vcpkg
+     (`vcpkg install libraw:x64-windows`), then `LIBRAW_DIR` and `LIBRAW_LIB`; build
+     without HEIC. Step by step in [doc/en/build.md](doc/en/build.md#windows).
 3. `cargo build --release -p tri-gui`, then `target/release/tri-gui [folder|image] [--focus]`.
 
 Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
