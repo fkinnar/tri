@@ -9,6 +9,7 @@ existe.
 
 | Document | Contenu |
 |---|---|
+| [long-story-short.md](long-story-short.md) ([English](../en/long-story-short.md)) | Pourquoi `tri` : l'histoire, le flux de travail visé, les principes et les objectifs, en bref |
 | [manual.md](manual.md) ([English](../en/manual.md)) | Premiers pas pour les testeurs (captures, volontairement court) ; captures produites par `scripts/manual-screenshots.sh` |
 | [gui.md](gui.md) | Interface egui : grille, plein écran, actions et raccourcis |
 | [build.md](build.md) | Prérequis, compilation par plateforme, variables d'environnement |
