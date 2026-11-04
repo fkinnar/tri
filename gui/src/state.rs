@@ -46,6 +46,8 @@ pub struct DisplayState {
     pub background: Option<crate::settings::Color>,
     /// Avance automatique après une note (`Maj+A`).
     pub auto_advance: Option<bool>,
+    /// Plein écran : passer en revue les développements (case de la section « Vue »).
+    pub review_developments: Option<bool>,
     /// En entrant dans une pile : couverture ou première image (bouton du mode pile).
     pub stack_enter: Option<crate::settings::StackEnter>,
     /// Infos sur les vignettes de la grille (`Maj+T`).

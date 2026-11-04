@@ -383,6 +383,9 @@ pub struct TriApp {
     view_info: String,
     /// Avance automatique après une note (`[gui] auto_advance`, Maj+A).
     auto_advance: bool,
+    /// Plein écran : ← / → par chaque développement (`[gui.view] review_developments`,
+    /// case de la section « Vue »), sinon de photo en photo dans le rendu de la grille.
+    review_developments: bool,
     /// En entrant dans une pile (mode pile) : sa couverture ou sa première image (issue
     /// n° 62 ; `[gui.view] stack_enter`, bouton du bandeau).
     stack_enter: crate::settings::StackEnter,
@@ -1026,6 +1029,7 @@ impl TriApp {
             background: None,
             view_info: String::new(),
             auto_advance: gui.auto_advance,
+            review_developments: gui.view.review_developments,
             stack_enter: gui.view.stack_enter,
             grid_info: gui.grid.info,
             grid_cell: gui.grid.cell,
@@ -1367,6 +1371,7 @@ impl TriApp {
             background: self.background,
             sort: Some(self.order),
             auto_advance: Some(self.auto_advance),
+            review_developments: Some(self.review_developments),
             stack_enter: Some(self.stack_enter),
             grid_info: Some(self.grid_info),
             grid_cell: Some(self.grid_cell),
@@ -1456,6 +1461,7 @@ impl TriApp {
             (&mut self.rating_bar, s.rating_bar),
             (&mut self.image_info, s.image_info),
             (&mut self.auto_advance, s.auto_advance),
+            (&mut self.review_developments, s.review_developments),
             (&mut self.grid_info, s.grid_info),
         ];
         for (field, saved) in pairs {
@@ -2320,6 +2326,44 @@ impl TriApp {
                 self.set_source(choice.0);
                 self.request_zoom();
             }
+        }
+        // Développements (retour du 04/11/2026) : de photo en photo dans le rendu de la
+        // grille (le même réglage), ou chacun de ses développements, la liste grisée.
+        self.subheading(ui, t!("panel-view-developments"));
+        let mut review = self.review_developments;
+        if self
+            .side_checkbox(ui, &mut review, t!("panel-view-review"))
+            .on_hover_text(t!(
+                "panel-view-review-tip",
+                keys = [Action::DevPrev, Action::DevNext]
+                    .map(|a| self.keymap.keys_for(a).join(" / "))
+                    .join(", ")
+            ))
+            .changed()
+        {
+            self.review_developments = review;
+        }
+        let engines = self.developers.engines();
+        let mut render = self.grid_render;
+        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        let tip = format!(
+            "{}\n{}",
+            t!("panel-view-render-tip"),
+            self.action_tip(Action::GridRenderNext)
+        );
+        ui.add_enabled_ui(!self.review_developments, |ui| {
+            ui.label(t!("panel-view-render"));
+            self.side_combo(
+                ui,
+                "view_render",
+                &mut render,
+                &choices,
+                |c| c.name(),
+                Some(tip),
+            );
+        });
+        if render != self.grid_render {
+            self.set_grid_render(render);
         }
         if self.stacks_switch(ui) {
             let ctx = ui.ctx().clone();
@@ -6293,6 +6337,31 @@ impl TriApp {
                         Action::PanUp => vec2(0.0, -step),
                         _ => vec2(0.0, step),
                     };
+                }
+            }
+            // Plein écran sans passer en revue les développements (défaut, retour du
+            // 04/11/2026) : de photo en photo, chacune sur son développement de couverture
+            // (le rendu de la grille) ; en mode pile, dans la pile.
+            Action::NavPrev | Action::NavNext
+                if self.mode == Mode::View && !self.review_developments =>
+            {
+                let step = if action == Action::NavNext { 1 } else { -1 };
+                if self.stacks_dirty {
+                    self.regroup();
+                }
+                let r = self.stacks.photo_range(self.selected);
+                let from = if step > 0 { r.end - 1 } else { r.start };
+                let next = if self.stacking {
+                    self.stacks
+                        .step_in_stack(from, step, self.gui.view.stack_wrap)
+                } else {
+                    let n = from as isize + step;
+                    (0..self.files.len() as isize)
+                        .contains(&n)
+                        .then_some(n as usize)
+                };
+                if let Some(i) = next {
+                    self.select(self.stacks.photo_cover(i));
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -15385,7 +15454,9 @@ mod tests {
         h.state_mut().perform(&ctx, Action::StackFirst);
         h.run_steps(2);
         assert_eq!(selected_name(&h), "img0.jpg");
-        // Plein écran, mode pile : → parcourt les développements, ← revient.
+        // Plein écran, mode pile, en passant en revue les développements : → les
+        // parcourt, ← revient.
+        h.state_mut().review_developments = true;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         press(&mut h, Key::S, Modifiers::CTRL);
@@ -15437,6 +15508,8 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().stacks.count(), 1, "une rafale");
         h.state_mut().metadata_panel = false;
+        // En passant en revue les développements.
+        h.state_mut().review_developments = true;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         // Au début de la rafale.
@@ -15461,6 +15534,25 @@ mod tests {
             back.push(selected_name(&h));
         }
         assert!(back.contains(&"a1.jpg".to_string()), "{back:?}");
+        // Par défaut (sans passer en revue) : de photo en photo, a2 sur son
+        // développement de couverture, dans la pile comme hors du mode pile (04/11/2026).
+        h.state_mut().review_developments = false;
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::StackFirst);
+        h.run_steps(2);
+        let mut photos_seen = vec![selected_name(&h)];
+        for _ in 0..3 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            photos_seen.push(selected_name(&h));
+        }
+        assert_eq!(photos_seen, ["a1.jpg", "a2.jpg", "a3.jpg", "a3.jpg"]);
+        h.state_mut().stacking = false;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "a2.jpg", "les développements sautés");
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "a1.jpg");
     }
 
     #[test]
@@ -17883,6 +17975,21 @@ mod tests {
         h.state_mut().gui.position.seconds = 0.0;
         h.run_steps(2);
         assert!(h.state().position_key.is_none());
+    }
+
+    #[test]
+    fn the_view_section_switches_the_review_of_developments() {
+        // Retour du 04/11/2026 : une case « Passer en revue les développements » (décochée
+        // par défaut) et la liste du rendu, la même que celle de la grille.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(!h.state().review_developments, "décochée par défaut");
+        click_settled(&mut h, &t!("panel-view-review"));
+        h.run_steps(2);
+        assert!(h.state().review_developments);
+        assert!(h.query_by_label(&t!("panel-view-render")).is_some());
     }
 
     #[test]

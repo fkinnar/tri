@@ -854,6 +854,11 @@ pub struct ViewSettings {
     /// Mode pile (plein écran) : au bout de la pile, ← / → repartent de l'autre bout
     /// (sinon on s'arrête).
     pub stack_wrap: bool,
+    /// Plein écran : ← / → passent par chaque développement d'une photo ; `false` (défaut,
+    /// retour du 04/11/2026) : de photo en photo, chacune dans le rendu de la grille (les
+    /// autres développements : Maj+W / Maj+Q). La case de la section « Vue » le change
+    /// (retenu).
+    pub review_developments: bool,
     /// Mode pile (plein écran), avance automatique après une note : au bout de la pile,
     /// passer à la première photo de la pile suivante (sinon on reste ; prime sur
     /// `stack_wrap` pour l'avance automatique).
@@ -882,6 +887,7 @@ impl Default for ViewSettings {
             image_info: true,
             zoom_on_focus_point: true,
             stack_wrap: false,
+            review_developments: false,
             stack_advance_next: false,
             stack_enter: StackEnter::Cover,
             overlay_line_width: 1.0,

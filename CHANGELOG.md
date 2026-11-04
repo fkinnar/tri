@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- **Full screen, photo to photo**: ← / → go from one photo to the next, each in the
+  grid's render, without going through all its developments (Shift+W / Shift+Q for
+  them). A "Review the developments" checkbox in the View section (with the render list,
+  the same as the grid's) brings back browsing every development
+  (`[gui.view] review_developments`).
 - **Full screen, stack mode**: in a burst, a photo with developments no longer blocks
   browsing; after its last development, → goes to the next photo of the burst (← to the
   previous one). The position mark has a subtler shadow.

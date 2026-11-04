@@ -680,6 +680,11 @@ zoom_on_focus_point = true
 # pile, haut / bas à la pile d'avant / d'après ; au bout de la pile, true : on repart de l'autre
 # bout ; false : on s'arrête.
 stack_wrap = false
+# Plein écran, flèches gauche / droite : true : par chaque développement d'une photo
+# (darktable, ses clones, RapidRAW…) ; false : de photo en photo, chacune dans le rendu de
+# la grille (« Rendu des vignettes »), les autres développements avec Maj+W / Maj+Q. La
+# case « Passer en revue les développements » de la section Vue le change (retenu).
+review_developments = false
 # Piles actives, en plein écran, avance automatique après une note (Maj+A) : au bout de la
 # pile, true : la première photo de la pile suivante (prime alors sur stack_wrap) ; false :
 # on reste sur la dernière.
