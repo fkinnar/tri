@@ -351,9 +351,11 @@ previews = true
 pairs = true
 # Delete = move to the trash (recoverable); false: permanent deletion.
 trash = true
-# External editor: program then arguments; "{files}" is replaced by the files
-# (appended at the end otherwise). Empty: the system's default application. Examples:
-# ["darktable"], ["open", "-a", "darktable"] (macOS), ["gimp", "{files}"].
+# External editor (e): empty, the application the system picks for each image type;
+# otherwise the program then its arguments, "{files}" (or "{file}") replaced by the images
+# (added at the end otherwise). Settings window: "System application" or "Other
+# application" (Browse…, arguments). Examples: ["darktable"],
+# ["/Applications/darktable.app"] (macOS), ["gimp", "{files}"].
 editor = []
 # Copy / move to…: number of recent destinations offered (keys 1 to 9).
 recent = 9

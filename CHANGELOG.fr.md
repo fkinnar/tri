@@ -2,8 +2,9 @@
 
 *[English version](CHANGELOG.md)*
 
-## À venir
-
+- **Éditeur externe plus simple à régler** : « Application du système » (celle que le
+  système choisit pour chaque type d'image, nommée dans les réglages) ou « Autre
+  application », choisie par « Parcourir… », avec `{files}` déjà en argument.
 - **Notes sur l'image** : même cadre que le repère de position et même principe, durée
   et place réglables (`[gui.notes]`), bandeau du bas affiché ou non ; à la même place, le
   repère se met à côté des notes. En plein écran, l'icône du panneau des dossiers est grisée (il

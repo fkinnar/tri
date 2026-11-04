@@ -39,7 +39,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 # Envoi par AirDrop (feuille de partage du système, `send::AirDrop`) ; déjà présents par
 # winit (même projet que objc2-foundation).
 objc2 = { version = "0.6.5", default-features = false, features = ["std"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSSharingService"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSSharingService", "NSWorkspace"] }
 
 # Windows : éjection d'un volume par l'API du système (`places::eject`, issue n° 192) ;
 # déjà présent par winit, std et d'autres (Microsoft, MIT / Apache-2.0).
