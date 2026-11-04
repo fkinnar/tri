@@ -774,6 +774,7 @@ settings-section-gui-zoom = Zoom and loupe
 settings-section-gui-dialogs = Dialogs
 settings-section-gui-compare = Compare
 settings-section-gui-position = Position mark
+settings-section-gui-notes = Notes on the image
 position-photo = Photo { $n } / { $total }
 position-stack = Stack { $n } / { $total }
 position-in-stack = { $n } / { $total }

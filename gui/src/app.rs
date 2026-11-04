@@ -838,6 +838,16 @@ pub struct TriApp {
     /// et depuis quand il est montré.
     position_key: Option<(PathBuf, bool)>,
     position_since: Instant,
+    /// Zone centrale du repère de position (image précédente) : les notes sur l'image s'y
+    /// calent.
+    mark_area: Rect,
+    /// Cadre et place des notes posées sur l'image à cette image : le repère de position à
+    /// la même place se met à côté d'elles (retour du 04/11/2026 : les notes ne bougent
+    /// pas).
+    notes_rect: Option<(Rect, crate::settings::PositionPlace)>,
+    /// Image et notes du cadre des notes, et depuis quand il est montré (`[gui.notes]`).
+    notes_key: Option<(PathBuf, tri::xmp::Notes)>,
+    notes_since: Instant,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -1246,6 +1256,10 @@ impl TriApp {
             focus_since: Instant::now(),
             position_key: None,
             position_since: Instant::now(),
+            mark_area: Rect::NOTHING,
+            notes_rect: None,
+            notes_key: None,
+            notes_since: Instant::now(),
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -7768,6 +7782,8 @@ impl TriApp {
     /// chaque changement d'image, pour `[gui.position] seconds` (fondu à la fin ; 0 :
     /// jamais, négatif : toujours), à la place `place`.
     fn position_mark(&mut self, ctx: &egui::Context, area: Rect) {
+        self.mark_area = area;
+        let notes = self.notes_rect.take();
         let p = self.gui.position;
         let shown = matches!(self.mode, Mode::Grid | Mode::View)
             && self.error.is_none()
@@ -7793,52 +7809,43 @@ impl TriApp {
             self.position_key = key;
             self.position_since = Instant::now();
         }
-        let elapsed = self.position_since.elapsed().as_secs_f32();
-        let opacity = if p.seconds < 0.0 {
-            1.0
-        } else {
-            if elapsed >= p.seconds {
-                return;
-            }
-            // Fondu sur la dernière part (300 ms au plus).
-            let fade = (p.seconds * 0.3).min(0.3);
-            let left = p.seconds - elapsed;
-            if left > fade {
-                ctx.request_repaint_after(Duration::from_secs_f32(left - fade));
-            } else {
-                ctx.request_repaint();
-            }
-            (left / fade).min(1.0)
+        let Some(opacity) = mark_opacity(p.seconds, self.position_since, ctx) else {
+            return;
         };
         let text = self.position_text();
         let align = p.place.align();
         let inner = area.shrink(16.0);
-        let at = align.pos_in_rect(&inner);
+        let mut at = align.pos_in_rect(&inner);
+        let mut pivot = align;
+        // Même place que les notes posées sur l'image : à côté d'elles, qui ne bougent pas
+        // (au-dessus en bas, en dessous ailleurs).
+        if let Some((notes, place)) = notes.filter(|(_, place)| *place == p.place) {
+            if matches!(
+                place,
+                crate::settings::PositionPlace::BottomLeft
+                    | crate::settings::PositionPlace::BottomRight
+            ) {
+                at.y = notes.top() - 6.0;
+            } else {
+                pivot = Align2([align.x(), egui::Align::Min]);
+                at.y = notes.bottom() + 6.0;
+            }
+        }
         egui::Area::new(egui::Id::unique("position_mark"))
-            .pivot(align)
+            .pivot(pivot)
             .fixed_pos(at)
             .interactable(false)
             .show(ctx, |ui| {
                 ui.set_opacity(opacity);
-                // Ombre discrète (retour du 04/11/2026 : celle des boîtes le détachait trop
-                // de l'image).
-                let shadow = egui::epaint::Shadow {
-                    offset: [0, 1],
-                    blur: 4,
-                    spread: 0,
-                    color: Color32::from_black_alpha(60),
-                };
-                egui::Frame::popup(ui.style())
-                    .shadow(shadow)
-                    .show(ui, |ui| {
-                        // Sur une ligne, quelle que soit la place.
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(text).size(self.gui.dialogs.title_size),
-                            )
-                            .extend(),
-                        );
-                    });
+                mark_frame(ui.style()).show(ui, |ui| {
+                    // Sur une ligne, quelle que soit la place.
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                        )
+                        .extend(),
+                    );
+                });
             });
     }
 
@@ -9285,18 +9292,54 @@ impl TriApp {
             );
         }
         self.view_info = format!("{position}{info}");
-        // Notes sur l'image seulement sans le bandeau du bas, qui les montre déjà (issue
-        // n° 8) : bandeau masqué (Maj+N) ou mode concentration.
-        let notes = self.folder.notes.notes(&file.path);
+        // Notes sur l'image (issue n° 8) : durée et place réglables comme le repère de
+        // position (`[gui.notes]`, 04/11/2026), même cadre, bandeau du bas affiché ou non
+        // (retour du même jour : tout pareil).
+        let notes = self.folder.notes.notes(&file.path).clone();
         let size = self.gui.view.marks;
-        let bar_shown = self.rating_bar && !self.focus_mode;
-        if *notes != tri::xmp::Notes::EMPTY && !bar_shown && self.image_info {
-            let width = marks::row_width(notes, size);
-            let left_center = view_rect.left_bottom() + vec2(15.0, -15.0 - size / 2.0);
-            let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
-                .expand(size * 0.35);
-            painter.rect_filled(back, 4.0, Color32::from_black_alpha(170));
-            marks::row(&painter, left_center, notes, size, &self.gui.colors);
+        let n = self.gui.notes;
+        if notes == tri::xmp::Notes::EMPTY || !self.image_info || n.seconds == 0.0 {
+            self.notes_key = None;
+        } else {
+            // Autre image, notes changées, clic sur l'image ou Entrée : remontrées.
+            let again = ctx.input(|i| {
+                i.key_pressed(egui::Key::Enter)
+                    || (i.pointer.primary_clicked()
+                        && i.pointer
+                            .interact_pos()
+                            .is_some_and(|p| view_rect.contains(p)))
+            });
+            let key = Some((file.path.clone(), notes.clone()));
+            if self.notes_key != key || again {
+                self.notes_key = key;
+                self.notes_since = Instant::now();
+            }
+            if let Some(opacity) = mark_opacity(n.seconds, self.notes_since, &ctx) {
+                let frame = mark_frame(ui.style());
+                let edge = frame.widget_rect(Rect::ZERO);
+                let width = marks::row_width(&notes, size);
+                let area = if self.mark_area.is_positive() {
+                    self.mark_area
+                } else {
+                    view_rect
+                };
+                let align = n.place.align();
+                let outer_size = vec2(width, size) + edge.size();
+                let outer = align.anchor_size(align.pos_in_rect(&area.shrink(16.0)), outer_size);
+                let content =
+                    Rect::from_min_size(outer.min - edge.min.to_vec2(), vec2(width, size));
+                let mut painter = painter.clone();
+                painter.multiply_opacity(opacity);
+                painter.add(frame.paint(content));
+                marks::row(
+                    &painter,
+                    content.left_center(),
+                    &notes,
+                    size,
+                    &self.gui.colors,
+                );
+                self.notes_rect = Some((outer, n.place));
+            }
         }
         // Aide-mémoire des touches, en haut à droite : masqué par défaut (retour du
         // 17/10/2026 : il mordait sur l'image, F1 ouvre l'aide).
@@ -9881,12 +9924,19 @@ impl TriApp {
             response.clicked().then_some(StatusClick::Action(action))
         };
         ui.horizontal(|ui| {
-            if let Some(c) = toggle(
-                ui,
-                marks::Side::Left,
-                self.folder_panel,
-                Action::ToggleFolderPanel,
-            ) {
+            // Le panneau des dossiers n'existe qu'en grille : grisé ailleurs (retour du
+            // 04/11/2026).
+            let folders = ui
+                .add_enabled_ui(self.mode == Mode::Grid, |ui| {
+                    toggle(
+                        ui,
+                        marks::Side::Left,
+                        self.folder_panel,
+                        Action::ToggleFolderPanel,
+                    )
+                })
+                .inner;
+            if let Some(c) = folders {
                 clicked = Some(c);
             }
             if let Some(c) = toggle(
@@ -13946,6 +13996,39 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Developed(_) => s.developed = avail,
         }
     }
+}
+
+/// Opacité d'un repère montré depuis `since` pour `seconds` (0 : jamais ; négatif :
+/// toujours) : fondu sur la dernière part (300 ms au plus), `None` une fois passé. Demande
+/// les rafraîchissements nécessaires.
+fn mark_opacity(seconds: f32, since: Instant, ctx: &egui::Context) -> Option<f32> {
+    if seconds < 0.0 {
+        return Some(1.0);
+    }
+    let elapsed = since.elapsed().as_secs_f32();
+    if elapsed >= seconds {
+        return None;
+    }
+    let fade = (seconds * 0.3).min(0.3);
+    let left = seconds - elapsed;
+    if left > fade {
+        ctx.request_repaint_after(Duration::from_secs_f32(left - fade));
+    } else {
+        ctx.request_repaint();
+    }
+    Some((left / fade).min(1.0))
+}
+
+/// Cadre des repères posés sur l'image (position, notes sans le bandeau) : celui des
+/// boîtes, avec une ombre discrète (retour du 04/11/2026 : celle des boîtes le détachait
+/// trop de l'image). Un seul style pour tous (retour du même jour).
+fn mark_frame(style: &egui::Style) -> egui::Frame {
+    egui::Frame::popup(style).shadow(egui::epaint::Shadow {
+        offset: [0, 1],
+        blur: 4,
+        spread: 0,
+        color: Color32::from_black_alpha(60),
+    })
 }
 
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
@@ -18022,6 +18105,48 @@ mod tests {
     }
 
     #[test]
+    fn notes_on_the_image_stay_and_the_position_mark_moves_aside() {
+        // Idée de l'utilisateur (04/11/2026) : notes sur l'image réglables comme le repère
+        // (`[gui.notes]`) ; à la même place, les notes restent, le repère se décale.
+        use crate::settings::PositionPlace;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        h.run_steps(3);
+        let mark_top = |h: &mut Harness<'_, TriApp>| {
+            h.run_steps(2);
+            h.ctx
+                .memory(|m| m.area_rect(egui::Id::unique("position_mark")))
+                .map(|r| r.top())
+                .unwrap()
+        };
+        {
+            let app = h.state_mut();
+            // Bandeau du bas affiché : les notes sur l'image aussi (retour du 04/11/2026).
+            app.rating_bar = true;
+            app.image_info = true;
+            app.gui.notes.seconds = -1.0;
+            app.gui.position.seconds = -1.0;
+            app.gui.position.place = PositionPlace::TopLeft;
+            app.gui.notes.place = PositionPlace::BottomLeft;
+        }
+        let alone = mark_top(&mut h);
+        assert!(h.state().notes_key.is_some(), "notes montrées");
+        h.state_mut().gui.notes.place = PositionPlace::TopLeft;
+        let aside = mark_top(&mut h);
+        let size = h.state().gui.view.marks;
+        assert!(
+            aside > alone + size,
+            "repère sous les notes : {alone} → {aside}"
+        );
+        // 0 : jamais.
+        h.state_mut().gui.notes.seconds = 0.0;
+        assert_eq!(mark_top(&mut h), alone, "plus de notes, le repère revient");
+        assert!(h.state().notes_key.is_none());
+    }
+
+    #[test]
     fn the_view_section_switches_the_review_of_developments() {
         // Retour du 04/11/2026 : une case « Passer en revue les développements » (décochée
         // par défaut) et la liste du rendu, la même que celle de la grille.
@@ -20738,6 +20863,12 @@ mod tests {
         assert!(!h.state().rating_bar);
         click(&mut h, "panneau des dossiers", |a| a.folder_panel);
         assert!(h.state().folder_panel, "et retour");
+        // Plein écran : pas de panneau des dossiers, son icône est grisée (04/11/2026).
+        h.state_mut().mode = Mode::View;
+        h.run_steps(2);
+        h.get_by_label_contains("panneau des dossiers").click();
+        h.run_steps(2);
+        assert!(h.state().folder_panel, "le clic ne fait rien");
     }
 
     #[test]

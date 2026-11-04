@@ -135,6 +135,13 @@ system one ("cold" measurements, experiments).
   image or Enter shows it again (`Stacks::photo_number`, `stack_number`,
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
+- **Notes on the image** (`[gui.notes]`, 2026-11-04, user feedback): in full screen, the
+  image's notes (flag, stars, colours) in the same frame as the position mark
+  (`mark_frame`, `mark_opacity`), on the same principle: display time after a change of
+  image or notes (`seconds`, 2; 0: never; -1: always; click on the image or Enter: shown
+  again) and place (`place`, `bottom-left`), bottom bar shown or not. At the same place as
+  the position mark, the notes stay and the mark goes next to them (above at the bottom,
+  below at the top and in the centre).
 - **Filters and sort per folder** (2026-10-30, `state::FolderView`): each folder's
   filters (RAW / JPEG, stars and their comparison, colours, flags, sharpness, exposure,
   developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
@@ -642,8 +649,8 @@ system one ("cold" measurements, experiments).
     flags, stars and colours of the selected image, clickable, faded when not set, their
     shortcuts in the tooltip (2026-10-22);
     `Shift+N` shows or hides it (`[gui] rating_bar`); on the right, the "auto-advance"
-    button (see below). In full screen, the ratings are drawn on the image only without
-    it (hidden, or focus mode; issue #8: they showed twice). In full screen too, after the
+    button (see below). In full screen, the ratings are also drawn on the image, for a
+    few seconds (`[gui.notes]`, see above; issue #8: they stayed there for good, twice). In full screen too, after the
     ratings: the grid's badges, blown / blocked (click: large histogram) and blurry
     (click: sharpness map; issue #9);
   - **click on a thumbnail mark** (#257, 2026-10-31): the stars (bottom left, all five

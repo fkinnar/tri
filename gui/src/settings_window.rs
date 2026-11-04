@@ -304,7 +304,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("i18n", "language") => &["auto", "fr", "en"],
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
         ("gui.view", "stack_enter") => &["cover", "first"],
-        ("gui.position", "place") => &[
+        ("gui.position", "place") | ("gui.notes", "place") => &[
             "center",
             "top-left",
             "top-right",

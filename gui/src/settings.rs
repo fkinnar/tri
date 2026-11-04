@@ -222,6 +222,8 @@ pub struct GuiSettings {
     pub compare: CompareSettings,
     /// `[gui.position]`.
     pub position: PositionSettings,
+    /// `[gui.notes]`.
+    pub notes: NotesSettings,
     /// `[gui.dialogs]`.
     pub dialogs: DialogSettings,
     /// `[gui.colors]`.
@@ -277,6 +279,7 @@ impl Default for GuiSettings {
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
             position: PositionSettings::default(),
+            notes: NotesSettings::default(),
             dialogs: DialogSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
@@ -673,6 +676,29 @@ impl Default for PositionSettings {
         Self {
             seconds: 2.0,
             place: PositionPlace::TopLeft,
+        }
+    }
+}
+
+/// Section `[gui.notes]` : notes posées sur l'image en plein écran, bandeau du bas affiché
+/// ou non (04/11/2026, idée de l'utilisateur : réglables comme le repère de position, pour
+/// éviter de les avoir au même coin). Même place que le repère : les notes restent,
+/// le repère se met à côté.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct NotesSettings {
+    /// Durée d'affichage (secondes) après un changement d'image ou de notes ; 0 : jamais ;
+    /// négatif (-1) : toujours.
+    pub seconds: f32,
+    /// Où, dans l'image.
+    pub place: PositionPlace,
+}
+
+impl Default for NotesSettings {
+    fn default() -> Self {
+        Self {
+            seconds: 2.0,
+            place: PositionPlace::BottomLeft,
         }
     }
 }
