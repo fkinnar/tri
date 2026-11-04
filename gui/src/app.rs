@@ -10796,8 +10796,8 @@ impl TriApp {
         // Configuration et fichiers de travail à part de ceux des rendus développés : un
         // rendu demandé par Maj+B pendant un export ne gêne pas. Les deux logiciels sont
         // cherchés quel que soit `render` : chaque développement est rendu par le sien.
-        // Sans logiciel : LibRaw (rendu de base). Un logiciel désactivé
-        // (`[develop.enabled]`) n'exporte pas non plus.
+        // Sans logiciel : LibRaw (rendu de base). Un logiciel désactivé ou non
+        // trouvé au lancement n'exporte pas non plus.
         let tools = crate::export::Tools {
             darktable: tri::develop::find_darktable(&self.settings.develop.darktable)
                 .filter(|_| {

@@ -4,9 +4,11 @@
 
 ## Unreleased
 
-- **Software found**: the settings window shows the development software found at launch
-  and where (a forgotten AppImage shows up), with a checkbox to disable each one
-  (`[develop.enabled]`); with none, the list of supported ones.
+- **Development software in the settings**: for each one, Auto (with where it was found
+  at launch: a forgotten AppImage shows up), Manual (a path, "Browse…") or Disabled; with
+  none, the list of supported ones.
+- **"Browse…"** next to every path field (copy / move to, export, offload, copy from a
+  server, settings): the system's folder chooser.
 - **Without a development software installed** (darktable, RapidRAW, RawTherapee, ART),
   the settings only useful with them are hidden (settings window, View section of the
   panel); their paths stay, to point to one installed elsewhere.

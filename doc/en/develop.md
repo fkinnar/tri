@@ -20,9 +20,9 @@ would follow the same model.
 `Developer` trait (`render`); `Developers` is the list of those found on the machine
 (`Developers::find`, work files under `<cache>/develop`), looked for once at launch
 from the files that exist (nothing is kept from one launch to the next).
-`Developers::found` also gives those found but disabled (`[develop.enabled]`,
-2026-11-04) and where (`Found::location`, the `Cli` command as one would type it); a
-disabled software is left out of the list in use, as if it were missing. An image may have been
+`Developers::found` says where each one was found (2026-11-04: `Found::location`, the
+`Cli` command as one would type it, and `Found::path`, the file), shown in the settings
+window; a software set to `""` is not looked for, as if it were missing. An image may have been
 developed in several: `resolve` picks the one of the `[develop] default` setting
 (drop-down list in the settings window: "auto" and the installed software) if it
 developed the image, otherwise the latest development (`"auto"`, default). User's

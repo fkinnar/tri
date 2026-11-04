@@ -45,6 +45,53 @@ fn supported_software() -> String {
     tri::develop::Engine::ALL.map(|e| e.name()).join(", ")
 }
 
+/// Choix d'un logiciel de développement dans la fenêtre de réglages ; dans le fichier :
+/// `"auto"`, un chemin (ou `"flatpak"`), `""`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeveloperMode {
+    Auto,
+    Manual,
+    Off,
+}
+
+impl DeveloperMode {
+    const ALL: [DeveloperMode; 3] = [
+        DeveloperMode::Auto,
+        DeveloperMode::Manual,
+        DeveloperMode::Off,
+    ];
+
+    /// D'après la valeur du fichier ; `manual` : passé en Manuel, chemin pas encore donné.
+    fn of(value: &str, manual: bool) -> DeveloperMode {
+        match value.trim() {
+            "auto" => DeveloperMode::Auto,
+            "" if !manual => DeveloperMode::Off,
+            _ => DeveloperMode::Manual,
+        }
+    }
+
+    fn label(self) -> String {
+        match self {
+            DeveloperMode::Auto => t!("settings-developer-auto"),
+            DeveloperMode::Manual => t!("settings-developer-manual"),
+            DeveloperMode::Off => t!("settings-developer-off"),
+        }
+    }
+}
+
+/// Dossier où « Parcourir… » s'ouvre : celui du chemin donné, sinon celui du logiciel
+/// trouvé au lancement, sinon la racine.
+fn browse_start(value: &str, found: Option<&tri::develop::Found>) -> std::path::PathBuf {
+    let given = (!value.is_empty() && value != "flatpak" && value != "auto")
+        .then(|| tri::settings::expand_home(value));
+    given
+        .into_iter()
+        .chain(found.and_then(|f| f.path.clone()))
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .find(|dir| dir.is_dir())
+        .unwrap_or_else(|| std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR))
+}
+
 /// Vrai si `section`.`key` n'est relu qu'au lancement : le moteur (aperçus, cache, calculs,
 /// emplacements) tourne déjà avec ses réglages ; la taille de la fenêtre ne sert qu'à
 /// l'ouverture.
@@ -62,7 +109,6 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
             | "data"
             // Logiciels de développement : cherchés au lancement.
             | "develop"
-            | "develop.enabled"
     ) || (section, key) == ("gui", "window")
 }
 
@@ -284,7 +330,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
 }
 
 fn is_folder_key(key: &str) -> bool {
-    key == "dir" || key.ends_with("_dir") || key == "destination"
+    key == "dir" || key.ends_with("_dir") || key == "destination" || key == "folder"
 }
 
 /// Identifiant du champ de recherche.
@@ -297,7 +343,7 @@ pub struct SettingsWindow {
     file: ConfigFile,
     /// Logiciels de développement installés, pour la liste de `[develop] default`.
     engines: Vec<tri::develop::Engine>,
-    /// Logiciels trouvés au lancement, désactivés compris (`[develop.enabled]`).
+    /// Logiciels de développement trouvés au lancement, et où.
     found: Vec<tri::develop::Found>,
     /// Couleurs du thème, pour les pastilles de `[sort] color_order`.
     colors: Colors,
@@ -309,6 +355,8 @@ pub struct SettingsWindow {
     /// Textes en cours de saisie (texte, liste TOML), écrits à la validation (Entrée ou
     /// focus perdu), par (section, clé).
     drafts: HashMap<(String, String), String>,
+    /// Logiciels passés en Manuel sans chemin encore choisi (le fichier garde `""`).
+    manual: std::collections::HashSet<String>,
     /// Champs de chemin (complétion par Tab), par (section, clé).
     paths: HashMap<(String, String), crate::path_field::PathField>,
     /// Dernière erreur de validation, par (section, clé).
@@ -379,7 +427,7 @@ pub enum Outcome {
 impl SettingsWindow {
     /// Logiciels de développement installés (ceux que propose `[develop] default`).
     /// Logiciels trouvés au lancement ([`tri::develop::Developers::found`]) : où chacun l'a
-    /// été, sous sa case de `[develop.enabled]` ; un logiciel absent n'y a pas de case.
+    /// été, sous son réglage de `[develop]` en mode Auto.
     pub fn with_found(mut self, found: Vec<tri::develop::Found>) -> SettingsWindow {
         self.found = found;
         self
@@ -421,6 +469,7 @@ impl SettingsWindow {
             query: String::new(),
             fresh: true,
             drafts: HashMap::new(),
+            manual: Default::default(),
             paths: HashMap::new(),
             errors: HashMap::new(),
             dirty: false,
@@ -551,9 +600,6 @@ impl SettingsWindow {
     fn hidden(&self, section: &str, key: &str) -> bool {
         use tri::develop::Engine;
         let missing = |e: Engine| !self.engines.contains(&e);
-        if section == "develop.enabled" {
-            return Engine::from_id(key).is_none_or(|e| !self.found.iter().any(|f| f.engine == e));
-        }
         if NEED_A_DEVELOPER.contains(&(section, key)) {
             return self.engines.is_empty();
         }
@@ -566,24 +612,9 @@ impl SettingsWindow {
             .is_some_and(missing)
     }
 
-    /// Où a été trouvé le logiciel de la case `section`.`key` de `[develop.enabled]`.
-    fn found_at(&self, section: &str, key: &str) -> Option<&str> {
-        let engine = (section == "develop.enabled")
-            .then(|| tri::develop::Engine::from_id(key))
-            .flatten()?;
-        self.found
-            .iter()
-            .find(|f| f.engine == engine)
-            .map(|f| f.location.as_str())
-    }
-
     /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
     /// la liste.
     fn section_hidden(&self, section: &tri::config_edit::Section) -> bool {
-        // Logiciels trouvés : toujours là, un message quand il n'y en a aucun.
-        if section.name == "develop.enabled" {
-            return false;
-        }
         let mut entries = section.groups.iter().flat_map(|g| &g.entries).peekable();
         entries.peek().is_some() && entries.all(|e| self.hidden(&section.name, &e.key))
     }
@@ -1059,8 +1090,8 @@ impl SettingsWindow {
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
             }
-            // Rien de trouvé : la section reste, pour dire ce que `tri` sait utiliser.
-            if section.name == "develop.enabled" && self.found.is_empty() {
+            // Aucun logiciel trouvé : dit, avec ce que `tri` sait utiliser.
+            if section.name == "develop" && self.found.is_empty() {
                 ui.label(t!("settings-found-none", list = supported_software()));
             }
         }
@@ -1435,13 +1466,6 @@ impl SettingsWindow {
                         new = Some(Value::Bool(v));
                     }
                     widget = Some(r);
-                    // Logiciel trouvé : où, pour information (pas modifiable ici).
-                    if let Some(found) = self.found_at(section, &entry.key) {
-                        ui.add(
-                            egui::Label::new(RichText::new(found).weak().monospace()).truncate(),
-                        )
-                        .on_hover_text(t!("settings-found-tip"));
-                    }
                 }
                 Value::Int(i) => {
                     let mut v = *i;
@@ -1507,6 +1531,16 @@ impl SettingsWindow {
                         new = Some(Value::Str(v));
                     }
                 }
+                // Logiciel de développement (04/11/2026, idée de l'utilisateur) : Auto
+                // (et où il a été trouvé), Manuel (un chemin, Parcourir…) ou Désactivé.
+                Value::Str(s)
+                    if section == "develop"
+                        && tri::develop::Engine::from_id(&entry.key).is_some() =>
+                {
+                    let (r, changed) = self.developer_editor(ui, &id, s);
+                    widget = Some(r);
+                    new = changed;
+                }
                 Value::Str(s) if choices(section, &entry.key).is_some() => {
                     let mut v = s.clone();
                     let combo = egui::ComboBox::from_id_salt(("settings_choice", &id))
@@ -1557,7 +1591,8 @@ impl SettingsWindow {
                     } else {
                         ui.add(egui::TextEdit::singleline(draft).desired_width(260.0))
                     };
-                    let done = field.lost_focus() && *draft != shown;
+                    let browsed = self.paths.get_mut(&id).is_some_and(|p| p.take_browsed());
+                    let done = (field.lost_focus() || browsed) && *draft != shown;
                     if done {
                         new = Some(match other {
                             Value::Str(_) => Value::Str(draft.clone()),
@@ -1597,6 +1632,108 @@ impl SettingsWindow {
         let value = new?;
         self.drafts.remove(&id);
         self.commit(section, &entry.key, Some(value))
+    }
+
+    /// Réglage d'un logiciel de développement (`[develop] darktable`…, 04/11/2026, idée
+    /// de l'utilisateur) : une liste Auto / Manuel / Désactivé, et dessous, selon le choix,
+    /// l'endroit où il a été trouvé au lancement, un chemin à taper ou choisir
+    /// (« Parcourir… », ouvert au dossier du logiciel trouvé, sinon à la racine), ou « …
+    /// désactivé ». Rend la réponse de la liste (focus) et la nouvelle valeur.
+    fn developer_editor(
+        &mut self,
+        ui: &mut Ui,
+        id: &(String, String),
+        value: &str,
+    ) -> (egui::Response, Option<Value>) {
+        let key = id.1.clone();
+        let Some(engine) = tri::develop::Engine::from_id(&key) else {
+            return (ui.label(value), None);
+        };
+        let found = self.found.iter().find(|f| f.engine == engine).cloned();
+        let before = DeveloperMode::of(value, self.manual.contains(&key));
+        let mut mode = before;
+        let mut new: Option<String> = None;
+        let response = ui
+            .vertical(|ui| {
+                let combo = egui::ComboBox::from_id_salt(("settings_developer", &key))
+                    .selected_text(mode.label())
+                    .show_ui(ui, |ui| {
+                        for m in DeveloperMode::ALL {
+                            ui.selectable_value(&mut mode, m, m.label());
+                        }
+                    });
+                if mode != before {
+                    self.manual.remove(&key);
+                    self.drafts.remove(id);
+                    new = match mode {
+                        DeveloperMode::Auto => Some("auto".into()),
+                        DeveloperMode::Off => Some(String::new()),
+                        // Le logiciel trouvé, pour partir de là ; sinon un chemin à donner.
+                        DeveloperMode::Manual => match &found {
+                            Some(f) => Some(f.path.as_ref().map_or_else(
+                                || "flatpak".to_string(),
+                                |p| p.to_string_lossy().into_owned(),
+                            )),
+                            None => {
+                                self.manual.insert(key.clone());
+                                None
+                            }
+                        },
+                    };
+                }
+                let value = new.clone().unwrap_or_else(|| value.to_string());
+                let value = value.as_str();
+                match mode {
+                    DeveloperMode::Auto => {
+                        let text = found.as_ref().map_or_else(
+                            || t!("settings-developer-not-found"),
+                            |f| f.location.clone(),
+                        );
+                        ui.add(egui::Label::new(RichText::new(text).weak().monospace()).truncate())
+                            .on_hover_text(t!("settings-developer-auto-tip"));
+                    }
+                    DeveloperMode::Off => {
+                        ui.weak(t!("settings-developer-disabled", name = engine.name()));
+                    }
+                    DeveloperMode::Manual => {
+                        ui.horizontal(|ui| {
+                            let draft = self.drafts.entry(id.clone()).or_insert(value.into());
+                            let field =
+                                ui.add(egui::TextEdit::singleline(draft).desired_width(360.0));
+                            if field.lost_focus() && draft != value {
+                                new = Some(draft.clone());
+                            }
+                            if !field.has_focus() && new.is_none() {
+                                *draft = value.into();
+                            }
+                            if ui.button(t!("settings-developer-browse")).clicked() {
+                                let start = browse_start(value, found.as_ref());
+                                if let Some(path) =
+                                    rfd::FileDialog::new().set_directory(start).pick_file()
+                                {
+                                    new = Some(path.to_string_lossy().into_owned());
+                                }
+                            }
+                        });
+                        let value = new.clone().unwrap_or_else(|| value.to_string());
+                        let missing = !value.is_empty()
+                            && value != "flatpak"
+                            && !tri::settings::expand_home(&value).is_file();
+                        if missing {
+                            ui.colored_label(
+                                ui.visuals().error_fg_color,
+                                t!("settings-developer-missing"),
+                            );
+                        }
+                    }
+                }
+                combo.response
+            })
+            .inner;
+        if new.is_some() {
+            self.drafts.remove(id);
+        }
+        (response, new.map(Value::Str))
     }
 
     /// Éditeur de `[sort] color_order` (idée de l'utilisateur, 31/10/2026) : à gauche,
@@ -1941,72 +2078,87 @@ mod tests {
     }
 
     #[test]
-    fn the_software_found_is_listed_with_its_place_and_can_be_switched_off() {
-        // Idée de l'utilisateur (04/11/2026) : des AppImage restées après une
-        // désinstallation gardaient les logiciels « installés ». La fenêtre montre ce qui a
-        // été trouvé, et où ; une case par logiciel trouvé le désactive.
+    fn each_development_software_is_auto_manual_or_disabled() {
+        // Idée de l'utilisateur (04/11/2026) : une liste par logiciel ; Auto dit où il a été
+        // trouvé, Manuel donne un chemin (Parcourir…), Désactivé le dit.
         use egui_kittest::kittest::Queryable;
         use tri::develop::{Engine, Found};
         crate::i18n::ensure();
+        assert_eq!(DeveloperMode::of("auto", false), DeveloperMode::Auto);
+        assert_eq!(DeveloperMode::of("", false), DeveloperMode::Off);
+        assert_eq!(DeveloperMode::of("", true), DeveloperMode::Manual);
+        assert_eq!(DeveloperMode::of("flatpak", false), DeveloperMode::Manual);
+        assert_eq!(
+            DeveloperMode::of("~/AppImages/x.AppImage", false),
+            DeveloperMode::Manual
+        );
         let dir = tempfile::tempdir().unwrap();
+        let program = dir.path().join("darktable-cli");
+        std::fs::write(&program, b"").unwrap();
+        let found = Found {
+            engine: Engine::Darktable,
+            location: program.display().to_string(),
+            path: Some(program.clone()),
+        };
+        assert_eq!(browse_start("", Some(&found)), dir.path());
+        assert_eq!(
+            browse_start("", None),
+            std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR),
+            "rien de trouvé : la racine"
+        );
         let path = dir.path().join("config.toml");
-        let place = "/home/moi/AppImages/darktable.AppImage darktable-cli";
+        std::fs::write(
+            &path,
+            "[develop]\nrapidraw = \"\"\nart = \"/nulle/part/ART-cli\"\n",
+        )
+        .unwrap();
         let mut w = SettingsWindow::open(&path)
             .unwrap()
             .with_engines(vec![Engine::Darktable])
-            .with_found(vec![Found {
-                engine: Engine::Darktable,
-                location: place.into(),
-                enabled: true,
-            }]);
-        assert!(!w.hidden("develop.enabled", "darktable"));
+            .with_found(vec![found]);
+        w.show_section("develop");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1400.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        let place = program.display().to_string();
         assert!(
-            w.hidden("develop.enabled", "rapidraw"),
-            "pas trouvé : pas de case"
+            h.query_by_label(&place).is_some(),
+            "darktable : où il a été trouvé"
         );
-        assert!(needs_restart("develop.enabled", "darktable"));
-        w.show_section("develop.enabled");
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1400.0, 1000.0))
-            .with_accessibility_check(false)
-            .build_ui_state(
-                |ui, w: &mut SettingsWindow| {
-                    w.show(ui.ctx());
-                },
-                w,
-            );
+        assert!(h.query_by_label("RapidRAW désactivé").is_some());
+        assert!(
+            h.query_by_label("Non trouvé au lancement.").is_some(),
+            "RawTherapee"
+        );
+        assert!(
+            h.query_by_label("Fichier introuvable.").is_some(),
+            "ART : chemin faux"
+        );
+        assert_eq!(
+            h.query_all_by_label("Parcourir…").count(),
+            1,
+            "ART seulement"
+        );
+        // Manuel : le chemin trouvé écrit dans le fichier.
+        assert!(!h.state().file.text().contains("darktable ="));
+        let read = h
+            .state_mut()
+            .commit("develop", "darktable", Some(Value::Str(place.clone())))
+            .expect("chemin accepté");
+        assert_eq!(read.develop.darktable, place);
         h.run_steps(2);
-        assert!(h.query_by_label(place).is_some(), "où il a été trouvé");
-        assert!(h.query_by_label("rapidraw").is_none());
-        h.get_by_role(egui::accesskit::Role::CheckBox).click();
-        h.run_steps(2);
-        let written = std::fs::read_to_string(&path).unwrap();
-        let settings: crate::settings::AppSettings = toml::from_str(&written).unwrap();
-        assert!(!settings.develop.enabled.darktable, "{written}");
-        assert!(settings.develop.enabled.rapidraw);
-        // Rien de trouvé : la section reste, avec la liste de ce qui est pris en charge.
-        let mut w = SettingsWindow::open(&path).unwrap();
-        let schema = schema();
-        let section = schema
-            .sections
-            .iter()
-            .find(|s| s.name == "develop.enabled")
-            .unwrap();
-        assert!(!w.section_hidden(section));
-        w.show_section("develop.enabled");
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1400.0, 1000.0))
-            .with_accessibility_check(false)
-            .build_ui_state(
-                |ui, w: &mut SettingsWindow| {
-                    w.show(ui.ctx());
-                },
-                w,
-            );
-        h.run_steps(2);
-        assert!(h.query_by_label_contains("Aucun logiciel").is_some());
-        assert!(h.query_by_label_contains("RawTherapee").is_some());
-        assert!(h.query_by_role(egui::accesskit::Role::CheckBox).is_none());
+        assert_eq!(
+            h.query_all_by_label("Parcourir…").count(),
+            2,
+            "darktable aussi"
+        );
     }
 
     #[test]

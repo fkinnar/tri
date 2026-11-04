@@ -17,6 +17,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
+# Fenêtre native de choix de fichier (« Parcourir… », 04/11/2026) : NSOpenPanel sur
+# macOS, portail XDG sous Linux (libdbus chargée à l'exécution), boîte de Windows. MIT.
+rfd = "0.17.2"
 
 [features]
 # Mêmes features que le moteur, transmises telles quelles.
