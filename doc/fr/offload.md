@@ -19,7 +19,9 @@ besoins de tous, pas seulement les siens.
   va dans la racine (`…/Sources/2026`) : retour du 17/10/2026, la proposition
   `AAAA/AAAA-MM-JJ_` mélangeait les deux, et restait vide pour une carte déjà
   déchargée. Un
-  `_` laissé seul en fin de nom est retiré. Le nom ne peut ni être absolu ni remonter
+  `_` laissé seul en fin de nom est retiré ; un nom **vide** décharge dans la racine même
+  (#281 : « décharger ici » dans un dossier qu'on vient de créer). Le nom ne peut ni être
+  absolu ni remonter
   (`..`) : on ne copie que sous la racine. Plus tard : gabarits (placeholders).
 - **Noms d'origine**, à plat : les sous-dossiers de la carte (`DCIM/100_FUJI`…) ne sont
   pas reproduits. Un nom déjà pris par un *autre* fichier reçoit un suffixe

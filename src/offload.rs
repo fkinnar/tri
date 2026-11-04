@@ -321,13 +321,17 @@ fn utc_date(t: SystemTime) -> String {
 }
 
 /// Dossier de destination : `root` / `folder`, sans `_` ni espaces en fin de nom (un
-/// suffixe proposé mais laissé vide). Erreur si `folder` est vide, absolu, ou remonte
-/// (`..`) : on ne copie que sous la racine.
+/// suffixe proposé mais laissé vide) ; vide : `root` lui-même. Erreur si `folder` est
+/// absolu ou remonte (`..`) : on ne copie que sous la racine.
 pub fn destination(root: &Path, folder: &str) -> io::Result<PathBuf> {
     let folder = folder.trim().trim_end_matches(['_', ' ', '-']);
+    // Sans dossier de séance : dans la racine même (#281 : « décharger ici » dans un
+    // dossier qu'on vient de créer).
+    if folder.is_empty() {
+        return Ok(root.to_path_buf());
+    }
     let relative = Path::new(folder);
-    let invalid = folder.is_empty()
-        || relative.is_absolute()
+    let invalid = relative.is_absolute()
         || relative
             .components()
             .any(|c| !matches!(c, std::path::Component::Normal(_)));
@@ -626,7 +630,14 @@ mod tests {
             PathBuf::from("/photos/2026/2026-10-16"),
             "suffixe laissé vide"
         );
-        for bad in ["", "  ", "../ailleurs", "/abs", "a/../../b"] {
+        for empty in ["", "  ", "_"] {
+            assert_eq!(
+                destination(root, empty).unwrap(),
+                PathBuf::from("/photos"),
+                "sans dossier de séance : la racine (#281)"
+            );
+        }
+        for bad in ["../ailleurs", "/abs", "a/../../b"] {
             assert!(destination(root, bad).is_err(), "« {bad} »");
         }
     }
