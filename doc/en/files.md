@@ -87,8 +87,18 @@ Launched programs are not waited for; a thread reaps their exit (no zombie proce
 | `editor` | `[]` | program then arguments, `{files}` replaced by the files (appended at the end otherwise); empty: default application |
 | `allow_actions` | `false` | the interface may rename, copy, move and delete images and folders |
 
-Editor examples: `["darktable"]`, `["open", "-a", "darktable"]` (macOS),
-`["gimp", "{files}"]`.
+Editor examples: `["darktable"]`, `["/Applications/darktable.app"]` (macOS: a `.app`
+application is opened through `open -a`, its arguments after `--args`),
+`["gimp", "{files}"]`; `{file}` is the same as `{files}`.
+
+**In the settings window** (2026-11-04, the user's idea: a TOML list to type was not for
+everyone): "System application" (empty list; below, for information, the one the system
+picks for a RAW and a flat image of the open folder, `files::default_app`: `NSWorkspace`
+on macOS, `xdg-mime` and the `Name=` of the `.desktop` launcher on Linux, nothing on
+Windows for now) or "Other application": a program (Browse…, opened in the applications
+folder) and its arguments on one line (`split_args` / `join_args`, quotes for an argument
+with spaces), `{files}` by default; "Program not found" if neither the path nor the
+`PATH` knows it.
 
 **Actions forbidden by default** (user's choice, 2026-10-30). A development software
 (darktable, Lightroom, Capture One…) keeps images in its library or catalogue and expects

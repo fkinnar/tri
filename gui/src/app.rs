@@ -13116,11 +13116,32 @@ impl TriApp {
                 self.settings_window = Some(
                     w.with_engines(self.developers.engines())
                         .with_found(self.developers.found())
+                        .with_default_apps(self.default_apps())
                         .with_colors(self.gui.colors.clone()),
                 );
             }
             Err(e) => self.file_error = Some(e),
         }
+    }
+
+    /// Application du système pour un RAW et une image plate du dossier ouvert (« RAF »,
+    /// « darktable »), pour la fenêtre de réglages ; rien pour un type absent du dossier.
+    fn default_apps(&self) -> Vec<(String, String)> {
+        let mut apps = Vec::new();
+        for kind in [MediaKind::Raw, MediaKind::Flat] {
+            let Some(file) = self.files.iter().find(|f| f.kind == kind) else {
+                continue;
+            };
+            let source = tri::media::source(&file.path).into_owned();
+            let ext = source
+                .extension()
+                .map(|e| e.to_string_lossy().to_uppercase())
+                .unwrap_or_default();
+            if let Some(app) = tri::files::default_app(&source) {
+                apps.push((ext, app));
+            }
+        }
+        apps
     }
 
     fn settings_window(&mut self, ctx: &egui::Context) {

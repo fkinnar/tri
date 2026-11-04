@@ -79,6 +79,59 @@ impl DeveloperMode {
     }
 }
 
+/// La commande de `[files] editor` lue dans le fichier (liste TOML de chaînes).
+fn editor_list(value: &Value) -> Vec<String> {
+    #[derive(serde::Deserialize)]
+    struct Wrap {
+        v: Vec<String>,
+    }
+    match value {
+        Value::Strings(list) => list.clone(),
+        Value::Toml(text) => toml::from_str::<Wrap>(&format!("v = {text}"))
+            .map(|w| w.v)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+/// Le programme de l'éditeur existe : un chemin (ou une application macOS), ou un nom
+/// trouvé dans le `PATH`.
+fn program_exists(program: &str) -> bool {
+    let path = tri::settings::expand_home(program);
+    if path.components().count() > 1 {
+        return path.exists();
+    }
+    std::env::var_os("PATH").is_some_and(|dirs| {
+        std::env::split_paths(&dirs)
+            .any(|d| d.join(program).is_file() || d.join(format!("{program}.exe")).is_file())
+    })
+}
+
+/// Dossier où « Parcourir… » s'ouvre pour l'éditeur : celui du programme choisi, sinon
+/// celui des applications du système.
+fn program_start(program: &str) -> std::path::PathBuf {
+    let given = tri::settings::expand_home(program);
+    if let Some(dir) = given
+        .parent()
+        .filter(|d| d.is_dir() && !d.as_os_str().is_empty())
+    {
+        return dir.to_path_buf();
+    }
+    let usual = if cfg!(target_os = "macos") {
+        "/Applications"
+    } else if cfg!(windows) {
+        r"C:\Program Files"
+    } else {
+        "/usr/bin"
+    };
+    let usual = std::path::PathBuf::from(usual);
+    if usual.is_dir() {
+        usual
+    } else {
+        std::path::PathBuf::from(std::path::MAIN_SEPARATOR_STR)
+    }
+}
+
 /// Dossier où « Parcourir… » s'ouvre : celui du chemin donné, sinon celui du logiciel
 /// trouvé au lancement, sinon la racine.
 fn browse_start(value: &str, found: Option<&tri::develop::Found>) -> std::path::PathBuf {
@@ -355,8 +408,12 @@ pub struct SettingsWindow {
     /// Textes en cours de saisie (texte, liste TOML), écrits à la validation (Entrée ou
     /// focus perdu), par (section, clé).
     drafts: HashMap<(String, String), String>,
-    /// Logiciels passés en Manuel sans chemin encore choisi (le fichier garde `""`).
+    /// Logiciels passés en Manuel sans chemin encore choisi (le fichier garde `""`) ;
+    /// `"editor"` : éditeur externe passé en « Autre application », pas encore choisi.
     manual: std::collections::HashSet<String>,
+    /// Application du système par type d'image du dossier ouvert (« RAF », « darktable »),
+    /// pour information sous l'éditeur externe.
+    default_apps: Vec<(String, String)>,
     /// Champs de chemin (complétion par Tab), par (section, clé).
     paths: HashMap<(String, String), crate::path_field::PathField>,
     /// Dernière erreur de validation, par (section, clé).
@@ -433,6 +490,13 @@ impl SettingsWindow {
         self
     }
 
+    /// Application du système par type d'image du dossier ouvert, montrée sous l'éditeur
+    /// externe en mode « Application du système ».
+    pub fn with_default_apps(mut self, apps: Vec<(String, String)>) -> SettingsWindow {
+        self.default_apps = apps;
+        self
+    }
+
     pub fn with_engines(mut self, engines: Vec<tri::develop::Engine>) -> SettingsWindow {
         self.engines = engines;
         self
@@ -470,6 +534,7 @@ impl SettingsWindow {
             fresh: true,
             drafts: HashMap::new(),
             manual: Default::default(),
+            default_apps: Vec::new(),
             paths: HashMap::new(),
             errors: HashMap::new(),
             dirty: false,
@@ -1531,6 +1596,13 @@ impl SettingsWindow {
                         new = Some(Value::Str(v));
                     }
                 }
+                // Éditeur externe (04/11/2026, idée de l'utilisateur : une liste TOML à
+                // taper, trop technique) : application du système, ou une autre choisie.
+                value if section == "files" && entry.key == "editor" => {
+                    let (r, changed) = self.editor_editor(ui, value);
+                    widget = Some(r);
+                    new = changed;
+                }
                 // Logiciel de développement (04/11/2026, idée de l'utilisateur) : Auto
                 // (et où il a été trouvé), Manuel (un chemin, Parcourir…) ou Désactivé.
                 Value::Str(s)
@@ -1632,6 +1704,133 @@ impl SettingsWindow {
         let value = new?;
         self.drafts.remove(&id);
         self.commit(section, &entry.key, Some(value))
+    }
+
+    /// `[files] editor` (04/11/2026, idée de l'utilisateur) : « Application du système »
+    /// (liste vide ; dessous, celle que le système choisit pour les types d'images du
+    /// dossier) ou « Autre application » : un programme (Parcourir…) et ses arguments,
+    /// `{files}` par défaut. Rend la réponse de la liste (focus) et la nouvelle valeur.
+    fn editor_editor(&mut self, ui: &mut Ui, value: &Value) -> (egui::Response, Option<Value>) {
+        let list = editor_list(value);
+        let key = "editor".to_string();
+        let system = list.is_empty() && !self.manual.contains(&key);
+        let mut other = !system;
+        let mut new: Option<Vec<String>> = None;
+        let program_id = ("files".to_string(), "editor/program".to_string());
+        let args_id = ("files".to_string(), "editor/args".to_string());
+        let response = ui
+            .vertical(|ui| {
+                let label = |other: bool| {
+                    if other {
+                        t!("settings-editor-other")
+                    } else {
+                        t!("settings-editor-system")
+                    }
+                };
+                let combo = egui::ComboBox::from_id_salt("settings_editor")
+                    .selected_text(label(other))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut other, false, label(false));
+                        ui.selectable_value(&mut other, true, label(true));
+                    });
+                if other == system {
+                    self.drafts.remove(&program_id);
+                    self.drafts.remove(&args_id);
+                    if other {
+                        self.manual.insert(key.clone());
+                    } else {
+                        self.manual.remove(&key);
+                        new = Some(Vec::new());
+                    }
+                }
+                if !other {
+                    let text = if self.default_apps.is_empty() {
+                        t!("settings-editor-system-tip")
+                    } else {
+                        let apps: Vec<String> = self
+                            .default_apps
+                            .iter()
+                            .map(|(kind, app)| format!("{kind} : {app}"))
+                            .collect();
+                        t!("settings-editor-system-apps", apps = apps.join(" · "))
+                    };
+                    ui.weak(text);
+                    return combo.response;
+                }
+                let (program, args) = match list.split_first() {
+                    Some((p, a)) => (p.clone(), a.to_vec()),
+                    None => (String::new(), Vec::new()),
+                };
+                let args = if args.is_empty() {
+                    vec!["{files}".to_string()]
+                } else {
+                    args
+                };
+                let shown_args = tri::files::join_args(&args);
+                ui.horizontal(|ui| {
+                    ui.label(t!("settings-editor-program"));
+                    let draft = self
+                        .drafts
+                        .entry(program_id.clone())
+                        .or_insert(program.clone());
+                    let field = ui.add(egui::TextEdit::singleline(draft).desired_width(300.0));
+                    if field.lost_focus() && *draft != program && !draft.trim().is_empty() {
+                        new = Some(
+                            std::iter::once(draft.trim().to_string())
+                                .chain(args.iter().cloned())
+                                .collect(),
+                        );
+                    }
+                    if !field.has_focus() && new.is_none() {
+                        *draft = program.clone();
+                    }
+                    if ui.button(t!("settings-developer-browse")).clicked()
+                        && let Some(path) = rfd::FileDialog::new()
+                            .set_directory(program_start(&program))
+                            .pick_file()
+                    {
+                        new = Some(
+                            std::iter::once(path.to_string_lossy().into_owned())
+                                .chain(args.iter().cloned())
+                                .collect(),
+                        );
+                    }
+                });
+                if !program.is_empty() && !program_exists(&program) {
+                    ui.colored_label(ui.visuals().error_fg_color, t!("settings-editor-missing"));
+                }
+                ui.horizontal(|ui| {
+                    ui.label(t!("settings-editor-args"));
+                    let draft = self
+                        .drafts
+                        .entry(args_id.clone())
+                        .or_insert(shown_args.clone());
+                    let field = ui
+                        .add(egui::TextEdit::singleline(draft).desired_width(300.0))
+                        .on_hover_text(t!("settings-editor-args-tip"));
+                    if field.lost_focus() && *draft != shown_args && !program.is_empty() {
+                        new = Some(
+                            std::iter::once(program.clone())
+                                .chain(tri::files::split_args(draft))
+                                .collect(),
+                        );
+                    }
+                    if !field.has_focus() && new.is_none() {
+                        *draft = shown_args.clone();
+                    }
+                });
+                ui.weak(t!("settings-editor-args-tip"));
+                combo.response
+            })
+            .inner;
+        if new.as_ref().is_some_and(|l| !l.is_empty()) {
+            self.manual.remove(&key);
+        }
+        if new.is_some() {
+            self.drafts.remove(&program_id);
+            self.drafts.remove(&args_id);
+        }
+        (response, new.map(Value::Strings))
     }
 
     /// Réglage d'un logiciel de développement (`[develop] darktable`…, 04/11/2026, idée
@@ -2159,6 +2358,70 @@ mod tests {
             2,
             "darktable aussi"
         );
+    }
+
+    #[test]
+    fn the_external_editor_is_the_system_one_or_another_chosen() {
+        // Idée de l'utilisateur (04/11/2026) : plus de liste TOML à taper ; l'application
+        // du système par défaut (et laquelle, pour information), ou une autre choisie par
+        // Parcourir…, avec `{files}` déjà en argument.
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        assert_eq!(editor_list(&Value::Toml("[]".into())), Vec::<String>::new());
+        assert_eq!(
+            editor_list(&Value::Toml(r#"["gimp", "{files}"]"#.into())),
+            ["gimp", "{files}"]
+        );
+        assert!(!program_exists("/nulle/part/gimp"));
+        assert!(!program_exists("pas-un-programme-connu"));
+        assert!(program_start("").is_dir());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path)
+            .unwrap()
+            .with_default_apps(vec![("RAF".into(), "darktable".into())]);
+        w.show_section("files");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1400.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("RAF : darktable").is_some());
+        assert!(
+            h.query_by_label("Programme").is_none(),
+            "système : rien à taper"
+        );
+        // « Autre application » : le programme à choisir, `{files}` déjà là.
+        h.state_mut().manual.insert("editor".into());
+        h.run_steps(2);
+        assert!(h.query_by_label("Programme").is_some());
+        assert_eq!(
+            h.state()
+                .drafts
+                .get(&("files".to_string(), "editor/args".to_string()))
+                .map(String::as_str),
+            Some("{files}"),
+            "argument par défaut"
+        );
+        let read = h
+            .state_mut()
+            .commit(
+                "files",
+                "editor",
+                Some(Value::Strings(vec![
+                    "/nulle/part/gimp".into(),
+                    "{files}".into(),
+                ])),
+            )
+            .expect("accepté");
+        assert_eq!(read.files.editor, ["/nulle/part/gimp", "{files}"]);
+        h.run_steps(2);
+        assert!(h.query_by_label("Programme introuvable.").is_some());
     }
 
     #[test]

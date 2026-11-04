@@ -2,8 +2,9 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-## Unreleased
-
+- **External editor easier to set**: "System application" (the one the system picks for
+  each image type, named in the settings) or "Other application", chosen with
+  "Browse…", with `{files}` already as argument.
 - **Notes on the image**: same frame and principle as the position mark, display time and
   place adjustable (`[gui.notes]`), bottom bar shown or not; at the same place, the mark
   goes next to the notes. In full screen, the folder panel icon is greyed out (it only exists in the grid).

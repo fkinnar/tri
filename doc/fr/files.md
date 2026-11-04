@@ -89,8 +89,19 @@ zombie).
 | `editor` | `[]` | programme puis arguments, `{files}` remplacé par les fichiers (ajoutés à la fin sinon) ; vide : application par défaut |
 | `allow_actions` | `false` | l'interface peut renommer, copier, déplacer et supprimer images et dossiers |
 
-Exemples d'éditeur : `["darktable"]`, `["open", "-a", "darktable"]` (macOS),
-`["gimp", "{files}"]`.
+Exemples d'éditeur : `["darktable"]`, `["/Applications/darktable.app"]` (macOS : une
+application `.app` est ouverte par `open -a`, ses arguments après `--args`),
+`["gimp", "{files}"]` ; `{file}` vaut `{files}`.
+
+**Dans la fenêtre de réglages** (04/11/2026, idée de l'utilisateur : une liste TOML à
+taper n'était pas pour tout le monde) : « Application du système » (liste vide ; dessous,
+pour information, celle que le système choisit pour un RAW et une image plate du dossier
+ouvert, `files::default_app` : `NSWorkspace` sous macOS, `xdg-mime` et le `Name=` du
+lanceur `.desktop` sous Linux, rien sous Windows pour l'instant) ou « Autre application » :
+un programme (Parcourir…, ouvert dans le dossier des applications) et ses arguments sur
+une ligne (`split_args` / `join_args`, guillemets pour un argument avec espaces),
+`{files}` par défaut ; « Programme introuvable » si ni le chemin ni le `PATH` ne le
+connaissent.
 
 **Actions interdites par défaut** (choix de l'utilisateur, 30/10/2026). Un logiciel de
 développement (darktable, Lightroom, Capture One…) range les images dans sa

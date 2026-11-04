@@ -29,10 +29,12 @@ pub struct FileSettings {
     pub pairs: bool,
     /// Supprimer = mettre à la corbeille (récupérable) ; `false` : suppression définitive.
     pub trash: bool,
-    /// Éditeur externe : programme puis arguments ; `{files}` est remplacé par les
-    /// fichiers (ajoutés à la fin sans `{files}`). Vide : application par défaut du
-    /// système (`open`, `xdg-open`, `start`). Ex. `["darktable"]`, ou sur macOS
-    /// `["open", "-a", "darktable"]`.
+    /// Éditeur externe : programme puis arguments ; `{files}` (ou `{file}`) est remplacé
+    /// par les fichiers (ajoutés à la fin sans lui). Vide : application par défaut du
+    /// système (`open`, `xdg-open`, `start`), selon le type de fichier. Ex. `["darktable"]`,
+    /// une application macOS (`["/Applications/darktable.app"]`, ouverte par `open -a`).
+    /// La fenêtre de réglages le présente comme « Application du système » ou « Autre
+    /// application » (programme, Parcourir…, arguments).
     pub editor: Vec<String>,
     /// Copier / déplacer vers… : nombre de destinations récentes proposées.
     pub recent: usize,
@@ -1267,10 +1269,21 @@ pub fn editor_command(editor: &[String], files: &[PathBuf]) -> Vec<Command> {
     let Some((program, args)) = editor.split_first() else {
         return files.iter().map(|f| default_opener(f)).collect();
     };
+    // Une application macOS (`.app`, choisie par Parcourir…) : `open -a`, qui lui passe
+    // les fichiers (et ses propres arguments après `--args`).
+    if is_app_bundle(Path::new(program)) {
+        let mut command = crate::process::command("open");
+        command.arg("-a").arg(program).args(files);
+        let extra: Vec<&String> = args.iter().filter(|a| !is_files_placeholder(a)).collect();
+        if !extra.is_empty() {
+            command.arg("--args").args(extra);
+        }
+        return vec![command];
+    }
     let mut command = crate::process::command(program);
     let mut placed = false;
     for arg in args {
-        if arg == "{files}" {
+        if is_files_placeholder(arg) {
             command.args(files);
             placed = true;
         } else {
@@ -1281,6 +1294,152 @@ pub fn editor_command(editor: &[String], files: &[PathBuf]) -> Vec<Command> {
         command.args(files);
     }
     vec![command]
+}
+
+/// `{files}`, ou `{file}` (plus naturel pour une image), remplacé par les fichiers.
+fn is_files_placeholder(arg: &str) -> bool {
+    arg == "{files}" || arg == "{file}"
+}
+
+/// Une application macOS (dossier `.app`).
+fn is_app_bundle(path: &Path) -> bool {
+    cfg!(target_os = "macos")
+        && path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("app"))
+}
+
+/// Arguments tapés sur une ligne (`--fenetre "Mon dossier" {files}`) : séparés par les
+/// espaces, guillemets simples ou doubles pour un argument qui en contient.
+pub fn split_args(line: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut started = false;
+    for c in line.chars() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), c) => current.push(c),
+            (None, '"' | '\'') => {
+                quote = Some(c);
+                started = true;
+            }
+            (None, c) if c.is_whitespace() => {
+                if started {
+                    args.push(std::mem::take(&mut current));
+                    started = false;
+                }
+            }
+            (None, c) => {
+                current.push(c);
+                started = true;
+            }
+        }
+    }
+    if started {
+        args.push(current);
+    }
+    args
+}
+
+/// Arguments sur une ligne, relisible par [`split_args`] (guillemets autour de ceux qui
+/// contiennent un espace ou sont vides).
+pub fn join_args(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            if a.is_empty() || a.contains(char::is_whitespace) || a.contains('"') {
+                if a.contains('"') {
+                    format!("'{a}'")
+                } else {
+                    format!("\"{a}\"")
+                }
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Nom de l'application qui ouvre `file` par défaut sur ce système (« Aperçu »,
+/// « darktable »), pour information dans la fenêtre de réglages (04/11/2026) ; `None` si
+/// le système ne le dit pas (Windows pour l'instant).
+pub fn default_app(file: &Path) -> Option<String> {
+    default_app_impl(file)
+}
+
+#[cfg(target_os = "macos")]
+fn default_app_impl(file: &Path) -> Option<String> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSString, NSURL};
+    let absolute = std::path::absolute(file).ok()?;
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&absolute.to_string_lossy()));
+    let app = NSWorkspace::sharedWorkspace().URLForApplicationToOpenURL(&url)?;
+    let path = app.path()?;
+    // Nom affiché par le Finder, traduit (« Aperçu » plutôt que « Preview »).
+    let shown = objc2_foundation::NSFileManager::defaultManager().displayNameAtPath(&path);
+    let shown = shown.to_string();
+    Some(shown.strip_suffix(".app").unwrap_or(&shown).to_string())
+}
+
+/// Sous Linux : `xdg-mime` donne le type du fichier puis le lanceur (`.desktop`) qui
+/// l'ouvre ; son nom (`Name=`) est lu dans les dossiers d'applications habituels.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn default_app_impl(file: &Path) -> Option<String> {
+    let query = |args: &[&std::ffi::OsStr]| -> Option<String> {
+        let out = crate::process::command("xdg-mime")
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (out.status.success() && !text.is_empty()).then_some(text)
+    };
+    let mime = query(&["query".as_ref(), "filetype".as_ref(), file.as_os_str()])?;
+    let desktop = query(&["query".as_ref(), "default".as_ref(), mime.as_ref()])?;
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home.as_ref().map(|h| h.join(".local/share")));
+    let data_dirs =
+        std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
+    let mut dirs: Vec<PathBuf> = data_home.into_iter().collect();
+    dirs.extend(
+        data_dirs
+            .split(':')
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from),
+    );
+    dirs.push(PathBuf::from("/var/lib/flatpak/exports/share"));
+    if let Some(h) = &home {
+        dirs.push(h.join(".local/share/flatpak/exports/share"));
+    }
+    let name = dirs
+        .iter()
+        .filter_map(|d| std::fs::read_to_string(d.join("applications").join(&desktop)).ok())
+        .find_map(|text| desktop_name(&text));
+    Some(name.unwrap_or_else(|| desktop.trim_end_matches(".desktop").to_string()))
+}
+
+#[cfg(windows)]
+fn default_app_impl(_file: &Path) -> Option<String> {
+    None
+}
+
+/// Le `Name=` de la section `[Desktop Entry]` d'un lanceur `.desktop`.
+#[cfg_attr(any(target_os = "macos", windows), allow(dead_code))]
+fn desktop_name(text: &str) -> Option<String> {
+    let mut in_entry = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_entry = line == "[Desktop Entry]";
+        } else if in_entry && let Some(name) = line.strip_prefix("Name=") {
+            return Some(name.trim().to_string());
+        }
+    }
+    None
 }
 
 fn default_opener(file: &Path) -> Command {
@@ -1970,8 +2129,56 @@ mod tests {
             args(&editor_command(&editor, &files)[0]),
             ["a.RAF", "b.RAF", "--fin"]
         );
+        // `{file}` vaut `{files}` (plus naturel pour une image).
+        let editor = vec!["ed".to_string(), "--debut".into(), "{file}".into()];
+        assert_eq!(
+            args(&editor_command(&editor, &files)[0]),
+            ["--debut", "a.RAF", "b.RAF"]
+        );
         // Sans éditeur : l'application par défaut, une commande par fichier.
         assert_eq!(editor_command(&[], &files).len(), 2);
+        // Une application macOS : `open -a`, ses arguments après `--args`.
+        if cfg!(target_os = "macos") {
+            let editor = vec![
+                "/Applications/darktable.app".to_string(),
+                "{files}".into(),
+                "--x".into(),
+            ];
+            let c = &editor_command(&editor, &files)[0];
+            assert_eq!(c.get_program(), "open");
+            assert_eq!(
+                args(c),
+                [
+                    "-a",
+                    "/Applications/darktable.app",
+                    "a.RAF",
+                    "b.RAF",
+                    "--args",
+                    "--x"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn arguments_are_split_and_joined_back() {
+        let line = r#"--fenetre "Mon dossier" {files} 'dit "oui"'"#;
+        let args = split_args(line);
+        assert_eq!(
+            args,
+            ["--fenetre", "Mon dossier", "{files}", r#"dit "oui""#]
+        );
+        assert_eq!(split_args(&join_args(&args)), args);
+        assert_eq!(split_args("  {file}  "), ["{file}"]);
+        assert!(split_args("").is_empty());
+        assert_eq!(split_args(r#"a """#), ["a", ""], "argument vide");
+    }
+
+    #[test]
+    fn a_desktop_file_gives_its_name() {
+        let text = "[Desktop Entry]\nType=Application\nName=darktable\nName[fr]=x\n\n[Desktop Action New]\nName=Autre\n";
+        assert_eq!(desktop_name(text).as_deref(), Some("darktable"));
+        assert_eq!(desktop_name("[Desktop Action New]\nName=Autre\n"), None);
     }
 
     #[test]
