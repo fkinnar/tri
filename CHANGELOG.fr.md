@@ -4,6 +4,10 @@
 
 ## À venir
 
+- **Plein écran, mode pile** : dans une rafale, une photo avec des développements ne
+  bloque plus la navigation ; après son dernier développement, → passe à la photo
+  suivante de la rafale (← à la précédente). Le repère de position a une ombre plus
+  discrète.
 - **Décharger sans sous-dossier** (#281) : un dossier de séance laissé vide décharge
   directement dans le dossier racine (« décharger ici » dans un dossier qu'on vient de
   créer).
