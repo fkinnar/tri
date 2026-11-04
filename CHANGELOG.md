@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Full screen, stack mode**: in a burst, a photo with developments no longer blocks
+  browsing; after its last development, → goes to the next photo of the burst (← to the
+  previous one). The position mark has a subtler shadow.
 - **Offload without a subfolder** (#281): a session folder left empty offloads straight
   into the root folder ("offload here" into a folder just created).
 - **Centred dialogs** (#282): ejecting a device and "Develop with…" (right-click on a

@@ -6305,12 +6305,24 @@ impl TriApp {
                     Some(StackKind::Developments(r)) => {
                         let len = r.len() as isize;
                         let at = (self.selected - r.start) as isize + step;
-                        let at = if wrap {
-                            at.rem_euclid(len)
-                        } else {
-                            at.clamp(0, len - 1)
-                        };
-                        self.show_development(r.start + at as usize);
+                        // La photo fait partie d'une rafale : au bout de ses développements,
+                        // la photo d'à côté de la rafale (retour du 04/11/2026 : on restait
+                        // bloqué sur le dernier développement).
+                        let burst = self
+                            .stacks
+                            .range_of(self.selected)
+                            .filter(|b| b.len() > r.len())
+                            .is_some();
+                        if (0..len).contains(&at) {
+                            self.show_development(r.start + at as usize);
+                        } else if burst {
+                            let from = if step > 0 { r.end - 1 } else { r.start };
+                            if let Some(i) = self.stacks.step_in_stack(from, step, wrap) {
+                                self.select(i);
+                            }
+                        } else if wrap {
+                            self.show_development(r.start + at.rem_euclid(len) as usize);
+                        }
                     }
                     _ => {
                         if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
@@ -7722,15 +7734,25 @@ impl TriApp {
             .interactable(false)
             .show(ctx, |ui| {
                 ui.set_opacity(opacity);
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    // Sur une ligne, quelle que soit la place.
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
-                        )
-                        .extend(),
-                    );
-                });
+                // Ombre discrète (retour du 04/11/2026 : celle des boîtes le détachait trop
+                // de l'image).
+                let shadow = egui::epaint::Shadow {
+                    offset: [0, 1],
+                    blur: 4,
+                    spread: 0,
+                    color: Color32::from_black_alpha(60),
+                };
+                egui::Frame::popup(ui.style())
+                    .shadow(shadow)
+                    .show(ui, |ui| {
+                        // Sur une ligne, quelle que soit la place.
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                            )
+                            .extend(),
+                        );
+                    });
             });
     }
 
@@ -15374,6 +15396,71 @@ mod tests {
         assert_eq!(selected_name(&h), "img0@dt-02.jpg");
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
+    fn full_screen_stack_browsing_goes_through_developments_to_the_next_photo() {
+        // Retour du 04/11/2026 : dans une rafale, la photo 2 avec deux développements ;
+        // → arrivait sur ses développements puis restait bloqué sur le dernier.
+        let ramp = |tint: u8| {
+            image::RgbImage::from_fn(64, 48, |x, _| {
+                let v = (x * 255 / 63) as u8;
+                image::Rgb([v.saturating_sub(tint), v, v])
+            })
+        };
+        let images = vec![
+            ("a1.jpg", ramp(0)),
+            ("a2.jpg", ramp(3)),
+            ("a3.jpg", ramp(6)),
+        ];
+        let (mut h, dir) = harness_images(images);
+        let photos = dir.path().join("photos");
+        for name in ["a2_01.jpg.xmp", "a2_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().stacking = true;
+        h.state_mut().settings.similarity.background = true;
+        let files = h.state().files.clone();
+        let preview = tri::preview::Settings::default();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        for f in &files {
+            let sig = tri::preview::compute_signature(f, &preview, &cancel).unwrap();
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(3);
+        assert_eq!(h.state().stacks.count(), 1, "une rafale");
+        h.state_mut().metadata_panel = false;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        // Au début de la rafale.
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, Action::StackFirst);
+        h.run_steps(2);
+        let mut seen = vec![selected_name(&h)];
+        assert_eq!(seen[0], "a1.jpg");
+        for _ in 0..6 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            seen.push(selected_name(&h));
+        }
+        assert!(seen.contains(&"a2@dt-02.jpg".to_string()), "{seen:?}");
+        assert!(
+            seen.contains(&"a3.jpg".to_string()),
+            "pas bloqué : {seen:?}"
+        );
+        // Et en revenant : de a3 aux développements de a2, puis a1.
+        let mut back = Vec::new();
+        for _ in 0..6 {
+            press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+            back.push(selected_name(&h));
+        }
+        assert!(back.contains(&"a1.jpg".to_string()), "{back:?}");
     }
 
     #[test]
