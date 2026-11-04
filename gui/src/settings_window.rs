@@ -39,6 +39,12 @@ fn schema() -> &'static Schema {
     }
 }
 
+/// Les logiciels de développement que `tri` sait utiliser, à la suite (« darktable,
+/// RapidRAW, … »).
+fn supported_software() -> String {
+    tri::develop::Engine::ALL.map(|e| e.name()).join(", ")
+}
+
 /// Vrai si `section`.`key` n'est relu qu'au lancement : le moteur (aperçus, cache, calculs,
 /// emplacements) tourne déjà avec ses réglages ; la taille de la fenêtre ne sert qu'à
 /// l'ouverture.
@@ -54,6 +60,9 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
             | "similarity"
             | "places"
             | "data"
+            // Logiciels de développement : cherchés au lancement.
+            | "develop"
+            | "develop.enabled"
     ) || (section, key) == ("gui", "window")
 }
 
@@ -288,6 +297,8 @@ pub struct SettingsWindow {
     file: ConfigFile,
     /// Logiciels de développement installés, pour la liste de `[develop] default`.
     engines: Vec<tri::develop::Engine>,
+    /// Logiciels trouvés au lancement, désactivés compris (`[develop.enabled]`).
+    found: Vec<tri::develop::Found>,
     /// Couleurs du thème, pour les pastilles de `[sort] color_order`.
     colors: Colors,
     /// Section affichée (sans recherche).
@@ -367,6 +378,13 @@ pub enum Outcome {
 
 impl SettingsWindow {
     /// Logiciels de développement installés (ceux que propose `[develop] default`).
+    /// Logiciels trouvés au lancement ([`tri::develop::Developers::found`]) : où chacun l'a
+    /// été, sous sa case de `[develop.enabled]` ; un logiciel absent n'y a pas de case.
+    pub fn with_found(mut self, found: Vec<tri::develop::Found>) -> SettingsWindow {
+        self.found = found;
+        self
+    }
+
     pub fn with_engines(mut self, engines: Vec<tri::develop::Engine>) -> SettingsWindow {
         self.engines = engines;
         self
@@ -386,6 +404,7 @@ impl SettingsWindow {
         let (keymap, key_warnings) = settings.keymap();
         Ok(SettingsWindow {
             engines: Vec::new(),
+            found: Vec::new(),
             colors: Colors::default(),
             keymap,
             key_warnings,
@@ -532,6 +551,9 @@ impl SettingsWindow {
     fn hidden(&self, section: &str, key: &str) -> bool {
         use tri::develop::Engine;
         let missing = |e: Engine| !self.engines.contains(&e);
+        if section == "develop.enabled" {
+            return Engine::from_id(key).is_none_or(|e| !self.found.iter().any(|f| f.engine == e));
+        }
         if NEED_A_DEVELOPER.contains(&(section, key)) {
             return self.engines.is_empty();
         }
@@ -544,9 +566,24 @@ impl SettingsWindow {
             .is_some_and(missing)
     }
 
+    /// Où a été trouvé le logiciel de la case `section`.`key` de `[develop.enabled]`.
+    fn found_at(&self, section: &str, key: &str) -> Option<&str> {
+        let engine = (section == "develop.enabled")
+            .then(|| tri::develop::Engine::from_id(key))
+            .flatten()?;
+        self.found
+            .iter()
+            .find(|f| f.engine == engine)
+            .map(|f| f.location.as_str())
+    }
+
     /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
     /// la liste.
     fn section_hidden(&self, section: &tri::config_edit::Section) -> bool {
+        // Logiciels trouvés : toujours là, un message quand il n'y en a aucun.
+        if section.name == "develop.enabled" {
+            return false;
+        }
         let mut entries = section.groups.iter().flat_map(|g| &g.entries).peekable();
         entries.peek().is_some() && entries.all(|e| self.hidden(&section.name, &e.key))
     }
@@ -1022,6 +1059,10 @@ impl SettingsWindow {
             if section.name == "keys" {
                 return self.keys_entries(ui, None);
             }
+            // Rien de trouvé : la section reste, pour dire ce que `tri` sait utiliser.
+            if section.name == "develop.enabled" && self.found.is_empty() {
+                ui.label(t!("settings-found-none", list = supported_software()));
+            }
         }
         for group in &section.groups {
             let entries: Vec<&Entry> = group
@@ -1394,6 +1435,13 @@ impl SettingsWindow {
                         new = Some(Value::Bool(v));
                     }
                     widget = Some(r);
+                    // Logiciel trouvé : où, pour information (pas modifiable ici).
+                    if let Some(found) = self.found_at(section, &entry.key) {
+                        ui.add(
+                            egui::Label::new(RichText::new(found).weak().monospace()).truncate(),
+                        )
+                        .on_hover_text(t!("settings-found-tip"));
+                    }
                 }
                 Value::Int(i) => {
                     let mut v = *i;
@@ -1890,6 +1938,75 @@ mod tests {
                 engine.id()
             );
         }
+    }
+
+    #[test]
+    fn the_software_found_is_listed_with_its_place_and_can_be_switched_off() {
+        // Idée de l'utilisateur (04/11/2026) : des AppImage restées après une
+        // désinstallation gardaient les logiciels « installés ». La fenêtre montre ce qui a
+        // été trouvé, et où ; une case par logiciel trouvé le désactive.
+        use egui_kittest::kittest::Queryable;
+        use tri::develop::{Engine, Found};
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let place = "/home/moi/AppImages/darktable.AppImage darktable-cli";
+        let mut w = SettingsWindow::open(&path)
+            .unwrap()
+            .with_engines(vec![Engine::Darktable])
+            .with_found(vec![Found {
+                engine: Engine::Darktable,
+                location: place.into(),
+                enabled: true,
+            }]);
+        assert!(!w.hidden("develop.enabled", "darktable"));
+        assert!(
+            w.hidden("develop.enabled", "rapidraw"),
+            "pas trouvé : pas de case"
+        );
+        assert!(needs_restart("develop.enabled", "darktable"));
+        w.show_section("develop.enabled");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        assert!(h.query_by_label(place).is_some(), "où il a été trouvé");
+        assert!(h.query_by_label("rapidraw").is_none());
+        h.get_by_role(egui::accesskit::Role::CheckBox).click();
+        h.run_steps(2);
+        let written = std::fs::read_to_string(&path).unwrap();
+        let settings: crate::settings::AppSettings = toml::from_str(&written).unwrap();
+        assert!(!settings.develop.enabled.darktable, "{written}");
+        assert!(settings.develop.enabled.rapidraw);
+        // Rien de trouvé : la section reste, avec la liste de ce qui est pris en charge.
+        let mut w = SettingsWindow::open(&path).unwrap();
+        let schema = schema();
+        let section = schema
+            .sections
+            .iter()
+            .find(|s| s.name == "develop.enabled")
+            .unwrap();
+        assert!(!w.section_hidden(section));
+        w.show_section("develop.enabled");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("Aucun logiciel").is_some());
+        assert!(h.query_by_label_contains("RawTherapee").is_some());
+        assert!(h.query_by_role(egui::accesskit::Role::CheckBox).is_none());
     }
 
     #[test]

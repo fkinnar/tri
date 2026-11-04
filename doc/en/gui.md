@@ -379,6 +379,15 @@ system one ("cold" measurements, experiments).
   darktable, and each `[sidecars.<software>]` without its software
   (`SettingsWindow::hidden`); the software paths stay, to point to one installed
   elsewhere. The View section of the panel then has no "Developments".
+- **Software found** (2026-11-04, the user's idea: AppImages left behind after an
+  uninstall kept the software "installed", with no way to see it): `[develop.enabled]`
+  section of the settings window, one checkbox per software found at launch with where it
+  was found (program, AppImage or Flatpak command; `Developers::found`), for information.
+  Unticking disables it from the next launch: treated as absent (no renders or exports by
+  it, its settings and sidecars hidden, sidecars not created in `auto`). To try without
+  one of them, or not to create everyone's sidecars on a machine where all are installed.
+  Nothing found: the section stays, with the list of supported software. The whole
+  `[develop]` section is now marked "on next launch" (software is looked for at start-up).
 - **Settings window** (`Ctrl+,`, 2026-10-18; `gui/src/settings_window.rs`, engine:
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
   the search), settings and their comments on the right, fuzzy search like the help

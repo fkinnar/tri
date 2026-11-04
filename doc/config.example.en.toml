@@ -147,6 +147,16 @@ art = "auto"
 # "art"), kept as long as it developed the image.
 default = "auto"
 
+# Software used among those found (the settings window shows where each one was found).
+# false: treated as absent, even when installed (no renders, settings or sidecars of its
+# own). To try without one of them, or not to create everyone's sidecars when all are
+# installed. Taken into account on next launch.
+[develop.enabled]
+darktable = true
+rapidraw = true
+rawtherapee = true
+art = true
+
 [export]
 # Export of images developed by Darktable (Ctrl+E), with one preset per use. Nothing is
 # overwritten (darktable appends _01…).
