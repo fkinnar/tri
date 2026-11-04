@@ -135,7 +135,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   on se perdait) : à chaque changement d'image, en grille et en plein écran, un petit
   cadre dit où on en est, « Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 » (la
   pile, puis la photo dans la pile ; une photo seule : « Pile 3 / 20 »), et « Dév. 2 / 3 »
-  si la photo a des développements, qui comptent pour une photo (`Stacks::photo_number`,
+  quand on passe en revue les développements (`review_developments`), qui comptent pour
+  une photo ; en plein écran, un clic sur l'image ou Entrée le remontre (`Stacks::photo_number`,
   `stack_number`, `development_number`). `[gui.position] seconds` (2 ; 0 : jamais ; -1 :
   toujours ; fondu sur la fin) et `place` (`center`, `top-left`, `top-right`,
   `bottom-right`, `bottom-left`).

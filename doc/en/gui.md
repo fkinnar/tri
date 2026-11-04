@@ -130,8 +130,9 @@ system one ("cold" measurements, experiments).
 - **Position mark** (2026-11-04, user's idea: going through stacks, one got lost): on
   each image change, in the grid and in full screen, a small frame says where one is,
   "Photo 12 / 94", with stacks "Stack 3 / 20 · 2 / 5" (the stack, then the photo in the
-  stack; a photo alone: "Stack 3 / 20"), and "Dev. 2 / 3" if the photo has developments,
-  which count as one photo (`Stacks::photo_number`, `stack_number`,
+  stack; a photo alone: "Stack 3 / 20"), and "Dev. 2 / 3" when reviewing the developments
+  (`review_developments`), which count as one photo; in full screen, a click on the
+  image or Enter shows it again (`Stacks::photo_number`, `stack_number`,
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
 - **Filters and sort per folder** (2026-10-30, `state::FolderView`): each folder's
