@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Décharger sans sous-dossier** (#281) : un dossier de séance laissé vide décharge
+  directement dans le dossier racine (« décharger ici » dans un dossier qu'on vient de
+  créer).
+- **Boîtes centrées** (#282) : l'éjection d'un support et « Développer avec… » (clic
+  droit sur un dossier) s'ouvrent au centre, comme les autres boîtes.
 - **Les boîtes se déplacent par leur titre seulement** (retour du 01/11/2026 : dans la
   fenêtre de réglages, glisser une pastille un peu à côté déplaçait toute la fenêtre) ;
   une boîte sans titre se saisit encore partout.

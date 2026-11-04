@@ -3048,7 +3048,10 @@ impl TriApp {
                             };
                             marks::eject(ui.painter(), rect, c);
                             if response.clicked() {
-                                eject = Some((row.path.clone(), rect.right_bottom()));
+                                // Au centre, comme les autres boîtes (#282 ; au coin de
+                                // l'icône avant).
+                                let at = ui.ctx().content_rect().center() - vec2(160.0, 120.0);
+                                eject = Some((row.path.clone(), at));
                             }
                         }
                     }
@@ -3096,7 +3099,8 @@ impl TriApp {
             match action {
                 // Clic droit : une boîte pour choisir le logiciel (26/10/2026).
                 Action::DevelopFolder => {
-                    let at = ctx.pointer_latest_pos().unwrap_or_default();
+                    // Au centre, comme les autres boîtes (#282 ; sous le pointeur avant).
+                    let at = ctx.content_rect().center() - vec2(180.0, 120.0);
                     self.develop_folder_dialog = Some((path, at, None));
                 }
                 Action::Sidecars => {

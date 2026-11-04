@@ -979,7 +979,7 @@ offload-ignored = { $n ->
 }
 offload-root = Dossier racine
 offload-session = Dossier de la séance
-offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus ancienne image), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine.
+offload-session-tip = Proposé : AAAA-MM-JJ_ (date de la plus ancienne image), à compléter (« _Self ») ou à remplacer entièrement ; l'année, si on la veut, va dans le dossier racine. Vide : directement dans le dossier racine.
 offload-destination = Destination : { $path }
 offload-raw-only = RAW seulement
 offload-raw-only-tip = Les JPEG du boîtier restent sur la carte.

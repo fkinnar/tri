@@ -18,7 +18,9 @@ everyone's needs, not just his.
   ("_Self") or replaced entirely. The year, if wanted, goes into the root
   (`…/Sources/2026`): feedback from 2026-10-17, the `AAAA/AAAA-MM-JJ_` suggestion mixed
   the two, and stayed empty for a card already offloaded. A
-  `_` left alone at the end of the name is removed. The name can neither be absolute nor
+  `_` left alone at the end of the name is removed; an **empty** name offloads into the
+  root itself (#281: "offload here" into a folder just created). The name can neither be
+  absolute nor
   go up (`..`): copies only go under the root. Later: templates (placeholders).
 - **Original names**, flat: the card's subfolders (`DCIM/100_FUJI`…) are not
   reproduced. A name already taken by *another* file gets a suffix

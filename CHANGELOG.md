@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Offload without a subfolder** (#281): a session folder left empty offloads straight
+  into the root folder ("offload here" into a folder just created).
+- **Centred dialogs** (#282): ejecting a device and "Develop with…" (right-click on a
+  folder) open in the middle, like the other dialogs.
 - **Dialogs move by their title only** (feedback of 2026-11-01: in the settings window,
   dragging a colour dot slightly off moved the whole window); a dialog without a title
   can still be grabbed anywhere.

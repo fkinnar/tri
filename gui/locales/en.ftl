@@ -977,7 +977,7 @@ offload-ignored = { $n ->
 }
 offload-root = Root folder
 offload-session = Session folder
-offload-session-tip = Suggested: YYYY-MM-DD_ (date of the oldest image), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder.
+offload-session-tip = Suggested: YYYY-MM-DD_ (date of the oldest image), to complete ("_Self") or replace entirely; the year, if wanted, goes in the root folder. Empty: straight into the root folder.
 offload-destination = Destination: { $path }
 offload-raw-only = RAW only
 offload-raw-only-tip = The camera JPEGs stay on the card.
