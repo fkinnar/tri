@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Without a development software installed** (darktable, RapidRAW, RawTherapee, ART),
+  the settings only useful with them are hidden (settings window, View section of the
+  panel); their paths stay, to point to one installed elsewhere.
 - **Position mark**: "Dev. n / m" only when reviewing the developments; in full screen,
   a click on the image or Enter shows it again.
 - **Full screen, photo to photo**: ← / → go from one photo to the next, each in the
