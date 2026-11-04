@@ -838,11 +838,12 @@ pub struct TriApp {
     /// et depuis quand il est montré.
     position_key: Option<(PathBuf, bool)>,
     position_since: Instant,
-    /// Zone centrale du repère de position et cadre du repère s'il est affiché (image
-    /// précédente) : les notes sur l'image s'y calent, au-dessus de lui s'il est en bas à
-    /// gauche.
+    /// Zone centrale du repère de position (image précédente) : les notes sur l'image s'y
+    /// calent.
     mark_area: Rect,
-    mark_rect: Option<Rect>,
+    /// Cadre des notes posées sur l'image à cette image : le repère de position en bas à
+    /// gauche se met au-dessus d'elles (retour du 04/11/2026 : les notes ne bougent pas).
+    notes_rect: Option<Rect>,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -1252,7 +1253,7 @@ impl TriApp {
             position_key: None,
             position_since: Instant::now(),
             mark_area: Rect::NOTHING,
-            mark_rect: None,
+            notes_rect: None,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -7776,7 +7777,7 @@ impl TriApp {
     /// jamais, négatif : toujours), à la place `place`.
     fn position_mark(&mut self, ctx: &egui::Context, area: Rect) {
         self.mark_area = area;
-        self.mark_rect = None;
+        let notes = self.notes_rect.take();
         let p = self.gui.position;
         let shown = matches!(self.mode, Mode::Grid | Mode::View)
             && self.error.is_none()
@@ -7822,8 +7823,14 @@ impl TriApp {
         let text = self.position_text();
         let align = p.place.align();
         let inner = area.shrink(16.0);
-        let at = align.pos_in_rect(&inner);
-        let shown = egui::Area::new(egui::Id::unique("position_mark"))
+        let mut at = align.pos_in_rect(&inner);
+        // En bas à gauche, au-dessus des notes posées sur l'image, qui ne bougent pas.
+        if p.place == crate::settings::PositionPlace::BottomLeft
+            && let Some(notes) = notes
+        {
+            at.y = at.y.min(notes.top() - 6.0);
+        }
+        egui::Area::new(egui::Id::unique("position_mark"))
             .pivot(align)
             .fixed_pos(at)
             .interactable(false)
@@ -7839,7 +7846,6 @@ impl TriApp {
                     );
                 });
             });
-        self.mark_rect = Some(shown.response.rect);
     }
 
     /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
@@ -9301,18 +9307,13 @@ impl TriApp {
             } else {
                 view_rect
             };
-            // Repère de position en bas à gauche : les notes au-dessus de lui.
-            let bottom = match self.mark_rect {
-                Some(mark)
-                    if self.gui.position.place == crate::settings::PositionPlace::BottomLeft =>
-                {
-                    mark.top() - 6.0
-                }
-                _ => area.bottom() - 16.0,
-            };
-            let corner = egui::pos2(area.left() + 16.0 - edge.min.x, bottom - edge.max.y);
+            let corner = egui::pos2(
+                area.left() + 16.0 - edge.min.x,
+                area.bottom() - 16.0 - edge.max.y,
+            );
             let content = Rect::from_min_size(corner - vec2(0.0, size), vec2(width, size));
             painter.add(frame.paint(content));
+            self.notes_rect = Some(frame.widget_rect(content));
             marks::row(
                 &painter,
                 content.left_center(),

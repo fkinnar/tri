@@ -137,7 +137,7 @@ system one ("cold" measurements, experiments).
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
   Same frame (`mark_frame`) as the notes drawn on the image when the bottom bar is hidden
   (feedback of 2026-11-04: two different styles), set at the same distance from the edge;
-  mark at the bottom left: the notes above it.
+  mark at the bottom left: above the notes, which do not move when it fades out.
 - **Filters and sort per folder** (2026-10-30, `state::FolderView`): each folder's
   filters (RAW / JPEG, stars and their comparison, colours, flags, sharpness, exposure,
   developed, inversion), sort order and, since 2026-10-31, the **thumbnail render**
