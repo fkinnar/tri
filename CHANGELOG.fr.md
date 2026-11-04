@@ -4,9 +4,12 @@
 
 ## À venir
 
-- **Logiciels trouvés** : la fenêtre de réglages montre les logiciels de développement
-  trouvés au lancement et où (une AppImage oubliée se voit), avec une case pour désactiver
-  chacun (`[develop.enabled]`) ; sans aucun, la liste de ceux pris en charge.
+- **Logiciels de développement dans les réglages** : pour chacun, Auto (avec l'endroit
+  où il a été trouvé au lancement : une AppImage oubliée se voit), Manuel (un chemin,
+  « Parcourir… ») ou Désactivé ; sans aucun, la liste de ceux pris en charge.
+- **« Parcourir… »** à côté de chaque champ de chemin (copier / déplacer vers, export,
+  déchargement, copie depuis un serveur, réglages) : la fenêtre de choix de dossier du
+  système.
 - **Sans logiciel de développement installé** (darktable, RapidRAW, RawTherapee, ART),
   les réglages qui ne servent qu'avec eux sont masqués (fenêtre de réglages, section Vue
   du panneau) ; leurs chemins restent, pour en indiquer un installé ailleurs.

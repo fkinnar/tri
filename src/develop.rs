@@ -252,23 +252,34 @@ pub trait Developer: Send + Sync + std::fmt::Debug {
 
 /// Un logiciel de développement trouvé sur la machine (4/11/2026, demandé par
 /// l'utilisateur : savoir ce que `tri` a trouvé, et où, sans le deviner ; une AppImage
-/// restée après une désinstallation le gardait « installé »).
+/// restée après une désinstallation le gardait « installé »). Montré sous le réglage du
+/// logiciel dans la fenêtre de réglages.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Found {
     /// Le logiciel.
     pub engine: Engine,
     /// Où il a été trouvé : son programme, ou la commande Flatpak.
     pub location: String,
-    /// Utilisé (`[develop.enabled]`) ; sinon tout se passe comme s'il n'était pas là.
-    pub enabled: bool,
+    /// Le fichier trouvé (programme ou AppImage), à écrire dans le réglage pour passer en
+    /// manuel ; `None` pour un Flatpak (réglage `"flatpak"`).
+    pub path: Option<PathBuf>,
+}
+
+impl Found {
+    fn of(engine: Engine, cli: &Cli) -> Found {
+        Found {
+            engine,
+            location: cli.to_string(),
+            path: (cli.program != Path::new("flatpak")).then(|| cli.program.clone()),
+        }
+    }
 }
 
 /// Les logiciels de développement trouvés sur la machine, et la préférence.
 #[derive(Clone, Debug, Default)]
 pub struct Developers {
-    /// Logiciels utilisés : trouvés et non désactivés.
     tools: Vec<Arc<dyn Developer>>,
-    /// Logiciels trouvés, désactivés compris ([`Developers::found`]).
+    /// Où chaque logiciel a été trouvé ([`Developers::found`]).
     found: Vec<Found>,
     /// Logiciel préféré (`[develop] default`).
     pub preference: Preference,
@@ -288,15 +299,8 @@ impl Developers {
         let mut found = Vec::new();
         let mut tools: Vec<Arc<dyn Developer>> = Vec::new();
         let mut keep = |engine: Engine, cli: &Cli, tool: Arc<dyn Developer>| {
-            let enabled = settings.enabled.get(engine);
-            found.push(Found {
-                engine,
-                location: cli.to_string(),
-                enabled,
-            });
-            if enabled {
-                tools.push(tool);
-            }
+            found.push(Found::of(engine, cli));
+            tools.push(tool);
         };
         if let Some(cli) = find_darktable(&settings.darktable) {
             let tool = Arc::new(Darktable {
@@ -334,8 +338,8 @@ impl Developers {
         }
     }
 
-    /// Logiciels trouvés sur la machine, utilisés ou non (`[develop.enabled]`), dans l'ordre
-    /// de [`Engine::ALL`] : pour information dans la fenêtre de réglages.
+    /// Logiciels trouvés sur la machine et où, dans l'ordre de [`Engine::ALL`] : pour
+    /// information dans la fenêtre de réglages.
     pub fn found(&self) -> Vec<Found> {
         let mut found = self.found.clone();
         found.sort_by_key(|f| f.engine);
@@ -347,7 +351,7 @@ impl Developers {
         self.found.push(Found {
             engine: tool.engine(),
             location: String::new(),
-            enabled: true,
+            path: None,
         });
         self.tools.push(tool);
         self
@@ -426,48 +430,6 @@ pub struct DevelopSettings {
     /// Logiciel préféré quand une image a été développée dans plusieurs : `"auto"` (le
     /// développement le plus récent) ou un logiciel (`"darktable"`).
     pub default: Preference,
-    /// Logiciels utilisés parmi ceux trouvés (section `[develop.enabled]`).
-    pub enabled: Enabled,
-}
-
-/// Section `[develop.enabled]` (4/11/2026, idée de l'utilisateur) : un logiciel trouvé
-/// mais désactivé est traité comme absent (pas de rendus, de réglages ni de sidecars à
-/// lui). Pour essayer `tri` sans l'un d'eux, ou éviter qu'une machine où tout est
-/// installé crée les sidecars de chacun.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Enabled {
-    /// darktable.
-    pub darktable: bool,
-    /// RapidRAW.
-    pub rapidraw: bool,
-    /// RawTherapee.
-    pub rawtherapee: bool,
-    /// ART.
-    pub art: bool,
-}
-
-impl Default for Enabled {
-    fn default() -> Self {
-        Self {
-            darktable: true,
-            rapidraw: true,
-            rawtherapee: true,
-            art: true,
-        }
-    }
-}
-
-impl Enabled {
-    /// Vrai si `engine` est utilisé quand il est trouvé.
-    pub fn get(&self, engine: Engine) -> bool {
-        match engine {
-            Engine::Darktable => self.darktable,
-            Engine::RapidRaw => self.rapidraw,
-            Engine::RawTherapee => self.rawtherapee,
-            Engine::Art => self.art,
-        }
-    }
 }
 
 impl Default for DevelopSettings {
@@ -479,7 +441,6 @@ impl Default for DevelopSettings {
             rawtherapee: "auto".into(),
             art: "auto".into(),
             default: Preference::Auto,
-            enabled: Enabled::default(),
         }
     }
 }
@@ -2297,7 +2258,7 @@ mod tests {
     }
 
     #[test]
-    fn a_found_software_can_be_switched_off() {
+    fn the_software_found_says_where() {
         let dir = tempfile::tempdir().unwrap();
         let cli = dir.path().join("darktable-cli");
         std::fs::write(&cli, b"").unwrap();
@@ -2309,29 +2270,25 @@ mod tests {
             ..DevelopSettings::default()
         };
         let work = dir.path().join("work");
-        let on = Developers::find(&settings, &work, false);
-        assert_eq!(on.engines(), [Engine::Darktable]);
+        let found = Developers::find(&settings, &work, false);
+        assert_eq!(found.engines(), [Engine::Darktable]);
         let expected = Found {
             engine: Engine::Darktable,
             location: cli.display().to_string(),
-            enabled: true,
+            path: Some(cli.clone()),
         };
-        assert_eq!(on.found(), std::slice::from_ref(&expected));
-        // Désactivé : toujours trouvé (pour information), mais plus utilisé.
-        settings.enabled.darktable = false;
-        let off = Developers::find(&settings, &work, false);
-        assert!(off.is_empty() && off.get(Engine::Darktable).is_none());
-        let expected = Found {
-            enabled: false,
-            ..expected
-        };
-        assert_eq!(off.found(), [expected]);
-        // Une commande Flatpak se lit comme on la taperait.
+        assert_eq!(found.found(), [expected]);
+        // Désactivé : pas cherché.
+        settings.darktable = String::new();
+        let none = Developers::find(&settings, &work, false);
+        assert!(none.is_empty() && none.found().is_empty());
+        // Un Flatpak : la commande telle qu'on la taperait, pas de fichier.
         let flatpak = Cli {
             program: "flatpak".into(),
             args: vec!["run".into(), FLATPAK_APP.into()],
         };
         assert_eq!(flatpak.to_string(), format!("flatpak run {FLATPAK_APP}"));
+        assert_eq!(Found::of(Engine::Darktable, &flatpak).path, None);
     }
 
     /// Rendu réel : seulement si darktable est installé et `TRI_TEST_DARKTABLE_RAW` désigne

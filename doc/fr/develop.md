@@ -20,9 +20,9 @@ est un `Engine` (identifiant, nom, sidecar qui porte son développement) et un p
 trait `Developer` (`render`) ; `Developers` est la liste de ceux trouvés sur la machine
 (`Developers::find`, fichiers de travail sous `<cache>/develop`), cherchés une fois au
 lancement d'après l'existence des fichiers (rien n'est retenu d'un lancement à l'autre).
-`Developers::found` donne aussi ceux trouvés mais désactivés (`[develop.enabled]`,
-04/11/2026) et où (`Found::location`, la commande `Cli` telle qu'on la taperait) ; un
-logiciel désactivé n'entre pas dans la liste utilisée, tout se passe comme s'il manquait. Une image peut avoir
+`Developers::found` dit où chacun l'a été (04/11/2026 : `Found::location`, la commande
+`Cli` telle qu'on la taperait, et `Found::path`, le fichier), montré dans la fenêtre de
+réglages ; un logiciel réglé à `""` n'est pas cherché, tout se passe comme s'il manquait. Une image peut avoir
 été développée dans plusieurs : `resolve` choisit celui du réglage `[develop] default`
 (liste déroulante dans la fenêtre de réglages : « auto » et les logiciels installés)
 s'il a développé l'image, sinon le développement le plus récent (`"auto"`, défaut). Choix

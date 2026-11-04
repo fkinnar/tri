@@ -90,6 +90,10 @@ OR LGPL-2.1-or-later) and `self_cell` (Apache-2.0 OR GPL-2.0-only). egui's defau
 (`epaint_default_fonts`) are under **OFL-1.1** and the **Ubuntu Font Licence**: font
 licences that allow embedding them in software under any licence,
 with their notice. Development only: `egui_kittest` (MIT OR Apache-2.0).
+Added on 2026-11-04: `rfd` — native "Browse…" window of the path fields,
+PolyMeilex/rfd, active (0.17.2; updated in October 2026) — under MIT, with `pollster`
+under MIT OR Apache-2.0; on Linux, XDG portal through libdbus **loaded at run time**
+(`dlopen`, nothing linked), the rest (`objc2-*`, `windows-sys`) already present.
 
 Practical obligation: reproduce the copyright and licence notices of these crates in the
 distribution. A tool like [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)

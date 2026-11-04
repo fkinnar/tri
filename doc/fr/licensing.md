@@ -90,6 +90,10 @@ OR LGPL-2.1-or-later) et `self_cell` (Apache-2.0 OR GPL-2.0-only). Les polices p
 d'egui (`epaint_default_fonts`) sont sous **OFL-1.1** et **Ubuntu Font Licence** : licences
 de polices qui permettent de les embarquer dans un logiciel sous n'importe quelle licence,
 avec leur notice. En développement seulement : `egui_kittest` (MIT OR Apache-2.0).
+Ajouté le 04/11/2026 : `rfd` — fenêtre native « Parcourir… » des champs de chemin,
+PolyMeilex/rfd, actif (0.17.2 ; mis à jour en octobre 2026) — sous MIT, avec `pollster`
+sous MIT OR Apache-2.0 ; sous Linux, portail XDG par libdbus **chargée à l'exécution**
+(`dlopen`, rien de lié), le reste (`objc2-*`, `windows-sys`) déjà présent.
 
 Obligation pratique : reproduire les notices de copyright et de licence de ces crates dans la
 distribution. Un outil comme [`cargo-about`](https://github.com/EmbarkStudios/cargo-about)

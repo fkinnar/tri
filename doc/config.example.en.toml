@@ -128,6 +128,8 @@ eject_lock_ms = 5000
 # Flatpak (org.darktable.Darktable); a path (darktable-cli, or an AppImage);
 # "flatpak": the Flatpak one; "": never.
 # Nothing is written in your setup (own configuration, library in memory).
+# Settings window: for each software, Auto (with where it was found at launch), Manual
+# (a path, Browse… button) or Disabled ("").
 darktable = "auto"
 # High quality (--hq): slightly more faithful, slightly slower.
 high_quality = false
@@ -146,16 +148,6 @@ art = "auto"
 # "auto" (the latest development) or a software ("darktable", "rapidraw", "rawtherapee",
 # "art"), kept as long as it developed the image.
 default = "auto"
-
-# Software used among those found (the settings window shows where each one was found).
-# false: treated as absent, even when installed (no renders, settings or sidecars of its
-# own). To try without one of them, or not to create everyone's sidecars when all are
-# installed. Taken into account on next launch.
-[develop.enabled]
-darktable = true
-rapidraw = true
-rawtherapee = true
-art = true
 
 [export]
 # Export of images developed by Darktable (Ctrl+E), with one preset per use. Nothing is

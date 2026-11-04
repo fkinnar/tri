@@ -379,15 +379,21 @@ system one ("cold" measurements, experiments).
   darktable, and each `[sidecars.<software>]` without its software
   (`SettingsWindow::hidden`); the software paths stay, to point to one installed
   elsewhere. The View section of the panel then has no "Developments".
-- **Software found** (2026-11-04, the user's idea: AppImages left behind after an
-  uninstall kept the software "installed", with no way to see it): `[develop.enabled]`
-  section of the settings window, one checkbox per software found at launch with where it
-  was found (program, AppImage or Flatpak command; `Developers::found`), for information.
-  Unticking disables it from the next launch: treated as absent (no renders or exports by
-  it, its settings and sidecars hidden, sidecars not created in `auto`). To try without
-  one of them, or not to create everyone's sidecars on a machine where all are installed.
-  Nothing found: the section stays, with the list of supported software. The whole
-  `[develop]` section is now marked "on next launch" (software is looked for at start-up).
+- **Development software in the settings** (2026-11-04, the user's idea: AppImages left
+  behind after an uninstall kept the software "installed", with no way to see it): each
+  software of `[develop]` has an **Auto / Manual / Disabled** list (`DeveloperMode`, value
+  in the file: `"auto"`, a path or `"flatpak"`, `""`). Auto shows below where it was found
+  at launch (program, AppImage or Flatpak command; `Developers::found`) or "Not found at
+  launch"; Manual, a field pre-filled with the path found and "Browse…" (opened at the
+  folder of the software found, otherwise at the root), "File not found" if the path is
+  wrong; Disabled, "darktable disabled" (treated as absent: no renders or exports, settings
+  and sidecars hidden). No software found: a message at the top of the section with the
+  list of supported ones. The whole section is marked "on next launch" (software is looked
+  for at start-up).
+- **"Browse…"** (2026-11-04): every folder path field (`PathField`: copy / move to,
+  export, offload, copy from a server, folders of the settings window, `folder` of export
+  presets included) has a button opening the system's folder chooser (`rfd`), at the typed
+  path or its nearest existing parent, otherwise at the home folder; Tab completion stays.
 - **Settings window** (`Ctrl+,`, 2026-10-18; `gui/src/settings_window.rs`, engine:
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
   the search), settings and their comments on the right, fuzzy search like the help
