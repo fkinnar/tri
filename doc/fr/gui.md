@@ -393,6 +393,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   logiciel (`SettingsWindow::hidden`) ; les chemins des logiciels restent, pour en
   indiquer un installé ailleurs. La section « Vue » du panneau n'a alors pas de
   « Développements ».
+- **Logiciels trouvés** (04/11/2026, idée de l'utilisateur : des AppImage restées après une
+  désinstallation gardaient les logiciels « installés », sans moyen de le voir) : section
+  `[develop.enabled]` de la fenêtre de réglages, une case par logiciel trouvé au lancement
+  avec l'endroit où il l'a été (programme, AppImage ou commande Flatpak ;
+  `Developers::found`), pour information. Décocher le désactive au prochain lancement :
+  traité comme absent (pas de rendus ni d'export par lui, ses réglages et ses sidecars
+  masqués, sidecars non créés en `auto`). Pour essayer sans l'un d'eux, ou ne pas créer
+  les sidecars de tous sur une machine où tout est installé. Rien de trouvé : la section
+  reste, avec la liste des logiciels pris en charge. Toute la section `[develop]` est
+  maintenant marquée « au prochain lancement » (les logiciels sont cherchés au démarrage).
 - **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
   `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
   depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme

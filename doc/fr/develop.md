@@ -18,7 +18,11 @@ tomber `tri`, et sa licence reste la sienne. RawTherapee (`rawtherapee-cli`, pro
 **Plusieurs logiciels** (26/10/2026, pour RapidRAW et les suivants) : chaque logiciel
 est un `Engine` (identifiant, nom, sidecar qui porte son développement) et un plugin du
 trait `Developer` (`render`) ; `Developers` est la liste de ceux trouvés sur la machine
-(`Developers::find`, fichiers de travail sous `<cache>/develop`). Une image peut avoir
+(`Developers::find`, fichiers de travail sous `<cache>/develop`), cherchés une fois au
+lancement d'après l'existence des fichiers (rien n'est retenu d'un lancement à l'autre).
+`Developers::found` donne aussi ceux trouvés mais désactivés (`[develop.enabled]`,
+04/11/2026) et où (`Found::location`, la commande `Cli` telle qu'on la taperait) ; un
+logiciel désactivé n'entre pas dans la liste utilisée, tout se passe comme s'il manquait. Une image peut avoir
 été développée dans plusieurs : `resolve` choisit celui du réglage `[develop] default`
 (liste déroulante dans la fenêtre de réglages : « auto » et les logiciels installés)
 s'il a développé l'image, sinon le développement le plus récent (`"auto"`, défaut). Choix

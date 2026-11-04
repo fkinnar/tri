@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Software found**: the settings window shows the development software found at launch
+  and where (a forgotten AppImage shows up), with a checkbox to disable each one
+  (`[develop.enabled]`); with none, the list of supported ones.
 - **Without a development software installed** (darktable, RapidRAW, RawTherapee, ART),
   the settings only useful with them are hidden (settings window, View section of the
   panel); their paths stay, to point to one installed elsewhere.

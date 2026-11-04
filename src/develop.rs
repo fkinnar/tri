@@ -250,10 +250,26 @@ pub trait Developer: Send + Sync + std::fmt::Debug {
     }
 }
 
+/// Un logiciel de développement trouvé sur la machine (4/11/2026, demandé par
+/// l'utilisateur : savoir ce que `tri` a trouvé, et où, sans le deviner ; une AppImage
+/// restée après une désinstallation le gardait « installé »).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Found {
+    /// Le logiciel.
+    pub engine: Engine,
+    /// Où il a été trouvé : son programme, ou la commande Flatpak.
+    pub location: String,
+    /// Utilisé (`[develop.enabled]`) ; sinon tout se passe comme s'il n'était pas là.
+    pub enabled: bool,
+}
+
 /// Les logiciels de développement trouvés sur la machine, et la préférence.
 #[derive(Clone, Debug, Default)]
 pub struct Developers {
+    /// Logiciels utilisés : trouvés et non désactivés.
     tools: Vec<Arc<dyn Developer>>,
+    /// Logiciels trouvés, désactivés compris ([`Developers::found`]).
+    found: Vec<Found>,
     /// Logiciel préféré (`[develop] default`).
     pub preference: Preference,
     /// Dossier des fichiers de travail (rendus temporaires), dans le cache de `tri`.
@@ -269,41 +285,70 @@ impl Developers {
     /// Les logiciels trouvés d'après `settings`, leurs fichiers de travail sous `work_dir`
     /// (dans le cache de `tri` : jamais la configuration de l'utilisateur).
     pub fn find(settings: &DevelopSettings, work_dir: &Path, high_quality: bool) -> Developers {
+        let mut found = Vec::new();
         let mut tools: Vec<Arc<dyn Developer>> = Vec::new();
+        let mut keep = |engine: Engine, cli: &Cli, tool: Arc<dyn Developer>| {
+            let enabled = settings.enabled.get(engine);
+            found.push(Found {
+                engine,
+                location: cli.to_string(),
+                enabled,
+            });
+            if enabled {
+                tools.push(tool);
+            }
+        };
         if let Some(cli) = find_darktable(&settings.darktable) {
-            tools.push(Arc::new(Darktable {
-                cli,
+            let tool = Arc::new(Darktable {
+                cli: cli.clone(),
                 config_dir: work_dir.join("darktable"),
                 high_quality,
-            }));
+            });
+            keep(Engine::Darktable, &cli, tool);
         }
         if let Some(cli) = find_rapidraw(&settings.rapidraw) {
-            tools.push(Arc::new(RapidRaw {
-                cli,
+            let tool = Arc::new(RapidRaw {
+                cli: cli.clone(),
                 work_dir: work_dir.join("rapidraw"),
-            }));
+            });
+            keep(Engine::RapidRaw, &cli, tool);
         }
         for (engine, setting) in [
             (Engine::RawTherapee, &settings.rawtherapee),
             (Engine::Art, &settings.art),
         ] {
             if let Some(cli) = find_profile_cli(engine, setting) {
-                tools.push(Arc::new(ProfileTool {
+                let tool = Arc::new(ProfileTool {
                     engine,
-                    cli,
+                    cli: cli.clone(),
                     work_dir: work_dir.join(engine.id()),
-                }));
+                });
+                keep(engine, &cli, tool);
             }
         }
         Developers {
             tools,
+            found,
             preference: settings.default,
             work_dir: work_dir.to_path_buf(),
         }
     }
 
+    /// Logiciels trouvés sur la machine, utilisés ou non (`[develop.enabled]`), dans l'ordre
+    /// de [`Engine::ALL`] : pour information dans la fenêtre de réglages.
+    pub fn found(&self) -> Vec<Found> {
+        let mut found = self.found.clone();
+        found.sort_by_key(|f| f.engine);
+        found
+    }
+
     /// Ajoute un logiciel (tests, logiciels choisis).
     pub fn with(mut self, tool: Arc<dyn Developer>) -> Developers {
+        self.found.push(Found {
+            engine: tool.engine(),
+            location: String::new(),
+            enabled: true,
+        });
         self.tools.push(tool);
         self
     }
@@ -381,6 +426,48 @@ pub struct DevelopSettings {
     /// Logiciel préféré quand une image a été développée dans plusieurs : `"auto"` (le
     /// développement le plus récent) ou un logiciel (`"darktable"`).
     pub default: Preference,
+    /// Logiciels utilisés parmi ceux trouvés (section `[develop.enabled]`).
+    pub enabled: Enabled,
+}
+
+/// Section `[develop.enabled]` (4/11/2026, idée de l'utilisateur) : un logiciel trouvé
+/// mais désactivé est traité comme absent (pas de rendus, de réglages ni de sidecars à
+/// lui). Pour essayer `tri` sans l'un d'eux, ou éviter qu'une machine où tout est
+/// installé crée les sidecars de chacun.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Enabled {
+    /// darktable.
+    pub darktable: bool,
+    /// RapidRAW.
+    pub rapidraw: bool,
+    /// RawTherapee.
+    pub rawtherapee: bool,
+    /// ART.
+    pub art: bool,
+}
+
+impl Default for Enabled {
+    fn default() -> Self {
+        Self {
+            darktable: true,
+            rapidraw: true,
+            rawtherapee: true,
+            art: true,
+        }
+    }
+}
+
+impl Enabled {
+    /// Vrai si `engine` est utilisé quand il est trouvé.
+    pub fn get(&self, engine: Engine) -> bool {
+        match engine {
+            Engine::Darktable => self.darktable,
+            Engine::RapidRaw => self.rapidraw,
+            Engine::RawTherapee => self.rawtherapee,
+            Engine::Art => self.art,
+        }
+    }
 }
 
 impl Default for DevelopSettings {
@@ -392,6 +479,7 @@ impl Default for DevelopSettings {
             rawtherapee: "auto".into(),
             art: "auto".into(),
             default: Preference::Auto,
+            enabled: Enabled::default(),
         }
     }
 }
@@ -438,6 +526,17 @@ impl Cli {
         let mut cmd = crate::process::command(&self.program);
         cmd.args(&self.args);
         cmd
+    }
+}
+
+/// La commande telle qu'on la taperait : le programme, puis ses arguments.
+impl std::fmt::Display for Cli {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.program.display())?;
+        for arg in &self.args {
+            write!(f, " {arg}")?;
+        }
+        Ok(())
     }
 }
 
@@ -2195,6 +2294,44 @@ mod tests {
         let cmd = flatpak.command();
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args, ["run", "--command=darktable-cli", FLATPAK_APP]);
+    }
+
+    #[test]
+    fn a_found_software_can_be_switched_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let cli = dir.path().join("darktable-cli");
+        std::fs::write(&cli, b"").unwrap();
+        let mut settings = DevelopSettings {
+            darktable: cli.to_string_lossy().into_owned(),
+            rapidraw: String::new(),
+            rawtherapee: String::new(),
+            art: String::new(),
+            ..DevelopSettings::default()
+        };
+        let work = dir.path().join("work");
+        let on = Developers::find(&settings, &work, false);
+        assert_eq!(on.engines(), [Engine::Darktable]);
+        let expected = Found {
+            engine: Engine::Darktable,
+            location: cli.display().to_string(),
+            enabled: true,
+        };
+        assert_eq!(on.found(), std::slice::from_ref(&expected));
+        // Désactivé : toujours trouvé (pour information), mais plus utilisé.
+        settings.enabled.darktable = false;
+        let off = Developers::find(&settings, &work, false);
+        assert!(off.is_empty() && off.get(Engine::Darktable).is_none());
+        let expected = Found {
+            enabled: false,
+            ..expected
+        };
+        assert_eq!(off.found(), [expected]);
+        // Une commande Flatpak se lit comme on la taperait.
+        let flatpak = Cli {
+            program: "flatpak".into(),
+            args: vec!["run".into(), FLATPAK_APP.into()],
+        };
+        assert_eq!(flatpak.to_string(), format!("flatpak run {FLATPAK_APP}"));
     }
 
     /// Rendu réel : seulement si darktable est installé et `TRI_TEST_DARKTABLE_RAW` désigne

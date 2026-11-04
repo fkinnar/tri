@@ -10796,21 +10796,30 @@ impl TriApp {
         // Configuration et fichiers de travail à part de ceux des rendus développés : un
         // rendu demandé par Maj+B pendant un export ne gêne pas. Les deux logiciels sont
         // cherchés quel que soit `render` : chaque développement est rendu par le sien.
-        // Sans logiciel : LibRaw (rendu de base).
+        // Sans logiciel : LibRaw (rendu de base). Un logiciel désactivé
+        // (`[develop.enabled]`) n'exporte pas non plus.
         let tools = crate::export::Tools {
-            darktable: tri::develop::find_darktable(&self.settings.develop.darktable).map(|cli| {
-                tri::develop::Darktable {
+            darktable: tri::develop::find_darktable(&self.settings.develop.darktable)
+                .filter(|_| {
+                    self.developers
+                        .get(tri::develop::Engine::Darktable)
+                        .is_some()
+                })
+                .map(|cli| tri::develop::Darktable {
                     cli,
                     config_dir: engine.cache.root().join("darktable-export"),
                     high_quality: true,
-                }
-            }),
-            rapidraw: tri::develop::find_rapidraw(&self.settings.develop.rapidraw).map(|cli| {
-                tri::develop::RapidRaw {
+                }),
+            rapidraw: tri::develop::find_rapidraw(&self.settings.develop.rapidraw)
+                .filter(|_| {
+                    self.developers
+                        .get(tri::develop::Engine::RapidRaw)
+                        .is_some()
+                })
+                .map(|cli| tri::develop::RapidRaw {
                     cli,
                     work_dir: engine.cache.root().join("rapidraw-export"),
-                }
-            }),
+                }),
             render,
         };
         trace(|| format!("export : {} images vers {folder}", images.len()));
@@ -13056,6 +13065,7 @@ impl TriApp {
                 self.help = false;
                 self.settings_window = Some(
                     w.with_engines(self.developers.engines())
+                        .with_found(self.developers.found())
                         .with_colors(self.gui.colors.clone()),
                 );
             }
