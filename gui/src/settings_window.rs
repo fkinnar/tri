@@ -84,6 +84,19 @@ fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), 
     })
 }
 
+/// Réglages sans objet sans aucun logiciel de développement installé (voir
+/// `SettingsWindow::hidden`).
+const NEED_A_DEVELOPER: [(&str, &str); 5] = [
+    ("develop", "default"),
+    ("gui.grid", "develop"),
+    ("gui.grid", "develop_toast_ms"),
+    ("gui.view", "review_developments"),
+    ("gui.colors", "development_mark"),
+];
+
+/// Réglages de darktable seul.
+const NEED_DARKTABLE: [(&str, &str); 1] = [("develop", "high_quality")];
+
 /// Le nom d'un profil ou préréglage : montré dans la liste de l'en-tête et changé par
 /// « Renommer… », pas parmi les réglages (issue n° 18).
 fn renamed_in_header(section: &str, key: &str) -> bool {
@@ -519,18 +532,16 @@ impl SettingsWindow {
     fn hidden(&self, section: &str, key: &str) -> bool {
         use tri::develop::Engine;
         let missing = |e: Engine| !self.engines.contains(&e);
-        match (section, key) {
-            ("develop", "default")
-            | ("gui.grid", "develop")
-            | ("gui.grid", "develop_toast_ms")
-            | ("gui.view", "review_developments")
-            | ("gui.colors", "development_mark") => self.engines.is_empty(),
-            ("develop", "high_quality") => missing(Engine::Darktable),
-            (s, _) => s
-                .strip_prefix("sidecars.")
-                .and_then(Engine::from_id)
-                .is_some_and(missing),
+        if NEED_A_DEVELOPER.contains(&(section, key)) {
+            return self.engines.is_empty();
         }
+        if NEED_DARKTABLE.contains(&(section, key)) {
+            return missing(Engine::Darktable);
+        }
+        section
+            .strip_prefix("sidecars.")
+            .and_then(Engine::from_id)
+            .is_some_and(missing)
     }
 
     /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
@@ -1857,6 +1868,28 @@ mod tests {
             "ART pas installé"
         );
         assert!(w.hidden("develop", "high_quality"), "darktable seulement");
+        // Chaque clé masquée est un vrai réglage (un renommage ne la laisse pas filer).
+        for (name, key) in NEED_A_DEVELOPER.iter().chain(&NEED_DARKTABLE) {
+            assert!(
+                section(name)
+                    .groups
+                    .iter()
+                    .flat_map(|g| &g.entries)
+                    .any(|e| e.key == *key),
+                "{name}.{key}"
+            );
+        }
+        for engine in Engine::ALL {
+            assert!(
+                schema
+                    .sections
+                    .iter()
+                    .any(|s| s.name == format!("sidecars.{}", engine.id()))
+                    || engine == Engine::Darktable,
+                "[sidecars.{}]",
+                engine.id()
+            );
+        }
     }
 
     #[test]
