@@ -8,6 +8,9 @@
   into the root folder ("offload here" into a folder just created).
 - **Centred dialogs** (#282): ejecting a device and "Develop with…" (right-click on a
   folder) open in the middle, like the other dialogs.
+- **Position mark**: on each image change, in the grid and in full screen, a small frame
+  says where one is ("Photo 12 / 94", with stacks "Stack 3 / 20 · 2 / 5", and "Dev. 2 /
+  3" for developments); display time and place in `[gui.position]`.
 - **Dialogs move by their title only** (feedback of 2026-11-01: in the settings window,
   dragging a colour dot slightly off moved the whole window); a dialog without a title
   can still be grabbed anywhere.

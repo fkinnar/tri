@@ -245,6 +245,43 @@ impl Stacks {
         }
     }
 
+    /// Rang (à partir de 1) de la photo de l'image `index` et nombre de photos : les
+    /// développements d'une photo comptent pour elle (repère de position, 04/11/2026).
+    /// `None` si `index` est hors de la liste.
+    pub fn photo_number(&self, index: usize) -> Option<(usize, usize)> {
+        if self.photos.is_empty() {
+            return (index < self.of.len()).then_some((index + 1, self.of.len()));
+        }
+        Some((*self.photo_of.get(index)? + 1, self.photos.len()))
+    }
+
+    /// Pile de l'image `index` : son rang et le nombre de piles (groupes, une photo seule
+    /// comprise), puis le rang de sa photo dans la pile et le nombre de photos de la pile
+    /// (développements comptés avec leur photo).
+    pub fn stack_number(&self, index: usize) -> Option<((usize, usize), (usize, usize))> {
+        let g = *self.of.get(index)?;
+        let r = &self.ranges[g];
+        let photo = |i: usize| {
+            if self.photos.is_empty() {
+                i
+            } else {
+                self.photo_of[i]
+            }
+        };
+        let (first, last) = (photo(r.start), photo(r.end - 1));
+        Some((
+            (g + 1, self.ranges.len()),
+            (photo(index) - first + 1, last - first + 1),
+        ))
+    }
+
+    /// Rang (à partir de 1) de l'image `index` dans la pile de développements de sa photo,
+    /// et sa taille, si la photo a des développements.
+    pub fn development_number(&self, index: usize) -> Option<(usize, usize)> {
+        let r = self.developments_of(index)?;
+        Some((index - r.start + 1, r.len()))
+    }
+
     /// Nombre de piles (groupes de plus d'une image).
     pub fn count(&self) -> usize {
         self.ranges.iter().filter(|r| r.len() > 1).count()
@@ -279,6 +316,23 @@ mod tests {
         assert_eq!(s.position(3), Some(1));
         assert_eq!((s.count(), s.groups()), (2, 3));
         assert_eq!(s.range_of(2), Some(&(1..4)));
+    }
+
+    #[test]
+    fn positions_count_photos_stacks_and_developments() {
+        // Repère de position (04/11/2026) : piles 0 | 1 2 3 4 | 5 ; 2-3 sont la photo 2 et
+        // son développement (une seule photo).
+        let s = Stacks::build(6, vec![0..1, 1..5, 5..6], true, |r| r.start, |_| true)
+            .with_developments(|a, b| (a, b) == (2, 3), |r| r.start, |_| true);
+        assert_eq!(s.photo_number(0), Some((1, 5)));
+        assert_eq!(s.photo_number(3), Some((3, 5)), "développement : sa photo");
+        assert_eq!(s.photo_number(5), Some((5, 5)));
+        assert_eq!(s.stack_number(4), Some(((2, 3), (3, 3))));
+        assert_eq!(s.stack_number(3), Some(((2, 3), (2, 3))));
+        assert_eq!(s.stack_number(5), Some(((3, 3), (1, 1))));
+        assert_eq!(s.development_number(3), Some((2, 2)));
+        assert_eq!(s.development_number(4), None);
+        assert_eq!(s.photo_number(9), None);
     }
 
     #[test]
