@@ -131,6 +131,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   en comparaison (`m`), lu dans le RAW (Fujifilm pour l'instant) ; carré, croix, cercle ou
   cœur (`[gui.view] focus_marker`), couleur `[gui.colors] focus`, liseré sombre dessous
   pour rester visible sur tout fond.
+- **Repère de position** (04/11/2026, idée de l'utilisateur : en parcourant les piles,
+  on se perdait) : à chaque changement d'image, en grille et en plein écran, un petit
+  cadre dit où on en est, « Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 » (la
+  pile, puis la photo dans la pile ; une photo seule : « Pile 3 / 20 »), et « Dév. 2 / 3 »
+  si la photo a des développements, qui comptent pour une photo (`Stacks::photo_number`,
+  `stack_number`, `development_number`). `[gui.position] seconds` (2 ; 0 : jamais ; -1 :
+  toujours ; fondu sur la fin) et `place` (`center`, `top-left`, `top-right`,
+  `bottom-right`, `bottom-left`).
 - **Filtres et tri par dossier** (30/10/2026, `state::FolderView`) : les filtres (RAW /
   JPEG, étoiles et leur comparaison, couleurs, drapeaux, netteté, exposition,
   développées, inversion), le tri et, depuis le 31/10/2026, le **rendu des vignettes**

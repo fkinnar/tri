@@ -758,6 +758,15 @@ gap = 4.0
 # Thickness of the frame of the active image (the one being rated).
 frame = 3.0
 
+[gui.position]
+# "Where am I" mark on each image change, in the grid and in full screen: "Photo 12 /
+# 94", with stacks "Stack 3 / 20 · 2 / 5" (the stack, then the photo in the stack), and
+# "Dev. 2 / 3" for a photo's developments. Display time in seconds; 0: never; -1:
+# always.
+seconds = 2.0
+# Where: "center", "top-left", "top-right", "bottom-right" or "bottom-left".
+place = "top-left"
+
 [gui.crop]
 # Cropping (versions): r in full screen. Keyboard step (arrows or hjkl: move;
 # with Shift: right side, bottom), as a proportion of the image.

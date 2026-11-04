@@ -9,6 +9,10 @@
   créer).
 - **Boîtes centrées** (#282) : l'éjection d'un support et « Développer avec… » (clic
   droit sur un dossier) s'ouvrent au centre, comme les autres boîtes.
+- **Repère de position** : à chaque changement d'image, en grille et en plein écran, un
+  petit cadre dit où on en est (« Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 »,
+  et « Dév. 2 / 3 » pour les développements) ; durée et place réglables
+  (`[gui.position]`).
 - **Les boîtes se déplacent par leur titre seulement** (retour du 01/11/2026 : dans la
   fenêtre de réglages, glisser une pastille un peu à côté déplaçait toute la fenêtre) ;
   une boîte sans titre se saisit encore partout.

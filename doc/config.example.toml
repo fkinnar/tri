@@ -758,6 +758,15 @@ gap = 4.0
 # Épaisseur du cadre de l'image active (celle que l'on note).
 frame = 3.0
 
+[gui.position]
+# Repère « où on en est » à chaque changement d'image, en grille et en plein écran :
+# « Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 » (la pile, puis la photo dans
+# la pile), et « Dév. 2 / 3 » pour les développements d'une photo. Durée d'affichage en
+# secondes ; 0 : jamais ; -1 : toujours.
+seconds = 2.0
+# Où : "center", "top-left", "top-right", "bottom-right" ou "bottom-left".
+place = "top-left"
+
 [gui.crop]
 # Recadrage (versions) : r en plein écran. Pas du clavier (flèches ou hjkl : déplacer ;
 # avec Maj : côté droit, bas), en proportion de l'image.

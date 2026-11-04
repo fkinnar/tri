@@ -220,6 +220,8 @@ pub struct GuiSettings {
     pub zoom: ZoomSettings,
     /// `[gui.compare]`.
     pub compare: CompareSettings,
+    /// `[gui.position]`.
+    pub position: PositionSettings,
     /// `[gui.dialogs]`.
     pub dialogs: DialogSettings,
     /// `[gui.colors]`.
@@ -274,6 +276,7 @@ impl Default for GuiSettings {
             view: ViewSettings::default(),
             zoom: ZoomSettings::default(),
             compare: CompareSettings::default(),
+            position: PositionSettings::default(),
             dialogs: DialogSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
@@ -649,6 +652,58 @@ impl Default for CropSettings {
             line_width: 1.5,
             handle_size: 9.0,
             handle_grab: 10.0,
+        }
+    }
+}
+
+/// Section `[gui.position]` : repère « où on en est » à chaque changement d'image (idée
+/// de l'utilisateur, 04/11/2026 : en parcourant les piles, on se perdait), « Photo 12 /
+/// 94 » ou « Pile 3 / 20 · 2 / 5 », en grille et en plein écran.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PositionSettings {
+    /// Durée d'affichage (secondes) ; 0 : jamais ; négatif (-1) : toujours.
+    pub seconds: f32,
+    /// Où, dans la grille ou l'image.
+    pub place: PositionPlace,
+}
+
+impl Default for PositionSettings {
+    fn default() -> Self {
+        Self {
+            seconds: 2.0,
+            place: PositionPlace::TopLeft,
+        }
+    }
+}
+
+/// Place du repère de position. Dans le fichier : `"center"`, `"top-left"`, `"top-right"`,
+/// `"bottom-right"` ou `"bottom-left"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PositionPlace {
+    /// Au centre.
+    Center,
+    /// En haut à gauche.
+    #[default]
+    TopLeft,
+    /// En haut à droite.
+    TopRight,
+    /// En bas à droite.
+    BottomRight,
+    /// En bas à gauche.
+    BottomLeft,
+}
+
+impl PositionPlace {
+    /// Ancrage egui correspondant.
+    pub fn align(self) -> egui::Align2 {
+        match self {
+            PositionPlace::Center => egui::Align2::CENTER_CENTER,
+            PositionPlace::TopLeft => egui::Align2::LEFT_TOP,
+            PositionPlace::TopRight => egui::Align2::RIGHT_TOP,
+            PositionPlace::BottomRight => egui::Align2::RIGHT_BOTTOM,
+            PositionPlace::BottomLeft => egui::Align2::LEFT_BOTTOM,
         }
     }
 }

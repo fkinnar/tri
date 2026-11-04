@@ -831,6 +831,10 @@ pub struct TriApp {
     last_zoom_size: std::collections::HashMap<Level, Vec2>,
     /// Moment où l'image sélectionnée l'a été (attente avant un 100 % RAW).
     focus_since: Instant,
+    /// Repère de position (`[gui.position]`) : l'image et le mode du dernier changement,
+    /// et depuis quand il est montré.
+    position_key: Option<(PathBuf, bool)>,
+    position_since: Instant,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -1236,6 +1240,8 @@ impl TriApp {
             requested: HashSet::new(),
             last_shown: (usize::MAX, None),
             focus_since: Instant::now(),
+            position_key: None,
+            position_since: Instant::now(),
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -7667,6 +7673,94 @@ impl TriApp {
             });
     }
 
+    /// Repère « où on en est » (idée de l'utilisateur, 04/11/2026 : en parcourant les
+    /// piles, on se perdait) dans la zone centrale `area`, en grille et en plein écran : à
+    /// chaque changement d'image, pour `[gui.position] seconds` (fondu à la fin ; 0 :
+    /// jamais, négatif : toujours), à la place `place`.
+    fn position_mark(&mut self, ctx: &egui::Context, area: Rect) {
+        let p = self.gui.position;
+        let shown = matches!(self.mode, Mode::Grid | Mode::View)
+            && self.error.is_none()
+            && self.opening.is_none();
+        let Some(file) = self
+            .files
+            .get(self.selected)
+            .filter(|_| shown && p.seconds != 0.0)
+        else {
+            self.position_key = None;
+            return;
+        };
+        let key = Some((file.path.clone(), self.mode == Mode::View));
+        if self.position_key != key {
+            self.position_key = key;
+            self.position_since = Instant::now();
+        }
+        let elapsed = self.position_since.elapsed().as_secs_f32();
+        let opacity = if p.seconds < 0.0 {
+            1.0
+        } else {
+            if elapsed >= p.seconds {
+                return;
+            }
+            // Fondu sur la dernière part (300 ms au plus).
+            let fade = (p.seconds * 0.3).min(0.3);
+            let left = p.seconds - elapsed;
+            if left > fade {
+                ctx.request_repaint_after(Duration::from_secs_f32(left - fade));
+            } else {
+                ctx.request_repaint();
+            }
+            (left / fade).min(1.0)
+        };
+        let text = self.position_text();
+        let align = p.place.align();
+        let inner = area.shrink(16.0);
+        let at = align.pos_in_rect(&inner);
+        egui::Area::new(egui::Id::unique("position_mark"))
+            .pivot(align)
+            .fixed_pos(at)
+            .interactable(false)
+            .show(ctx, |ui| {
+                ui.set_opacity(opacity);
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    // Sur une ligne, quelle que soit la place.
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                        )
+                        .extend(),
+                    );
+                });
+            });
+    }
+
+    /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
+    /// piles « Pile 3 / 20 · 2 / 5 », et « Dév. 2 / 3 » si sa photo a des développements
+    /// (qui comptent pour une photo).
+    fn position_text(&self) -> String {
+        let i = self.selected;
+        let mut parts = Vec::new();
+        match self.stacks.stack_number(i).filter(|_| self.stacking) {
+            Some(((g, groups), (m, photos))) => {
+                parts.push(t!("position-stack", n = g, total = groups));
+                if photos > 1 {
+                    parts.push(t!("position-in-stack", n = m, total = photos));
+                }
+            }
+            None => {
+                let (n, total) = self
+                    .stacks
+                    .photo_number(i)
+                    .unwrap_or((i + 1, self.files.len()));
+                parts.push(t!("position-photo", n = n, total = total));
+            }
+        }
+        if let Some((k, total)) = self.stacks.development_number(i) {
+            parts.push(t!("position-development", n = k, total = total));
+        }
+        parts.join(" · ")
+    }
+
     /// Le développé de l'image `index` existe, **pour son sidecar actuel** : la clé de
     /// cache suit le sidecar (taille, date), un développement modifié dans darktable n'y
     /// est plus. Un développé déjà chargé mais périmé est oublié (état, texture) : `b` ne
@@ -13513,6 +13607,7 @@ impl eframe::App for TriApp {
             self.develop_toast(ui);
         });
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
+        self.position_mark(&ctx, center.response.rect);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -17675,6 +17770,32 @@ mod tests {
                 "nombre d'images à {width}"
             );
         }
+    }
+
+    #[test]
+    fn a_position_mark_says_where_we_are() {
+        // Idée de l'utilisateur (04/11/2026) : en parcourant, « Photo n / total », montré
+        // à chaque changement d'image (`[gui.position]`), en grille et en plein écran.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().position_text(), "Photo 1 / 3");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().position_text(), "Photo 2 / 3");
+        let shown = h.state().position_key.clone();
+        assert_eq!(
+            shown.as_ref().map(|(p, view)| (p.clone(), *view)),
+            Some((h.state().files[1].path.clone(), false))
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(
+            h.state().position_key.as_ref().map(|k| k.1),
+            Some(true),
+            "plein écran"
+        );
+        // 0 : jamais.
+        h.state_mut().gui.position.seconds = 0.0;
+        h.run_steps(2);
+        assert!(h.state().position_key.is_none());
     }
 
     #[test]

@@ -236,6 +236,13 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("i18n", "language") => &["auto", "fr", "en"],
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
         ("gui.view", "stack_enter") => &["cover", "first"],
+        ("gui.position", "place") => &[
+            "center",
+            "top-left",
+            "top-right",
+            "bottom-right",
+            "bottom-left",
+        ],
         ("cache", "location") => &["user", "disk", "folder"],
         // Tous les logiciels connus ; la liste n'affiche que ceux installés (`fits`).
         ("develop", "default") => &["auto", "darktable", "rapidraw", "rawtherapee", "art"],
