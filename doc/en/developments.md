@@ -89,6 +89,14 @@ screen a development shows its render, `b` shows the camera JPEG
 instead (before / after); `c` on the photo (2026-10-31) compares it side by side with its
 developments (see "Side-by-side comparison").
 
+In full screen, ← / → go **from photo to photo**, each on its cover development, that
+is in the grid's render (2026-11-04, `Stacks::photo_range`, `photo_cover`), in stack
+mode as outside it; the other developments stay on `Shift+W` / `Shift+Q`. The "Review the
+developments" checkbox of the View section (`[gui.view] review_developments`, unticked
+by default, remembered) makes ← / → go through each development, and greys out the render
+list (the same as the grid's: changing it in full screen changes the grid too). At the
+end of the developments of a photo in a burst, the next photo of the burst (#285).
+
 ## Export
 
 A development is exported by **its own software** (`Ctrl+E`, 2026-10-31: RapidRAW copies

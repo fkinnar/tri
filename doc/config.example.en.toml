@@ -679,6 +679,11 @@ zoom_on_focus_point = true
 # stack, up / down to the previous / next stack; at the end of the stack, true: start again
 # from the other end; false: stop.
 stack_wrap = false
+# Full screen, left / right arrows: true: through each development of a photo (darktable,
+# its clones, RapidRAW…); false: from photo to photo, each in the grid's render ("Thumbnail
+# render"), the other developments with Shift+W / Shift+Q. The "Review the developments"
+# checkbox of the View section changes it (remembered).
+review_developments = false
 # Active stacks, in full screen, auto advance after a rating (Shift+A): at the end of the
 # stack, true: the first photo of the next stack (then takes precedence over stack_wrap);
 # false: stay on the last one.

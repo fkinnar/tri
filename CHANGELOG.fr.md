@@ -4,6 +4,11 @@
 
 ## À venir
 
+- **Plein écran, de photo en photo** : ← / → vont d'une photo à la suivante, chacune dans
+  le rendu de la grille, sans passer par tous ses développements (Maj+W / Maj+Q pour
+  eux). Une case « Passer en revue les développements » dans la section Vue (avec la
+  liste du rendu, la même que la grille) rétablit le parcours de chaque développement
+  (`[gui.view] review_developments`).
 - **Plein écran, mode pile** : dans une rafale, une photo avec des développements ne
   bloque plus la navigation ; après son dernier développement, → passe à la photo
   suivante de la rafale (← à la précédente). Le repère de position a une ombre plus

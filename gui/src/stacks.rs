@@ -245,6 +245,25 @@ impl Stacks {
         }
     }
 
+    /// La photo de l'image `index` et ses développements (rangs dans la liste complète) ;
+    /// l'image seule si elle n'en a pas.
+    pub fn photo_range(&self, index: usize) -> Range<usize> {
+        self.photo_of
+            .get(index)
+            .and_then(|&p| self.photos.get(p))
+            .cloned()
+            .unwrap_or(index..index + 1)
+    }
+
+    /// Couverture de la pile de développements de l'image `index` (repliée ou non : le
+    /// développement que la grille montrerait repliée) ; l'image elle-même sinon.
+    pub fn photo_cover(&self, index: usize) -> usize {
+        match self.photo_of.get(index) {
+            Some(&p) => self.photo_covers[p],
+            None => index,
+        }
+    }
+
     /// Rang (à partir de 1) de la photo de l'image `index` et nombre de photos : les
     /// développements d'une photo comptent pour elle (repère de position, 04/11/2026).
     /// `None` si `index` est hors de la liste.
