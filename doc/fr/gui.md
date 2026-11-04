@@ -385,6 +385,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   « défaut » revient au profil. Les conflits s'affichent en tête et sous l'action.
   `Keymap::specs_for` / `keys_spec` écrivent les raccourcis comme `[keys]` les lit (un
   test vérifie l'aller-retour de tous les raccourcis des profils).
+- **Réglages des logiciels de développement masqués sans eux** (04/11/2026 : la plupart
+  des utilisateurs n'en ont aucun) : sans darktable, RapidRAW, RawTherapee ni ART, la
+  fenêtre de réglages cache `[develop] default`, `[gui.grid] develop` et
+  `develop_toast_ms`, `[gui.view] review_developments`, `[gui.colors] development_mark`,
+  `[develop] high_quality` sans darktable, et chaque `[sidecars.<logiciel>]` sans son
+  logiciel (`SettingsWindow::hidden`) ; les chemins des logiciels restent, pour en
+  indiquer un installé ailleurs. La section « Vue » du panneau n'a alors pas de
+  « Développements ».
 - **Fenêtre de réglages** (`Ctrl+,`, 18/10/2026 ; `gui/src/settings_window.rs`, moteur :
   `tri::config_edit`, voir `config_edit.md`) : sections à gauche (flèches haut / bas
   depuis la recherche), réglages et leurs commentaires à droite, recherche floue comme

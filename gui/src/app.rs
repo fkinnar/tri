@@ -2327,8 +2327,22 @@ impl TriApp {
                 self.request_zoom();
             }
         }
-        // Développements (retour du 04/11/2026) : de photo en photo dans le rendu de la
-        // grille (le même réglage), ou chacun de ses développements, la liste grisée.
+        // Sans logiciel de développement installé : rien à passer en revue (retour du
+        // 04/11/2026).
+        if !self.developers.is_empty() {
+            self.view_developments(ui);
+        }
+        if self.stacks_switch(ui) {
+            let ctx = ui.ctx().clone();
+            self.perform(&ctx, Action::StackMode);
+        }
+        self.file_actions_switch(ui);
+    }
+
+    /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo dans
+    /// le rendu de la grille (le même réglage), ou chacun de ses développements, la liste
+    /// alors grisée.
+    fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
         let mut review = self.review_developments;
         if self
@@ -2365,11 +2379,6 @@ impl TriApp {
         if render != self.grid_render {
             self.set_grid_render(render);
         }
-        if self.stacks_switch(ui) {
-            let ctx = ui.ctx().clone();
-            self.perform(&ctx, Action::StackMode);
-        }
-        self.file_actions_switch(ui);
     }
 
     /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
@@ -18009,6 +18018,10 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(3);
+        // Sans logiciel de développement installé : rien à passer en revue, pas de case.
+        assert!(h.query_by_label(&t!("panel-view-review")).is_none());
+        h.state_mut().developers = fake_darktable();
         h.run_steps(3);
         assert!(!h.state().review_developments, "décochée par défaut");
         click_settled(&mut h, &t!("panel-view-review"));

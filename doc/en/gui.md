@@ -372,6 +372,13 @@ system one ("cold" measurements, experiments).
   written shortcut ("g g"); "default" goes back to the profile. Conflicts are shown at the
   top and under the action. `Keymap::specs_for` / `keys_spec` write shortcuts the way
   `[keys]` reads them (a test checks the round trip of all the profiles' shortcuts).
+- **Development software settings hidden without it** (2026-11-04: most users have
+  none): without darktable, RapidRAW, RawTherapee or ART, the settings window hides
+  `[develop] default`, `[gui.grid] develop` and `develop_toast_ms`, `[gui.view]
+  review_developments`, `[gui.colors] development_mark`, `[develop] high_quality` without
+  darktable, and each `[sidecars.<software>]` without its software
+  (`SettingsWindow::hidden`); the software paths stay, to point to one installed
+  elsewhere. The View section of the panel then has no "Developments".
 - **Settings window** (`Ctrl+,`, 2026-10-18; `gui/src/settings_window.rs`, engine:
   `tri::config_edit`, see `config_edit.md`): sections on the left (up / down arrows from
   the search), settings and their comments on the right, fuzzy search like the help

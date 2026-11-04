@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Sans logiciel de développement installé** (darktable, RapidRAW, RawTherapee, ART),
+  les réglages qui ne servent qu'avec eux sont masqués (fenêtre de réglages, section Vue
+  du panneau) ; leurs chemins restent, pour en indiquer un installé ailleurs.
 - **Repère de position** : « Dév. n / m » seulement en passant en revue les
   développements ; en plein écran, un clic sur l'image ou Entrée le remontre.
 - **Plein écran, de photo en photo** : ← / → vont d'une photo à la suivante, chacune dans

@@ -84,6 +84,19 @@ fn family(section: &str) -> Option<((&'static str, &'static str, &'static str), 
     })
 }
 
+/// Réglages sans objet sans aucun logiciel de développement installé (voir
+/// `SettingsWindow::hidden`).
+const NEED_A_DEVELOPER: [(&str, &str); 5] = [
+    ("develop", "default"),
+    ("gui.grid", "develop"),
+    ("gui.grid", "develop_toast_ms"),
+    ("gui.view", "review_developments"),
+    ("gui.colors", "development_mark"),
+];
+
+/// Réglages de darktable seul.
+const NEED_DARKTABLE: [(&str, &str); 1] = [("develop", "high_quality")];
+
 /// Le nom d'un profil ou préréglage : montré dans la liste de l'en-tête et changé par
 /// « Renommer… », pas parmi les réglages (issue n° 18).
 fn renamed_in_header(section: &str, key: &str) -> bool {
@@ -511,6 +524,40 @@ impl SettingsWindow {
         self.recording.is_some()
     }
 
+    /// Réglage sans objet tant qu'aucun logiciel de développement (darktable, RapidRAW,
+    /// RawTherapee, ART) qui le concerne n'est installé (retour du 04/11/2026 : la plupart
+    /// des utilisateurs n'en ont aucun) : masqué dans la fenêtre, gardé dans le fichier.
+    /// Les chemins des logiciels (`[develop] darktable`…) restent : c'est là qu'on en
+    /// indique un installé ailleurs.
+    fn hidden(&self, section: &str, key: &str) -> bool {
+        use tri::develop::Engine;
+        let missing = |e: Engine| !self.engines.contains(&e);
+        if NEED_A_DEVELOPER.contains(&(section, key)) {
+            return self.engines.is_empty();
+        }
+        if NEED_DARKTABLE.contains(&(section, key)) {
+            return missing(Engine::Darktable);
+        }
+        section
+            .strip_prefix("sidecars.")
+            .and_then(Engine::from_id)
+            .is_some_and(missing)
+    }
+
+    /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
+    /// la liste.
+    fn section_hidden(&self, section: &tri::config_edit::Section) -> bool {
+        let mut entries = section.groups.iter().flat_map(|g| &g.entries).peekable();
+        entries.peek().is_some() && entries.all(|e| self.hidden(&section.name, &e.key))
+    }
+
+    /// Sections de la liste de gauche ([`listed`]), sans celles dont tout est masqué.
+    fn shown_sections(&self, schema: &Schema) -> Vec<usize> {
+        let mut list = listed(schema);
+        list.retain(|&i| !self.section_hidden(&schema.sections[i]));
+        list
+    }
+
     /// Valeur actuelle : celle du fichier, sinon la valeur par défaut.
     /// Choix cohérent avec les autres valeurs de la section ? Profils d'export : pas
     /// d'espace « 16 bits » (ProPhoto…) en JPEG ou en 8 bits, pas de JPEG avec un tel
@@ -605,7 +652,7 @@ impl SettingsWindow {
                     i.consume_key(Modifiers::NONE, Key::ArrowDown),
                 )
             });
-            let listed = listed(schema);
+            let listed = self.shown_sections(schema);
             let at = listed_of(schema, self.section);
             let pos = listed.iter().position(|&i| i == at).unwrap_or(0);
             if up {
@@ -743,7 +790,7 @@ impl SettingsWindow {
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     let at = listed_of(schema, self.section);
-                    let mut order = listed(schema);
+                    let mut order = self.shown_sections(schema);
                     // Recherche : les sections trouvées en tête, dans l'ordre des résultats,
                     // puis les autres, grisées, après un espace (un trait prendrait toute la
                     // largeur, la liste avec).
@@ -982,6 +1029,7 @@ impl SettingsWindow {
                 .iter()
                 .filter(|e| only.is_none_or(|keys| keys.contains(&e.key.as_str())))
                 .filter(|e| !renamed_in_header(&section.name, &e.key))
+                .filter(|e| !self.hidden(&section.name, &e.key))
                 .collect();
             if entries.is_empty() {
                 continue;
@@ -1031,7 +1079,9 @@ impl SettingsWindow {
             }
             for group in &section.groups {
                 for entry in &group.entries {
-                    if renamed_in_header(&section.name, &entry.key) {
+                    if renamed_in_header(&section.name, &entry.key)
+                        || self.hidden(&section.name, &entry.key)
+                    {
                         continue;
                     }
                     let id = format!("{}.{}", section.name, entry.key);
@@ -1796,6 +1846,53 @@ mod tests {
     }
 
     #[test]
+    fn settings_without_purpose_are_hidden_without_a_development_software() {
+        // Retour du 04/11/2026 : sans darktable, RapidRAW, RawTherapee ni ART, leurs
+        // réglages n'ont pas de sens ; les chemins des logiciels restent.
+        use tri::develop::Engine;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        let schema = schema();
+        let section = |name: &str| schema.sections.iter().find(|s| s.name == name).unwrap();
+        assert!(w.hidden("gui.view", "review_developments"));
+        assert!(w.hidden("develop", "default"));
+        assert!(!w.hidden("develop", "darktable"), "le chemin reste");
+        assert!(w.section_hidden(section("sidecars.rapidraw")));
+        assert!(!w.section_hidden(section("develop")));
+        w.engines = vec![Engine::RapidRaw];
+        assert!(!w.hidden("gui.view", "review_developments"));
+        assert!(!w.section_hidden(section("sidecars.rapidraw")));
+        assert!(
+            w.section_hidden(section("sidecars.art")),
+            "ART pas installé"
+        );
+        assert!(w.hidden("develop", "high_quality"), "darktable seulement");
+        // Chaque clé masquée est un vrai réglage (un renommage ne la laisse pas filer).
+        for (name, key) in NEED_A_DEVELOPER.iter().chain(&NEED_DARKTABLE) {
+            assert!(
+                section(name)
+                    .groups
+                    .iter()
+                    .flat_map(|g| &g.entries)
+                    .any(|e| e.key == *key),
+                "{name}.{key}"
+            );
+        }
+        for engine in Engine::ALL {
+            assert!(
+                schema
+                    .sections
+                    .iter()
+                    .any(|s| s.name == format!("sidecars.{}", engine.id()))
+                    || engine == Engine::Darktable,
+                "[sidecars.{}]",
+                engine.id()
+            );
+        }
+    }
+
+    #[test]
     fn every_choice_is_accepted_and_names_a_real_setting() {
         let schema = schema();
         for section in &schema.sections {
@@ -1851,8 +1948,10 @@ mod tests {
                 w,
             );
         h.run_steps(3);
-        // Jusqu'à la dernière section : la liste défile pour la montrer.
-        let last = schema().sections.len() - 1;
+        // Jusqu'à la dernière section : la liste défile pour la montrer (sections masquées
+        // sautées).
+        let shown = h.state().shown_sections(schema());
+        let last = *shown.last().unwrap();
         for _ in 0..last {
             h.key_press(Key::ArrowDown);
             h.run_steps(1);
