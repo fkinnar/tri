@@ -775,6 +775,15 @@ seconds = 2.0
 # Où : "center", "top-left", "top-right", "bottom-right" ou "bottom-left".
 place = "top-left"
 
+[gui.notes]
+# Notes (étoiles, drapeau, couleurs) posées sur l'image en plein écran, bandeau du bas
+# affiché ou non. Durée d'affichage en secondes après un changement d'image ou de notes (un
+# clic sur l'image ou Entrée les remontre) ; 0 : jamais ; -1 : toujours.
+seconds = 2.0
+# Place : "center", "top-left", "top-right", "bottom-right" ou "bottom-left". À la même
+# place que le repère de position, les notes restent et le repère se met à côté.
+place = "bottom-left"
+
 [gui.crop]
 # Recadrage (versions) : r en plein écran. Pas du clavier (flèches ou hjkl : déplacer ;
 # avec Maj : côté droit, bas), en proportion de l'image.

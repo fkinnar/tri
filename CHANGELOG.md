@@ -4,8 +4,9 @@
 
 ## Unreleased
 
-- **Notes on the image** (bottom bar hidden): same frame as the position mark, placed like
-  it. In full screen, the folder panel icon is greyed out (it only exists in the grid).
+- **Notes on the image**: same frame and principle as the position mark, display time and
+  place adjustable (`[gui.notes]`), bottom bar shown or not; at the same place, the mark
+  goes next to the notes. In full screen, the folder panel icon is greyed out (it only exists in the grid).
 - **Development software in the settings**: for each one, Auto (with where it was found
   at launch: a forgotten AppImage shows up), Manual (a path, "Browse…") or Disabled; with
   none, the list of supported ones.

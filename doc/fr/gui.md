@@ -140,9 +140,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `stack_number`, `development_number`). `[gui.position] seconds` (2 ; 0 : jamais ; -1 :
   toujours ; fondu sur la fin) et `place` (`center`, `top-left`, `top-right`,
   `bottom-right`, `bottom-left`).
-  Même cadre (`mark_frame`) que les notes posées sur l'image quand le bandeau du bas est
-  masqué (retour du 04/11/2026 : deux styles différents), calées à la même distance du
-  bord ; repère en bas à gauche : au-dessus des notes, qui ne bougent pas quand il disparaît.
+- **Notes sur l'image** (`[gui.notes]`, 04/11/2026, retours de l'utilisateur) : en plein
+  écran, les notes de l'image (drapeau, étoiles, couleurs) dans le même cadre que le repère
+  de position (`mark_frame`, `mark_opacity`), sur le même principe : durée après un
+  changement d'image ou de notes (`seconds`, 2 ; 0 : jamais ; -1 : toujours ; clic sur
+  l'image ou Entrée : remontrées) et place (`place`, `bottom-left`), bandeau du bas affiché
+  ou non. À la même place que le repère, les notes restent et le repère se met à côté
+  (au-dessus en bas, en dessous en haut et au centre).
 - **Filtres et tri par dossier** (30/10/2026, `state::FolderView`) : les filtres (RAW /
   JPEG, étoiles et leur comparaison, couleurs, drapeaux, netteté, exposition,
   développées, inversion), le tri et, depuis le 31/10/2026, le **rendu des vignettes**
@@ -684,8 +688,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     plein écran : drapeaux, étoiles et couleurs de l'image sélectionnée, cliquables,
     estompés quand ils ne sont pas posés, leurs raccourcis dans la bulle (22/10/2026) ; `Maj+N` l'affiche ou le masque
     (`[gui] rating_bar`) ; à droite, le bouton « avance auto » (voir ci-dessous). En
-    plein écran, les notes ne sont dessinées sur l'image que sans lui (masqué, ou mode
-    concentration ; issue n° 8 : elles apparaissaient deux fois). En plein écran aussi,
+    plein écran, les notes sont aussi posées sur l'image, quelques secondes
+    (`[gui.notes]`, voir plus haut ; issue n° 8 : elles y restaient en permanence en
+    double). En plein écran aussi,
     après les notes : les badges de la grille, brûlée / bouchée (clic : grand
     histogramme) et floue (clic : carte de netteté ; issue n° 9) ;
   - **clic sur une marque de la vignette** (#257, 31/10/2026) : les étoiles (en bas à

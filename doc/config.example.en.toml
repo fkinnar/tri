@@ -775,6 +775,15 @@ seconds = 2.0
 # Where: "center", "top-left", "top-right", "bottom-right" or "bottom-left".
 place = "top-left"
 
+[gui.notes]
+# Notes (stars, flag, colours) drawn on the image in full screen, bottom bar shown or not.
+# Display time in seconds after a change of image or notes (a click on the image or Enter
+# shows them again); 0: never; -1: always.
+seconds = 2.0
+# Place: "center", "top-left", "top-right", "bottom-right" or "bottom-left". At the same
+# place as the position mark, the notes stay and the mark goes next to them.
+place = "bottom-left"
+
 [gui.crop]
 # Cropping (versions): r in full screen. Keyboard step (arrows or hjkl: move;
 # with Shift: right side, bottom), as a proportion of the image.
