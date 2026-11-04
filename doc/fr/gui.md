@@ -140,6 +140,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `stack_number`, `development_number`). `[gui.position] seconds` (2 ; 0 : jamais ; -1 :
   toujours ; fondu sur la fin) et `place` (`center`, `top-left`, `top-right`,
   `bottom-right`, `bottom-left`).
+  Même cadre (`mark_frame`) que les notes posées sur l'image quand le bandeau du bas est
+  masqué (retour du 04/11/2026 : deux styles différents), calées à la même distance du
+  bord ; repère en bas à gauche : les notes au-dessus de lui.
 - **Filtres et tri par dossier** (30/10/2026, `state::FolderView`) : les filtres (RAW /
   JPEG, étoiles et leur comparaison, couleurs, drapeaux, netteté, exposition,
   développées, inversion), le tri et, depuis le 31/10/2026, le **rendu des vignettes**

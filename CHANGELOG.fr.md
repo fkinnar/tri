@@ -4,6 +4,9 @@
 
 ## À venir
 
+- **Notes sur l'image** (bandeau du bas masqué) : même cadre que le repère de position,
+  calées comme lui. En plein écran, l'icône du panneau des dossiers est grisée (il
+  n'existe qu'en grille).
 - **Logiciels de développement dans les réglages** : pour chacun, Auto (avec l'endroit
   où il a été trouvé au lancement : une AppImage oubliée se voit), Manuel (un chemin,
   « Parcourir… ») ou Désactivé ; sans aucun, la liste de ceux pris en charge.

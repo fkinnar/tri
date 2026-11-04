@@ -838,6 +838,11 @@ pub struct TriApp {
     /// et depuis quand il est montré.
     position_key: Option<(PathBuf, bool)>,
     position_since: Instant,
+    /// Zone centrale du repère de position et cadre du repère s'il est affiché (image
+    /// précédente) : les notes sur l'image s'y calent, au-dessus de lui s'il est en bas à
+    /// gauche.
+    mark_area: Rect,
+    mark_rect: Option<Rect>,
     /// Dernière image affichée en plein écran (pour la trace).
     last_shown: (usize, Option<Level>),
 }
@@ -1246,6 +1251,8 @@ impl TriApp {
             focus_since: Instant::now(),
             position_key: None,
             position_since: Instant::now(),
+            mark_area: Rect::NOTHING,
+            mark_rect: None,
             last_zoom_size: std::collections::HashMap::new(),
             gui,
         };
@@ -7768,6 +7775,8 @@ impl TriApp {
     /// chaque changement d'image, pour `[gui.position] seconds` (fondu à la fin ; 0 :
     /// jamais, négatif : toujours), à la place `place`.
     fn position_mark(&mut self, ctx: &egui::Context, area: Rect) {
+        self.mark_area = area;
+        self.mark_rect = None;
         let p = self.gui.position;
         let shown = matches!(self.mode, Mode::Grid | Mode::View)
             && self.error.is_none()
@@ -7814,32 +7823,23 @@ impl TriApp {
         let align = p.place.align();
         let inner = area.shrink(16.0);
         let at = align.pos_in_rect(&inner);
-        egui::Area::new(egui::Id::unique("position_mark"))
+        let shown = egui::Area::new(egui::Id::unique("position_mark"))
             .pivot(align)
             .fixed_pos(at)
             .interactable(false)
             .show(ctx, |ui| {
                 ui.set_opacity(opacity);
-                // Ombre discrète (retour du 04/11/2026 : celle des boîtes le détachait trop
-                // de l'image).
-                let shadow = egui::epaint::Shadow {
-                    offset: [0, 1],
-                    blur: 4,
-                    spread: 0,
-                    color: Color32::from_black_alpha(60),
-                };
-                egui::Frame::popup(ui.style())
-                    .shadow(shadow)
-                    .show(ui, |ui| {
-                        // Sur une ligne, quelle que soit la place.
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(text).size(self.gui.dialogs.title_size),
-                            )
-                            .extend(),
-                        );
-                    });
+                mark_frame(ui.style()).show(ui, |ui| {
+                    // Sur une ligne, quelle que soit la place.
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                        )
+                        .extend(),
+                    );
+                });
             });
+        self.mark_rect = Some(shown.response.rect);
     }
 
     /// Texte du repère de position de l'image sélectionnée : « Photo 12 / 94 », avec les
@@ -9291,12 +9291,35 @@ impl TriApp {
         let size = self.gui.view.marks;
         let bar_shown = self.rating_bar && !self.focus_mode;
         if *notes != tri::xmp::Notes::EMPTY && !bar_shown && self.image_info {
+            // Même cadre que le repère de position (retour du 04/11/2026), à la même
+            // distance du bord.
+            let frame = mark_frame(ui.style());
+            let edge = frame.widget_rect(Rect::ZERO);
             let width = marks::row_width(notes, size);
-            let left_center = view_rect.left_bottom() + vec2(15.0, -15.0 - size / 2.0);
-            let back = Rect::from_min_size(left_center - vec2(0.0, size / 2.0), vec2(width, size))
-                .expand(size * 0.35);
-            painter.rect_filled(back, 4.0, Color32::from_black_alpha(170));
-            marks::row(&painter, left_center, notes, size, &self.gui.colors);
+            let area = if self.mark_area.is_positive() {
+                self.mark_area
+            } else {
+                view_rect
+            };
+            // Repère de position en bas à gauche : les notes au-dessus de lui.
+            let bottom = match self.mark_rect {
+                Some(mark)
+                    if self.gui.position.place == crate::settings::PositionPlace::BottomLeft =>
+                {
+                    mark.top() - 6.0
+                }
+                _ => area.bottom() - 16.0,
+            };
+            let corner = egui::pos2(area.left() + 16.0 - edge.min.x, bottom - edge.max.y);
+            let content = Rect::from_min_size(corner - vec2(0.0, size), vec2(width, size));
+            painter.add(frame.paint(content));
+            marks::row(
+                &painter,
+                content.left_center(),
+                notes,
+                size,
+                &self.gui.colors,
+            );
         }
         // Aide-mémoire des touches, en haut à droite : masqué par défaut (retour du
         // 17/10/2026 : il mordait sur l'image, F1 ouvre l'aide).
@@ -9881,12 +9904,19 @@ impl TriApp {
             response.clicked().then_some(StatusClick::Action(action))
         };
         ui.horizontal(|ui| {
-            if let Some(c) = toggle(
-                ui,
-                marks::Side::Left,
-                self.folder_panel,
-                Action::ToggleFolderPanel,
-            ) {
+            // Le panneau des dossiers n'existe qu'en grille : grisé ailleurs (retour du
+            // 04/11/2026).
+            let folders = ui
+                .add_enabled_ui(self.mode == Mode::Grid, |ui| {
+                    toggle(
+                        ui,
+                        marks::Side::Left,
+                        self.folder_panel,
+                        Action::ToggleFolderPanel,
+                    )
+                })
+                .inner;
+            if let Some(c) = folders {
                 clicked = Some(c);
             }
             if let Some(c) = toggle(
@@ -13946,6 +13976,18 @@ fn set(status: &mut [Status], index: usize, level: Level, avail: Avail) {
             Level::Developed(_) => s.developed = avail,
         }
     }
+}
+
+/// Cadre des repères posés sur l'image (position, notes sans le bandeau) : celui des
+/// boîtes, avec une ombre discrète (retour du 04/11/2026 : celle des boîtes le détachait
+/// trop de l'image). Un seul style pour tous (retour du même jour).
+fn mark_frame(style: &egui::Style) -> egui::Frame {
+    egui::Frame::popup(style).shadow(egui::epaint::Shadow {
+        offset: [0, 1],
+        blur: 4,
+        spread: 0,
+        color: Color32::from_black_alpha(60),
+    })
 }
 
 /// Texte lisible sur n'importe quelle image : fond sombre translucide.
@@ -20738,6 +20780,12 @@ mod tests {
         assert!(!h.state().rating_bar);
         click(&mut h, "panneau des dossiers", |a| a.folder_panel);
         assert!(h.state().folder_panel, "et retour");
+        // Plein écran : pas de panneau des dossiers, son icône est grisée (04/11/2026).
+        h.state_mut().mode = Mode::View;
+        h.run_steps(2);
+        h.get_by_label_contains("panneau des dossiers").click();
+        h.run_steps(2);
+        assert!(h.state().folder_panel, "le clic ne fait rien");
     }
 
     #[test]
