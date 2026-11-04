@@ -4,6 +4,8 @@
 
 ## À venir
 
+- **Repère de position** : « Dév. n / m » seulement en passant en revue les
+  développements ; en plein écran, un clic sur l'image ou Entrée le remontre.
 - **Plein écran, de photo en photo** : ← / → vont d'une photo à la suivante, chacune dans
   le rendu de la grille, sans passer par tous ses développements (Maj+W / Maj+Q pour
   eux). Une case « Passer en revue les développements » dans la section Vue (avec la

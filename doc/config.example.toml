@@ -766,7 +766,8 @@ frame = 3.0
 [gui.position]
 # Repère « où on en est » à chaque changement d'image, en grille et en plein écran :
 # « Photo 12 / 94 », avec les piles « Pile 3 / 20 · 2 / 5 » (la pile, puis la photo dans
-# la pile), et « Dév. 2 / 3 » pour les développements d'une photo. Durée d'affichage en
+# la pile), et « Dév. 2 / 3 » en passant en revue les développements (review_developments) ;
+# en plein écran, un clic sur l'image ou Entrée le remontre. Durée d'affichage en
 # secondes ; 0 : jamais ; -1 : toujours.
 seconds = 2.0
 # Où : "center", "top-left", "top-right", "bottom-right" ou "bottom-left".

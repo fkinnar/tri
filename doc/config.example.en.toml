@@ -766,7 +766,8 @@ frame = 3.0
 [gui.position]
 # "Where am I" mark on each image change, in the grid and in full screen: "Photo 12 /
 # 94", with stacks "Stack 3 / 20 · 2 / 5" (the stack, then the photo in the stack), and
-# "Dev. 2 / 3" for a photo's developments. Display time in seconds; 0: never; -1:
+# "Dev. 2 / 3" when reviewing the developments (review_developments); in full screen, a
+# click on the image or Enter shows it again. Display time in seconds; 0: never; -1:
 # always.
 seconds = 2.0
 # Where: "center", "top-left", "top-right", "bottom-right" or "bottom-left".

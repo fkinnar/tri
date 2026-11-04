@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Position mark**: "Dev. n / m" only when reviewing the developments; in full screen,
+  a click on the image or Enter shows it again.
 - **Full screen, photo to photo**: ← / → go from one photo to the next, each in the
   grid's render, without going through all its developments (Shift+W / Shift+Q for
   them). A "Review the developments" checkbox in the View section (with the render list,

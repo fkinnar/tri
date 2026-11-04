@@ -7772,7 +7772,15 @@ impl TriApp {
             return;
         };
         let key = Some((file.path.clone(), self.mode == Mode::View));
-        if self.position_key != key {
+        // En plein écran, un clic sur l'image ou Entrée le remontre (retour du
+        // 04/11/2026).
+        let again = self.mode == Mode::View
+            && ctx.input(|i| {
+                i.key_pressed(egui::Key::Enter)
+                    || (i.pointer.primary_clicked()
+                        && i.pointer.interact_pos().is_some_and(|p| area.contains(p)))
+            });
+        if self.position_key != key || again {
             self.position_key = key;
             self.position_since = Instant::now();
         }
@@ -7846,7 +7854,13 @@ impl TriApp {
                 parts.push(t!("position-photo", n = n, total = total));
             }
         }
-        if let Some((k, total)) = self.stacks.development_number(i) {
+        // Seulement en passant en revue les développements (retour du 04/11/2026 : sinon,
+        // on va de photo en photo, le compte n'a pas de sens).
+        if let Some((k, total)) = self
+            .stacks
+            .development_number(i)
+            .filter(|_| self.review_developments)
+        {
             parts.push(t!("position-development", n = k, total = total));
         }
         parts.join(" · ")
@@ -15551,6 +15565,11 @@ mod tests {
         h.run_steps(2);
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "a2.jpg", "les développements sautés");
+        // Le repère ne compte pas les développements quand on ne les passe pas en revue.
+        assert!(!h.state().position_text().contains("Dév."));
+        h.state_mut().review_developments = true;
+        assert!(h.state().position_text().contains("Dév. 1 / 3"));
+        h.state_mut().review_developments = false;
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "a1.jpg");
     }
@@ -17971,6 +17990,12 @@ mod tests {
             Some(true),
             "plein écran"
         );
+        // Entrée en plein écran le remontre.
+        let before = h.state().position_since;
+        std::thread::sleep(Duration::from_millis(5));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().position_since > before, "remontré");
         // 0 : jamais.
         h.state_mut().gui.position.seconds = 0.0;
         h.run_steps(2);
