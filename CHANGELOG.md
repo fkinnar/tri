@@ -2,6 +2,9 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+- **"Developed" filter with a single software** (#301): one box instead of two, and no
+  "None checked" line. Background tasks at the bottom of the right panel take its
+  background colour (#300).
 - **"Shown source" in the grid's order**: camera JPEG first, then the software, RAW last.
 - **Development of each photo** (full screen): the list goes under "Review the
   developments", without a title, and is hidden while reviewing instead of greyed out.

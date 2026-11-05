@@ -2,6 +2,9 @@
 
 *[English version](CHANGELOG.md)*
 
+- **Filtre « Développées » avec un seul logiciel** (#301) : une case au lieu de deux, et
+  plus de ligne « Aucun coché ». Les tâches de fond en bas du panneau de droite prennent
+  sa couleur de fond (#300).
 - **« Source affichée » dans l'ordre de la grille** : JPEG boîtier d'abord, puis les
   logiciels, RAW en dernier.
 - **Développement de chaque photo** (plein écran) : la liste passe sous « Passer en revue

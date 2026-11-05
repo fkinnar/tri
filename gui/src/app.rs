@@ -2087,6 +2087,11 @@ impl TriApp {
         let mut checked = rule.engines.clone();
         let mut listed = engines.clone();
         listed.extend(checked.iter().filter(|e| !engines.contains(e)));
+        // Un seul logiciel : la case « Développées » suffit (#301 : deux cases pour la même
+        // chose).
+        if listed.len() <= 1 {
+            return;
+        }
         for engine in listed {
             let mut on = checked.contains(&engine);
             if self
@@ -2101,7 +2106,6 @@ impl TriApp {
                 }
             }
         }
-        ui.weak(t!("filter-developed-none-hint"));
         if checked != rule.engines {
             checked.sort();
             self.developed_checked = Some(checked);
@@ -9766,11 +9770,18 @@ impl TriApp {
 
     /// Le filtre « développées », s'il est allumé.
     fn developed_rule(&self) -> Option<tri::develop::DevelopedRule> {
+        let engines = self.developers.engines();
         self.developed_on.then(|| tri::develop::DevelopedRule {
-            engines: self
-                .developed_checked
-                .clone()
-                .unwrap_or_else(|| self.developers.engines()),
+            engines: match &self.developed_checked {
+                // Un seul logiciel, sans case à lui (#301) : la case « Développées » le
+                // vise, quoi qu'un réglage d'avant ait retenu.
+                Some(checked)
+                    if engines.len() > 1 || checked.iter().any(|e| !engines.contains(e)) =>
+                {
+                    checked.clone()
+                }
+                _ => engines,
+            },
         })
     }
 
@@ -13814,7 +13825,11 @@ impl eframe::App for TriApp {
                         } else {
                             "tasks"
                         };
-                        let panel = egui::Panel::bottom(id).show(ui, |ui| {
+                        // Sans fond propre (#300) : celui du panneau, éclairci quand il
+                        // a le clavier, passe dessous (le fond des panneaux d'egui restait
+                        // d'une autre teinte).
+                        let frame = egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 4));
+                        let panel = egui::Panel::bottom(id).frame(frame).show(ui, |ui| {
                             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                                 self.tasks_ui(ui, &tasks, false)
                             })
@@ -15325,12 +15340,25 @@ mod tests {
         assert_eq!(h.state().files.len(), all);
         press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::I, Modifiers::NONE);
-        // Aucun coché : les RAW sans développement (les JPEG du dossier de test n'en sont
-        // pas) ; retenu.
+        // Un seul logiciel (#301) : pas de case à lui, la case « Développées » le vise,
+        // même si un réglage d'avant n'en retenait aucun.
         h.state_mut().developed_checked = Some(Vec::new());
         h.state_mut().apply_filter();
+        assert_eq!(
+            h.state().developed_rule().unwrap().engines,
+            [Engine::Darktable]
+        );
         assert!(h.state().files.is_empty());
-        assert_eq!(h.state().display().developed_engines, Some(Vec::new()));
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        assert!(
+            h.query_by_label("Darktable").is_none(),
+            "pas de seconde case pour le seul logiciel"
+        );
+        // Deux logiciels : une case par logiciel.
+        h.state_mut().developers = fake_darktable().with(Arc::new(FakeDeveloper(Engine::RapidRaw)));
+        h.run_steps(3);
+        assert!(h.query_by_label("Darktable").is_some());
         f_shift_d(&mut h);
         assert!(!h.state().developed_on);
         f_shift_d(&mut h);
