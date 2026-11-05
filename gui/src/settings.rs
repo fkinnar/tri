@@ -292,6 +292,23 @@ impl Default for GuiSettings {
 }
 
 impl GuiSettings {
+    /// Couleur des titres : `[gui.colors] title`, ou l'ancienne
+    /// `[gui.dialogs] title_color` d'un fichier qui ne règle que celle-là.
+    pub fn title_color(&self) -> Color {
+        match self.dialogs.legacy_title_color {
+            Some(old) if self.colors.title == Colors::default().title => old,
+            _ => self.colors.title,
+        }
+    }
+
+    /// `[gui.dialogs]` tel que les boîtes le lisent (couleur des titres comprise).
+    pub fn dialogs(&self) -> DialogSettings {
+        DialogSettings {
+            title_color: self.title_color(),
+            ..self.dialogs
+        }
+    }
+
     /// Table des raccourcis des profils choisis.
     pub fn keymap(&self) -> Keymap {
         Keymap::from_profiles(&[self.profile])
@@ -614,8 +631,15 @@ pub struct DialogSettings {
     pub max_width: f32,
     /// Taille du texte des titres (points).
     pub title_size: f32,
-    /// Couleur des titres (accent).
+    /// Couleur des titres, tirée de `[gui.colors] title` à chaque image (pour les boîtes,
+    /// qui ne lisent que cette section) ; pas une clé de cette section.
+    #[serde(skip)]
     pub title_color: Color,
+    /// Ancienne place de `[gui.colors] title` (jusqu'au 05/11/2026), encore lue : un
+    /// fichier qui la donne reste valide et garde sa couleur (voir
+    /// [`GuiSettings::title_color`]).
+    #[serde(rename = "title_color")]
+    pub legacy_title_color: Option<Color>,
     /// Fond du panneau qui a le clavier : part de la couleur du texte mêlée au fond des
     /// panneaux (0 : aucune différence, 1 : couleur du texte).
     pub focus_panel_tint: f32,
@@ -651,7 +675,8 @@ impl Default for DialogSettings {
             min_width: 340.0,
             max_width: 520.0,
             title_size: 17.0,
-            title_color: Color([80, 190, 220]),
+            title_color: Colors::default().title,
+            legacy_title_color: None,
             focus_panel_tint: 0.06,
             cursor_tint: 0.12,
             focus_line: ThemeColor::Accent,
@@ -1233,6 +1258,9 @@ pub struct Colors {
     pub accent: Color,
     /// Couleur d'accent du thème clair (défaut : celle d'egui, plus claire).
     pub accent_light: Color,
+    /// Titres (boîtes, sections des panneaux) : turquoise, à part de l'accent pour qui
+    /// bricole un thème. Était `[gui.dialogs] title_color` jusqu'au 05/11/2026.
+    pub title: Color,
     /// Fond de la cellule sélectionnée (au clic ou au clavier).
     pub selection: Option<Color>,
     /// Barres de progression de la barre d'état ; absent : gris du thème (discret, pas la
@@ -1339,6 +1367,7 @@ impl Default for Colors {
         Self {
             accent: Color([0, 92, 128]),
             accent_light: Color([144, 209, 255]),
+            title: Color([80, 190, 220]),
             selection: None,
             progress: None,
             hover: Color([180, 180, 180]),
@@ -1609,6 +1638,22 @@ mod tests {
             let style = ctx.style_of(theme);
             assert_eq!(style.visuals.error_fg_color, Color32::from_rgb(1, 2, 3));
         }
+    }
+
+    #[test]
+    fn the_title_colour_moved_to_the_colours_and_the_old_key_still_works() {
+        // Réorganisation du 05/11/2026 : [gui.dialogs] title_color → [gui.colors] title.
+        let read = |text: &str| -> AppSettings { tri::settings::parse(text).unwrap() };
+        let default = read("");
+        assert_eq!(default.gui.title_color(), Colors::default().title);
+        let new = read("[gui.colors]\ntitle = \"#010203\"\n");
+        assert_eq!(new.gui.title_color(), Color([1, 2, 3]));
+        assert_eq!(new.gui.dialogs().title_color, Color([1, 2, 3]));
+        let old = read("[gui.dialogs]\ntitle_color = \"#040506\"\n");
+        assert_eq!(old.gui.title_color(), Color([4, 5, 6]));
+        let both =
+            read("[gui.dialogs]\ntitle_color = \"#040506\"\n[gui.colors]\ntitle = \"#010203\"\n");
+        assert_eq!(both.gui.title_color(), Color([1, 2, 3]));
     }
 
     #[test]

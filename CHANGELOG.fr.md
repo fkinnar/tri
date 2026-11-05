@@ -7,7 +7,8 @@
   ce qui prend l'accent (étoiles, liseré des boîtes) la suivent. Les couleurs qui
   peuvent suivre l'accent ont une case « Couleur d'accent » plutôt que le mot à taper. Les
   boutons de la barre du bas s'allument comme ceux de la barre des filtres : icône à
-  l'accent, sans fond.
+  l'accent, sans fond. La couleur des titres passe dans les couleurs : `[gui.colors]
+  title` (l'ancienne `[gui.dialogs] title_color` reste lue).
 - **Éditeur externe plus simple à régler** : « Application du système » (celle que le
   système choisit pour chaque type d'image, nommée dans les réglages) ou « Autre
   application », choisie par « Parcourir… », avec `{files}` déjà en argument.
