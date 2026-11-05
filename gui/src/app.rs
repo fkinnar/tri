@@ -7988,8 +7988,14 @@ impl TriApp {
     /// chaque changement d'image, pour `[gui.position] seconds` (fondu à la fin ; 0 :
     /// jamais, négatif : toujours), à la place `place`.
     /// ← / → n'ont pas bougé : au bout de la pile (`stack`) ou de la liste, dans le sens
-    /// `step` (#307).
+    /// `step` (#307). La dernière pile (ou la première) dit la fin de la sélection : on voit
+    /// tout de suite qu'il n'y a plus rien après.
     fn at_end(&mut self, step: isize, stack: bool) {
+        let stack = stack
+            && self
+                .stacks
+                .neighbour_group(self.selected, step > 0)
+                .is_some();
         let text = match (stack, step > 0) {
             (true, true) => t!("end-stack-last"),
             (true, false) => t!("end-stack-first"),
@@ -17520,10 +17526,16 @@ mod tests {
         h.state_mut().end_notice = None;
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(notice(&h), Some(t!("end-list-last")));
-        // Mode pile (une pile d'une photo) : le bout de la pile.
+        // Mode pile, sur la dernière pile : la fin de la sélection, pas seulement de la
+        // pile (on voit tout de suite qu'il n'y a plus rien après).
         h.state_mut().end_notice = None;
         press(&mut h, Key::S, Modifiers::CTRL);
         assert!(h.state().stacking);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(notice(&h), Some(t!("end-list-last")));
+        // Une pile qui a des voisines : le bout de la pile.
+        h.state_mut().end_notice = None;
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(notice(&h), Some(t!("end-stack-last")));
         // 0 : jamais.

@@ -786,7 +786,7 @@ place = "bottom-left"
 
 [gui.end]
 # En plein écran, les flèches gauche / droite au bout de la pile ou de la liste : « Fin de
-# la pile », « Dernière image »… un instant. Durée d'affichage en secondes ; 0 : jamais.
+# la pile », « Fin de la sélection »… un instant. Durée d'affichage en secondes ; 0 : jamais.
 seconds = 1.5
 # Place : "center", "top-left", "top-right", "bottom-right" ou "bottom-left".
 place = "center"

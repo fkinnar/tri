@@ -786,7 +786,7 @@ place = "bottom-left"
 
 [gui.end]
 # In full screen, the left / right arrows at the end of the stack or of the list: "End of
-# the stack", "Last image"… for a moment. Display time in seconds; 0: never.
+# the stack", "End of the selection"… for a moment. Display time in seconds; 0: never.
 seconds = 1.5
 # Place: "center", "top-left", "top-right", "bottom-right" or "bottom-left".
 place = "center"

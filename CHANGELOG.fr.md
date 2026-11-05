@@ -8,7 +8,7 @@
   (#304) ; le filtre « Développées » est grisé dans un dossier sans aucun développement
   (#305).
 - **Bout de la pile ou de la liste** (#307) : en plein écran, ← / → qui ne bougent plus
-  le disent un instant (« Fin de la pile », « Dernière image »…), place et durée dans
+  le disent un instant (« Fin de la pile », « Fin de la sélection »…), place et durée dans
   `[gui.end]`.
 - **Filtre « Développées » avec un seul logiciel** (#301) : une case au lieu de deux, et
   plus de ligne « Aucun coché ». Les tâches de fond en bas du panneau de droite prennent
