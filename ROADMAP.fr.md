@@ -6,7 +6,7 @@
 > va dans « après la V1 », sauf les bugs. Les retours se font par les *issues* du dépôt ;
 > chaque sujet ci-dessous a la sienne, en lien à côté de son nom.
 
-## Déjà là (alpha 7)
+## Déjà là (alpha 8)
 
 Grille et plein écran (rendu boîtier, rendu RAW, 1:1, zoom continu, loupe), notation XMP
 compatible darktable / Lightroom / digiKam, filtres (notes, netteté, exposition,
