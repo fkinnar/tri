@@ -572,6 +572,10 @@ pub struct TriApp {
     /// Lot lancé de lui-même pour la grille (`[gui.grid] develop = "auto"`) : pas de
     /// bilan s'il n'y avait rien à rendre.
     develop_batch_auto: bool,
+    /// Le dossier a au moins un développement (un logiciel installé) : sinon le filtre
+    /// « Développées » est grisé (#305). Revu à l'ouverture, à la relecture des notes et
+    /// quand les logiciels changent.
+    any_developed: bool,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -968,6 +972,18 @@ impl TriApp {
         }
         self.developers = developers;
         self.fit_grid_render();
+        self.refresh_any_developed();
+    }
+
+    /// Vrai s'il y a au moins un développement dans le dossier (#305) : une image de
+    /// développement (clone, copie), ou une photo développée dans un logiciel installé.
+    fn refresh_any_developed(&mut self) {
+        let engines = self.developers.engines();
+        self.any_developed = self.folder.files.iter().any(|f| {
+            tri::media::is_development(&f.path)
+                || (f.kind == MediaKind::Raw
+                    && engines.iter().any(|e| e.sidecar(&f.path).is_some()))
+        });
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -1153,6 +1169,7 @@ impl TriApp {
             sidecars_dialog: None,
             develop_batch: None,
             develop_batch_auto: false,
+            any_developed: false,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -1389,6 +1406,7 @@ impl TriApp {
         self.apply_sidecar_policy();
         self.watch_snapshot = loaded.snapshot;
         trace(|| format!("notes lues : {}", self.folder.notes.len()));
+        self.refresh_any_developed();
         // Filtre sur les notes : à refaire ; tri par note : à refaire aussi (31/10/2026 :
         // le dossier était trié à l'ouverture, sur des notes pas encore lues).
         self.notes_changed();
@@ -1730,9 +1748,19 @@ impl TriApp {
                     clip(tri::exposure::Clip::Over),
                     clip(tri::exposure::Clip::Under),
                 );
+                // Les rendus lancés d'office pour la grille d'un autre dossier s'arrêtent
+                // (#303 : ils continuaient après avoir changé de dossier) ; un lot demandé
+                // à la main va au bout.
+                if self.develop_batch_auto
+                    && let Some(batch) = &self.develop_batch
+                    && batch.folder != folder.dir
+                {
+                    batch.cancel();
+                }
                 self.apply_cache_location(&folder.dir);
                 self.restore_folder_view(&folder.dir);
                 self.folder = folder;
+                self.refresh_any_developed();
                 self.apply_sidecar_policy();
                 self.start_loading();
                 self.apply_sort();
@@ -1952,13 +1980,19 @@ impl TriApp {
 
     /// Interrupteurs des filtres sur l'analyse et les développements, allumés ou non :
     /// netteté, exposition, et développées s'il y a un logiciel de développement.
-    fn content_toggles(&self) -> Vec<(Action, bool)> {
+    /// Filtres sur le contenu : action, allumé, utilisable. « Développées » n'est
+    /// utilisable que si le dossier a un développement (#305), ou pour l'éteindre.
+    fn content_toggles(&self) -> Vec<(Action, bool, bool)> {
         let mut toggles = vec![
-            (Action::FilterBlurry, self.blur_rule.is_some()),
-            (Action::FilterWellExposed, self.well_exposed),
+            (Action::FilterBlurry, self.blur_rule.is_some(), true),
+            (Action::FilterWellExposed, self.well_exposed, true),
         ];
         if !self.developers.is_empty() || self.developed_on {
-            toggles.push((Action::FilterDeveloped, self.developed_on));
+            toggles.push((
+                Action::FilterDeveloped,
+                self.developed_on,
+                self.developed_on || self.any_developed,
+            ));
         }
         toggles
     }
@@ -2018,7 +2052,7 @@ impl TriApp {
         });
         ui.add_space(self.gui.dialogs.spacing);
         let size = self.gui.grid.marks + 4.0;
-        for (action, on) in self.content_toggles() {
+        for (action, on, enabled) in self.content_toggles() {
             let name = match action {
                 Action::FilterBlurry => t!("panel-filter-sharp"),
                 Action::FilterWellExposed => t!("panel-filter-exposed"),
@@ -2027,6 +2061,9 @@ impl TriApp {
             let tip = self.action_tip(action);
             let (item, key) = self.side_begin(false);
             let row = ui.horizontal(|ui| {
+                if !enabled {
+                    ui.disable();
+                }
                 let mut checked = on;
                 let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
                 let (rect, icon) = marks::clickable(ui, size, &tip);
@@ -2042,7 +2079,7 @@ impl TriApp {
                 check.changed() || icon.clicked() || label.clicked()
             });
             self.side_end(ui, item, row.response.rect, row.inner);
-            if row.inner || key == Some(SideKey::Activate) {
+            if enabled && (row.inner || key == Some(SideKey::Activate)) {
                 clicked = Some(action);
             }
             if !on {
@@ -11129,6 +11166,7 @@ impl TriApp {
                 // Les notes connues en attendant la relecture en fond.
                 folder.notes.seed(&self.folder.notes);
                 self.folder = folder;
+                self.refresh_any_developed();
                 self.apply_sidecar_policy();
                 self.start_loading();
                 self.apply_sort();
@@ -11622,7 +11660,17 @@ impl TriApp {
     /// RAW, se voyait mal). La recherche par nom n'en fait pas : son champ montre déjà le
     /// nombre, et chaque lettre tapée la relancerait. `[gui.grid] filter_toast_ms`.
     fn filter_toast(&mut self, ui: &mut Ui) {
-        let seen = (self.folder.dir.clone(), self.filter_parts(false));
+        // Les curseurs de sévérité des filtres actifs comptent aussi (#304 : les bouger
+        // changeait le nombre sans le montrer).
+        let mut parts = self.filter_parts(false);
+        if self.blur_rule.is_some() {
+            parts.push_str(&format!(" · {:.3}", self.blur_strictness));
+        }
+        if self.well_exposed {
+            let (over, under) = self.clip_strictness;
+            parts.push_str(&format!(" · {over:.3} {under:.3}"));
+        }
+        let seen = (self.folder.dir.clone(), parts);
         if seen != self.filter_seen {
             // Pas au changement de dossier : seulement quand le filtre change.
             if seen.0 == self.filter_seen.0 {
@@ -11868,18 +11916,26 @@ impl TriApp {
                 "filter-settings-in-panel",
                 keys = self.keymap.keys_for(Action::ToggleMetadata).join(" / ")
             );
-            for (action, on) in self.content_toggles() {
+            for (action, on, enabled) in self.content_toggles() {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
                 let (rect, response) = marks::clickable(ui, size, &tip);
+                // Pas de développement dans le dossier : grisé, sans effet (#305).
+                let response = if enabled {
+                    response
+                } else {
+                    response.on_hover_cursor(egui::CursorIcon::Default)
+                };
                 // Allumé à l'accent, éteint en gris moyen comme les étoiles (retour du
                 // 31/10/2026 : l'accent fondu sur le gris de la barre ne se lisait pas).
                 let color = if on {
                     marks::accent_mark(ui.ctx())
-                } else {
+                } else if enabled {
                     ui.visuals().weak_text_color()
+                } else {
+                    ui.visuals().weak_text_color().gamma_multiply(0.4)
                 };
                 filter_icon(ui.painter(), rect, action, color);
-                if response.clicked() {
+                if enabled && response.clicked() {
                     clicked.push(action);
                 }
             }
@@ -13829,12 +13885,16 @@ impl eframe::App for TriApp {
                         // a le clavier, passe dessous (le fond des panneaux d'egui restait
                         // d'une autre teinte).
                         let frame = egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 4));
-                        let panel = egui::Panel::bottom(id).frame(frame).show(ui, |ui| {
-                            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                                self.tasks_ui(ui, &tasks, false)
-                            })
-                            .inner
-                        });
+                        // Ni trait au-dessus (#303 : il ne servait à rien).
+                        let panel = egui::Panel::bottom(id)
+                            .frame(frame)
+                            .show_separator_line(false)
+                            .show(ui, |ui| {
+                                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                                    self.tasks_ui(ui, &tasks, false)
+                                })
+                                .inner
+                            });
                         #[cfg(test)]
                         {
                             self.tasks_height = panel.response.rect.height();
@@ -17304,6 +17364,85 @@ mod tests {
     }
 
     #[test]
+    fn the_grid_s_own_renders_stop_when_another_folder_opens() {
+        // #303 : les rendus lancés d'office pour la grille continuaient après avoir changé
+        // de dossier ; un lot demandé à la main va au bout.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        let other = dir.path().join("other");
+        std::fs::create_dir(&other).unwrap();
+        let batch = |app: &TriApp| {
+            let engine = app.engine.as_ref().unwrap();
+            crate::develop_batch::DevelopBatch::start(
+                photos.clone(),
+                Vec::new(),
+                CachedPreviews {
+                    cache: engine.cache.clone(),
+                    settings: engine.preview,
+                    developers: tri::develop::Developers::none().into(),
+                },
+                None,
+                || {},
+            )
+        };
+        let open = |h: &mut Harness<'_, TriApp>, to: &Path| {
+            h.state_mut().open_folder(to);
+            let to = to.to_path_buf();
+            run_until(h, move |app| app.folder.dir == to && app.opening.is_none());
+        };
+        let start = |h: &mut Harness<'_, TriApp>, auto: bool| {
+            let b = batch(h.state());
+            let flag = b.cancel_flag();
+            h.state_mut().develop_batch = Some(b);
+            h.state_mut().develop_batch_auto = auto;
+            flag
+        };
+        let cancelled = |f: &Arc<AtomicBool>| f.load(std::sync::atomic::Ordering::Relaxed);
+        // À la main : il va au bout.
+        let manual = start(&mut h, false);
+        open(&mut h, &other);
+        assert!(!cancelled(&manual));
+        // D'office pour la grille de `photos` : rouvrir `photos` ne l'arrête pas…
+        open(&mut h, &photos);
+        let auto = start(&mut h, true);
+        open(&mut h, &photos);
+        assert!(!cancelled(&auto));
+        // … un autre dossier, si.
+        let auto = start(&mut h, true);
+        open(&mut h, &other);
+        assert!(cancelled(&auto), "interrompu");
+    }
+
+    #[test]
+    fn the_developed_filter_is_greyed_without_developments() {
+        // #305 : un dossier sans aucun développement, la case « Développées » ne servait à
+        // rien.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        h.state_mut().refresh_any_developed();
+        let developed = |app: &TriApp| {
+            app.content_toggles()
+                .into_iter()
+                .find(|t| t.0 == Action::FilterDeveloped)
+                .map(|t| t.2)
+        };
+        assert_eq!(
+            developed(h.state()),
+            Some(false),
+            "rien de développé : grisée"
+        );
+        // Allumée quand même (réglage retenu) : utilisable, pour l'éteindre.
+        h.state_mut().developed_on = true;
+        assert_eq!(developed(h.state()), Some(true));
+        h.state_mut().developed_on = false;
+        // Une image de développement dans le dossier : utilisable.
+        h.state_mut().any_developed = true;
+        assert_eq!(developed(h.state()), Some(true));
+    }
+
+    #[test]
     fn a_new_colour_order_from_the_settings_sorts_the_grid_again() {
         // 31/10/2026 : l'éditeur de `[sort] color_order` écrivait le fichier, la grille
         // triée par couleur restait dans l'ancien ordre.
@@ -18083,6 +18222,18 @@ mod tests {
         h.state_mut().apply_filter();
         h.run_steps(2);
         assert!(h.state().filter_toast_at.is_none());
+        // Un curseur de sévérité d'un filtre actif aussi (#304).
+        h.state_mut().name_query.clear();
+        h.state_mut().well_exposed = true;
+        h.state_mut().apply_filter();
+        h.run_steps(2);
+        h.state_mut().filter_toast_at = None;
+        h.state_mut().clip_strictness.0 = 0.5;
+        h.run_steps(2);
+        assert!(
+            h.state().filter_toast_at.is_some(),
+            "curseur « brûlé » bougé"
+        );
         // Elle s'en va d'elle-même.
         h.state_mut().gui.grid.filter_toast_ms = 0;
         h.state_mut().perform(&ctx, Action::FilterCycle);

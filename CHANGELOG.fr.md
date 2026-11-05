@@ -2,6 +2,11 @@
 
 *[English version](CHANGELOG.md)*
 
+- **Corrections du test de bout en bout** : les rendus développés lancés d'office pour la
+  grille s'arrêtent quand un autre dossier s'ouvre (#303), sans le trait au-dessus des
+  tâches ; bouger un curseur de sévérité d'un filtre actif montre le nombre d'images
+  (#304) ; le filtre « Développées » est grisé dans un dossier sans aucun développement
+  (#305).
 - **Filtre « Développées » avec un seul logiciel** (#301) : une case au lieu de deux, et
   plus de ligne « Aucun coché ». Les tâches de fond en bas du panneau de droite prennent
   sa couleur de fond (#300).
