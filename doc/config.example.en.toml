@@ -128,8 +128,8 @@ eject_lock_ms = 5000
 # Flatpak (org.darktable.Darktable); a path (darktable-cli, or an AppImage);
 # "flatpak": the Flatpak one; "": never.
 # Nothing is written in your setup (own configuration, library in memory).
-# Settings window: for each software, Auto (with where it was found at launch), Manual
-# (a path, Browse… button) or Disabled ("").
+# Settings window: for each software, Auto (with where it was found), Manual
+# (a path, Browse… button) or Disabled (""), applied at once.
 darktable = "auto"
 # High quality (--hq): slightly more faithful, slightly slower.
 high_quality = false

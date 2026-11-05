@@ -2,6 +2,8 @@
 
 *[English version](CHANGELOG.md)*
 
+- **Logiciels de développement appliqués tout de suite** : changer Auto / Manuel /
+  Désactivé dans les réglages relance la recherche, sans redémarrer.
 - **Couleur d'accent** réglable (`[gui.colors] accent`, `accent_light` pour le thème
   clair), avec un sélecteur de couleur dans les réglages : sélections, curseurs, et tout
   ce qui prend l'accent (étoiles, liseré des boîtes) la suivent. Les couleurs qui

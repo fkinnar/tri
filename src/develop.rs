@@ -404,6 +404,32 @@ impl Developers {
     }
 }
 
+/// [`Developers`] partagés entre l'interface et le moteur qui calcule les rendus
+/// développés, remplaçables à chaud (05/11/2026 : un logiciel réglé ou désactivé dans la
+/// fenêtre de réglages compte tout de suite, sans relancer `tri`).
+#[derive(Clone, Debug, Default)]
+pub struct SharedDevelopers(Arc<std::sync::RwLock<Developers>>);
+
+impl From<Developers> for SharedDevelopers {
+    fn from(developers: Developers) -> Self {
+        SharedDevelopers(Arc::new(std::sync::RwLock::new(developers)))
+    }
+}
+
+impl SharedDevelopers {
+    /// Copie des logiciels du moment.
+    pub fn current(&self) -> Developers {
+        self.0.read().map(|d| d.clone()).unwrap_or_default()
+    }
+
+    /// Remplace les logiciels (les rendus déjà lancés finissent avec les anciens).
+    pub fn replace(&self, developers: Developers) {
+        if let Ok(mut d) = self.0.write() {
+            *d = developers;
+        }
+    }
+}
+
 /// Réglages (section `[develop]` du fichier de configuration).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(default, deny_unknown_fields)]

@@ -242,6 +242,8 @@ struct Engine {
     cache: Cache,
     preview: preview::Settings,
     loader: Loader,
+    /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
+    developers: tri::develop::SharedDevelopers,
 }
 
 /// Capture d'écran automatique pour le développement (`TRI_GUI_SCREENSHOT=<fichier.png>`) :
@@ -931,7 +933,13 @@ impl TriApp {
         // Profils d'export, préréglages de recadrage, darktable : aussi à chaud.
         self.settings.export = new.export;
         self.settings.versions = new.versions;
-        self.settings.develop = new.develop;
+        // Logiciels de développement cherchés à nouveau (05/11/2026 : Auto / Manuel /
+        // Désactivé comptait seulement au prochain lancement) : interface, moteur et
+        // fenêtre de réglages à jour tout de suite.
+        if new.develop != self.settings.develop {
+            self.settings.develop = new.develop;
+            self.find_developers();
+        }
         // Ordre des couleurs du tri (31/10/2026 : l'éditeur écrivait, la grille ne
         // bougeait pas) : la grille retriée si elle est triée par note.
         if new.sort != self.settings.sort {
@@ -941,6 +949,24 @@ impl TriApp {
                 self.refilter(Reveal::Minimal);
             }
         }
+    }
+
+    /// Cherche les logiciels de développement d'après `[develop]`, comme au lancement, et
+    /// les remplace partout (moteur, fenêtre de réglages ouverte). Sans moteur (pas encore
+    /// démarré), il les cherchera lui-même.
+    fn find_developers(&mut self) {
+        let Some(engine) = &self.engine else { return };
+        let developers = tri::develop::Developers::find(
+            &self.settings.develop,
+            &engine.cache.root().join("develop"),
+            self.settings.develop.high_quality,
+        );
+        trace(|| format!("logiciels de développement : {developers:?}"));
+        engine.developers.replace(developers.clone());
+        if let Some(w) = &mut self.settings_window {
+            w.set_developers(developers.engines(), developers.found());
+        }
+        self.developers = developers;
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -3511,7 +3537,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers: tri::develop::Developers::none(),
+            developers: tri::develop::Developers::none().into(),
         };
         let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Arc::new(Scheduler::new(producer, config, |_| {}));
@@ -3627,7 +3653,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers: self.developers.clone(),
+            developers: self.developers.clone().into(),
         };
         // Logiciel imposé : ses rendus s'affichent ensuite pour ces images.
         if let Some(force) = force {
@@ -5526,10 +5552,11 @@ impl TriApp {
         );
         trace(|| format!("logiciels de développement : {developers:?}"));
         self.developers = developers.clone();
+        let shared = tri::develop::SharedDevelopers::from(developers);
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings: preview,
-            developers,
+            developers: shared.clone(),
         };
         let config = self.settings.scheduler(self.raw_policy());
         let scheduler = Scheduler::new(producer, config, move |event| {
@@ -5548,6 +5575,7 @@ impl TriApp {
             cache,
             preview,
             loader,
+            developers: shared,
         });
     }
 
@@ -9680,7 +9708,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers,
+            developers: developers.into(),
         };
         let repaint = ctx.clone();
         self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
@@ -17007,6 +17035,39 @@ mod tests {
             ["img1.jpg", "img0.jpg", "img2.jpg"],
             "retrié une fois les notes lues"
         );
+    }
+
+    #[test]
+    fn development_software_changed_in_the_settings_counts_at_once() {
+        // 05/11/2026 : Auto / Manuel / Désactivé ne comptait qu'au prochain lancement.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let cli = dir.path().join("darktable-cli");
+        std::fs::write(&cli, "").unwrap();
+        let develop = |darktable: &str| {
+            let mut settings = AppSettings::default();
+            settings.develop.darktable = darktable.to_string();
+            settings.develop.rapidraw = String::new();
+            settings.develop.rawtherapee = String::new();
+            settings.develop.art = String::new();
+            settings
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut()
+            .apply_settings(&ctx, develop(&cli.to_string_lossy()));
+        let engines = |h: &Harness<'_, TriApp>| {
+            let app = h.state();
+            let shared = app.engine.as_ref().unwrap().developers.current();
+            (app.developers.engines(), shared.engines())
+        };
+        let darktable = vec![tri::develop::Engine::Darktable];
+        assert_eq!(
+            engines(&h),
+            (darktable.clone(), darktable),
+            "trouvé tout de suite"
+        );
+        h.state_mut().apply_settings(&ctx, develop(""));
+        assert_eq!(engines(&h), (vec![], vec![]), "désactivé tout de suite");
     }
 
     #[test]
