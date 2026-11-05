@@ -3,7 +3,8 @@
 *[Version française](CHANGELOG.fr.md)*
 
 - **Filter count bubble** counts the photos like the status bar: a development shown on
-  its own (clone, copy) no longer counts as one more image.
+  its own (clone, copy) no longer counts as one more image. Under "Developed", a software
+  without any development in the folder is greyed out.
 - **Image info icon** in the bottom bar (full screen, left of the 1:1): shows and changes
   whether the infos on the image are shown (`Ctrl+I`); hidden, the position mark goes too,
   like the notes.

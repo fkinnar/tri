@@ -4,7 +4,8 @@
 
 - **Bulle du nombre d'images d'un filtre** : elle compte les photos comme la barre
   d'état ; un développement montré à part (clone, copie) ne compte plus pour une image de
-  plus.
+  plus. Sous « Développées », un logiciel sans aucun développement dans le dossier est
+  grisé.
 - **Icône des infos sur l'image** dans le bandeau du bas (plein écran, à gauche du 1:1) :
   montre et change l'affichage des infos sur l'image (`Ctrl+I`) ; masquées, le repère de
   position part aussi, comme les notes.
