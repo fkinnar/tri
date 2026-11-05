@@ -326,6 +326,15 @@ system one ("cold" measurements, experiments).
   text, unless `selection` is given); colours `[gui.colors] neutral_*`. Only retouches the
   backgrounds of egui's dark theme (`Theme::apply`), restored when changing theme; applied
   live from the settings.
+- **Accent colour** (asked on 2026-11-04: it could not be set): `[gui.colors] accent`
+  (dark and neutral grey themes) and `accent_light` (light theme), egui's by default.
+  `Theme::apply` makes it egui's selection (`visuals.selection`); everything that "takes
+  the accent" reads it there (stars, `focus_line = "accent"`, active buttons).
+  The text on it is the accent much lighter (dark accent) or much darker (light accent):
+  readable on a yellow. The colours that can follow the accent (`focus_line`, `stars`:
+  `"accent"` or `"#rrggbb"`) get an "Accent colour" box in the settings window; unticked,
+  the colour picker, starting from the current accent (feedback of 2026-11-05: the word
+  "accent" to type in a field).
 - **Search** (2026-10-19): `/` in the grid and in the folders panel (in full screen, `/`
   stays "fit"), Ctrl+F everywhere. **Grid**: field at the right of the filter bar, just
   before the counter (#241, 2026-10-31; after the filters before; `[gui.grid] search_width`; narrow window, issue #71: the sort, the thumbnail render and the
@@ -497,7 +506,7 @@ system one ("cold" measurements, experiments).
   number of stacks; the threshold is remembered for the folder on closing
   (`group-thresholds.tsv` in the data folder; the default: `[similarity] threshold`).
   Second feedback of 2026-10-18: **a single toggle** (`Ctrl+S`, stack button in the
-  filter bar and the rating bar, accent background when active, always visible; right
+  filter bar and the rating bar, icon in the accent colour when active, always visible; right
   click: `Ctrl+G`): stacks active, grouping in the grid **and** in full screen ← / →
   within the stack, ↑ / ↓ from stack to stack; inactive, ← / → from photo to photo.
   Stacks in **shades of grey**, no more turquoise. Third feedback: with all stacks

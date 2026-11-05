@@ -723,18 +723,10 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
     }
 }
 
-/// Icône du bandeau de notation dans `rect` : flèche (image précédente / suivante), ou
-/// étoile suivie d'une flèche (avance automatique) ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
-/// automatique, à l'accent sinon, y prend la couleur du texte sélectionné (elle
-/// disparaissait dans le fond, issue n° 59).
-pub fn bar_icon_on(
-    painter: &Painter,
-    rect: Rect,
-    action: Action,
-    color: Color32,
-    colors: &Colors,
-    on: bool,
-) {
+/// Icône du bandeau de notation dans `rect`, toute en `color` (l'accent quand le bouton
+/// est allumé) : flèche (image précédente / suivante), ou étoile suivie d'une flèche
+/// (avance automatique).
+pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
     let (w, h) = (rect.width(), rect.height());
     let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
     let stroke = Stroke::new((w * 0.12).max(1.5), color);
@@ -831,12 +823,9 @@ pub fn bar_icon_on(
         Action::Back => grid_fit_icon(painter, rect.shrink(w * 0.05), color),
         _ => {
             // Petite étoile à gauche, flèche à droite.
-            let star_fill = if on {
-                painter.ctx().global_style().visuals.selection.stroke.color
-            } else {
-                star_color(painter.ctx(), colors)
-            };
-            star(painter, p(0.26, 0.5), w * 0.32, star_fill);
+            // Toute l'icône d'une couleur, l'accent quand l'avance est active (retour du
+            // 05/11/2026 : comme les interrupteurs de la barre des filtres).
+            star(painter, p(0.26, 0.5), w * 0.32, color);
             painter.line_segment([p(0.58, 0.5), p(1.0, 0.5)], stroke);
             painter.add(Shape::line(
                 vec![p(0.78, 0.26), p(1.0, 0.5), p(0.78, 0.74)],
@@ -971,12 +960,25 @@ pub fn accent(ctx: &egui::Context) -> Color32 {
     ctx.global_style().visuals.selection.bg_fill
 }
 
+/// Accent bien visible sur le fond du thème (icône allumée sur l'histogramme, nombre de
+/// résultats, cadre de dépôt) : l'accent lui-même s'il tranche (clair sur sombre, foncé
+/// sur clair), sinon sa variante contrastée (le texte de la sélection).
+pub fn accent_bright(visuals: &egui::Visuals) -> Color32 {
+    let accent = visuals.selection.bg_fill;
+    if visuals.dark_mode == crate::settings::is_light(accent) {
+        accent
+    } else {
+        visuals.selection.stroke.color
+    }
+}
+
 /// Accent pour un trait ou une petite forme sur le fond (étoiles, anneau d'une couleur
 /// choisie) : en thème clair, le fond de sélection est trop pâle sur du blanc, on prend
-/// sa variante foncée (le texte de la sélection d'egui).
+/// sa variante foncée (le texte de la sélection d'egui). Un accent réglé foncé
+/// (`accent_light`) se voit déjà sur du blanc : gardé tel quel.
 pub fn accent_mark(ctx: &egui::Context) -> Color32 {
     let style = ctx.global_style();
-    if style.visuals.dark_mode {
+    if style.visuals.dark_mode || !crate::settings::is_light(style.visuals.selection.bg_fill) {
         style.visuals.selection.bg_fill
     } else {
         style.visuals.selection.stroke.color
@@ -987,15 +989,14 @@ pub fn accent_mark(ctx: &egui::Context) -> Color32 {
 /// `[gui.colors] stars`, sinon l'accent éclairci, le bleu foncé de l'accent ne s'y
 /// lisait pas.
 pub fn chip_star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
-    colors.stars.map_or_else(
-        || accent(ctx).lerp_to_gamma(Color32::WHITE, 0.4),
-        Color32::from,
-    )
+    colors
+        .stars
+        .resolve(accent(ctx).lerp_to_gamma(Color32::WHITE, 0.4))
 }
 
 /// Couleur des étoiles : `[gui.colors] stars`, sinon l'accent du thème.
 pub fn star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
-    colors.stars.map_or_else(|| accent_mark(ctx), Color32::from)
+    colors.stars.resolve(accent_mark(ctx))
 }
 
 /// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en

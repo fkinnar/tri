@@ -53,7 +53,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[gui.metadata]` | Panneau des métadonnées : affiché, largeur, histogramme en grille et sa hauteur, pas des curseurs au clavier, air sous chaque groupe de réglages (`group_gap`) | interface |
 | `[gui.sharpness]` | Carte de netteté affichée au démarrage, couleurs de la rotation, opacité | interface |
 | `[gui.compare]` | Comparaison : images au plus, espace, cadre de l'image active | interface |
-| `[gui.colors]` | Couleurs `"#rrggbb"` (sélection, cadre du survol, barres de progression, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
+| `[gui.colors]` | Couleurs `"#rrggbb"` (accent par thème, sélection, cadre du survol, barres de progression, badge, erreurs, fond du plein écran, étoiles, drapeaux, couleurs de notation) | interface |
 | `[keys]` | Raccourcis par action, qui remplacent ceux des profils (voir [gui.md](gui.md#actions-et-raccourcis-actionsrs)) | interface |
 
 ### Erreurs

@@ -10398,7 +10398,7 @@ impl TriApp {
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
                             .on_hover_text(t!("histogram-photo-tip", keys = key));
                         let color = if self.histogram_photo {
-                            ui.visuals().selection.stroke.color
+                            crate::marks::accent_bright(ui.visuals())
                         } else if response.hovered() {
                             ui.visuals().strong_text_color()
                         } else {
@@ -10423,7 +10423,7 @@ impl TriApp {
                                 .on_hover_cursor(egui::CursorIcon::PointingHand)
                                 .on_hover_text(t!("histogram-camera-button-tip", keys = key));
                             let color = if self.histogram_camera {
-                                ui.visuals().selection.stroke.color
+                                crate::marks::accent_bright(ui.visuals())
                             } else if response.hovered() {
                                 ui.visuals().strong_text_color()
                             } else {
@@ -11352,19 +11352,15 @@ impl TriApp {
                         Action::Develop => self.source == Source::Developed,
                         _ => false,
                     };
-                    if active {
-                        ui.painter()
-                            .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
-                    }
-                    let color = ui.style().interact(&response).fg_stroke.color;
-                    marks::bar_icon_on(
-                        ui.painter(),
-                        rect.shrink(icon * 0.2),
-                        action,
-                        color,
-                        &colors,
-                        active,
-                    );
+                    // Allumé = icône à l'accent, sans fond (retour du 05/11/2026 : comme
+                    // les interrupteurs de la barre des filtres ; le fond d'accent rendait
+                    // l'icône illisible sur un accent clair).
+                    let color = if active {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
+                    marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
                     if response.clicked() {
                         clicked = Some(action);
                     }
@@ -11380,11 +11376,11 @@ impl TriApp {
                     let tip = self.action_tip(Action::ToggleGridInfo);
                     let (rect, response) =
                         marks::icon_button(ui, icon, &Action::ToggleGridInfo.label(), &tip);
-                    if self.grid_info {
-                        ui.painter()
-                            .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
-                    }
-                    let color = ui.style().interact(&response).fg_stroke.color;
+                    let color = if self.grid_info {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
                     marks::grid_info_icon(ui.painter(), rect.shrink(icon * 0.2), color);
                     if response.clicked() {
                         clicked = Some(Action::ToggleGridInfo);
@@ -12067,7 +12063,7 @@ impl TriApp {
         let mark_color = if selected {
             self.gui
                 .theme
-                .selected_text(&colors, visuals_text(ui, true))
+                .selected_text(&colors, ui.visuals(), visuals_text(ui, true))
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
@@ -12208,7 +12204,7 @@ impl TriApp {
         let text_color = if selected {
             self.gui
                 .theme
-                .selected_text(&colors, visuals_text(ui, true))
+                .selected_text(&colors, ui.visuals(), visuals_text(ui, true))
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };

@@ -53,7 +53,7 @@ cannot change without updating its documentation.
 | `[gui.metadata]` | Metadata panel: shown, width, histogram in the grid and its height, keyboard slider step, air below each group of settings (`group_gap`) | interface |
 | `[gui.sharpness]` | Sharpness map shown at startup, rotation colors, opacity | interface |
 | `[gui.compare]` | Comparison: maximum images, spacing, frame of the active image | interface |
-| `[gui.colors]` | `"#rrggbb"` colors (selection, hover frame, progress bars, badge, errors, full-screen background, stars, flags, rating colors) | interface |
+| `[gui.colors]` | `"#rrggbb"` colors (accent per theme, selection, hover frame, progress bars, badge, errors, full-screen background, stars, flags, rating colors) | interface |
 | `[keys]` | Shortcuts per action, which replace those of the profiles (see [gui.md](gui.md#actions-and-shortcuts-actionsrs)) | interface |
 
 ### Errors

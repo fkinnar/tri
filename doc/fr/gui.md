@@ -334,6 +334,16 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   texte sombre, sauf `selection` donnée) ; couleurs `[gui.colors] neutral_*`. Retouche
   seulement les fonds du thème sombre d'egui (`Theme::apply`), remis d'origine en
   changeant de thème ; appliqué à chaud depuis les réglages.
+- **Couleur d'accent** (demandée le 04/11/2026 : elle n'était pas réglable) :
+  `[gui.colors] accent` (thèmes sombre et gris neutre) et `accent_light` (thème clair),
+  par défaut celles d'egui. `Theme::apply` en fait la sélection d'egui
+  (`visuals.selection`) ; tout ce qui « prend l'accent » la lit là (étoiles,
+  `focus_line = "accent"`, boutons actifs). Le texte posé dessus est l'accent très
+  éclairci (accent sombre) ou très assombri (accent clair) : lisible sur un jaune.
+  Les couleurs qui peuvent suivre l'accent (`focus_line`, `stars` : `"accent"` ou
+  `"#rrggbb"`) ont dans la fenêtre de réglages une case « Couleur d'accent » ; décochée,
+  le sélecteur de couleur, parti de l'accent du moment (retour du 05/11/2026 : le mot
+  « accent » à taper dans un champ).
 - **Recherche** (19/10/2026) : `/` en grille et dans le panneau des dossiers (en plein
   écran, `/` reste « ajusté »), Ctrl+F partout. **Grille** : champ à droite de la barre des
   filtres, juste avant le compteur (#241, 31/10/2026 ; après les filtres avant ;
@@ -520,7 +530,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
   défaut : `[similarity] threshold`).
   Second retour du 18/10/2026 : **un seul interrupteur** (`Ctrl+S`, bouton pile de la
-  barre des filtres et du bandeau, fond d'accent quand actif, toujours visible ; clic
+  barre des filtres et du bandeau, icône à l'accent quand actif, toujours visible ; clic
   droit : `Ctrl+G`) : piles actives, regroupement en grille **et** en plein écran ← / →
   dans la pile, ↑ / ↓ de pile en pile ; inactives, ← / → de photo en photo. Piles en
   **tons de gris**, plus de turquoise. Troisième retour : toutes piles dépliées, cadres
