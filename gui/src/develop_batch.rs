@@ -142,6 +142,12 @@ impl DevelopBatch {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
+    /// Drapeau d'interruption, lisible même une fois le lot fini et oublié.
+    #[cfg(test)]
+    pub fn cancel_flag(&self) -> Arc<AtomicBool> {
+        self.cancel.clone()
+    }
+
     /// Bilan, une fois le lot fini (une seule fois) ; `None` tant qu'il tourne.
     pub fn finished(&mut self) -> Option<Summary> {
         if !self.handle.as_ref()?.is_finished() {
