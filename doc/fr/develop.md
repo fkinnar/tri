@@ -236,7 +236,8 @@ les images **sans développement** (montrées dans leur rendu LibRaw). Repliée,
 nomme le logiciel s'il est seul, les sigles s'ils sont plusieurs (« DT + RR »,
 `Engine::short`), « LibRaw » si aucun n'est coché. Les cases cochées sont retenues d'une
 session à l'autre (`gui-state.toml`, `developed_engines`) ; au premier lancement, tous
-les logiciels installés. Moteur : `develop::DevelopedRule` (logiciels cochés) et
+les logiciels installés. Un seul logiciel installé (#301, 05/11/2026) : pas de case à
+lui, la case « Développées » le vise. Moteur : `develop::DevelopedRule` (logiciels cochés) et
 `DevelopedFilter` (trait `Filter`), qui lisent les sidecars (`Engine::sidecar` :
 historique darktable non vide, `.rrdata` de RapidRAW) ; une image plate n'a pas de
 développement. Filtre sur le contenu : effacé par `f Échap`, inversible (`f i`).

@@ -228,6 +228,8 @@ development** (shown in their LibRaw render). Folded, the list names the softwar
 is alone, the abbreviations when there are several ("DT + RR", `Engine::short`), "LibRaw"
 when none is checked. The checked boxes are kept from one session to the next
 (`gui-state.toml`, `developed_engines`); at first launch, all the installed software.
+With a single software installed (#301, 2026-11-05): no box of its own, the "Developed"
+box targets it.
 Engine: `develop::DevelopedRule` (checked software) and `DevelopedFilter` (`Filter`
 trait), which read the sidecars (`Engine::sidecar`: non-empty darktable history,
 RapidRAW's `.rrdata`); a flat image has no development. A content filter: cleared by

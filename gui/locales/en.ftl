@@ -961,7 +961,6 @@ slider-strict = stricter
 filter-developed-none = not developed
 filter-developed-engine = developed in { $engine }
 filter-developed-tip = Development software: the images developed in one of the checked software, shown in the latest one; none checked: the images without development, in their LibRaw render
-filter-developed-none-hint = None checked: not developed (LibRaw)
 develop-with = Develop with
 develop-with-choose = choose…
 develop-with-libraw = RAW render (LibRaw)
