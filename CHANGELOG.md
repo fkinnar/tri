@@ -3,7 +3,8 @@
 *[Version française](CHANGELOG.fr.md)*
 
 - **Development software applied at once**: changing Auto / Manual / Disabled in the
-  settings looks for the software again, no restart needed.
+  settings looks for the software again, no restart needed; a disabled one is no longer
+  offered for the thumbnails render.
 - **Accent colour** adjustable (`[gui.colors] accent`, `accent_light` for the light
   theme), with a colour picker in the settings: selections, sliders, and everything that
   takes the accent (stars, dialog focus line) follow it. Colours that can follow the accent

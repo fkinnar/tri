@@ -149,7 +149,8 @@ system one ("cold" measurements, experiments).
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
   a processed folder in cover) are kept in `folder-views` in the data folder (one JSON
   line per folder, written when they change) and restored when it opens, at launch too;
-  a folder with nothing kept opens without filters, in the order kept for all. The name
+  a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
+  without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name
   search is not part of it. `[gui] remember_folder_view = false`: as before, the
   previous folder's filters stay. **In full screen too**, the filter bar (Shift+F) and the
   whole right panel (filters, grid): ratings are given in passes (1 star, filter, 2

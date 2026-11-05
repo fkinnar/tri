@@ -967,6 +967,7 @@ impl TriApp {
             w.set_developers(developers.engines(), developers.found());
         }
         self.developers = developers;
+        self.fit_grid_render();
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -2161,7 +2162,7 @@ impl TriApp {
             .on_hover_text(self.action_tip(Action::GridRenderNext));
         let engines = self.developers.engines();
         let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        let choices = crate::grid_render::GridRender::choices(&engines);
         let tip = self.action_tip(Action::GridRenderNext);
         self.side_combo(
             ui,
@@ -2399,7 +2400,7 @@ impl TriApp {
         }
         let engines = self.developers.engines();
         let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        let choices = crate::grid_render::GridRender::choices(&engines);
         let tip = format!(
             "{}\n{}",
             t!("panel-view-render-tip"),
@@ -4955,7 +4956,10 @@ impl TriApp {
         // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
         // configuration (pas celui du dossier précédent : on trie en JPEG boîtier, on
         // revient sur un dossier traité en couverture).
-        let render = view.render.unwrap_or(self.gui.grid.render);
+        let render = view
+            .render
+            .unwrap_or(self.gui.grid.render)
+            .available(&self.developers.engines());
         if render != self.grid_render {
             self.grid_render = render;
             if let Some(engine) = &self.engine {
@@ -5577,6 +5581,14 @@ impl TriApp {
             loader,
             developers: shared,
         });
+        self.fit_grid_render();
+    }
+
+    /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
+    /// à l'autre puis désinstallé, ou désactivé dans les réglages, n'est plus proposé.
+    fn fit_grid_render(&mut self) {
+        let render = self.grid_render.available(&self.developers.engines());
+        self.set_grid_render(render);
     }
 
     /// Photos jugées floues d'après les scores connus.
@@ -17066,8 +17078,16 @@ mod tests {
             (darktable.clone(), darktable),
             "trouvé tout de suite"
         );
+        use crate::grid_render::GridRender;
+        h.state_mut()
+            .set_grid_render(GridRender::Engine(tri::develop::Engine::Darktable));
         h.state_mut().apply_settings(&ctx, develop(""));
         assert_eq!(engines(&h), (vec![], vec![]), "désactivé tout de suite");
+        assert_eq!(
+            h.state().grid_render,
+            GridRender::Embedded,
+            "vignettes : plus de rendu darktable proposé"
+        );
     }
 
     #[test]

@@ -154,8 +154,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
   boîtier, on revient sur un dossier traité en couverture) de chaque dossier sont retenus
   dans `folder-views` du dossier de données (une ligne JSON par dossier, écrite quand ils
-  changent) et repris à son ouverture, au lancement compris ; un dossier sans rien de
-  retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
+  changent) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
+  cède la place à la couverture, ou au JPEG boîtier sans aucun logiciel (05/11/2026) ;
+  un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
   fait pas partie.
   `[gui] remember_folder_view = false` : comme avant, les filtres du dossier précédent
   restent. **En plein écran aussi**, la barre des filtres (Maj+F) et tout le panneau de
