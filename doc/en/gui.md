@@ -329,9 +329,12 @@ system one ("cold" measurements, experiments).
 - **Accent colour** (asked on 2026-11-04: it could not be set): `[gui.colors] accent`
   (dark and neutral grey themes) and `accent_light` (light theme), egui's by default.
   `Theme::apply` makes it egui's selection (`visuals.selection`); everything that "takes
-  the accent" reads it there (stars, RAW badge, `focus_line = "accent"`, active buttons).
-  The text on it keeps egui's pale blue on a dark accent, its dark blue on a light one
-  (readable on a yellow).
+  the accent" reads it there (stars, `focus_line = "accent"`, active buttons).
+  The text on it is the accent much lighter (dark accent) or much darker (light accent):
+  readable on a yellow. The colours that can follow the accent (`focus_line`, `stars`:
+  `"accent"` or `"#rrggbb"`) get an "Accent colour" box in the settings window; unticked,
+  the colour picker, starting from the current accent (feedback of 2026-11-05: the word
+  "accent" to type in a field).
 - **Search** (2026-10-19): `/` in the grid and in the folders panel (in full screen, `/`
   stays "fit"), Ctrl+F everywhere. **Grid**: field at the right of the filter bar, just
   before the counter (#241, 2026-10-31; after the filters before; `[gui.grid] search_width`; narrow window, issue #71: the sort, the thumbnail render and the

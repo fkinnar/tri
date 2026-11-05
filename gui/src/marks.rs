@@ -1000,15 +1000,14 @@ pub fn accent_mark(ctx: &egui::Context) -> Color32 {
 /// `[gui.colors] stars`, sinon l'accent éclairci, le bleu foncé de l'accent ne s'y
 /// lisait pas.
 pub fn chip_star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
-    colors.stars.map_or_else(
-        || accent(ctx).lerp_to_gamma(Color32::WHITE, 0.4),
-        Color32::from,
-    )
+    colors
+        .stars
+        .resolve(accent(ctx).lerp_to_gamma(Color32::WHITE, 0.4))
 }
 
 /// Couleur des étoiles : `[gui.colors] stars`, sinon l'accent du thème.
 pub fn star_color(ctx: &egui::Context, colors: &Colors) -> Color32 {
-    colors.stars.map_or_else(|| accent_mark(ctx), Color32::from)
+    colors.stars.resolve(accent_mark(ctx))
 }
 
 /// Balai (effacer une liste) dans `rect` : manche en diagonale, ligature, puis brins en

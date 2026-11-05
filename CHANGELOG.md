@@ -4,7 +4,8 @@
 
 - **Accent colour** adjustable (`[gui.colors] accent`, `accent_light` for the light
   theme), with a colour picker in the settings: selections, sliders, and everything that
-  takes the accent (stars, RAW badge, dialog focus line) follow it.
+  takes the accent (stars, dialog focus line) follow it. Colours that can follow the accent
+  get an "Accent colour" box instead of the word to type.
 - **External editor easier to set**: "System application" (the one the system picks for
   each image type, named in the settings) or "Other application", chosen with
   "Browse…", with `{files}` already as argument.

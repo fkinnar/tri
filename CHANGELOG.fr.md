@@ -4,7 +4,8 @@
 
 - **Couleur d'accent** réglable (`[gui.colors] accent`, `accent_light` pour le thème
   clair), avec un sélecteur de couleur dans les réglages : sélections, curseurs, et tout
-  ce qui prend l'accent (étoiles, badge RAW, liseré des boîtes) la suivent.
+  ce qui prend l'accent (étoiles, liseré des boîtes) la suivent. Les couleurs qui
+  peuvent suivre l'accent ont une case « Couleur d'accent » plutôt que le mot à taper.
 - **Éditeur externe plus simple à régler** : « Application du système » (celle que le
   système choisit pour chaque type d'image, nommée dans les réglages) ou « Autre
   application », choisie par « Parcourir… », avec `{files}` déjà en argument.

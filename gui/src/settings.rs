@@ -1228,7 +1228,7 @@ impl Default for HistogramSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct Colors {
     /// Couleur d'accent du thème sombre (et du gris neutre) : sélections, curseurs,
-    /// boutons actifs, et tout ce qui « prend l'accent » (étoiles, badge RAW, liseré des
+    /// boutons actifs, et tout ce qui « prend l'accent » (étoiles, liseré des
     /// boîtes…). Demandée le 04/11/2026 ; défaut = celle d'egui, rien ne change.
     pub accent: Color,
     /// Couleur d'accent du thème clair (défaut : celle d'egui, plus claire).
@@ -1279,7 +1279,7 @@ pub struct Colors {
     /// Marques vides des vignettes (`[gui.grid] empty_marks`) : contour de l'étoile, de
     /// la pastille et du cercle du neutre quand rien n'est posé.
     pub empty_mark: Color,
-    /// Badge « RAW » des cellules ; absent : couleur d'accent du thème.
+    /// Badge « RAW » des cellules ; absent : couleur du nom de l'image.
     pub badge: Option<Color>,
     /// Icône d'une vignette impossible à calculer.
     pub warning: Color,
@@ -1290,9 +1290,9 @@ pub struct Colors {
     /// Fonds proposés tour à tour (`Ctrl+L`) pour la grille et le plein écran, après celui
     /// du thème ; une couleur égale à celle du thème ou déjà vue est sautée.
     pub backgrounds: Vec<Color>,
-    /// Étoiles ; absent : couleur d'accent du thème, comme le reste de l'interface
-    /// (retour du 21/10/2026, à la place du jaune).
-    pub stars: Option<Color>,
+    /// Étoiles ; `"accent"` (défaut) : couleur d'accent du thème, comme le reste de
+    /// l'interface (retour du 21/10/2026, à la place du jaune).
+    pub stars: ThemeColor,
     /// Pastille « acceptée ».
     pub accepted: Color,
     /// Pastille « rejetée ».
@@ -1369,7 +1369,7 @@ impl Default for Colors {
                 Color([0, 0, 0]),
                 Color([255, 255, 255]),
             ],
-            stars: None,
+            stars: ThemeColor::Accent,
             accepted: Color([70, 170, 90]),
             rejected: Color([215, 70, 70]),
             red: Color([225, 65, 65]),

@@ -916,7 +916,7 @@ group_gap = 0.5
 
 [gui.colors]
 # Couleur d'accent : sélections, curseurs, boutons actifs, et tout ce qui « prend
-# l'accent » (étoiles, badge RAW, liseré des boîtes…) ; une par thème (le gris neutre
+# l'accent » (étoiles, liseré des boîtes…) ; une par thème (le gris neutre
 # prend celle du thème sombre).
 accent = "#005c80"
 accent_light = "#90d1ff"
@@ -962,7 +962,7 @@ development_mark = "#585858"
 # pastille et du cercle du neutre quand rien n'est posé ; sombre, pour rester visible sur
 # la case sélectionnée.
 empty_mark = "#3c3c3c"
-# Badge « RAW » des cellules (absent : couleur d'accent du thème).
+# Badge « RAW » des cellules (absent : couleur du nom de l'image).
 # badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
@@ -970,9 +970,9 @@ view_background = "#0c0c0c"
 # Fonds proposés tour à tour par Ctrl+L (grille et plein écran), après celui du thème ;
 # une couleur égale à celle du thème ou déjà dans la liste est sautée.
 backgrounds = ["#303030", "#000000", "#ffffff"]
-# Notes : étoiles (absent : couleur d'accent du thème), pastilles accepté / rejeté,
-# couleurs de notation.
-# stars = "#f0c440"
+# Notes : étoiles ("accent" : couleur d'accent du thème, ou "#rrggbb"), pastilles
+# accepté / rejeté, couleurs de notation.
+stars = "accent"
 accepted = "#46aa5a"
 rejected = "#d74646"
 red = "#e14141"

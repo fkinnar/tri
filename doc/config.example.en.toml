@@ -916,7 +916,7 @@ group_gap = 0.5
 
 [gui.colors]
 # Accent colour: selections, sliders, active buttons, and everything that "takes the
-# accent" (stars, RAW badge, dialog focus line…); one per theme (the neutral grey theme
+# accent" (stars, dialog focus line…); one per theme (the neutral grey theme
 # takes the dark one's).
 accent = "#005c80"
 accent_light = "#90d1ff"
@@ -961,7 +961,7 @@ development_mark = "#585858"
 # Empty marks of the thumbnails (`[gui.grid] empty_marks`): outline of the star, the dot
 # and the neutral circle when nothing is set; dark, to stay visible on the selected cell.
 empty_mark = "#3c3c3c"
-# "RAW" badge of the cells (absent: the theme's accent colour).
+# "RAW" badge of the cells (absent: the colour of the image name).
 # badge = "#78aae6"
 warning = "#e6a03c"
 error = "#e65a5a"
@@ -969,9 +969,9 @@ view_background = "#0c0c0c"
 # Backgrounds offered in turn by Ctrl+L (grid and full screen), after the theme's; a
 # colour equal to the theme's or already in the list is skipped.
 backgrounds = ["#303030", "#000000", "#ffffff"]
-# Ratings: stars (missing: the theme's accent colour), picked / rejected dots,
-# rating colours.
-# stars = "#f0c440"
+# Ratings: stars ("accent": the theme's accent colour, or "#rrggbb"), picked / rejected
+# dots, rating colours.
+stars = "accent"
 accepted = "#46aa5a"
 rejected = "#d74646"
 red = "#e14141"

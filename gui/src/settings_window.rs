@@ -320,6 +320,46 @@ fn section_title(ui: &Ui, name: &str, strong: bool) -> egui::text::LayoutJob {
     job
 }
 
+/// `"#rrggbb"`.
+fn hex_color([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
+/// Couleur qui suit l'accent ou fixe : case « Couleur d'accent » ; décochée, sélecteur de
+/// couleur, parti de l'accent du moment (on ajuste à partir de ce qu'on voyait).
+fn accent_color_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Value>) {
+    let s = match value {
+        Value::Str(s) => s.as_str(),
+        _ => "accent",
+    };
+    let fixed = parse_color(s).filter(|_| !s.trim().eq_ignore_ascii_case("accent"));
+    let mut new = None;
+    let response = ui
+        .horizontal(|ui| {
+            let mut on = fixed.is_none();
+            let r = ui
+                .checkbox(&mut on, t!("settings-accent"))
+                .on_hover_text(t!("settings-accent-tip"));
+            if r.changed() {
+                new = Some(Value::Str(if on {
+                    "accent".into()
+                } else {
+                    let [r, g, b, _] = crate::marks::accent_mark(ui.ctx()).to_array();
+                    hex_color([r, g, b])
+                }));
+            }
+            if let Some(mut rgb) = fixed {
+                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    new = Some(Value::Str(hex_color(rgb)));
+                }
+                ui.weak(s);
+            }
+            r
+        })
+        .inner;
+    (response, new)
+}
+
 /// Vrai si la clé désigne un dossier : saisie avec complétion par Tab.
 /// Valeurs possibles d'un réglage à choix (liste déroulante plutôt que texte libre). Un
 /// test vérifie que chacune est acceptée.
@@ -1646,14 +1686,19 @@ impl SettingsWindow {
                     widget = Some(r);
                     new = changed;
                 }
+                // Couleur qui peut suivre l'accent (`"accent"` par défaut : liseré des
+                // boîtes, étoiles) : une case plutôt que le mot à taper (retour du
+                // 05/11/2026), décochée = sélecteur de couleur comme les autres.
+                value if matches!(&entry.default, Value::Str(d) if d == "accent") => {
+                    let (r, changed) = accent_color_editor(ui, value);
+                    widget = Some(r);
+                    new = changed;
+                }
                 Value::Str(s) if parse_color(s).is_some() => {
                     let mut rgb = parse_color(s).unwrap_or_default();
                     let r = ui.color_edit_button_srgb(&mut rgb);
                     if r.changed() {
-                        new = Some(Value::Str(format!(
-                            "#{:02x}{:02x}{:02x}",
-                            rgb[0], rgb[1], rgb[2]
-                        )));
+                        new = Some(Value::Str(hex_color(rgb)));
                     }
                     widget = Some(r);
                     ui.weak(s);
@@ -2368,6 +2413,50 @@ mod tests {
             2,
             "darktable aussi"
         );
+    }
+
+    #[test]
+    fn a_colour_that_follows_the_accent_is_a_box_then_a_picker() {
+        // Retour du 05/11/2026 : « accent » s'écrivait dans un champ de texte.
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.show_section("gui.dialogs");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1400.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        assert!(
+            !h.state()
+                .drafts
+                .contains_key(&("gui.dialogs".to_string(), "focus_line".to_string())),
+            "pas de champ de texte"
+        );
+        h.get_by_label("Couleur d'accent").click();
+        h.run_steps(2);
+        let written = std::fs::read_to_string(&path).unwrap();
+        let line = written
+            .lines()
+            .find(|l| l.starts_with("focus_line"))
+            .expect("écrit");
+        let value = line.split('"').nth(1).unwrap();
+        assert!(parse_color(value).is_some(), "une couleur fixe : {line}");
+        assert!(
+            h.query_by_label(value).is_some(),
+            "sélecteur et valeur montrés"
+        );
+        h.get_by_label("Couleur d'accent").click();
+        h.run_steps(2);
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("focus_line = \"accent\""), "{written}");
     }
 
     #[test]
