@@ -55,23 +55,27 @@ impl GridRender {
         }
     }
 
-    /// Libellé des listes : le nom, « (LibRaw) » en gris après « RAW » (05/11/2026 :
+    /// Libellé des listes : le nom, « LibRaw » en gris après « RAW », « boîtier » après
+    /// « JPEG » (05/11/2026 :
     /// « Rendu des vignettes : Rendu RAW » disait deux fois « rendu »). Le nom prend la
     /// couleur de la liste (survol, choix en place), la précision `weak`.
     pub fn label(self, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {
-        let GridRender::LibRaw = self else {
-            return self.name().into();
+        let (main, note) = match self {
+            GridRender::LibRaw => (t!("grid-render-raw"), t!("grid-render-libraw-short")),
+            // Même principe pour le JPEG boîtier (retour du 05/11/2026).
+            GridRender::Embedded => (t!("grid-render-jpeg"), t!("grid-render-camera")),
+            _ => return self.name().into(),
         };
         let mut job = eframe::egui::text::LayoutJob::default();
         let font = eframe::egui::FontSelection::Default;
         let style = eframe::egui::Style::default();
-        eframe::egui::RichText::new(t!("grid-render-raw")).append_to(
+        eframe::egui::RichText::new(main).append_to(
             &mut job,
             &style,
             font.clone(),
             eframe::egui::Align::Center,
         );
-        eframe::egui::RichText::new(format!("  {}", t!("grid-render-libraw-short")))
+        eframe::egui::RichText::new(format!("  {note}"))
             .color(weak)
             .append_to(&mut job, &style, font, eframe::egui::Align::Center);
         job.into()

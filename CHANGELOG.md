@@ -5,7 +5,8 @@
 - **Development software applied at once**: changing Auto / Manual / Disabled in the
   settings looks for the software again, no restart needed; a disabled one is no longer
   offered for the thumbnails render. "Thumbnails render" and "Shown source" use the same
-  names: camera JPEG, RAW (LibRaw in grey), the software.
+  names: JPEG and RAW, with "camera" and "LibRaw" in grey, the software. In full screen,
+  "Render (the same as the grid)" becomes "Development of each photo", what it chooses.
 - **Folder search, way out with the mouse**: a cross at the end of the field, and a second
   click on the "server" icon, close it (a click on the icon by mistake left "smb://").
 - **Accent colour** adjustable (`[gui.colors] accent`, `accent_light` for the light
