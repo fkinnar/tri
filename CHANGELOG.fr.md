@@ -2,6 +2,8 @@
 
 *[English version](CHANGELOG.md)*
 
+- **« Source affichée » dans l'ordre de la grille** : JPEG boîtier d'abord, puis les
+  logiciels, RAW en dernier.
 - **Développement de chaque photo** (plein écran) : la liste passe sous « Passer en revue
   les développements », sans titre, et se masque pendant la revue au lieu d'être grisée.
   Hors du mode pile, la revue passe par chaque développement (→ sautait ceux d'une photo

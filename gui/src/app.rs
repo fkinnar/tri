@@ -2326,7 +2326,7 @@ impl TriApp {
             // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
             use crate::grid_render::GridRender;
             let shown = GridRender::Engine(development.engine);
-            let choices = [shown, GridRender::Embedded];
+            let choices = [GridRender::Embedded, shown];
             let mut choice = if self.dev_before {
                 GridRender::Embedded
             } else {
@@ -2350,11 +2350,19 @@ impl TriApp {
                 Some(Level::Developed(e)) => Some(e),
                 _ => None,
             };
+            // Même ordre que la grille (retour du 05/11/2026) : JPEG boîtier, les logiciels
+            // dans l'ordre de la grille, RAW en dernier.
             let mut choices = vec![(Source::Embedded, None)];
+            choices.extend(
+                self.developers
+                    .engines()
+                    .into_iter()
+                    .filter(|e| rendered.contains(e))
+                    .map(|e| (Source::Developed, Some(e))),
+            );
             if file.kind == MediaKind::Raw {
                 choices.push((Source::Raw, None));
             }
-            choices.extend(rendered.iter().map(|&e| (Source::Developed, Some(e))));
             let current = match self.source {
                 Source::Developed => match shown {
                     Some(e) if rendered.contains(&e) => (Source::Developed, Some(e)),
