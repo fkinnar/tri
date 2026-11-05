@@ -6,7 +6,9 @@
   theme), with a colour picker in the settings: selections, sliders, and everything that
   takes the accent (stars, dialog focus line) follow it. Colours that can follow the accent
   get an "Accent colour" box instead of the word to type. The bottom bar buttons light up
-  like the filter bar ones: icon in the accent colour, no background.
+  like the filter bar ones: icon in the accent colour, no background. The title colour
+  moves to the colours: `[gui.colors] title` (the old `[gui.dialogs] title_color` is
+  still read).
 - **External editor easier to set**: "System application" (the one the system picks for
   each image type, named in the settings) or "Other application", chosen with
   "Browse…", with `{files}` already as argument.

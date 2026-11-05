@@ -730,8 +730,6 @@ button_padding = 10.0
 min_width = 340.0
 max_width = 520.0
 title_size = 17.0
-# Colour of the titles (accent, turquoise), underlined by a separator line.
-title_color = "#50bedc"
 # Panel that has the keyboard: its background a little lighter in the dark theme, a little
 # darker in the light theme (share of the text colour mixed into the background, 0 to 1).
 focus_panel_tint = 0.06
@@ -920,6 +918,9 @@ group_gap = 0.5
 # takes the dark one's).
 accent = "#005c80"
 accent_light = "#90d1ff"
+# Titles (dialogs, panel sections), underlined by a separator line; separate from the
+# accent.
+title = "#50bedc"
 # Colours "#rrggbb". Selection (click or keyboard) missing: theme colour. Example:
 # selection = "#1e6f7f"
 # Progress bars of the status bar; missing: the theme's discreet grey. Example:

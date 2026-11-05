@@ -730,8 +730,6 @@ button_padding = 10.0
 min_width = 340.0
 max_width = 520.0
 title_size = 17.0
-# Couleur des titres (accent, turquoise), soulignés d'une ligne de séparation.
-title_color = "#50bedc"
 # Panneau qui a le clavier : son fond un peu plus clair en thème sombre, un peu plus foncé
 # en thème clair (part de la couleur du texte mêlée au fond, de 0 à 1).
 focus_panel_tint = 0.06
@@ -920,6 +918,9 @@ group_gap = 0.5
 # prend celle du thème sombre).
 accent = "#005c80"
 accent_light = "#90d1ff"
+# Titres (boîtes, sections des panneaux), soulignés d'une ligne de séparation ; à part de
+# l'accent.
+title = "#50bedc"
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
 # Barres de progression de la barre d'état ; absent : gris discret du thème. Exemple :

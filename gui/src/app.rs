@@ -2821,7 +2821,7 @@ impl TriApp {
         let focused = self.focus == crate::actions::Scope::Folders;
         let cursor = self.tree.cursor().filter(|_| focused);
         let scroll = focused && std::mem::take(&mut self.scroll_to_cursor);
-        let accent = Color32::from(self.gui.dialogs.title_color);
+        let accent = Color32::from(self.gui.title_color());
         ScrollArea::both().auto_shrink(false).show(ui, |ui| {
             // Une section par nature d'emplacement, chacune sous son titre (demandé le
             // 20/10/2026) : disques, dossier personnel, favoris, puis la racine.
@@ -10021,7 +10021,7 @@ impl TriApp {
             {
                 ui.separator();
                 ui.colored_label(
-                    Color32::from(self.gui.dialogs.title_color),
+                    Color32::from(self.gui.title_color()),
                     t!(
                         "stack-position",
                         n = self.selected - r.start + 1,
@@ -10040,7 +10040,7 @@ impl TriApp {
             };
             if let Some(focus) = focus {
                 ui.separator();
-                ui.colored_label(Color32::from(self.gui.dialogs.title_color), focus);
+                ui.colored_label(Color32::from(self.gui.title_color()), focus);
             }
             if let Some((text, error)) = &self.notice {
                 ui.separator();
@@ -13526,7 +13526,7 @@ impl eframe::App for TriApp {
         if ctx.input(|i| i.viewport().close_requested()) {
             self.stop_background();
         }
-        ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs));
+        ctx.data_mut(|d| d.insert_temp(dialog_settings_id(), self.gui.dialogs()));
         // Recadrage : Tab change de préréglage ; panneaux : de section en section (egui,
         // lui, déplacerait le focus vers un champ ou un bouton ; rendu en fin d'image, sauf
         // depuis un champ).
