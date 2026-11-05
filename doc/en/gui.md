@@ -220,7 +220,7 @@ system one ("cold" measurements, experiments).
   at first by their background too, until the feedback of 2026-11-01: in the settings
   window, dragging a dot slightly off moved the window; a dialog without a title can
   still be grabbed anywhere), larger and more airy
-  (`[gui.dialogs]`: margins, spacing, widths; title in the accent colour, `title_color`,
+  (`[gui.dialogs]`: margins, spacing, widths; title colour `[gui.colors] title`,
   underlined by a separator line).
   egui's `Modal` cannot be moved (its area also covers the greyed background): `Dialog`
   keeps the position and shifts it while dragging; texts in it are not selectable

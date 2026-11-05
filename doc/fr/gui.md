@@ -230,8 +230,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   largeur de la boîte ; d'abord aussi par leur fond, jusqu'au retour du 01/11/2026 :
   dans la fenêtre de réglages, glisser une pastille à côté déplaçait la fenêtre ; une
   boîte sans titre se saisit encore partout), plus
-  grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; titre en couleur
-  d'accent, `title_color`, souligné d'une ligne de séparation).
+  grandes et aérées (`[gui.dialogs]` : marges, espacement, largeurs ; couleur du
+  titre `[gui.colors] title`, souligné d'une ligne de séparation).
   La `Modal` d'egui ne se déplace pas (sa zone couvre aussi le fond grisé) : `Dialog`
   garde la position et la décale au glissement ; les textes n'y sont pas sélectionnables
   (sinon glisser le titre sélectionnait du texte). Boutons et champs restent prioritaires.
