@@ -93,8 +93,8 @@ In full screen, ← / → go **from photo to photo**, each on its cover developm
 is in the grid's render (2026-11-04, `Stacks::photo_range`, `photo_cover`), in stack
 mode as outside it; the other developments stay on `Shift+W` / `Shift+Q`. The "Review the
 developments" checkbox of the View section (`[gui.view] review_developments`, unticked
-by default, remembered) makes ← / → go through each development, and greys out the
-"Development of each photo" list (the grid's render: changing it in full screen changes
+by default, remembered) makes ← / → go through each development, and hides the
+"Development of each photo" list, placed above it (the grid's render: changing it in full screen changes
 the grid too). At the end of the developments of a photo in a burst, the next photo of
 the burst (#285).
 
