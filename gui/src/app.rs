@@ -576,6 +576,9 @@ pub struct TriApp {
     /// « Développées » est grisé (#305). Revu à l'ouverture, à la relecture des notes et
     /// quand les logiciels changent.
     any_developed: bool,
+    /// Logiciels installés dont le dossier a au moins un développement : les autres sont
+    /// grisés dans le filtre « Développées » (retour du 05/11/2026).
+    developed_in: Vec<tri::develop::Engine>,
     /// Plein écran : bout de la pile ou de la liste atteint (#307), le texte, depuis quand
     /// et l'image où il a été atteint ([`TriApp::end_mark`] : il s'efface quand on la
     /// quitte).
@@ -981,13 +984,24 @@ impl TriApp {
 
     /// Vrai s'il y a au moins un développement dans le dossier (#305) : une image de
     /// développement (clone, copie), ou une photo développée dans un logiciel installé.
+    /// Aussi, logiciel par logiciel, ceux qui ont un développement dans le dossier.
     fn refresh_any_developed(&mut self) {
-        let engines = self.developers.engines();
-        self.any_developed = self.folder.files.iter().any(|f| {
-            tri::media::is_development(&f.path)
-                || (f.kind == MediaKind::Raw
-                    && engines.iter().any(|e| e.sidecar(&f.path).is_some()))
-        });
+        let files = &self.folder.files;
+        let developable =
+            |f: &&MediaFile| f.kind == MediaKind::Raw || tri::media::is_development(&f.path);
+        self.developed_in = self
+            .developers
+            .engines()
+            .into_iter()
+            .filter(|e| {
+                files
+                    .iter()
+                    .filter(developable)
+                    .any(|f| e.sidecar(&f.path).is_some())
+            })
+            .collect();
+        self.any_developed = !self.developed_in.is_empty()
+            || files.iter().any(|f| tri::media::is_development(&f.path));
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -1174,6 +1188,7 @@ impl TriApp {
             develop_batch: None,
             develop_batch_auto: false,
             any_developed: false,
+            developed_in: Vec::new(),
             end_notice: None,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
@@ -1892,7 +1907,8 @@ impl TriApp {
     ) -> egui::Response {
         let (i, key) = self.side_begin(false);
         let mut response = ui.checkbox(on, text);
-        if key == Some(SideKey::Activate) {
+        // Grisée : le clavier n'y touche pas non plus.
+        if key == Some(SideKey::Activate) && ui.is_enabled() {
             *on = !*on;
             response.mark_changed();
         }
@@ -2136,11 +2152,17 @@ impl TriApp {
         }
         for engine in listed {
             let mut on = checked.contains(&engine);
-            if self
-                .side_checkbox(ui, &mut on, engine.name())
-                .on_hover_text(t!("filter-developed-tip"))
-                .changed()
-            {
+            // Aucun développement de ce logiciel dans le dossier : grisé (coché ou non, il
+            // ne change rien).
+            let enabled = self.developed_in.contains(&engine);
+            let changed = ui
+                .add_enabled_ui(enabled, |ui| {
+                    self.side_checkbox(ui, &mut on, engine.name())
+                        .on_hover_text(t!("filter-developed-tip"))
+                        .changed()
+                })
+                .inner;
+            if changed {
                 if on {
                     checked.push(engine);
                 } else {
@@ -11735,6 +11757,23 @@ impl TriApp {
     /// d'état passe inaperçu ; un filtre qui ne laisse rien, « JPEG » dans un dossier de
     /// RAW, se voyait mal). La recherche par nom n'en fait pas : son champ montre déjà le
     /// nombre, et chaque lettre tapée la relancerait. `[gui.grid] filter_toast_ms`.
+    /// Nombre d'images de la bulle du filtre : les photos, comme la barre d'état ; un
+    /// développement montré à part (clone, copie) compte avec sa photo (retour du
+    /// 05/11/2026 : une photo développée dans darktable faisait « 2 images » sous le filtre
+    /// « Développées »). Seulement des développements à part : on les compte eux.
+    fn shown_count(&self) -> usize {
+        let photos = self
+            .files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .count();
+        if photos == 0 {
+            self.files.len()
+        } else {
+            photos
+        }
+    }
+
     fn filter_toast(&mut self, ui: &mut Ui) {
         // Les curseurs de sévérité des filtres actifs comptent aussi (#304 : les bouger
         // changeait le nombre sans le montrer).
@@ -11766,10 +11805,9 @@ impl TriApp {
         // Le dernier tiers s'efface.
         let left = (total - elapsed).as_secs_f32() / total.as_secs_f32();
         let alpha = (left * 3.0).min(1.0);
-        let text = if self.files.is_empty() {
-            t!("filter-toast-none")
-        } else {
-            t!("filter-toast", n = self.files.len())
+        let text = match self.shown_count() {
+            0 => t!("filter-toast-none"),
+            n => t!("filter-toast", n = n),
         };
         let painter = ui.painter();
         let galley = painter.layout_no_wrap(
@@ -17517,6 +17555,19 @@ mod tests {
         // Une image de développement dans le dossier : utilisable.
         h.state_mut().any_developed = true;
         assert_eq!(developed(h.state()), Some(true));
+        // Deux logiciels, un seul avec des développements : l'autre est grisé dans la
+        // liste (retour du 05/11/2026).
+        h.state_mut().developers =
+            fake_darktable().with(Arc::new(FakeDeveloper(tri::develop::Engine::RapidRaw)));
+        h.state_mut().developed_in = vec![tri::develop::Engine::Darktable];
+        h.state_mut().developed_on = true;
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        let enabled = |h: &Harness<'_, TriApp>, name: &str| {
+            !format!("{:?}", h.get_by_label(name)).contains("disabled: true")
+        };
+        assert!(enabled(&h, "Darktable"));
+        assert!(!enabled(&h, "RapidRAW"), "rien de RapidRAW : grisé");
     }
 
     #[test]
@@ -17582,6 +17633,38 @@ mod tests {
         h.get_by_label_contains(&icon).click();
         h.run_steps(3);
         assert!(h.state().image_info);
+    }
+
+    #[test]
+    fn the_filter_count_counts_photos_not_their_developments() {
+        // Retour du 05/11/2026 : une photo et son développement à part faisaient « 2
+        // images » dans la bulle du filtre, « 1 image » dans la barre d'état.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        assert_eq!(
+            h.state().shown_count(),
+            3,
+            "trois photos, un développement à part"
+        );
+        // Seulement la photo et son développement.
+        h.state_mut()
+            .files
+            .retain(|f| f.path.to_string_lossy().contains("img0"));
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(h.state().shown_count(), 1);
+        // Seulement le développement : on le compte.
+        h.state_mut()
+            .files
+            .retain(|f| tri::media::is_development(&f.path));
+        assert_eq!(h.state().shown_count(), 1);
     }
 
     #[test]
