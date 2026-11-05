@@ -5,7 +5,7 @@
 - **Logiciels de développement appliqués tout de suite** : changer Auto / Manuel /
   Désactivé dans les réglages relance la recherche, sans redémarrer ; un logiciel désactivé
   n'est plus proposé pour le rendu des vignettes. « Rendu des vignettes » et « Source
-  affichée » disent pareil : JPEG boîtier, RAW (LibRaw en gris), le logiciel.
+  affichée » disent pareil : JPEG et RAW, « boîtier » et « LibRaw » en gris, le logiciel.
 - **Recherche des dossiers, sortie à la souris** : une croix au bout du champ, et un second
   clic sur l'icône « serveur », la referment (un clic par erreur laissait « smb:// »).
 - **Couleur d'accent** réglable (`[gui.colors] accent`, `accent_light` pour le thème
