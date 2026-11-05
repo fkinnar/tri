@@ -576,6 +576,9 @@ pub struct TriApp {
     /// « Développées » est grisé (#305). Revu à l'ouverture, à la relecture des notes et
     /// quand les logiciels changent.
     any_developed: bool,
+    /// Plein écran : bout de la pile ou de la liste atteint (#307), le texte et depuis
+    /// quand ([`TriApp::end_mark`]).
+    end_notice: Option<(String, Instant)>,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -1170,6 +1173,7 @@ impl TriApp {
             develop_batch: None,
             develop_batch_auto: false,
             any_developed: false,
+            end_notice: None,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -6522,6 +6526,7 @@ impl TriApp {
             // (le rendu de la grille) ; en mode pile, dans la pile.
             Action::NavPrev | Action::NavNext if self.mode == Mode::View && !self.reviewing() => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
+                let stacking = self.stacking;
                 if self.stacks_dirty {
                     self.regroup();
                 }
@@ -6536,8 +6541,9 @@ impl TriApp {
                         .contains(&n)
                         .then_some(n as usize)
                 };
-                if let Some(i) = next {
-                    self.select(self.stacks.photo_cover(i));
+                match next {
+                    Some(i) => self.select(self.stacks.photo_cover(i)),
+                    None => self.at_end(step, stacking),
                 }
             }
             // Plein écran, en passant en revue les développements hors du mode pile : image
@@ -6556,6 +6562,8 @@ impl TriApp {
                     } else {
                         self.select(i);
                     }
+                } else {
+                    self.at_end(step, false);
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -6580,18 +6588,20 @@ impl TriApp {
                             self.show_development(r.start + at as usize);
                         } else if burst {
                             let from = if step > 0 { r.end - 1 } else { r.start };
-                            if let Some(i) = self.stacks.step_in_stack(from, step, wrap) {
-                                self.select(i);
+                            match self.stacks.step_in_stack(from, step, wrap) {
+                                Some(i) => self.select(i),
+                                None => self.at_end(step, true),
                             }
                         } else if wrap {
                             self.show_development(r.start + at.rem_euclid(len) as usize);
+                        } else {
+                            self.at_end(step, true);
                         }
                     }
-                    _ => {
-                        if let Some(i) = self.stacks.step_in_stack(self.selected, step, wrap) {
-                            self.select(i);
-                        }
-                    }
+                    _ => match self.stacks.step_in_stack(self.selected, step, wrap) {
+                        Some(i) => self.select(i),
+                        None => self.at_end(step, true),
+                    },
                 }
             }
             Action::NavUp | Action::NavDown if self.mode == Mode::View && self.stacking => {
@@ -7977,6 +7987,59 @@ impl TriApp {
     /// piles, on se perdait) dans la zone centrale `area`, en grille et en plein écran : à
     /// chaque changement d'image, pour `[gui.position] seconds` (fondu à la fin ; 0 :
     /// jamais, négatif : toujours), à la place `place`.
+    /// ← / → n'ont pas bougé : au bout de la pile (`stack`) ou de la liste, dans le sens
+    /// `step` (#307). La dernière pile (ou la première) dit la fin de la sélection : on voit
+    /// tout de suite qu'il n'y a plus rien après.
+    fn at_end(&mut self, step: isize, stack: bool) {
+        let stack = stack
+            && self
+                .stacks
+                .neighbour_group(self.selected, step > 0)
+                .is_some();
+        let text = match (stack, step > 0) {
+            (true, true) => t!("end-stack-last"),
+            (true, false) => t!("end-stack-first"),
+            (false, true) => t!("end-list-last"),
+            (false, false) => t!("end-list-first"),
+        };
+        self.end_notice = Some((text, Instant::now()));
+    }
+
+    /// Le bout de la pile ou de la liste, un instant (`[gui.end]`), dans le cadre du repère
+    /// de position.
+    fn end_mark(&mut self, ctx: &egui::Context, area: Rect) {
+        let e = self.gui.end;
+        let Some((text, since)) = self.end_notice.clone() else {
+            return;
+        };
+        if self.mode != Mode::View || e.seconds <= 0.0 {
+            self.end_notice = None;
+            return;
+        }
+        let Some(opacity) = mark_opacity(e.seconds, since, ctx) else {
+            self.end_notice = None;
+            return;
+        };
+        let align = e.place.align();
+        let at = align.pos_in_rect(&area.shrink(16.0));
+        egui::Area::new(egui::Id::unique("end_mark"))
+            .pivot(align)
+            .fixed_pos(at)
+            .interactable(false)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.set_opacity(opacity);
+                mark_frame(ui.style()).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                        )
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                });
+            });
+    }
+
     fn position_mark(&mut self, ctx: &egui::Context, area: Rect) {
         self.mark_area = area;
         let notes = self.notes_rect.take();
@@ -14029,6 +14092,7 @@ impl eframe::App for TriApp {
         });
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         self.position_mark(&ctx, center.response.rect);
+        self.end_mark(&ctx, center.response.rect);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -17440,6 +17504,44 @@ mod tests {
         // Une image de développement dans le dossier : utilisable.
         h.state_mut().any_developed = true;
         assert_eq!(developed(h.state()), Some(true));
+    }
+
+    #[test]
+    fn full_screen_says_when_the_list_or_the_stack_ends() {
+        // #307 : au bout de la pile ou du dossier, le défilement s'arrêtait sans rien dire.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::View);
+        let notice = |h: &Harness<'_, TriApp>| h.state().end_notice.clone().map(|n| n.0);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(notice(&h), Some(t!("end-list-first")));
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&t!("end-list-first")).is_some(),
+            "montré sur l'image"
+        );
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        h.state_mut().end_notice = None;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(notice(&h), Some(t!("end-list-last")));
+        // Mode pile, sur la dernière pile : la fin de la sélection, pas seulement de la
+        // pile (on voit tout de suite qu'il n'y a plus rien après).
+        h.state_mut().end_notice = None;
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert!(h.state().stacking);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(notice(&h), Some(t!("end-list-last")));
+        // Une pile qui a des voisines : le bout de la pile.
+        h.state_mut().end_notice = None;
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(notice(&h), Some(t!("end-stack-last")));
+        // 0 : jamais.
+        h.state_mut().gui.end.seconds = 0.0;
+        h.run_steps(2);
+        assert!(h.state().end_notice.is_none());
     }
 
     #[test]

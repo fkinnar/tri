@@ -784,6 +784,13 @@ seconds = 2.0
 # place as the position mark, the notes stay and the mark goes next to them.
 place = "bottom-left"
 
+[gui.end]
+# In full screen, the left / right arrows at the end of the stack or of the list: "End of
+# the stack", "End of the selection"… for a moment. Display time in seconds; 0: never.
+seconds = 1.5
+# Place: "center", "top-left", "top-right", "bottom-right" or "bottom-left".
+place = "center"
+
 [gui.crop]
 # Cropping (versions): r in full screen. Keyboard step (arrows or hjkl: move;
 # with Shift: right side, bottom), as a proportion of the image.

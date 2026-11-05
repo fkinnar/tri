@@ -141,6 +141,11 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `stack_number`, `development_number`). `[gui.position] seconds` (2 ; 0 : jamais ; -1 :
   toujours ; fondu sur la fin) et `place` (`center`, `top-left`, `top-right`,
   `bottom-right`, `bottom-left`).
+- **Bout de la pile ou de la liste** (`[gui.end]`, #307, 05/11/2026) : en plein écran,
+  ← / → qui ne bougent plus le disent un instant, dans le même cadre que le repère de
+  position (« Fin de la pile », « Début de la pile », « Fin de la sélection », « Début
+  de la sélection », celle-ci aussi au bout de la dernière pile ; `TriApp::at_end`,
+  `end_mark`), au centre par défaut.
 - **Notes sur l'image** (`[gui.notes]`, 04/11/2026, retours de l'utilisateur) : en plein
   écran, les notes de l'image (drapeau, étoiles, couleurs) dans le même cadre que le repère
   de position (`mark_frame`, `mark_opacity`), sur le même principe : durée après un

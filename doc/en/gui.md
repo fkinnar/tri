@@ -136,6 +136,11 @@ system one ("cold" measurements, experiments).
   image or Enter shows it again (`Stacks::photo_number`, `stack_number`,
   `development_number`). `[gui.position] seconds` (2; 0: never; -1: always; fades out at
   the end) and `place` (`center`, `top-left`, `top-right`, `bottom-right`, `bottom-left`).
+- **End of the stack or of the list** (`[gui.end]`, #307, 2026-11-05): in full screen,
+  ← / → that no longer move say so for a moment, in the same frame as the position mark
+  ("End of the stack", "Start of the stack", "End of the selection", "Start of the
+  selection", the latter also at the end of the last stack; `TriApp::at_end`, `end_mark`),
+  in the centre by default.
 - **Notes on the image** (`[gui.notes]`, 2026-11-04, user feedback): in full screen, the
   image's notes (flag, stars, colours) in the same frame as the position mark
   (`mark_frame`, `mark_opacity`), on the same principle: display time after a change of
