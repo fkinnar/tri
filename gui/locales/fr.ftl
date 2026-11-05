@@ -71,6 +71,7 @@ action-core-view-overlay_orient = Superposition : tourner les lignes (œil de la
 overlay-orientation = Superposition : orientation { $n } / 4
 action-core-search = Rechercher : en grille, par nom de fichier ; dans le panneau des dossiers, un dossier (aussi /)
 search-grid-hint = Rechercher ({ $keys })
+search-folder-close = Fermer la recherche (Échap)
 search-folder-hint = Rechercher… ~/ ou /
 search-folder-tip = Rechercher un dossier ({ $keys }) : parmi les sous-dossiers du dossier pointé ; « ~/… » depuis le dossier personnel, « /… » depuis la racine ou un chemin tapé ; « \\nas\photo », « smb://nas/photo », « ftp://nas », « sftp://… », « davs://… » pour un serveur réseau. ↑ ↓ choisissent, Entrée ouvre, Échap referme.
 search-folder-in = dans { $base }

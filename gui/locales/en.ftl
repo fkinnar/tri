@@ -71,6 +71,7 @@ action-core-view-overlay_orient = Overlay: turn the lines (spiral eye from corne
 overlay-orientation = Overlay: orientation { $n } / 4
 action-core-search = Search: in the grid, by file name; in the folder panel, a folder (also /)
 search-grid-hint = Search ({ $keys })
+search-folder-close = Close the search (Esc)
 search-folder-hint = Search… ~/ or /
 search-folder-tip = Search a folder ({ $keys }): among the subfolders of the pointed one; “~/…” from the home folder, “/…” from the root or a typed path; “\\nas\photo”, “smb://nas/photo”, “ftp://nas”, “sftp://…”, “davs://…” for a network server. ↑ ↓ choose, Enter opens, Esc closes.
 search-folder-in = in { $base }

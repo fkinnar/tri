@@ -58,7 +58,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   est grisé, un clic ou `o` le monte puis l'ouvre, clic droit « Monter » / « Éjecter »,
   26/10/2026, #113), disques fixés, réseau (avec les partages mémorisés ; icône
   « serveur » de l'en-tête ou `c` : se connecter à un partage par son adresse,
-  `\\nas\photo` ou `smb://nas/photo`, Maj+C ou clic droit l'oublie, 28/10/2026, voir
+  `\\nas\photo` ou `smb://nas/photo`, Maj+C ou clic droit l'oublie, 28/10/2026 ; un
+  second clic sur l'icône ou la croix au bout du champ referme la recherche, 05/11/2026 ; voir
   [servers.md](servers.md)), dossiers personnels (avec Bureau, Documents,
   Téléchargements, Images), favoris, puis seulement le système (racine, repliée) ; icône
   **Sous-dossiers** à côté du titre (20/10/2026, gardée ; une case jusqu'au 28/10/2026,

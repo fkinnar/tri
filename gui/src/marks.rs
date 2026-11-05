@@ -1433,6 +1433,13 @@ pub fn focus_marker(
     }
 }
 
+/// Croix (fermer, effacer) dans `rect`.
+pub fn cross(painter: &Painter, rect: Rect, color: Color32) {
+    let stroke = Stroke::new((rect.width() * 0.14).max(1.5), color);
+    painter.line_segment([rect.left_top(), rect.right_bottom()], stroke);
+    painter.line_segment([rect.right_top(), rect.left_bottom()], stroke);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

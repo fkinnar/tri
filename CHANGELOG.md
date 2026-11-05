@@ -6,6 +6,8 @@
   settings looks for the software again, no restart needed; a disabled one is no longer
   offered for the thumbnails render. "Thumbnails render" and "Shown source" use the same
   names: camera JPEG, RAW (LibRaw in grey), the software.
+- **Folder search, way out with the mouse**: a cross at the end of the field, and a second
+  click on the "server" icon, close it (a click on the icon by mistake left "smb://").
 - **Accent colour** adjustable (`[gui.colors] accent`, `accent_light` for the light
   theme), with a colour picker in the settings: selections, sliders, and everything that
   takes the accent (stars, dialog focus line) follow it. Colours that can follow the accent
