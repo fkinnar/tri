@@ -7,7 +7,8 @@
   slider of an active filter shows the image count (#304); the "Developed" filter is
   greyed out in a folder without any development (#305).
 - **End of the stack or of the list** (#307): in full screen, ← / → that no longer move
-  say so for a moment ("End of the stack", "End of the selection"…), place and time in `[gui.end]`; it goes away as soon as another image shows.
+  say so for a moment ("End of the stack", "End of the selection"…), place and time in
+  `[gui.end]`; it goes away as soon as another image shows.
 - **"Developed" filter with a single software** (#301): one box instead of two, and no
   "None checked" line. Background tasks at the bottom of the right panel take its
   background colour (#300).
