@@ -154,8 +154,9 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   valeur d'un dossier jamais réglé, pas celle du dossier précédent : on trie en JPEG
   boîtier, on revient sur un dossier traité en couverture) de chaque dossier sont retenus
   dans `folder-views` du dossier de données (une ligne JSON par dossier, écrite quand ils
-  changent) et repris à son ouverture, au lancement compris ; un dossier sans rien de
-  retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
+  changent) et repris à son ouverture, au lancement compris ; un logiciel désactivé ou désinstallé depuis
+  cède la place à la couverture, ou au JPEG boîtier sans aucun logiciel (05/11/2026) ;
+  un dossier sans rien de retenu s'ouvre sans filtre, dans l'ordre retenu pour tous. La recherche par nom n'en
   fait pas partie.
   `[gui] remember_folder_view = false` : comme avant, les filtres du dossier précédent
   restent. **En plein écran aussi**, la barre des filtres (Maj+F) et tout le panneau de
@@ -414,14 +415,15 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   des AppImage restées après une désinstallation gardaient les logiciels « installés »,
   sans moyen de le voir) : chaque logiciel de `[develop]` a une liste **Auto / Manuel /
   Désactivé** (`DeveloperMode`, valeur du fichier : `"auto"`, un chemin ou `"flatpak"`,
-  `""`). Auto montre dessous où il a été trouvé au lancement (programme, AppImage ou
-  commande Flatpak ; `Developers::found`) ou « Non trouvé au lancement » ; Manuel, un
+  `""`). Auto montre dessous où il a été trouvé (programme, AppImage ou commande
+  Flatpak ; `Developers::found`) ou « Non trouvé » ; Manuel, un
   champ prérempli avec le chemin trouvé et « Parcourir… » (ouvert au dossier du logiciel
   trouvé, sinon à la racine), « Fichier introuvable » si le chemin est faux ; Désactivé,
   « darktable désactivé » (traité comme absent : ni rendus ni export, réglages et sidecars
   masqués). Aucun logiciel trouvé : un message en tête de section avec la liste de ceux pris
-  en charge. Toute la section est marquée « au prochain lancement » (les logiciels sont
-  cherchés au démarrage).
+  en charge. Appliqué tout de suite (05/11/2026 ; jusque-là « au prochain lancement ») :
+  un changement de `[develop]` relance la recherche (`TriApp::find_developers`), pour
+  l'interface, le moteur et la fenêtre.
 - **« Parcourir… »** (04/11/2026) : tout champ de chemin de dossier (`PathField` :
   copier / déplacer vers, export, déchargement, copie depuis un serveur, dossiers de la
   fenêtre de réglages, `folder` des préréglages d'export compris) a un bouton qui ouvre

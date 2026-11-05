@@ -133,7 +133,7 @@ fn program_start(program: &str) -> std::path::PathBuf {
 }
 
 /// Dossier où « Parcourir… » s'ouvre : celui du chemin donné, sinon celui du logiciel
-/// trouvé au lancement, sinon la racine.
+/// trouvé, sinon la racine.
 fn browse_start(value: &str, found: Option<&tri::develop::Found>) -> std::path::PathBuf {
     let given = (!value.is_empty() && value != "flatpak" && value != "auto")
         .then(|| tri::settings::expand_home(value));
@@ -160,8 +160,6 @@ pub fn needs_restart(section: &str, key: &str) -> bool {
             | "similarity"
             | "places"
             | "data"
-            // Logiciels de développement : cherchés au lancement.
-            | "develop"
     ) || (section, key) == ("gui", "window")
 }
 
@@ -522,7 +520,17 @@ pub enum Outcome {
 }
 
 impl SettingsWindow {
-    /// Logiciels de développement installés (ceux que propose `[develop] default`).
+    /// Logiciels cherchés à nouveau (réglage `[develop]` changé) : listes et réglages
+    /// montrés ou masqués à jour.
+    pub fn set_developers(
+        &mut self,
+        engines: Vec<tri::develop::Engine>,
+        found: Vec<tri::develop::Found>,
+    ) {
+        self.engines = engines;
+        self.found = found;
+    }
+
     /// Logiciels trouvés au lancement ([`tri::develop::Developers::found`]) : où chacun l'a
     /// été, sous son réglage de `[develop]` en mode Auto.
     pub fn with_found(mut self, found: Vec<tri::develop::Found>) -> SettingsWindow {
@@ -537,6 +545,7 @@ impl SettingsWindow {
         self
     }
 
+    /// Logiciels de développement installés (ceux que propose `[develop] default`).
     pub fn with_engines(mut self, engines: Vec<tri::develop::Engine>) -> SettingsWindow {
         self.engines = engines;
         self
@@ -1890,7 +1899,7 @@ impl SettingsWindow {
 
     /// Réglage d'un logiciel de développement (`[develop] darktable`…, 04/11/2026, idée
     /// de l'utilisateur) : une liste Auto / Manuel / Désactivé, et dessous, selon le choix,
-    /// l'endroit où il a été trouvé au lancement, un chemin à taper ou choisir
+    /// l'endroit où il a été trouvé, un chemin à taper ou choisir
     /// (« Parcourir… », ouvert au dossier du logiciel trouvé, sinon à la racine), ou « …
     /// désactivé ». Rend la réponse de la liste (focus) et la nouvelle valeur.
     fn developer_editor(
@@ -2387,10 +2396,7 @@ mod tests {
             "darktable : où il a été trouvé"
         );
         assert!(h.query_by_label("RapidRAW désactivé").is_some());
-        assert!(
-            h.query_by_label("Non trouvé au lancement.").is_some(),
-            "RawTherapee"
-        );
+        assert!(h.query_by_label("Non trouvé.").is_some(), "RawTherapee");
         assert!(
             h.query_by_label("Fichier introuvable.").is_some(),
             "ART : chemin faux"

@@ -127,8 +127,8 @@ eject_lock_ms = 5000
 # Flatpak (org.darktable.Darktable) ; un chemin (darktable-cli, ou une AppImage) ;
 # "flatpak" : celui du Flatpak ; "" : jamais.
 # Rien n'est écrit chez vous (configuration propre, bibliothèque en mémoire).
-# Fenêtre de réglages : pour chaque logiciel, Auto (avec l'endroit où il a été trouvé au
-# lancement), Manuel (un chemin, bouton Parcourir…) ou Désactivé ("").
+# Fenêtre de réglages : pour chaque logiciel, Auto (avec l'endroit où il a été trouvé),
+# Manuel (un chemin, bouton Parcourir…) ou Désactivé (""), appliqué tout de suite.
 darktable = "auto"
 # Haute qualité (--hq) : un peu plus fidèle, un peu plus lent.
 high_quality = false

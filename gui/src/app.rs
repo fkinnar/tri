@@ -242,6 +242,8 @@ struct Engine {
     cache: Cache,
     preview: preview::Settings,
     loader: Loader,
+    /// Logiciels de développement du moteur, remplacés quand `[develop]` change.
+    developers: tri::develop::SharedDevelopers,
 }
 
 /// Capture d'écran automatique pour le développement (`TRI_GUI_SCREENSHOT=<fichier.png>`) :
@@ -931,7 +933,13 @@ impl TriApp {
         // Profils d'export, préréglages de recadrage, darktable : aussi à chaud.
         self.settings.export = new.export;
         self.settings.versions = new.versions;
-        self.settings.develop = new.develop;
+        // Logiciels de développement cherchés à nouveau (05/11/2026 : Auto / Manuel /
+        // Désactivé comptait seulement au prochain lancement) : interface, moteur et
+        // fenêtre de réglages à jour tout de suite.
+        if new.develop != self.settings.develop {
+            self.settings.develop = new.develop;
+            self.find_developers();
+        }
         // Ordre des couleurs du tri (31/10/2026 : l'éditeur écrivait, la grille ne
         // bougeait pas) : la grille retriée si elle est triée par note.
         if new.sort != self.settings.sort {
@@ -941,6 +949,25 @@ impl TriApp {
                 self.refilter(Reveal::Minimal);
             }
         }
+    }
+
+    /// Cherche les logiciels de développement d'après `[develop]`, comme au lancement, et
+    /// les remplace partout (moteur, fenêtre de réglages ouverte). Sans moteur (pas encore
+    /// démarré), il les cherchera lui-même.
+    fn find_developers(&mut self) {
+        let Some(engine) = &self.engine else { return };
+        let developers = tri::develop::Developers::find(
+            &self.settings.develop,
+            &engine.cache.root().join("develop"),
+            self.settings.develop.high_quality,
+        );
+        trace(|| format!("logiciels de développement : {developers:?}"));
+        engine.developers.replace(developers.clone());
+        if let Some(w) = &mut self.settings_window {
+            w.set_developers(developers.engines(), developers.found());
+        }
+        self.developers = developers;
+        self.fit_grid_render();
     }
 
     /// Application sur le dossier `dir` (parcouru tout de suite, calculs lancés à la première
@@ -1866,7 +1893,7 @@ impl TriApp {
         id: &str,
         value: &mut T,
         all: &[T],
-        name: impl Fn(T) -> String,
+        name: impl Fn(T) -> egui::WidgetText,
         tip: Option<String>,
     ) -> bool {
         let before = *value;
@@ -2135,14 +2162,15 @@ impl TriApp {
             .on_hover_text(self.action_tip(Action::GridRenderNext));
         let engines = self.developers.engines();
         let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        let choices = crate::grid_render::GridRender::choices(&engines);
+        let weak = ui.visuals().weak_text_color();
         let tip = self.action_tip(Action::GridRenderNext);
         self.side_combo(
             ui,
             "grid_render",
             &mut render,
             &choices,
-            |c| c.name(),
+            |c| c.label(weak),
             Some(tip),
         );
         if self.shown_render() != self.grid_render {
@@ -2327,11 +2355,17 @@ impl TriApp {
                 choices[0]
             };
             let raw = file.kind == MediaKind::Raw;
-            let name = move |c: (Source, Option<tri::develop::Engine>)| match c {
-                (Source::Developed, Some(e)) => t!("shown-developed", engine = e.name()),
-                (Source::Raw, _) => t!("shown-raw"),
-                _ if raw => t!("shown-embedded"),
-                _ => t!("shown-image"),
+            // Mêmes libellés que « Rendu des vignettes » (05/11/2026 : « Rendu boîtier »,
+            // « Rendu RAW » sous « Source affichée » répétaient « rendu »).
+            use crate::grid_render::GridRender;
+            let weak = ui.visuals().weak_text_color();
+            let name = move |c: (Source, Option<tri::develop::Engine>)| -> egui::WidgetText {
+                match c {
+                    (Source::Developed, Some(e)) => GridRender::Engine(e).label(weak),
+                    (Source::Raw, _) => GridRender::LibRaw.label(weak),
+                    _ if raw => GridRender::Embedded.label(weak),
+                    _ => t!("shown-image").into(),
+                }
             };
             if self.side_combo(ui, "view_source", &mut choice, &choices, name, Some(tip)) {
                 if let Some(engine) = choice.1 {
@@ -2373,7 +2407,8 @@ impl TriApp {
         }
         let engines = self.developers.engines();
         let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines, render);
+        let choices = crate::grid_render::GridRender::choices(&engines);
+        let weak = ui.visuals().weak_text_color();
         let tip = format!(
             "{}\n{}",
             t!("panel-view-render-tip"),
@@ -2386,7 +2421,7 @@ impl TriApp {
                 "view_render",
                 &mut render,
                 &choices,
-                |c| c.name(),
+                |c| c.label(weak),
                 Some(tip),
             );
         });
@@ -3511,7 +3546,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers: tri::develop::Developers::none(),
+            developers: tri::develop::Developers::none().into(),
         };
         let config = self.settings.scheduler(self.gui.raw_previews);
         let scheduler = Arc::new(Scheduler::new(producer, config, |_| {}));
@@ -3627,7 +3662,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers: self.developers.clone(),
+            developers: self.developers.clone().into(),
         };
         // Logiciel imposé : ses rendus s'affichent ensuite pour ces images.
         if let Some(force) = force {
@@ -4929,7 +4964,10 @@ impl TriApp {
         // Rendu des vignettes du dossier (31/10/2026) ; sans rien de retenu, celui de la
         // configuration (pas celui du dossier précédent : on trie en JPEG boîtier, on
         // revient sur un dossier traité en couverture).
-        let render = view.render.unwrap_or(self.gui.grid.render);
+        let render = view
+            .render
+            .unwrap_or(self.gui.grid.render)
+            .available(&self.developers.engines());
         if render != self.grid_render {
             self.grid_render = render;
             if let Some(engine) = &self.engine {
@@ -5526,10 +5564,11 @@ impl TriApp {
         );
         trace(|| format!("logiciels de développement : {developers:?}"));
         self.developers = developers.clone();
+        let shared = tri::develop::SharedDevelopers::from(developers);
         let producer = CachedPreviews {
             cache: cache.clone(),
             settings: preview,
-            developers,
+            developers: shared.clone(),
         };
         let config = self.settings.scheduler(self.raw_policy());
         let scheduler = Scheduler::new(producer, config, move |event| {
@@ -5548,7 +5587,16 @@ impl TriApp {
             cache,
             preview,
             loader,
+            developers: shared,
         });
+        self.fit_grid_render();
+    }
+
+    /// Rendu des vignettes ramené à un choix possible : un logiciel retenu d'une session
+    /// à l'autre puis désinstallé, ou désactivé dans les réglages, n'est plus proposé.
+    fn fit_grid_render(&mut self) {
+        let render = self.grid_render.available(&self.developers.engines());
+        self.set_grid_render(render);
     }
 
     /// Photos jugées floues d'après les scores connus.
@@ -9680,7 +9728,7 @@ impl TriApp {
         let producer = CachedPreviews {
             cache: engine.cache.clone(),
             settings: engine.preview,
-            developers,
+            developers: developers.into(),
         };
         let repaint = ctx.clone();
         self.develop_batch = Some(crate::develop_batch::DevelopBatch::start(
@@ -15339,8 +15387,8 @@ mod tests {
         assert_eq!(h.state().order.key, other);
         combo(&h, 1);
         h.run_steps(2);
-        h.get_by_label(&crate::grid_render::GridRender::LibRaw.name())
-            .click();
+        // « RAW », puis « LibRaw » en gris.
+        h.get_by_label("RAW  LibRaw").click();
         h.run_steps(2);
         assert_eq!(
             h.state().grid_render,
@@ -17010,6 +17058,47 @@ mod tests {
     }
 
     #[test]
+    fn development_software_changed_in_the_settings_counts_at_once() {
+        // 05/11/2026 : Auto / Manuel / Désactivé ne comptait qu'au prochain lancement.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let cli = dir.path().join("darktable-cli");
+        std::fs::write(&cli, "").unwrap();
+        let develop = |darktable: &str| {
+            let mut settings = AppSettings::default();
+            settings.develop.darktable = darktable.to_string();
+            settings.develop.rapidraw = String::new();
+            settings.develop.rawtherapee = String::new();
+            settings.develop.art = String::new();
+            settings
+        };
+        let ctx = h.ctx.clone();
+        h.state_mut()
+            .apply_settings(&ctx, develop(&cli.to_string_lossy()));
+        let engines = |h: &Harness<'_, TriApp>| {
+            let app = h.state();
+            let shared = app.engine.as_ref().unwrap().developers.current();
+            (app.developers.engines(), shared.engines())
+        };
+        let darktable = vec![tri::develop::Engine::Darktable];
+        assert_eq!(
+            engines(&h),
+            (darktable.clone(), darktable),
+            "trouvé tout de suite"
+        );
+        use crate::grid_render::GridRender;
+        h.state_mut()
+            .set_grid_render(GridRender::Engine(tri::develop::Engine::Darktable));
+        h.state_mut().apply_settings(&ctx, develop(""));
+        assert_eq!(engines(&h), (vec![], vec![]), "désactivé tout de suite");
+        assert_eq!(
+            h.state().grid_render,
+            GridRender::Embedded,
+            "vignettes : plus de rendu darktable proposé"
+        );
+    }
+
+    #[test]
     fn a_new_colour_order_from_the_settings_sorts_the_grid_again() {
         // 31/10/2026 : l'éditeur de `[sort] color_order` écrivait le fichier, la grille
         // triée par couleur restait dans l'ancien ordre.
@@ -18252,12 +18341,12 @@ mod tests {
         // Rendu des vignettes par dossier (31/10/2026) : un dossier sans rien de retenu
         // reprend celui de la configuration, pas celui du dossier précédent.
         use crate::grid_render::GridRender;
-        h.state_mut().set_grid_render(GridRender::Cover);
+        h.state_mut().set_grid_render(GridRender::LibRaw);
         h.run_steps(2);
         open(&mut h, &other);
         assert_eq!(h.state().grid_render, GridRender::Embedded, "configuration");
         open(&mut h, &photos);
-        assert_eq!(h.state().grid_render, GridRender::Cover, "repris");
+        assert_eq!(h.state().grid_render, GridRender::LibRaw, "repris");
         // Réglage coupé : rien de repris, les filtres restent ceux du moment.
         h.state_mut().gui.remember_folder_view = false;
         press(&mut h, Key::F, Modifiers::NONE);

@@ -47,7 +47,7 @@ pub struct CachedPreviews {
     pub settings: Settings,
     /// Logiciels de développement, pour les niveaux [`Level::Developed`] (aucun : pas de
     /// rendu développé).
-    pub developers: crate::develop::Developers,
+    pub developers: crate::develop::SharedDevelopers,
 }
 
 impl CachedPreviews {
@@ -69,14 +69,14 @@ impl CachedPreviews {
         if self.cache.contains(&key) {
             return Ok(());
         }
-        let tool = self
-            .developers
+        let developers = self.developers.current();
+        let tool = developers
             .get(engine)
             .ok_or_else(|| failure(DevelopError::Unavailable(engine)))?;
         let sidecar = engine
             .sidecar(&file.path)
             .ok_or_else(|| failure(DevelopError::NotDeveloped))?;
-        let work = &self.developers.work_dir;
+        let work = &developers.work_dir;
         std::fs::create_dir_all(work).map_err(|e| Failure::Error(e.to_string()))?;
         let out = work.join(format!(
             "rendu-{}-{}-{:?}.jpg",

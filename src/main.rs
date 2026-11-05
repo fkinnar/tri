@@ -392,7 +392,7 @@ fn start_previews(settings: &EngineSettings, dir: &Path) -> AnyResult<Previews> 
         cache: cache.clone(),
         settings: preview,
         // Rendus développés : dans l'interface seulement, à la demande.
-        developers: tri::develop::Developers::none(),
+        developers: tri::develop::Developers::none().into(),
     };
     let scheduler = Scheduler::new(producer, config, move |e| {
         let _ = tx.send(e);

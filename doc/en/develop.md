@@ -18,8 +18,10 @@ would follow the same model.
 **Several software** (2026-10-26, for RapidRAW and the next ones): each software is an
 `Engine` (identifier, name, sidecar carrying its development) and a plugin of the
 `Developer` trait (`render`); `Developers` is the list of those found on the machine
-(`Developers::find`, work files under `<cache>/develop`), looked for once at launch
-from the files that exist (nothing is kept from one launch to the next).
+(`Developers::find`, work files under `<cache>/develop`), looked for at launch from
+the files that exist (nothing is kept from one launch to the next), and again when
+`[develop]` changes in the settings window (2026-11-05): the engine holds them in a
+`SharedDevelopers` replaced live.
 `Developers::found` says where each one was found (2026-11-04: `Found::location`, the
 `Cli` command as one would type it, and `Found::path`, the file), shown in the settings
 window; a software set to `""` is not looked for, as if it were missing. An image may have been

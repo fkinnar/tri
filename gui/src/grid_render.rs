@@ -55,26 +55,55 @@ impl GridRender {
         }
     }
 
-    /// Choix proposés : les logiciels installés (`engines`) seulement ; la valeur en place
-    /// `current` reste visible (un logiciel désinstallé depuis).
-    pub fn choices(engines: &[Engine], current: GridRender) -> Vec<GridRender> {
+    /// Libellé des listes : le nom, « (LibRaw) » en gris après « RAW » (05/11/2026 :
+    /// « Rendu des vignettes : Rendu RAW » disait deux fois « rendu »). Le nom prend la
+    /// couleur de la liste (survol, choix en place), la précision `weak`.
+    pub fn label(self, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {
+        let GridRender::LibRaw = self else {
+            return self.name().into();
+        };
+        let mut job = eframe::egui::text::LayoutJob::default();
+        let font = eframe::egui::FontSelection::Default;
+        let style = eframe::egui::Style::default();
+        eframe::egui::RichText::new(t!("grid-render-raw")).append_to(
+            &mut job,
+            &style,
+            font.clone(),
+            eframe::egui::Align::Center,
+        );
+        eframe::egui::RichText::new(format!("  {}", t!("grid-render-libraw-short")))
+            .color(weak)
+            .append_to(&mut job, &style, font, eframe::egui::Align::Center);
+        job.into()
+    }
+
+    /// Choix proposés : les logiciels installés (`engines`) seulement (05/11/2026 : un
+    /// logiciel désactivé restait proposé tant qu'il était le choix en place).
+    pub fn choices(engines: &[Engine]) -> Vec<GridRender> {
         let mut list = vec![GridRender::Embedded];
         if !engines.is_empty() {
             list.push(GridRender::Cover);
         }
         list.extend(engines.iter().map(|&e| GridRender::Engine(e)));
-        if let GridRender::Engine(e) = current
-            && !engines.contains(&e)
-        {
-            list.push(current);
-        }
         list.push(GridRender::LibRaw);
         list
     }
 
+    /// Le choix tel qu'il peut s'appliquer avec les logiciels `engines` : un logiciel qui
+    /// n'est plus là (désactivé, désinstallé) cède la place à la couverture, ou au JPEG
+    /// boîtier sans aucun logiciel ; la couverture aussi, sans logiciel.
+    pub fn available(self, engines: &[Engine]) -> GridRender {
+        match self {
+            GridRender::Engine(e) if engines.contains(&e) => self,
+            GridRender::Engine(_) | GridRender::Cover if engines.is_empty() => GridRender::Embedded,
+            GridRender::Engine(_) => GridRender::Cover,
+            other => other,
+        }
+    }
+
     /// Le choix suivant de la liste (`f d`), en boucle.
     pub fn next(self, engines: &[Engine]) -> GridRender {
-        let list = GridRender::choices(engines, self);
+        let list = GridRender::choices(engines);
         let at = list.iter().position(|&r| r == self).unwrap_or(0);
         list[(at + 1) % list.len()]
     }
@@ -227,20 +256,28 @@ mod tests {
         }
         assert_eq!(GridRender::from_id("capture-one"), None);
         assert_eq!(
-            GridRender::choices(&[], GridRender::Embedded),
+            GridRender::choices(&[]),
             [GridRender::Embedded, GridRender::LibRaw]
         );
         assert_eq!(
-            GridRender::choices(&[DT], GridRender::Engine(RR)),
+            GridRender::choices(&[DT]),
             [
                 GridRender::Embedded,
                 GridRender::Cover,
                 GridRender::Engine(DT),
-                GridRender::Engine(RR),
                 GridRender::LibRaw
             ],
-            "la valeur en place reste visible"
+            "seulement les logiciels là"
         );
+        // Un logiciel qui n'est plus là : la couverture, ou le JPEG boîtier sans aucun.
+        assert_eq!(GridRender::Engine(RR).available(&[DT]), GridRender::Cover);
+        assert_eq!(GridRender::Engine(RR).available(&[]), GridRender::Embedded);
+        assert_eq!(GridRender::Cover.available(&[]), GridRender::Embedded);
+        assert_eq!(
+            GridRender::Engine(DT).available(&[DT]),
+            GridRender::Engine(DT)
+        );
+        assert_eq!(GridRender::LibRaw.available(&[]), GridRender::LibRaw);
         assert_eq!(GridRender::LibRaw.next(&[DT]), GridRender::Embedded);
         assert_eq!(GridRender::Embedded.next(&[DT]), GridRender::Cover);
     }

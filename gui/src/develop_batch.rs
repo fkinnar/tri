@@ -67,7 +67,7 @@ impl DevelopBatch {
                 .filter_map(|f| {
                     let engine = match force {
                         Some(e) => e.sidecar(&f.path).map(|_| e)?,
-                        None => producer.developers.resolve(&f.path)?,
+                        None => producer.developers.current().resolve(&f.path)?,
                     };
                     Some((f, engine))
                 })
@@ -202,7 +202,9 @@ mod tests {
         let producer = CachedPreviews {
             cache: tri::cache::Cache::open(dir.path().join("cache")).unwrap(),
             settings: tri::preview::Settings::default(),
-            developers: tri::develop::Developers::none().with(Arc::new(Failing)),
+            developers: tri::develop::Developers::none()
+                .with(Arc::new(Failing))
+                .into(),
         };
         let mut batch =
             DevelopBatch::start(dir.path().to_path_buf(), vec![a, b], producer, None, || {});
@@ -243,7 +245,8 @@ mod tests {
                 &tri::develop::DevelopSettings::default(),
                 &cache.path().join("develop"),
                 false,
-            ),
+            )
+            .into(),
         };
         let mut batch = DevelopBatch::start(dir, files, producer, None, || {});
         let summary = loop {

@@ -149,7 +149,8 @@ system one ("cold" measurements, experiments).
   folder never set, not the previous folder's: one culls in camera JPEG and comes back to
   a processed folder in cover) are kept in `folder-views` in the data folder (one JSON
   line per folder, written when they change) and restored when it opens, at launch too;
-  a folder with nothing kept opens without filters, in the order kept for all. The name
+  a software disabled or uninstalled since gives way to the cover, or to the camera JPEG
+  without any software (2026-11-05); a folder with nothing kept opens without filters, in the order kept for all. The name
   search is not part of it. `[gui] remember_folder_view = false`: as before, the
   previous folder's filters stay. **In full screen too**, the filter bar (Shift+F) and the
   whole right panel (filters, grid): ratings are given in passes (1 star, filter, 2
@@ -399,13 +400,13 @@ system one ("cold" measurements, experiments).
   behind after an uninstall kept the software "installed", with no way to see it): each
   software of `[develop]` has an **Auto / Manual / Disabled** list (`DeveloperMode`, value
   in the file: `"auto"`, a path or `"flatpak"`, `""`). Auto shows below where it was found
-  at launch (program, AppImage or Flatpak command; `Developers::found`) or "Not found at
-  launch"; Manual, a field pre-filled with the path found and "Browse…" (opened at the
+  (program, AppImage or Flatpak command; `Developers::found`) or "Not found"; Manual, a field pre-filled with the path found and "Browse…" (opened at the
   folder of the software found, otherwise at the root), "File not found" if the path is
   wrong; Disabled, "darktable disabled" (treated as absent: no renders or exports, settings
   and sidecars hidden). No software found: a message at the top of the section with the
-  list of supported ones. The whole section is marked "on next launch" (software is looked
-  for at start-up).
+  list of supported ones. Applied at once (2026-11-05; until then "on next launch"): a
+  change of `[develop]` looks for the software again (`TriApp::find_developers`), for the
+  interface, the engine and the window.
 - **"Browse…"** (2026-11-04): every folder path field (`PathField`: copy / move to,
   export, offload, copy from a server, folders of the settings window, `folder` of export
   presets included) has a button opening the system's folder chooser (`rfd`), at the typed
