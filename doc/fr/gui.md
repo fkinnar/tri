@@ -326,7 +326,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Plein écran, rien sur l'image** (22/10/2026) : numéro, source, taille et attentes
   (« rendu RAW en cours ») dans la barre d'état, après le nom ; notes dans le bandeau.
   En mode concentration, sans barres, ils sont dessinés sur l'image ; `Ctrl+I`
-  (`core.view.image_info`, `[gui.view] image_info`) les masque ou les affiche, retenu.
+  (`core.view.image_info`, `[gui.view] image_info`) les masque ou les affiche, retenu ;
+  aussi les notes et le repère de position posés sur l'image. Une icône « i » à droite de
+  la barre d'état montre cet état (à l'accent quand elles sont affichées) et le change à la
+  souris, grisée en grille (05/11/2026).
 - **Couleur de fond** (`Ctrl+L`, `core.view.background`, 22/10/2026, comme les
   « lumières » de Lightroom) : grille et plein écran (comparaison et loupe comprises),
   tour à tour le fond du thème puis `[gui.colors] backgrounds` (gris foncé, noir, blanc),

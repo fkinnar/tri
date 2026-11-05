@@ -1440,6 +1440,16 @@ pub fn cross(painter: &Painter, rect: Rect, color: Color32) {
     painter.line_segment([rect.right_top(), rect.left_bottom()], stroke);
 }
 
+/// Icône « infos sur l'image » : un cercle et un « i ».
+pub fn info_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center();
+    let stroke = Stroke::new((s * 0.09).max(1.2), color);
+    painter.circle_stroke(c, s * 0.38, stroke);
+    painter.circle_filled(c + vec2(0.0, -s * 0.17), s * 0.06, color);
+    painter.line_segment([c + vec2(0.0, -s * 0.04), c + vec2(0.0, s * 0.22)], stroke);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

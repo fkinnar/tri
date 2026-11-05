@@ -8046,7 +8046,10 @@ impl TriApp {
         self.mark_area = area;
         let notes = self.notes_rect.take();
         let p = self.gui.position;
+        // En plein écran, avec les infos sur l'image seulement (Ctrl+I, retour du
+        // 05/11/2026 : masquées, les notes partaient mais pas la position).
         let shown = matches!(self.mode, Mode::Grid | Mode::View)
+            && (self.mode != Mode::View || self.image_info)
             && self.error.is_none()
             && self.opening.is_none();
         let Some(file) = self
@@ -10366,6 +10369,32 @@ impl TriApp {
                     self.metadata_panel,
                     Action::ToggleMetadata,
                 ) {
+                    clicked = Some(c);
+                }
+                // Infos sur l'image en plein écran (repère de position, notes ; Ctrl+I) :
+                // leur état se voit, et se change à la souris (retour du 05/11/2026 :
+                // masquées sans le savoir). Grisée en grille, où elles n'existent pas.
+                let info = ui
+                    .add_enabled_ui(self.mode == Mode::View, |ui| {
+                        let tip = self.action_tip(Action::ToggleImageInfo);
+                        let (rect, response) = marks::clickable(ui, size, &tip);
+                        let shown = if self.image_info {
+                            marks::accent_mark(ui.ctx())
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        let color = if ui.is_enabled() {
+                            shown
+                        } else {
+                            ui.visuals().weak_text_color().gamma_multiply(0.5)
+                        };
+                        marks::info_icon(ui.painter(), rect, color);
+                        response
+                            .clicked()
+                            .then_some(StatusClick::Action(Action::ToggleImageInfo))
+                    })
+                    .inner;
+                if let Some(c) = info {
                     clicked = Some(c);
                 }
                 if self.eject_failed.is_some()
@@ -17549,6 +17578,30 @@ mod tests {
         h.state_mut().gui.end.seconds = 0.0;
         h.run_steps(2);
         assert!(h.state().end_notice.is_none());
+    }
+
+    #[test]
+    fn image_info_has_its_icon_and_hides_the_position_too() {
+        // Retour du 05/11/2026 : Ctrl+I masquait les notes sans qu'on le sache, et laissait
+        // le repère de position.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().gui.position.seconds = -1.0;
+        h.state_mut().image_info = true;
+        h.run_steps(3);
+        assert!(h.state().position_key.is_some(), "repère montré");
+        let icon = Action::ToggleImageInfo.label();
+        h.get_by_label_contains(&icon).click();
+        h.run_steps(3);
+        assert!(
+            !h.state().image_info,
+            "l'icône de la barre d'état les masque"
+        );
+        assert!(h.state().position_key.is_none(), "repère masqué aussi");
+        h.get_by_label_contains(&icon).click();
+        h.run_steps(3);
+        assert!(h.state().image_info);
     }
 
     #[test]
