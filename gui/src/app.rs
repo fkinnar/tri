@@ -576,9 +576,10 @@ pub struct TriApp {
     /// « Développées » est grisé (#305). Revu à l'ouverture, à la relecture des notes et
     /// quand les logiciels changent.
     any_developed: bool,
-    /// Plein écran : bout de la pile ou de la liste atteint (#307), le texte et depuis
-    /// quand ([`TriApp::end_mark`]).
-    end_notice: Option<(String, Instant)>,
+    /// Plein écran : bout de la pile ou de la liste atteint (#307), le texte, depuis quand
+    /// et l'image où il a été atteint ([`TriApp::end_mark`] : il s'efface quand on la
+    /// quitte).
+    end_notice: Option<(String, Instant, usize)>,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -8002,17 +8003,18 @@ impl TriApp {
             (false, true) => t!("end-list-last"),
             (false, false) => t!("end-list-first"),
         };
-        self.end_notice = Some((text, Instant::now()));
+        self.end_notice = Some((text, Instant::now(), self.selected));
     }
 
     /// Le bout de la pile ou de la liste, un instant (`[gui.end]`), dans le cadre du repère
     /// de position.
     fn end_mark(&mut self, ctx: &egui::Context, area: Rect) {
         let e = self.gui.end;
-        let Some((text, since)) = self.end_notice.clone() else {
+        let Some((text, since, at)) = self.end_notice.clone() else {
             return;
         };
-        if self.mode != Mode::View || e.seconds <= 0.0 {
+        // Une autre image (pile suivante…) : le bout n'est plus là (retour du 05/11/2026).
+        if self.mode != Mode::View || e.seconds <= 0.0 || at != self.selected {
             self.end_notice = None;
             return;
         }
@@ -17538,6 +17540,11 @@ mod tests {
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(notice(&h), Some(t!("end-stack-last")));
+        // Passer à la pile suivante l'efface (retour du 05/11/2026).
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().end_notice.is_none(), "effacé sur une autre image");
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
         // 0 : jamais.
         h.state_mut().gui.end.seconds = 0.0;
         h.run_steps(2);

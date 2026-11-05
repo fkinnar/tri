@@ -9,7 +9,7 @@
   (#305).
 - **Bout de la pile ou de la liste** (#307) : en plein écran, ← / → qui ne bougent plus
   le disent un instant (« Fin de la pile », « Fin de la sélection »…), place et durée dans
-  `[gui.end]`.
+  `[gui.end]` ; il s'efface dès qu'une autre image s'affiche.
 - **Filtre « Développées » avec un seul logiciel** (#301) : une case au lieu de deux, et
   plus de ligne « Aucun coché ». Les tâches de fond en bas du panneau de droite prennent
   sa couleur de fond (#300).
