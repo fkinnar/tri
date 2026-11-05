@@ -2,6 +2,12 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+## 1.0.0-alpha.8 — 2026-11-05
+
+Eighth and last test version before the beta: development software (darktable, RapidRAW,
+RawTherapee, ART), network shares, stacks, accent colour and settings, fixes from the
+end-to-end tests.
+
 - **Filter count bubble** counts the photos like the status bar: a development shown on
   its own (clone, copy) no longer counts as one more image. Under "Developed", a software
   without any development in the folder is greyed out.

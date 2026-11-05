@@ -2,6 +2,12 @@
 
 *[English version](CHANGELOG.md)*
 
+## 1.0.0-alpha.8 — 05/11/2026
+
+Huitième et dernière version de test avant la bêta : logiciels de développement
+(darktable, RapidRAW, RawTherapee, ART), partages réseau, piles, couleur d'accent et
+réglages, corrections des tests de bout en bout.
+
 - **Bulle du nombre d'images d'un filtre** : elle compte les photos comme la barre
   d'état ; un développement montré à part (clone, copie) ne compte plus pour une image de
   plus. Sous « Développées », un logiciel sans aucun développement dans le dossier est
