@@ -4,6 +4,9 @@
 
 - **Développement de chaque photo** (plein écran) : la liste passe sous « Passer en revue
   les développements », sans titre, et se masque pendant la revue au lieu d'être grisée.
+  Hors du mode pile, la revue passe par chaque développement (→ sautait ceux d'une photo
+  repliée, ou restait bloqué). Sur un développement, « Source affichée » est une liste
+  (le logiciel, JPEG boîtier) comme sur une photo, plutôt qu'une case « Avant ».
 - **Logiciels de développement appliqués tout de suite** : changer Auto / Manuel /
   Désactivé dans les réglages relance la recherche, sans redémarrer ; un logiciel désactivé
   n'est plus proposé pour le rendu des vignettes. « Rendu des vignettes » et « Source

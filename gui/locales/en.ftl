@@ -941,7 +941,6 @@ panel-view-developments = Developments
 panel-view-review = Review the developments
 panel-view-review-tip = Ticked: ← / → go through each development of a photo (darktable, its clones, RapidRAW…). Unticked: from photo to photo, each in the chosen render; the other developments: { $keys }. [gui.view] review_developments
 panel-view-render-tip = The one ← / → land on when a photo has several: the same setting as "Thumbnails render" in the grid.
-panel-view-before = Before the development (camera render)
 panel-grid-render = Thumbnail render
 panel-grid-render-filtered = For now, the "Developed" filter chooses the render.
 panel-grid-sort = Sort

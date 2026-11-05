@@ -2321,14 +2321,27 @@ impl TriApp {
         let tip = self.action_tip(Action::ToggleSource);
         self.subheading(ui, t!("panel-view-source"))
             .on_hover_text(&tip);
-        if tri::media::is_development(&file.path) {
-            let mut before = self.dev_before;
-            if self
-                .side_checkbox(ui, &mut before, t!("panel-view-before"))
-                .on_hover_text(&tip)
-                .changed()
-            {
-                self.dev_before = before;
+        if let Some(development) = tri::developments::get(&file.path) {
+            // Une liste comme pour une photo (retour du 05/11/2026 : une case ici, une
+            // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
+            use crate::grid_render::GridRender;
+            let shown = GridRender::Engine(development.engine);
+            let choices = [shown, GridRender::Embedded];
+            let mut choice = if self.dev_before {
+                GridRender::Embedded
+            } else {
+                shown
+            };
+            let weak = ui.visuals().weak_text_color();
+            if self.side_combo(
+                ui,
+                "view_source_development",
+                &mut choice,
+                &choices,
+                |c| c.label(weak),
+                Some(tip),
+            ) {
+                self.dev_before = choice == GridRender::Embedded;
                 self.request_zoom();
             }
         } else {
@@ -6440,6 +6453,24 @@ impl TriApp {
                 };
                 if let Some(i) = next {
                     self.select(self.stacks.photo_cover(i));
+                }
+            }
+            // Plein écran, en passant en revue les développements hors du mode pile : image
+            // par image dans toute la liste, développements repliés compris (retour du
+            // 05/11/2026 : → sautait les développements d'une photo repliée, ou restait
+            // bloqué sur l'un d'eux).
+            Action::NavPrev | Action::NavNext
+                if self.mode == Mode::View && self.review_developments && !self.stacking =>
+            {
+                let step = if action == Action::NavNext { 1 } else { -1 };
+                let n = self.selected as isize + step;
+                if (0..self.files.len() as isize).contains(&n) {
+                    let i = n as usize;
+                    if tri::media::is_development(&self.files[i].path) {
+                        self.show_development(i);
+                    } else {
+                        self.select(i);
+                    }
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -15680,6 +15711,46 @@ mod tests {
         assert_eq!(selected_name(&h), "img0@dt-02.jpg");
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
+    fn reviewing_developments_outside_stack_mode_goes_through_each_of_them() {
+        // Retour du 05/11/2026 : hors du mode pile, → sautait les développements d'une
+        // photo repliée (ou restait bloqué sur l'un d'eux).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().review_developments = true;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!h.state().stacking);
+        let mut seen = vec![selected_name(&h)];
+        for _ in 0..4 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(2);
+            seen.push(selected_name(&h));
+        }
+        assert_eq!(
+            seen,
+            [
+                "img0.jpg",
+                "img0@dt-01.jpg",
+                "img0@dt-02.jpg",
+                "img1.jpg",
+                "img2.jpg"
+            ]
+        );
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg", "← revient par eux");
     }
 
     #[test]
