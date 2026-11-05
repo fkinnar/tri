@@ -55,6 +55,28 @@ impl GridRender {
         }
     }
 
+    /// Libellé des listes : le nom, « (LibRaw) » en gris après « RAW » (05/11/2026 :
+    /// « Rendu des vignettes : Rendu RAW » disait deux fois « rendu »). Le nom prend la
+    /// couleur de la liste (survol, choix en place), la précision `weak`.
+    pub fn label(self, weak: eframe::egui::Color32) -> eframe::egui::WidgetText {
+        let GridRender::LibRaw = self else {
+            return self.name().into();
+        };
+        let mut job = eframe::egui::text::LayoutJob::default();
+        let font = eframe::egui::FontSelection::Default;
+        let style = eframe::egui::Style::default();
+        eframe::egui::RichText::new(t!("grid-render-raw")).append_to(
+            &mut job,
+            &style,
+            font.clone(),
+            eframe::egui::Align::Center,
+        );
+        eframe::egui::RichText::new(format!("  {}", t!("grid-render-libraw-short")))
+            .color(weak)
+            .append_to(&mut job, &style, font, eframe::egui::Align::Center);
+        job.into()
+    }
+
     /// Choix proposés : les logiciels installés (`engines`) seulement (05/11/2026 : un
     /// logiciel désactivé restait proposé tant qu'il était le choix en place).
     pub fn choices(engines: &[Engine]) -> Vec<GridRender> {

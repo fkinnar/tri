@@ -1893,7 +1893,7 @@ impl TriApp {
         id: &str,
         value: &mut T,
         all: &[T],
-        name: impl Fn(T) -> String,
+        name: impl Fn(T) -> egui::WidgetText,
         tip: Option<String>,
     ) -> bool {
         let before = *value;
@@ -2163,13 +2163,14 @@ impl TriApp {
         let engines = self.developers.engines();
         let mut render = self.grid_render;
         let choices = crate::grid_render::GridRender::choices(&engines);
+        let weak = ui.visuals().weak_text_color();
         let tip = self.action_tip(Action::GridRenderNext);
         self.side_combo(
             ui,
             "grid_render",
             &mut render,
             &choices,
-            |c| c.name(),
+            |c| c.label(weak),
             Some(tip),
         );
         if self.shown_render() != self.grid_render {
@@ -2354,11 +2355,17 @@ impl TriApp {
                 choices[0]
             };
             let raw = file.kind == MediaKind::Raw;
-            let name = move |c: (Source, Option<tri::develop::Engine>)| match c {
-                (Source::Developed, Some(e)) => t!("shown-developed", engine = e.name()),
-                (Source::Raw, _) => t!("shown-raw"),
-                _ if raw => t!("shown-embedded"),
-                _ => t!("shown-image"),
+            // Mêmes libellés que « Rendu des vignettes » (05/11/2026 : « Rendu boîtier »,
+            // « Rendu RAW » sous « Source affichée » répétaient « rendu »).
+            use crate::grid_render::GridRender;
+            let weak = ui.visuals().weak_text_color();
+            let name = move |c: (Source, Option<tri::develop::Engine>)| -> egui::WidgetText {
+                match c {
+                    (Source::Developed, Some(e)) => GridRender::Engine(e).label(weak),
+                    (Source::Raw, _) => GridRender::LibRaw.label(weak),
+                    _ if raw => GridRender::Embedded.label(weak),
+                    _ => t!("shown-image").into(),
+                }
             };
             if self.side_combo(ui, "view_source", &mut choice, &choices, name, Some(tip)) {
                 if let Some(engine) = choice.1 {
@@ -2401,6 +2408,7 @@ impl TriApp {
         let engines = self.developers.engines();
         let mut render = self.grid_render;
         let choices = crate::grid_render::GridRender::choices(&engines);
+        let weak = ui.visuals().weak_text_color();
         let tip = format!(
             "{}\n{}",
             t!("panel-view-render-tip"),
@@ -2413,7 +2421,7 @@ impl TriApp {
                 "view_render",
                 &mut render,
                 &choices,
-                |c| c.name(),
+                |c| c.label(weak),
                 Some(tip),
             );
         });
@@ -15379,8 +15387,8 @@ mod tests {
         assert_eq!(h.state().order.key, other);
         combo(&h, 1);
         h.run_steps(2);
-        h.get_by_label(&crate::grid_render::GridRender::LibRaw.name())
-            .click();
+        // « RAW », puis « LibRaw » en gris.
+        h.get_by_label("RAW  LibRaw").click();
         h.run_steps(2);
         assert_eq!(
             h.state().grid_render,
@@ -18333,12 +18341,12 @@ mod tests {
         // Rendu des vignettes par dossier (31/10/2026) : un dossier sans rien de retenu
         // reprend celui de la configuration, pas celui du dossier précédent.
         use crate::grid_render::GridRender;
-        h.state_mut().set_grid_render(GridRender::Cover);
+        h.state_mut().set_grid_render(GridRender::LibRaw);
         h.run_steps(2);
         open(&mut h, &other);
         assert_eq!(h.state().grid_render, GridRender::Embedded, "configuration");
         open(&mut h, &photos);
-        assert_eq!(h.state().grid_render, GridRender::Cover, "repris");
+        assert_eq!(h.state().grid_render, GridRender::LibRaw, "repris");
         // Réglage coupé : rien de repris, les filtres restent ceux du moment.
         h.state_mut().gui.remember_folder_view = false;
         press(&mut h, Key::F, Modifiers::NONE);
