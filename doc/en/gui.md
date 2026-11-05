@@ -58,7 +58,8 @@ system one ("cold" measurements, experiments).
   then opens it, right click "Mount" / "Eject", 2026-10-26, #113), fixed drives,
   network (with the remembered shares; "server" icon of the header or `c`: connect to a
   share by its address, `\\nas\photo` or `smb://nas/photo`, Shift+C or right click
-  forgets it, 2026-10-28, see [servers.md](servers.md)), personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
+  forgets it, 2026-10-28; a second click on the icon or the cross at the end of the field
+  closes the search, 2026-11-05; see [servers.md](servers.md)), personal folders (with Desktop, Documents, Downloads, Pictures), favourites,
   then only the system (root, collapsed); **Subfolders** icon next to the title (2026-10-20,
   remembered; a checkbox until 2026-10-28, Refresh moved to the right edge): images of subfolders are shown too (`[gui.folders] subfolders_depth`
   levels), read on demand by the engine (`places::Tree`, see [places.md](places.md)). The

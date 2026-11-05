@@ -2841,9 +2841,13 @@ impl TriApp {
                 }
             });
         });
-        if connect {
+        // Un second clic referme la recherche (retour du 05/11/2026 : cliqué par erreur,
+        // « smb:// » restait, sans moyen évident de revenir aux dossiers).
+        if connect && self.folder_query.is_empty() {
             let ctx = ui.ctx().clone();
             self.start_server_search(&ctx);
+        } else if connect {
+            self.close_folder_search();
         }
         // Recherche de dossiers (retour du 19/10/2026) : sous le titre ; pendant la
         // recherche, les résultats remplacent l'arborescence.
@@ -7620,14 +7624,39 @@ impl TriApp {
                 self.folder_result = (self.folder_result + 1).min(last);
             }
         }
+        // Une croix au bout du champ quand il n'est pas vide : retour aux dossiers à la
+        // souris (Échap ne sert que champ actif ; 05/11/2026).
+        let mut clear = false;
         let field = ui
-            .add(
-                egui::TextEdit::singleline(&mut self.folder_query)
-                    .id(folder_search_id())
-                    .hint_text(t!("search-folder-hint"))
-                    .desired_width(f32::INFINITY),
-            )
-            .on_hover_text(t!("search-folder-tip", keys = self.search_keys()));
+            .horizontal(|ui| {
+                let size = ui.spacing().interact_size.y;
+                let width = if self.folder_query.is_empty() {
+                    f32::INFINITY
+                } else {
+                    ui.available_width() - size - ui.spacing().item_spacing.x
+                };
+                let field = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut self.folder_query)
+                            .id(folder_search_id())
+                            .hint_text(t!("search-folder-hint"))
+                            .desired_width(width),
+                    )
+                    .on_hover_text(t!("search-folder-tip", keys = self.search_keys()));
+                if !self.folder_query.is_empty() {
+                    let label = t!("search-folder-close");
+                    let (rect, response) = marks::icon_button(ui, size, &label, &label);
+                    let color = ui.style().interact(&response).fg_stroke.color;
+                    marks::cross(ui.painter(), rect.shrink(size * 0.3), color);
+                    clear = response.clicked();
+                }
+                field
+            })
+            .inner;
+        if clear {
+            self.close_folder_search();
+            return false;
+        }
         if self.focus_request == Some(folder_search_id()) {
             field.request_focus();
             self.focus_request = None;
@@ -17096,6 +17125,28 @@ mod tests {
             GridRender::Embedded,
             "vignettes : plus de rendu darktable proposé"
         );
+    }
+
+    #[test]
+    fn the_server_search_can_be_left_with_the_mouse() {
+        // 05/11/2026 : « Se connecter à un serveur » cliqué par erreur, « smb:// » restait.
+        use egui_kittest::kittest::Queryable;
+        let (mut h, _dir) = harness();
+        h.state_mut().folder_panel = true;
+        h.run_steps(3);
+        let connect = Action::FolderConnect.label();
+        h.get_by_label(&connect).click();
+        h.run_steps(2);
+        assert!(!h.state().folder_query.is_empty(), "adresse commencée");
+        h.get_by_label(&connect).click();
+        h.run_steps(2);
+        assert!(h.state().folder_query.is_empty(), "second clic : refermée");
+        h.get_by_label(&connect).click();
+        h.run_steps(2);
+        h.get_by_label("Fermer la recherche (Échap)").click();
+        h.run_steps(2);
+        assert!(h.state().folder_query.is_empty(), "la croix : refermée");
+        assert!(h.state().folder_search.is_none());
     }
 
     #[test]
