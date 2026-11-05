@@ -11735,6 +11735,23 @@ impl TriApp {
     /// d'état passe inaperçu ; un filtre qui ne laisse rien, « JPEG » dans un dossier de
     /// RAW, se voyait mal). La recherche par nom n'en fait pas : son champ montre déjà le
     /// nombre, et chaque lettre tapée la relancerait. `[gui.grid] filter_toast_ms`.
+    /// Nombre d'images de la bulle du filtre : les photos, comme la barre d'état ; un
+    /// développement montré à part (clone, copie) compte avec sa photo (retour du
+    /// 05/11/2026 : une photo développée dans darktable faisait « 2 images » sous le filtre
+    /// « Développées »). Seulement des développements à part : on les compte eux.
+    fn shown_count(&self) -> usize {
+        let photos = self
+            .files
+            .iter()
+            .filter(|f| !tri::media::is_development(&f.path))
+            .count();
+        if photos == 0 {
+            self.files.len()
+        } else {
+            photos
+        }
+    }
+
     fn filter_toast(&mut self, ui: &mut Ui) {
         // Les curseurs de sévérité des filtres actifs comptent aussi (#304 : les bouger
         // changeait le nombre sans le montrer).
@@ -11766,10 +11783,9 @@ impl TriApp {
         // Le dernier tiers s'efface.
         let left = (total - elapsed).as_secs_f32() / total.as_secs_f32();
         let alpha = (left * 3.0).min(1.0);
-        let text = if self.files.is_empty() {
-            t!("filter-toast-none")
-        } else {
-            t!("filter-toast", n = self.files.len())
+        let text = match self.shown_count() {
+            0 => t!("filter-toast-none"),
+            n => t!("filter-toast", n = n),
         };
         let painter = ui.painter();
         let galley = painter.layout_no_wrap(
@@ -17582,6 +17598,38 @@ mod tests {
         h.get_by_label_contains(&icon).click();
         h.run_steps(3);
         assert!(h.state().image_info);
+    }
+
+    #[test]
+    fn the_filter_count_counts_photos_not_their_developments() {
+        // Retour du 05/11/2026 : une photo et son développement à part faisaient « 2
+        // images » dans la bulle du filtre, « 1 image » dans la barre d'état.
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        std::fs::write(
+            photos.join("img0_01.jpg.xmp"),
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
+        )
+        .unwrap();
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
+        assert_eq!(
+            h.state().shown_count(),
+            3,
+            "trois photos, un développement à part"
+        );
+        // Seulement la photo et son développement.
+        h.state_mut()
+            .files
+            .retain(|f| f.path.to_string_lossy().contains("img0"));
+        assert_eq!(h.state().files.len(), 2);
+        assert_eq!(h.state().shown_count(), 1);
+        // Seulement le développement : on le compte.
+        h.state_mut()
+            .files
+            .retain(|f| tri::media::is_development(&f.path));
+        assert_eq!(h.state().shown_count(), 1);
     }
 
     #[test]
