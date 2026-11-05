@@ -5,7 +5,8 @@
 - **Accent colour** adjustable (`[gui.colors] accent`, `accent_light` for the light
   theme), with a colour picker in the settings: selections, sliders, and everything that
   takes the accent (stars, dialog focus line) follow it. Colours that can follow the accent
-  get an "Accent colour" box instead of the word to type.
+  get an "Accent colour" box instead of the word to type. The bottom bar buttons light up
+  like the filter bar ones: icon in the accent colour, no background.
 - **External editor easier to set**: "System application" (the one the system picks for
   each image type, named in the settings) or "Other application", chosen with
   "Browse…", with `{files}` already as argument.

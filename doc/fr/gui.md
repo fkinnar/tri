@@ -530,7 +530,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
   défaut : `[similarity] threshold`).
   Second retour du 18/10/2026 : **un seul interrupteur** (`Ctrl+S`, bouton pile de la
-  barre des filtres et du bandeau, fond d'accent quand actif, toujours visible ; clic
+  barre des filtres et du bandeau, icône à l'accent quand actif, toujours visible ; clic
   droit : `Ctrl+G`) : piles actives, regroupement en grille **et** en plein écran ← / →
   dans la pile, ↑ / ↓ de pile en pile ; inactives, ← / → de photo en photo. Piles en
   **tons de gris**, plus de turquoise. Troisième retour : toutes piles dépliées, cadres

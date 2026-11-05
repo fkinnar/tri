@@ -723,18 +723,10 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
     }
 }
 
-/// Icône du bandeau de notation dans `rect` : flèche (image précédente / suivante), ou
-/// étoile suivie d'une flèche (avance automatique) ; `on` : bouton allumé, sur le fond d'accent. L'étoile de l'avance
-/// automatique, à l'accent sinon, y prend la couleur du texte sélectionné (elle
-/// disparaissait dans le fond, issue n° 59).
-pub fn bar_icon_on(
-    painter: &Painter,
-    rect: Rect,
-    action: Action,
-    color: Color32,
-    colors: &Colors,
-    on: bool,
-) {
+/// Icône du bandeau de notation dans `rect`, toute en `color` (l'accent quand le bouton
+/// est allumé) : flèche (image précédente / suivante), ou étoile suivie d'une flèche
+/// (avance automatique).
+pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
     let (w, h) = (rect.width(), rect.height());
     let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
     let stroke = Stroke::new((w * 0.12).max(1.5), color);
@@ -831,12 +823,9 @@ pub fn bar_icon_on(
         Action::Back => grid_fit_icon(painter, rect.shrink(w * 0.05), color),
         _ => {
             // Petite étoile à gauche, flèche à droite.
-            let star_fill = if on {
-                painter.ctx().global_style().visuals.selection.stroke.color
-            } else {
-                star_color(painter.ctx(), colors)
-            };
-            star(painter, p(0.26, 0.5), w * 0.32, star_fill);
+            // Toute l'icône d'une couleur, l'accent quand l'avance est active (retour du
+            // 05/11/2026 : comme les interrupteurs de la barre des filtres).
+            star(painter, p(0.26, 0.5), w * 0.32, color);
             painter.line_segment([p(0.58, 0.5), p(1.0, 0.5)], stroke);
             painter.add(Shape::line(
                 vec![p(0.78, 0.26), p(1.0, 0.5), p(0.78, 0.74)],

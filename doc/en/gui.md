@@ -506,7 +506,7 @@ system one ("cold" measurements, experiments).
   number of stacks; the threshold is remembered for the folder on closing
   (`group-thresholds.tsv` in the data folder; the default: `[similarity] threshold`).
   Second feedback of 2026-10-18: **a single toggle** (`Ctrl+S`, stack button in the
-  filter bar and the rating bar, accent background when active, always visible; right
+  filter bar and the rating bar, icon in the accent colour when active, always visible; right
   click: `Ctrl+G`): stacks active, grouping in the grid **and** in full screen ← / →
   within the stack, ↑ / ↓ from stack to stack; inactive, ← / → from photo to photo.
   Stacks in **shades of grey**, no more turquoise. Third feedback: with all stacks
