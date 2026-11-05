@@ -2,6 +2,13 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+- **Development of each photo** (full screen): the list goes under "Review the
+  developments", without a title, and is hidden while reviewing instead of greyed out.
+  Reviewing outside stack mode now goes through every development (→ skipped those of a
+  folded photo, or got stuck). On a development, "Shown source" is a list (the software,
+  camera JPEG) like on a photo, instead of a "Before" box. With the camera JPEG as source,
+  the developments options are greyed out (no review), and their list no longer offers
+  the camera JPEG: it is chosen in one place, the source.
 - **Development software applied at once**: changing Auto / Manual / Disabled in the
   settings looks for the software again, no restart needed; a disabled one is no longer
   offered for the thumbnails render. "Thumbnails render" and "Shown source" use the same

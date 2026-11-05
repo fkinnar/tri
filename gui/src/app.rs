@@ -2321,14 +2321,27 @@ impl TriApp {
         let tip = self.action_tip(Action::ToggleSource);
         self.subheading(ui, t!("panel-view-source"))
             .on_hover_text(&tip);
-        if tri::media::is_development(&file.path) {
-            let mut before = self.dev_before;
-            if self
-                .side_checkbox(ui, &mut before, t!("panel-view-before"))
-                .on_hover_text(&tip)
-                .changed()
-            {
-                self.dev_before = before;
+        if let Some(development) = tri::developments::get(&file.path) {
+            // Une liste comme pour une photo (retour du 05/11/2026 : une case ici, une
+            // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
+            use crate::grid_render::GridRender;
+            let shown = GridRender::Engine(development.engine);
+            let choices = [shown, GridRender::Embedded];
+            let mut choice = if self.dev_before {
+                GridRender::Embedded
+            } else {
+                shown
+            };
+            let weak = ui.visuals().weak_text_color();
+            if self.side_combo(
+                ui,
+                "view_source_development",
+                &mut choice,
+                &choices,
+                |c| c.label(weak),
+                Some(tip),
+            ) {
+                self.dev_before = choice == GridRender::Embedded;
                 self.request_zoom();
             }
         } else {
@@ -2387,47 +2400,88 @@ impl TriApp {
         self.file_actions_switch(ui);
     }
 
-    /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo dans
-    /// le rendu de la grille (le même réglage), ou chacun de ses développements, la liste
-    /// alors grisée.
+    /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo, ou
+    /// chacun de ses développements ; grisée quand la source est le JPEG boîtier.
     fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
-        let mut review = self.review_developments;
-        if self
-            .side_checkbox(ui, &mut review, t!("panel-view-review"))
-            .on_hover_text(t!(
-                "panel-view-review-tip",
-                keys = [Action::DevPrev, Action::DevNext]
-                    .map(|a| self.keymap.keys_for(a).join(" / "))
-                    .join(", ")
-            ))
-            .changed()
-        {
-            self.review_developments = review;
-        }
+        // Source « JPEG boîtier » : pas de développement à voir, tout est grisé et la revue
+        // ne s'applique pas (retour du 05/11/2026 : le JPEG à un seul endroit, la source).
+        let jpeg = self.jpeg_source();
+        ui.add_enabled_ui(!jpeg, |ui| {
+            let mut review = self.review_developments;
+            if self
+                .side_checkbox(ui, &mut review, t!("panel-view-review"))
+                .on_hover_text(t!(
+                    "panel-view-review-tip",
+                    keys = [Action::DevPrev, Action::DevNext]
+                        .map(|a| self.keymap.keys_for(a).join(" / "))
+                        .join(", ")
+                ))
+                .changed()
+            {
+                self.review_developments = review;
+            }
+            // Dessous, sans titre (le sous-titre « Développements » suffit), le
+            // développement de chaque photo ; masqué pendant la revue (retours du
+            // 05/11/2026 : grisé sous la case cochée, il semblait en dépendre à l'envers) :
+            // ← / → passent alors par chaque développement, le choix ne s'applique plus.
+            if !self.review_developments {
+                self.view_render_list(ui);
+            }
+        });
+    }
+
+    /// Liste du développement de chaque photo (le rendu de la grille), sans le JPEG
+    /// boîtier, qui est une source (retour du 05/11/2026) : une grille en JPEG boîtier
+    /// s'y lit « Couverture » (la photo y montre son développement), sans rien changer
+    /// tant qu'on n'y touche pas.
+    fn view_render_list(&mut self, ui: &mut Ui) {
+        use crate::grid_render::GridRender;
         let engines = self.developers.engines();
-        let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines);
+        let shown = match self.grid_render {
+            GridRender::Embedded => GridRender::Cover,
+            other => other,
+        };
+        let mut render = shown;
+        let choices: Vec<GridRender> = GridRender::choices(&engines)
+            .into_iter()
+            .filter(|&c| c != GridRender::Embedded)
+            .collect();
         let weak = ui.visuals().weak_text_color();
         let tip = format!(
             "{}\n{}",
             t!("panel-view-render-tip"),
             self.action_tip(Action::GridRenderNext)
         );
-        ui.add_enabled_ui(!self.review_developments, |ui| {
-            ui.label(t!("panel-view-render"));
-            self.side_combo(
-                ui,
-                "view_render",
-                &mut render,
-                &choices,
-                |c| c.label(weak),
-                Some(tip),
-            );
-        });
-        if render != self.grid_render {
+        self.side_combo(
+            ui,
+            "view_render",
+            &mut render,
+            &choices,
+            |c| c.label(weak),
+            Some(tip),
+        );
+        if render != shown {
             self.set_grid_render(render);
         }
+    }
+
+    /// Vrai si l'image affichée montre le JPEG boîtier par choix : la source « JPEG
+    /// boîtier » sur une photo, « avant » sur un développement.
+    fn jpeg_source(&self) -> bool {
+        self.files.get(self.selected).is_some_and(|f| {
+            if tri::media::is_development(&f.path) {
+                self.dev_before
+            } else {
+                self.source == Source::Embedded
+            }
+        })
+    }
+
+    /// Passer en revue les développements, en vigueur : la case cochée, sauf source
+    /// « JPEG boîtier » (grisée alors).
+    fn reviewing(&self) -> bool {
+        self.review_developments && !self.jpeg_source()
     }
 
     /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
@@ -6417,9 +6471,7 @@ impl TriApp {
             // Plein écran sans passer en revue les développements (défaut, retour du
             // 04/11/2026) : de photo en photo, chacune sur son développement de couverture
             // (le rendu de la grille) ; en mode pile, dans la pile.
-            Action::NavPrev | Action::NavNext
-                if self.mode == Mode::View && !self.review_developments =>
-            {
+            Action::NavPrev | Action::NavNext if self.mode == Mode::View && !self.reviewing() => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 if self.stacks_dirty {
                     self.regroup();
@@ -6437,6 +6489,24 @@ impl TriApp {
                 };
                 if let Some(i) = next {
                     self.select(self.stacks.photo_cover(i));
+                }
+            }
+            // Plein écran, en passant en revue les développements hors du mode pile : image
+            // par image dans toute la liste, développements repliés compris (retour du
+            // 05/11/2026 : → sautait les développements d'une photo repliée, ou restait
+            // bloqué sur l'un d'eux).
+            Action::NavPrev | Action::NavNext
+                if self.mode == Mode::View && self.reviewing() && !self.stacking =>
+            {
+                let step = if action == Action::NavNext { 1 } else { -1 };
+                let n = self.selected as isize + step;
+                if (0..self.files.len() as isize).contains(&n) {
+                    let i = n as usize;
+                    if tri::media::is_development(&self.files[i].path) {
+                        self.show_development(i);
+                    } else {
+                        self.select(i);
+                    }
                 }
             }
             // En plein écran, seule la navigation image par image a un sens.
@@ -7952,7 +8022,7 @@ impl TriApp {
         if let Some((k, total)) = self
             .stacks
             .development_number(i)
-            .filter(|_| self.review_developments)
+            .filter(|_| self.reviewing())
         {
             parts.push(t!("position-development", n = k, total = total));
         }
@@ -15667,6 +15737,8 @@ mod tests {
         // Plein écran, mode pile, en passant en revue les développements : → les
         // parcourt, ← revient.
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         press(&mut h, Key::S, Modifiers::CTRL);
@@ -15677,6 +15749,48 @@ mod tests {
         assert_eq!(selected_name(&h), "img0@dt-02.jpg");
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
+    }
+
+    #[test]
+    fn reviewing_developments_outside_stack_mode_goes_through_each_of_them() {
+        // Retour du 05/11/2026 : hors du mode pile, → sautait les développements d'une
+        // photo repliée (ou restait bloqué sur l'un d'eux).
+        let (mut h, dir) = harness();
+        h.run_steps(3);
+        let photos = dir.path().join("photos");
+        for name in ["img0_01.jpg.xmp", "img0_02.jpg.xmp"] {
+            std::fs::write(
+                photos.join(name),
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
+            )
+            .unwrap();
+        }
+        h.state_mut().reload_folder(None);
+        run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
+        h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(!h.state().stacking);
+        let mut seen = vec![selected_name(&h)];
+        for _ in 0..4 {
+            press(&mut h, Key::ArrowRight, Modifiers::NONE);
+            h.run_steps(2);
+            seen.push(selected_name(&h));
+        }
+        assert_eq!(
+            seen,
+            [
+                "img0.jpg",
+                "img0@dt-01.jpg",
+                "img0@dt-02.jpg",
+                "img1.jpg",
+                "img2.jpg"
+            ]
+        );
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+        assert_eq!(selected_name(&h), "img0@dt-02.jpg", "← revient par eux");
     }
 
     #[test]
@@ -15720,6 +15834,8 @@ mod tests {
         h.state_mut().metadata_panel = false;
         // En passant en revue les développements.
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         // Au début de la rafale.
@@ -15764,6 +15880,8 @@ mod tests {
         // Le repère ne compte pas les développements quand on ne les passe pas en revue.
         assert!(!h.state().position_text().contains("Dév."));
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         assert!(h.state().position_text().contains("Dév. 1 / 3"));
         h.state_mut().review_developments = false;
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
@@ -18316,10 +18434,34 @@ mod tests {
         h.state_mut().developers = fake_darktable();
         h.run_steps(3);
         assert!(!h.state().review_developments, "décochée par défaut");
+        // Source « JPEG boîtier » (par défaut) : grisée, sans effet (05/11/2026).
+        assert_eq!(h.state().source, Source::Embedded);
+        h.get_by_label(&t!("panel-view-review")).click();
+        h.run_steps(2);
+        assert!(!h.state().review_developments, "grisée en JPEG boîtier");
+        h.state_mut().source = Source::Raw;
+        h.run_steps(2);
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
-        assert!(h.query_by_label(&t!("panel-view-render")).is_some());
+        // La liste du développement de chaque photo, sans le JPEG boîtier (une grille en
+        // JPEG boîtier s'y lit « Couverture ») : masquée pendant la revue.
+        // La liste s'annonce par sa bulle ; sa valeur : « Couverture ».
+        let tip = t!("panel-view-render-tip");
+        let lists = |h: &Harness<'_, TriApp>| {
+            h.query_all_by_label_contains(&tip)
+                .filter(|n| format!("{n:?}").contains(&t!("grid-render-cover")))
+                .count()
+        };
+        let reviewing = lists(&h);
+        click_settled(&mut h, &t!("panel-view-review"));
+        h.run_steps(2);
+        assert_eq!(lists(&h), reviewing + 1, "la liste revient sous la case");
+        assert_eq!(
+            h.state().grid_render,
+            crate::grid_render::GridRender::Embedded,
+            "la grille ne change pas tant qu'on n'y touche pas"
+        );
     }
 
     #[test]
