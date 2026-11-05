@@ -2,8 +2,8 @@
 
 *[English version](CHANGELOG.md)*
 
-- **Icône des infos sur l'image** dans la barre d'état (à droite) : montre et change
-  l'affichage des infos sur l'image en plein écran (`Ctrl+I`) ; masquées, le repère de
+- **Icône des infos sur l'image** dans le bandeau du bas (plein écran, à gauche du 1:1) :
+  montre et change l'affichage des infos sur l'image (`Ctrl+I`) ; masquées, le repère de
   position part aussi, comme les notes.
 - **Corrections du test de bout en bout** : les rendus développés lancés d'office pour la
   grille s'arrêtent quand un autre dossier s'ouvre (#303), sans le trait au-dessus des

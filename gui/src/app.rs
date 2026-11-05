@@ -10371,32 +10371,6 @@ impl TriApp {
                 ) {
                     clicked = Some(c);
                 }
-                // Infos sur l'image en plein écran (repère de position, notes ; Ctrl+I) :
-                // leur état se voit, et se change à la souris (retour du 05/11/2026 :
-                // masquées sans le savoir). Grisée en grille, où elles n'existent pas.
-                let info = ui
-                    .add_enabled_ui(self.mode == Mode::View, |ui| {
-                        let tip = self.action_tip(Action::ToggleImageInfo);
-                        let (rect, response) = marks::clickable(ui, size, &tip);
-                        let shown = if self.image_info {
-                            marks::accent_mark(ui.ctx())
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        let color = if ui.is_enabled() {
-                            shown
-                        } else {
-                            ui.visuals().weak_text_color().gamma_multiply(0.5)
-                        };
-                        marks::info_icon(ui.painter(), rect, color);
-                        response
-                            .clicked()
-                            .then_some(StatusClick::Action(Action::ToggleImageInfo))
-                    })
-                    .inner;
-                if let Some(c) = info {
-                    clicked = Some(c);
-                }
                 if self.eject_failed.is_some()
                     && self.ejecting.is_none()
                     && ui.button(t!("status-retry-eject")).clicked()
@@ -11629,6 +11603,12 @@ impl TriApp {
                     actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
+                // Infos sur l'image (repère de position, notes ; Ctrl+I), à gauche du 1:1 :
+                // leur état se voit, et se change à la souris (retour du 05/11/2026 :
+                // masquées sans le savoir).
+                if self.mode == Mode::View {
+                    actions.push(Action::ToggleImageInfo);
+                }
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keymap.keys_for(Action::Back).join(" / ");
@@ -11643,6 +11623,7 @@ impl TriApp {
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
+                        Action::ToggleImageInfo => self.image_info,
                         Action::StackMode => self.stacking,
                         Action::StackEnterToggle => {
                             self.stack_enter == crate::settings::StackEnter::First
@@ -11722,6 +11703,7 @@ impl TriApp {
                 | Action::DevPrev
                 | Action::DevNext
                 | Action::ToggleZoom
+                | Action::ToggleImageInfo
                 | Action::ToggleGridInfo
                 | Action::HistogramLarge
                 | Action::TogglePeaking),
@@ -17589,15 +17571,13 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         h.state_mut().gui.position.seconds = -1.0;
         h.state_mut().image_info = true;
+        h.state_mut().rating_bar = true;
         h.run_steps(3);
         assert!(h.state().position_key.is_some(), "repère montré");
         let icon = Action::ToggleImageInfo.label();
         h.get_by_label_contains(&icon).click();
         h.run_steps(3);
-        assert!(
-            !h.state().image_info,
-            "l'icône de la barre d'état les masque"
-        );
+        assert!(!h.state().image_info, "l'icône du bandeau les masque");
         assert!(h.state().position_key.is_none(), "repère masqué aussi");
         h.get_by_label_contains(&icon).click();
         h.run_steps(3);

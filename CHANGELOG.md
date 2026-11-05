@@ -2,9 +2,9 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-- **Image info icon** in the status bar (right): shows and changes whether the infos on
-  the image are shown in full screen (`Ctrl+I`); hidden, the position mark goes too, like
-  the notes.
+- **Image info icon** in the bottom bar (full screen, left of the 1:1): shows and changes
+  whether the infos on the image are shown (`Ctrl+I`); hidden, the position mark goes too,
+  like the notes.
 - **Fixes from the end-to-end test**: the grid's own development renders stop when
   another folder opens (#303), without the line above the tasks; moving a strictness
   slider of an active filter shows the image count (#304); the "Developed" filter is

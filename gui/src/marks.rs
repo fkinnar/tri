@@ -809,6 +809,7 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
                 painter.line_segment([base - t * r * 0.2, base + t * length], stroke);
             }
         }
+        Action::ToggleImageInfo => info_icon(painter, rect, color),
         Action::ToggleZoom => {
             // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
             painter.text(

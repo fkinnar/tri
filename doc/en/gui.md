@@ -319,9 +319,9 @@ system one ("cold" measurements, experiments).
   ("RAW render in progress") in the status bar, after the name; ratings in the rating
   bar. In focus mode, without bars, they are drawn on the image; `Ctrl+I`
   (`core.view.image_info`, `[gui.view] image_info`) hides or shows them, remembered;
-  also the notes and the position mark drawn on the image. An "i" icon at the right of the
-  status bar shows this state (in the accent colour when shown) and changes it with the
-  mouse, greyed out in the grid (2026-11-05).
+  also the notes and the position mark drawn on the image. An "i" icon in the bottom bar,
+  left of the 1:1, shows this state (in the accent colour when shown) and changes it with
+  the mouse (2026-11-05).
 - **Background colour** (`Ctrl+L`, `core.view.background`, 2026-10-22, like Lightroom's
   "lights"): grid and full screen (comparison and loupe included), in turn the theme's
   background then `[gui.colors] backgrounds` (dark grey, black, white), without
