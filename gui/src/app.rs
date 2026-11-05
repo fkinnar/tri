@@ -8046,7 +8046,10 @@ impl TriApp {
         self.mark_area = area;
         let notes = self.notes_rect.take();
         let p = self.gui.position;
+        // En plein écran, avec les infos sur l'image seulement (Ctrl+I, retour du
+        // 05/11/2026 : masquées, les notes partaient mais pas la position).
         let shown = matches!(self.mode, Mode::Grid | Mode::View)
+            && (self.mode != Mode::View || self.image_info)
             && self.error.is_none()
             && self.opening.is_none();
         let Some(file) = self
@@ -11600,6 +11603,12 @@ impl TriApp {
                     actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
+                // Infos sur l'image (repère de position, notes ; Ctrl+I), à gauche du 1:1 :
+                // leur état se voit, et se change à la souris (retour du 05/11/2026 :
+                // masquées sans le savoir).
+                if self.mode == Mode::View {
+                    actions.push(Action::ToggleImageInfo);
+                }
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keymap.keys_for(Action::Back).join(" / ");
@@ -11614,6 +11623,7 @@ impl TriApp {
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
+                        Action::ToggleImageInfo => self.image_info,
                         Action::StackMode => self.stacking,
                         Action::StackEnterToggle => {
                             self.stack_enter == crate::settings::StackEnter::First
@@ -11693,6 +11703,7 @@ impl TriApp {
                 | Action::DevPrev
                 | Action::DevNext
                 | Action::ToggleZoom
+                | Action::ToggleImageInfo
                 | Action::ToggleGridInfo
                 | Action::HistogramLarge
                 | Action::TogglePeaking),
@@ -17549,6 +17560,28 @@ mod tests {
         h.state_mut().gui.end.seconds = 0.0;
         h.run_steps(2);
         assert!(h.state().end_notice.is_none());
+    }
+
+    #[test]
+    fn image_info_has_its_icon_and_hides_the_position_too() {
+        // Retour du 05/11/2026 : Ctrl+I masquait les notes sans qu'on le sache, et laissait
+        // le repère de position.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.state_mut().gui.position.seconds = -1.0;
+        h.state_mut().image_info = true;
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        assert!(h.state().position_key.is_some(), "repère montré");
+        let icon = Action::ToggleImageInfo.label();
+        h.get_by_label_contains(&icon).click();
+        h.run_steps(3);
+        assert!(!h.state().image_info, "l'icône du bandeau les masque");
+        assert!(h.state().position_key.is_none(), "repère masqué aussi");
+        h.get_by_label_contains(&icon).click();
+        h.run_steps(3);
+        assert!(h.state().image_info);
     }
 
     #[test]

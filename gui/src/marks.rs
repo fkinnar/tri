@@ -809,6 +809,7 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
                 painter.line_segment([base - t * r * 0.2, base + t * length], stroke);
             }
         }
+        Action::ToggleImageInfo => info_icon(painter, rect, color),
         Action::ToggleZoom => {
             // « 1:1 » écrit : chiffres et deux-points sont dans toutes les polices.
             painter.text(
@@ -1438,6 +1439,16 @@ pub fn cross(painter: &Painter, rect: Rect, color: Color32) {
     let stroke = Stroke::new((rect.width() * 0.14).max(1.5), color);
     painter.line_segment([rect.left_top(), rect.right_bottom()], stroke);
     painter.line_segment([rect.right_top(), rect.left_bottom()], stroke);
+}
+
+/// Icône « infos sur l'image » : un cercle et un « i ».
+pub fn info_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center();
+    let stroke = Stroke::new((s * 0.09).max(1.2), color);
+    painter.circle_stroke(c, s * 0.38, stroke);
+    painter.circle_filled(c + vec2(0.0, -s * 0.17), s * 0.06, color);
+    painter.line_segment([c + vec2(0.0, -s * 0.04), c + vec2(0.0, s * 0.22)], stroke);
 }
 
 #[cfg(test)]
