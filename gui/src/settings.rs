@@ -224,6 +224,8 @@ pub struct GuiSettings {
     pub position: PositionSettings,
     /// `[gui.notes]`.
     pub notes: NotesSettings,
+    /// `[gui.end]`.
+    pub end: EndSettings,
     /// `[gui.dialogs]`.
     pub dialogs: DialogSettings,
     /// `[gui.colors]`.
@@ -280,6 +282,7 @@ impl Default for GuiSettings {
             compare: CompareSettings::default(),
             position: PositionSettings::default(),
             notes: NotesSettings::default(),
+            end: EndSettings::default(),
             dialogs: DialogSettings::default(),
             colors: Colors::default(),
             folders: FolderSettings::default(),
@@ -762,6 +765,26 @@ impl Default for NotesSettings {
         Self {
             seconds: 2.0,
             place: PositionPlace::BottomLeft,
+        }
+    }
+}
+
+/// Section `[gui.end]` : en plein écran, ← / → au bout de la pile ou de la liste le
+/// disent un instant (#307 : le défilement s'arrêtait sans rien dire).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct EndSettings {
+    /// Durée d'affichage (secondes) ; 0 : jamais.
+    pub seconds: f32,
+    /// Où, dans l'image.
+    pub place: PositionPlace,
+}
+
+impl Default for EndSettings {
+    fn default() -> Self {
+        Self {
+            seconds: 1.5,
+            place: PositionPlace::Center,
         }
     }
 }
