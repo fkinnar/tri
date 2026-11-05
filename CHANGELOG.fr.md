@@ -2,9 +2,8 @@
 
 *[English version](CHANGELOG.md)*
 
-- **« Développement de chaque photo »** (plein écran) passe avant « Passer en revue les
-  développements » et se masque pendant la revue, au lieu d'être grisée sous la case
-  cochée.
+- **Développement de chaque photo** (plein écran) : la liste passe sous « Passer en revue
+  les développements », sans titre, et se masque pendant la revue au lieu d'être grisée.
 - **Logiciels de développement appliqués tout de suite** : changer Auto / Manuel /
   Désactivé dans les réglages relance la recherche, sans redémarrer ; un logiciel désactivé
   n'est plus proposé pour le rendu des vignettes. « Rendu des vignettes » et « Source

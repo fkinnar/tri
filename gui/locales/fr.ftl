@@ -939,7 +939,6 @@ panel-view-source = Source affichée
 panel-view-developments = Développements
 panel-view-review = Passer en revue les développements
 panel-view-review-tip = Coché : ← / → passent par chaque développement d'une photo (darktable, ses clones, RapidRAW…). Décoché : de photo en photo, chacune dans le rendu choisi ; les autres développements : { $keys }. [gui.view] review_developments
-panel-view-render = Développement de chaque photo
 panel-view-render-tip = Celui sur lequel ← / → arrivent quand une photo en a plusieurs : le même réglage que « Rendu des vignettes » dans la grille.
 panel-view-before = Avant le développement (rendu boîtier)
 panel-grid-render = Rendu des vignettes

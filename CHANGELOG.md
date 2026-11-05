@@ -2,8 +2,8 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
-- **"Development of each photo"** (full screen) comes before "Review the developments"
-  and is hidden while reviewing, instead of greyed out under the ticked box.
+- **Development of each photo** (full screen): the list goes under "Review the
+  developments", without a title, and is hidden while reviewing instead of greyed out.
 - **Development software applied at once**: changing Auto / Manual / Disabled in the
   settings looks for the software again, no restart needed; a disabled one is no longer
   offered for the thumbnails render. "Thumbnails render" and "Shown source" use the same

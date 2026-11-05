@@ -2392,32 +2392,6 @@ impl TriApp {
     /// alors grisée.
     fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
-        // La liste d'abord, masquée pendant la revue (retour du 05/11/2026 : grisée sous
-        // une case cochée, elle semblait dépendre de la case à l'envers) : ← / → passent
-        // alors par chaque développement, le choix ne s'applique plus.
-        if !self.review_developments {
-            let engines = self.developers.engines();
-            let mut render = self.grid_render;
-            let choices = crate::grid_render::GridRender::choices(&engines);
-            let weak = ui.visuals().weak_text_color();
-            let tip = format!(
-                "{}\n{}",
-                t!("panel-view-render-tip"),
-                self.action_tip(Action::GridRenderNext)
-            );
-            ui.label(t!("panel-view-render"));
-            self.side_combo(
-                ui,
-                "view_render",
-                &mut render,
-                &choices,
-                |c| c.label(weak),
-                Some(tip),
-            );
-            if render != self.grid_render {
-                self.set_grid_render(render);
-            }
-        }
         let mut review = self.review_developments;
         if self
             .side_checkbox(ui, &mut review, t!("panel-view-review"))
@@ -2430,6 +2404,32 @@ impl TriApp {
             .changed()
         {
             self.review_developments = review;
+        }
+        // Dessous, sans titre (le sous-titre « Développements » suffit), le développement
+        // de chaque photo ; masqué pendant la revue (retours du 05/11/2026 : grisé sous la
+        // case cochée, il semblait en dépendre à l'envers) : ← / → passent alors par
+        // chaque développement, le choix ne s'applique plus.
+        if !self.review_developments {
+            let engines = self.developers.engines();
+            let mut render = self.grid_render;
+            let choices = crate::grid_render::GridRender::choices(&engines);
+            let weak = ui.visuals().weak_text_color();
+            let tip = format!(
+                "{}\n{}",
+                t!("panel-view-render-tip"),
+                self.action_tip(Action::GridRenderNext)
+            );
+            self.side_combo(
+                ui,
+                "view_render",
+                &mut render,
+                &choices,
+                |c| c.label(weak),
+                Some(tip),
+            );
+            if render != self.grid_render {
+                self.set_grid_render(render);
+            }
         }
     }
 
@@ -18324,10 +18324,11 @@ mod tests {
         assert!(h.state().review_developments);
         // La liste du développement de chaque photo : masquée pendant la revue (elle ne
         // s'applique plus ; retour du 05/11/2026).
-        assert!(h.query_by_label(&t!("panel-view-render")).is_none());
+        let lists = |h: &Harness<'_, TriApp>| h.query_all_by_label_contains("JPEG").count();
+        let reviewing = lists(&h);
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
-        assert!(h.query_by_label(&t!("panel-view-render")).is_some());
+        assert_eq!(lists(&h), reviewing + 1, "la liste revient sous la case");
     }
 
     #[test]

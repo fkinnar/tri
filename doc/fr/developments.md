@@ -96,8 +96,8 @@ couverture, c'est-à-dire dans le rendu de la grille (04/11/2026, `Stacks::photo
 `photo_cover`), en mode pile comme hors du mode pile ; les autres développements restent
 à `Maj+W` / `Maj+Q`. La case « Passer en revue les développements » de la section Vue
 (`[gui.view] review_developments`, décochée par défaut, retenue) fait passer ← / → par
-chaque développement, et masque la liste « Développement de chaque photo », placée
-au-dessus d'elle (le rendu de la grille : la changer en plein écran change aussi la
+chaque développement, et masque la liste du développement de chaque photo, placée
+sous elle sans titre (le rendu de la grille : la changer en plein écran change aussi la
 grille). Au bout des développements d'une photo d'une rafale, la photo suivante de la
 rafale (#285).
 
