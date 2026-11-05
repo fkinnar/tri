@@ -344,6 +344,14 @@ impl Theme {
                 style.visuals.error_fg_color = colors.error.into();
             });
         }
+        for (theme, accent) in [
+            (egui::Theme::Dark, colors.accent),
+            (egui::Theme::Light, colors.accent_light),
+        ] {
+            ctx.style_mut_of(theme, |style| {
+                style.visuals.selection = accent_selection(accent.into());
+            });
+        }
         let dark = egui::Visuals::dark();
         ctx.style_mut_of(egui::Theme::Dark, |style| {
             let v = &mut style.visuals;
@@ -399,12 +407,18 @@ impl Theme {
     }
 
     /// Nom d'une image sur une cellule sélectionnée : sombre sur le gris clair de ce
-    /// thème (sans `selection` donnée), sinon `text`.
-    pub fn selected_text(self, colors: &Colors, text: Color32) -> Color32 {
+    /// thème (sans `selection` donnée), sinon `text`, à moins qu'il ne se perde sur le fond
+    /// (accent ou `selection` réglés clairs dans un thème sombre, ou l'inverse) : alors un
+    /// gris très foncé ou très clair.
+    pub fn selected_text(self, colors: &Colors, visuals: &egui::Visuals, text: Color32) -> Color32 {
         if self == Theme::Neutral && colors.selection.is_none() {
-            colors.neutral_cell_text.into()
-        } else {
-            text
+            return colors.neutral_cell_text.into();
+        }
+        let fill = self.selection(colors, visuals);
+        match (is_light(fill), is_light(text)) {
+            (true, true) => Color32::from_gray(24),
+            (false, false) => Color32::from_gray(235),
+            _ => text,
         }
     }
 
@@ -434,6 +448,30 @@ impl Theme {
         } else {
             (colors.stack_band.into(), colors.stack_band_alt.into())
         }
+    }
+}
+
+/// Vrai pour une couleur claire (luminance perçue au-dessus du milieu) : un texte posé
+/// dessus doit être sombre, et sur fond blanc elle se voit mal.
+pub fn is_light(color: Color32) -> bool {
+    let [r, g, b, _] = color.to_array();
+    0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b) > 128.0
+}
+
+/// Sélection d'egui pour une couleur d'accent. Le texte posé dessus est l'accent très
+/// éclairci sur un accent sombre, très assombri sur un accent clair : lisible sur un jaune
+/// vif, et de la même teinte (les défauts restent proches du bleu pâle et du bleu foncé
+/// d'egui). Ailleurs, cette variante sert d'accent visible sur le fond
+/// (`marks::accent_bright`).
+fn accent_selection(accent: Color32) -> egui::style::Selection {
+    let text = if is_light(accent) {
+        accent.lerp_to_gamma(Color32::BLACK, 0.6)
+    } else {
+        accent.lerp_to_gamma(Color32::WHITE, 0.75)
+    };
+    egui::style::Selection {
+        bg_fill: accent,
+        stroke: egui::Stroke::new(1.0, text),
     }
 }
 
@@ -1189,6 +1227,12 @@ impl Default for HistogramSettings {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Colors {
+    /// Couleur d'accent du thème sombre (et du gris neutre) : sélections, curseurs,
+    /// boutons actifs, et tout ce qui « prend l'accent » (étoiles, badge RAW, liseré des
+    /// boîtes…). Demandée le 04/11/2026 ; défaut = celle d'egui, rien ne change.
+    pub accent: Color,
+    /// Couleur d'accent du thème clair (défaut : celle d'egui, plus claire).
+    pub accent_light: Color,
     /// Fond de la cellule sélectionnée (au clic ou au clavier).
     pub selection: Option<Color>,
     /// Barres de progression de la barre d'état ; absent : gris du thème (discret, pas la
@@ -1293,6 +1337,8 @@ pub struct Colors {
 impl Default for Colors {
     fn default() -> Self {
         Self {
+            accent: Color([0, 92, 128]),
+            accent_light: Color([144, 209, 255]),
             selection: None,
             progress: None,
             hover: Color([180, 180, 180]),
@@ -1566,6 +1612,41 @@ mod tests {
     }
 
     #[test]
+    fn the_accent_colour_is_the_theme_selection_with_readable_text() {
+        // Demandée le 04/11/2026 : l'accent n'était pas réglable.
+        let ctx = egui::Context::default();
+        let defaults = Colors::default();
+        Theme::Dark.apply(&ctx, &defaults);
+        // Par défaut, les accents d'egui.
+        for (theme, egui) in [
+            (egui::Theme::Dark, egui::Visuals::dark()),
+            (egui::Theme::Light, egui::Visuals::light()),
+        ] {
+            let selection = ctx.style_of(theme).visuals.selection;
+            assert_eq!(selection.bg_fill, egui.selection.bg_fill);
+            assert_eq!(
+                is_light(selection.stroke.color),
+                is_light(egui.selection.stroke.color)
+            );
+        }
+        let colors = Colors {
+            accent: Color([240, 200, 40]),
+            accent_light: Color([20, 60, 20]),
+            ..Colors::default()
+        };
+        Theme::Neutral.apply(&ctx, &colors);
+        let dark = ctx.style_of(egui::Theme::Dark).visuals.selection;
+        assert_eq!(dark.bg_fill, Color32::from_rgb(240, 200, 40));
+        assert!(!is_light(dark.stroke.color), "texte sombre sur un jaune");
+        let light = ctx.style_of(egui::Theme::Light).visuals.selection;
+        assert_eq!(light.bg_fill, Color32::from_rgb(20, 60, 20));
+        assert!(
+            is_light(light.stroke.color),
+            "texte clair sur un vert foncé"
+        );
+    }
+
+    #[test]
     fn the_neutral_theme_has_its_own_greys() {
         let c = Colors::default();
         assert_eq!(Theme::Dark.center(&c), None);
@@ -1597,14 +1678,26 @@ mod tests {
             Color32::from(c.neutral_selection)
         );
         assert_eq!(Theme::Dark.selection(&c, &v), v.selection.bg_fill);
-        let mut chosen = c;
+        let mut chosen = c.clone();
         chosen.selection = Some(Color([1, 2, 3]));
         assert_eq!(
             Theme::Neutral.selection(&chosen, &v),
             Color32::from_rgb(1, 2, 3)
         );
         assert_eq!(
-            Theme::Neutral.selected_text(&chosen, Color32::WHITE),
+            Theme::Neutral.selected_text(&chosen, &v, Color32::WHITE),
+            Color32::WHITE
+        );
+        // Un accent clair dans le thème sombre : nom en sombre (05/11/2026).
+        let mut yellow = v.clone();
+        yellow.selection.bg_fill = Color32::from_rgb(240, 208, 32);
+        assert!(!is_light(Theme::Dark.selected_text(
+            &c,
+            &yellow,
+            Color32::WHITE
+        )));
+        assert_eq!(
+            Theme::Dark.selected_text(&c, &v, Color32::WHITE),
             Color32::WHITE
         );
         let parsed: AppSettings = tri::settings::parse("[gui]\ntheme = \"neutral\"\n").unwrap();

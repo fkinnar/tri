@@ -10398,7 +10398,7 @@ impl TriApp {
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
                             .on_hover_text(t!("histogram-photo-tip", keys = key));
                         let color = if self.histogram_photo {
-                            ui.visuals().selection.stroke.color
+                            crate::marks::accent_bright(ui.visuals())
                         } else if response.hovered() {
                             ui.visuals().strong_text_color()
                         } else {
@@ -10423,7 +10423,7 @@ impl TriApp {
                                 .on_hover_cursor(egui::CursorIcon::PointingHand)
                                 .on_hover_text(t!("histogram-camera-button-tip", keys = key));
                             let color = if self.histogram_camera {
-                                ui.visuals().selection.stroke.color
+                                crate::marks::accent_bright(ui.visuals())
                             } else if response.hovered() {
                                 ui.visuals().strong_text_color()
                             } else {
@@ -12067,7 +12067,7 @@ impl TriApp {
         let mark_color = if selected {
             self.gui
                 .theme
-                .selected_text(&colors, visuals_text(ui, true))
+                .selected_text(&colors, ui.visuals(), visuals_text(ui, true))
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };
@@ -12208,7 +12208,7 @@ impl TriApp {
         let text_color = if selected {
             self.gui
                 .theme
-                .selected_text(&colors, visuals_text(ui, true))
+                .selected_text(&colors, ui.visuals(), visuals_text(ui, true))
         } else {
             self.gui.theme.cell_text(&colors, visuals_text(ui, false))
         };

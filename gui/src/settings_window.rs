@@ -957,7 +957,7 @@ impl SettingsWindow {
                             let mut job = section_title(ui, name, false);
                             if count > 0 {
                                 RichText::new(format!("  {count}"))
-                                    .color(ui.visuals().selection.stroke.color)
+                                    .color(crate::marks::accent_bright(ui.visuals()))
                                     .strong()
                                     .append_to(
                                         &mut job,
@@ -981,7 +981,17 @@ impl SettingsWindow {
                             }
                             continue;
                         }
-                        let label = ui.selectable_label(at == i, section_title(ui, name, false));
+                        let mut job = section_title(ui, name, false);
+                        if at == i {
+                            // Texte de la sélection sur le fond d'accent : les gris du thème
+                            // disparaissaient sur un accent clair (accent réglable, 05/11/2026).
+                            let on = ui.visuals().selection.stroke.color;
+                            for (n, part) in job.sections.iter_mut().enumerate() {
+                                part.format.color =
+                                    if n == 0 { on } else { on.gamma_multiply(0.7) };
+                            }
+                        }
+                        let label = ui.selectable_label(at == i, job);
                         if at == i && self.section_moved {
                             label.scroll_to_me(None);
                         }
@@ -1996,7 +2006,7 @@ impl SettingsWindow {
                                 ui.painter().rect_stroke(
                                     response.rect.expand(1.0),
                                     3.0,
-                                    Stroke::new(1.5, ui.visuals().selection.stroke.color),
+                                    Stroke::new(1.5, crate::marks::accent_bright(ui.visuals())),
                                     egui::StrokeKind::Outside,
                                 );
                             }
@@ -2060,7 +2070,7 @@ impl SettingsWindow {
                         ui.painter().rect_stroke(
                             zone_rect.expand(2.0),
                             3.0,
-                            Stroke::new(1.5, ui.visuals().selection.stroke.color),
+                            Stroke::new(1.5, crate::marks::accent_bright(ui.visuals())),
                             egui::StrokeKind::Outside,
                         );
                         if released && let ColorDrag::Sorted(k) = *d {

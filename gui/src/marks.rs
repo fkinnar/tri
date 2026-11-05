@@ -971,12 +971,25 @@ pub fn accent(ctx: &egui::Context) -> Color32 {
     ctx.global_style().visuals.selection.bg_fill
 }
 
+/// Accent bien visible sur le fond du thème (icône allumée sur l'histogramme, nombre de
+/// résultats, cadre de dépôt) : l'accent lui-même s'il tranche (clair sur sombre, foncé
+/// sur clair), sinon sa variante contrastée (le texte de la sélection).
+pub fn accent_bright(visuals: &egui::Visuals) -> Color32 {
+    let accent = visuals.selection.bg_fill;
+    if visuals.dark_mode == crate::settings::is_light(accent) {
+        accent
+    } else {
+        visuals.selection.stroke.color
+    }
+}
+
 /// Accent pour un trait ou une petite forme sur le fond (étoiles, anneau d'une couleur
 /// choisie) : en thème clair, le fond de sélection est trop pâle sur du blanc, on prend
-/// sa variante foncée (le texte de la sélection d'egui).
+/// sa variante foncée (le texte de la sélection d'egui). Un accent réglé foncé
+/// (`accent_light`) se voit déjà sur du blanc : gardé tel quel.
 pub fn accent_mark(ctx: &egui::Context) -> Color32 {
     let style = ctx.global_style();
-    if style.visuals.dark_mode {
+    if style.visuals.dark_mode || !crate::settings::is_light(style.visuals.selection.bg_fill) {
         style.visuals.selection.bg_fill
     } else {
         style.visuals.selection.stroke.color

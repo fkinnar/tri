@@ -915,6 +915,11 @@ slider_step = 0.1
 group_gap = 0.5
 
 [gui.colors]
+# Couleur d'accent : sélections, curseurs, boutons actifs, et tout ce qui « prend
+# l'accent » (étoiles, badge RAW, liseré des boîtes…) ; une par thème (le gris neutre
+# prend celle du thème sombre).
+accent = "#005c80"
+accent_light = "#90d1ff"
 # Couleurs "#rrggbb". Sélection (clic ou clavier) absente : couleur du thème. Exemple :
 # selection = "#1e6f7f"
 # Barres de progression de la barre d'état ; absent : gris discret du thème. Exemple :
