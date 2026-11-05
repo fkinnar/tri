@@ -94,7 +94,8 @@ is in the grid's render (2026-11-04, `Stacks::photo_range`, `photo_cover`), in s
 mode as outside it; the other developments stay on `Shift+W` / `Shift+Q`. The "Review the
 developments" checkbox of the View section (`[gui.view] review_developments`, unticked
 by default, remembered) makes ← / → go through each development (outside stack mode too, folded developments
-included, 2026-11-05), and hides the
+included, 2026-11-05; greyed out, with no effect, when the source is the camera JPEG: to
+review the developments, show the RAW or the developed), and hides the
 list of the development of each photo, placed below it without a title (the grid's render: changing it in full screen changes
 the grid too). At the end of the developments of a photo in a burst, the next photo of
 the burst (#285).

@@ -2400,50 +2400,88 @@ impl TriApp {
         self.file_actions_switch(ui);
     }
 
-    /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo dans
-    /// le rendu de la grille (le même réglage), ou chacun de ses développements, la liste
-    /// alors grisée.
+    /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo, ou
+    /// chacun de ses développements ; grisée quand la source est le JPEG boîtier.
     fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
-        let mut review = self.review_developments;
-        if self
-            .side_checkbox(ui, &mut review, t!("panel-view-review"))
-            .on_hover_text(t!(
-                "panel-view-review-tip",
-                keys = [Action::DevPrev, Action::DevNext]
-                    .map(|a| self.keymap.keys_for(a).join(" / "))
-                    .join(", ")
-            ))
-            .changed()
-        {
-            self.review_developments = review;
-        }
-        // Dessous, sans titre (le sous-titre « Développements » suffit), le développement
-        // de chaque photo ; masqué pendant la revue (retours du 05/11/2026 : grisé sous la
-        // case cochée, il semblait en dépendre à l'envers) : ← / → passent alors par
-        // chaque développement, le choix ne s'applique plus.
-        if !self.review_developments {
-            let engines = self.developers.engines();
-            let mut render = self.grid_render;
-            let choices = crate::grid_render::GridRender::choices(&engines);
-            let weak = ui.visuals().weak_text_color();
-            let tip = format!(
-                "{}\n{}",
-                t!("panel-view-render-tip"),
-                self.action_tip(Action::GridRenderNext)
-            );
-            self.side_combo(
-                ui,
-                "view_render",
-                &mut render,
-                &choices,
-                |c| c.label(weak),
-                Some(tip),
-            );
-            if render != self.grid_render {
-                self.set_grid_render(render);
+        // Source « JPEG boîtier » : pas de développement à voir, tout est grisé et la revue
+        // ne s'applique pas (retour du 05/11/2026 : le JPEG à un seul endroit, la source).
+        let jpeg = self.jpeg_source();
+        ui.add_enabled_ui(!jpeg, |ui| {
+            let mut review = self.review_developments;
+            if self
+                .side_checkbox(ui, &mut review, t!("panel-view-review"))
+                .on_hover_text(t!(
+                    "panel-view-review-tip",
+                    keys = [Action::DevPrev, Action::DevNext]
+                        .map(|a| self.keymap.keys_for(a).join(" / "))
+                        .join(", ")
+                ))
+                .changed()
+            {
+                self.review_developments = review;
             }
+            // Dessous, sans titre (le sous-titre « Développements » suffit), le
+            // développement de chaque photo ; masqué pendant la revue (retours du
+            // 05/11/2026 : grisé sous la case cochée, il semblait en dépendre à l'envers) :
+            // ← / → passent alors par chaque développement, le choix ne s'applique plus.
+            if !self.review_developments {
+                self.view_render_list(ui);
+            }
+        });
+    }
+
+    /// Liste du développement de chaque photo (le rendu de la grille), sans le JPEG
+    /// boîtier, qui est une source (retour du 05/11/2026) : une grille en JPEG boîtier
+    /// s'y lit « Couverture » (la photo y montre son développement), sans rien changer
+    /// tant qu'on n'y touche pas.
+    fn view_render_list(&mut self, ui: &mut Ui) {
+        use crate::grid_render::GridRender;
+        let engines = self.developers.engines();
+        let shown = match self.grid_render {
+            GridRender::Embedded => GridRender::Cover,
+            other => other,
+        };
+        let mut render = shown;
+        let choices: Vec<GridRender> = GridRender::choices(&engines)
+            .into_iter()
+            .filter(|&c| c != GridRender::Embedded)
+            .collect();
+        let weak = ui.visuals().weak_text_color();
+        let tip = format!(
+            "{}\n{}",
+            t!("panel-view-render-tip"),
+            self.action_tip(Action::GridRenderNext)
+        );
+        self.side_combo(
+            ui,
+            "view_render",
+            &mut render,
+            &choices,
+            |c| c.label(weak),
+            Some(tip),
+        );
+        if render != shown {
+            self.set_grid_render(render);
         }
+    }
+
+    /// Vrai si l'image affichée montre le JPEG boîtier par choix : la source « JPEG
+    /// boîtier » sur une photo, « avant » sur un développement.
+    fn jpeg_source(&self) -> bool {
+        self.files.get(self.selected).is_some_and(|f| {
+            if tri::media::is_development(&f.path) {
+                self.dev_before
+            } else {
+                self.source == Source::Embedded
+            }
+        })
+    }
+
+    /// Passer en revue les développements, en vigueur : la case cochée, sauf source
+    /// « JPEG boîtier » (grisée alors).
+    fn reviewing(&self) -> bool {
+        self.review_developments && !self.jpeg_source()
     }
 
     /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
@@ -6433,9 +6471,7 @@ impl TriApp {
             // Plein écran sans passer en revue les développements (défaut, retour du
             // 04/11/2026) : de photo en photo, chacune sur son développement de couverture
             // (le rendu de la grille) ; en mode pile, dans la pile.
-            Action::NavPrev | Action::NavNext
-                if self.mode == Mode::View && !self.review_developments =>
-            {
+            Action::NavPrev | Action::NavNext if self.mode == Mode::View && !self.reviewing() => {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 if self.stacks_dirty {
                     self.regroup();
@@ -6460,7 +6496,7 @@ impl TriApp {
             // 05/11/2026 : → sautait les développements d'une photo repliée, ou restait
             // bloqué sur l'un d'eux).
             Action::NavPrev | Action::NavNext
-                if self.mode == Mode::View && self.review_developments && !self.stacking =>
+                if self.mode == Mode::View && self.reviewing() && !self.stacking =>
             {
                 let step = if action == Action::NavNext { 1 } else { -1 };
                 let n = self.selected as isize + step;
@@ -7986,7 +8022,7 @@ impl TriApp {
         if let Some((k, total)) = self
             .stacks
             .development_number(i)
-            .filter(|_| self.review_developments)
+            .filter(|_| self.reviewing())
         {
             parts.push(t!("position-development", n = k, total = total));
         }
@@ -15701,6 +15737,8 @@ mod tests {
         // Plein écran, mode pile, en passant en revue les développements : → les
         // parcourt, ← revient.
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         press(&mut h, Key::S, Modifiers::CTRL);
@@ -15730,6 +15768,8 @@ mod tests {
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(!h.state().stacking);
         let mut seen = vec![selected_name(&h)];
@@ -15794,6 +15834,8 @@ mod tests {
         h.state_mut().metadata_panel = false;
         // En passant en revue les développements.
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         // Au début de la rafale.
@@ -15838,6 +15880,8 @@ mod tests {
         // Le repère ne compte pas les développements quand on ne les passe pas en revue.
         assert!(!h.state().position_text().contains("Dév."));
         h.state_mut().review_developments = true;
+        // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
+        h.state_mut().source = Source::Raw;
         assert!(h.state().position_text().contains("Dév. 1 / 3"));
         h.state_mut().review_developments = false;
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
@@ -18390,16 +18434,34 @@ mod tests {
         h.state_mut().developers = fake_darktable();
         h.run_steps(3);
         assert!(!h.state().review_developments, "décochée par défaut");
+        // Source « JPEG boîtier » (par défaut) : grisée, sans effet (05/11/2026).
+        assert_eq!(h.state().source, Source::Embedded);
+        h.get_by_label(&t!("panel-view-review")).click();
+        h.run_steps(2);
+        assert!(!h.state().review_developments, "grisée en JPEG boîtier");
+        h.state_mut().source = Source::Raw;
+        h.run_steps(2);
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
-        // La liste du développement de chaque photo : masquée pendant la revue (elle ne
-        // s'applique plus ; retour du 05/11/2026).
-        let lists = |h: &Harness<'_, TriApp>| h.query_all_by_label_contains("JPEG").count();
+        // La liste du développement de chaque photo, sans le JPEG boîtier (une grille en
+        // JPEG boîtier s'y lit « Couverture ») : masquée pendant la revue.
+        // La liste s'annonce par sa bulle ; sa valeur : « Couverture ».
+        let tip = t!("panel-view-render-tip");
+        let lists = |h: &Harness<'_, TriApp>| {
+            h.query_all_by_label_contains(&tip)
+                .filter(|n| format!("{n:?}").contains(&t!("grid-render-cover")))
+                .count()
+        };
         let reviewing = lists(&h);
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert_eq!(lists(&h), reviewing + 1, "la liste revient sous la case");
+        assert_eq!(
+            h.state().grid_render,
+            crate::grid_render::GridRender::Embedded,
+            "la grille ne change pas tant qu'on n'y touche pas"
+        );
     }
 
     #[test]
