@@ -2,6 +2,7 @@
 
 *[Version française](CHANGELOG.fr.md)*
 
+- **"Shown source" in the grid's order**: camera JPEG first, then the software, RAW last.
 - **Development of each photo** (full screen): the list goes under "Review the
   developments", without a title, and is hidden while reviewing instead of greyed out.
   Reviewing outside stack mode now goes through every development (→ skipped those of a
