@@ -113,6 +113,9 @@
 - **Loupe at the edge of the screen**: it stays inside the visible area (at the top or
   bottom, half of it went off-screen, mostly in the grid and focus mode), the aimed point
   at the centre of what it shows.
+- **Arrows or hjkl, by key set**: after the leader, the menu of continuations and the
+  help showed "h / Left"; they now show only `h` in vim, the arrow in classic (both keys
+  still work).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

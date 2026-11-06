@@ -1938,12 +1938,17 @@ impl Keymap {
         // supprime, sans Suppr (retour du 06/11/2026 : plus lisible) ; sinon les communes.
         let own = |k: &Vec<Chord>| self.own.iter().any(|(o, a)| o == k && *a == action);
         let has_own = self.bindings.iter().any(|(k, a)| *a == action && own(k));
-        let mine: Vec<&Vec<Chord>> = self
+        let mut mine: Vec<&Vec<Chord>> = self
             .bindings
             .iter()
             .filter(|(k, a)| *a == action && (!has_own || own(k)))
             .map(|(k, _)| k)
             .collect();
+        // Flèches et hjkl pour la même action (`<leader> h` / `<leader> Flèche gauche`) :
+        // celles du jeu choisi seulement (retour du 06/11/2026).
+        if mine.iter().any(|k| !self.other_set_variant(k)) {
+            mine.retain(|k| !self.other_set_variant(k));
+        }
         let mut keys: Vec<String> = Vec::new();
         // En grille, « ajusté » (`/`) lance la recherche (`TriApp::perform`) : l'aide
         // l'écrit pour la recherche, seul en vim, comme dans vim (06/11/2026).
@@ -2029,6 +2034,16 @@ impl Keymap {
                 menu,
             });
         }
+        // Flèche et lettre hjkl pour la même action : celle du jeu choisi (retour du
+        // 06/11/2026 : « h / Flèche gauche » en vim).
+        let kept: Vec<Option<Action>> = next
+            .iter()
+            .filter(|n| !self.other_set_variant(&[n.chord]))
+            .map(|n| n.action)
+            .collect();
+        next.retain(|n| {
+            n.action.is_none() || !self.other_set_variant(&[n.chord]) || !kept.contains(&n.action)
+        });
         // Maj + touche qui fait la même chose que la touche seule : en double.
         let plain: Vec<(Chord, Option<Action>)> = next
             .iter()
@@ -2062,6 +2077,18 @@ impl Keymap {
             )
         });
         next
+    }
+
+    /// Vrai si la séquence `keys` est la variante de l'autre jeu : des flèches en vim,
+    /// `hjkl` en classique. L'aide la tait quand l'action en a une du jeu choisi.
+    fn other_set_variant(&self, keys: &[Chord]) -> bool {
+        keys.iter().any(|c| match c.trigger {
+            Trigger::Key(Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown) => {
+                self.vim
+            }
+            Trigger::Key(Key::H | Key::J | Key::K | Key::L) if !c.ctrl => !self.vim,
+            _ => false,
+        })
     }
 
     /// Nom donné au sous-menu `keys` par `[menus]` : `key-submenu-<nom>` des catalogues s'il
@@ -2757,6 +2784,50 @@ mod tests {
     }
 
     #[test]
+    fn arrows_or_hjkl_after_the_leader_follow_the_chosen_set() {
+        // Retour du 06/11/2026 : « h / Flèche gauche » dans le menu des suites, en vim.
+        let lead = parse_chord("Ctrl+b").unwrap();
+        let vim = vim().with_leader("Ctrl+b").unwrap();
+        let classic = Keymap::from_profiles(&[Profile::Classic])
+            .with_leader("Ctrl+b")
+            .unwrap();
+        let keys = |km: &Keymap, action: Action| -> Vec<String> {
+            km.continuations(&[lead])
+                .into_iter()
+                .filter(|n| n.action == Some(action))
+                .map(|n| n.key)
+                .collect()
+        };
+        assert_eq!(keys(&vim, Action::FocusLeft), ["h"]);
+        assert_eq!(
+            keys(&classic, Action::FocusLeft),
+            [key_label(Key::ArrowLeft)]
+        );
+        assert_eq!(vim.keys_for(Action::FocusLeft), ["<leader> h"]);
+        assert_eq!(
+            classic.keys_for(Action::FocusLeft),
+            [format!("<leader> {}", key_label(Key::ArrowLeft))]
+        );
+        // Les deux marchent toujours.
+        let mut seq = Sequencer::new(Duration::from_secs(1));
+        let t = Instant::now();
+        seq.feed_one(&vim, lead, t);
+        assert_eq!(
+            seq.feed_one(&vim, plain(Key::ArrowLeft), t),
+            Some(Action::FocusLeft)
+        );
+        // Une action sans variante garde sa touche (`<leader> p j` / `<leader> p Bas`).
+        let p = [lead, parse_chord("p").unwrap()];
+        let lenient: Vec<String> = vim
+            .continuations(&p)
+            .into_iter()
+            .filter(|n| n.action == Some(Action::SharpnessLenient))
+            .map(|n| n.key)
+            .collect();
+        assert_eq!(lenient, ["j"]);
+    }
+
+    #[test]
     fn the_help_shows_the_keys_of_the_chosen_set_only() {
         // Retour du 06/11/2026 : en vim, « x » supprime, sans Suppr ni Retour arrière
         // (communs, qui marchent aussi) ; en classique, les communs.
@@ -2789,7 +2860,7 @@ mod tests {
     #[test]
     fn the_help_writes_leader_for_the_panel_prefix() {
         // #175 : l'aide écrivait « Ctrl+B puis r » ; le leader est réglable, montré à part.
-        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let km = vim().with_leader("Ctrl+b").unwrap();
         let keys = km.keys_for(Action::Develop);
         assert!(keys.contains(&"<leader> rr".to_string()), "{keys:?}");
         let keys = km.keys_for(Action::FocusLeft);
@@ -2803,7 +2874,7 @@ mod tests {
 
     #[test]
     fn the_key_menu_lists_what_can_follow_a_prefix() {
-        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let km = vim().with_leader("Ctrl+b").unwrap();
         let lead = parse_chord("Ctrl+b").unwrap();
         let next = km.continuations(&[lead]);
         let find = |key: &str| next.iter().find(|n| n.key == key);

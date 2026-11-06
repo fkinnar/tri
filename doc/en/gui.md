@@ -987,7 +987,9 @@ otherwise, the common ones (`Keymap::keys_for`). Arrows and Enter are written
 Segoe UI Symbol, added as a fallback to egui's, which has none; nothing bundled;
 each font has its scale, its arrows at the text size: Apple Symbols 1.4, DejaVu Sans 1,
 Segoe UI Symbol 1.1; `[gui] arrow_font`, and `arrow_font_scale` on top); otherwise spelled out. Tests do not install
-it: their texts stay stable. Special case of the search: in the
+it: their texts stay stable. An action bound to an arrow and to an
+`hjkl` letter (after the leader, common to both sets) only shows the chosen set's
+variant, in the help as in the menu of continuations (`Keymap::other_set_variant`). Special case of the search: in the
 grid, "fit" (`/`) starts it (`TriApp::perform`), so the help writes `/` for it, alone in
 vim (as in vim), with `Ctrl+f` in classic. The search field is only shown in the grid
 (feedback of 2026-11-06: in the enlarged view it is useless, and `/` there goes back to

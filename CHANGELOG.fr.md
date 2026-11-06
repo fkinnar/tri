@@ -119,6 +119,9 @@
 - **Loupe au bord de l'écran** : elle reste dans la zone visible (en haut ou en bas, la
   moitié sortait, surtout en grille et en mode concentration), le point visé au centre de
   ce qu'elle montre.
+- **Flèches ou hjkl, selon le jeu** : après le leader, le menu des suites et l'aide
+  montraient « h / Flèche gauche » ; ils ne montrent plus que `h` en vim, la flèche en
+  classique (les deux touches marchent toujours).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
