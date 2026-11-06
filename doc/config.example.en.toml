@@ -1029,7 +1029,8 @@ analysis_under = "#286eff"
 
 [keys]
 # Shortcuts, by action identifier (listed in the help, F1 or ?, when hovering an
-# action). The shortcuts given REPLACE those of the sets for that action; empty list:
+# action; every action and its default shortcuts: keys.toml, shipped with the
+# program). The shortcuts given REPLACE those of the sets for that action; empty list:
 # none at all. A key: "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap";
 # a capital letter alone means Shift + the letter ("G", as in vim); a sequence: "g g";
 # a character without a key name: "°". A shortcut bound to two actions is reported

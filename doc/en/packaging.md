@@ -56,6 +56,8 @@ candidates and a nightly build branch.
   loaded from Homebrew.
 - `Info.plist` (identifier `io.github.fkinnar.tri`, photography category), icon
   `tri.icns` made from `gui/assets/icon-1024.png` (`sips`, `iconutil`).
+- `Contents/Resources/keys.toml`: default shortcuts (`gui/resources/keys.toml`, read at
+  startup, see `gui.md`; 2026-11-06, issue #280).
 - The `.dmg` contains the app, a link to Applications and the license files.
 - Command line from the app: `/Applications/tri.app/Contents/MacOS/tri`.
 
@@ -89,6 +91,7 @@ tri-<version>-linux-<arch>/
   bin/tri-gui, bin/tri
   lib/          LibRaw and dependencies (libraw, liblcms2, libjpeg, libgomp)
   share/applications/tri.desktop, share/icons/hicolor/256x256/apps/tri.png
+  share/tri/keys.toml   default shortcuts (read from bin/../share/tri)
   licenses/, install.sh, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
@@ -135,7 +138,8 @@ Made from the same tree as the archive (same minimum glibc, same bundled librari
 right after it:
 
 - **`.deb`** (`package_deb`, `dpkg-deb`): everything in `/opt/tri`, links
-  `/usr/bin/tri-gui` and `/usr/bin/tri`, launcher and icon in `/usr/share`; the RPATH
+  `/usr/bin/tri-gui` and `/usr/bin/tri`, launcher and icon in `/usr/share` (but
+  `keys.toml` in `/opt/tri/share/tri`, next to the program: the link is resolved); the RPATH
   `$ORIGIN/../lib` follows the link. Debian version: `1.0.0~alpha.7` (`~`: before the
   final version), nightly `1.0.0~alpha.7+nightly.20261025.d16c32f`. Depends on glibc 2.39
   and the C++ runtime; display (OpenGL, X11, Wayland) only recommended, loaded by winit
@@ -157,7 +161,7 @@ installer** and a **portable `.zip`**, built by the CI (`windows-latest`).
 tri-<version>-windows-x64/
   tri-gui.exe, tri.exe
   raw_r.dll and its vcpkg dependencies, Visual C++ runtime (msvcp140.dll, vcruntime140*.dll…)
-  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
+  tri.ico, keys.toml (default shortcuts), licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - **Installer** (WiX 5, `dotnet tool install --global wix --version 5.0.2`; the WiX

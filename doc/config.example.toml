@@ -1030,7 +1030,8 @@ analysis_under = "#286eff"
 
 [keys]
 # Raccourcis, par identifiant d'action (liste dans l'aide, F1 ou ?, au survol d'une
-# action). Les raccourcis cités REMPLACENT ceux des profils pour cette action ; liste vide :
+# action ; toutes les actions et leurs raccourcis par défaut : keys.toml, livré avec le
+# programme). Les raccourcis cités REMPLACENT ceux des profils pour cette action ; liste vide :
 # plus aucun. Une touche : "p", "Maj+P", "Ctrl+u", "Flèche gauche", "PageUp", "Échap" ;
 # une majuscule seule vaut Maj + la lettre ("G", comme dans vim) ; une séquence : "g g" ;
 # un caractère sans nom de touche : "°". Un raccourci attribué à deux actions est signalé

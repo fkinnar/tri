@@ -18,6 +18,11 @@
   pointer, like in full screen.
 - **Stack filter button** in the filter bar, with stacks on: shows only the current
   stack (`f c`), lit while looking at it, click again to see everything.
+- **Default shortcuts in a file** (#280): no shortcut is written in the code any more.
+  The classic, vim and common sets are in `keys.toml`, shipped next to the program and
+  read at startup. It lists every action, with `[]` for those without a shortcut. A
+  built-in copy takes over if the file is missing or unreadable; an unreadable file is
+  reported in the status bar. Your own shortcuts stay in `[keys]`.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

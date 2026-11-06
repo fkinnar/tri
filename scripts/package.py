@@ -110,6 +110,13 @@ def common_files(dest):
         shutil.copy2(ROOT / name, dest / name)
 
 
+def ship_keys(dest):
+    """Raccourcis par défaut (`keys.toml`, issue n° 280) : lus au lancement à côté du
+    programme, pour pouvoir les changer sans recompiler (`actions::resource_file`)."""
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "gui" / "resources" / "keys.toml", dest / "keys.toml")
+
+
 # --- macOS ------------------------------------------------------------------------------
 
 
@@ -199,6 +206,7 @@ def package_macos(release, out, ver, archive, identity):
         shutil.copy2(release / name, macos / name)
         binaries.append(macos / name)
     mac_icns(resources)
+    ship_keys(resources)
 
     # Bibliothèques : copiées, puis chaque référence réécrite vers Frameworks.
     libs = mac_collect(binaries)
@@ -382,6 +390,9 @@ def package_linux(release, out, ver, archive):
 
     (apps / "tri.desktop").write_text(DESKTOP)
     shutil.copy2(ROOT / "gui" / "assets" / "icon-256.png", icons / "tri.png")
+    # bin/../share/tri : aussi après install.sh (tout copié dans lib/tri) et dans
+    # l'AppImage (usr/bin, usr/share/tri).
+    ship_keys(stage / "share" / "tri")
     install = stage / "install.sh"
     install.write_text(INSTALL_SH)
     install.chmod(0o755)
@@ -442,7 +453,10 @@ def package_deb(stage, out, ver, arch):
     (usr / "bin").mkdir(parents=True)
     for name in BINARIES:
         (usr / "bin" / name).symlink_to(f"../../opt/tri/bin/{name}")
-    shutil.copytree(stage / "share", usr / "share")
+    shutil.copytree(stage / "share", usr / "share",
+                    ignore=shutil.ignore_patterns("tri"))
+    # Raccourcis : à côté du programme (/opt/tri/bin/../share/tri), pas dans /usr/share.
+    shutil.copytree(stage / "share" / "tri", opt / "share" / "tri")
     size = sum(f.stat().st_size for f in root.rglob("*") if f.is_file() and
                not f.is_symlink()) // 1024
     debian = root / "DEBIAN"
@@ -638,6 +652,7 @@ def package_windows(release, out, ver, archive):
     write_native_notice(licenses, native)
     rust_notices(licenses / "rust-crates.html")
     common_files(stage)
+    ship_keys(stage)
     windows_ico(stage / "tri.ico")
     print("DLL livrées : " + ", ".join(p.name for p in dlls.values()))
     if not archive:

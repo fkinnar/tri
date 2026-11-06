@@ -1001,9 +1001,28 @@ Deux jeux de raccourcis sont livrés, **au choix** (`[gui] profile` : `"classic"
 défaut, `"vim"`, ou `"both"` pour les deux ensemble, qui ne se recouvrent pas ; liste
 déroulante dans la fenêtre de réglages). Décidé le 18/10/2026 : un utilisateur d'outils
 classiques n'a que faire des touches de vim, et inversement ; ce qui est pareil pour les
-deux n'est écrit qu'une fois, dans les listes communes (`BASICS`, notation, filtres,
-sélection, fichiers, panneaux, histogramme ; `actions.rs`), le propre de chaque jeu dans
-`CLASSIC` / `VIM`. Un test vérifie que chaque jeu couvre toutes les actions, sans conflit.
+deux n'est écrit qu'une fois, dans la section commune, le propre de chaque jeu dans la
+sienne. Un test vérifie que chaque jeu couvre toutes les actions, sans conflit.
+
+**Fichier des raccourcis par défaut** (06/11/2026, issue n° 280 : plus aucun raccourci
+dans le code) : `gui/resources/keys.toml`, sections `[common]`, `[classic]`, `[vim]` et
+`[leader]` (touches après le préfixe des panneaux), dans la syntaxe de `[keys]`, les
+sections s'ajoutant. **Toutes les actions y figurent**, `[]` pour celles sans raccourci
+(choix de l'utilisateur : un fichier à lire d'un coup d'œil, et complet pour qui écrit le
+sien) ; un test le vérifie, donc toute nouvelle action s'y ajoute aussi. Il est **livré à
+côté du programme** et lu au lancement (`actions::Defaults`, `resource_file`) : à côté de
+l'exécutable (Windows), `../Resources` (macOS), `../share/tri` (Linux) ; changer les
+raccourcis par défaut ne demande plus de recompiler. Une copie est intégrée au programme
+(`include_str!`), utilisée si le fichier manque (exécution depuis `cargo`) ou s'il est
+illisible (signalé dans la barre d'état, avec les entrées fautives : action ou touche
+inconnue). Généré le 06/11/2026 depuis les anciennes tables Rust, avec une vérification
+qu'il donnait exactement les mêmes raccourcis ; commentaires en anglais (fichier livré).
+Pour ses propres raccourcis, l'utilisateur garde `[keys]` (un fichier livré est remplacé
+à chaque mise à jour). La fenêtre d'aide défile avec les touches de navigation du profil
+qui ne tapent pas de texte (flèches, pages, Ctrl+U / Ctrl+D). Restent dans le code des
+**touches de widgets**, conventions d'interface plutôt que raccourcis : Entrée valide un
+champ, Tab complète un chemin, ↑ / ↓ parcourent une liste de suggestions ; et la touche
+de loupe, réglable à part (`[gui.zoom] loupe_key`).
 L'aide et les textes qui citent une touche la lisent dans la table en vigueur : ils
 suivent le jeu choisi.
 

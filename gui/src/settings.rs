@@ -114,6 +114,8 @@ impl AppSettings {
                 (keymap, vec![warning])
             }
         };
+        // Problèmes de `keys.toml` (raccourcis par défaut) d'abord.
+        warnings.splice(0..0, crate::actions::Defaults::warnings().iter().cloned());
         let (keymap, more) = keymap.with_overrides(&self.keys);
         warnings.extend(more);
         // Touche de loupe aussi liée à une action : les deux se gêneraient.

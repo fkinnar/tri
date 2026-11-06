@@ -948,9 +948,26 @@ Two shortcut sets are shipped, **to choose from** (`[gui] profile`: `"classic"` 
 default, `"vim"`, or `"both"` for both together, which do not overlap; drop-down list in
 the settings window). Decided on 2026-10-18: a user of classic tools has no use for vim
 keys, and vice versa; what is the same for both is written only once, in the common lists
-(`BASICS`, rating, filters, selection, files, panels, histogram; `actions.rs`), what is
-specific to each set in `CLASSIC` / `VIM`. A test checks that each set covers all actions,
-without conflict. The help and the texts that mention a key read it from the table in
+in the common section, what is specific to each set in its own. A test checks that each
+set covers all actions, without conflict.
+
+**Default shortcuts file** (2026-11-06, issue #280: no shortcut left in the code):
+`gui/resources/keys.toml`, sections `[common]`, `[classic]`, `[vim]` and `[leader]` (keys
+after the panel prefix), in the syntax of `[keys]`, the sections adding up. **Every
+action is listed**, `[]` for those without a shortcut (the user's choice: a file to read
+at a glance, and complete for whoever writes their own); a test checks it, so every new
+action is added there too. It is **shipped next to the program** and read at startup
+(`actions::Defaults`, `resource_file`): next to the executable (Windows), `../Resources`
+(macOS), `../share/tri` (Linux); changing the default shortcuts no longer needs a
+rebuild. A copy is built into the program (`include_str!`), used when the file is
+missing (run from `cargo`) or unreadable (reported in the status bar, with the faulty
+entries: unknown action or key). Generated on 2026-11-06 from the former Rust tables,
+checked to give exactly the same shortcuts; comments in English (shipped file). For
+their own shortcuts, users keep `[keys]` (a shipped file is replaced on every update).
+The help window scrolls with the profile's navigation keys that type no text (arrows,
+pages, Ctrl+U / Ctrl+D). Left in the code are **widget keys**, interface conventions
+rather than shortcuts: Enter validates a field, Tab completes a path, Up / Down move in
+a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). The help and the texts that mention a key read it from the table in
 effect: they follow the chosen set.
 
 | Action | Classic | Vim |
