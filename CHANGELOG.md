@@ -80,6 +80,9 @@
   "Shown render", the same in the grid and full screen (camera JPEG, cover, each
   software, RAW render). `r` / `Shift+R`: next / previous render for the whole folder,
   kept from photo to photo; on a development under review, `r` stays before / after.
+- **Review of developments tooltip**: it names the keys of the chosen set (`h` / `l` in
+  vim, no more hard-coded "← / →") and `( (` to unfold a photo, instead of keys that no
+  longer existed.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
