@@ -1122,6 +1122,16 @@ per notch (`loupe_wheel_step` points; `TriApp::loupe_wheel_input` removes the sc
 the grid stays in place). The value shows in the bottom bar (`marks::loupe_icon`, −, the
 value, +; a click on the value: 100 %), when there is room.
 
+### Zoom like the loupe (2026-11-07)
+
+Decided with the user: what applies to the loupe applies to the full-screen zoom.
+`<leader> z` (`core.view.zoom_scale`) opens the same entry as `<leader> m`
+(`entry_for_zoom`, `TriApp::set_zoom_scale`, centred like `+` / `-`). `Ctrl+K` / `Ctrl+J`
+set the loupe if its key is held, otherwise the zoom (one pair of keys, the held key
+chooses). In the bottom bar, the 1:1 button (fit ↔ 100 %) is followed by −, the value
+("Fit", its percentage in a tooltip, or the percentage; a click: `z`) and +
+(`TriApp::zoom_controls`).
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys

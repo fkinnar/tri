@@ -142,6 +142,10 @@
   pause (`[gui.zoom] loupe_digits_ms`). La roulette, la loupe tenue, change aussi le
   grossissement (la grille ne défile pas). La valeur se voit dans la barre du bas (loupe,
   −, valeur, + ; un clic sur la valeur : 100 %). Pour la session.
+- **Le zoom comme la loupe** : `<leader> z` puis un nombre sans Entrée (`150`, `20` =
+  200 %, `2` = 200 %) ; `Ctrl+K` / `Ctrl+J` changent le zoom d'un palier (la loupe si sa
+  touche est tenue) ; dans la barre du bas, à côté du 1:1, −, la valeur (« Ajusté » ou le
+  pourcentage ; un clic : ajusté ou 100 %) et +.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

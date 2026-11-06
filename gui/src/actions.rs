@@ -459,6 +459,8 @@ pub enum Action {
     LoupeZoomIn,
     /// Loupe : palier précédent.
     LoupeZoomOut,
+    /// Zoom du plein écran tapé en chiffres (`<leader> z 200`, `20`, `2`).
+    ZoomScaleEntry,
     /// Loupe : grossissement tapé en chiffres (`<leader> m 200`, `20`, `2`).
     LoupeScaleEntry,
     /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
@@ -483,7 +485,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 212] = [
+    pub const ALL: [Action; 213] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -667,6 +669,7 @@ impl Action {
         Action::LoupeZoomIn,
         Action::LoupeZoomOut,
         Action::LoupeScaleEntry,
+        Action::ZoomScaleEntry,
         Action::ToggleSource,
         Action::PanLeft,
         Action::PanRight,
@@ -806,7 +809,7 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back | Search => Group::Navigation,
-            ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry
+            ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry | ZoomScaleEntry
             | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
             | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale
             | HistogramLarge | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
@@ -1083,6 +1086,7 @@ impl Action {
             Action::LoupeZoomIn => "core.view.loupe_zoom_in",
             Action::LoupeZoomOut => "core.view.loupe_zoom_out",
             Action::LoupeScaleEntry => "core.view.loupe_scale",
+            Action::ZoomScaleEntry => "core.view.zoom_scale",
             Action::ReviewDevelopments => "core.view.review_developments",
             Action::FileActionsAllow => "core.file.allow_actions",
             Action::Palette => "core.app.palette",
