@@ -2365,11 +2365,7 @@ impl TriApp {
                 {
                     self.histogram_large = true;
                 }
-                let look = histogram::Look {
-                    scale: self.histogram_scale,
-                    details: false,
-                    channel: None,
-                };
+                let look = self.small_histogram_look();
                 histogram::draw(
                     ui.painter(),
                     rect,
@@ -7014,6 +7010,17 @@ impl TriApp {
                     self.select(shown[new]);
                 }
             }
+        }
+    }
+
+    /// Ce que montre le petit histogramme (panneau de droite) : l'échelle et le canal
+    /// choisis, comme le grand (retour du 06/11/2026 : `<leader> i r` ne changeait que le
+    /// grand), sans les indicateurs.
+    fn small_histogram_look(&self) -> histogram::Look {
+        histogram::Look {
+            scale: self.histogram_scale,
+            details: false,
+            channel: self.histogram_channel,
         }
     }
 
@@ -22271,6 +22278,24 @@ mod tests {
         }
         assert_eq!(names(&h), ["IMG0.jpg"]);
         assert!(h.state().offloaded.is_none());
+    }
+
+    #[test]
+    fn the_channel_chosen_after_the_leader_shows_in_the_small_histogram_too() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().small_histogram_look().channel, None);
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::R, Modifiers::NONE)],
+        );
+        assert!(!h.state().histogram_large, "sans ouvrir le grand");
+        assert_eq!(h.state().small_histogram_look().channel, Some(0));
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::A, Modifiers::NONE)],
+        );
+        assert_eq!(h.state().small_histogram_look().channel, None);
     }
 
     #[test]
