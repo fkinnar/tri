@@ -9527,11 +9527,18 @@ impl TriApp {
             },
         };
         let side = z.loupe_size;
-        let square = Rect::from_center_size(pos, vec2(side, side));
+        // Gardée dans la zone visible (retour du 06/11/2026 : en haut ou en bas de l'écran,
+        // la moitié sortait), le point visé au centre de ce qu'elle montre.
+        let bounds = painter
+            .clip_rect()
+            .intersect(ctx.content_rect())
+            .shrink(2.0);
+        let square = view::keep_inside(Rect::from_center_size(pos, vec2(side, side)), bounds);
         let size = px * z.loupe_scale / ppp;
         self.loupe_sizes.insert(index, size);
         let point = view::relative(rect, pos);
-        let whole = Rect::from_min_size(pos - vec2(point.x * size.x, point.y * size.y), size);
+        let center = square.center();
+        let whole = Rect::from_min_size(center - vec2(point.x * size.x, point.y * size.y), size);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         let clipped = painter.with_clip_rect(square);
         clipped.rect_filled(square, 0.0, self.view_background());
