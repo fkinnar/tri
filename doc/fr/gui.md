@@ -1045,7 +1045,9 @@ Sans, Segoe UI Symbol, ajoutée en secours de celle d'egui, qui n'en a aucun ; r
 d'embarqué ; chaque police a son échelle, ses flèches à la taille du texte : Apple
 Symbols 1,4, DejaVu Sans 1, Segoe UI Symbol 1,1 ; `[gui] arrow_font`, et
 `arrow_font_scale` par-dessus) ; sinon en toutes lettres. Les tests
-ne l'installent pas : leurs textes restent stables. Cas particulier de la recherche : en grille,
+ne l'installent pas : leurs textes restent stables. Une action liée à une flèche et à une lettre
+`hjkl` (après le leader, communes aux deux jeux) ne montre que la variante du jeu choisi,
+dans l'aide comme dans le menu des suites (`Keymap::other_set_variant`). Cas particulier de la recherche : en grille,
 « ajusté » (`/`) la lance (`TriApp::perform`), l'aide écrit donc `/` pour elle, seul en vim
 (comme dans vim), avec `Ctrl+f` en classique. Le champ de recherche n'est montré qu'en
 grille (retour du 06/11/2026 : en vue agrandie il ne sert à rien, et `/` y remet en
