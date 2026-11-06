@@ -652,6 +652,9 @@ pub struct TriApp {
     /// Où chaque vignette visible est dessinée (sa photo, sans la case) : la loupe s'y
     /// pose dans la grille.
     grid_images: Vec<(usize, Rect)>,
+    /// Haut du corps de la dernière section ouverte du panneau de droite : un sous-titre
+    /// qui y commence n'ajoute pas d'air.
+    section_body_top: f32,
     /// « Quitter » demandé (tests : le harnais ne ferme rien).
     #[cfg(test)]
     quit_requested: bool,
@@ -1247,6 +1250,7 @@ impl TriApp {
             #[cfg(test)]
             cell_rects: Vec::new(),
             grid_images: Vec::new(),
+            section_body_top: f32::NAN,
             #[cfg(test)]
             quit_requested: false,
             pan: Vec2::ZERO,
@@ -1970,7 +1974,15 @@ impl TriApp {
     /// ligne ; retour du 31/10/2026 : les sections Vue et Grille étaient trop serrées).
     fn subheading(&self, ui: &mut Ui, text: String) -> egui::Response {
         let line = ui.text_style_height(&egui::TextStyle::Body);
-        ui.add_space(self.gui.metadata.group_gap * line);
+        // En tête de section, pas d'air en plus : le titre de la section en donne déjà
+        // (retour du 06/11/2026 : « Vue » s'ouvrait plus bas que les autres sections).
+        if (ui.cursor().top() - self.section_body_top).abs() > 0.5 {
+            ui.add_space(self.gui.metadata.group_gap * line);
+        } else {
+            // Le texte à la même distance du titre qu'une case ou une ligne des EXIF, plus
+            // hautes que lui et centrées.
+            ui.add_space((ui.spacing().interact_size.y - line).max(0.0) / 2.0);
+        }
         ui.label(egui::RichText::new(text).weak())
     }
 
@@ -2044,13 +2056,10 @@ impl TriApp {
                 self.panel_folded.remove(id);
             }
         }
+        self.section_body_top = ui.cursor().top();
         open != clicked
     }
 
-    /// Interrupteurs des filtres sur l'analyse et les développements, allumés ou non :
-    /// netteté, exposition, et développées s'il y a un logiciel de développement.
-    /// Filtres sur le contenu : action, allumé, utilisable. « Développées » n'est
-    /// utilisable que si le dossier a un développement (#305), ou pour l'éteindre.
     /// Action sans objet ici, grisée dans l'interface : absente de la palette, refusée au
     /// clavier (retour du 06/11/2026 : « Développées », grisé sans photo développée dans le
     /// dossier, s'allumait par la palette ou `f r`). Éteindre reste toujours possible.
@@ -2071,6 +2080,10 @@ impl TriApp {
         }
     }
 
+    /// Interrupteurs des filtres sur l'analyse et les développements, allumés ou non :
+    /// netteté, exposition, et développées s'il y a un logiciel de développement.
+    /// Filtres sur le contenu : action, allumé, utilisable. « Développées » n'est
+    /// utilisable que si le dossier a un développement (#305), ou pour l'éteindre.
     fn content_toggles(&self) -> Vec<(Action, bool, bool)> {
         let mut toggles = vec![
             (Action::FilterBlurry, self.blur_rule.is_some(), true),
