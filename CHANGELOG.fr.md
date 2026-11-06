@@ -91,7 +91,9 @@
   touches qui n'existaient plus.
 - **Loupe au clavier** : la touche de loupe maintenue (`m`), les flèches (`hjkl` en vim)
   la déplacent sans changer d'image, avec Maj d'un grand pas ; bouger la souris la rend
-  au pointeur. Pas réglables : `[gui.zoom] loupe_step`, `loupe_step_large`.
+  au pointeur. Pas réglables : `[gui.zoom] loupe_step`, `loupe_step_large`. La loupe
+  marche aussi **dans la grille**, sur la vignette sous le pointeur (au clavier : la
+  sélectionnée).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

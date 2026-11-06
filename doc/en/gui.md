@@ -1083,6 +1083,11 @@ zoomed image (with Shift) by `loupe_step_large`, instead of changing image
 over the image, otherwise at the centre; the aimed point is relative to the image
 (`loupe_point`), in the frame recorded when drawing (`loupe_rects`, one entry per image in
 comparison). Moving the mouse, or releasing the key, gives the loupe back to the pointer.
+**In the grid** too (asked the same evening): each thumbnail records where it is drawn
+(`grid_images`); `grid_loupe` puts the loupe on the one under the pointer, otherwise
+(keyboard) on the selected one, drawn in the foreground and clipped to the grid; its 1:1
+is requested as in full screen (`displayed`: the loupe's image), the thumbnail enlarged
+meanwhile.
 
 ### Shortcut review (2026-11-06, issue #280)
 

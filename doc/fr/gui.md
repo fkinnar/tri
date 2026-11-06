@@ -1141,6 +1141,11 @@ changer d'image (`TriApp::loupe_key_move`, avant le reste des actions). Départ 
 pointeur s'il est sur l'image, sinon au centre ; le point visé est relatif à l'image
 (`loupe_point`), dans le cadre relevé au dessin (`loupe_rects`, une entrée par image en
 comparaison). Bouger la souris, ou relâcher la touche, rend la loupe au pointeur.
+**Dans la grille** aussi (demandé le même soir) : chaque vignette retient où elle est
+dessinée (`grid_images`) ; `grid_loupe` pose la loupe sur celle sous le pointeur, sinon
+(clavier) sur la sélectionnée, dessinée au premier plan et coupée à la grille ; son 1:1
+est demandé comme en plein écran (`displayed` : l'image de la loupe), la vignette
+agrandie en attendant.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

@@ -85,7 +85,9 @@
   longer existed.
 - **Loupe from the keyboard**: with the loupe key held (`m`), the arrows (`hjkl` in vim)
   move it without changing image, by a large step with Shift; moving the mouse gives it
-  back to the pointer. Steps: `[gui.zoom] loupe_step`, `loupe_step_large`.
+  back to the pointer. Steps: `[gui.zoom] loupe_step`, `loupe_step_large`. The loupe also
+  works **in the grid**, on the thumbnail under the pointer (from the keyboard: the
+  selected one).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
