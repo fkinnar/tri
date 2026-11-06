@@ -1013,6 +1013,22 @@ grid (thumbnail render, pages, sort…) elsewhere. Actions without a key are lef
 closes; arrows and pages scroll. At the bottom, a reminder of F1 and of the leader in
 force.
 
+### Command palette (2026-11-06)
+
+An idea from the help redesign ("too many results to be really useful"): like
+Ctrl+Shift+P in VS Code, or the command line of vim. `core.app.palette`: `Ctrl+Shift+P`
+in classic, `:` in vim (the user's choice; `:` joins the characters bound for
+themselves, whatever the layout). Type a few letters; below, the **actions** of where
+you are (`cheatsheet::applies`, without the palette) and **every setting**
+(`settings_window::settings_list`, without those the window hides), the best line chosen
+(`palette::search`, the same search as the help: every language, typos, keywords; on a
+tie, an action before a setting, then the shortest title). Up / Down arrows, Tab,
+Ctrl+N / Ctrl+P change line; **Enter runs** the action, or opens the settings window
+filtered on the setting (`section.key`); a click too; Esc closes. Each action shows its
+keys: shortcuts are learnt along the way, and actions without a shortcut become reachable
+from the keyboard. Settings `[gui.dialogs] palette_width`, `palette_max`. Maybe later:
+toggle a yes / no right in the palette.
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys

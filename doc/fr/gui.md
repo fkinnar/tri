@@ -1069,6 +1069,23 @@ ailleurs. Les actions sans touche n'y sont pas (elles restent dans F1). Modale :
 Échap ferment, `F1` passe à la liste complète, un clic ferme ; les flèches et les pages
 font défiler. En bas, le rappel de F1 et du leader en vigueur.
 
+### Palette de commandes (06/11/2026)
+
+Idée née de la refonte de l'aide (« trop de résultats pour que ce soit utile ») : comme
+Ctrl+Maj+P dans VS Code, ou la ligne de commande de vim. `core.app.palette` :
+`Ctrl+Maj+P` en classique, `:` en vim (choix de l'utilisateur ; `:` rejoint les
+caractères liés pour eux-mêmes, quelle que soit la disposition). On tape quelques
+lettres ; dessous, les **actions** de l'endroit où l'on est (`cheatsheet::applies`, sans
+la palette) et **tous les réglages** (`settings_window::settings_list`, sans ceux que la
+fenêtre masque), la meilleure ligne choisie (`palette::search`, même recherche que
+l'aide : toutes les langues, fautes de frappe, mots-clés ; à égalité, une action avant un
+réglage, puis le titre le plus court). Flèches haut / bas, Tab, Ctrl+N / Ctrl+P changent
+de ligne ; **Entrée lance** l'action, ou ouvre la fenêtre de réglages filtrée sur le
+réglage (`section.clé`) ; un clic aussi ; Échap ferme. Chaque action montre ses touches :
+on apprend les raccourcis en passant, et les actions sans raccourci deviennent
+accessibles au clavier. Réglages `[gui.dialogs] palette_width`, `palette_max`. Plus tard
+peut-être : basculer un oui / non directement dans la palette.
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les

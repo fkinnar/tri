@@ -54,7 +54,8 @@ Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
   made for, its principles; [en français](doc/fr/long-story-short.md).
 - [First steps](doc/en/manual.md) (short on purpose: the rest is yours to discover),
   [premiers pas](doc/fr/manual.md) in French.
-- `?`: the keys of where you are; `F1`: every key, with a search. `Ctrl+,`: the settings (key set, "neutral grey"
+- `?`: the keys of where you are; `F1`: every key, with a search; `Ctrl+Shift+P` (`:`
+  in vim): find an action or a setting and run it. `Ctrl+,`: the settings (key set, "neutral grey"
   theme, language…).
 - Ratings: `0`–`5` stars, `6`–`9` colours, `Shift+P` / `Shift+X` picked / rejected.
 - `Enter` full screen, `z` 100 %, `r` camera render or RAW rendering, `/` search.

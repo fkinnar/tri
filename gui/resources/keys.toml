@@ -19,7 +19,7 @@
 #   Letters are written in lower case; an upper-case letter means Shift + that letter.
 # - A sequence is several keys separated by spaces: "g g", "f 3", "f Escape".
 # - A character can stand for a key the keyboard layout moves around: "°", "(", ")",
-#   "+", "-", "*", "/", "=", "?", ",", ".".
+#   "+", "-", "*", "/", "=", ":", "?", ",", ".".
 # - Cmd and Alt are left to the system. On macOS, Cmd+Z, Cmd+Shift+Z and Cmd+C also act
 #   as Ctrl+Z, Ctrl+Shift+Z and Ctrl+C.
 #
@@ -283,6 +283,8 @@ loupe = "m"
 
 # --- Classic profile ---
 # Arrows, Home / End, Page Up / Page Down; Shift + arrows in a zoomed image.
+# Command palette (find an action or a setting and run it): Ctrl+Shift+P, as in VS Code.
+"core.app.palette" = ["Ctrl+Shift+p"]
 "core.nav.prev" = ["Left"]
 "core.nav.next" = ["Right"]
 "core.nav.up" = ["Up"]
@@ -342,6 +344,8 @@ loupe = "m"
 [vim]
 
 # --- Vim profile ---
+# Command palette (find an action or a setting and run it): ":", the command line of vim.
+"core.app.palette" = [":"]
 # hjkl, g g / G, Ctrl+U / Ctrl+D; Shift + hjkl in a zoomed image; "u" undoes, like in
 # vim.
 "core.nav.prev" = ["h"]

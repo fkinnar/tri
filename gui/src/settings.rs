@@ -721,6 +721,10 @@ pub struct DialogSettings {
     pub help_here_text: f32,
     /// Aide « ici » : largeur d'une colonne de cartes (points).
     pub help_here_column: f32,
+    /// Palette de commandes : largeur (points).
+    pub palette_width: f32,
+    /// Palette de commandes : lignes montrées au plus.
+    pub palette_max: usize,
     /// Pendant une attente (copie, recherche sur le réseau, touche de séquence…),
     /// intervalle entre deux images pour voir où elle en est (ms).
     pub poll_ms: u64,
@@ -750,6 +754,8 @@ impl Default for DialogSettings {
             help_scroll_line: 40.0,
             help_here_text: 16.0,
             help_here_column: 420.0,
+            palette_width: 640.0,
+            palette_max: 40,
             poll_ms: 100,
             max_errors: 5,
             completions: 12,

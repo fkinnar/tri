@@ -278,6 +278,60 @@ fn listed_of(schema: &Schema, i: usize) -> usize {
     }
 }
 
+/// Réglage masqué faute du logiciel de développement installé qu'il concerne (voir
+/// [`SettingsWindow::hidden`]), `engines` : ceux qui sont installés.
+fn hidden_for(engines: &[tri::develop::Engine], section: &str, key: &str) -> bool {
+    use tri::develop::Engine;
+    let missing = |e: Engine| !engines.contains(&e);
+    if NEED_A_DEVELOPER.contains(&(section, key)) {
+        return engines.is_empty();
+    }
+    if NEED_DARKTABLE.contains(&(section, key)) {
+        return missing(Engine::Darktable);
+    }
+    section
+        .strip_prefix("sidecars.")
+        .and_then(Engine::from_id)
+        .is_some_and(missing)
+}
+
+/// Un réglage, pour la palette de commandes : sa section, sa clé et ce qui le décrit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SettingRef {
+    /// Section (`gui.zoom`).
+    pub section: String,
+    /// Clé (`max`).
+    pub key: String,
+    /// Libellé de la section, traduit (« Zoom »).
+    pub section_label: String,
+    /// Description (commentaire du fichier d'exemple, dans la langue de l'interface).
+    pub doc: String,
+}
+
+/// Les réglages de la fenêtre de réglages (fichier d'exemple), sans ceux qu'elle masque
+/// (`engines` : logiciels de développement installés), pour la palette de commandes.
+pub fn settings_list(engines: &[tri::develop::Engine]) -> Vec<SettingRef> {
+    let mut list = Vec::new();
+    for section in &schema().sections {
+        for group in &section.groups {
+            for entry in &group.entries {
+                if renamed_in_header(&section.name, &entry.key)
+                    || hidden_for(engines, &section.name, &entry.key)
+                {
+                    continue;
+                }
+                list.push(SettingRef {
+                    section: section.name.clone(),
+                    key: entry.key.clone(),
+                    section_label: section_label(&section.name),
+                    doc: group.doc.clone(),
+                });
+            }
+        }
+    }
+    list
+}
+
 /// Libellé lisible d'une section (« Couleurs » pour `gui.colors`), traduit ; à défaut,
 /// son nom (profil ou préréglage ajouté : « Profil d'export « tirage » »).
 pub fn section_label(name: &str) -> String {
@@ -712,18 +766,7 @@ impl SettingsWindow {
     /// Les chemins des logiciels (`[develop] darktable`…) restent : c'est là qu'on en
     /// indique un installé ailleurs.
     fn hidden(&self, section: &str, key: &str) -> bool {
-        use tri::develop::Engine;
-        let missing = |e: Engine| !self.engines.contains(&e);
-        if NEED_A_DEVELOPER.contains(&(section, key)) {
-            return self.engines.is_empty();
-        }
-        if NEED_DARKTABLE.contains(&(section, key)) {
-            return missing(Engine::Darktable);
-        }
-        section
-            .strip_prefix("sidecars.")
-            .and_then(Engine::from_id)
-            .is_some_and(missing)
+        hidden_for(&self.engines, section, key)
     }
 
     /// Section dont tous les réglages sont masqués ([`SettingsWindow::hidden`]) : absente de
