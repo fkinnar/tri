@@ -24,7 +24,8 @@
   programme et lu au lancement. Il liste toutes les actions, avec `[]` pour celles sans
   raccourci. Une copie intégrée prend le relais si le fichier manque ou est illisible ; un
   fichier illisible est signalé dans la barre d'état. Vos propres raccourcis restent dans
-  `[keys]`.
+  `[keys]`. Le préfixe des panneaux (`leader`, Ctrl+b) y est aussi ; `[gui] leader` est
+  désormais vide par défaut et ne le remplace que si vous le réglez.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

@@ -24,11 +24,17 @@
 #   as Ctrl+Z, Ctrl+Shift+Z and Ctrl+C.
 #
 # Sections add up: [common] applies to both profiles. [classic] and [vim] are added
-# according to [gui] profile ("classic", "vim" or "both"). [leader] lists the keys
-# typed after the panel prefix ([gui] leader, Ctrl+b by default, like tmux).
+# according to [gui] profile ("classic", "vim" or "both"). [after_leader] lists the
+# keys typed after the panel prefix, "leader" below.
 #
 # Panel keys (folders, metadata, large histogram, crop) only act while that panel has
 # the keyboard. There, they take precedence over the general shortcuts.
+
+# Panel prefix, like the prefix of tmux: then the keys of [after_leader] (h / l for the
+# panel on the left / right, o for the next one…). The panel that has the keyboard handles its
+# keys first; Escape gives the keyboard back to the images. Can be replaced for yourself
+# with [gui] leader in the configuration file.
+leader = "Ctrl+b"
 
 [common]
 
@@ -395,7 +401,7 @@
 "core.folders.section_next" = [")"]
 "core.folders.section_prev" = ["("]
 
-[leader]
+[after_leader]
 # After the panel prefix ([gui] leader, Ctrl+b by default): h / Left the panel on the
 # left, l / Right the one on the right, o the next one; b to report a problem (bug);
 # r, d, p to develop (the image's software, darktable, RapidRAW).

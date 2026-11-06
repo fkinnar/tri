@@ -1006,7 +1006,8 @@ sienne. Un test vérifie que chaque jeu couvre toutes les actions, sans conflit.
 
 **Fichier des raccourcis par défaut** (06/11/2026, issue n° 280 : plus aucun raccourci
 dans le code) : `gui/resources/keys.toml`, sections `[common]`, `[classic]`, `[vim]` et
-`[leader]` (touches après le préfixe des panneaux), dans la syntaxe de `[keys]`, les
+`[after_leader]` (touches après le préfixe des panneaux ; le préfixe lui-même en tête,
+`leader = "Ctrl+b"`, que `[gui] leader` remplace pour soi, vide par défaut), dans la syntaxe de `[keys]`, les
 sections s'ajoutant. **Toutes les actions y figurent**, `[]` pour celles sans raccourci
 (choix de l'utilisateur : un fichier à lire d'un coup d'œil, et complet pour qui écrit le
 sien) ; un test le vérifie, donc toute nouvelle action s'y ajoute aussi. Il est **livré à

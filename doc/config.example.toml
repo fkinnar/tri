@@ -509,8 +509,9 @@ profile = "classic"
 # le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
 # ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
 # y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images. Le leader
-# puis b : signaler un problème (formulaire de GitHub prérempli).
-leader = "Ctrl+b"
+# puis b : signaler un problème (formulaire de GitHub prérempli). Vide : celui des
+# raccourcis par défaut (keys.toml, livré avec le programme : Ctrl+b, comme tmux).
+leader = ""
 # Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
 # (première image, profil vim) doit être tapé dans ce délai.
 key_sequence_timeout_ms = 1000

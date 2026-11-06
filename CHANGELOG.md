@@ -22,7 +22,9 @@
   The classic, vim and common sets are in `keys.toml`, shipped next to the program and
   read at startup. It lists every action, with `[]` for those without a shortcut. A
   built-in copy takes over if the file is missing or unreadable; an unreadable file is
-  reported in the status bar. Your own shortcuts stay in `[keys]`.
+  reported in the status bar. Your own shortcuts stay in `[keys]`. The panel prefix
+  (`leader`, Ctrl+b) is in the file too; `[gui] leader` is now empty by default and
+  replaces it only if you set it.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

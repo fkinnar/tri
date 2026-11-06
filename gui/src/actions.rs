@@ -1213,8 +1213,10 @@ pub struct Defaults {
     classic: Vec<(Vec<Chord>, Action)>,
     /// Profil vim.
     vim: Vec<(Vec<Chord>, Action)>,
-    /// Touches tapées après le préfixe des panneaux (`[gui] leader`).
+    /// Touches tapées après le préfixe des panneaux.
     leader: Vec<(Vec<Chord>, Action)>,
+    /// Préfixe des panneaux (`leader`, en tête du fichier), tel qu'écrit : « Ctrl+b ».
+    prefix: String,
 }
 
 /// Copie de `gui/resources/keys.toml` intégrée au programme.
@@ -1236,11 +1238,26 @@ impl Defaults {
         let mut defaults = Defaults::default();
         let mut warnings = Vec::new();
         for (section, entries) in &table {
+            // Le préfixe des panneaux, en tête du fichier.
+            if section == "leader"
+                && let Some(prefix) = entries.as_str()
+            {
+                match parse_chord(prefix) {
+                    Ok(_) => defaults.prefix = prefix.to_string(),
+                    Err(e) => warnings.push(t!(
+                        "keys-file-error",
+                        section = "",
+                        id = "leader",
+                        error = e
+                    )),
+                }
+                continue;
+            }
             let list = match section.as_str() {
                 "common" => &mut defaults.common,
                 "classic" => &mut defaults.classic,
                 "vim" => &mut defaults.vim,
-                "leader" => &mut defaults.leader,
+                "after_leader" => &mut defaults.leader,
                 _ => {
                     warnings.push(t!("keys-file-section", section = section.as_str()));
                     continue;
@@ -1316,6 +1333,11 @@ impl Defaults {
     /// Les raccourcis par défaut chargés (au premier appel).
     pub fn get() -> &'static Defaults {
         &DEFAULTS.get_or_init(Defaults::load).0
+    }
+
+    /// Préfixe des panneaux par défaut (« Ctrl+b »).
+    pub fn prefix(&self) -> &str {
+        &self.prefix
     }
 
     /// Problèmes rencontrés en chargeant les raccourcis par défaut.
@@ -1597,7 +1619,7 @@ impl Keymap {
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
         self.leader = Some(lead);
-        // Touches suivantes : section `[leader]` de `keys.toml`.
+        // Touches suivantes : section `[after_leader]` de `keys.toml`.
         for (keys, action) in &Defaults::get().leader {
             let mut sequence = vec![lead];
             sequence.extend(keys.iter().copied());
@@ -2317,6 +2339,14 @@ mod tests {
         assert_eq!(d.common, vec![(vec![plain(Key::Z)], Action::ToggleZoom)]);
         assert_eq!(d.vim, vec![(vec![plain(Key::L)], Action::NavNext)]);
         assert!(Defaults::parse("[common\n").is_err(), "TOML illisible");
+        // Le préfixe des panneaux, en tête du fichier.
+        assert_eq!(Defaults::get().prefix(), "Ctrl+b");
+        let (d, warnings) = Defaults::parse("leader = \"Ctrl+Pomme\"").unwrap();
+        assert_eq!(
+            (d.prefix(), warnings.len()),
+            ("", 1),
+            "préfixe illisible : signalé"
+        );
     }
 
     #[test]
