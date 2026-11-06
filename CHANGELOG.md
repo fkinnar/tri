@@ -35,7 +35,8 @@
 - **Previous version** of an image in full screen: `Shift+V`, the other way round from
   `v`.
 - **Small histogram** follows the chosen channel too (`<leader> i r`, `g`, `b`, `l`, `a`),
-  not only the large one.
+  not only the large one. In the large histogram, `s` changes the scale and `c` goes
+  to the next channel.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

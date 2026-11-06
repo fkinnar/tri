@@ -22333,6 +22333,15 @@ mod tests {
             HistogramScale::Linear,
             "<leader> i s dans la boîte"
         );
+        // s seul, et c le canal suivant, dans la boîte (retour du 06/11/2026).
+        press(&mut h, Key::S, Modifiers::NONE);
+        assert_ne!(h.state().histogram_scale, HistogramScale::Linear, "s");
+        assert!(h.state().histogram_large, "s ne ferme pas la boîte");
+        let stacking = h.state().stacking;
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().histogram_channel, Some(0), "c : canal suivant");
+        assert_eq!(h.state().stacking, stacking, "s n'a pas touché aux piles");
+        assert!(h.state().crop.is_none(), "c ne recadre pas");
         // Les déplacements passent sous la boîte : l'histogramme suit l'image courante.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().selected, 1, "→ : image suivante");

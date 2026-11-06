@@ -246,8 +246,10 @@ loupe = "m"
 "core.metadata.activate" = ["Space"]
 
 # --- Large histogram (when open) ---
-# r, g, b: one channel; a: all of them; l: the luminance. The same letters work after
-# "<leader> i" anywhere, with s (scale) and c (next channel).
+# r, g, b: one channel; a: all of them; l: the luminance; c: the next channel; s: the
+# scale (EV / linear). The same letters work after "<leader> i" anywhere.
+"core.view.histogram_scale" = ["s"]
+"core.view.histogram_channel" = ["c"]
 "core.histogram.red" = ["r"]
 "core.histogram.green" = ["g"]
 "core.histogram.blue" = ["b"]

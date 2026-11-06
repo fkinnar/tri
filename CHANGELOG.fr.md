@@ -37,7 +37,8 @@
 - **Version précédente** d'une image en plein écran : `Maj+V`, dans l'autre sens que
   `v`.
 - **Petit histogramme** : il suit lui aussi le canal choisi (`<leader> i r`, `g`, `b`,
-  `l`, `a`), plus seulement le grand.
+  `l`, `a`), plus seulement le grand. Dans le grand histogramme, `s` change l'échelle et
+  `c` passe au canal suivant.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
