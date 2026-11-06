@@ -1055,14 +1055,17 @@ the plural ("rendus vignette": `fuzzy` ignores a final "s" or "x"), the RAW / JP
 switches (actions `core.filter.kind.all|raw|flat`). In the palette as in the help, a
 line found by **words** of its title (not by scattered letters) comes first. An action
 **greyed out** here ("Developed" without a developed photo in the folder:
-`TriApp::action_unusable`) is left out of the palette and refused from the keyboard,
-with the reason in the status bar. The **loupe** (a held key, set separately) has its
+`TriApp::action_unusable`) comes after the others in the palette and is refused when
+run, with the reason in the status bar. The **loupe** (a held key, set separately) has its
 help entry, `Action::Loupe` (`core.view.loupe`), with its key in force; it cannot be
 bound (`Action::bindable`): absent from `keys.toml`, `[keys]` and the shortcuts page; run
 from the palette, it recalls its key. Each panel checkbox has its action, for the palette
 (feedback of the same evening: "passer en revue" only found the default value):
 `core.view.review_developments` and `core.file.allow_actions`, without a shortcut, which
-toggle the current state; settings lines are called "configuration" there.
+toggle the current state; settings lines are called "configuration" there. The palette offers
+**everything, unfiltered** (feedback of the same evening: from a side panel, "passer" did
+not find the review), with no line limit by default; on equal match, what applies here
+(`TriApp::palette_places`: the panel with the keyboard and the images) comes first.
 
 ### One shown render (2026-11-06)
 
