@@ -98,10 +98,19 @@ images d'une même pose.
   `threshold_by_rank` va désormais jusqu'à **tout regrouper** à fond à gauche (plus de
   « centre × étendue », qui s'arrêtait à 0,375 sur FULLTEST, sous les 0,41 qui
   réuniraient les piles « bras croisés »). Entre le centre et chaque bout, le nombre de
-  piles (liens coupés + 1) suit une **moyenne de puissance λ** (`strictness_curve`,
-  2 par défaut) : λ = 1, à parts égales ; au-delà, plus doux à gauche et plus rapide à
-  droite. Sur FULLTEST (123 piles au centre), à -0,2 / -0,6 / -0,9 : 99 / 50 / 14 piles
-  à λ = 1, 110 / 78 / 39 à λ = 2. Curseur **« Progression du curseur »** de la fenêtre
+  piles (liens coupés + 1) suit, avec λ = `strictness_curve` (2 par défaut) :
+  - vers la **gauche**, une **échelle logarithmique** à la position `u^λ` : chaque pixel
+    retire la même part des piles, donc de plus en plus de pixels pour une pile de moins
+    à mesure qu'on va à gauche ; λ > 1 adoucit le départ du centre. Une première version
+    (moyenne de puissance λ des deux côtés) avait une pente infinie au bout gauche : à
+    λ = 2, de 39 piles à 2 dans les derniers 10 % (« au pixel près », retour de
+    l'utilisateur) ;
+  - vers la **droite**, une **moyenne de puissance λ** : λ = 1, à parts égales ; au-delà,
+    plus rapide près du centre.
+
+  Sur FULLTEST (123 piles au centre), à -0,2 / -0,6 / -0,9 / -0,95 / -1 : 104 / 28 / 4,4
+  / 3 / 2 piles à λ = 2 (à λ = 1 : 54 / 10 / 3 / 2,5 / 2). Sur une demi-glissière de
+  100 px, il faut environ 3 à 4 px par pile vers 3 à 5 piles. Curseur **« Progression du curseur »** de la fenêtre
   `Ctrl+G`, retenu par dossier (`folder_curve` / `remember_curve`, `group-curve.tsv`),
   de 1 / `strictness_curve_max` à `strictness_curve_max`. `strictness_span` ne sert
   plus qu'aux dossiers de trop peu d'images (`with_strictness`).

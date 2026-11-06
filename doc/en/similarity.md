@@ -94,10 +94,18 @@ did not separate the poses better. On the other hand, pose changes fell on **pau
   now goes all the way to **grouping everything** fully to the left (no more "centre ×
   span", which stopped at 0.375 on FULLTEST, below the 0.41 that would bring the "arms
   crossed" stacks together). Between the centre and each end, the number of stacks (cut
-  links + 1) follows a **power mean of order λ** (`strictness_curve`, 2 by default):
-  λ = 1, in equal shares; above, gentler to the left and faster to the right. On
-  FULLTEST (123 stacks at the centre), at -0.2 / -0.6 / -0.9: 99 / 50 / 14 stacks at
-  λ = 1, 110 / 78 / 39 at λ = 2. **"Slider progression"** slider of the `Ctrl+G` window,
+  links + 1) follows, with λ = `strictness_curve` (2 by default):
+  - towards the **left**, a **logarithmic scale** at the position `u^λ`: each pixel
+    removes the same share of the stacks, so more and more pixels for one stack less
+    the further left; λ > 1 softens the start from the centre. A first version (power
+    mean of order λ on both sides) had an infinite slope at the left end: at λ = 2, from
+    39 stacks to 2 in the last 10 % ("to the pixel", the user's feedback);
+  - towards the **right**, a **power mean of order λ**: λ = 1, in equal shares; above,
+    faster near the centre.
+
+  On FULLTEST (123 stacks at the centre), at -0.2 / -0.6 / -0.9 / -0.95 / -1: 104 / 28 /
+  4.4 / 3 / 2 stacks at λ = 2 (at λ = 1: 54 / 10 / 3 / 2.5 / 2). On a 100 px half slider,
+  about 3 to 4 px per stack around 3 to 5 stacks. **"Slider progression"** slider of the `Ctrl+G` window,
   remembered per folder (`folder_curve` / `remember_curve`, `group-curve.tsv`), from
   1 / `strictness_curve_max` to `strictness_curve_max`. `strictness_span` now only
   serves folders with too few images (`with_strictness`).

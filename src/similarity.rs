@@ -406,11 +406,16 @@ pub fn distances_by_rank(links: &[Option<Link>], max_gap_s: f32) -> Vec<f32> {
 /// et il restait des piles tout à droite). Au centre, `centre` ; à fond à droite, aucun
 /// lien joint (plus de piles) ; à fond à gauche, tous (issue n° 306 : à « centre ×
 /// étendue », des piles d'une même série restaient séparées). Entre les deux, le nombre
-/// de liens coupés + 1 (les piles, à l'écart de temps près) suit une moyenne de
-/// puissance `curve` (λ) entre sa valeur au centre et au bout : λ = 1, à parts égales ;
-/// λ > 1, plus doux vers la gauche et plus rapide vers la droite (retour de
-/// l'utilisateur : la gauche allait trop vite). Trop peu de distances (moins de
-/// `min_links`) : [`with_strictness`] avec `span`.
+/// de liens coupés + 1 (les piles, à l'écart de temps près) va de sa valeur au centre à
+/// celle du bout (retours de l'utilisateur : la gauche allait trop vite, puis « au pixel
+/// près » tout au bout) :
+/// - vers la gauche, sur une échelle **logarithmique** à la position `u^λ` : chaque pixel
+///   retire la même part des piles, si bien que plus on va à gauche (moins de piles),
+///   plus il faut de pixels pour en perdre une ; λ > 1 adoucit le départ du centre ;
+/// - vers la droite, une moyenne de puissance λ : λ = 1, à parts égales ; λ > 1, plus
+///   rapide près du centre.
+///
+/// Trop peu de distances (moins de `min_links`) : [`with_strictness`] avec `span`.
 pub fn threshold_by_rank(
     sorted: &[f32],
     centre: f32,
@@ -427,10 +432,15 @@ pub fn threshold_by_rank(
     // Liens coupés + 1 : au centre, puis au bout vers lequel on va.
     let joined_at_centre = sorted.partition_point(|&d| d <= centre);
     let middle = (n - joined_at_centre + 1) as f64;
-    let end = if t > 0.0 { (n + 1) as f64 } else { 1.0 };
     let u = t.abs() as f64;
     let lambda = f64::from(curve).max(0.01);
-    let cut = ((1.0 - u) * middle.powf(lambda) + u * end.powf(lambda)).powf(1.0 / lambda);
+    let cut = if t > 0.0 {
+        let end = (n + 1) as f64;
+        ((1.0 - u) * middle.powf(lambda) + u * end.powf(lambda)).powf(1.0 / lambda)
+    } else {
+        // Du centre à 1 (tout joint), en log : middle^(1 - u^λ).
+        middle.powf(1.0 - u.powf(lambda))
+    };
     let k = n + 1 - (cut.round() as usize).clamp(1, n + 1);
     // Seuil entre la k-ième et la suivante : exactement k liens joints.
     match k {
@@ -779,10 +789,18 @@ mod tests {
                 "{curve} : {steps:?}"
             );
         }
-        // λ = 1 : à parts égales (6 coupés + 1 au centre, 1 au bout gauche, 11 au droit).
-        assert_eq!(joined(-0.5, 1.0), 7);
+        // 6 coupés + 1 au centre ; à gauche en log (√6 ≈ 2 à mi-chemin), à droite à
+        // parts égales (jusqu'à 11) à λ = 1.
+        assert_eq!(joined(-0.5, 1.0), 9);
         assert_eq!(joined(0.6, 1.0), 2);
-        // λ > 1 : plus doux à gauche, plus rapide à droite.
+        // Vers la gauche, de plus en plus de pas pour une pile de moins (≥ 1 lien joint
+        // de plus par pas au début, puis des pas sans changement).
+        let left: Vec<usize> = (0..=20).map(|t| joined(-(t as f32) / 20.0, 1.0)).collect();
+        assert!(
+            left.windows(2).rev().take(3).any(|w| w[0] == w[1]),
+            "{left:?}"
+        );
+        // λ > 1 : plus doux près du centre à gauche, plus rapide à droite.
         assert!(joined(-0.5, 3.0) < joined(-0.5, 1.0));
         assert!(joined(0.2, 3.0) < joined(0.2, 1.0));
         // Trop peu de liens : le seuil géométrique d'avant.

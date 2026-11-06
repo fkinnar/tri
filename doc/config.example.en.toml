@@ -447,9 +447,11 @@ auto_range = 2.0
 strictness_span = 3.0
 # Progression of the stacks slider (lambda): it follows the rank of the folder's
 # distances, from the (computed) centre to grouping everything fully to the left and no
-# stack at all fully to the right; in between, the number of stacks follows a power
-# mean of order lambda. 1: even in number of stacks; above, gentler to the left (large
-# stacks) and faster to the right. Can also be set for a folder, "Slider progression"
+# stack at all fully to the right. Towards the left, the number of stacks follows a
+# logarithmic scale (each pixel removes the same share: more and more pixels for one
+# stack less), at the position raised to the power lambda; towards the right, a power
+# mean of order lambda. Above 1: gentler start from the centre to the left, faster to
+# the right. Can also be set for a folder, "Slider progression"
 # slider of the grouping window (Ctrl+G). The chosen strictness is remembered for each
 # folder.
 strictness_curve = 2.0

@@ -8,8 +8,8 @@
   moves two images apart (a change of pose in the studio often falls on one). Two new
   sliders in the grouping window (`Ctrl+G`), remembered per folder: "Weight of pauses"
   (to the left, content only; to the right, pauses cut more, e.g. street photography)
-  and "Slider progression" (above 1, the strictness moves more gently to the left and
-  faster to the right). Fully to the left, the strictness slider now groups everything.
+  and "Slider progression" (to the left, each pixel removes the same share of the
+  stacks; above 1, a gentler start from the middle and a faster right side). Fully to the left, the strictness slider now groups everything.
   Settings `[similarity] pause_weight`, `pause_range`, `strictness_curve`,
   `strictness_curve_max`. The
   window closed with Esc or `Ctrl+G` now also remembers the strictness.
