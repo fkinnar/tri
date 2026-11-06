@@ -59,7 +59,8 @@ Détails (Windows, options, HEIC) : [doc/fr/build.md](doc/fr/build.md).
 - `F1` ou `?` : toutes les touches, avec une recherche. `Ctrl+,` : les réglages (dont le
   jeu de raccourcis, le thème « gris neutre », la langue).
 - Notes : `0`–`5` étoiles, `6`–`9` couleurs, `Maj+P` / `Maj+X` accepté / rejeté.
-- `Entrée` plein écran, `z` 100 %, `b` rendu boîtier ou rendu RAW, `/` rechercher.
+- `Entrée` plein écran, `z` 100 %, `r` rendu boîtier ou rendu RAW, `/` rechercher.
+- Tous les raccourcis par défaut : [`gui/resources/keys.toml`](gui/resources/keys.toml).
 
 ## Documentation
 

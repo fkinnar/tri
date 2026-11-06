@@ -502,8 +502,9 @@ enabled = true
 # [gui.colors] neutral_*).
 theme = "dark"
 # Jeu de raccourcis : "classic" (flèches, Début / Fin, Suppr, Ctrl+C / Ctrl+X copier /
-# déplacer vers, Ctrl+Z / Ctrl+Y), "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, dw / yw,
-# u / Ctrl+R) ou "both" (les deux). Le reste (notation, filtres, piles, zoom…) est commun.
+# déplacer vers, Ctrl+Z / Ctrl+Y) ou "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, d) / y),
+# u / Ctrl+R). Le reste (notation, filtres, piles, zoom…) est commun. Tous les raccourcis
+# par défaut : keys.toml, livré avec le programme.
 profile = "classic"
 # Changer de panneau au clavier, comme tmux : le leader, puis h / l (ou les flèches) pour
 # le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
@@ -732,12 +733,13 @@ overlay_opacity = 0.6
 steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
 max = 4.0
 min = 0.1
-# Loupe, en vue ajustée : tant que cette touche est maintenue (une touche libre, écrite
-# comme dans [keys] : "t", "F3"… ; ou "shift", "ctrl", "alt" ; "none" : pas de loupe),
-# l'image à 100 % (loupe_scale) sous le pointeur, dans un carré de loupe_size points,
-# après loupe_delay_ms (pour ne pas clignoter sur une pression brève). Une touche déjà
-# liée à une action est signalée.
-loupe_key = "t"
+# Loupe, en vue ajustée et en comparaison : tant que cette touche est maintenue (une
+# touche libre, écrite comme dans [keys] : "m", "F3"… ; ou "shift", "ctrl", "alt" ;
+# "none" : pas de loupe), l'image à 100 % (loupe_scale) sous le pointeur, dans un carré
+# de loupe_size points, après loupe_delay_ms (pour ne pas clignoter sur une pression
+# brève). Vide : celle des raccourcis par défaut (keys.toml : m, comme « magnify »). Une
+# touche déjà liée à une action est refusée (signalé).
+loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 1.0

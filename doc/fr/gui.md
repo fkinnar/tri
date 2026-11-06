@@ -1027,6 +1027,68 @@ de loupe, réglable à part (`[gui.zoom] loupe_key`).
 L'aide et les textes qui citent une touche la lisent dans la table en vigueur : ils
 suivent le jeu choisi.
 
+### Revue des raccourcis (06/11/2026, issue n° 280)
+
+Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les
+touches citées ailleurs dans ce document sont **celles de leur date** : la référence
+est `gui/resources/keys.toml` et l'aide (F1). Règle retenue (en tête de `keys.toml`) :
+
+- **une lettre par domaine**, tirée du nom **anglais** : `c` crop, `i` histogramme, `m`
+  magnify (loupe), `n` ordre, `o` overlays, `p` peaking, `r` render, `s` stacks, `t`
+  text (infos), `v` versions, `a` AF point, `b` background, `e` external, `w` warnings ;
+- **lettre seule** : l'action principale ; **Maj+lettre** : sa variante ; **Ctrl+lettre** :
+  la fenêtre de réglages du domaine ;
+- **réglage secondaire** (changé de temps en temps) : `<leader>`, la lettre du domaine,
+  puis le réglage (`<leader> i s` : échelle de l'histogramme) ; une séquence du leader
+  atteint les actions de tous les panneaux (`Keymap::lookup` : panneau actif, puis
+  général, puis autre panneau) ;
+- sauf les **réflexes de tous** : `Ctrl+Z`, `Ctrl+C`, `Ctrl+X`, `Ctrl+A`, `Ctrl+F`,
+  `Ctrl+E`, `Ctrl+,`.
+
+Autres décisions : le profil **« both » est retiré** (lu comme `classic`, et signalé) :
+classique et vim peuvent ainsi lier une même touche différemment (panneau des dossiers :
+conventions du Finder / de l'Explorateur en classique, nvim-tree en vim). La **loupe**
+rejoint `keys.toml` (`loupe = "m"`, `[gui.zoom] loupe_key` vide par défaut). **Strict** :
+un leader ou une touche de loupe déjà liés à une action sont **refusés** (celui de
+`keys.toml` reste, et c'est dit) ; un leader sur Espace demande d'abord de déplacer la
+sélection dans `[keys]`.
+
+| Action | Avant | Après |
+|---|---|---|
+| Piles actives / inactives | `Ctrl+S` | `s` |
+| Fenêtre de regroupement | `Ctrl+G` | `Ctrl+S` |
+| Déplier / replier la pile courante | `s` | `( (` / `) )` |
+| Développement suivant / précédent | `Maj+W` / `Maj+Q` | `( (` / `) )` et les flèches |
+| Grand histogramme | `Maj+E` | `Maj+I` |
+| Échelle de l'histogramme | `Maj+I` | `<leader> i s` |
+| Canal suivant / un canal | `Maj+C` / (grand histogramme) | `<leader> i c` / `<leader> i r g b a l` |
+| Source (JPEG boîtier, RAW, développé) | `b` | `r` |
+| Rendu des vignettes | `f d` | `Maj+R` |
+| Développer (logiciel de l'image / dossier) | `Maj+B` / `Ctrl+Maj+B` | `<leader> r r` / `<leader> r Maj+R` |
+| Développer dans darktable / RapidRAW / RawTherapee / ART | `<leader> d` / `p` / — / — | `<leader> r d` / `p` / `t` / `a` |
+| Ouvrir le dossier dans un logiciel (dossiers) | `d` | `<leader> r d` / `p` / `t` / `a` |
+| Tri suivant / inverser | `f s` / `f r` | `n` / `Maj+N` |
+| Filtre « pile courante » / « développées » | `f c` / `f Maj+D` | `f s` / `f r` |
+| Recadrer | `r` | `c` |
+| Version suivante | `n` | `v` |
+| Mode visuel (sélection d'une plage) | `v` | `Maj+Espace` |
+| Comparer | `c` | `=` |
+| Loupe (maintenue) | `t` | `m` |
+| Collimateur | `m` | `a` |
+| Infos sur l'image | `Ctrl+I` | `t` |
+| Fond | `Ctrl+L` | `b` |
+| Révéler dans le gestionnaire de fichiers | `Maj+R` | `Maj+E` |
+| Couleur / sévérité de la carte de netteté | `Ctrl+P` / `Ctrl+J`, `Ctrl+K` | `<leader> p c` / `<leader> p j`, `p k` (ou ↓ ↑) |
+| Panneaux dossiers / métadonnées / filtres / notation | `Maj+D` / `Maj+M` / `Maj+F` / `Maj+N` | `<leader> Maj+H` / `Maj+L` / `Maj+K` / `Maj+J` (ou Maj + flèches) |
+| Avance automatique | `Maj+A` | `<leader> Espace` |
+| Signaler un problème | `<leader> b` | `<leader> ?` |
+| Dossiers, classique : créer / renommer / favori | `a` / `r` / `m` | `Ctrl+Maj+N` / `F2` / `Ctrl+D` |
+| Profil | `classic` / `vim` / `both` | `classic` / `vim` |
+
+Idée notée pour plus tard : un nombre après une séquence (`<leader> m 200` : loupe à
+200 %).
+
+
 | Action | Classique | Vim |
 |---|---|---|
 | `core.nav.prev` / `core.nav.next` | ← / → | h / l |

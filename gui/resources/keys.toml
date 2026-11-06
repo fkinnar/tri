@@ -19,29 +19,43 @@
 #   Letters are written in lower case; an upper-case letter means Shift + that letter.
 # - A sequence is several keys separated by spaces: "g g", "f 3", "f Escape".
 # - A character can stand for a key the keyboard layout moves around: "°", "(", ")",
-#   "+", "-", "*", "/", "?", ",", ".".
+#   "+", "-", "*", "/", "=", "?", ",", ".".
 # - Cmd and Alt are left to the system. On macOS, Cmd+Z, Cmd+Shift+Z and Cmd+C also act
 #   as Ctrl+Z, Ctrl+Shift+Z and Ctrl+C.
 #
-# Sections add up: [common] applies to both profiles. [classic] and [vim] are added
-# according to [gui] profile ("classic", "vim" or "both"). [after_leader] lists the
-# keys typed after the panel prefix, "leader" below.
+# Sections add up: [common] applies to both profiles, then [classic] or [vim] according
+# to [gui] profile. [after_leader] lists the keys typed after the panel prefix ("leader"
+# below), in both profiles.
+#
+# How the keys are chosen (shortcut review of 2026-11-06, issue #280):
+# - one letter per domain, from its English name: c crop, i histogram, m magnify, n
+#   order, o overlays, p peaking, r render, s stacks, t text infos, v versions…;
+# - the letter alone: the main action; Shift + the letter: its variant; Ctrl + the
+#   letter: the settings window of the domain;
+# - a setting changed now and then: <leader>, the letter of the domain, then the
+#   setting ("<leader> i s": histogram scale);
+# - except for everybody's reflexes: Ctrl+Z, Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+F, Ctrl+E,
+#   Ctrl+, keep their usual meaning.
 #
 # Panel keys (folders, metadata, large histogram, crop) only act while that panel has
-# the keyboard. There, they take precedence over the general shortcuts.
+# the keyboard; there, they take precedence over the general shortcuts. A sequence
+# starting with the leader reaches them from anywhere.
 
-# Panel prefix, like the prefix of tmux: then the keys of [after_leader] (h / l for the
-# panel on the left / right, o for the next one…). The panel that has the keyboard handles its
-# keys first; Escape gives the keyboard back to the images. Can be replaced for yourself
-# with [gui] leader in the configuration file.
+# Panel prefix, like the prefix of tmux: then the keys of [after_leader]. It must not
+# be bound to anything else (it is refused, and the reason shown, if it is). Can be
+# replaced for yourself with [gui] leader in the configuration file.
 leader = "Ctrl+b"
+
+# Loupe: while this key is held, the image at 100 % under the pointer (fit view and
+# comparison). A key, or "shift", "ctrl", "alt"; "none": no loupe. It must not be bound
+# to anything else. Can be replaced for yourself with [gui.zoom] loupe_key.
+loupe = "m"
 
 [common]
 
 # --- Basics ---
 "core.view.open" = ["Enter"]
 "core.view.zoom" = ["z"]
-"core.view.source" = ["b"]
 "core.view.back" = ["Escape"]
 # "?" comes with or without Shift depending on the keyboard layout.
 "core.app.help" = ["F1", "?", "Shift+?"]
@@ -51,19 +65,22 @@ leader = "Ctrl+b"
 # Focus mode: F11, as for full-screen applications. Also Ctrl+Shift+F, because on
 # macOS F11 shows the desktop.
 "core.view.focus_mode" = ["F11", "Ctrl+Shift+f"]
-# Develop in the development software: on request only (it takes a few seconds).
-"core.develop.render" = ["Shift+b"]
-# The whole folder, in the background (issue #69).
-"core.develop.folder" = ["Ctrl+Shift+b"]
-# "q q": "q" alone quit too quickly, next to Shift+Q (issue #244).
+# "q q": "q" alone quit too quickly (issue #244).
 "core.app.quit" = ["q q"]
 "core.app.check_update" = []
+"core.app.settings" = ["Ctrl+,"]
+# Zoom steps, like Lightroom: characters, for the top row as well as the numeric
+# keypad, whatever the keyboard layout.
+"core.view.zoom_in" = ["+"]
+"core.view.zoom_out" = ["-"]
+"core.view.zoom_100" = ["*"]
+"core.view.zoom_fit" = ["/"]
 
 # --- Rating ---
 # Designed for AZERTY keyboards too: digits with or without Shift (top row of an
 # AZERTY with Shift, numeric keypad without). Purple on "°" (AZERTY), "," and "." (the
-# keypad decimal separator depends on the system). Flags on Shift+P / X / U ("u" alone
-# is kept for undo).
+# keypad decimal separator depends on the system). Flags on Shift+P / X / U, like
+# Lightroom (pick, reject, unflag).
 "core.rate.star.0" = ["0", "Shift+0"]
 "core.rate.star.1" = ["1", "Shift+1"]
 "core.rate.star.2" = ["2", "Shift+2"]
@@ -79,35 +96,47 @@ leader = "Ctrl+b"
 "core.flag.accept" = ["Shift+p"]
 "core.flag.reject" = ["Shift+x"]
 "core.flag.none" = ["Shift+u"]
-"core.rate.auto_advance" = ["Shift+a"]
-"core.view.rating_bar" = ["Shift+n"]
-"core.view.image_info" = ["Ctrl+i"]
-# "L" like the lights of Lightroom.
-"core.view.background" = ["Ctrl+l"]
-# Thumbnail infos ("text"): name, format, ratings, badges.
-"core.view.grid_info" = ["Shift+t"]
-"core.view.folders" = ["Shift+d"]
-"core.view.refresh_folders" = ["F5"]
+
+# --- Selection and comparison ---
+# Space selects; Shift+Space selects a range, like the visual mode of vim. Escape also
+# clears the selection.
+"core.select.toggle" = ["Space"]
+"core.select.visual" = ["Shift+Space"]
+"core.select.all" = ["Ctrl+a"]
+"core.select.clear" = ["Ctrl+Shift+a"]
+# Compare the selection: "=", side by side (direct on US, French and Belgian
+# keyboards).
+"core.view.compare" = ["="]
+
+# --- Render (r): what is shown, and developing ---
+# r: the source in full screen (camera JPEG, RAW, development); Shift+R: the thumbnail
+# render of the grid. Developing is on request (a few seconds): after the leader, see
+# [after_leader].
+"core.view.source" = ["r"]
+"core.grid.render" = ["Shift+r"]
+
+# --- On the image ---
+# i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
 "core.view.histogram" = ["i"]
-"core.view.histogram_scale" = ["Shift+i"]
-"core.view.histogram_large" = ["Shift+e"]
-"core.view.histogram_channel" = ["Shift+c"]
-# Clipped / blocked areas: "w" for warnings ("o" is for the overlays, like Lightroom).
+"core.view.histogram_large" = ["Shift+i"]
+# w: clipped / blocked areas (warnings).
 "core.view.clipping" = ["w"]
+# p: the sharpness map (peaking). Its colour and strictness: after the leader.
 "core.view.peaking" = ["p"]
-"core.view.peaking_color" = ["Ctrl+p"]
-# Sharpness strictness (slider, map and judgement): Ctrl+J more lenient, Ctrl+K
-# stricter, like down / up in vim (Ctrl + arrows belong to the system).
-"core.view.sharpness_lenient" = ["Ctrl+j"]
-"core.view.sharpness_strict" = ["Ctrl+k"]
-"core.view.focus_point" = ["m"]
-# Overlays, like Lightroom: "o" the next one (grids, then the user's own), Shift+O
-# turns the spiral (and the other lines).
+# a: the AF point.
+"core.view.focus_point" = ["a"]
+# o: the overlays, like Lightroom (grids, then the user's own); Shift+O turns the
+# spiral (and the other lines).
 "core.view.overlay" = ["o"]
 "core.view.overlay_orient" = ["Shift+o"]
-"core.view.metadata" = ["Shift+m"]
+# b: the background (grey, black…), like the lights of Lightroom.
+"core.view.background" = ["b"]
+# t: the infos on the image (text); Shift+T: the infos of the thumbnails.
+"core.view.image_info" = ["t"]
+"core.view.grid_info" = ["Shift+t"]
+"core.view.refresh_folders" = ["F5"]
 
-# --- Filters ---
+# --- Filters (f) ---
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
 # "f Escape" clears everything.
 "core.filter.cycle" = ["f f"]
@@ -118,7 +147,7 @@ leader = "Ctrl+b"
 "core.filter.stars.4" = ["f 4", "f Shift+4"]
 "core.filter.stars.5" = ["f 5", "f Shift+5"]
 # Comparison: at least, exactly, at most (issue #165).
-"core.filter.stars.op" = ["f Equals"]
+"core.filter.stars.op" = ["f ="]
 "core.filter.flag.accepted" = ["f p", "f Shift+p"]
 "core.filter.flag.not_rejected" = ["f u", "f Shift+u"]
 "core.filter.flag.rejected" = ["f x", "f Shift+x"]
@@ -129,114 +158,84 @@ leader = "Ctrl+b"
 "core.filter.color.purple" = ["f °", "f ,", "f ."]
 "core.filter.clear" = ["f Escape"]
 "core.filter.blurry" = ["f b"]
-# Well exposed: "w" like the exposure warnings. Invert: "i".
+# Well exposed: "w" like the exposure warnings.
 "core.filter.well_exposed" = ["f w"]
-# Current stack only (issue #52).
-"core.filter.stack" = ["f c"]
+# Current stack only (issue #52): "s" like the stacks.
+"core.filter.stack" = ["f s"]
 "core.filter.invert" = ["f i"]
-# Order: "s" next sort, "r" reverse.
-"core.filter.sort" = ["f s"]
-"core.filter.sort_reverse" = ["f r"]
-# Thumbnail render ("developed", issue #114).
-"core.grid.render" = ["f d"]
-# Developed: Shift+D, next to the thumbnail render.
-"core.filter.developed" = ["f Shift+d"]
-"core.view.filter_bar" = ["Shift+f"]
+# Developed: "r" like the render.
+"core.filter.developed" = ["f r"]
 
-# --- Selection ---
-# Everything with the keyboard; "v" like the visual mode of vim. Escape also clears
-# the selection.
-"core.select.toggle" = ["Space"]
-"core.select.visual" = ["v"]
-"core.view.compare" = ["c"]
-"core.select.all" = ["Ctrl+a"]
-"core.select.clear" = ["Ctrl+Shift+a"]
+# --- Order (n) ---
+# n: the next sort; Shift+N: reverse it.
+"core.filter.sort" = ["n"]
+"core.filter.sort_reverse" = ["Shift+n"]
 
-# --- Files ---
+# --- Stacks (s) ---
+# s: stacks on / off (grid and full screen); Shift+S: expand / collapse all of them;
+# Ctrl+S: the grouping window; Ctrl+Shift+S: enter a stack by its cover or its first
+# photo. "( (" opens a level of the current stack (the burst, then the developments),
+# ") )" closes it. Characters: direct on AZERTY, Shift+9 / Shift+0 on QWERTY. Never "["
+# "]" nor "{" "}" (Alt+Shift on macOS).
+"core.stack.mode" = ["s"]
+"core.stack.all" = ["Shift+s"]
+"core.stack.settings" = ["Ctrl+s"]
+"core.stack.enter" = ["Ctrl+Shift+s"]
+"core.stack.open" = ["( ("]
+"core.stack.close" = [") )"]
+"core.stack.toggle" = []
+# The favourite of the stack: Shift+Enter (Enter as well in stack mode, in full screen).
+"core.stack.choose" = ["Shift+Enter"]
+# Developments of a photo: "( (" / ") )" open and close their level, the arrows move
+# inside it.
+"core.dev.next" = []
+"core.dev.prev" = []
+"core.dev.toggle" = []
+"core.dev.fold_all" = []
+
+# --- Crop (c) and versions (v) ---
+# c: crop (full screen; from the grid, opens it). v: the next version of the image
+# (the original, then each version).
+"core.view.crop" = ["c"]
+"core.view.version_next" = ["v"]
+
+# --- External (e) and files ---
+# e: open in the external editor; Shift+E: reveal in the file manager (explorer);
+# Ctrl+E: export, like Lightroom; Ctrl+Shift+E: the export report.
+"core.file.edit" = ["e"]
+"core.file.reveal" = ["Shift+e"]
+"core.file.export" = ["Ctrl+e"]
+"core.file.export.report" = ["Ctrl+Shift+e"]
 # Delete: Delete, or the "delete" key of Mac keyboards (Backspace); a confirmation
-# always follows.
+# always follows. Shift: the whole stack; Ctrl: the whole photo, with its
+# developments.
 "core.file.rename" = ["F2"]
 "core.file.delete" = ["Delete", "Backspace"]
-# The photo with all its developments: Ctrl as well. Without developments, Delete is
-# enough (same dialog).
 "core.file.delete_photo" = ["Ctrl+Delete", "Ctrl+Backspace"]
-"core.file.reveal" = ["Shift+r"]
-"core.file.edit" = ["e"]
-# Like most applications (Cmd+, on macOS is taken by the system).
-"core.app.settings" = ["Ctrl+,"]
 # Move: Ctrl+X, like "cut".
 "core.file.move" = ["Ctrl+x"]
-# Export: Ctrl+E, like Lightroom.
-"core.file.export" = ["Ctrl+e"]
-# Export report: Ctrl+Shift+E, next to the export.
-"core.file.export.report" = ["Ctrl+Shift+e"]
-# Crop: "r", like Lightroom (full screen; from the grid, opens it).
-"core.view.crop" = ["r"]
-# Versions of the image: "n", the original then each version.
-"core.view.version_next" = ["n"]
+# Write the missing rating sidecars (one software, or all of them).
+"core.file.sidecars" = []
+# Send by AirDrop (macOS).
+"plugin.airdrop.send" = []
 # Undo / redo: Ctrl+Z / Ctrl+Shift+Z in both profiles (Cmd+Z / Cmd+Shift+Z on macOS
 # too), everybody's reflex.
 "core.edit.undo" = ["Ctrl+z"]
 "core.edit.redo" = ["Ctrl+Shift+z"]
 "core.edit.history" = ["Ctrl+h"]
-# Stacks: "s" expands / collapses the image's stack, Shift+S all of them; Ctrl+G the
-# grouping window.
-"core.stack.toggle" = ["s"]
-"core.stack.all" = ["Shift+s"]
-"core.stack.settings" = ["Ctrl+g"]
-# Developments of a photo: Shift+W / Shift+Q the next / previous one (grid and full
-# screen). They fold with the stack keys: "core.dev.toggle" and "core.dev.fold_all"
-# have no default key (they can be set in [keys]).
-"core.dev.next" = ["Shift+w"]
-"core.dev.prev" = ["Shift+q"]
-"core.dev.toggle" = []
-"core.dev.fold_all" = []
-# Write the missing rating sidecars (one software, or all of them).
-"core.file.sidecars" = []
-# Send by AirDrop (macOS).
-"plugin.airdrop.send" = []
-# Zoom steps, like Lightroom: characters, for the top row as well as the numeric
-# keypad, whatever the keyboard layout.
-"core.view.zoom_in" = ["+"]
-"core.view.zoom_out" = ["-"]
-"core.view.zoom_100" = ["*"]
-"core.view.zoom_fit" = ["/"]
-# Stack mode (full screen). The favourite of the stack: Shift+Enter (Enter as well in
-# stack mode, in full screen).
-"core.stack.mode" = ["Ctrl+s"]
-# "( (" opens a level (burst, then developments), ") )" closes it. Characters: direct
-# on AZERTY, Shift+9 / Shift+0 on QWERTY. Never "[" "]" nor "{" "}" (Alt+Shift on
-# macOS).
-"core.stack.open" = ["( ("]
-"core.stack.close" = [") )"]
-"core.stack.choose" = ["Shift+Enter"]
-# On entering a stack: the cover or the first photo (button of the bottom bar).
-"core.stack.enter" = ["Ctrl+Shift+s"]
 
 # --- Folder panel (when it has the keyboard) ---
-# Moving: arrows or hjkl, depending on the profile.
 "core.folders.open" = ["Enter"]
-# Removable drive under the cursor: offload, eject (a dialog confirms).
-"core.folders.offload" = ["o"]
-"core.folders.eject" = ["e"]
-# Like nvim-tree: "a" creates, "r" renames; delete: Delete (and "x" in vim). A dialog
-# always confirms.
-"core.folders.create" = ["a"]
-"core.folders.rename" = ["r", "F2"]
-"core.folders.delete" = ["Delete", "Backspace"]
-# Favourite: "m" (mark), like the bookmarks of nvim-tree.
-"core.folders.favorite" = ["m"]
 # Name the favourite: "n".
 "core.folders.favorite_name" = ["n"]
 # Connect to a network share: "c" (connect); forget it: Shift+C.
 "core.folders.connect" = ["c"]
 "core.folders.forget" = ["Shift+c"]
-# Open the folder in darktable: "d", like developing the images.
-"plugin.darktable.open_folder" = ["d"]
-"plugin.rawtherapee.open_folder" = []
-"plugin.art.open_folder" = []
-# Copy / move the folder to…: like for the images (Ctrl+C or "y", Ctrl+X); the dialog
-# can switch from one to the other.
+# Removable drive under the cursor: offload, eject (a dialog confirms).
+"core.folders.offload" = ["o"]
+"core.folders.eject" = ["e"]
+"core.folders.delete" = ["Delete", "Backspace"]
+# Move the folder to…: like for the images; the dialog can switch to "copy".
 "core.folders.move" = ["Ctrl+x"]
 
 # --- Metadata panel (when it has the keyboard) ---
@@ -246,19 +245,19 @@ leader = "Ctrl+b"
 "core.metadata.activate" = ["Space"]
 
 # --- Large histogram (when open) ---
-# r, g, b: one channel; a: all of them.
+# r, g, b: one channel; a: all of them; l: the luminance. The same letters work after
+# "<leader> i" anywhere, with s (scale) and c (next channel).
 "core.histogram.red" = ["r"]
 "core.histogram.green" = ["g"]
 "core.histogram.blue" = ["b"]
 "core.histogram.all" = ["a"]
-# l: the luminance.
 "core.histogram.luminance" = ["l"]
 # p: the analysis photo (areas on the image in grey), to the right of the histogram.
 "core.histogram.photo" = ["p"]
 # j: the curve of the camera JPEG, over the RAW data.
 "core.histogram.camera" = ["j"]
 
-# --- Crop ---
+# --- Crop (while cropping) ---
 # Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
 # (like Lightroom), Enter to save.
 "core.crop.ratio.free" = ["1", "Shift+1"]
@@ -270,8 +269,7 @@ leader = "Ctrl+b"
 "core.crop.ratio.4_3" = ["7", "Shift+7"]
 "core.crop.rotate" = ["x"]
 "core.crop.save" = ["Enter"]
-# Presets: Tab / Shift+Tab ("p" was also the sharpness map, which stayed on during the
-# crop).
+# Presets: Tab / Shift+Tab.
 "core.crop.preset" = ["Tab"]
 "core.crop.preset_prev" = ["Shift+Tab"]
 
@@ -304,20 +302,22 @@ leader = "Ctrl+b"
 "core.crop.size.up" = ["Shift+Up"]
 "core.crop.size.down" = ["Shift+Down"]
 # Copy / move to…: Ctrl+C / Ctrl+X, like copy / cut in a file manager (Cmd+C on
-# macOS).
+# macOS). Shift as well: the whole stack.
 "core.file.copy" = ["Ctrl+c"]
-"core.folders.copy" = ["Ctrl+c"]
-# The whole stack: Shift as well (the trash is confirmed, as always).
 "core.file.copy_stack" = ["Ctrl+Shift+c"]
 "core.file.delete_stack" = ["Shift+Delete"]
 "core.edit.redo" = ["Ctrl+y"]
-# Folder panel.
+# Folder panel: arrows; the conventions of the Finder and of the Explorer.
 "core.folders.up" = ["Up"]
 "core.folders.down" = ["Down"]
 "core.folders.expand" = ["Right"]
 "core.folders.collapse" = ["Left"]
 "core.folders.first" = ["Home"]
 "core.folders.last" = ["End"]
+"core.folders.create" = ["Ctrl+Shift+n"]
+"core.folders.rename" = ["F2"]
+"core.folders.favorite" = ["Ctrl+d"]
+"core.folders.copy" = ["Ctrl+c"]
 # Metadata panel: Shift + arrows extend the selection.
 "core.metadata.up" = ["Up"]
 "core.metadata.down" = ["Down"]
@@ -361,9 +361,8 @@ leader = "Ctrl+b"
 "core.crop.size.down" = ["Shift+j"]
 # "y" copies (yank), "x" deletes (deletes the character: here the image; a
 # confirmation follows). The stack is a sentence (issue #62): "(" / ")" its start and
-# end, "d )" / "y )" the whole stack ("[" / "]" ruled out: Alt+Shift on AZERTY on
-# macOS). Characters rather than keys: direct on AZERTY, Shift+9 / Shift+0 on QWERTY.
-# "y" alone waits a short moment for what follows ([gui] key_ambiguous_timeout_ms).
+# end, "d )" / "y )" the whole stack. "y" alone waits a short moment for what follows
+# ([gui] key_ambiguous_timeout_ms).
 "core.file.copy" = ["y"]
 "core.file.copy_stack" = ["y )"]
 "core.file.delete_stack" = ["d )"]
@@ -374,13 +373,16 @@ leader = "Ctrl+b"
 "core.file.delete" = ["x"]
 "core.edit.undo" = ["u"]
 "core.edit.redo" = ["Ctrl+r"]
-# Folder panel, like nvim-tree.
+# Folder panel, like nvim-tree: "a" creates, "r" renames, "m" marks as favourite.
 "core.folders.up" = ["k"]
 "core.folders.down" = ["j"]
 "core.folders.expand" = ["l"]
 "core.folders.collapse" = ["h"]
 "core.folders.first" = ["g g"]
 "core.folders.last" = ["Shift+g"]
+"core.folders.create" = ["a"]
+"core.folders.rename" = ["r", "F2"]
+"core.folders.favorite" = ["m"]
 "core.folders.delete" = ["x"]
 "core.folders.copy" = ["y"]
 # Metadata panel: "y" copies, Shift + j / k extend the selection, Shift+Y copies
@@ -402,15 +404,44 @@ leader = "Ctrl+b"
 "core.folders.section_prev" = ["("]
 
 [after_leader]
-# After the panel prefix ([gui] leader, Ctrl+b by default): h / Left the panel on the
-# left, l / Right the one on the right, o the next one; b to report a problem (bug);
-# r, d, p to develop (the image's software, darktable, RapidRAW).
+# Keys typed after the leader (Ctrl+b by default), in both profiles.
+# Panels: go to the one on the left / right (h / l, or the arrows), or the next one
+# (o); show / hide the one in that direction with Shift (H / L / K / J, or Shift +
+# arrows): folders on the left, metadata on the right, filters at the top, rating at
+# the bottom.
 "core.panel.left" = ["h", "Left"]
 "core.panel.right" = ["l", "Right"]
 "core.panel.next" = ["o"]
-"core.app.report_issue" = ["b"]
-"core.develop.render" = ["r"]
-"plugin.darktable.develop" = ["d"]
-"plugin.rapidraw.develop" = ["p"]
-"plugin.rawtherapee.develop" = []
-"plugin.art.develop" = []
+"core.view.folders" = ["Shift+h", "Shift+Left"]
+"core.view.metadata" = ["Shift+l", "Shift+Right"]
+"core.view.filter_bar" = ["Shift+k", "Shift+Up"]
+"core.view.rating_bar" = ["Shift+j", "Shift+Down"]
+# Space: auto-advance after a rating.
+"core.rate.auto_advance" = ["Space"]
+# ?: report a problem (prefilled GitHub form), next to the help.
+"core.app.report_issue" = ["?", "Shift+?"]
+# r: develop. r again: with the image's software; Shift+R: the whole folder, in the
+# background; d, p, t, a: with darktable, RapidRAW, RawTherapee, ART. In the folder
+# panel, the same keys open the folder in that software.
+"core.develop.render" = ["r r"]
+"core.develop.folder" = ["r Shift+r"]
+"plugin.darktable.develop" = ["r d"]
+"plugin.rapidraw.develop" = ["r p"]
+"plugin.rawtherapee.develop" = ["r t"]
+"plugin.art.develop" = ["r a"]
+"plugin.darktable.open_folder" = ["r d"]
+"plugin.rawtherapee.open_folder" = ["r t"]
+"plugin.art.open_folder" = ["r a"]
+# i: the histogram. s: the scale (EV / linear); c: the next channel; r, g, b, a, l:
+# red, green, blue, all, luminance.
+"core.view.histogram_scale" = ["i s"]
+"core.view.histogram_channel" = ["i c"]
+"core.histogram.red" = ["i r"]
+"core.histogram.green" = ["i g"]
+"core.histogram.blue" = ["i b"]
+"core.histogram.all" = ["i a"]
+"core.histogram.luminance" = ["i l"]
+# p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
+"core.view.peaking_color" = ["p c"]
+"core.view.sharpness_lenient" = ["p j", "p Down"]
+"core.view.sharpness_strict" = ["p k", "p Up"]

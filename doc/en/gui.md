@@ -971,6 +971,66 @@ rather than shortcuts: Enter validates a field, Tab completes a path, Up / Down 
 a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). The help and the texts that mention a key read it from the table in
 effect: they follow the chosen set.
 
+### Shortcut review (2026-11-06, issue #280)
+
+Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys
+mentioned elsewhere in this document are **those of their date**: the reference is
+`gui/resources/keys.toml` and the help (F1). The rule (at the top of `keys.toml`):
+
+- **one letter per domain**, from its **English** name: `c` crop, `i` histogram, `m`
+  magnify (loupe), `n` order, `o` overlays, `p` peaking, `r` render, `s` stacks, `t`
+  text (infos), `v` versions, `a` AF point, `b` background, `e` external, `w` warnings;
+- **the letter alone**: the main action; **Shift+letter**: its variant;
+  **Ctrl+letter**: the settings window of the domain;
+- **a secondary setting** (changed now and then): `<leader>`, the letter of the domain,
+  then the setting (`<leader> i s`: histogram scale); a leader sequence reaches the
+  actions of every panel (`Keymap::lookup`: focused panel, then general, then another
+  panel);
+- except for **everybody's reflexes**: `Ctrl+Z`, `Ctrl+C`, `Ctrl+X`, `Ctrl+A`,
+  `Ctrl+F`, `Ctrl+E`, `Ctrl+,`.
+
+Other decisions: the **"both" profile is removed** (read as `classic`, and reported):
+classic and vim can thus bind a key differently (folder panel: Finder / Explorer
+conventions in classic, nvim-tree in vim). The **loupe** joins `keys.toml` (`loupe =
+"m"`, `[gui.zoom] loupe_key` empty by default). **Strict**: a leader or loupe key
+already bound to an action is **refused** (the one of `keys.toml` stays, and it is
+said); a leader on Space first requires moving the selection in `[keys]`.
+
+| Action | Before | After |
+|---|---|---|
+| Stacks on / off | `Ctrl+S` | `s` |
+| Grouping window | `Ctrl+G` | `Ctrl+S` |
+| Expand / collapse the current stack | `s` | `( (` / `) )` |
+| Next / previous development | `Shift+W` / `Shift+Q` | `( (` / `) )` and the arrows |
+| Large histogram | `Shift+E` | `Shift+I` |
+| Histogram scale | `Shift+I` | `<leader> i s` |
+| Next channel / one channel | `Shift+C` / (large histogram) | `<leader> i c` / `<leader> i r g b a l` |
+| Source (camera JPEG, RAW, developed) | `b` | `r` |
+| Thumbnail render | `f d` | `Shift+R` |
+| Develop (image's software / folder) | `Shift+B` / `Ctrl+Shift+B` | `<leader> r r` / `<leader> r Shift+R` |
+| Develop in darktable / RapidRAW / RawTherapee / ART | `<leader> d` / `p` / — / — | `<leader> r d` / `p` / `t` / `a` |
+| Open the folder in a software (folders) | `d` | `<leader> r d` / `p` / `t` / `a` |
+| Next sort / reverse | `f s` / `f r` | `n` / `Shift+N` |
+| "Current stack" / "developed" filter | `f c` / `f Shift+D` | `f s` / `f r` |
+| Crop | `r` | `c` |
+| Next version | `n` | `v` |
+| Visual mode (range selection) | `v` | `Shift+Space` |
+| Compare | `c` | `=` |
+| Loupe (held) | `t` | `m` |
+| AF point | `m` | `a` |
+| Infos on the image | `Ctrl+I` | `t` |
+| Background | `Ctrl+L` | `b` |
+| Reveal in the file manager | `Shift+R` | `Shift+E` |
+| Sharpness map colour / strictness | `Ctrl+P` / `Ctrl+J`, `Ctrl+K` | `<leader> p c` / `<leader> p j`, `p k` (or Down Up) |
+| Folder / metadata / filter / rating panels | `Shift+D` / `Shift+M` / `Shift+F` / `Shift+N` | `<leader> Shift+H` / `Shift+L` / `Shift+K` / `Shift+J` (or Shift + arrows) |
+| Auto-advance | `Shift+A` | `<leader> Space` |
+| Report a problem | `<leader> b` | `<leader> ?` |
+| Folders, classic: create / rename / favourite | `a` / `r` / `m` | `Ctrl+Shift+N` / `F2` / `Ctrl+D` |
+| Profile | `classic` / `vim` / `both` | `classic` / `vim` |
+
+Idea noted for later: a number after a sequence (`<leader> m 200`: loupe at 200 %).
+
+
 | Action | Classic | Vim |
 |---|---|---|
 | `core.nav.prev` / `core.nav.next` | ← / → | h / l |

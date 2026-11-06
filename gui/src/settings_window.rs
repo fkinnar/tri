@@ -386,7 +386,7 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         };
     }
     Some(match (section, key) {
-        ("gui", "profile") => &["classic", "vim", "both"],
+        ("gui", "profile") => &["classic", "vim"],
         ("gui", "theme") => &["dark", "light", "system", "neutral"],
         ("gui", "sort") => &["name", "captured", "modified", "stars", "color", "flag"],
         ("gui", "raw_previews") => &["on-demand", "background"],

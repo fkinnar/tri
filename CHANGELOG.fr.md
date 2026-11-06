@@ -26,6 +26,14 @@
   fichier illisible est signalé dans la barre d'état. Vos propres raccourcis restent dans
   `[keys]`. Le préfixe des panneaux (`leader`, Ctrl+b) y est aussi ; `[gui] leader` est
   désormais vide par défaut et ne le remplace que si vous le réglez.
+- **Revue des raccourcis** (#280) : une lettre par domaine, tirée de son nom anglais
+  (c recadrage, i histogramme, m loupe, n ordre, r rendu, s piles, t infos, v
+  versions…). Maj + la lettre en est la variante, Ctrl + la lettre les réglages du
+  domaine, et `<leader>` + la lettre + une touche un réglage secondaire (`<leader> i s`
+  : échelle de l'histogramme). Les panneaux s'affichent et se masquent avec `<leader>`
+  Maj + une direction. Le profil « both » disparaît, et la loupe passe sur `m` et dans
+  `keys.toml`. Un leader ou une touche de loupe déjà liés à une action sont refusés. Le
+  tableau complet avant / après est dans `doc/fr/gui.md`.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

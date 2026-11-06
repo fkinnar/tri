@@ -6903,7 +6903,10 @@ impl TriApp {
                             self.stack_only = Some(paths);
                         }
                         _ => {
-                            self.hint = Some(t!("filter-stack-none"));
+                            self.hint = Some(t!(
+                                "filter-stack-none",
+                                keys = self.keys_text(Action::FilterStack)
+                            ));
                             return;
                         }
                     }
@@ -7008,6 +7011,11 @@ impl TriApp {
                 }
             }
         }
+    }
+
+    /// Raccourcis d'une action, lisibles, pour un texte qui les cite (« <leader> Maj+h »).
+    fn keys_text(&self, action: Action) -> String {
+        self.keymap.keys_for(action).join(" / ")
     }
 
     /// Bulle d'un contrôle : libellé de l'action et ses raccourcis.
@@ -7263,7 +7271,14 @@ impl TriApp {
                 .collect();
         }
         if targets.is_empty() || (targets.len() < 2 && !self.stacking) {
-            self.hint = Some(t!("compare-needs-two"));
+            let keys = [
+                Action::SelectToggle,
+                Action::SelectVisual,
+                Action::SelectAll,
+            ]
+            .map(|a| self.keys_text(a))
+            .join(", ");
+            self.hint = Some(t!("compare-needs-two", keys = keys));
             return;
         }
         let max = self.gui.compare.max.max(2);
@@ -9252,7 +9267,8 @@ impl TriApp {
         image_rect: Option<Rect>,
     ) {
         let z = self.gui.zoom.clone();
-        let held = ctx.input(|i| z.loupe_key.held(i));
+        let loupe = self.keymap.loupe();
+        let held = ctx.input(|i| loupe.held(i));
         let pointer = ctx.input(|i| i.pointer.hover_pos());
         let over = match (image_rect, pointer) {
             (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
@@ -14272,7 +14288,10 @@ impl eframe::App for TriApp {
                         t!("empty-folder-gone-back")
                     );
                 }
-                text += &t!("empty-no-folder");
+                text += &t!(
+                    "empty-no-folder",
+                    keys = self.keys_text(Action::ToggleFolderPanel)
+                );
                 ui.centered_and_justified(|ui| {
                     ui.label(
                         egui::RichText::new(text)
@@ -15529,7 +15548,7 @@ mod tests {
         // `y` seul (copier) agit dès l'image suivante, sans attendre un éventuel `y w`.
         settings.gui.key_ambiguous_timeout_ms = 0;
         // Les deux jeux de raccourcis : les tests tapent l'un et l'autre.
-        settings.gui.profile = crate::actions::Profile::Both;
+        settings.gui.profile = crate::actions::Profile::Classic;
         // Ni darktable, ni RapidRAW, ni RawTherapee, ni ART dans les tests (installés ou
         // non sur la machine : RawTherapee et ART le sont sur celle de développement
         // depuis le 31/10/2026, et leurs profils de notes se créaient d'eux-mêmes) : un
@@ -15595,6 +15614,36 @@ mod tests {
         h.run_steps(3);
     }
 
+    /// Après le leader (Ctrl+B), les touches `keys`.
+    fn leader(h: &mut Harness<'_, TriApp>, keys: &[(Key, Modifiers)]) {
+        press(h, Key::B, Modifiers::CTRL);
+        for &(key, modifiers) in keys {
+            press(h, key, modifiers);
+        }
+    }
+
+    /// Un caractère tapé (« ( », « = »…), lié pour lui-même quelle que soit la touche.
+    fn type_text(h: &mut Harness<'_, TriApp>, text: &str) {
+        h.event(UiEvent::Text(text.into()));
+        h.run_steps(3);
+    }
+
+    /// Une action sans touche par défaut.
+    fn act(h: &mut Harness<'_, TriApp>, action: Action) {
+        let ctx = h.ctx.clone();
+        h.state_mut().perform(&ctx, action);
+        h.run_steps(3);
+    }
+
+    /// Le profil vim (les tests tournent en classique).
+    fn use_vim(h: &mut Harness<'_, TriApp>) {
+        h.state_mut().keymap =
+            crate::actions::Keymap::from_profiles(&[crate::actions::Profile::Vim])
+                .with_leader("Ctrl+b")
+                .unwrap()
+                .with_loupe(crate::settings::LoupeKey::Key(Key::M));
+    }
+
     #[test]
     fn the_grid_shows_the_chosen_render_with_its_badge() {
         // #114 : `f d` passe au rendu suivant (logiciels installés seulement), retenu d'une
@@ -15604,20 +15653,16 @@ mod tests {
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
         assert_eq!(h.state().grid_render, GridRender::Embedded);
-        let f_then = |h: &mut Harness<'_, TriApp>, key| {
-            press(h, Key::F, Modifiers::NONE);
-            press(h, key, Modifiers::NONE);
-        };
-        f_then(&mut h, Key::D);
+        press(&mut h, Key::R, Modifiers::SHIFT);
         assert_eq!(h.state().grid_render, GridRender::Cover);
         assert_eq!(h.state().display().grid_render, Some(GridRender::Cover));
         assert_eq!(h.state().raw_policy(), RawPreviews::Background);
-        f_then(&mut h, Key::D);
+        press(&mut h, Key::R, Modifiers::SHIFT);
         assert_eq!(
             h.state().grid_render,
             GridRender::Engine(tri::develop::Engine::Darktable)
         );
-        f_then(&mut h, Key::D);
+        press(&mut h, Key::R, Modifiers::SHIFT);
         assert_eq!(h.state().grid_render, GridRender::LibRaw);
         // Une image vue comme un RAW, son rendu LibRaw dans le cache : il remplace la
         // vignette.
@@ -15640,7 +15685,7 @@ mod tests {
             app.texture_levels.get(&file.path) == Some(&Level::Standard)
         });
         // Retour au JPEG boîtier : la vignette revient.
-        f_then(&mut h, Key::D);
+        press(&mut h, Key::R, Modifiers::SHIFT);
         assert_eq!(h.state().grid_render, GridRender::Embedded);
         run_until(&mut h, |app| {
             app.texture_levels.get(&file.path) == Some(&Level::Thumbnail)
@@ -15660,7 +15705,7 @@ mod tests {
         assert!(all > 0);
         let f_shift_d = |h: &mut Harness<'_, TriApp>| {
             press(h, Key::F, Modifiers::NONE);
-            press(h, Key::D, Modifiers::SHIFT);
+            press(h, Key::R, Modifiers::NONE);
         };
         f_shift_d(&mut h);
         assert!(h.state().developed_on);
@@ -16092,10 +16137,12 @@ mod tests {
         h.state_mut().perform(&ctx, Action::StackClose);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3, "repliés");
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 5);
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, ")");
+        type_text(&mut h, ")");
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
         // `)` : le dernier développement, `(` : la photo (montrés à la place de la
@@ -16113,7 +16160,7 @@ mod tests {
         h.state_mut().source = Source::Raw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::NONE);
         assert!(h.state().stacking, "mode pile");
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
@@ -16366,20 +16413,22 @@ mod tests {
             "le clone est la couverture"
         );
         assert_eq!(selected_name(&h), "img0@dt-01.jpg");
-        press(&mut h, Key::W, Modifiers::SHIFT);
+        act(&mut h, Action::DevNext);
         assert_eq!(h.state().selected, i - 1, "en boucle : la photo");
         let keys = h.state().keymap.keys_for(Action::DevToggle).join(" / ");
         let badge = t!("dev-count-tip", n = 1, keys = keys.clone());
         h.get_by_label(&badge);
-        press(&mut h, Key::Q, Modifiers::SHIFT);
+        act(&mut h, Action::DevPrev);
         assert_eq!(h.state().selected, i);
         // `s` déplie (comme une pile, 31/10/2026) : les deux vignettes, cadrées.
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
         assert!(h.state().stacks.in_unfolded_developments(i));
         assert!(h.query_by_label(&badge).is_none());
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, ")");
+        type_text(&mut h, ")");
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
         assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
@@ -16389,7 +16438,8 @@ mod tests {
             h.query_by_label(&fold_tip).is_none(),
             "repliée : pas de pastille"
         );
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         h.run_steps(2);
         assert_eq!(
             h.query_all_by_label(&fold_tip).count(),
@@ -16401,7 +16451,8 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 3, "repliée au clic");
         assert!(h.state().dev_preferred.is_empty());
         // Alt+clic : replier en gardant ce développement (le clone) comme couverture.
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         h.run_steps(2);
         h.get_all_by_label(&fold_tip)
             .nth(1)
@@ -16418,7 +16469,7 @@ mod tests {
         // plus de préféré.
         press(&mut h, Key::Enter, Modifiers::SHIFT);
         assert!(h.state().dev_preferred.contains(&clone), "pas une bascule");
-        press(&mut h, Key::W, Modifiers::SHIFT);
+        act(&mut h, Action::DevNext);
         assert_eq!(h.state().selected, i - 1, "la photo");
         press(&mut h, Key::Enter, Modifiers::SHIFT);
         assert!(
@@ -16427,7 +16478,8 @@ mod tests {
         );
         // Maj+S replie toutes les piles, développements compris (31/10/2026), puis les
         // redéplie toutes.
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4);
         press(&mut h, Key::S, Modifiers::SHIFT);
@@ -16439,7 +16491,7 @@ mod tests {
         press(&mut h, Key::S, Modifiers::SHIFT);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 3);
-        press(&mut h, Key::Q, Modifiers::SHIFT);
+        act(&mut h, Action::DevPrev);
         assert_eq!(h.state().selected, i, "retour sur le clone");
         press(&mut h, Key::Num4, Modifiers::SHIFT);
         assert_eq!(
@@ -16536,7 +16588,7 @@ mod tests {
             "img0@dt.jpg",
             "la couverture : le développement"
         );
-        press(&mut h, Key::X, Modifiers::NONE);
+        press(&mut h, Key::Delete, Modifiers::NONE);
         assert!(h.state().file_dialog.is_some());
         h.get_by_label(&t!("delete-stripped", name = "img0.jpg.xmp"));
         assert!(
@@ -16555,7 +16607,7 @@ mod tests {
         );
         assert_eq!(h.state().history.entries().len(), 1);
         // Annulé : le développement revient.
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
         assert!(tri::developments::file_is_darktable(&xmp));
         h.run_steps(2);
@@ -16585,7 +16637,7 @@ mod tests {
         press(&mut h, Key::X, Modifiers::SHIFT);
         assert_eq!(h.state().history.entries().len(), 2, "un pas par note");
         // u : la dernière note (rejet) défaite, puis Ctrl+Z : les étoiles.
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         assert_eq!(tri::xmp::read(&image).unwrap().flag, Flag::None);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 3);
         assert!(h.state().notice.as_ref().unwrap().0.starts_with("Annulé"));
@@ -16597,7 +16649,7 @@ mod tests {
             "affichage relu"
         );
         // Rétablir : Ctrl+R puis Ctrl+Maj+Z.
-        press(&mut h, Key::R, Modifiers::CTRL);
+        press(&mut h, Key::Y, Modifiers::CTRL);
         press(&mut h, Key::Z, Modifiers::CTRL | Modifiers::SHIFT);
         let notes = tri::xmp::read(&image).unwrap();
         assert_eq!((notes.stars, notes.flag), (3, Flag::Rejected));
@@ -16605,7 +16657,7 @@ mod tests {
         let mut changed = notes.clone();
         changed.stars = 5;
         tri::xmp::write_sidecar(&dir.path().join("photos/img0.jpg.xmp"), &changed).unwrap();
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 5);
         assert!(
             h.state()
@@ -16806,7 +16858,7 @@ mod tests {
         h.run_steps(3);
         press(&mut h, Key::Num3, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg", "désactivée par défaut");
-        press(&mut h, Key::A, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::Space, Modifiers::NONE)]);
         assert!(h.state().auto_advance);
         press(&mut h, Key::Num2, Modifiers::NONE);
         // La paire img0.jpg + img0.png est notée d'un coup : on passe à img1.jpg.
@@ -16828,7 +16880,7 @@ mod tests {
     fn auto_advance_does_not_skip_an_image_when_the_rated_one_leaves_the_filter() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        press(&mut h, Key::A, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::Space, Modifiers::NONE)]);
         // Filtre « sans les rejetées », puis rejet de img0 : elle disparaît, img1 prend sa
         // place sous la sélection ; avancer encore sauterait img1.
         press(&mut h, Key::F, Modifiers::NONE);
@@ -16882,10 +16934,10 @@ mod tests {
         h.run_steps(3);
         let on_disk = tri::xmp::read(&image).unwrap();
         assert_eq!((on_disk.stars, on_disk.flag), (0, Flag::None));
-        press(&mut h, Key::N, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::J, Modifiers::SHIFT)]);
         assert!(
             h.query_by_label("3 étoiles").is_none(),
-            "Maj+N masque le bandeau"
+            "<leader> Maj+J masque le bandeau"
         );
     }
 
@@ -16928,16 +16980,16 @@ mod tests {
         let (mut h, dir) = harness_files(&names, 64, 48);
         h.run_steps(3);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert!(h.query_by_label("3 sélectionnées · mode visuel").is_some());
         // Échap annule la plage ; on recommence et on valide par v.
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().selection.is_empty());
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         assert!(!h.state().selection.is_visual());
         assert_eq!(h.state().selection.len(), 2, "c et d");
         press(&mut h, Key::Delete, Modifiers::NONE);
@@ -17071,7 +17123,7 @@ mod tests {
         press(&mut h, Key::N, Modifiers::SHIFT);
         assert!(
             h.state().cursor_hidden,
-            "Maj+N : bandeau, curseur toujours masqué"
+            "<leader> Maj+J : bandeau, curseur toujours masqué"
         );
         // Clic dans le vide, sous les vignettes : masqué ; clic sur une image : revenu.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -17148,16 +17200,16 @@ mod tests {
         let names = ["a.jpg", "b.jpg", "c.jpg"];
         let (mut h, _dir) = harness_files(&names, 64, 48);
         h.run_steps(3);
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
-        press(&mut h, Key::V, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         h.run_steps(5);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
-            key: Key::T,
+            key: Key::M,
             physical_key: None,
             pressed: true,
             repeat: false,
@@ -17188,7 +17240,7 @@ mod tests {
         let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
         let (mut h, dir) = harness_files(&names, 64, 48);
         h.run_steps(3);
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(
             h.state().mode,
             Mode::Grid,
@@ -17196,11 +17248,11 @@ mod tests {
         );
         assert!(h.query_by_label_contains("au moins 2 images").is_some());
         // a, b, c sélectionnées (mode visuel), puis c.
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
-        press(&mut h, Key::V, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::Space, Modifiers::SHIFT);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 3);
         assert_eq!(selected_name(&h), "c.jpg", "l'image courante reste active");
@@ -17228,7 +17280,7 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         assert_eq!(h.state().selection.len(), 2);
         // Entrée depuis la comparaison : plein écran sur l'image active.
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
     }
@@ -17259,26 +17311,38 @@ mod tests {
             "le 1:1 d'une image plate, pixel pour pixel"
         );
         // Ctrl+J : plus souple, la carte est refaite à un seuil plus bas.
-        press(&mut h, Key::J, Modifiers::CTRL);
+        leader(
+            &mut h,
+            &[(Key::P, Modifiers::NONE), (Key::J, Modifiers::NONE)],
+        );
         assert!(h.state().blur_strictness < 0.0);
         run_until(&mut h, |s| {
             s.peaking_texture
                 .as_ref()
                 .is_some_and(|((_, _, t), _)| *t < threshold)
         });
-        press(&mut h, Key::K, Modifiers::CTRL);
+        leader(
+            &mut h,
+            &[(Key::P, Modifiers::NONE), (Key::K, Modifiers::NONE)],
+        );
         assert_eq!(h.state().blur_strictness, 0.0, "retour juste au centre");
         press(&mut h, Key::Z, Modifiers::NONE);
         // Ctrl+P : couleur suivante, en boucle sur les couleurs configurées.
         let n = h.state().gui.sharpness.colors.len();
         for i in 1..=n {
-            press(&mut h, Key::P, Modifiers::CTRL);
+            leader(
+                &mut h,
+                &[(Key::P, Modifiers::NONE), (Key::C, Modifiers::NONE)],
+            );
             assert_eq!(h.state().peaking_color, i % n);
         }
         // Masquée, Ctrl+P la remontre.
         press(&mut h, Key::P, Modifiers::NONE);
         assert!(!h.state().peaking);
-        press(&mut h, Key::P, Modifiers::CTRL);
+        leader(
+            &mut h,
+            &[(Key::P, Modifiers::NONE), (Key::C, Modifiers::NONE)],
+        );
         assert!(h.state().peaking);
     }
 
@@ -17452,13 +17516,13 @@ mod tests {
     }
 
     #[test]
-    fn m_toggles_the_focus_point() {
+    fn a_toggles_the_focus_point() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert!(h.state().focus_point, "affiché par défaut");
-        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
         assert!(!h.state().focus_point);
-        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::A, Modifiers::NONE);
         assert!(h.state().focus_point);
     }
 
@@ -17794,7 +17858,7 @@ mod tests {
         // Mode pile, sur la dernière pile : la fin de la sélection, pas seulement de la
         // pile (on voit tout de suite qu'il n'y a plus rien après).
         h.state_mut().end_notice = None;
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::NONE);
         assert!(h.state().stacking);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(notice(&h), Some(t!("end-list-last")));
@@ -17939,7 +18003,7 @@ mod tests {
         assert_eq!(names(&h), ["img2.jpg", "img1.jpg", "img0.jpg"]);
         assert_eq!(h.state().selected, 0);
         // Annulée : img2 revient à 0 étoile, derrière (ordre des noms à égalité).
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         h.run_steps(2);
         assert_eq!(names(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
         // Drapeaux : acceptée, sans drapeau, rejetée ; une rejetée sous 0 étoile.
@@ -18091,7 +18155,7 @@ mod tests {
         assert_eq!(h.state().files.len(), 2, "dossier relu");
         assert!(h.state().file_error.is_none());
         // y : copier ; la destination récente revient par la flèche du haut.
-        press(&mut h, Key::Y, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::CTRL);
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         press(&mut h, Key::Enter, Modifiers::NONE);
         run_until(&mut h, |app| app.file_dialog.is_none());
@@ -18131,6 +18195,7 @@ mod tests {
         assert!(h.state().file_dialog.is_none());
         assert!(photos.join("img0.jpg").exists());
         // x (comme dans vim) : la boîte de suppression.
+        use_vim(&mut h);
         press(&mut h, Key::X, Modifiers::NONE);
         assert!(h.state().file_dialog.is_some(), "x supprime");
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -19103,7 +19168,7 @@ mod tests {
         h.get_by_label(&t!("panel-grid-stacks-on")).click();
         h.run_steps(3);
         assert!(h.state().stacking, "la section « Vue » allume les piles");
-        press(&mut h, Key::F, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::K, Modifiers::SHIFT)]);
         assert!(h.query_by_label("Effacer").is_none(), "Maj+F la masque");
     }
 
@@ -19178,9 +19243,9 @@ mod tests {
             h.query_by_label("Effacer").is_some(),
             "barre visible par défaut"
         );
-        press(&mut h, Key::F, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::K, Modifiers::SHIFT)]);
         assert!(h.query_by_label("Effacer").is_none());
-        press(&mut h, Key::F, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::K, Modifiers::SHIFT)]);
         // Deux interrupteurs : JPEG éteint, les RAW seuls ; rallumé, tout ; RAW éteint,
         // les JPEG seuls ; le dernier allumé ne s'éteint pas.
         click_settled(&mut h, "JPEG");
@@ -19316,8 +19381,8 @@ mod tests {
         assert_eq!(order(&h), ["img0.jpg", "img1.jpg", "img2.jpg"]);
         h.state_mut().select(1);
         // f r : décroissant, img1 toujours sélectionnée.
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::R, Modifiers::NONE);
+        // f r → Maj+N.
+        press(&mut h, Key::N, Modifiers::SHIFT);
         assert_eq!(order(&h), ["img2.jpg", "img1.jpg", "img0.jpg"]);
         assert_eq!(
             file_name(&h.state().files[h.state().selected].path),
@@ -19325,8 +19390,8 @@ mod tests {
         );
         // f s deux fois : date de modification (décroissant : la plus récente d'abord).
         for _ in 0..2 {
-            press(&mut h, Key::F, Modifiers::NONE);
-            press(&mut h, Key::S, Modifiers::NONE);
+            // f s → n.
+            press(&mut h, Key::N, Modifiers::NONE);
         }
         assert_eq!(h.state().order.key, tri::sort::SortKey::Modified);
         assert_eq!(order(&h), ["img1.jpg", "img0.jpg", "img2.jpg"]);
@@ -19334,8 +19399,8 @@ mod tests {
             file_name(&h.state().files[h.state().selected].path),
             "img1.jpg"
         );
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::R, Modifiers::NONE);
+        // f r → Maj+N (revue du 06/11/2026).
+        press(&mut h, Key::N, Modifiers::SHIFT);
         assert_eq!(order(&h), ["img2.jpg", "img0.jpg", "img1.jpg"]);
         // Retenu d'un lancement à l'autre.
         assert_eq!(h.state().display().sort, Some(h.state().order));
@@ -19440,6 +19505,7 @@ mod tests {
         // Section Grille repliée : les lignes des EXIF restent dans la fenêtre de test.
         h.state_mut().panel_folded.insert("grid".to_string());
         h.run_steps(3);
+        use_vim(&mut h);
         // Arborescence de test : le dossier temporaire et deux séances.
         for d in ["séance-1", "séance-2"] {
             std::fs::create_dir(dir.path().join(d)).unwrap();
@@ -20225,7 +20291,10 @@ mod tests {
         press(&mut h, Key::H, Modifiers::NONE);
         h.state_mut().tree.point_at(&seance);
         h.state_mut().developers = tri::develop::Developers::none();
-        press(&mut h, Key::D, Modifiers::NONE);
+        leader(
+            &mut h,
+            &[(Key::R, Modifiers::NONE), (Key::D, Modifiers::NONE)],
+        );
         assert!(
             h.state()
                 .file_error
@@ -20270,7 +20339,10 @@ mod tests {
         }
         // Déjà ouvert : rien n'est lancé, la barre d'état explique (darktable planterait).
         h.state_mut().developers = fake(true, PathBuf::new());
-        press(&mut h, Key::D, Modifiers::NONE);
+        leader(
+            &mut h,
+            &[(Key::R, Modifiers::NONE), (Key::D, Modifiers::NONE)],
+        );
         assert!(
             h.state()
                 .file_error
@@ -20292,7 +20364,10 @@ mod tests {
             std::fs::write(&gui, script).unwrap();
             std::fs::set_permissions(&gui, std::fs::Permissions::from_mode(0o755)).unwrap();
             h.state_mut().developers = fake(false, gui);
-            press(&mut h, Key::D, Modifiers::NONE);
+            leader(
+                &mut h,
+                &[(Key::R, Modifiers::NONE), (Key::D, Modifiers::NONE)],
+            );
             assert_eq!(h.state().file_error, None);
             let deadline = Instant::now() + Duration::from_secs(10);
             while !got.is_file() {
@@ -20322,7 +20397,7 @@ mod tests {
         h.state_mut().tree.point_at(&seance);
         // m : favori, dans sa section après le dossier personnel ; le curseur reste dans
         // l'arborescence.
-        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::D, Modifiers::CTRL);
         let data = dir.path().join("data");
         assert_eq!(
             tri::places::favorites(&data),
@@ -20345,7 +20420,7 @@ mod tests {
         h.run_steps(2);
         assert!(h.query_by_label_contains("ajouté aux favoris").is_some());
         // Renommé depuis le panneau : le favori suit.
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::F2, Modifiers::NONE);
         h.event(UiEvent::Text("séance du jour".into()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -20378,12 +20453,12 @@ mod tests {
         );
         // Déplier le favori ne déplie pas le vrai dossier.
         h.state_mut().tree.set_cursor(f);
-        press(&mut h, Key::L, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert!(h.state().tree.rows()[f].expanded);
         assert!(!h.state().tree.is_expanded(&renamed));
         // m sur la ligne du favori : retiré.
         h.state_mut().tree.set_cursor(f);
-        press(&mut h, Key::M, Modifiers::NONE);
+        press(&mut h, Key::D, Modifiers::CTRL);
         assert!(tri::places::favorites(&data).is_empty());
         assert_eq!(favorite(&h.state().tree.rows()), None);
     }
@@ -20436,7 +20511,7 @@ mod tests {
         assert_eq!(h.state().focus, Scope::Folders);
         h.state_mut().tree.point_at(&base);
         // a : nouveau dossier dans « base ».
-        press(&mut h, Key::A, Modifiers::NONE);
+        press(&mut h, Key::N, Modifiers::CTRL | Modifiers::SHIFT);
         h.event(UiEvent::Text("Séance".into()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
@@ -20444,20 +20519,20 @@ mod tests {
         assert!(made.is_dir());
         assert_eq!(h.state().tree.cursor_path(), Some(made.clone()), "pointé");
         // r : renommer ; le nom actuel est sélectionné, on tape le nouveau.
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::F2, Modifiers::NONE);
         h.event(UiEvent::Text("Séance du jour".into()));
         h.run_steps(2);
         press(&mut h, Key::Enter, Modifiers::NONE);
         let renamed = base.join("Séance du jour");
         assert!(renamed.is_dir() && !made.exists());
         // Annuler deux fois : renommage puis création défaits.
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(made.is_dir() && !renamed.exists());
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(!made.exists());
         // x : supprimer (confirmé ; corbeille désactivée dans les tests).
         h.state_mut().tree.point_at(&base);
-        press(&mut h, Key::X, Modifiers::NONE);
+        press(&mut h, Key::Delete, Modifiers::NONE);
         assert!(h.query_by_label_contains("Dossier vide").is_some());
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(!base.exists());
@@ -20481,7 +20556,7 @@ mod tests {
         assert!(h.state().file_dialog.is_none());
         // Un emplacement ne se supprime pas.
         h.state_mut().tree.set_cursor(0);
-        press(&mut h, Key::X, Modifiers::NONE);
+        press(&mut h, Key::Delete, Modifiers::NONE);
         assert!(h.state().file_dialog.is_none());
         assert!(h.state().notice.as_ref().unwrap().0.contains("emplacement"));
     }
@@ -20529,7 +20604,7 @@ mod tests {
         assert!(moved.join("JPEG/A.JPG").exists() && !seance.exists());
         assert_eq!(h.state().tree.cursor_path(), Some(moved.clone()), "pointé");
         // Annulé : le dossier revient.
-        press(&mut h, Key::U, Modifiers::NONE);
+        press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(seance.join("JPEG/A.JPG").exists() && !moved.exists());
         // Clic droit, « Ajouter aux favoris » : ajouté (ouvrait la boîte de suppression).
         h.state_mut().tree.reload();
@@ -20562,7 +20637,7 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert!(!h.state().stacking);
-        press(&mut h, Key::G, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::CTRL);
         assert!(h.state().group_dialog);
         // Espace coche aussitôt (plus de Tab pour atteindre la case).
         press(&mut h, Key::Space, Modifiers::NONE);
@@ -20663,7 +20738,7 @@ mod tests {
         h.state_mut().group_curve = 3.0;
         // La fenêtre (Ctrl+G) montre les deux curseurs ; à sa fermeture, retenus pour le
         // dossier.
-        press(&mut h, Key::G, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::CTRL);
         h.run_steps(2);
         for label in [t!("groups-pauses"), t!("groups-curve")] {
             assert!(h.query_by_label_contains(&label).is_some(), "{label}");
@@ -20725,6 +20800,7 @@ mod tests {
         h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
             .with_ambiguous(Duration::from_secs(60));
         h.run_steps(3);
+        use_vim(&mut h);
         assert_eq!(h.state().stacks.count(), 1);
         let bracket = |h: &mut Harness<'_, TriApp>| {
             h.event(UiEvent::Text(")".into()));
@@ -20756,6 +20832,10 @@ mod tests {
         h.event(UiEvent::Text("(".into()));
         h.run_steps(3);
         assert_eq!(h.state().selected, 0, "début de pile");
+        // Maj+Fin / Maj+Début : le profil classique.
+        h.state_mut().keymap = crate::actions::Keymap::default()
+            .with_leader("Ctrl+b")
+            .unwrap();
         press(&mut h, Key::End, Modifiers::SHIFT);
         assert_eq!(h.state().selected, 2);
         press(&mut h, Key::Home, Modifiers::SHIFT);
@@ -20780,7 +20860,7 @@ mod tests {
         // `c` sur la pile repliée, sans sélection : ses photos côte à côte (#52) ; Échap
         // revient à la grille, sur sa couverture.
         assert_eq!(h.state().mode, Mode::Grid);
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 3, "toute la pile");
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -20788,6 +20868,7 @@ mod tests {
         let cover = h.state().stacks.visible(h.state().selected);
         assert_eq!(h.state().selected, cover, "la couverture, visible");
         // Piles désactivées : expliqué, rien d'autre (`d` attend de nouveau sa suite).
+        use_vim(&mut h);
         h.state_mut().sequencer = crate::actions::Sequencer::new(Duration::from_secs(60))
             .with_ambiguous(Duration::from_secs(60));
         h.state_mut().stacking = false;
@@ -20839,13 +20920,13 @@ mod tests {
         // #167 : piles actives, `c` sur une photo seule (pile d'une image) la compare.
         let (mut h, _dir) = harness();
         h.run_steps(3);
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Grid, "sans piles : il en faut deux");
         assert!(h.state().hint.is_some());
         h.state_mut().stacking = true;
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 1);
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -20894,7 +20975,7 @@ mod tests {
             .unwrap();
         assert_eq!(h.state().selected, i, "la couverture : le clone");
         assert!(!h.state().stacking, "piles de rafale inactives");
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare, "hint: {:?}", h.state().hint);
         assert_eq!(
             h.state().compare,
@@ -20944,7 +21025,7 @@ mod tests {
             3,
             "img0 et son clone, img1, img2"
         );
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(
             h.state().compare.len(),
@@ -20960,7 +21041,7 @@ mod tests {
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 1, "une seule pile repliée");
-        press(&mut h, Key::C, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         let compared: Vec<String> = h.state().compare.iter().map(|p| file_name(p)).collect();
         assert_eq!(compared, ["img0.jpg", "img1.jpg", "img2.jpg"]);
@@ -21001,7 +21082,7 @@ mod tests {
         assert_eq!(h.state().stacks.count(), 2);
         // `f c` : seulement la pile courante, dépliée ; encore : tout (#52).
         press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::S, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 3, "une pile");
         assert_eq!(h.state().stacks.shown.len(), 3, "dépliée");
         assert!(h.state().filter_summary().contains("pile de 3"));
@@ -21015,7 +21096,7 @@ mod tests {
         assert_eq!(h.state().stacks.count(), 1, "une seule pile");
         h.state_mut().settings.similarity = similarity;
         press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::S, Modifiers::NONE);
         assert_eq!(h.state().files.len(), 6, "tout");
         h.run_steps(2);
         // Repliée avant `f c` : repliée de nouveau en sortant (retour du 25/10/2026).
@@ -21038,11 +21119,12 @@ mod tests {
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
         // Dépliée avant (s) : elle le reste.
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
+        press(&mut h, Key::F, Modifiers::NONE);
         press(&mut h, Key::S, Modifiers::NONE);
         press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
-        press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::S, Modifiers::NONE);
         h.run_steps(2);
         assert_eq!(h.state().stacks.shown.len(), 4, "pile restée dépliée");
         h.state_mut().expanded.clear();
@@ -21061,7 +21143,8 @@ mod tests {
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert!(selected_name(&h).starts_with('b'), "{}", selected_name(&h));
         // s déplie la pile ; Maj+S déplie / replie tout.
-        press(&mut h, Key::S, Modifiers::NONE);
+        type_text(&mut h, "(");
+        type_text(&mut h, "(");
         assert_eq!(h.state().stacks.shown.len(), 4);
         press(&mut h, Key::S, Modifiers::SHIFT);
         assert_eq!(h.state().stacks.shown.len(), 2, "tout replié");
@@ -21152,17 +21235,17 @@ mod tests {
         h.state_mut().stack_enter = crate::settings::StackEnter::Cover;
         h.state_mut().select(range.end - 1);
         // Ctrl+S : plus de piles ; → passe à la photo suivante, toutes visibles.
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::NONE);
         assert!(!h.state().stacking);
         h.run_steps(2);
         let before = h.state().selected;
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().selected, before + 1, "de photo en photo");
-        press(&mut h, Key::S, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
         // Ctrl+G : la fenêtre ; seuil nul : plus de piles.
-        press(&mut h, Key::G, Modifiers::CTRL);
+        press(&mut h, Key::S, Modifiers::CTRL);
         assert!(h.state().group_dialog);
         h.state_mut().settings.similarity.auto = false;
         h.state_mut().settings.similarity.threshold = 0.0;
@@ -21239,7 +21322,7 @@ mod tests {
         assert!(!h.state().loupe_on, "Maj : plus de loupe");
         h.event(UiEvent::ModifiersChanged(Modifiers::NONE));
         let key = |pressed| UiEvent::Key {
-            key: Key::T,
+            key: Key::M,
             physical_key: None,
             pressed,
             repeat: false,
@@ -21260,7 +21343,7 @@ mod tests {
         press(&mut h, Key::F1, Modifiers::NONE);
         assert!(h.query_by_label("Ligne du dessous").is_some());
         // Image suivante, et déplier dans le panneau des dossiers.
-        assert!(h.query_all_by_label("Flèche droite / l").count() >= 1);
+        assert!(h.query_all_by_label("Flèche droite").count() >= 1);
         assert!(h.query_by_label("core.nav.next").is_none());
     }
 
@@ -21486,11 +21569,14 @@ mod tests {
         assert!(h.state().histogram, "histogramme affiché par défaut");
         press(&mut h, Key::I, Modifiers::NONE);
         assert!(!h.state().histogram, "i le masque");
-        press(&mut h, Key::I, Modifiers::SHIFT);
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::S, Modifiers::NONE)],
+        );
         assert_eq!(
             h.state().histogram_scale,
             HistogramScale::Linear,
-            "Maj+I : linéaire"
+            "<leader> i s : linéaire"
         );
         assert!(!h.state().clipping);
         press(&mut h, Key::W, Modifiers::NONE);
@@ -21499,10 +21585,13 @@ mod tests {
         run_until(&mut h, |app| app.mask_textures.contains(&white_path));
         // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
         // vert, bleu, luminance, tous ; Échap ferme.
-        press(&mut h, Key::C, Modifiers::SHIFT);
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::C, Modifiers::NONE)],
+        );
         assert!(
             h.state().histogram_large,
-            "Maj+C ouvre le grand histogramme"
+            "<leader> i c ouvre le grand histogramme"
         );
         assert_eq!(h.state().histogram_channel, Some(0));
         // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
@@ -21518,7 +21607,10 @@ mod tests {
         );
         let luminance = Some(tri::exposure::LUMINANCE);
         for expected in [Some(1), Some(2), luminance, None] {
-            press(&mut h, Key::C, Modifiers::SHIFT);
+            leader(
+                &mut h,
+                &[(Key::I, Modifiers::NONE), (Key::C, Modifiers::NONE)],
+            );
             assert_eq!(h.state().histogram_channel, expected);
         }
         // r, g, b, a : un canal, ou tous ; b ne change pas la source, g ne commence pas gg.
@@ -21643,10 +21735,10 @@ mod tests {
             h.query_by_label_contains("64 × 48").is_some(),
             "dimensions de img0"
         );
-        press(&mut h, Key::M, Modifiers::SHIFT);
+        leader(&mut h, &[(Key::L, Modifiers::SHIFT)]);
         assert!(
             h.query_by_label("Dimensions").is_none(),
-            "Maj+M masque le panneau"
+            "<leader> Maj+L masque le panneau"
         );
     }
 
@@ -21810,7 +21902,7 @@ mod tests {
         press(&mut h, Key::Num4, Modifiers::NONE);
         assert_eq!(count(&h), 2, "au moins 4");
         press(&mut h, Key::F, Modifiers::NONE);
-        press(&mut h, Key::Equals, Modifiers::NONE);
+        type_text(&mut h, "=");
         assert_eq!(count(&h), 1, "exactement 4");
         assert!(h.state().filter_summary().contains("exactement 4"));
         h.get_by_label("=").click();
@@ -22180,7 +22272,7 @@ mod tests {
     #[test]
     fn the_large_histogram_opens_and_closes() {
         let (mut h, _dir) = harness();
-        press(&mut h, Key::E, Modifiers::SHIFT);
+        press(&mut h, Key::I, Modifiers::SHIFT);
         assert!(h.state().histogram_large, "Maj+E l'ouvre");
         // L'échelle est une icône dans l'histogramme (19/10/2026), plus un bouton texte
         // à côté de « Fermer ».
@@ -22203,23 +22295,26 @@ mod tests {
         assert_eq!(h.state().histogram_channel, Some(tri::exposure::LUMINANCE));
         press(&mut h, Key::A, Modifiers::NONE);
         assert_eq!(h.state().histogram_channel, None);
-        press(&mut h, Key::I, Modifiers::SHIFT);
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::S, Modifiers::NONE)],
+        );
         assert_eq!(
             h.state().histogram_scale,
             HistogramScale::Linear,
-            "Maj+I dans la boîte"
+            "<leader> i s dans la boîte"
         );
         // Les déplacements passent sous la boîte : l'histogramme suit l'image courante.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().selected, 1, "→ : image suivante");
         assert!(h.state().histogram_large, "boîte toujours ouverte");
-        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(h.state().selected, 0, "h aussi");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(!h.state().histogram_large, "Échap la ferme");
         assert_eq!(h.state().mode, Mode::Grid);
-        press(&mut h, Key::E, Modifiers::SHIFT);
-        press(&mut h, Key::E, Modifiers::SHIFT);
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        press(&mut h, Key::I, Modifiers::SHIFT);
         assert!(!h.state().histogram_large, "la même touche la ferme");
     }
 
@@ -22284,7 +22379,7 @@ mod tests {
         assert_eq!(h.state().selected, 1);
         press(&mut h, Key::ArrowDown, Modifiers::NONE);
         assert_eq!(h.state().selected, 1, "pas de lignes en plein écran");
-        press(&mut h, Key::H, Modifiers::NONE);
+        press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(h.state().selected, 0);
     }
 
@@ -22307,9 +22402,9 @@ mod tests {
             Source::Embedded,
             "rendu boîtier par défaut"
         );
-        press(&mut h, Key::B, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(h.state().source, Source::Raw);
-        press(&mut h, Key::B, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(
             h.state().source,
             Source::Embedded,
@@ -22319,7 +22414,7 @@ mod tests {
         // rien) et reste boîtier ↔ RAW.
         h.state_mut().developers = fake_darktable();
         for expected in [Source::Raw, Source::Embedded] {
-            press(&mut h, Key::B, Modifiers::NONE);
+            press(&mut h, Key::R, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
         }
         assert!(
@@ -22338,7 +22433,7 @@ mod tests {
         };
         set(&mut h.state_mut().status, 0, DT, Avail::Ready);
         for expected in [Source::Raw, Source::Developed, Source::Embedded] {
-            press(&mut h, Key::B, Modifiers::NONE);
+            press(&mut h, Key::R, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
         }
         // Développement modifié dans darktable (autre clé : le cache ne l'a plus) : oublié,
@@ -22351,7 +22446,7 @@ mod tests {
             .remove(&key)
             .unwrap();
         for expected in [Source::Raw, Source::Embedded] {
-            press(&mut h, Key::B, Modifiers::NONE);
+            press(&mut h, Key::R, Modifiers::NONE);
             assert_eq!(h.state().source, expected);
         }
         assert_eq!(h.state().status[0].developed, Avail::Pending);
@@ -22439,7 +22534,7 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         for (key, expected) in [
             (None, crate::export::Render::Embedded),
-            (Some(Key::B), crate::export::Render::LibRaw),
+            (Some(Key::R), crate::export::Render::LibRaw),
         ] {
             if let Some(key) = key {
                 press(&mut h, key, Modifiers::NONE);
@@ -22462,7 +22557,7 @@ mod tests {
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
         // r depuis la grille : plein écran et recadrage.
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().crop.is_some());
@@ -22531,9 +22626,9 @@ mod tests {
             "3:2 : {w} × {h2}"
         );
         // n : version suivante (ici la seule), puis l'original.
-        press(&mut h, Key::N, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         assert_eq!(h.state().version_shown, None);
-        press(&mut h, Key::N, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
         // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
         versions_list(&h);
@@ -22547,7 +22642,7 @@ mod tests {
         press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
         // Échap abandonne sans rien écrire.
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().crop.is_none());
         assert_eq!(
@@ -22565,7 +22660,7 @@ mod tests {
         h.state_mut().config_path = Some(config.clone());
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
@@ -22613,7 +22708,7 @@ mod tests {
         assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
         // Issue n° 14 : pas deux versions du même nom. Le préréglage propose « Story (2) » ;
         // un nom tapé déjà pris (casse comprise) n'est pas enregistré, le recadrage reste.
-        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
@@ -22693,6 +22788,7 @@ mod tests {
         h.state_mut().metadata_panel = false;
         let lead = |h: &mut Harness<'_, TriApp>| press(h, Key::B, Modifiers::CTRL);
         lead(&mut h);
+        press(&mut h, Key::R, Modifiers::NONE);
         press(&mut h, Key::P, Modifiers::NONE);
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error && text.contains("RapidRAW"), "{text}");
@@ -22700,6 +22796,7 @@ mod tests {
         // darktable installé mais rien développé : refusé aussi (décidé le 31/10/2026 au
         // soir : tous les logiciels, pas seulement RapidRAW ; seul LibRaw est toujours là).
         lead(&mut h);
+        press(&mut h, Key::R, Modifiers::NONE);
         press(&mut h, Key::D, Modifiers::NONE);
         let (text, error) = h.state().notice.clone().expect("message");
         assert!(error && text.contains("Darktable"), "{text}");
@@ -22718,6 +22815,7 @@ mod tests {
         tri::cache::forget_stamps(sidecars.iter().map(|p| p.as_path()));
         // darktable : choisi pour l'image, rendu demandé, source « développé ».
         lead(&mut h);
+        press(&mut h, Key::R, Modifiers::NONE);
         press(&mut h, Key::D, Modifiers::NONE);
         let path = h.state().files[0].path.clone();
         assert_eq!(
@@ -22805,7 +22903,7 @@ mod tests {
         }
         press(&mut h, Key::Enter, Modifiers::NONE);
         let b = |h: &mut Harness<'_, TriApp>| {
-            press(h, Key::B, Modifiers::NONE);
+            press(h, Key::R, Modifiers::NONE);
             (h.state().source, h.state().developed_level_at(0))
         };
         assert_eq!(b(&mut h).0, Source::Raw);
@@ -22894,7 +22992,10 @@ mod tests {
         h.state_mut().developers = fake_darktable();
         press(&mut h, Key::Enter, Modifiers::NONE);
         // Maj+B : développer l'image affichée (à la demande seulement).
-        press(&mut h, Key::B, Modifiers::SHIFT);
+        leader(
+            &mut h,
+            &[(Key::R, Modifiers::NONE), (Key::R, Modifiers::NONE)],
+        );
         assert_eq!(h.state().source, Source::Developed);
         run_until(&mut h, |app| {
             matches!(app.status[0].developed, Avail::Failed(_))
@@ -22945,13 +23046,13 @@ mod tests {
         press(&mut h, Key::Enter, Modifiers::NONE);
         press(&mut h, Key::Z, Modifiers::NONE);
         h.state_mut().zoom = Some(vec2(0.3, 0.6));
-        press(&mut h, Key::B, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(h.state().source, Source::Raw);
         let zoom = h.state().zoom.expect("toujours zoomé");
         // Image plate de 64×48 plus petite que la vue : le centre est ramené au milieu,
         // mais le zoom reste actif.
         assert!(zoom.x >= 0.0 && zoom.y >= 0.0);
-        press(&mut h, Key::B, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert!(h.state().zoom.is_some());
     }
 
@@ -22959,6 +23060,7 @@ mod tests {
     fn gg_goes_to_the_first_image_and_shift_g_to_the_last() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        use_vim(&mut h);
         press(&mut h, Key::G, Modifiers::SHIFT);
         assert_eq!(h.state().selected, 2);
         press(&mut h, Key::G, Modifiers::NONE);
@@ -22986,6 +23088,7 @@ mod tests {
         let right = h.state().zoom.unwrap();
         assert!(right.x > start.x, "vers la droite : {start:?} -> {right:?}");
         assert_eq!(right.y, start.y);
+        use_vim(&mut h);
         press(&mut h, Key::J, Modifiers::SHIFT);
         let down = h.state().zoom.unwrap();
         assert!(down.y > right.y, "vers le bas : {right:?} -> {down:?}");
