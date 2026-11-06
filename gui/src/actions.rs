@@ -2338,11 +2338,16 @@ fn sequence_label(keys: &[Chord]) -> String {
     }
 }
 
-/// Nom lisible d'une touche, dans la langue de l'interface. Volontairement indépendant des
-/// noms d'egui et sans symboles : « ⏴ » et même « ← » manquent dans la police par défaut
-/// d'egui (les tests d'interface le vérifient), et les polices du système ne sont pas
-/// garanties.
+/// Nom lisible d'une touche, dans la langue de l'interface, pour l'affichage. Les flèches
+/// en symbole (←, →, ↑, ↓) quand une police du système les a ([`crate::fonts`] ; la
+/// police d'egui n'en a pas), sinon en toutes lettres. Les noms écrits restent ceux de
+/// [`key_label_in`] (lus dans `[keys]` dans toutes les langues).
 pub fn key_label(key: Key) -> String {
+    if crate::fonts::arrows()
+        && let Some(arrow) = crate::fonts::arrow(key)
+    {
+        return arrow.to_string();
+    }
     key_label_in(tri::i18n::language(), key)
 }
 
