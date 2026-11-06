@@ -1117,7 +1117,10 @@ Photoshop (`TriApp::loupe_entry_keys`): digits go to the number (not to the star
 apply at once, one or two after `loupe_digits_ms` as hundreds or tens
 (`loupe_entry_percent`: `2` and `20` = 200 %, `01` = 10 %); 0 is ignored, Esc cancels,
 another key applies what was typed then acts. For the session (`TriApp::loupe_scale`);
-`loupe_scale` stays the starting value.
+`loupe_scale` stays the starting value. The wheel, with the loupe held, changes the magnification one step
+per notch (`loupe_wheel_step` points; `TriApp::loupe_wheel_input` removes the scrolling:
+the grid stays in place). The value shows in the bottom bar (`marks::loupe_icon`, −, the
+value, +; a click on the value: 100 %), when there is room.
 
 ### Shortcut review (2026-11-06, issue #280)
 

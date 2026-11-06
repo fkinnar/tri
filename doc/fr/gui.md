@@ -1178,7 +1178,11 @@ Photoshop (`TriApp::loupe_entry_keys`) : les chiffres vont au nombre (pas aux é
 trois s'appliquent aussitôt, un ou deux après `loupe_digits_ms` en centaines ou en
 dizaines (`loupe_entry_percent` : `2` et `20` = 200 %, `01` = 10 %) ; 0 est ignoré, Échap
 annule, une autre touche applique ce qui est tapé puis agit. Pour la session
-(`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ.
+(`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ. La roulette, la loupe
+tenue, change le grossissement d'un palier par cran (`loupe_wheel_step` points ;
+`TriApp::loupe_wheel_input` retire le défilement : la grille reste en place). La valeur
+se voit dans la barre du bas (`marks::loupe_icon`, −, la valeur, + ; un clic sur la
+valeur : 100 %).
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

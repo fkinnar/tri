@@ -139,7 +139,9 @@
 - **Grossissement de la loupe au clavier** : `Ctrl+K` / `Ctrl+J` (ou `+` / `-` la loupe
   tenue) d'un palier ; `<leader> m` puis un nombre, sans Entrée : trois chiffres aussitôt
   (`150`), deux en dizaines (`20` = 200 %), un en centaines (`2` = 200 %) après une courte
-  pause (`[gui.zoom] loupe_digits_ms`). Pour la session.
+  pause (`[gui.zoom] loupe_digits_ms`). La roulette, la loupe tenue, change aussi le
+  grossissement (la grille ne défile pas). La valeur se voit dans la barre du bas (loupe,
+  −, valeur, + ; un clic sur la valeur : 100 %). Pour la session.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

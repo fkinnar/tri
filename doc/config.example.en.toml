@@ -769,6 +769,9 @@ loupe_step_large = 320.0
 # (2: 200 %, 20: 200 %, 01: 10 %). Ctrl+K / Ctrl+J: one step (steps) up or down. For the
 # session; loupe_scale stays the starting value.
 loupe_digits_ms = 600
+# Wheel, with the loupe held: one magnification step every loupe_wheel_step points of
+# scrolling (a mouse notch; on a touchpad, a swipe); the grid does not scroll.
+loupe_wheel_step = 50.0
 
 [gui.dialogs]
 # Dialogs opened near the click (rating, eject, offload, rename, trash):

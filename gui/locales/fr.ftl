@@ -1350,3 +1350,4 @@ loupe-entry = Loupe : { $digits } %
 loupe-scale = Loupe : { $percent } %
 loupe-entry-zero = Loupe : 0 % n'a pas de sens, ignoré
 kw-core-view-loupe-scale = loupe grossissement zoom pourcentage agrandir
+loupe-reset-tip = Grossissement de la loupe ; un clic : 100 %

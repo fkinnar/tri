@@ -1451,6 +1451,20 @@ pub fn info_icon(painter: &Painter, rect: Rect, color: Color32) {
     painter.line_segment([c + vec2(0.0, -s * 0.04), c + vec2(0.0, s * 0.22)], stroke);
 }
 
+/// Loupe : un verre rond et son manche (grossissement de la loupe, barre du bas).
+pub fn loupe_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center() + vec2(-s * 0.08, -s * 0.08);
+    let r = s * 0.28;
+    let stroke = Stroke::new((s * 0.1).max(1.3), color);
+    painter.circle_stroke(c, r, stroke);
+    let d = std::f32::consts::FRAC_1_SQRT_2;
+    painter.line_segment(
+        [c + vec2(r * d, r * d), c + vec2(s * 0.42, s * 0.42)],
+        Stroke::new((s * 0.14).max(1.6), color),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -860,6 +860,8 @@ pub struct TriApp {
     /// Grossissement en cours de saisie après `<leader> m` : les chiffres tapés et
     /// l'instant du dernier.
     loupe_entry: Option<(String, Instant)>,
+    /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
+    loupe_wheel: f32,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1359,6 +1361,7 @@ impl TriApp {
             loupe_sizes: HashMap::new(),
             loupe_scale: gui.zoom.loupe_scale,
             loupe_entry: None,
+            loupe_wheel: 0.0,
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
@@ -9409,6 +9412,51 @@ impl TriApp {
         }
     }
 
+    /// La roulette, la loupe tenue (demandé le 06/11/2026) : un palier de grossissement par
+    /// cran (`[gui.zoom] loupe_wheel_step` points de défilement), et rien d'autre ne
+    /// défile (la grille reste en place).
+    fn loupe_wheel_input(&mut self, ctx: &egui::Context) {
+        let loupe = self.keymap.loupe();
+        if self.zoom.is_some() || !ctx.input(|i| loupe.held(i)) {
+            self.loupe_wheel = 0.0;
+            return;
+        }
+        let step = self.gui.zoom.loupe_wheel_step.max(1.0);
+        let dy = ctx.input_mut(|i| {
+            // Un cran (ligne) vaut un palier ; au pavé tactile, des points.
+            let dy: f32 = i
+                .events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { unit, delta, .. } => Some(match unit {
+                        egui::MouseWheelUnit::Point => delta.y,
+                        egui::MouseWheelUnit::Line => delta.y * step,
+                        egui::MouseWheelUnit::Page => delta.y * step * 10.0,
+                    }),
+                    _ => None,
+                })
+                .sum();
+            i.smooth_scroll_delta = Vec2::ZERO;
+            i.events
+                .retain(|e| !matches!(e, egui::Event::MouseWheel { .. }));
+            dy
+        });
+        if dy == 0.0 {
+            return;
+        }
+        self.loupe_wheel += dy;
+        while self.loupe_wheel.abs() >= step {
+            let up = self.loupe_wheel > 0.0;
+            self.loupe_wheel -= step.copysign(self.loupe_wheel);
+            let action = if up {
+                Action::LoupeZoomIn
+            } else {
+                Action::LoupeZoomOut
+            };
+            self.perform(ctx, action);
+        }
+    }
+
     /// Grossissement de la loupe pour la session, dans les bornes du zoom, et le dit.
     fn set_loupe_scale(&mut self, scale: f32) {
         let z = &self.gui.zoom;
@@ -12119,6 +12167,40 @@ impl TriApp {
                     if room >= buttons + self.gui.grid.size_slider + spacing {
                         self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
+                }
+                // Grossissement de la loupe (demandé le 06/11/2026 : réglable, il se voit) :
+                // loupe, −, la valeur (un clic : 100 %), + ; posés de droite à gauche.
+                // Après les outils de la grille : seulement s'il reste la place (fenêtre
+                // étroite : les notes d'abord).
+                let loupe_room = 4.0 * (icon + ui.spacing().item_spacing.x);
+                if self.keymap.loupe() != crate::settings::LoupeKey::None
+                    && ui.available_width() - self.gui.dialogs.spacing >= loupe_room
+                {
+                    ui.separator();
+                    for (action, text) in [(Action::LoupeZoomIn, "+"), (Action::LoupeZoomOut, "−")]
+                    {
+                        if action == Action::LoupeZoomOut {
+                            let percent = (self.loupe_scale * 100.0).round() as u32;
+                            let reset = ui
+                                .add(egui::Button::new(format!("{percent} %")).frame(false))
+                                .on_hover_text(t!("loupe-reset-tip"));
+                            if reset.clicked() {
+                                self.set_loupe_scale(1.0);
+                            }
+                        }
+                        let tip = self.action_tip(action);
+                        if ui
+                            .add(egui::Button::new(text).frame(false))
+                            .on_hover_text(tip)
+                            .clicked()
+                        {
+                            clicked = Some(action);
+                        }
+                    }
+                    let tip = self.action_tip(Action::Loupe);
+                    let (rect, _) = marks::icon_button(ui, icon, &Action::Loupe.label(), &tip);
+                    let color = ui.visuals().weak_text_color();
+                    marks::loupe_icon(ui.painter(), rect.shrink(icon * 0.2), color);
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
                 // la barre des filtres), précédé du triangle de netteté (posés de droite à
@@ -14872,6 +14954,7 @@ impl eframe::App for TriApp {
         }
         steps.mark("fonds");
         self.handle_keys(&ctx);
+        self.loupe_wheel_input(&ctx);
         steps.mark("touches");
         // Les champs de recherche dessinés dans cette image disent s'ils ont le clavier.
         self.search_focused = None;
@@ -18686,6 +18769,26 @@ mod tests {
         press(&mut h, Key::J, Modifiers::CTRL);
         press(&mut h, Key::J, Modifiers::CTRL);
         assert_eq!(h.state().loupe_scale, 1.0);
+        // La roulette, la loupe tenue : un palier par cran, la grille ne défile pas.
+        h.event(UiEvent::Key {
+            key: Key::M,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        let offset = h.state().scroll_offset;
+        h.event(UiEvent::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, 1.0),
+            modifiers: Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+        });
+        h.run_steps(3);
+        assert_eq!(h.state().loupe_scale, 2.0);
+        assert_eq!(h.state().scroll_offset, offset);
     }
 
     #[test]

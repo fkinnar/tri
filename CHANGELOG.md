@@ -132,7 +132,9 @@
 - **Loupe magnification from the keyboard**: `Ctrl+K` / `Ctrl+J` (or `+` / `-` with the
   loupe held) one step; `<leader> m` then a number, without Enter: three digits at once
   (`150`), two as tens (`20` = 200 %), one as hundreds (`2` = 200 %) after a short pause
-  (`[gui.zoom] loupe_digits_ms`). For the session.
+  (`[gui.zoom] loupe_digits_ms`). The wheel, with the loupe held, changes it too (the grid
+  does not scroll). The value shows in the bottom bar (loupe, −, value, +; a click on the
+  value: 100 %). For the session.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
