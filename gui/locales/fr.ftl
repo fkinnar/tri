@@ -101,6 +101,7 @@ action-core-file-export-report = Rapport d'export
 action-core-file-export = Exporter…
 action-core-view-crop = Recadrer (nouvelle version)
 action-core-view-version_next = Version suivante de l'image (original, puis chaque version)
+action-core-view-version_prev = Version précédente de l'image
 action-core-crop-move-left = Recadrage : déplacer le cadre à gauche
 action-core-crop-move-right = Recadrage : déplacer le cadre à droite
 action-core-crop-move-up = Recadrage : déplacer le cadre vers le haut

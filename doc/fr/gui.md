@@ -1070,7 +1070,7 @@ sélection dans `[keys]`.
 | Tri suivant / inverser | `f s` / `f r` | `n` / `Maj+N` |
 | Filtre « pile courante » / « développées » | `f c` / `f Maj+D` | `f s` / `f r` |
 | Recadrer | `r` | `c` |
-| Version suivante | `n` | `v` |
+| Version suivante / précédente | `n` / — | `v` / `Maj+V` (ajoutée le 06/11/2026) |
 | Mode visuel (sélection d'une plage) | `v` | `Maj+Espace` |
 | Comparer | `c` | `=` |
 | Loupe (maintenue) | `t` | `m` |

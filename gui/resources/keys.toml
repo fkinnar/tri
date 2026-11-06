@@ -194,10 +194,11 @@ loupe = "m"
 "core.dev.fold_all" = []
 
 # --- Crop (c) and versions (v) ---
-# c: crop (full screen; from the grid, opens it). v: the next version of the image
-# (the original, then each version).
+# c: crop (full screen; from the grid, opens it). v / Shift+V: the next / previous
+# version of the image (the original, then each version).
 "core.view.crop" = ["c"]
 "core.view.version_next" = ["v"]
+"core.view.version_prev" = ["Shift+v"]
 
 # --- External (e) and files ---
 # e: open in the external editor; Shift+E: reveal in the file manager (explorer);

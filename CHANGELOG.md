@@ -32,6 +32,8 @@
   panels show and hide with `<leader>` Shift + a direction. The "both" profile is gone,
   and the loupe moves to `m` and into `keys.toml`. A leader or loupe key already bound
   to an action is refused. The full before / after table is in `doc/en/gui.md`.
+- **Previous version** of an image in full screen: `Shift+V`, the other way round from
+  `v`.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

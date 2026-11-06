@@ -34,6 +34,8 @@
   Maj + une direction. Le profil « both » disparaît, et la loupe passe sur `m` et dans
   `keys.toml`. Un leader ou une touche de loupe déjà liés à une action sont refusés. Le
   tableau complet avant / après est dans `doc/fr/gui.md`.
+- **Version précédente** d'une image en plein écran : `Maj+V`, dans l'autre sens que
+  `v`.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

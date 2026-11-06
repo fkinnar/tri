@@ -378,6 +378,8 @@ pub enum Action {
     CropPresetPrev,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
+    /// Plein écran : version précédente (dans l'autre sens, 06/11/2026).
+    VersionPrev,
     /// Rechercher : en grille, filtre par nom de fichier ; dans le panneau des dossiers,
     /// un dossier (aussi `/`, sauf en plein écran où il vaut « ajusté »).
     Search,
@@ -458,7 +460,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 194] = [
+    pub const ALL: [Action; 195] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -543,6 +545,7 @@ impl Action {
         Action::CropPreset,
         Action::CropPresetPrev,
         Action::VersionNext,
+        Action::VersionPrev,
         Action::Send("plugin.airdrop.send"),
         Action::Undo,
         Action::Redo,
@@ -718,7 +721,7 @@ impl Action {
             | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
             | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
-            | CropPreset | CropPresetPrev | VersionNext => Group::Crop,
+            | CropPreset | CropPresetPrev | VersionNext | VersionPrev => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
@@ -865,6 +868,7 @@ impl Action {
             Action::CropPreset => "core.crop.preset",
             Action::CropPresetPrev => "core.crop.preset_prev",
             Action::VersionNext => "core.view.version_next",
+            Action::VersionPrev => "core.view.version_prev",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",

@@ -145,6 +145,7 @@ pub fn navigate(
         | Action::CropPreset
         | Action::CropPresetPrev
         | Action::VersionNext
+        | Action::VersionPrev
         | Action::Send(_)
         | Action::Undo
         | Action::Redo

@@ -102,6 +102,7 @@ action-core-file-export-report = Export report
 action-core-file-export = Export…
 action-core-view-crop = Crop (new version)
 action-core-view-version_next = Next version of the image (original, then each version)
+action-core-view-version_prev = Previous version of the image
 action-core-crop-move-left = Crop: move the frame left
 action-core-crop-move-right = Crop: move the frame right
 action-core-crop-move-up = Crop: move the frame up
