@@ -253,7 +253,7 @@ cli-export-done = { $n ->
    *[other] { $n } files written
 }
 cli-export-failed = { $failed } images without a written file (unreadable by Darktable?)
-cli-groups-header = image	next	distance	gap (s)
+cli-groups-header = image	next	distance	gap (s)	with the pause
 cli-groups-summary = { $n } images, { $groups } groups at threshold { $threshold } ({ $ms } ms per signature)
 cli-cache-cleared = cache cleared ({ $level })
 cli-cache-here = cache kept in { $place }

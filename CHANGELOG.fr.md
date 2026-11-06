@@ -2,6 +2,19 @@
 
 *[English version](CHANGELOG.md)*
 
+## Non publié
+
+- **Piles : pauses et progression du curseur** (#306) : une pause plus longue que la cadence
+  du dossier éloigne deux images (en studio, un changement de pose tombe souvent sur une
+  pause). Deux nouveaux curseurs dans la fenêtre de regroupement (`Ctrl+G`), retenus par
+  dossier : « Importance des pauses » (à gauche, le contenu seul ; à droite, les pauses
+  coupent davantage, en photo de rue par exemple) et « Progression du curseur » (vers
+  la gauche, chaque pixel retire la même part des piles ; au-delà de 1, départ plus doux
+  du centre et droite plus rapide). À
+  fond à gauche, le curseur de sévérité regroupe désormais tout. Réglages
+  `[similarity] pause_weight`, `pause_range`, `strictness_curve`, `strictness_curve_max`. Fermée par Échap ou `Ctrl+G`, la fenêtre retient
+  aussi la sévérité.
+
 ## 1.0.0-alpha.8 — 05/11/2026
 
 Huitième et dernière version de test avant la bêta : logiciels de développement

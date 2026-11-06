@@ -52,9 +52,24 @@ pub struct SimilaritySettings {
     /// `strictness_span` ; vers la droite, il suit le rang des distances jusqu'à aucune
     /// pile ([`threshold_by_rank`] ; trop peu de liens : seuil divisé).
     pub strictness_span: f32,
+    /// Progression du curseur des piles (λ, issue n° 306) : le nombre de piles suit une
+    /// moyenne de puissance λ entre le centre et chaque bout ([`threshold_by_rank`]) ;
+    /// 1 : régulière en nombre de piles ; au-delà, plus douce vers la gauche (grandes
+    /// piles), plus rapide vers la droite.
+    pub strictness_curve: f32,
+    /// Bornes du curseur « progression » de la fenêtre de regroupement : de
+    /// 1 / `strictness_curve_max` à `strictness_curve_max`.
+    pub strictness_curve_max: f32,
     /// Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
     /// dans le même groupe (secondes ; 0 : sans limite).
     pub max_gap_s: f32,
+    /// Importance des pauses (issue n° 306) : une pause plus longue que la cadence du
+    /// dossier allonge la distance, × (1 + `pause_weight` × log2(pause / cadence)),
+    /// voir [`with_pauses`] ; 0 : seul le contenu compte.
+    pub pause_weight: f32,
+    /// Curseur « importance des pauses » à fond à droite : `pause_weight` multiplié par
+    /// cette valeur (à fond à gauche : 0, pauses ignorées).
+    pub pause_range: f32,
 }
 
 impl Default for SimilaritySettings {
@@ -69,7 +84,11 @@ impl Default for SimilaritySettings {
             auto_separation: 0.5,
             auto_range: 2.0,
             strictness_span: 3.0,
+            strictness_curve: 2.0,
+            strictness_curve_max: 4.0,
             max_gap_s: 60.0,
+            pause_weight: 0.1,
+            pause_range: 5.0,
         }
     }
 }
@@ -256,6 +275,46 @@ pub fn distances(signatures: &[Option<&Signature>], shape_weight: f32) -> Vec<Op
         .collect()
 }
 
+/// Liens `links` dont la distance est allongée par la pause qui sépare les deux images
+/// (issue n° 306 : en studio, les changements de pose tombaient sur des pauses de 9 à
+/// 30 s, quand la cadence d'une pose est de 1 à 3 s). La cadence est l'écart médian du
+/// dossier (au moins 1 s, la précision des heures EXIF) ; un écart sous la cadence ou
+/// inconnu ne change rien, au-delà la distance est multipliée par
+/// 1 + `weight` × log2(écart / cadence). Multiplier plutôt qu'ajouter : deux images
+/// identiques restent ensemble après une pause, la pause départage les autres.
+pub fn with_pauses(links: &[Option<Link>], weight: f32) -> Vec<Option<Link>> {
+    let mut gaps: Vec<f32> = links.iter().flatten().filter_map(|l| l.gap_s).collect();
+    if weight <= 0.0 || gaps.is_empty() {
+        return links.to_vec();
+    }
+    gaps.sort_by(f32::total_cmp);
+    let cadence = gaps[gaps.len() / 2].max(1.0);
+    links
+        .iter()
+        .map(|l| {
+            l.map(|l| {
+                let pause = l.gap_s.map_or(0.0, |g| (g / cadence).max(1.0).log2());
+                Link {
+                    distance: l.distance * (1.0 + weight * pause),
+                    ..l
+                }
+            })
+        })
+        .collect()
+}
+
+/// Importance des pauses au curseur `t` (-1 à 1) de la fenêtre de regroupement : au
+/// centre `weight` (le réglage), à fond à gauche 0 (pauses ignorées, le contenu seul),
+/// à fond à droite `weight × range`.
+pub fn pause_weight(weight: f32, t: f32, range: f32) -> f32 {
+    let t = t.clamp(-1.0, 1.0);
+    if t <= 0.0 {
+        weight * (1.0 + t)
+    } else {
+        weight * range.max(1.0).powf(t)
+    }
+}
+
 /// Groupes d'images voisines : rangs de début et de fin (exclue) de chaque groupe, dans
 /// l'ordre. Une image rejoint la précédente si leur lien est sous `threshold` et leur
 /// écart de temps sous `max_gap_s` (0 : sans limite) ; un lien inconnu coupe.
@@ -344,14 +403,24 @@ pub fn distances_by_rank(links: &[Option<Link>], max_gap_s: f32) -> Vec<f32> {
 /// Seuil à la sévérité `strictness` d'après les distances `sorted` du dossier
 /// ([`distances_by_rank`]) : le curseur suit leur **rang**, pas leur valeur (issue
 /// n° 61 : les petites distances, serrées, rendaient le côté strict sensible au pixel,
-/// et il restait des piles tout à droite). Au centre, `centre` ; vers la droite, de moins
-/// en moins de liens joints, à parts égales, jusqu'à aucun ; vers la gauche, jusqu'au
-/// seuil `centre × span` (comme [`with_strictness`]). Trop peu de distances (moins de
-/// `min_links`) : [`with_strictness`].
+/// et il restait des piles tout à droite). Au centre, `centre` ; à fond à droite, aucun
+/// lien joint (plus de piles) ; à fond à gauche, tous (issue n° 306 : à « centre ×
+/// étendue », des piles d'une même série restaient séparées). Entre les deux, le nombre
+/// de liens coupés + 1 (les piles, à l'écart de temps près) va de sa valeur au centre à
+/// celle du bout (retours de l'utilisateur : la gauche allait trop vite, puis « au pixel
+/// près » tout au bout) :
+/// - vers la gauche, sur une échelle **logarithmique** à la position `u^λ` : chaque pixel
+///   retire la même part des piles, si bien que plus on va à gauche (moins de piles),
+///   plus il faut de pixels pour en perdre une ; λ > 1 adoucit le départ du centre ;
+/// - vers la droite, une moyenne de puissance λ : λ = 1, à parts égales ; λ > 1, plus
+///   rapide près du centre.
+///
+/// Trop peu de distances (moins de `min_links`) : [`with_strictness`] avec `span`.
 pub fn threshold_by_rank(
     sorted: &[f32],
     centre: f32,
     strictness: f32,
+    curve: f32,
     span: f32,
     min_links: usize,
 ) -> f32 {
@@ -360,17 +429,21 @@ pub fn threshold_by_rank(
         return with_strictness(centre, t, span);
     }
     let n = sorted.len();
-    // Nombre de liens joints (distance sous le seuil) : au centre, puis tout à gauche.
-    let below = |x: f32| sorted.partition_point(|&d| d <= x);
-    let middle = below(centre) as f32;
-    let k = if t > 0.0 {
-        (middle * (1.0 - t)).round() as usize
+    // Liens coupés + 1 : au centre, puis au bout vers lequel on va.
+    let joined_at_centre = sorted.partition_point(|&d| d <= centre);
+    let middle = (n - joined_at_centre + 1) as f64;
+    let u = t.abs() as f64;
+    let lambda = f64::from(curve).max(0.01);
+    let cut = if t > 0.0 {
+        let end = (n + 1) as f64;
+        ((1.0 - u) * middle.powf(lambda) + u * end.powf(lambda)).powf(1.0 / lambda)
     } else {
-        let loose = below(centre * span.max(1.0)) as f32;
-        (middle + (loose - middle) * -t).round() as usize
+        // Du centre à 1 (tout joint), en log : middle^(1 - u^λ).
+        middle.powf(1.0 - u.powf(lambda))
     };
+    let k = n + 1 - (cut.round() as usize).clamp(1, n + 1);
     // Seuil entre la k-ième et la suivante : exactement k liens joints.
-    match k.min(n) {
+    match k {
         0 => sorted[0] - (sorted[0].abs() + 1.0),
         k if k == n => sorted[n - 1],
         k => (sorted[k - 1] + sorted[k]) / 2.0,
@@ -393,6 +466,40 @@ pub fn remember_strictness(
     strictness: Option<f32>,
 ) -> std::io::Result<()> {
     crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
+}
+
+/// Fichier des importances des pauses par dossier (curseur, -1 à 1).
+const PAUSES: &str = "group-pauses.tsv";
+
+/// Importance des pauses retenue pour le dossier `dir` (curseur, -1 à 1), s'il y en a une.
+pub fn folder_pauses(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    crate::folder::folder_value(data, PAUSES, dir)
+}
+
+/// Retient l'importance des pauses `t` pour le dossier `dir` ; `None` : l'oublie (centre).
+pub fn remember_pauses(
+    data: &std::path::Path,
+    dir: &std::path::Path,
+    t: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, PAUSES, dir, t)
+}
+
+/// Fichier des progressions du curseur des piles par dossier (`strictness_curve`).
+const CURVES: &str = "group-curve.tsv";
+
+/// Progression du curseur des piles retenue pour le dossier `dir`, s'il y en a une.
+pub fn folder_curve(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    crate::folder::folder_value(data, CURVES, dir)
+}
+
+/// Retient la progression `curve` pour le dossier `dir` ; `None` : l'oublie (réglage).
+pub fn remember_curve(
+    data: &std::path::Path,
+    dir: &std::path::Path,
+    curve: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, CURVES, dir, curve)
 }
 
 /// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.
@@ -561,6 +668,78 @@ mod tests {
     }
 
     #[test]
+    fn pauses_lengthen_distances_but_never_join() {
+        let link = |distance: f32, gap: Option<f32>| {
+            Some(Link {
+                distance,
+                gap_s: gap,
+            })
+        };
+        // Cadence 1 s (médiane) ; une pause de 32 s = 5 cadences doublées.
+        let links = [
+            link(0.1, Some(1.0)),
+            link(0.1, Some(1.0)),
+            link(0.3, Some(32.0)),
+            link(0.0, Some(32.0)),
+            link(0.2, None),
+            None,
+            link(0.1, Some(1.0)),
+        ];
+        let p = with_pauses(&links, 0.2);
+        let d: Vec<Option<f32>> = p.iter().map(|l| l.map(|l| l.distance)).collect();
+        assert_eq!(d[0], Some(0.1), "sous la cadence : rien");
+        assert!((d[2].unwrap() - 0.3 * 2.0).abs() < 1e-6, "{:?}", d[2]);
+        assert_eq!(d[3], Some(0.0), "identiques : toujours ensemble");
+        assert_eq!(d[4], Some(0.2), "écart inconnu : rien");
+        assert_eq!(d[5], None);
+        assert_eq!(p[2].unwrap().gap_s, Some(32.0), "écart gardé");
+        assert!(
+            links.iter().zip(&p).all(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => b.distance >= a.distance,
+                _ => a == b,
+            }),
+            "une pause ne rapproche jamais"
+        );
+        assert_eq!(with_pauses(&links, 0.0), links, "importance nulle");
+        // Cadence lente (médiane 10 s) : 20 s n'est qu'une double cadence.
+        let slow = [
+            link(0.2, Some(10.0)),
+            link(0.2, Some(10.0)),
+            link(0.2, Some(20.0)),
+        ];
+        let d = with_pauses(&slow, 0.5)[2].unwrap().distance;
+        assert!((d - 0.2 * 1.5).abs() < 1e-6, "{d}");
+    }
+
+    #[test]
+    fn the_pause_slider_goes_from_none_to_range() {
+        assert_eq!(pause_weight(0.1, 0.0, 5.0), 0.1);
+        assert_eq!(pause_weight(0.1, -1.0, 5.0), 0.0, "à gauche : ignorées");
+        assert!((pause_weight(0.1, 1.0, 5.0) - 0.5).abs() < 1e-6);
+        assert!((pause_weight(0.1, -0.5, 5.0) - 0.05).abs() < 1e-6);
+        assert_eq!(pause_weight(0.1, 3.0, 5.0), pause_weight(0.1, 1.0, 5.0));
+    }
+
+    #[test]
+    fn pauses_and_curve_are_remembered_per_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path();
+        let a = std::path::Path::new("/photos/a");
+        assert_eq!(
+            (folder_pauses(data, a), folder_curve(data, a)),
+            (None, None)
+        );
+        remember_pauses(data, a, Some(-0.4)).unwrap();
+        remember_curve(data, a, Some(2.5)).unwrap();
+        remember_strictness(data, a, Some(0.2)).unwrap();
+        assert_eq!(folder_pauses(data, a), Some(-0.4));
+        assert_eq!(folder_curve(data, a), Some(2.5));
+        assert_eq!(folder_strictness(data, a), Some(0.2), "fichiers séparés");
+        remember_pauses(data, a, None).unwrap();
+        assert_eq!(folder_pauses(data, a), None);
+    }
+
+    #[test]
     fn strictness_lowers_the_threshold_to_the_right() {
         assert_eq!(with_strictness(0.2, 0.0, 3.0), 0.2);
         assert!((with_strictness(0.2, 1.0, 3.0) - 0.2 / 3.0).abs() < 1e-6);
@@ -588,26 +767,45 @@ mod tests {
 
     #[test]
     fn the_stack_slider_follows_the_rank_of_the_distances() {
-        // Issue n° 61 : à parts égales de liens joints, jusqu'à aucun tout à droite.
+        // Issue n° 61 : à parts égales de liens joints, jusqu'à aucun tout à droite ;
+        // issue n° 306 : jusqu'à tous tout à gauche.
         let sorted: Vec<f32> = (1..=10).map(|i| i as f32 / 100.0).collect();
-        let joined = |t: f32| {
-            let thr = threshold_by_rank(&sorted, 0.055, t, 3.0, 2);
+        let joined = |t: f32, curve: f32| {
+            let thr = threshold_by_rank(&sorted, 0.055, t, curve, 3.0, 2);
             sorted.iter().filter(|&&d| d <= thr).count()
         };
         assert_eq!(
-            threshold_by_rank(&sorted, 0.055, 0.0, 3.0, 2),
+            threshold_by_rank(&sorted, 0.055, 0.0, 2.0, 3.0, 2),
             0.055,
             "centre"
         );
-        assert_eq!(joined(0.0), 5);
-        assert_eq!(joined(1.0), 0, "tout à droite : plus aucune pile");
-        assert_eq!(joined(0.6), 2);
-        assert_eq!(joined(-1.0), 10, "tout à gauche : jusqu'à centre × span");
-        let steps: Vec<usize> = (-10..=10).map(|t| joined(t as f32 / 10.0)).collect();
-        assert!(steps.windows(2).all(|w| w[0] >= w[1]), "{steps:?}");
+        for curve in [0.5, 1.0, 2.0, 4.0] {
+            assert_eq!(joined(0.0, curve), 5);
+            assert_eq!(joined(1.0, curve), 0, "tout à droite : plus aucune pile");
+            assert_eq!(joined(-1.0, curve), 10, "tout à gauche : tout regroupé");
+            let steps: Vec<usize> = (-10..=10).map(|t| joined(t as f32 / 10.0, curve)).collect();
+            assert!(
+                steps.windows(2).all(|w| w[0] >= w[1]),
+                "{curve} : {steps:?}"
+            );
+        }
+        // 6 coupés + 1 au centre ; à gauche en log (√6 ≈ 2 à mi-chemin), à droite à
+        // parts égales (jusqu'à 11) à λ = 1.
+        assert_eq!(joined(-0.5, 1.0), 9);
+        assert_eq!(joined(0.6, 1.0), 2);
+        // Vers la gauche, de plus en plus de pas pour une pile de moins (≥ 1 lien joint
+        // de plus par pas au début, puis des pas sans changement).
+        let left: Vec<usize> = (0..=20).map(|t| joined(-(t as f32) / 20.0, 1.0)).collect();
+        assert!(
+            left.windows(2).rev().take(3).any(|w| w[0] == w[1]),
+            "{left:?}"
+        );
+        // λ > 1 : plus doux près du centre à gauche, plus rapide à droite.
+        assert!(joined(-0.5, 3.0) < joined(-0.5, 1.0));
+        assert!(joined(0.2, 3.0) < joined(0.2, 1.0));
         // Trop peu de liens : le seuil géométrique d'avant.
         assert_eq!(
-            threshold_by_rank(&sorted[..1], 0.2, 1.0, 3.0, 2),
+            threshold_by_rank(&sorted[..1], 0.2, 1.0, 2.0, 3.0, 2),
             with_strictness(0.2, 1.0, 3.0)
         );
     }

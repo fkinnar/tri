@@ -831,6 +831,8 @@ fn similarity_groups(
     let refs: Vec<Option<&tri::similarity::Signature>> =
         signatures.iter().map(Option::as_ref).collect();
     let links = tri::similarity::distances(&refs, s.shape_weight);
+    // Centre calculé sur le contenu seul ; les pauses ne font que couper davantage.
+    let paused = tri::similarity::with_pauses(&links, s.pause_weight);
     let name = |i: usize| {
         files[i]
             .path
@@ -840,18 +842,19 @@ fn similarity_groups(
             .into_owned()
     };
     println!("{}", t!("cli-groups-header"));
-    for (i, link) in links.iter().enumerate() {
-        let (d, gap) = match link {
-            Some(l) => (
+    for (i, (link, with_pause)) in links.iter().zip(&paused).enumerate() {
+        let (d, gap, p) = match (link, with_pause) {
+            (Some(l), Some(p)) => (
                 format!("{:.3}", l.distance),
                 l.gap_s.map_or("-".into(), |g| format!("{g:.0}")),
+                format!("{:.3}", p.distance),
             ),
-            None => ("-".into(), "-".into()),
+            _ => ("-".into(), "-".into(), "-".into()),
         };
-        println!("{}	{}	{d}	{gap}", name(i), name(i + 1));
+        println!("{}	{}	{d}	{gap}	{p}", name(i), name(i + 1));
     }
     let threshold = threshold.unwrap_or_else(|| tri::similarity::suggested_threshold(&links, s));
-    let groups = tri::similarity::group(&links, threshold, s.max_gap_s);
+    let groups = tri::similarity::group(&paused, threshold, s.max_gap_s);
     for g in &groups {
         let names: Vec<String> = g.clone().map(name).collect();
         println!("[{}] {}", g.len(), names.join(" "));

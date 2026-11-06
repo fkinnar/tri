@@ -54,11 +54,12 @@ plus grandes) ; double-clic : retour au centre.
   0,77), contre 0,25 fixe.
 - `with_strictness(centre, s, strictness_span)` : `centre × span^(-s)` (×3 à ÷3 par
   défaut).
-- `threshold_by_rank(distances triées, centre, s, span, min)` (25/10/2026, issue n° 61 :
+- `threshold_by_rank(distances triées, centre, s, courbe, span, min)` (25/10/2026, issue n° 61 :
   côté strict sensible au pixel, et des piles restaient tout à droite) : le curseur suit
   le **rang** des distances (`distances_by_rank`), pas leur valeur. Au centre, `centre` ;
   vers la droite, de moins en moins de liens joints, à parts égales, jusqu'à aucun ; vers
-  la gauche, jusqu'à `centre × span`. Simulé sur six vraies séances : tout à droite, 9 à
+  la gauche, jusqu'à `centre × span` (jusqu'à tout regrouper depuis le 06/11/2026, voir
+  plus bas). Simulé sur six vraies séances : tout à droite, 9 à
   40 piles restaient avec le seuil géométrique, aucune maintenant. Moins de `min` liens :
   `with_strictness`.
 - `folder_strictness` / `remember_strictness` : la sévérité choisie, retenue pour chaque
@@ -66,6 +67,54 @@ plus grandes) ; double-clic : retour au centre.
   Les seuils par dossier d'avant (`group-thresholds.tsv`) ne sont plus lus.
 - `tri <dossier> --groups` regroupe au centre calculé (`--threshold X` pour imposer un
   seuil).
+
+## Pauses et progression du curseur (06/11/2026, issue n° 306)
+
+Mesuré sur FULLTEST (570 RAF d'une séance d'autoportraits en studio, même cadrage) :
+l'empreinte voit surtout le fond et le cadrage. Une main près du visage la change à
+peine. « Main sur la tête » et « bras le long du corps » sont à 0,34 l'une de l'autre,
+autant que deux images d'une même pose où l'on bouge dans le cadre (jusqu'à 0,41). Des
+empreintes plus fines (grilles de gris 12 × 16 à 48 × 64, tolérantes aux décalages,
+médianes de fenêtres de 2 à 4 images) ne séparaient pas mieux les poses. En revanche, les
+changements de pose tombaient sur des **pauses** : 9 à 302 s, contre 1 à 3 s entre deux
+images d'une même pose.
+
+- `with_pauses(liens, poids)` : une pause plus longue que la **cadence** du dossier
+  (écart médian, au moins 1 s) multiplie la distance par
+  1 + poids × log2(pause / cadence). Multiplier plutôt qu'ajouter : deux images
+  identiques restent ensemble, la pause départage les autres. Le **centre** du curseur
+  reste calculé sur les distances sans pause : une pause ne fait que couper davantage.
+  Mesuré à 0,1 : le « buste » de 234 photos se sépare à fond à gauche en 12 + 102 + 120
+  (bras devant le visage, main sur la tête ou au menton, bras le long du corps) ; au
+  centre, sur trois autres séances, de 0 à 4 piles de plus.
+- Une pause est un **indice**, pas une règle (retour de l'utilisateur) : en studio, le
+  contenu compte d'abord ; en photo de rue, une pause marque souvent un autre lieu.
+  D'où le curseur **« Importance des pauses »** de la fenêtre `Ctrl+G`, retenu par
+  dossier (`folder_pauses` / `remember_pauses`, `group-pauses.tsv`) :
+  `pause_weight(poids, t, étendue)`, au centre `[similarity] pause_weight`, à fond à
+  gauche 0 (pauses ignorées), à fond à droite × `pause_range`.
+- **Progression du curseur** (retour de l'utilisateur : réglable, mais la gauche allait
+  encore trop vite ; l'idée d'un paramètre sur toute l'échelle est la sienne) :
+  `threshold_by_rank` va désormais jusqu'à **tout regrouper** à fond à gauche (plus de
+  « centre × étendue », qui s'arrêtait à 0,375 sur FULLTEST, sous les 0,41 qui
+  réuniraient les piles « bras croisés »). Entre le centre et chaque bout, le nombre de
+  piles (liens coupés + 1) suit, avec λ = `strictness_curve` (2 par défaut) :
+  - vers la **gauche**, une **échelle logarithmique** à la position `u^λ` : chaque pixel
+    retire la même part des piles, donc de plus en plus de pixels pour une pile de moins
+    à mesure qu'on va à gauche ; λ > 1 adoucit le départ du centre. Une première version
+    (moyenne de puissance λ des deux côtés) avait une pente infinie au bout gauche : à
+    λ = 2, de 39 piles à 2 dans les derniers 10 % (« au pixel près », retour de
+    l'utilisateur) ;
+  - vers la **droite**, une **moyenne de puissance λ** : λ = 1, à parts égales ; au-delà,
+    plus rapide près du centre.
+
+  Sur FULLTEST (123 piles au centre), à -0,2 / -0,6 / -0,9 / -0,95 / -1 : 104 / 28 / 4,4
+  / 3 / 2 piles à λ = 2 (à λ = 1 : 54 / 10 / 3 / 2,5 / 2). Sur une demi-glissière de
+  100 px, il faut environ 3 à 4 px par pile vers 3 à 5 piles. Curseur **« Progression du curseur »** de la fenêtre
+  `Ctrl+G`, retenu par dossier (`folder_curve` / `remember_curve`, `group-curve.tsv`),
+  de 1 / `strictness_curve_max` à `strictness_curve_max`. `strictness_span` ne sert
+  plus qu'aux dossiers de trop peu d'images (`with_strictness`).
+- `tri <dossier> --groups` montre aussi la distance avec la pause, et regroupe avec elle.
 
 ## Couvertures choisies
 

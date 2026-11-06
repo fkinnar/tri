@@ -514,7 +514,10 @@ system one ("cold" measurements, experiments).
   navigation and auto-advance skip hidden images. **Grouping window** (`Ctrl+G`, like
   Capture One): group or not, threshold slider (the grid follows live), maximum time gap,
   number of stacks; the threshold is remembered for the folder on closing
-  (`group-thresholds.tsv` in the data folder; the default: `[similarity] threshold`).
+  (`group-thresholds.tsv` in the data folder; the default: `[similarity] threshold`). Since 2026-11-06 (#306), also **"Slider progression"** (gentler
+  to the left above 1; fully to the left, everything is grouped) and **"Weight of pauses"** (to the left the
+  content only, to the right pauses cut more), remembered per folder, even when closed
+  with the keyboard (see `similarity.md`).
   Second feedback of 2026-10-18: **a single toggle** (`Ctrl+S`, stack button in the
   filter bar and the rating bar, icon in the accent colour when active, always visible; right
   click: `Ctrl+G`): stacks active, grouping in the grid **and** in full screen ← / →

@@ -441,14 +441,35 @@ auto_min_links = 8
 auto_separation = 0.5
 # Bounds of the computed centre: between threshold / auto_range and threshold × auto_range.
 auto_range = 2.0
-# Range of the stacks slider, all the way left (more lenient, large stacks): the
-# threshold is multiplied by this value. Towards the right, the slider follows the rank of
-# the folder's distances until no stack is left (too few images: threshold divided by
-# this value). The chosen strictness is remembered for each folder.
+# Stacks slider when the folder has too few images to follow the rank of the
+# distances: fully to the left, the threshold is multiplied by this value; fully to the
+# right, divided.
 strictness_span = 3.0
+# Progression of the stacks slider (lambda): it follows the rank of the folder's
+# distances, from the (computed) centre to grouping everything fully to the left and no
+# stack at all fully to the right. Towards the left, the number of stacks follows a
+# logarithmic scale (each pixel removes the same share: more and more pixels for one
+# stack less), at the position raised to the power lambda; towards the right, a power
+# mean of order lambda. Above 1: gentler start from the centre to the left, faster to
+# the right. Can also be set for a folder, "Slider progression"
+# slider of the grouping window (Ctrl+G). The chosen strictness is remembered for each
+# folder.
+strictness_curve = 2.0
+# Bounds of the "Slider progression" slider: from 1 / strictness_curve_max to
+# strictness_curve_max.
+strictness_curve_max = 4.0
 # Capture time gap beyond which two neighbouring images are never
 # grouped (seconds; 0: no limit).
 max_gap_s = 60.0
+# Weight of pauses: a pause longer than the folder's pace (median gap between two
+# images) moves the two images apart, distance multiplied by
+# 1 + pause_weight × log2(pause / pace). Two identical images stay together; 0: only
+# the content counts. Middle of the "Weight of pauses" slider (Ctrl+G), remembered for
+# each folder: lower in the studio, higher in street photography.
+pause_weight = 0.1
+# "Weight of pauses" slider fully to the right: pause_weight multiplied by this value
+# (fully to the left: pauses ignored).
+pause_range = 5.0
 
 [i18n]
 # Language of the texts (interface, command line, messages): "auto" (system language;
