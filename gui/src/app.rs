@@ -14080,10 +14080,14 @@ impl TriApp {
         };
         let key_width = rows.iter().map(|r| width_of(&r.0)).fold(0.0, f32::max);
         let text_width = rows.iter().map(|r| width_of(&r.1)).fold(0.0, f32::max);
-        let gap = 24.0;
-        let column = key_width + 12.0 + text_width + gap;
+        // Entre les colonnes, de l'air et un trait (retour du 06/11/2026 : la deuxième
+        // colonne commençait trop près de la fin de la première) ; sous chaque ligne, un
+        // trait discret.
+        let key_gap = 12.0;
+        let gap = 48.0;
+        let inner = key_width + key_gap + text_width;
         let room = ctx.content_rect().width() * 0.9;
-        let columns = ((room / column).floor() as usize).clamp(1, rows.len().max(1));
+        let columns = (((room + gap) / (inner + gap)).floor() as usize).clamp(1, rows.len().max(1));
         let lines = rows.len().div_ceil(columns);
         egui::Area::new(egui::Id::unique("key_menu"))
             .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0))
@@ -14101,35 +14105,62 @@ impl TriApp {
                         if rows.is_empty() {
                             ui.weak(t!("key-menu-empty"));
                         }
-                        egui::Grid::new("key_menu_grid")
-                            .num_columns(columns * 2)
-                            .spacing(vec2(12.0, 4.0))
-                            .show(ui, |ui| {
-                                for line in 0..lines {
-                                    for col in 0..columns {
-                                        // Rempli colonne par colonne, comme une liste.
-                                        match rows.get(col * lines + line) {
-                                            Some((key, text, menu)) => {
-                                                ui.label(
-                                                    egui::RichText::new(key).strong().color(accent),
-                                                );
-                                                let text = egui::RichText::new(text);
-                                                let text =
-                                                    if *menu { text.italics() } else { text };
-                                                // Une simple étiquette, alignée à gauche par la
-                                                // grille, sur la ligne de sa touche (retour du
-                                                // 06/11/2026 : décalée par un conteneur).
-                                                ui.label(text);
-                                            }
-                                            None => {
-                                                ui.label("");
-                                                ui.label("");
-                                            }
+                        let line_color = row_line_color(ui);
+                        ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            for col in 0..columns {
+                                if col > 0 {
+                                    // Le trait entre deux colonnes, au milieu de l'espace.
+                                    let (space, _) = ui.allocate_exact_size(
+                                        vec2(gap, ui.available_height().min(1.0)),
+                                        Sense::hover(),
+                                    );
+                                    let x = space.center().x;
+                                    let top = space.top();
+                                    let height = lines as f32 * ui.spacing().interact_size.y;
+                                    ui.painter().vline(
+                                        x,
+                                        top..=top + height,
+                                        egui::Stroke::new(1.0, line_color),
+                                    );
+                                }
+                                // Chaque colonne à sa largeur (retour du 06/11/2026 : celle
+                                // de la plus longue ligne du menu laissait du vide à droite).
+                                let chunk = rows.iter().skip(col * lines).take(lines);
+                                let col_key =
+                                    chunk.clone().map(|r| width_of(&r.0)).fold(0.0, f32::max);
+                                let col_text = chunk.map(|r| width_of(&r.1)).fold(0.0, f32::max);
+                                let col_inner = col_key + key_gap + col_text;
+                                ui.vertical(|ui| {
+                                    ui.set_width(col_inner);
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    // Rempli colonne par colonne, comme une liste.
+                                    for line in 0..lines {
+                                        let Some((key, text, menu)) = rows.get(col * lines + line)
+                                        else {
+                                            break;
+                                        };
+                                        let row = ui.horizontal(|ui| {
+                                            ui.set_min_height(ui.spacing().interact_size.y);
+                                            let key = ui.label(
+                                                egui::RichText::new(key).strong().color(accent),
+                                            );
+                                            ui.add_space(col_key - key.rect.width() + key_gap);
+                                            let text = egui::RichText::new(text);
+                                            ui.label(if *menu { text.italics() } else { text });
+                                        });
+                                        if line + 1 < lines && col * lines + line + 1 < rows.len() {
+                                            let r = row.response.rect;
+                                            ui.painter().hline(
+                                                r.left()..=r.left() + col_inner,
+                                                r.bottom(),
+                                                egui::Stroke::new(1.0, line_color),
+                                            );
                                         }
                                     }
-                                    ui.end_row();
-                                }
-                            });
+                                });
+                            }
+                        });
                     });
             });
     }
@@ -16042,6 +16073,17 @@ fn palette_row(
     .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Couleur des traits entre les lignes d'une liste (menu des suites, aide « ici ») : un
+/// poil plus claire que le fond, pour guider l'œil sans se voir.
+fn row_line_color(ui: &Ui) -> Color32 {
+    ui.visuals()
+        .widgets
+        .noninteractive
+        .bg_stroke
+        .color
+        .gamma_multiply(0.6)
+}
+
 /// Une carte de l'aide « ici » : le thème, puis une ligne par action (touches à
 /// gauche, à l'accent ; ce qu'elle fait à droite).
 fn help_here_card(
@@ -16073,7 +16115,15 @@ fn help_here_card(
                 })
                 .fold(0.0, f32::max);
             let keys_width = widest.min(ui.available_width() * 0.38);
-            for row in rows {
+            let line_color = row_line_color(ui);
+            for (i, row) in rows.iter().enumerate() {
+                // Un trait discret entre deux lignes (retour du 06/11/2026), au milieu de
+                // l'espace qui les sépare.
+                if i > 0 {
+                    let y = ui.cursor().top() - ui.spacing().item_spacing.y / 2.0;
+                    let x = ui.max_rect().x_range();
+                    ui.painter().hline(x, y, egui::Stroke::new(1.0, line_color));
+                }
                 ui.horizontal_top(|ui| {
                     ui.allocate_ui_with_layout(
                         vec2(keys_width, 0.0),
@@ -16091,7 +16141,7 @@ fn help_here_card(
                     ui.add_space(size * 0.5);
                     ui.add(egui::Label::new(egui::RichText::new(&row.label).size(size)).wrap());
                 });
-                ui.add_space(size * 0.2);
+                ui.add_space(size * 0.3);
             }
         });
 }

@@ -124,7 +124,8 @@
   classique (les deux touches marchent toujours).
 - **Menu des suites plus lisible** : chaque touche sur la ligne de son libellé, et
   l'ordre de `keys.toml` (le violet avec les autres couleurs, plus en tête à cause de
-  « ° »).
+  « ° ») ; des colonnes séparées par un trait et de l'air, chacune à sa largeur. Un trait
+  discret entre les lignes, là et dans l'aide « ici » (`?`).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
