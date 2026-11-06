@@ -18126,7 +18126,9 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::NONE,
         });
-        // Sur la deuxième vignette : la loupe y est, son 1:1 demandé.
+        // Sur la deuxième vignette : la loupe y est, son 1:1 demandé. Les vignettes
+        // d'abord (lentes à venir sur les machines de la CI).
+        run_until(&mut h, |app| app.grid_images.len() >= 2);
         let (index, rect) = h.state().grid_images[1];
         h.hover_at(rect.center());
         h.run_steps(3);
