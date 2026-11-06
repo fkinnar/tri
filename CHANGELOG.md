@@ -4,15 +4,20 @@
 
 ## Unreleased
 
-- **Stacks: pauses and slider progression** (#306): a pause longer than the folder's pace
-  moves two images apart (a change of pose in the studio often falls on one). Two new
-  sliders in the grouping window (`Ctrl+G`), remembered per folder: "Weight of pauses"
-  (to the left, content only; to the right, pauses cut more, e.g. street photography)
-  and "Slider progression" (to the left, each pixel removes the same share of the
-  stacks; above 1, a gentler start from the middle and a faster right side). Fully to the left, the strictness slider now groups everything.
-  Settings `[similarity] pause_weight`, `pause_range`, `strictness_curve`,
-  `strictness_curve_max`. The
-  window closed with Esc or `Ctrl+G` now also remembers the strictness.
+- **Stacks: pauses and slider progression** (#306): a pause longer than the folder's
+  pace moves two images apart (a change of pose in the studio often falls on one). Two
+  new sliders in the grouping window (`Ctrl+G`), remembered per folder: "Weight of
+  pauses" (to the left, content only; to the right, pauses cut more, e.g. street
+  photography) and "Slider progression" (to the left, each pixel removes the same share
+  of the stacks; above 1, a gentler start from the middle and a faster right side).
+  Fully to the left, the strictness slider now groups everything. Settings `[similarity]
+  pause_weight`, `pause_range`, `strictness_curve`, `strictness_curve_max`. The window
+  closed with Esc or `Ctrl+G` now also remembers the strictness.
+- **Comparison**: up to 21 images by default (`[gui.compare] max`, 6 before: about the
+  size of the thumbnails on a screen), and the loupe (`t` held) on the image under the
+  pointer, like in full screen.
+- **Stack filter button** in the filter bar, with stacks on: shows only the current
+  stack (`f c`), lit while looking at it, click again to see everything.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

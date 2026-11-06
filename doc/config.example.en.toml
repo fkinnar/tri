@@ -779,8 +779,8 @@ completions = 12
 [gui.compare]
 # Side-by-side comparison of the selected images (c). Maximum number of images compared
 # (beyond, the first ones): each keeps a preview, and at 1:1 its 1:1 (~100 MB of graphics
-# memory for 26 Mpx).
-max = 6
+# memory for 26 Mpx; 21 at 1:1: ~2 GB). 21: about the size of the thumbnails on a screen.
+max = 21
 # Space between the images (points).
 gap = 4.0
 # Thickness of the frame of the active image (the one being rated).
