@@ -1027,6 +1027,26 @@ de loupe, réglable à part (`[gui.zoom] loupe_key`).
 L'aide et les textes qui citent une touche la lisent dans la table en vigueur : ils
 suivent le jeu choisi.
 
+### Menu des suites (06/11/2026)
+
+Idée de l'utilisateur (refonte de l'aide : qu'un débutant trouve facilement quoi faire),
+comme **which-key** dans nvim. Un début de séquence (`<leader>`, `f`, `<leader> r`, `g`…)
+laissé sans suite `[gui] key_menu_delay_ms` (400 ms) affiche en bas de l'écran les touches
+possibles et ce qu'elles font, en colonnes ; une séquence connue, tapée d'un trait, ne
+l'affiche pas. Le menu affiché, la séquence **n'expire plus** (`Sequencer::hold`) : on a le
+temps de lire ; un sous-menu suit tout de suite (`<leader> r`). **Échap** abandonne
+(`Sequencer::cancel`), sans revenir en arrière, sauf s'il est lui-même une suite
+(`f Échap` efface les filtres). Pas de menu après une touche ambiguë (`y` avant `y )`) :
+elle agit seule après un court délai. `[gui] key_menu = false` le désactive.
+
+Tout vient de la table en vigueur (`Keymap::continuations`) : `keys.toml`, `[keys]`, jeu
+choisi, et le panneau qui a le clavier, classé comme `lookup` (`<leader> r d` développe
+depuis les images, ouvre le dossier depuis les dossiers). Plusieurs touches pour la même
+chose sont sur une ligne (`Maj+h / Maj+Flèche gauche`). Un sous-menu est nommé par la
+section `[menus]` de `keys.toml` (`"<leader> i" = "histogram"` : message
+`key-submenu-histogram` des catalogues, sinon le texte tel quel), à défaut par le thème
+le plus fréquent de ses actions. Capture : étape `keys:Ctrl+b r` de `TRI_GUI_ACTIONS`.
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les

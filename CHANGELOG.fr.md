@@ -39,6 +39,11 @@
 - **Petit histogramme** : il suit lui aussi le canal choisi (`<leader> i r`, `g`, `b`,
   `l`, `a`), plus seulement le grand. Choisir un canal n'ouvre plus le grand histogramme. Dans
   le grand histogramme, `s` change l'échelle et `c` passe au canal suivant.
+- **Menu des suites** (comme which-key dans nvim) : après le début d'une séquence
+  (`<leader>`, `f`, `<leader> r`…), un court instant sans suite affiche en bas de l'écran
+  les touches possibles et ce qu'elles font. Le menu attend alors la touche suivante sans
+  délai ; Échap l'abandonne. Réglages `[gui] key_menu` et `key_menu_delay_ms` (400 ms) ;
+  sous-menus nommés dans `keys.toml` (`[menus]`).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

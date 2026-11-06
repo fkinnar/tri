@@ -195,6 +195,10 @@ pub struct GuiSettings {
     /// Touche qui est un raccourci et le début d'un autre (`y` et `y w`) : délai d'attente
     /// de la suite (ms) avant d'agir seule.
     pub key_ambiguous_timeout_ms: u64,
+    /// Menu des suites après le début d'une séquence (comme which-key dans nvim).
+    pub key_menu: bool,
+    /// Délai avant d'afficher le menu des suites (ms).
+    pub key_menu_delay_ms: u64,
     /// Trace (`TRI_GUI_TRACE`) : une image de l'interface plus lente que ce délai (ms)
     /// est tracée avec la durée de ses étapes.
     pub trace_slow_ms: u64,
@@ -302,6 +306,8 @@ impl Default for GuiSettings {
             leader: String::new(),
             key_sequence_timeout_ms: 1000,
             key_ambiguous_timeout_ms: 300,
+            key_menu: true,
+            key_menu_delay_ms: 400,
             trace_slow_ms: 100,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
