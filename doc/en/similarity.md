@@ -52,11 +52,12 @@ double-click: back to the middle.
   (2026-10-17): 0.21, 0.16 and 0.15 (separation 0.66 to 0.77), against a fixed 0.25.
 - `with_strictness(centre, s, strictness_span)`: `centre × span^(-s)` (×3 to ÷3 by
   default).
-- `threshold_by_rank(sorted distances, centre, s, span, min)` (2026-10-25, issue #61: the
+- `threshold_by_rank(sorted distances, centre, s, curve, span, min)` (2026-10-25, issue #61: the
   strict side was pixel-sensitive, and stacks remained fully to the right): the slider
   follows the **rank** of the distances (`distances_by_rank`), not their value. In the
   middle, `centre`; towards the right, fewer and fewer links joined, in equal shares,
-  down to none; towards the left, up to `centre × span`. Simulated on six real shoots:
+  down to none; towards the left, up to `centre × span` (up to grouping everything since 2026-11-06,
+  see below). Simulated on six real shoots:
   fully to the right, 9 to 40 stacks remained with the geometric threshold, none now.
   Fewer than `min` links: `with_strictness`.
 - `folder_strictness` / `remember_strictness`: the chosen strictness, remembered for each
@@ -65,7 +66,7 @@ double-click: back to the middle.
 - `tri <folder> --groups` groups at the computed centre (`--threshold X` to force a
   threshold).
 
-## Pauses and reach to the left (2026-11-06, issue #306)
+## Pauses and slider progression (2026-11-06, issue #306)
 
 Measured on FULLTEST (570 RAF from a studio self-portrait shoot, same framing): the
 fingerprint mostly sees the background and the framing. A hand near the face barely
@@ -88,10 +89,18 @@ did not separate the poses better. On the other hand, pose changes fell on **pau
   (`folder_pauses` / `remember_pauses`, `group-pauses.tsv`):
   `pause_weight(weight, t, range)`, in the middle `[similarity] pause_weight`, fully to
   the left 0 (pauses ignored), fully to the right × `pause_range`.
-- **"Reach to the left"**: `strictness_span` can be set per folder (`folder_span` /
-  `remember_span`, `group-span.tsv`), from 1 to `strictness_span_max`. At ×3, the
-  strictness slider stopped at 0.375 on FULLTEST, below the 0.41 that would bring the
-  "arms crossed" stacks together.
+- **Slider progression** (the user's feedback: adjustable, but the left still went too
+  fast; the idea of one parameter over the whole scale is theirs): `threshold_by_rank`
+  now goes all the way to **grouping everything** fully to the left (no more "centre ×
+  span", which stopped at 0.375 on FULLTEST, below the 0.41 that would bring the "arms
+  crossed" stacks together). Between the centre and each end, the number of stacks (cut
+  links + 1) follows a **power mean of order λ** (`strictness_curve`, 2 by default):
+  λ = 1, in equal shares; above, gentler to the left and faster to the right. On
+  FULLTEST (123 stacks at the centre), at -0.2 / -0.6 / -0.9: 99 / 50 / 14 stacks at
+  λ = 1, 110 / 78 / 39 at λ = 2. **"Slider progression"** slider of the `Ctrl+G` window,
+  remembered per folder (`folder_curve` / `remember_curve`, `group-curve.tsv`), from
+  1 / `strictness_curve_max` to `strictness_curve_max`. `strictness_span` now only
+  serves folders with too few images (`with_strictness`).
 - `tri <folder> --groups` also shows the distance with the pause, and groups with it.
 
 ## Chosen covers

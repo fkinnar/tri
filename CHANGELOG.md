@@ -4,12 +4,14 @@
 
 ## Unreleased
 
-- **Stacks: pauses and reach to the left** (#306): a pause longer than the folder's pace
+- **Stacks: pauses and slider progression** (#306): a pause longer than the folder's pace
   moves two images apart (a change of pose in the studio often falls on one). Two new
   sliders in the grouping window (`Ctrl+G`), remembered per folder: "Weight of pauses"
   (to the left, content only; to the right, pauses cut more, e.g. street photography)
-  and "Reach to the left" (how far the strictness slider groups fully to the left).
-  Settings `[similarity] pause_weight`, `pause_range`, `strictness_span_max`. The
+  and "Slider progression" (above 1, the strictness moves more gently to the left and
+  faster to the right). Fully to the left, the strictness slider now groups everything.
+  Settings `[similarity] pause_weight`, `pause_range`, `strictness_curve`,
+  `strictness_curve_max`. The
   window closed with Esc or `Ctrl+G` now also remembers the strictness.
 
 ## 1.0.0-alpha.8 — 2026-11-05

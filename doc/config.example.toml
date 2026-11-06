@@ -438,15 +438,21 @@ auto_min_links = 8
 auto_separation = 0.5
 # Bornes du centre calculé : entre threshold / auto_range et threshold × auto_range.
 auto_range = 2.0
-# Étendue du curseur des piles, à fond à gauche (plus souple, grandes piles) : le seuil
-# est multiplié par cette valeur. Vers la droite, le curseur suit le rang des distances du
-# dossier jusqu'à ne plus faire aucune pile (trop peu d'images : seuil divisé par cette
-# valeur). La sévérité choisie est retenue pour chaque dossier. Réglable aussi pour un
-# dossier, curseur « Étendue à gauche » de la fenêtre de regroupement (Ctrl+G).
+# Curseur des piles quand le dossier a trop peu d'images pour suivre le rang des
+# distances : à fond à gauche, le seuil est multiplié par cette valeur ; à fond à
+# droite, divisé.
 strictness_span = 3.0
-# Haut du curseur « Étendue à gauche » : plus grande valeur de strictness_span réglable
-# pour un dossier.
-strictness_span_max = 10.0
+# Progression du curseur des piles (lambda) : il suit le rang des distances du dossier,
+# du centre (calculé) jusqu'à tout regrouper à fond à gauche et ne plus faire aucune
+# pile à fond à droite ; le nombre de piles suit entre les deux une moyenne de puissance
+# lambda. 1 : régulière en nombre de piles ; au-delà, plus douce vers la gauche (grandes
+# piles) et plus rapide vers la droite. Réglable aussi pour un dossier, curseur
+# « Progression du curseur » de la fenêtre de regroupement (Ctrl+G). La sévérité choisie
+# est retenue pour chaque dossier.
+strictness_curve = 2.0
+# Bornes du curseur « Progression du curseur » : de 1 / strictness_curve_max à
+# strictness_curve_max.
+strictness_curve_max = 4.0
 # Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
 # groupées (secondes ; 0 : sans limite).
 max_gap_s = 60.0

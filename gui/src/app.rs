@@ -720,9 +720,9 @@ pub struct TriApp {
     /// Importance des pauses (-1 : ignorées, 0 : `[similarity] pause_weight`, 1 : ×
     /// `pause_range`), curseur de la fenêtre de regroupement, retenue par dossier.
     group_pauses: f32,
-    /// Étendue à gauche du curseur des piles (`[similarity] strictness_span` par défaut),
-    /// curseur de la fenêtre de regroupement, retenue par dossier.
-    group_span: f32,
+    /// Progression du curseur des piles (λ, `[similarity] strictness_curve` par
+    /// défaut), curseur de la fenêtre de regroupement, retenue par dossier.
+    group_curve: f32,
     /// Filtre « pile courante » (`f c`, issue n° 52) : les images de la pile gardée.
     stack_only: Option<HashSet<PathBuf>>,
     /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
@@ -1265,7 +1265,7 @@ impl TriApp {
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
             group_pauses: 0.0,
-            group_span: settings.similarity.strictness_span,
+            group_curve: settings.similarity.strictness_curve,
             group_distances: Vec::new(),
             stack_only: None,
             stack_only_unfolded: Vec::new(),
@@ -1766,11 +1766,11 @@ impl TriApp {
                     .data_dir()
                     .and_then(|d| tri::similarity::folder_pauses(&d, &folder.dir))
                     .unwrap_or(0.0);
-                self.group_span = self
+                self.group_curve = self
                     .settings
                     .data_dir()
-                    .and_then(|d| tri::similarity::folder_span(&d, &folder.dir))
-                    .unwrap_or(self.settings.similarity.strictness_span);
+                    .and_then(|d| tri::similarity::folder_curve(&d, &folder.dir))
+                    .unwrap_or(self.settings.similarity.strictness_curve);
                 self.blur_strictness = self
                     .settings
                     .data_dir()
@@ -4914,7 +4914,8 @@ impl TriApp {
             &self.group_distances,
             self.group_centre,
             self.group_strictness,
-            self.group_span,
+            self.group_curve,
+            s.strictness_span,
             s.auto_min_links,
         )
     }
@@ -4929,7 +4930,7 @@ impl TriApp {
         }
     }
 
-    /// Retient l'importance des pauses et l'étendue à gauche pour le dossier ouvert
+    /// Retient l'importance des pauses et la progression du curseur pour le dossier ouvert
     /// (oubliées à leur valeur par défaut).
     fn remember_group_tuning(&self) {
         if let Some(data) = self.settings.data_dir()
@@ -4938,9 +4939,9 @@ impl TriApp {
             let dir = &self.folder.dir;
             let pauses = (self.group_pauses != 0.0).then_some(self.group_pauses);
             let _ = tri::similarity::remember_pauses(&data, dir, pauses);
-            let span = (self.group_span != self.settings.similarity.strictness_span)
-                .then_some(self.group_span);
-            let _ = tri::similarity::remember_span(&data, dir, span);
+            let curve = (self.group_curve != self.settings.similarity.strictness_curve)
+                .then_some(self.group_curve);
+            let _ = tri::similarity::remember_curve(&data, dir, curve);
         }
     }
 
@@ -13394,16 +13395,17 @@ impl TriApp {
         }
         let at = ctx.content_rect().center() - vec2(200.0, 160.0);
         let default_gap = self.settings.similarity.max_gap_s;
-        let default_span = self.settings.similarity.strictness_span;
-        let max_span = self
+        let default_curve = self.settings.similarity.strictness_curve;
+        let max_curve = self
             .settings
             .similarity
-            .strictness_span_max
-            .max(default_span);
+            .strictness_curve_max
+            .max(default_curve)
+            .max(1.0);
         let mut reset = false;
         let (mut strictness, mut gap, mut stacking) =
             (self.group_strictness, self.group_gap, self.stacking);
-        let (mut pauses, mut span) = (self.group_pauses, self.group_span);
+        let (mut pauses, mut curve) = (self.group_pauses, self.group_curve);
         let threshold = t!(
             "groups-threshold-value",
             threshold = format!("{:.2}", self.group_threshold()),
@@ -13442,18 +13444,19 @@ impl TriApp {
                 ui.weak(threshold);
                 ui.weak(t!("groups-threshold-tip"));
                 ui.add_space(4.0);
-                ui.label(t!("groups-span"));
+                ui.label(t!("groups-curve"));
                 if ui
                     .add(
-                        egui::Slider::new(&mut span, 1.0..=max_span)
-                            .step_by(0.1)
-                            .prefix("× "),
+                        // Sans pas : un pas compté depuis 1 / max décalait la valeur
+                        // retenue à la seule ouverture de la fenêtre.
+                        egui::Slider::new(&mut curve, 1.0 / max_curve..=max_curve)
+                            .fixed_decimals(1),
                     )
                     .double_clicked_slider(ui)
                 {
-                    span = default_span;
+                    curve = default_curve;
                 }
-                ui.weak(t!("groups-span-tip"));
+                ui.weak(t!("groups-curve-tip"));
                 ui.add_space(4.0);
                 ui.label(t!("groups-pauses"));
                 ui.horizontal(|ui| {
@@ -13503,20 +13506,20 @@ impl TriApp {
         if reset {
             strictness = 0.0;
         }
-        if (strictness, gap, stacking, pauses, span)
+        if (strictness, gap, stacking, pauses, curve)
             != (
                 self.group_strictness,
                 self.group_gap,
                 self.stacking,
                 self.group_pauses,
-                self.group_span,
+                self.group_curve,
             )
         {
             self.group_strictness = strictness;
             self.group_gap = gap;
             self.stacking = stacking;
             self.group_pauses = pauses;
-            self.group_span = span;
+            self.group_curve = curve;
             self.stacks_dirty = true;
         }
         if modal.should_close() {
@@ -20504,10 +20507,11 @@ mod tests {
     }
 
     #[test]
-    fn pauses_and_reach_to_the_left_tune_the_stacks() {
+    fn pauses_and_progression_tune_the_stacks() {
         // Six images de même contenu, à peine différentes d'une voisine à l'autre ; prises
         // à 1 s d'intervalle, avec une pause de 30 s au milieu (#306).
         let names = ["a1.jpg", "a2.jpg", "a3.jpg", "b1.jpg", "b2.jpg", "b3.jpg"];
+        // Distances toutes différentes (1 à 5 bits de composition : 0,008 à 0,039).
         let img = image::RgbImage::from_pixel(8, 8, image::Rgb([90, 90, 90]));
         let (mut h, dir) = harness_images(names.iter().map(|n| (*n, img.clone())).collect());
         h.state_mut().stacking = true;
@@ -20515,9 +20519,8 @@ mod tests {
         h.state_mut().settings.similarity.threshold = 0.05;
         let files = h.state().files.clone();
         for (i, f) in files.iter().enumerate() {
-            // 4 bits de composition de plus à chaque image : distance 0,031 entre voisines.
             let sig = tri::similarity::Signature {
-                shape: (1u64 << (4 * i)) - 1,
+                shape: (1u64 << (i * (i + 1) / 2)) - 1,
                 colors: [90; 48],
                 time: Some(i as i64 + if i >= 3 { 30 } else { 0 }),
             };
@@ -20537,18 +20540,28 @@ mod tests {
         assert_eq!(stacks(&mut h), 2, "pauses importantes : coupées");
         h.state_mut().group_pauses = -1.0;
         assert_eq!(stacks(&mut h), 1, "pauses ignorées");
-        // Étendue à gauche : à fond à gauche, le seuil du centre × l'étendue.
+        // Progression : à fond à gauche, tout ensemble quelle qu'elle soit (#306) ; à
+        // mi-chemin, plus douce (moins de liens joints) au-delà de 1.
+        h.state_mut().settings.similarity.auto_min_links = 2;
+        h.state_mut().settings.similarity.threshold = 0.001;
+        assert_eq!(stacks(&mut h), 0, "au centre : aucune pile");
         h.state_mut().group_strictness = -1.0;
-        h.state_mut().settings.similarity.threshold = 0.01;
-        h.state_mut().group_span = 2.0;
-        assert_eq!(stacks(&mut h), 0, "0,02 : plus aucune pile");
-        h.state_mut().group_span = 4.0;
-        assert_eq!(stacks(&mut h), 1, "0,04 : tout ensemble");
+        h.state_mut().group_curve = 4.0;
+        assert_eq!(stacks(&mut h), 1, "à fond à gauche : tout ensemble");
+        h.state_mut().group_strictness = -0.5;
+        let steep = h.state().group_threshold();
+        h.state_mut().group_curve = 1.0;
+        assert!(
+            h.state().group_threshold() > steep,
+            "λ = 1 : plus de liens joints"
+        );
+        h.state_mut().group_strictness = -1.0;
+        h.state_mut().group_curve = 3.0;
         // La fenêtre (Ctrl+G) montre les deux curseurs ; à sa fermeture, retenus pour le
         // dossier.
         press(&mut h, Key::G, Modifiers::CTRL);
         h.run_steps(2);
-        for label in [t!("groups-pauses"), t!("groups-span")] {
+        for label in [t!("groups-pauses"), t!("groups-curve")] {
             assert!(h.query_by_label_contains(&label).is_some(), "{label}");
         }
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -20562,7 +20575,7 @@ mod tests {
             Some(-1.0),
             "la sévérité aussi, fermée au clavier"
         );
-        assert_eq!(tri::similarity::folder_span(&data, &folder), Some(4.0));
+        assert_eq!(tri::similarity::folder_curve(&data, &folder), Some(3.0));
         drop(dir);
     }
 

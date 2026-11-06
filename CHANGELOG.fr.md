@@ -4,13 +4,14 @@
 
 ## Non publié
 
-- **Piles : pauses et étendue à gauche** (#306) : une pause plus longue que la cadence
+- **Piles : pauses et progression du curseur** (#306) : une pause plus longue que la cadence
   du dossier éloigne deux images (en studio, un changement de pose tombe souvent sur une
   pause). Deux nouveaux curseurs dans la fenêtre de regroupement (`Ctrl+G`), retenus par
   dossier : « Importance des pauses » (à gauche, le contenu seul ; à droite, les pauses
-  coupent davantage, en photo de rue par exemple) et « Étendue à gauche » (jusqu'où le
-  curseur de sévérité regroupe à fond à gauche). Réglages `[similarity] pause_weight`,
-  `pause_range`, `strictness_span_max`. Fermée par Échap ou `Ctrl+G`, la fenêtre retient
+  coupent davantage, en photo de rue par exemple) et « Progression du curseur » (au-delà
+  de 1, la sévérité avance plus doucement vers la gauche et plus vite vers la droite). À
+  fond à gauche, le curseur de sévérité regroupe désormais tout. Réglages
+  `[similarity] pause_weight`, `pause_range`, `strictness_curve`, `strictness_curve_max`. Fermée par Échap ou `Ctrl+G`, la fenêtre retient
   aussi la sévérité.
 
 ## 1.0.0-alpha.8 — 05/11/2026
