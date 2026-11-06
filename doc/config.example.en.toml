@@ -785,6 +785,10 @@ help_here_column = 420.0
 # Command palette (Ctrl+Shift+P, : in vim): width in points, most lines shown.
 palette_width = 640.0
 palette_max = 40
+# Palette prefixes: ">" only searches the actions (as in VS Code), "?" only the settings;
+# alone, they list everything. Empty: none.
+palette_actions_prefix = ">"
+palette_settings_prefix = "?"
 # During a wait (copy, network lookup, key sequence…), interval between two frames to see
 # how far it has got, in milliseconds.
 poll_ms = 100

@@ -294,7 +294,7 @@ place-metadata = Panneau des métadonnées
 help-here-title = Raccourcis ici : { $place }
 help-here-footer = { $help } : toutes les actions, avec recherche · { $leader } = { $keys } (une pause après une touche montre la suite) · Échap ou clic : fermer
 palette-title = Palette de commandes
-palette-hint = Une action ou un réglage…
+palette-hint = Une action ou un réglage…  ({ $actions } actions seulement, { $settings } réglages seulement)
 palette-empty = Rien trouvé
 palette-action = action
 palette-setting = réglage

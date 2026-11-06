@@ -67,6 +67,10 @@
   couleur, drapeau), en plus de « Ordre suivant » : dans la palette (« tri nom »), sans
   raccourci par défaut (à poser dans `[keys]`). La palette gagne un titre et un champ plus
   aéré.
+- **Préfixes de la palette** : `>` ne cherche que les actions (comme dans VS Code), `?`
+  que les réglages ; seul, le préfixe les liste tous. Réglables :
+  `[gui.dialogs] palette_actions_prefix`, `palette_settings_prefix`. La palette prend
+  l'aspect des autres boîtes (couleurs, marges, titre, croix).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

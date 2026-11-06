@@ -1037,7 +1037,13 @@ keys: shortcuts are learnt along the way, and actions without a shortcut become 
 from the keyboard. Settings `[gui.dialogs] palette_width`, `palette_max`. Maybe later:
 toggle a yes / no right in the palette. Feedback of the same day: a title, a roomier
 field, and actions that were missing to be found there: **Sort by…**
-(`core.filter.sort_by.<key>`, one per order, without a default shortcut).
+(`core.filter.sort_by.<key>`, one per order, without a default shortcut). Then
+**prefixes** (the user's idea): `>` only searches the actions (as in VS Code), `?` only
+the settings; alone, the prefix lists everything, in the order of the help or of the
+file, to browse (`palette::split_prefix`, `Only`; `[gui.dialogs] palette_actions_prefix`
+and `palette_settings_prefix`, one character, empty: none). The field's grey hint
+recalls them. The palette is drawn in the common dialog frame (`modal_at`, `Dialog`:
+colours, margins, title and cross like the others).
 
 ### Shortcut review (2026-11-06, issue #280)
 
