@@ -840,6 +840,11 @@ pub struct TriApp {
     /// Loupe : touche maintenue depuis…, et loupe affichée.
     loupe_since: Option<Instant>,
     loupe_on: bool,
+    /// Loupe placée au clavier (touches de navigation, la touche de loupe maintenue) :
+    /// l'image et le point visé, relatif à l'image (0 à 1) ; `None` : sous le pointeur.
+    loupe_point: Option<(usize, Vec2)>,
+    /// Cadre de chaque image où la loupe peut se poser (pour la déplacer au clavier).
+    loupe_rects: HashMap<usize, Rect>,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1330,6 +1335,8 @@ impl TriApp {
             fit_scale: 1.0,
             loupe_since: None,
             loupe_on: false,
+            loupe_point: None,
+            loupe_rects: HashMap::new(),
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
@@ -5976,6 +5983,10 @@ impl TriApp {
                 }
                 continue;
             }
+            // Loupe maintenue : les flèches (hjkl) la déplacent au lieu de changer d'image.
+            if self.loupe_key_move(ctx, action) {
+                continue;
+            }
             // Palette de commandes : Échap ou sa touche la ferment ; le reste est pour elle
             // (son champ, ses flèches).
             if self.palette.is_some() {
@@ -9303,6 +9314,64 @@ impl TriApp {
         }
     }
 
+    /// Loupe au clavier (idée de l'utilisateur, 06/11/2026) : la touche de loupe
+    /// maintenue, une touche de navigation la déplace d'un pas, une touche de défilement
+    /// (avec Maj) d'un grand pas. Vrai si l'action est prise ainsi.
+    fn loupe_key_move(&mut self, ctx: &egui::Context, action: Action) -> bool {
+        let (dx, dy, large) = match action {
+            Action::NavPrev => (-1.0, 0.0, false),
+            Action::NavNext => (1.0, 0.0, false),
+            Action::NavUp => (0.0, -1.0, false),
+            Action::NavDown => (0.0, 1.0, false),
+            Action::PanLeft => (-1.0, 0.0, true),
+            Action::PanRight => (1.0, 0.0, true),
+            Action::PanUp => (0.0, -1.0, true),
+            Action::PanDown => (0.0, 1.0, true),
+            _ => return false,
+        };
+        let loupe = self.keymap.loupe();
+        if self.mode == Mode::Grid || self.zoom.is_some() || !ctx.input(|i| loupe.held(i)) {
+            return false;
+        }
+        // L'image sous la loupe (comparaison : celle visée), sinon l'image affichée.
+        let index = if self.loupe_on {
+            self.loupe_index
+        } else {
+            self.selected
+        };
+        let Some(&rect) = self.loupe_rects.get(&index) else {
+            return true;
+        };
+        // Départ : sous le pointeur s'il est sur l'image, sinon au centre.
+        let start = self
+            .loupe_point
+            .filter(|(i, _)| *i == index)
+            .map(|(_, p)| p)
+            .or_else(|| {
+                ctx.input(|i| i.pointer.hover_pos())
+                    .filter(|p| rect.contains(*p))
+                    .map(|p| view::relative(rect, p))
+            })
+            .unwrap_or(vec2(0.5, 0.5));
+        let z = &self.gui.zoom;
+        let step = if large {
+            z.loupe_step_large
+        } else {
+            z.loupe_step
+        };
+        let moved = start
+            + vec2(
+                dx * step / rect.width().max(1.0),
+                dy * step / rect.height().max(1.0),
+            );
+        self.loupe_point = Some((
+            index,
+            vec2(moved.x.clamp(0.0, 1.0), moved.y.clamp(0.0, 1.0)),
+        ));
+        ctx.request_repaint();
+        true
+    }
+
     /// Loupe (décidé le 18/10/2026) : en vue ajustée, tant que la touche de
     /// `[gui.zoom] loupe_key` est maintenue (après `loupe_delay_ms`), l'image à
     /// `loupe_scale` (100 %) sous le pointeur, dans un carré ; le 1:1 est chargé pour
@@ -9317,11 +9386,23 @@ impl TriApp {
         let z = self.gui.zoom.clone();
         let loupe = self.keymap.loupe();
         let held = ctx.input(|i| loupe.held(i));
+        // La souris qui bouge reprend la loupe au clavier.
+        if !held || ctx.input(|i| i.pointer.delta() != Vec2::ZERO) {
+            self.loupe_point = None;
+        }
+        if let Some(r) = image_rect {
+            self.loupe_rects.insert(index, r);
+        }
         let pointer = ctx.input(|i| i.pointer.hover_pos());
-        let over = match (image_rect, pointer) {
+        let keyboard = self
+            .loupe_point
+            .filter(|(i, _)| *i == index)
+            .zip(image_rect)
+            .map(|((_, rel), r)| (r, r.min + vec2(rel.x * r.width(), rel.y * r.height())));
+        let over = keyboard.or(match (image_rect, pointer) {
             (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
             _ => None,
-        };
+        });
         if !held || self.zoom.is_some() || over.is_none() {
             self.loupe_since = None;
             self.loupe_on = false;
@@ -17944,6 +18025,49 @@ mod tests {
         }
         assert!(seen.len() >= 2, "loupe sur plusieurs images : {seen:?}");
         assert_eq!(selected_name(&h), "c.jpg", "l'image active ne change pas");
+    }
+
+    #[test]
+    fn the_held_loupe_moves_with_the_navigation_keys() {
+        // Idée de l'utilisateur, 06/11/2026 : m + flèches (hjkl en vim) déplace la loupe,
+        // avec Maj d'un grand pas, sans changer d'image.
+        let (mut h, _dir) = harness_with(640, 480);
+        h.run_steps(3);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(5);
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        h.event(UiEvent::Key {
+            key: Key::M,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(3);
+        let selected = h.state().selected;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, selected, "pas d'image suivante");
+        let (_, first) = h.state().loupe_point.expect("placée au clavier");
+        assert!(first.x > 0.5 && (first.y - 0.5).abs() < 1e-3, "{first:?}");
+        press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
+        let (_, second) = h.state().loupe_point.unwrap();
+        assert!(
+            second.x - first.x > (first.x - 0.5) * 3.0,
+            "grand pas : {second:?}"
+        );
+        assert!(h.state().loupe_on, "la loupe est là, au point visé");
+        // Touche relâchée : les flèches changent d'image de nouveau.
+        h.event(UiEvent::Key {
+            key: Key::M,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_ne!(h.state().selected, selected);
+        assert!(h.state().loupe_point.is_none());
     }
 
     #[test]

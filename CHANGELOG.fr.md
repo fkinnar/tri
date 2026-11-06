@@ -89,6 +89,9 @@
 - **Bulle de la revue des développements** : elle cite les touches du jeu choisi (`h` /
   `l` en vim, plus « ← / → » écrit en dur) et `( (` pour déplier une photo, au lieu de
   touches qui n'existaient plus.
+- **Loupe au clavier** : la touche de loupe maintenue (`m`), les flèches (`hjkl` en vim)
+  la déplacent sans changer d'image, avec Maj d'un grand pas ; bouger la souris la rend
+  au pointeur. Pas réglables : `[gui.zoom] loupe_step`, `loupe_step_large`.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
