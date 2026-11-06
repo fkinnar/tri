@@ -510,7 +510,7 @@ profile = "classic"
 # le panneau de gauche / de droite, o pour le suivant. Le panneau qui a le clavier passe
 # ses touches d'abord (dossiers : flèches / hjkl, Entrée ouvre ; métadonnées : défiler,
 # y copie) ; les autres gardent leur effet ; Échap rend le clavier aux images. Le leader
-# puis b : signaler un problème (formulaire de GitHub prérempli). Vide : celui des
+# puis ? : signaler un problème (formulaire de GitHub prérempli). Vide : celui des
 # raccourcis par défaut (keys.toml, livré avec le programme : Ctrl+b, comme tmux).
 leader = ""
 # Délai maximal entre deux touches d'une séquence (ms), comme le timeoutlen de vim : « gg »
@@ -519,6 +519,13 @@ key_sequence_timeout_ms = 1000
 # Touche qui est un raccourci et le début d'un autre (y copie, y w copie la pile) : délai
 # d'attente de la suite (ms) avant d'agir seule.
 key_ambiguous_timeout_ms = 300
+# Menu des suites (comme which-key dans nvim) : après le début d'une séquence (le leader,
+# f, <leader> r…), la liste des touches possibles et de ce qu'elles font. Le menu affiché,
+# la séquence attend la suite sans délai ; Échap l'abandonne.
+key_menu = true
+# Délai avant d'afficher le menu des suites (ms) : tapée d'un trait, une séquence connue ne
+# l'affiche pas.
+key_menu_delay_ms = 400
 # Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
 # tracée avec la durée de ses étapes.
 trace_slow_ms = 100

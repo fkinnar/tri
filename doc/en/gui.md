@@ -971,6 +971,27 @@ rather than shortcuts: Enter validates a field, Tab completes a path, Up / Down 
 a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). The help and the texts that mention a key read it from the table in
 effect: they follow the chosen set.
 
+### Menu of continuations (2026-11-06)
+
+The user's idea (help redesign: a newcomer should easily find what to do), like
+**which-key** in nvim. A started sequence (`<leader>`, `f`, `<leader> r`, `g`…) left
+without a next key for `[gui] key_menu_delay_ms` (400 ms) shows the possible keys and
+what they do at the bottom of the screen, in columns; a known sequence typed in one go
+does not show it. While the menu is shown, the sequence **no longer expires**
+(`Sequencer::hold`): there is time to read; a sub-menu follows at once (`<leader> r`).
+**Esc** abandons (`Sequencer::cancel`) without going back, unless it is itself a
+continuation (`f Esc` clears the filters). No menu after an ambiguous key (`y` before
+`y )`): it acts alone after a short delay. `[gui] key_menu = false` turns it off.
+
+Everything comes from the keymap in force (`Keymap::continuations`): `keys.toml`,
+`[keys]`, the chosen set, and the panel that has the keyboard, ranked like `lookup`
+(`<leader> r d` develops from the images, opens the folder from the folders). Several
+keys for the same thing share a line (`Shift+h / Shift+Left`). A sub-menu is named by
+the `[menus]` section of `keys.toml` (`"<leader> i" = "histogram"`: message
+`key-submenu-histogram` of the catalogues, otherwise the text as is), failing that by
+the most frequent theme of its actions. Screenshot: step `keys:Ctrl+b r` of
+`TRI_GUI_ACTIONS`.
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys

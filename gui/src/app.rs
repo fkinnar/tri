@@ -5954,12 +5954,41 @@ impl TriApp {
         // Touche ambiguë (`y` avant `y w`) restée sans suite : son action, d'abord.
         let mut actions: Vec<Action> = self.sequencer.expire(now).into_iter().collect();
         for (chord, repeated) in chords {
+            // Échap dans le menu des suites : abandonne la séquence, sans revenir en arrière
+            // (comme dans which-key), sauf s'il en est une suite (`f Échap`).
+            let escape = crate::actions::Chord::key(egui::Key::Escape);
+            if chord == escape
+                && self.sequencer.is_held()
+                && let Some((prefix, _)) = self.sequencer.prefix(now)
+                && !self
+                    .keymap
+                    .continuations(prefix)
+                    .iter()
+                    .any(|n| n.chord == escape)
+            {
+                self.sequencer.cancel();
+                continue;
+            }
             let fed = self.sequencer.feed(&self.keymap, chord, now);
             // Touche tenue : seules les actions faites pour se répéter (#160).
             actions.extend(fed.into_iter().filter(|a| !repeated || a.repeats()));
         }
         if let Some(at) = self.sequencer.deadline() {
             ctx.request_repaint_after(at.saturating_duration_since(now));
+        }
+        // Menu des suites, après un court délai (une séquence tapée d'un trait ne l'affiche
+        // pas) : la séquence attend alors sans délai la touche suivante.
+        if self.gui.key_menu
+            && !self.sequencer.is_held()
+            && let Some((_, since)) = self.sequencer.prefix(now)
+        {
+            let at = since + Duration::from_millis(self.gui.key_menu_delay_ms);
+            if now >= at {
+                self.sequencer.hold();
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(at - now);
+            }
         }
         for action in actions {
             // Regroupement : Échap ou Ctrl+G ferme.
@@ -12938,6 +12967,16 @@ impl TriApp {
                         window.show_section(&section);
                     }
                 }
+                Step::Keys(chords) => {
+                    let now = Instant::now();
+                    let focus = self.effective_focus();
+                    self.keymap.set_focus(focus);
+                    for chord in chords {
+                        for action in self.sequencer.feed(&self.keymap, chord, now) {
+                            self.perform(ctx, action);
+                        }
+                    }
+                }
                 Step::Search(text) => {
                     if let Some(window) = &mut self.settings_window {
                         window.search(&text);
@@ -13745,6 +13784,107 @@ impl TriApp {
         }
     }
 
+    /// Menu des suites (comme which-key dans nvim) : la séquence commencée, tenue par le
+    /// séquenceur, et chaque touche possible avec ce qu'elle fait ; un sous-menu
+    /// (`<leader> r`) est nommé d'après son thème. En bas, au centre, en colonnes.
+    fn key_menu(&mut self, ctx: &egui::Context) {
+        if !self.sequencer.is_held() {
+            return;
+        }
+        let Some((prefix, _)) = self.sequencer.prefix(Instant::now()) else {
+            return;
+        };
+        let title = self.keymap.prefix_label(prefix);
+        let next = self.keymap.continuations(prefix);
+        let accent = crate::marks::accent_mark(ctx);
+        let mut rows: Vec<(String, String, bool)> = Vec::new();
+        for n in &next {
+            let menu = n
+                .menu
+                .as_ref()
+                .map(|m| t!("key-menu-more", group = m.as_str()));
+            let text = match (n.action, menu) {
+                (Some(a), Some(m)) => format!("{}  {m}", a.label()),
+                (Some(a), None) => a.label(),
+                (None, Some(m)) => m,
+                (None, None) => String::new(),
+            };
+            // Plusieurs touches pour la même chose (Maj+h, Maj+Flèche gauche) : une ligne.
+            match rows.iter_mut().find(|r| r.1 == text) {
+                Some(row) => {
+                    row.0.push_str(" / ");
+                    row.0.push_str(&n.key);
+                }
+                None => rows.push((n.key.clone(), text, n.action.is_none())),
+            }
+        }
+        let font = egui::TextStyle::Body.resolve(&ctx.global_style());
+        let width_of = |text: &str| {
+            ctx.fonts_mut(|f| {
+                f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE)
+                    .size()
+                    .x
+            })
+        };
+        let key_width = rows.iter().map(|r| width_of(&r.0)).fold(0.0, f32::max);
+        let text_width = rows.iter().map(|r| width_of(&r.1)).fold(0.0, f32::max);
+        let gap = 24.0;
+        let column = key_width + 12.0 + text_width + gap;
+        let room = ctx.content_rect().width() * 0.9;
+        let columns = ((room / column).floor() as usize).clamp(1, rows.len().max(1));
+        let lines = rows.len().div_ceil(columns);
+        egui::Area::new(egui::Id::unique("key_menu"))
+            .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0))
+            .order(egui::Order::Foreground)
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(&title).strong().color(accent));
+                            ui.weak(t!("key-menu-cancel"));
+                        });
+                        ui.separator();
+                        if rows.is_empty() {
+                            ui.weak(t!("key-menu-empty"));
+                        }
+                        egui::Grid::new("key_menu_grid")
+                            .num_columns(columns * 2)
+                            .spacing(vec2(12.0, 4.0))
+                            .show(ui, |ui| {
+                                for line in 0..lines {
+                                    for col in 0..columns {
+                                        // Rempli colonne par colonne, comme une liste.
+                                        match rows.get(col * lines + line) {
+                                            Some((key, text, menu)) => {
+                                                ui.label(
+                                                    egui::RichText::new(key).strong().color(accent),
+                                                );
+                                                let text = egui::RichText::new(text);
+                                                let text =
+                                                    if *menu { text.italics() } else { text };
+                                                ui.allocate_ui_with_layout(
+                                                    vec2(text_width + gap, 0.0),
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| ui.label(text),
+                                                );
+                                            }
+                                            None => {
+                                                ui.label("");
+                                                ui.label("");
+                                            }
+                                        }
+                                    }
+                                    ui.end_row();
+                                }
+                            });
+                    });
+            });
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -14335,6 +14475,7 @@ impl eframe::App for TriApp {
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         self.position_mark(&ctx, center.response.rect);
         self.end_mark(&ctx, center.response.rect);
+        self.key_menu(&ctx);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -14403,6 +14544,9 @@ enum Step {
     Settings(String),
     /// Taper dans la recherche de la boîte ouverte, réglages ou aide (`search:vim`).
     Search(String),
+    /// Taper des touches, comme au clavier (`keys:Ctrl+b r`, écrites comme dans
+    /// `keys.toml`) : séquences et menu des suites compris.
+    Keys(Vec<crate::actions::Chord>),
 }
 
 fn startup_actions() -> Vec<Step> {
@@ -14430,6 +14574,9 @@ fn parse_actions(list: &str) -> Vec<Step> {
                 None if id.starts_with("search:") => {
                     Some(Step::Search(id["search:".len()..].to_string()))
                 }
+                None if id.starts_with("keys:") => crate::actions::parse_keys(&id["keys:".len()..])
+                    .ok()
+                    .map(Step::Keys),
                 None => Action::from_id(id).map(Step::Do),
             };
             if step.is_none() {
@@ -15654,6 +15801,30 @@ mod tests {
                 .with_leader("Ctrl+b")
                 .unwrap()
                 .with_loupe(crate::settings::LoupeKey::Key(Key::M));
+    }
+
+    #[test]
+    fn the_key_menu_holds_the_sequence_and_escape_cancels_it() {
+        let (mut h, _dir) = harness();
+        h.state_mut().gui.key_menu_delay_ms = 0;
+        act(&mut h, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        leader(&mut h, &[]);
+        assert!(h.state().sequencer.is_held(), "menu affiché");
+        let held = h
+            .state()
+            .sequencer
+            .prefix(Instant::now())
+            .map(|(p, _)| p.len());
+        assert_eq!(held, Some(1));
+        // Échap abandonne la séquence sans quitter le plein écran.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(!h.state().sequencer.is_held());
+        assert_eq!(h.state().mode, Mode::View);
+        // Désactivé : pas de menu.
+        h.state_mut().gui.key_menu = false;
+        leader(&mut h, &[]);
+        assert!(!h.state().sequencer.is_held());
     }
 
     #[test]

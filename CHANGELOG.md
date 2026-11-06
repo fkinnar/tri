@@ -37,6 +37,11 @@
 - **Small histogram** follows the chosen channel too (`<leader> i r`, `g`, `b`, `l`, `a`),
   not only the large one. Choosing a channel no longer opens the large histogram. In
   the large histogram, `s` changes the scale and `c` goes to the next channel.
+- **Menu of continuations** (like which-key in nvim): after the start of a sequence
+  (`<leader>`, `f`, `<leader> r`…), a short moment without a next key shows the possible
+  keys and what they do at the bottom of the screen. The menu then waits for the next
+  key without a delay; Esc abandons it. Settings `[gui] key_menu` and
+  `key_menu_delay_ms` (400 ms); sub-menus named in `keys.toml` (`[menus]`).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

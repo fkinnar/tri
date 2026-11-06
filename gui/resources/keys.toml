@@ -448,3 +448,21 @@ loupe = "m"
 "core.view.peaking_color" = ["p c"]
 "core.view.sharpness_lenient" = ["p j", "p Down"]
 "core.view.sharpness_strict" = ["p k", "p Up"]
+
+# Names of the sub-menus in the menu of continuations (shown after a moment when a
+# sequence is started, like which-key in nvim): "keys" = "name". The keys start with
+# "<leader>" for those typed after the panel prefix. The name is one of those known to
+# tri (translated: filters, histogram, peaking, render, stack-open, stack-close, quit,
+# go, copy, delete), or your own text. Without a name, the menu shows the theme of most
+# of its actions.
+[menus]
+"f" = "filters"
+"(" = "stack-open"
+")" = "stack-close"
+"q" = "quit"
+"g" = "go"
+"y" = "copy"
+"d" = "delete"
+"<leader> i" = "histogram"
+"<leader> p" = "peaking"
+"<leader> r" = "render"

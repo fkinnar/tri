@@ -512,7 +512,7 @@ profile = "classic"
 # the left / right panel, o for the next one. The panel that has the keyboard handles
 # its keys first (folders: arrows / hjkl, Enter opens; metadata: scroll,
 # y copies); the others keep their effect; Esc gives the keyboard back to the images. The
-# leader then b: report a problem (prefilled GitHub form). Empty: the one of the default
+# leader then ?: report a problem (prefilled GitHub form). Empty: the one of the default
 # shortcuts (keys.toml, shipped with the program: Ctrl+b, like tmux).
 leader = ""
 # Maximum delay between two keys of a sequence (ms), like vim's timeoutlen: "gg"
@@ -521,6 +521,13 @@ key_sequence_timeout_ms = 1000
 # Key that is both a shortcut and the start of another (y copies, y w copies the stack):
 # how long to wait for the rest (ms) before acting alone.
 key_ambiguous_timeout_ms = 300
+# Menu of continuations (like which-key in nvim): after the start of a sequence (the
+# leader, f, <leader> r…), the list of possible keys and what they do. While the menu is
+# shown, the sequence waits for the next key without a delay; Esc abandons it.
+key_menu = true
+# Delay before showing the menu of continuations (ms): typed in one go, a known sequence
+# does not show it.
+key_menu_delay_ms = 400
 # Diagnostics (TRI_GUI_TRACE=1): a frame of the interface slower than this delay (ms) is
 # traced with the duration of its steps.
 trace_slow_ms = 100

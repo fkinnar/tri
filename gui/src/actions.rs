@@ -1108,6 +1108,11 @@ impl Chord {
         })
     }
 
+    /// Combinaison d'une touche seule, sans modificateur.
+    pub const fn key(key: Key) -> Chord {
+        plain(key)
+    }
+
     /// Combinaison d'un caractère tapé.
     pub const fn char(c: char) -> Chord {
         Chord {
@@ -1227,6 +1232,9 @@ pub struct Defaults {
     prefix: String,
     /// Touche de loupe (`loupe`, en tête du fichier).
     loupe: crate::settings::LoupeKey,
+    /// Noms des sous-menus du menu des suites (`[menus]`) : après le leader ou non, début
+    /// de séquence, nom.
+    menus: Vec<(bool, Vec<Chord>, String)>,
 }
 
 /// Copie de `gui/resources/keys.toml` intégrée au programme.
@@ -1272,6 +1280,35 @@ impl Defaults {
                         id = "leader",
                         error = e
                     )),
+                }
+                continue;
+            }
+            // Noms des sous-menus du menu des suites.
+            if section == "menus"
+                && let Some(entries) = entries.as_table()
+            {
+                for (spec, name) in entries {
+                    let (lead, rest) = match spec.trim().strip_prefix("<leader>") {
+                        Some(rest) => (true, rest.trim()),
+                        None => (false, spec.trim()),
+                    };
+                    let keys = if rest.is_empty() {
+                        Ok(Vec::new())
+                    } else {
+                        parse_keys(rest)
+                    };
+                    match (keys, name.as_str()) {
+                        (Ok(keys), Some(name)) => {
+                            defaults.menus.push((lead, keys, name.to_string()))
+                        }
+                        (Err(e), _) => warnings.push(t!(
+                            "keys-file-error",
+                            section = "menus",
+                            id = spec.as_str(),
+                            error = e
+                        )),
+                        (Ok(_), None) => warnings.push(t!("keys-file-section", section = "menus")),
+                    }
                 }
                 continue;
             }
@@ -1419,6 +1456,9 @@ pub struct Keymap {
     /// Touche de loupe en vigueur (`keys.toml`, sinon `[gui.zoom] loupe_key`), refusée si
     /// elle est déjà liée à une action ([`Keymap::with_loupe`]).
     loupe: crate::settings::LoupeKey,
+    /// Noms des sous-menus du menu des suites (`[menus]` de `keys.toml`), le leader en
+    /// tête de ceux qui le suivent.
+    menus: Vec<(Vec<Chord>, String)>,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -1449,11 +1489,18 @@ impl Keymap {
                 }
             }
         }
+        let menus = Defaults::get()
+            .menus
+            .iter()
+            .filter(|(lead, _, _)| !lead)
+            .map(|(_, keys, name)| (keys.clone(), name.clone()))
+            .collect();
         Keymap {
             bindings,
             leader: None,
             focus: Scope::Images,
             loupe: crate::settings::LoupeKey::None,
+            menus,
         }
     }
 
@@ -1671,6 +1718,11 @@ impl Keymap {
             sequence.extend(keys.iter().copied());
             self.bindings.push((sequence, *action));
         }
+        for (_, keys, name) in Defaults::get().menus.iter().filter(|(l, _, _)| *l) {
+            let mut sequence = vec![lead];
+            sequence.extend(keys.iter().copied());
+            self.menus.push((sequence, name.clone()));
+        }
         Ok(self)
     }
 
@@ -1763,6 +1815,148 @@ impl Keymap {
             }
         }
         keys
+    }
+}
+
+/// Une suite possible d'un début de séquence, pour le menu des suites (façon which-key de
+/// nvim) : la touche, et l'action qu'elle fait ou le sous-menu qu'elle ouvre.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Next {
+    /// Touche suivante.
+    pub chord: Chord,
+    /// Son nom lisible (« r », « Maj+H », « Espace »).
+    pub key: String,
+    /// Action faite par cette touche (rien : seulement un sous-menu).
+    pub action: Option<Action>,
+    /// D'autres touches peuvent suivre : nom du sous-menu (`[menus]` de `keys.toml`,
+    /// traduit), sinon le thème le plus fréquent de ses actions (« Histogramme »).
+    pub menu: Option<String>,
+}
+
+impl Keymap {
+    /// Suites possibles du début de séquence `prefix`, dans le panneau actif, telles que
+    /// [`Sequencer::feed`] les traiterait (même classement des panneaux que `lookup`).
+    /// Une touche liée avec et sans Maj à la même action n'apparaît qu'une fois. Triées
+    /// par touche (caractères d'abord), la variante avec Maj après la touche seule.
+    pub fn continuations(&self, prefix: &[Chord]) -> Vec<Next> {
+        let mut chords: Vec<Chord> = Vec::new();
+        for (k, _) in &self.bindings {
+            if k.len() > prefix.len() && k.starts_with(prefix) && !chords.contains(&k[prefix.len()])
+            {
+                chords.push(k[prefix.len()]);
+            }
+        }
+        let mut next: Vec<Next> = Vec::new();
+        for chord in chords {
+            let mut keys = prefix.to_vec();
+            keys.push(chord);
+            let (action, more) = match self.lookup(&keys) {
+                Lookup::Action(a) => (Some(a), false),
+                Lookup::Ambiguous(a) => (Some(a), true),
+                Lookup::Prefix => (None, true),
+                Lookup::None => continue,
+            };
+            if action.is_some_and(|a| !a.available()) {
+                continue;
+            }
+            let menu = more
+                .then(|| {
+                    self.menu_name(&keys)
+                        .or_else(|| self.menu_group(&keys).map(Group::label))
+                })
+                .flatten();
+            if action.is_none() && menu.is_none() {
+                continue;
+            }
+            next.push(Next {
+                chord,
+                key: chord_label(&chord),
+                action,
+                menu,
+            });
+        }
+        // Maj + touche qui fait la même chose que la touche seule : en double.
+        let plain: Vec<(Chord, Option<Action>)> = next
+            .iter()
+            .filter(|n| !n.chord.shift)
+            .map(|n| (n.chord, n.action))
+            .collect();
+        next.retain(|n| {
+            !n.chord.shift
+                || n.action.is_none()
+                || !plain.contains(&(
+                    Chord {
+                        shift: false,
+                        ..n.chord
+                    },
+                    n.action,
+                ))
+        });
+        next.sort_by_key(|n| {
+            let bare = Chord {
+                shift: false,
+                ctrl: false,
+                ..n.chord
+            };
+            // Caractères et lettres d'abord, puis les touches nommées (Espace, flèches).
+            let name = chord_label(&bare);
+            (
+                name.chars().count() > 1,
+                name.to_lowercase(),
+                n.chord.ctrl,
+                n.chord.shift,
+            )
+        });
+        next
+    }
+
+    /// Nom donné au sous-menu `keys` par `[menus]` : `key-submenu-<nom>` des catalogues s'il
+    /// existe, sinon le nom tel quel (un texte de l'utilisateur).
+    fn menu_name(&self, keys: &[Chord]) -> Option<String> {
+        let (_, name) = self.menus.iter().find(|(k, _)| k == keys)?;
+        let id = format!("key-submenu-{name}");
+        Some(if tri::i18n::has(tri::i18n::language(), &id) {
+            tri::i18n::translate(&id, None)
+        } else {
+            name.clone()
+        })
+    }
+
+    /// Thème le plus fréquent des actions disponibles qui commencent par `keys` (plus
+    /// longues), dans le panneau actif.
+    fn menu_group(&self, keys: &[Chord]) -> Option<Group> {
+        let mut counts: Vec<(Group, usize)> = Vec::new();
+        for (k, a) in &self.bindings {
+            if k.len() > keys.len() && k.starts_with(keys) && a.available() {
+                let found =
+                    matches!(self.lookup(k), Lookup::Action(x) | Lookup::Ambiguous(x) if x == *a);
+                if !found {
+                    continue;
+                }
+                match counts.iter_mut().find(|(g, _)| *g == a.group()) {
+                    Some((_, n)) => *n += 1,
+                    None => counts.push((a.group(), 1)),
+                }
+            }
+        }
+        // À égalité, le premier rencontré (ordre de `keys.toml`).
+        let best = counts.iter().map(|(_, n)| *n).max()?;
+        counts.into_iter().find(|(_, n)| *n == best).map(|(g, _)| g)
+    }
+
+    /// Titre du menu des suites : le début de séquence, le leader écrit `<leader>`.
+    pub fn prefix_label(&self, prefix: &[Chord]) -> String {
+        match prefix.split_first() {
+            Some((first, rest)) if Some(*first) == self.leader => {
+                let mut label = t!("key-leader");
+                for c in rest {
+                    label.push(' ');
+                    label.push_str(&chord_label(c));
+                }
+                label
+            }
+            _ => prefix.iter().map(chord_label).collect::<Vec<_>>().join(" "),
+        }
     }
 }
 
@@ -2002,6 +2196,9 @@ pub struct Sequencer {
     /// suite ne vient pas dans le délai `ambiguous`.
     waiting: Option<Action>,
     ambiguous: Duration,
+    /// Menu des suites affiché ([`Sequencer::hold`]) : la séquence attend sans délai la
+    /// touche suivante, le temps de lire le menu.
+    held: bool,
 }
 
 impl Sequencer {
@@ -2014,6 +2211,7 @@ impl Sequencer {
             timeout,
             waiting: None,
             ambiguous: timeout,
+            held: false,
         }
     }
 
@@ -2036,7 +2234,38 @@ impl Sequencer {
     /// Vrai si une séquence est commencée (et pas encore expirée à `now`).
     pub fn is_pending(&self, now: Instant) -> bool {
         self.since
-            .is_some_and(|since| now.duration_since(since) <= self.window())
+            .is_some_and(|since| self.held || now.duration_since(since) <= self.window())
+    }
+
+    /// Début de séquence en attente à `now` (`<leader>`, `f`, `<leader> r`…) et l'instant
+    /// de sa dernière touche, pour le menu des suites. Rien pour une touche ambiguë
+    /// (`y` avant `y w`) : elle agit seule après un court délai.
+    pub fn prefix(&self, now: Instant) -> Option<(&[Chord], Instant)> {
+        if self.waiting.is_some() || !self.is_pending(now) {
+            return None;
+        }
+        Some((&self.pending, self.since?))
+    }
+
+    /// Le menu des suites est affiché : la séquence n'expire plus, elle attend la touche
+    /// suivante (ou [`Sequencer::cancel`]).
+    pub fn hold(&mut self) {
+        if self.since.is_some() && self.waiting.is_none() {
+            self.held = true;
+        }
+    }
+
+    /// Vrai si le menu des suites tient la séquence.
+    pub fn is_held(&self) -> bool {
+        self.held && self.since.is_some()
+    }
+
+    /// Abandonne la séquence en cours (Échap dans le menu des suites).
+    pub fn cancel(&mut self) {
+        self.pending.clear();
+        self.since = None;
+        self.waiting = None;
+        self.held = false;
     }
 
     /// Instant où l'action d'une touche ambiguë sera faite, faute de suite : l'interface
@@ -2068,10 +2297,13 @@ impl Sequencer {
         keys.push(chord);
         let since = self.since.take();
         let waiting = self.waiting.take();
+        let held = std::mem::take(&mut self.held);
         match keymap.lookup(&keys) {
             Lookup::Prefix => {
                 self.pending = keys;
                 self.since = Some(now);
+                // Menu déjà affiché : le sous-menu (`<leader> r`) suit tout de suite.
+                self.held = held;
             }
             Lookup::Ambiguous(action) => {
                 self.pending = keys;
@@ -2089,6 +2321,7 @@ impl Sequencer {
                 self.pending = keys;
                 self.since = since;
                 self.waiting = waiting;
+                self.held = held;
             }
             // Séquence interrompue par une touche qui a un sens seule : la touche ambiguë
             // en attente est faite, puis celle-ci compte seule.
@@ -2292,6 +2525,116 @@ mod tests {
         let specs = km.specs_for(Action::FocusNext);
         let labels: Vec<String> = specs.iter().map(|s| km.spec_label(s)).collect();
         assert_eq!(labels, ["<leader> o"]);
+    }
+
+    #[test]
+    fn the_key_menu_lists_what_can_follow_a_prefix() {
+        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let lead = parse_chord("Ctrl+b").unwrap();
+        let next = km.continuations(&[lead]);
+        let find = |key: &str| next.iter().find(|n| n.key == key);
+        // Une action directe : son action, pas de sous-menu.
+        let h = find("h").expect("h");
+        assert_eq!(h.action, Some(Action::FocusLeft));
+        assert_eq!(h.menu, None);
+        // Un sous-menu nommé par `[menus]` de keys.toml.
+        let i = find("i").expect("i");
+        assert_eq!(i.action, None);
+        assert_eq!(
+            i.menu.as_deref(),
+            Some(t!("key-submenu-histogram").as_str())
+        );
+        // Caractères d'abord, touches nommées ensuite.
+        let space = next.iter().position(|n| n.key == key_label(Key::Space));
+        let h = next.iter().position(|n| n.key == "h");
+        assert!(h < space, "{next:?}");
+        assert_eq!(km.prefix_label(&[lead]), t!("key-leader"));
+        // Dans le sous-menu : les réglages de l'histogramme.
+        let sub = km.continuations(&[lead, parse_chord("i").unwrap()]);
+        assert!(sub.iter().any(|n| n.action == Some(Action::HistogramScale)));
+        assert_eq!(
+            km.prefix_label(&[lead, parse_chord("i").unwrap()]),
+            format!("{} i", t!("key-leader"))
+        );
+    }
+
+    #[test]
+    fn the_key_menu_follows_the_focused_panel() {
+        // `<leader> r d` : développer dans darktable depuis les images, ouvrir le dossier
+        // dans darktable depuis le panneau des dossiers.
+        let mut km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let prefix = [parse_chord("Ctrl+b").unwrap(), parse_chord("r").unwrap()];
+        let d = |km: &Keymap| {
+            km.continuations(&prefix)
+                .into_iter()
+                .find(|n| n.key == "d")
+                .and_then(|n| n.action)
+        };
+        let images = d(&km).expect("d");
+        km.set_focus(Scope::Folders);
+        let folders = d(&km).expect("d");
+        assert_ne!(images, folders);
+        assert_eq!(folders.scope(), Some(Scope::Folders));
+    }
+
+    #[test]
+    fn a_held_sequence_waits_for_its_next_key() {
+        let km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let lead = parse_chord("Ctrl+b").unwrap();
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        let t = Instant::now();
+        assert_eq!(seq.feed_one(&km, lead, t), None);
+        assert_eq!(seq.prefix(t).map(|(p, _)| p.to_vec()), Some(vec![lead]));
+        seq.hold();
+        assert!(seq.is_held());
+        // Bien après le délai des séquences : toujours en attente.
+        let later = t + Duration::from_secs(30);
+        assert!(seq.is_pending(later));
+        // Le sous-menu reste tenu, puis l'action part.
+        assert_eq!(seq.feed_one(&km, parse_chord("i").unwrap(), later), None);
+        assert!(seq.is_held());
+        assert_eq!(
+            seq.feed_one(&km, parse_chord("s").unwrap(), later),
+            Some(Action::HistogramScale)
+        );
+        assert!(!seq.is_held());
+        assert!(!seq.is_pending(later));
+        // Abandon.
+        seq.feed_one(&km, lead, later);
+        seq.hold();
+        seq.cancel();
+        assert!(!seq.is_pending(later));
+        assert!(seq.prefix(later).is_none());
+    }
+
+    #[test]
+    fn an_ambiguous_key_shows_no_menu() {
+        // `y` copie seule après un court délai (`y )` : la pile) : pas de menu.
+        let km = vim();
+        let mut seq = Sequencer::new(Duration::from_millis(1000));
+        let t = Instant::now();
+        assert_eq!(seq.feed_one(&km, parse_chord("y").unwrap(), t), None);
+        assert!(seq.prefix(t).is_none());
+        seq.hold();
+        assert!(!seq.is_held());
+    }
+
+    #[test]
+    fn menu_names_come_from_the_keys_file() {
+        let text =
+            "[menus]\n\"f\" = \"filters\"\n\"<leader> x\" = \"Mine\"\n\"Nope+q\" = \"bad\"\n";
+        let (d, warnings) = Defaults::parse(text).unwrap();
+        assert_eq!(d.menus.len(), 2, "{:?}", d.menus);
+        assert_eq!(
+            d.menus[0],
+            (
+                false,
+                vec![parse_chord("f").unwrap()],
+                "filters".to_string()
+            )
+        );
+        assert!(d.menus[1].0);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
     }
 
     #[test]
