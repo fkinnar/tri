@@ -67,6 +67,37 @@ plus grandes) ; double-clic : retour au centre.
 - `tri <dossier> --groups` regroupe au centre calculé (`--threshold X` pour imposer un
   seuil).
 
+## Pauses et étendue à gauche (06/11/2026, issue n° 306)
+
+Mesuré sur FULLTEST (570 RAF d'une séance d'autoportraits en studio, même cadrage) :
+l'empreinte voit surtout le fond et le cadrage. Une main près du visage la change à
+peine. « Main sur la tête » et « bras le long du corps » sont à 0,34 l'une de l'autre,
+autant que deux images d'une même pose où l'on bouge dans le cadre (jusqu'à 0,41). Des
+empreintes plus fines (grilles de gris 12 × 16 à 48 × 64, tolérantes aux décalages,
+médianes de fenêtres de 2 à 4 images) ne séparaient pas mieux les poses. En revanche, les
+changements de pose tombaient sur des **pauses** : 9 à 302 s, contre 1 à 3 s entre deux
+images d'une même pose.
+
+- `with_pauses(liens, poids)` : une pause plus longue que la **cadence** du dossier
+  (écart médian, au moins 1 s) multiplie la distance par
+  1 + poids × log2(pause / cadence). Multiplier plutôt qu'ajouter : deux images
+  identiques restent ensemble, la pause départage les autres. Le **centre** du curseur
+  reste calculé sur les distances sans pause : une pause ne fait que couper davantage.
+  Mesuré à 0,1 : le « buste » de 234 photos se sépare à fond à gauche en 12 + 102 + 120
+  (bras devant le visage, main sur la tête ou au menton, bras le long du corps) ; au
+  centre, sur trois autres séances, de 0 à 4 piles de plus.
+- Une pause est un **indice**, pas une règle (retour de l'utilisateur) : en studio, le
+  contenu compte d'abord ; en photo de rue, une pause marque souvent un autre lieu.
+  D'où le curseur **« Importance des pauses »** de la fenêtre `Ctrl+G`, retenu par
+  dossier (`folder_pauses` / `remember_pauses`, `group-pauses.tsv`) :
+  `pause_weight(poids, t, étendue)`, au centre `[similarity] pause_weight`, à fond à
+  gauche 0 (pauses ignorées), à fond à droite × `pause_range`.
+- **« Étendue à gauche »** : `strictness_span` réglable par dossier (`folder_span` /
+  `remember_span`, `group-span.tsv`), de 1 à `strictness_span_max`. À ×3, le curseur de
+  sévérité s'arrêtait à 0,375 sur FULLTEST, sous les 0,41 qui réuniraient les piles
+  « bras croisés ».
+- `tri <dossier> --groups` montre aussi la distance avec la pause, et regroupe avec elle.
+
 ## Couvertures choisies
 
 `chosen_covers` / `choose_cover` : la préférée de chaque pile, choisie par l'utilisateur

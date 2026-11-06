@@ -52,9 +52,19 @@ pub struct SimilaritySettings {
     /// `strictness_span` ; vers la droite, il suit le rang des distances jusqu'à aucune
     /// pile ([`threshold_by_rank`] ; trop peu de liens : seuil divisé).
     pub strictness_span: f32,
+    /// Haut du curseur « étendue à gauche » de la fenêtre de regroupement : valeur
+    /// maximale de `strictness_span` réglable pour un dossier.
+    pub strictness_span_max: f32,
     /// Écart de temps de prise de vue au-delà duquel deux images voisines ne sont jamais
     /// dans le même groupe (secondes ; 0 : sans limite).
     pub max_gap_s: f32,
+    /// Importance des pauses (issue n° 306) : une pause plus longue que la cadence du
+    /// dossier allonge la distance, × (1 + `pause_weight` × log2(pause / cadence)),
+    /// voir [`with_pauses`] ; 0 : seul le contenu compte.
+    pub pause_weight: f32,
+    /// Curseur « importance des pauses » à fond à droite : `pause_weight` multiplié par
+    /// cette valeur (à fond à gauche : 0, pauses ignorées).
+    pub pause_range: f32,
 }
 
 impl Default for SimilaritySettings {
@@ -69,7 +79,10 @@ impl Default for SimilaritySettings {
             auto_separation: 0.5,
             auto_range: 2.0,
             strictness_span: 3.0,
+            strictness_span_max: 10.0,
             max_gap_s: 60.0,
+            pause_weight: 0.1,
+            pause_range: 5.0,
         }
     }
 }
@@ -256,6 +269,46 @@ pub fn distances(signatures: &[Option<&Signature>], shape_weight: f32) -> Vec<Op
         .collect()
 }
 
+/// Liens `links` dont la distance est allongée par la pause qui sépare les deux images
+/// (issue n° 306 : en studio, les changements de pose tombaient sur des pauses de 9 à
+/// 30 s, quand la cadence d'une pose est de 1 à 3 s). La cadence est l'écart médian du
+/// dossier (au moins 1 s, la précision des heures EXIF) ; un écart sous la cadence ou
+/// inconnu ne change rien, au-delà la distance est multipliée par
+/// 1 + `weight` × log2(écart / cadence). Multiplier plutôt qu'ajouter : deux images
+/// identiques restent ensemble après une pause, la pause départage les autres.
+pub fn with_pauses(links: &[Option<Link>], weight: f32) -> Vec<Option<Link>> {
+    let mut gaps: Vec<f32> = links.iter().flatten().filter_map(|l| l.gap_s).collect();
+    if weight <= 0.0 || gaps.is_empty() {
+        return links.to_vec();
+    }
+    gaps.sort_by(f32::total_cmp);
+    let cadence = gaps[gaps.len() / 2].max(1.0);
+    links
+        .iter()
+        .map(|l| {
+            l.map(|l| {
+                let pause = l.gap_s.map_or(0.0, |g| (g / cadence).max(1.0).log2());
+                Link {
+                    distance: l.distance * (1.0 + weight * pause),
+                    ..l
+                }
+            })
+        })
+        .collect()
+}
+
+/// Importance des pauses au curseur `t` (-1 à 1) de la fenêtre de regroupement : au
+/// centre `weight` (le réglage), à fond à gauche 0 (pauses ignorées, le contenu seul),
+/// à fond à droite `weight × range`.
+pub fn pause_weight(weight: f32, t: f32, range: f32) -> f32 {
+    let t = t.clamp(-1.0, 1.0);
+    if t <= 0.0 {
+        weight * (1.0 + t)
+    } else {
+        weight * range.max(1.0).powf(t)
+    }
+}
+
 /// Groupes d'images voisines : rangs de début et de fin (exclue) de chaque groupe, dans
 /// l'ordre. Une image rejoint la précédente si leur lien est sous `threshold` et leur
 /// écart de temps sous `max_gap_s` (0 : sans limite) ; un lien inconnu coupe.
@@ -393,6 +446,40 @@ pub fn remember_strictness(
     strictness: Option<f32>,
 ) -> std::io::Result<()> {
     crate::folder::remember_folder_value(data, STRICTNESS, dir, strictness)
+}
+
+/// Fichier des importances des pauses par dossier (curseur, -1 à 1).
+const PAUSES: &str = "group-pauses.tsv";
+
+/// Importance des pauses retenue pour le dossier `dir` (curseur, -1 à 1), s'il y en a une.
+pub fn folder_pauses(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    crate::folder::folder_value(data, PAUSES, dir)
+}
+
+/// Retient l'importance des pauses `t` pour le dossier `dir` ; `None` : l'oublie (centre).
+pub fn remember_pauses(
+    data: &std::path::Path,
+    dir: &std::path::Path,
+    t: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, PAUSES, dir, t)
+}
+
+/// Fichier des étendues à gauche du curseur des piles par dossier (`strictness_span`).
+const SPANS: &str = "group-span.tsv";
+
+/// Étendue à gauche retenue pour le dossier `dir`, s'il y en a une.
+pub fn folder_span(data: &std::path::Path, dir: &std::path::Path) -> Option<f32> {
+    crate::folder::folder_value(data, SPANS, dir)
+}
+
+/// Retient l'étendue à gauche `span` pour le dossier `dir` ; `None` : l'oublie (réglage).
+pub fn remember_span(
+    data: &std::path::Path,
+    dir: &std::path::Path,
+    span: Option<f32>,
+) -> std::io::Result<()> {
+    crate::folder::remember_folder_value(data, SPANS, dir, span)
 }
 
 /// Fichier des couvertures choisies (une image par ligne), dans le dossier de données.
@@ -558,6 +645,75 @@ mod tests {
         // Distances toutes pareilles : pas de coupure.
         let flat: Vec<Option<Link>> = (0..10).map(|_| link(0.2, 1.0)).collect();
         assert_eq!(suggested_threshold(&flat, &s), s.threshold);
+    }
+
+    #[test]
+    fn pauses_lengthen_distances_but_never_join() {
+        let link = |distance: f32, gap: Option<f32>| {
+            Some(Link {
+                distance,
+                gap_s: gap,
+            })
+        };
+        // Cadence 1 s (médiane) ; une pause de 32 s = 5 cadences doublées.
+        let links = [
+            link(0.1, Some(1.0)),
+            link(0.1, Some(1.0)),
+            link(0.3, Some(32.0)),
+            link(0.0, Some(32.0)),
+            link(0.2, None),
+            None,
+            link(0.1, Some(1.0)),
+        ];
+        let p = with_pauses(&links, 0.2);
+        let d: Vec<Option<f32>> = p.iter().map(|l| l.map(|l| l.distance)).collect();
+        assert_eq!(d[0], Some(0.1), "sous la cadence : rien");
+        assert!((d[2].unwrap() - 0.3 * 2.0).abs() < 1e-6, "{:?}", d[2]);
+        assert_eq!(d[3], Some(0.0), "identiques : toujours ensemble");
+        assert_eq!(d[4], Some(0.2), "écart inconnu : rien");
+        assert_eq!(d[5], None);
+        assert_eq!(p[2].unwrap().gap_s, Some(32.0), "écart gardé");
+        assert!(
+            links.iter().zip(&p).all(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => b.distance >= a.distance,
+                _ => a == b,
+            }),
+            "une pause ne rapproche jamais"
+        );
+        assert_eq!(with_pauses(&links, 0.0), links, "importance nulle");
+        // Cadence lente (médiane 10 s) : 20 s n'est qu'une double cadence.
+        let slow = [
+            link(0.2, Some(10.0)),
+            link(0.2, Some(10.0)),
+            link(0.2, Some(20.0)),
+        ];
+        let d = with_pauses(&slow, 0.5)[2].unwrap().distance;
+        assert!((d - 0.2 * 1.5).abs() < 1e-6, "{d}");
+    }
+
+    #[test]
+    fn the_pause_slider_goes_from_none_to_range() {
+        assert_eq!(pause_weight(0.1, 0.0, 5.0), 0.1);
+        assert_eq!(pause_weight(0.1, -1.0, 5.0), 0.0, "à gauche : ignorées");
+        assert!((pause_weight(0.1, 1.0, 5.0) - 0.5).abs() < 1e-6);
+        assert!((pause_weight(0.1, -0.5, 5.0) - 0.05).abs() < 1e-6);
+        assert_eq!(pause_weight(0.1, 3.0, 5.0), pause_weight(0.1, 1.0, 5.0));
+    }
+
+    #[test]
+    fn pauses_and_span_are_remembered_per_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path();
+        let a = std::path::Path::new("/photos/a");
+        assert_eq!((folder_pauses(data, a), folder_span(data, a)), (None, None));
+        remember_pauses(data, a, Some(-0.4)).unwrap();
+        remember_span(data, a, Some(4.5)).unwrap();
+        remember_strictness(data, a, Some(0.2)).unwrap();
+        assert_eq!(folder_pauses(data, a), Some(-0.4));
+        assert_eq!(folder_span(data, a), Some(4.5));
+        assert_eq!(folder_strictness(data, a), Some(0.2), "fichiers séparés");
+        remember_pauses(data, a, None).unwrap();
+        assert_eq!(folder_pauses(data, a), None);
     }
 
     #[test]

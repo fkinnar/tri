@@ -65,6 +65,35 @@ double-click: back to the middle.
 - `tri <folder> --groups` groups at the computed centre (`--threshold X` to force a
   threshold).
 
+## Pauses and reach to the left (2026-11-06, issue #306)
+
+Measured on FULLTEST (570 RAF from a studio self-portrait shoot, same framing): the
+fingerprint mostly sees the background and the framing. A hand near the face barely
+changes it. "Hand on the head" and "arms down" are 0.34 apart, as far as two images of
+the same pose where one moves within the frame (up to 0.41). Finer fingerprints (grey
+grids from 12 × 16 to 48 × 64, shift-tolerant, medians over windows of 2 to 4 images)
+did not separate the poses better. On the other hand, pose changes fell on **pauses**:
+9 to 302 s, against 1 to 3 s between two images of the same pose.
+
+- `with_pauses(links, weight)`: a pause longer than the folder's **pace** (median gap,
+  at least 1 s) multiplies the distance by 1 + weight × log2(pause / pace). Multiplying
+  rather than adding: two identical images stay together, the pause decides between the
+  others. The slider's **centre** is still computed from the distances without pauses:
+  a pause can only cut more. Measured at 0.1: fully to the left, the 234-photo "bust"
+  stack splits into 12 + 102 + 120 (arm across the face, hand on the head or the chin,
+  arms down); at the centre, on three other shoots, 0 to 4 more stacks.
+- A pause is a **hint**, not a rule (the user's feedback): in the studio, the content
+  comes first; in street photography, a pause often means another place. Hence the
+  **"Weight of pauses"** slider of the `Ctrl+G` window, remembered per folder
+  (`folder_pauses` / `remember_pauses`, `group-pauses.tsv`):
+  `pause_weight(weight, t, range)`, in the middle `[similarity] pause_weight`, fully to
+  the left 0 (pauses ignored), fully to the right × `pause_range`.
+- **"Reach to the left"**: `strictness_span` can be set per folder (`folder_span` /
+  `remember_span`, `group-span.tsv`), from 1 to `strictness_span_max`. At ×3, the
+  strictness slider stopped at 0.375 on FULLTEST, below the 0.41 that would bring the
+  "arms crossed" stacks together.
+- `tri <folder> --groups` also shows the distance with the pause, and groups with it.
+
 ## Chosen covers
 
 `chosen_covers` / `choose_cover`: the favourite of each stack, chosen by the user (one per

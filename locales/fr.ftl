@@ -254,7 +254,7 @@ cli-export-done = { $n ->
    *[other] { $n } fichiers écrits
 }
 cli-export-failed = { $failed } images sans fichier écrit (illisibles par Darktable ?)
-cli-groups-header = image	suivante	distance	écart (s)
+cli-groups-header = image	suivante	distance	écart (s)	avec la pause
 cli-groups-summary = { $n } images, { $groups } groupes au seuil { $threshold } ({ $ms } ms par empreinte)
 cli-cache-cleared = cache vidé ({ $level })
 cli-cache-here = cache gardé dans { $place }

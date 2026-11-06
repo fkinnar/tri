@@ -717,6 +717,12 @@ pub struct TriApp {
     /// Sévérité du regroupement (-1 souple, grandes piles, à 1 strict ; 0 : le centre),
     /// réglée au curseur de la barre des filtres, retenue par dossier.
     group_strictness: f32,
+    /// Importance des pauses (-1 : ignorées, 0 : `[similarity] pause_weight`, 1 : ×
+    /// `pause_range`), curseur de la fenêtre de regroupement, retenue par dossier.
+    group_pauses: f32,
+    /// Étendue à gauche du curseur des piles (`[similarity] strictness_span` par défaut),
+    /// curseur de la fenêtre de regroupement, retenue par dossier.
+    group_span: f32,
     /// Filtre « pile courante » (`f c`, issue n° 52) : les images de la pile gardée.
     stack_only: Option<HashSet<PathBuf>>,
     /// Images de cette pile que `f c` a dépliées (elles étaient repliées) : repliées de
@@ -1258,6 +1264,8 @@ impl TriApp {
             // Grille non groupée par défaut (retour du 19/10/2026) : `[gui.grid] stacks`.
             stacking: settings.similarity.background && gui.grid.stacks,
             group_strictness: 0.0,
+            group_pauses: 0.0,
+            group_span: settings.similarity.strictness_span,
             group_distances: Vec::new(),
             stack_only: None,
             stack_only_unfolded: Vec::new(),
@@ -1753,6 +1761,16 @@ impl TriApp {
                     .data_dir()
                     .and_then(|d| tri::similarity::folder_strictness(&d, &folder.dir))
                     .unwrap_or(0.0);
+                self.group_pauses = self
+                    .settings
+                    .data_dir()
+                    .and_then(|d| tri::similarity::folder_pauses(&d, &folder.dir))
+                    .unwrap_or(0.0);
+                self.group_span = self
+                    .settings
+                    .data_dir()
+                    .and_then(|d| tri::similarity::folder_span(&d, &folder.dir))
+                    .unwrap_or(self.settings.similarity.strictness_span);
                 self.blur_strictness = self
                     .settings
                     .data_dir()
@@ -4896,7 +4914,7 @@ impl TriApp {
             &self.group_distances,
             self.group_centre,
             self.group_strictness,
-            s.strictness_span,
+            self.group_span,
             s.auto_min_links,
         )
     }
@@ -4909,6 +4927,27 @@ impl TriApp {
             let keep = (self.group_strictness != 0.0).then_some(self.group_strictness);
             let _ = tri::similarity::remember_strictness(&data, &self.folder.dir, keep);
         }
+    }
+
+    /// Retient l'importance des pauses et l'étendue à gauche pour le dossier ouvert
+    /// (oubliées à leur valeur par défaut).
+    fn remember_group_tuning(&self) {
+        if let Some(data) = self.settings.data_dir()
+            && !self.folder.is_none()
+        {
+            let dir = &self.folder.dir;
+            let pauses = (self.group_pauses != 0.0).then_some(self.group_pauses);
+            let _ = tri::similarity::remember_pauses(&data, dir, pauses);
+            let span = (self.group_span != self.settings.similarity.strictness_span)
+                .then_some(self.group_span);
+            let _ = tri::similarity::remember_span(&data, dir, span);
+        }
+    }
+
+    /// Importance des pauses en vigueur (curseur de la fenêtre de regroupement).
+    fn group_pause_weight(&self) -> f32 {
+        let s = &self.settings.similarity;
+        tri::similarity::pause_weight(s.pause_weight, self.group_pauses, s.pause_range)
     }
 
     /// Seuils du filtre « bien exposées » et des badges (parts saturée, bouchée) : ceux de
@@ -5261,7 +5300,10 @@ impl TriApp {
             std::iter::once(0..self.files.len()).collect()
         } else {
             let links = tri::similarity::distances(&signatures, s.shape_weight);
+            // Centre calculé sur le contenu seul ; les pauses ne font que couper
+            // davantage (issue n° 306).
             self.group_centre = tri::similarity::suggested_threshold(&links, s);
+            let links = tri::similarity::with_pauses(&links, self.group_pause_weight());
             self.group_distances = tri::similarity::distances_by_rank(&links, self.group_gap);
             tri::similarity::group(&links, self.group_threshold(), self.group_gap)
         };
@@ -5922,7 +5964,11 @@ impl TriApp {
             // Regroupement : Échap ou Ctrl+G ferme.
             if self.group_dialog {
                 if matches!(action, Action::Back | Action::GroupingWindow) {
+                    // Retenus comme en fermant à la souris (ils ne l'étaient pas au
+                    // clavier).
                     self.group_dialog = false;
+                    self.remember_group_strictness();
+                    self.remember_group_tuning();
                 }
                 continue;
             }
@@ -13348,9 +13394,16 @@ impl TriApp {
         }
         let at = ctx.content_rect().center() - vec2(200.0, 160.0);
         let default_gap = self.settings.similarity.max_gap_s;
+        let default_span = self.settings.similarity.strictness_span;
+        let max_span = self
+            .settings
+            .similarity
+            .strictness_span_max
+            .max(default_span);
         let mut reset = false;
         let (mut strictness, mut gap, mut stacking) =
             (self.group_strictness, self.group_gap, self.stacking);
+        let (mut pauses, mut span) = (self.group_pauses, self.group_span);
         let threshold = t!(
             "groups-threshold-value",
             threshold = format!("{:.2}", self.group_threshold()),
@@ -13389,6 +13442,36 @@ impl TriApp {
                 ui.weak(threshold);
                 ui.weak(t!("groups-threshold-tip"));
                 ui.add_space(4.0);
+                ui.label(t!("groups-span"));
+                if ui
+                    .add(
+                        egui::Slider::new(&mut span, 1.0..=max_span)
+                            .step_by(0.1)
+                            .prefix("× "),
+                    )
+                    .double_clicked_slider(ui)
+                {
+                    span = default_span;
+                }
+                ui.weak(t!("groups-span-tip"));
+                ui.add_space(4.0);
+                ui.label(t!("groups-pauses"));
+                ui.horizontal(|ui| {
+                    ui.weak(t!("groups-pauses-less"));
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut pauses, -1.0..=1.0)
+                                .step_by(0.05)
+                                .show_value(false),
+                        )
+                        .double_clicked_slider(ui)
+                    {
+                        pauses = 0.0;
+                    }
+                    ui.weak(t!("groups-pauses-more"));
+                });
+                ui.weak(t!("groups-pauses-tip"));
+                ui.add_space(4.0);
                 ui.label(t!("groups-gap"));
                 if ui
                     .add(
@@ -13420,15 +13503,26 @@ impl TriApp {
         if reset {
             strictness = 0.0;
         }
-        if (strictness, gap, stacking) != (self.group_strictness, self.group_gap, self.stacking) {
+        if (strictness, gap, stacking, pauses, span)
+            != (
+                self.group_strictness,
+                self.group_gap,
+                self.stacking,
+                self.group_pauses,
+                self.group_span,
+            )
+        {
             self.group_strictness = strictness;
             self.group_gap = gap;
             self.stacking = stacking;
+            self.group_pauses = pauses;
+            self.group_span = span;
             self.stacks_dirty = true;
         }
         if modal.should_close() {
             self.group_dialog = false;
             self.remember_group_strictness();
+            self.remember_group_tuning();
         }
     }
 
@@ -20407,6 +20501,69 @@ mod tests {
             h.state().filter_bar,
         );
         assert_eq!(after, before);
+    }
+
+    #[test]
+    fn pauses_and_reach_to_the_left_tune_the_stacks() {
+        // Six images de même contenu, à peine différentes d'une voisine à l'autre ; prises
+        // à 1 s d'intervalle, avec une pause de 30 s au milieu (#306).
+        let names = ["a1.jpg", "a2.jpg", "a3.jpg", "b1.jpg", "b2.jpg", "b3.jpg"];
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([90, 90, 90]));
+        let (mut h, dir) = harness_images(names.iter().map(|n| (*n, img.clone())).collect());
+        h.state_mut().stacking = true;
+        h.state_mut().settings.similarity.auto = false;
+        h.state_mut().settings.similarity.threshold = 0.05;
+        let files = h.state().files.clone();
+        for (i, f) in files.iter().enumerate() {
+            // 4 bits de composition de plus à chaque image : distance 0,031 entre voisines.
+            let sig = tri::similarity::Signature {
+                shape: (1u64 << (4 * i)) - 1,
+                colors: [90; 48],
+                time: Some(i as i64 + if i >= 3 { 30 } else { 0 }),
+            };
+            h.state_mut().signatures.insert(f.path.clone(), sig);
+        }
+        let stacks = |h: &mut Harness<'static, TriApp>| {
+            h.state_mut().stacks_dirty = true;
+            h.run_steps(2);
+            h.state().stacks.count()
+        };
+        assert_eq!(
+            stacks(&mut h),
+            1,
+            "au centre, la pause ne suffit pas à couper"
+        );
+        h.state_mut().group_pauses = 1.0;
+        assert_eq!(stacks(&mut h), 2, "pauses importantes : coupées");
+        h.state_mut().group_pauses = -1.0;
+        assert_eq!(stacks(&mut h), 1, "pauses ignorées");
+        // Étendue à gauche : à fond à gauche, le seuil du centre × l'étendue.
+        h.state_mut().group_strictness = -1.0;
+        h.state_mut().settings.similarity.threshold = 0.01;
+        h.state_mut().group_span = 2.0;
+        assert_eq!(stacks(&mut h), 0, "0,02 : plus aucune pile");
+        h.state_mut().group_span = 4.0;
+        assert_eq!(stacks(&mut h), 1, "0,04 : tout ensemble");
+        // La fenêtre (Ctrl+G) montre les deux curseurs ; à sa fermeture, retenus pour le
+        // dossier.
+        press(&mut h, Key::G, Modifiers::CTRL);
+        h.run_steps(2);
+        for label in [t!("groups-pauses"), t!("groups-span")] {
+            assert!(h.query_by_label_contains(&label).is_some(), "{label}");
+        }
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().group_dialog);
+        let data = h.state().settings.data_dir().unwrap();
+        let folder = h.state().folder.dir.clone();
+        assert_eq!(tri::similarity::folder_pauses(&data, &folder), Some(-1.0));
+        assert_eq!(
+            tri::similarity::folder_strictness(&data, &folder),
+            Some(-1.0),
+            "la sévérité aussi, fermée au clavier"
+        );
+        assert_eq!(tri::similarity::folder_span(&data, &folder), Some(4.0));
+        drop(dir);
     }
 
     #[test]

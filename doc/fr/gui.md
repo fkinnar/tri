@@ -539,7 +539,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   regroupement** (`Ctrl+G`, comme Capture One) : regrouper ou non, curseur du seuil (la
   grille suit en direct), écart de temps maximal, nombre de piles ; le seuil est retenu
   pour le dossier à la fermeture (`group-thresholds.tsv` du dossier de données ; le
-  défaut : `[similarity] threshold`).
+  défaut : `[similarity] threshold`). Depuis le 06/11/2026 (#306), aussi **« Étendue à
+  gauche »** (jusqu'où la sévérité regroupe à fond à gauche) et **« Importance des
+  pauses »** (à gauche le contenu seul, à droite les pauses coupent davantage), retenues
+  par dossier, même fermée au clavier (voir `similarity.md`).
   Second retour du 18/10/2026 : **un seul interrupteur** (`Ctrl+S`, bouton pile de la
   barre des filtres et du bandeau, icône à l'accent quand actif, toujours visible ; clic
   droit : `Ctrl+G`) : piles actives, regroupement en grille **et** en plein écran ← / →
