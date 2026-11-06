@@ -782,6 +782,9 @@ help_scroll_line = 40.0
 # du texte et largeur d'une colonne de cartes, en points.
 help_here_text = 16.0
 help_here_column = 420.0
+# Palette de commandes (Ctrl+Maj+P, : en vim) : largeur en points, lignes montrées au plus.
+palette_width = 640.0
+palette_max = 40
 # Pendant une attente (copie, recherche sur le réseau, touche de séquence…), intervalle
 # entre deux images pour voir où elle en est, en millisecondes.
 poll_ms = 100

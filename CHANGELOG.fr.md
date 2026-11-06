@@ -53,6 +53,10 @@
   des mots-clés par thème (« noter » trouve les étoiles) ; une action qui a le mot dans
   son libellé passe devant. Fautes de frappe et classement valent aussi pour la recherche
   des réglages.
+- **Palette de commandes** : `Ctrl+Maj+P` (classique) ou `:` (vim), on tape quelques
+  lettres, Entrée lance l'action trouvée ou ouvre le réglage trouvé dans la fenêtre de
+  réglages. Chaque action montre ses touches ; les actions sans raccourci deviennent
+  accessibles au clavier.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

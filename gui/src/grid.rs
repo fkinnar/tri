@@ -235,6 +235,7 @@ pub fn navigate(
         | Action::Back
         | Action::Help
         | Action::HelpHere
+        | Action::Palette
         | Action::Settings
         | Action::CheckUpdate
         | Action::ReportIssue

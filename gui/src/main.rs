@@ -48,6 +48,7 @@ mod markdown;
 mod marks;
 mod meta;
 mod offload;
+mod palette;
 mod path_field;
 mod settings;
 mod settings_window;

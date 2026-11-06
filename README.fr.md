@@ -57,7 +57,7 @@ Détails (Windows, options, HEIC) : [doc/fr/build.md](doc/fr/build.md).
 - [Premiers pas](doc/fr/manual.md) (court exprès : le reste est à découvrir),
   [first steps](doc/en/manual.md) en anglais.
 - `?` : les touches de l'endroit où l'on est ; `F1` : toutes les touches, avec une
-  recherche. `Ctrl+,` : les réglages (dont le
+  recherche ; `Ctrl+Maj+P` (`:` en vim) : chercher une action ou un réglage et le lancer. `Ctrl+,` : les réglages (dont le
   jeu de raccourcis, le thème « gris neutre », la langue).
 - Notes : `0`–`5` étoiles, `6`–`9` couleurs, `Maj+P` / `Maj+X` accepté / rejeté.
 - `Entrée` plein écran, `z` 100 %, `r` rendu boîtier ou rendu RAW, `/` rechercher.

@@ -444,6 +444,8 @@ pub enum Action {
     Help,
     /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
     HelpHere,
+    /// Palette de commandes : chercher une action ou un réglage et le lancer.
+    Palette,
     /// Fenêtre de réglages.
     Settings,
     /// Rechercher une nouvelle version (sur demande, page Releases).
@@ -462,7 +464,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 196] = [
+    pub const ALL: [Action; 197] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -641,6 +643,7 @@ impl Action {
         Action::Back,
         Action::Help,
         Action::HelpHere,
+        Action::Palette,
         Action::Settings,
         Action::CheckUpdate,
         Action::ReportIssue,
@@ -770,7 +773,7 @@ impl Action {
                 Group::Panels
             }
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | HelpHere | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
+            Help | HelpHere | Palette | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
     }
 
@@ -1000,6 +1003,7 @@ impl Action {
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::HelpHere => "core.app.help_here",
+            Action::Palette => "core.app.palette",
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",
             Action::ReportIssue => "core.app.report_issue",
@@ -2080,7 +2084,7 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     // « + - * / ( ) = » : des caractères, pas des touches (le zoom, les piles) ; la touche
     // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
     // caractère est le même partout, pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/()=".contains(*c))
+    if let Some(c) = single.filter(|c| "+-*/()=:".contains(*c))
         && !shift
         && !ctrl
     {

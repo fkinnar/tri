@@ -809,6 +809,8 @@ pub struct TriApp {
     help_here: Option<(crate::cheatsheet::Place, crate::cheatsheet::Sections)>,
     /// Défilement de l'aide « ici » demandé au clavier, à faire à la prochaine image.
     help_here_scroll: f32,
+    /// Palette de commandes ouverte (Ctrl+Maj+P, `:` en vim).
+    palette: Option<PaletteState>,
     /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
     /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
     help_lines: Option<HelpLines>,
@@ -1314,6 +1316,7 @@ impl TriApp {
             help_search: None,
             help_here: None,
             help_here_scroll: 0.0,
+            palette: None,
             help_lines: None,
             help_widths: None,
             visible_waiting: 0,
@@ -6033,6 +6036,14 @@ impl TriApp {
                 }
                 continue;
             }
+            // Palette de commandes : Échap ou sa touche la ferment ; le reste est pour elle
+            // (son champ, ses flèches).
+            if self.palette.is_some() {
+                if matches!(action, Action::Back | Action::Palette) {
+                    self.palette = None;
+                }
+                continue;
+            }
             // Aide « ici » : `?` ou Échap la ferment, F1 passe à la liste complète ; rien
             // d'autre ne passe derrière.
             if self.help_here.is_some() {
@@ -6193,6 +6204,15 @@ impl TriApp {
                 ctx.send_viewport_cmd(ViewportCommand::Close)
             }
             Action::Help => self.help = !self.help,
+            Action::Palette => {
+                self.help = false;
+                self.help_here = None;
+                self.palette = Some(PaletteState {
+                    place: self.help_place(),
+                    settings: crate::settings_window::settings_list(&self.developers.engines()),
+                    ..PaletteState::default()
+                });
+            }
             Action::HelpHere => {
                 if self.help_here.take().is_none() {
                     self.help = false;
@@ -13018,7 +13038,16 @@ impl TriApp {
                     }
                 }
                 Step::Search(text) => {
-                    if let Some(window) = &mut self.settings_window {
+                    if let Some(p) = &mut self.palette {
+                        p.hits = crate::palette::search(
+                            &self.keymap,
+                            &text,
+                            p.place,
+                            &p.settings,
+                            self.gui.dialogs.palette_max,
+                        );
+                        p.query = text;
+                    } else if let Some(window) = &mut self.settings_window {
                         window.search(&text);
                     } else if self.help {
                         self.help_search = Some(text);
@@ -13943,6 +13972,125 @@ impl TriApp {
             });
     }
 
+    /// Palette de commandes : un champ, et dessous les actions et réglages trouvés, le
+    /// premier choisi. ↑ / ↓ (Tab, Ctrl+N / Ctrl+P aussi) changent de ligne, Entrée ou un
+    /// clic lance, Échap ferme.
+    fn palette_window(&mut self, ctx: &egui::Context) {
+        let Some(mut state) = self.palette.take() else {
+            return;
+        };
+        // Avant le champ, qui ne s'en sert pas (Entrée lui ferait perdre le clavier).
+        let (down, up, run) = ctx.input_mut(|i| {
+            let mut down = 0;
+            let mut up = 0;
+            for (m, k) in [
+                (egui::Modifiers::NONE, egui::Key::ArrowDown),
+                (egui::Modifiers::NONE, egui::Key::Tab),
+                (egui::Modifiers::CTRL, egui::Key::N),
+            ] {
+                while i.consume_key(m, k) {
+                    down += 1;
+                }
+            }
+            for (m, k) in [
+                (egui::Modifiers::NONE, egui::Key::ArrowUp),
+                (egui::Modifiers::SHIFT, egui::Key::Tab),
+                (egui::Modifiers::CTRL, egui::Key::P),
+            ] {
+                while i.consume_key(m, k) {
+                    up += 1;
+                }
+            }
+            (
+                down,
+                up,
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+            )
+        });
+        let count = state.hits.len();
+        if count > 0 {
+            state.selected = (state.selected + down).min(count - 1);
+            state.selected = state.selected.saturating_sub(up);
+        }
+        let width = self
+            .gui
+            .dialogs
+            .palette_width
+            .min(ctx.content_rect().width() * 0.9);
+        let accent = crate::marks::accent_mark(ctx);
+        let mut clicked = None;
+        let mut query = state.query.clone();
+        egui::Area::new(egui::Id::unique("palette"))
+            .order(egui::Order::Foreground)
+            .anchor(
+                Align2::CENTER_TOP,
+                vec2(0.0, ctx.content_rect().height() * 0.12),
+            )
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.set_width(width);
+                        let field = ui.add(
+                            egui::TextEdit::singleline(&mut query)
+                                .id(egui::Id::unique("palette_query"))
+                                .hint_text(t!("palette-hint"))
+                                .desired_width(f32::INFINITY),
+                        );
+                        if !state.focused {
+                            field.request_focus();
+                            state.focused = true;
+                        }
+                        ui.add_space(6.0);
+                        if !query.trim().is_empty() && state.hits.is_empty() {
+                            ui.weak(t!("palette-empty"));
+                        }
+                        ScrollArea::vertical()
+                            .max_height(ctx.content_rect().height() * 0.6)
+                            .show(ui, |ui| {
+                                for (i, hit) in state.hits.iter().enumerate() {
+                                    let chosen = i == state.selected;
+                                    let row = palette_row(ui, hit, chosen, accent);
+                                    if chosen && (down > 0 || up > 0) {
+                                        row.scroll_to_me(None);
+                                    }
+                                    if row.clicked() {
+                                        clicked = Some(i);
+                                    }
+                                }
+                            });
+                        ui.add_space(4.0);
+                        ui.weak(t!("palette-keys"));
+                    });
+            });
+        if query != state.query {
+            state.hits = crate::palette::search(
+                &self.keymap,
+                &query,
+                state.place,
+                &state.settings,
+                self.gui.dialogs.palette_max,
+            );
+            state.selected = 0;
+            state.query = query;
+        }
+        let chosen = clicked.or((run && count > 0).then_some(state.selected));
+        match chosen
+            .and_then(|i| state.hits.get(i))
+            .map(|h| h.item.clone())
+        {
+            Some(crate::palette::Item::Action(action)) => self.perform(ctx, action),
+            Some(crate::palette::Item::Setting(section, key)) => {
+                self.open_settings();
+                if let Some(window) = &mut self.settings_window {
+                    window.search(&format!("{section}.{key}"));
+                }
+            }
+            None if run => {}
+            None => self.palette = Some(state),
+        }
+    }
+
     /// Aide « ici » (`?`) : par-dessus l'écran assombri, les raccourcis de l'endroit où
     /// l'on est, par thème, en colonnes de cartes, en grand pour se lire d'un coup d'œil.
     /// Un clic la ferme.
@@ -14615,6 +14763,7 @@ impl eframe::App for TriApp {
         self.end_mark(&ctx, center.response.rect);
         self.key_menu(&ctx);
         self.help_here_overlay(&ctx);
+        self.palette_window(&ctx);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -14681,7 +14830,8 @@ enum Step {
     RatingDialog,
     /// Ouvrir la fenêtre de réglages sur une section (`settings:keys`, `settings:gui.zoom`).
     Settings(String),
-    /// Taper dans la recherche de la boîte ouverte, réglages ou aide (`search:vim`).
+    /// Taper dans la recherche de la boîte ouverte, palette, réglages ou aide
+    /// (`search:vim`).
     Search(String),
     /// Taper des touches, comme au clavier (`keys:Ctrl+b r`, écrites comme dans
     /// `keys.toml`) : séquences et menu des suites compris.
@@ -15650,6 +15800,69 @@ enum HelpLine {
     },
 }
 
+/// Palette de commandes ouverte.
+#[derive(Default)]
+struct PaletteState {
+    /// Ce qui est tapé.
+    query: String,
+    /// Lignes trouvées pour `query`.
+    hits: Vec<crate::palette::Hit>,
+    /// Ligne choisie (Entrée la lance).
+    selected: usize,
+    /// Endroit d'où on l'a ouverte : seules les actions qui y ont un sens.
+    place: crate::cheatsheet::Place,
+    /// Les réglages, lus à l'ouverture.
+    settings: Vec<crate::settings_window::SettingRef>,
+    /// Le champ a reçu le clavier (une fois, à l'ouverture).
+    focused: bool,
+}
+
+/// Une ligne de la palette : étiquette (action ou réglage), titre, touches à droite,
+/// description dessous ; fond à l'accent si elle est choisie.
+fn palette_row(
+    ui: &mut egui::Ui,
+    hit: &crate::palette::Hit,
+    chosen: bool,
+    accent: Color32,
+) -> egui::Response {
+    let fill = if chosen {
+        accent.gamma_multiply(0.35)
+    } else {
+        Color32::TRANSPARENT
+    };
+    let inner = egui::Frame::new()
+        .fill(fill)
+        .corner_radius(4.0)
+        .inner_margin(vec2(8.0, 4.0))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let tag = match hit.item {
+                    crate::palette::Item::Action(_) => t!("palette-action"),
+                    crate::palette::Item::Setting(..) => t!("palette-setting"),
+                };
+                ui.label(egui::RichText::new(tag).small().weak());
+                ui.label(&hit.title);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if !hit.keys.is_empty() {
+                        ui.label(egui::RichText::new(&hit.keys).color(accent));
+                    }
+                });
+            });
+            if !hit.detail.is_empty() {
+                ui.add(
+                    egui::Label::new(egui::RichText::new(&hit.detail).small().weak()).truncate(),
+                );
+            }
+        });
+    ui.interact(
+        inner.response.rect,
+        ui.scope_id().with(("palette_row", &hit.title)),
+        Sense::click(),
+    )
+    .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// Une carte de l'aide « ici » : le thème, puis une ligne par action (touches à
 /// gauche, à l'accent ; ce qu'elle fait à droite).
 fn help_here_card(
@@ -16023,6 +16236,43 @@ mod tests {
         h.state_mut().gui.key_menu = false;
         leader(&mut h, &[]);
         assert!(!h.state().sequencer.is_held());
+    }
+
+    #[test]
+    fn the_palette_finds_and_runs_an_action() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        assert!(h.state().palette.is_some(), "Ctrl+Maj+P ouvre la palette");
+        let before = h.state().histogram;
+        type_text(&mut h, "histogramme");
+        // La ligne voulue, atteinte avec la flèche bas.
+        let at = h
+            .state()
+            .palette
+            .as_ref()
+            .and_then(|p| {
+                p.hits.iter().position(|hit| {
+                    hit.item == crate::palette::Item::Action(Action::ToggleHistogram)
+                })
+            })
+            .expect("trouvée");
+        for _ in 0..at {
+            press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        }
+        assert_eq!(h.state().palette.as_ref().map(|p| p.selected), Some(at));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().palette.is_none(), "Entrée lance et ferme");
+        assert_ne!(h.state().histogram, before);
+        // Échap ferme sans rien lancer.
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().palette.is_none());
+        // En vim, « : » ouvre, sans s'écrire dans le champ.
+        use_vim(&mut h);
+        type_text(&mut h, ":");
+        let query = h.state().palette.as_ref().map(|p| p.query.clone());
+        assert_eq!(query.as_deref(), Some(""));
     }
 
     #[test]

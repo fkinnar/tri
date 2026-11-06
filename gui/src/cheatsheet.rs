@@ -7,9 +7,10 @@
 use crate::actions::{Action, Group, Keymap, Scope};
 
 /// Endroit de l'interface dont l'aide « ici » montre les raccourcis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Place {
     /// Grille des vignettes.
+    #[default]
     Grid,
     /// Une image en plein écran.
     View,
