@@ -254,8 +254,10 @@ system one ("cold" measurements, experiments).
   `Shift+W`; for a stack larger
   than the limit, `f c` shows the whole stack, expanded, in the grid (a single stack, not
   regrouped apart: #163), `f c` again or
-  "Clear" gives everything back, and a stack that was collapsed collapses again; with stacks on, a single photo is a one-image stack and compares
-  too, 2026-10-26, #167) (at least 2, at most `[gui.compare] max`, 6 by default: each keeps
+  "Clear" gives everything back, and a stack that was collapsed collapses again; with
+  stacks on, a stack button in the filter bar does the same, lit in the accent colour
+  while looking at a stack (2026-11-06), greyed out outside a stack; with stacks on, a single photo is a one-image stack and compares
+  too, 2026-10-26, #167) (at least 2, at most `[gui.compare] max`, 21 by default since 2026-11-06 (6 before): each keeps
   its preview and its 1:1 in graphics memory), laid out to be seen as large as possible
   (number of columns chosen from the proportions of the images and of the window, last
   row centred). The **active image** (frame in the selection colour) is the current
@@ -450,7 +452,8 @@ system one ("cold" measurements, experiments).
   `<` impossible, egui only receives its character), after `loupe_delay_ms` (no flicker
   on a short press), a square of `loupe_size` points under the pointer shows the image at
   `loupe_scale` (100 %); its 1:1 is loaded for the occasion, the enlarged preview shown
-  while waiting ("loading 100 %…").
+  while waiting ("loading 100 %…"). In **comparison** too since 2026-11-06: the image
+  under the pointer (`loupe_index`), drawn over the others.
 - **Back to the grid with the mouse** (issue #193): in full screen, a grid icon at the
   far right of the bottom bar (like Esc).
 - **"Expand all" button** next to the similarity slider (`Shift+S`).

@@ -263,8 +263,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   de sa couverture, comme `Maj+W` ; pour une
   pile plus grande que la limite, `f c` montre toute la pile, dépliée, dans la grille (une
   seule pile, sans regroupement à part : #163),
-  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; piles actives, une photo seule est une pile d'une image et se compare
-  aussi, 26/10/2026, #167) (au moins 2, au plus `[gui.compare] max`, 6 par défaut : chacune
+  `f c` encore ou « Effacer » rend tout, et une pile qui était repliée se replie ; en
+  mode pile, un bouton pile dans la barre des filtres fait de même, allumé à l'accent
+  quand on regarde une pile (06/11/2026), grisé hors d'une pile ; piles actives, une photo seule est une pile d'une image et se compare
+  aussi, 26/10/2026, #167) (au moins 2, au plus `[gui.compare] max`, 21 par défaut depuis le 06/11/2026 (6 avant) : chacune
   garde son aperçu et son 1:1 en mémoire graphique), disposées pour être vues le plus
   grand possible (nombre de colonnes choisi d'après les proportions des images et de la
   fenêtre, dernière ligne centrée). L'**image active** (cadre de la couleur de sélection)
@@ -474,7 +476,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   n'en reçoit que le caractère), après `loupe_delay_ms` (pas de clignotement sur une
   pression brève), un carré de `loupe_size` points sous le pointeur montre
   l'image à `loupe_scale` (100 %) ; son 1:1 est chargé pour l'occasion, l'aperçu agrandi
-  en attendant (« 100 % en cours »).
+  en attendant (« 100 % en cours »). En **comparaison** aussi depuis le 06/11/2026 :
+  l'image sous le pointeur (`loupe_index`), dessinée par-dessus les autres.
 - **Bouton « tout déplier »** à côté du curseur de similarité (`Maj+S`).
 - **Piles de développements** (30/10/2026, `Stacks::with_developments`, moteur
   `tri::developments`, voir `developments.md`) : une photo et ses développements

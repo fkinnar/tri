@@ -833,6 +833,9 @@ pub struct TriApp {
     /// Loupe : touche maintenue depuis…, et loupe affichée.
     loupe_since: Option<Instant>,
     loupe_on: bool,
+    /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
+    /// pointeur.
+    loupe_index: usize,
     /// Zoom par double-clic : point cliqué (relatif) et position du curseur, appliqués dès
     /// que le 100 % est affiché (sa taille n'est connue qu'à ce moment) pour garder ce point
     /// sous le curseur.
@@ -1317,6 +1320,7 @@ impl TriApp {
             fit_scale: 1.0,
             loupe_since: None,
             loupe_on: false,
+            loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
             big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
@@ -7427,7 +7431,7 @@ impl TriApp {
                 let path = self.files[i].path.clone();
                 wanted.push((rank == 0, i, self.developed_level(&path)));
             }
-            if self.zoom.is_some() || (self.loupe_on && rank == 0) {
+            if self.zoom.is_some() || (self.loupe_on && i == self.loupe_index) {
                 let developed = self.developed_level(&self.files[i].path);
                 let level = view::zoom_level(kind, self.source_for(&self.files[i]), developed);
                 // 100 % RAW : seulement une fois qu'on s'est arrêté sur l'image.
@@ -7550,7 +7554,7 @@ impl TriApp {
         let mut loupe_extra = None;
         if self.loupe_on
             && !zoomed
-            && let Some(file) = self.files.get(self.selected)
+            && let Some(file) = self.files.get(self.loupe_index)
         {
             let level = view::zoom_level(
                 file.kind,
@@ -7558,8 +7562,8 @@ impl TriApp {
                 self.developed_level(&file.path),
             );
             let key = (file.path.clone(), level);
-            if self.ready(self.selected, level)
-                && !self.loaded(self.selected, level)
+            if self.ready(self.loupe_index, level)
+                && !self.loaded(self.loupe_index, level)
                 && !self.missing.contains(&key)
             {
                 loupe_extra = Some((file.clone(), level));
@@ -9046,6 +9050,10 @@ impl TriApp {
         let pan = std::mem::take(&mut self.pan);
         let mut waiting = false;
         let mut new_center = None;
+        // Loupe (`t`, comme en plein écran ; demandé le 06/11/2026) : l'image sous le
+        // pointeur, dessinée après toutes les autres pour pouvoir déborder sur elles.
+        let pointer = ctx.input(|i| i.pointer.hover_pos());
+        let mut loupe_target = None;
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         for (&index, &rect) in panes.iter().zip(&rects) {
             let file = self.files[index].clone();
@@ -9104,6 +9112,9 @@ impl TriApp {
                     }
                     _ => view::fit_rect(rect, original),
                 };
+                if pointer.is_some_and(|p| rect.contains(p)) {
+                    loupe_target = Some((index, image_rect.intersect(rect)));
+                }
                 painter.image(texture.id(), image_rect, uv, Color32::WHITE);
                 self.draw_overlay(&ctx, &painter, Some(image_rect));
                 // Repères du capteur : faux sur un développé recadré.
@@ -9169,6 +9180,11 @@ impl TriApp {
         }
         if let Some(c) = new_center {
             self.zoom = Some(c);
+        }
+        let painter = ui.painter_at(area);
+        match loupe_target {
+            Some((index, image_rect)) => self.loupe(&ctx, &painter, index, Some(image_rect)),
+            None => self.loupe(&ctx, &painter, self.selected, None),
         }
         self.view_waiting = waiting;
     }
@@ -9246,6 +9262,12 @@ impl TriApp {
             self.loupe_since = None;
             self.loupe_on = false;
             return;
+        }
+        // Une autre image (comparaison : le pointeur passe d'une image à l'autre) : son
+        // 1:1 est demandé à son tour.
+        if self.loupe_index != index {
+            self.loupe_index = index;
+            self.loupe_on = false;
         }
         let since = *self.loupe_since.get_or_insert_with(Instant::now);
         let delay = Duration::from_millis(z.loupe_delay_ms);
@@ -12100,6 +12122,35 @@ impl TriApp {
                     clicked.push(action);
                 }
             }
+            // Pile courante seulement (`f c`), en mode pile : allumé à l'accent quand on
+            // regarde une pile (retour du 06/11/2026 : rien ne le disait), grisé si
+            // l'image n'est pas dans une pile.
+            if self.stacking {
+                let on = self.stack_only.is_some();
+                let enabled = on
+                    || self
+                        .stacks
+                        .range_of(self.selected)
+                        .is_some_and(|r| r.len() > 1);
+                let tip = self.action_tip(Action::FilterStack);
+                let (rect, response) = marks::clickable(ui, size, &tip);
+                let response = if enabled {
+                    response
+                } else {
+                    response.on_hover_cursor(egui::CursorIcon::Default)
+                };
+                let color = if on {
+                    marks::accent_mark(ui.ctx())
+                } else if enabled {
+                    ui.visuals().weak_text_color()
+                } else {
+                    ui.visuals().weak_text_color().gamma_multiply(0.4)
+                };
+                filter_icon(ui.painter(), rect, Action::FilterStack, color);
+                if enabled && response.clicked() {
+                    clicked.push(Action::FilterStack);
+                }
+            }
             ui.separator();
             for color in Color::ALL {
                 let tip = self.action_tip(Action::FilterColor(color));
@@ -14633,6 +14684,7 @@ fn filter_icon(painter: &egui::Painter, rect: Rect, action: Action, color: Color
         Action::FilterBlurry => marks::sharp_triangle(painter, rect, color),
         Action::FilterWellExposed => marks::sun(painter, rect, color),
         Action::FilterDeveloped => marks::film_reel(painter, rect, color),
+        Action::FilterStack => marks::bar_icon(painter, rect, Action::StackMode, color),
         _ => {}
     }
 }
@@ -17077,6 +17129,46 @@ mod tests {
             h.state().selection.is_empty(),
             "clic simple : sélection effacée"
         );
+    }
+
+    #[test]
+    fn the_loupe_works_in_comparison_on_the_image_under_the_pointer() {
+        let names = ["a.jpg", "b.jpg", "c.jpg"];
+        let (mut h, _dir) = harness_files(&names, 64, 48);
+        h.run_steps(3);
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Compare);
+        h.run_steps(5);
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        h.event(UiEvent::Key {
+            key: Key::T,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        // `t` maintenue, le pointeur passe sur chaque image : la loupe suit.
+        let area = h.ctx.content_rect();
+        let mut seen = HashSet::new();
+        for k in 1..20 {
+            for y in [0.35, 0.5, 0.65] {
+                let at = pos2(
+                    area.left() + area.width() * k as f32 / 20.0,
+                    area.top() + area.height() * y,
+                );
+                h.hover_at(at);
+                h.run_steps(2);
+                if h.state().loupe_on {
+                    seen.insert(h.state().loupe_index);
+                }
+            }
+        }
+        assert!(seen.len() >= 2, "loupe sur plusieurs images : {seen:?}");
+        assert_eq!(selected_name(&h), "c.jpg", "l'image active ne change pas");
     }
 
     #[test]
@@ -20916,6 +21008,23 @@ mod tests {
         h.run_steps(2);
         // Repliée avant `f c` : repliée de nouveau en sortant (retour du 25/10/2026).
         assert_eq!(h.state().stacks.shown.len(), 2, "pile repliée de nouveau");
+        // Bouton de la pile dans la barre des filtres (06/11/2026) : comme `f c`.
+        let tip = h.state().action_tip(Action::FilterStack);
+        h.get_by_label(&tip).click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 3, "bouton : une pile");
+        h.get_by_label(&tip).click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 6, "bouton encore : tout");
+        h.state_mut().stacking = false;
+        h.run_steps(2);
+        assert!(
+            h.query_by_label(&tip).is_none(),
+            "sans piles, pas de bouton"
+        );
+        h.state_mut().stacking = true;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
         // Dépliée avant (s) : elle le reste.
         press(&mut h, Key::S, Modifiers::NONE);
         press(&mut h, Key::F, Modifiers::NONE);

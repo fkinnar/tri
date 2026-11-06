@@ -836,7 +836,7 @@ pub struct CompareSettings {
 impl Default for CompareSettings {
     fn default() -> Self {
         Self {
-            max: 6,
+            max: 21,
             gap: 4.0,
             frame: 3.0,
         }

@@ -779,8 +779,8 @@ completions = 12
 [gui.compare]
 # Comparaison côte à côte des images sélectionnées (c). Images comparées au plus (au-delà,
 # les premières) : chacune garde un aperçu, et en 1:1 son 1:1 (~100 Mo de mémoire graphique
-# pour 26 Mpx).
-max = 6
+# pour 26 Mpx ; 21 en 1:1 : ~2 Go). 21 : à peu près la taille des vignettes sur un écran.
+max = 21
 # Espace entre les images (points).
 gap = 4.0
 # Épaisseur du cadre de l'image active (celle que l'on note).
