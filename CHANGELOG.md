@@ -97,6 +97,8 @@
 - **Keyboard loupe steps**: measured in the loupe (the image at 100 %), the same in the
   grid and full screen: a quarter of a loupe, a whole loupe with Shift (on a thumbnail
   they jumped hundreds of pixels).
+- **Right panel**: each section starts at the same distance from its title ("View" and
+  "Grid", which open on a subheading, started lower).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
