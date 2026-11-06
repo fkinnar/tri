@@ -442,6 +442,8 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
+    /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
+    HelpHere,
     /// Fenêtre de réglages.
     Settings,
     /// Rechercher une nouvelle version (sur demande, page Releases).
@@ -460,7 +462,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 195] = [
+    pub const ALL: [Action; 196] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -638,6 +640,7 @@ impl Action {
         Action::PanDown,
         Action::Back,
         Action::Help,
+        Action::HelpHere,
         Action::Settings,
         Action::CheckUpdate,
         Action::ReportIssue,
@@ -745,7 +748,7 @@ impl Action {
                 Group::Panels
             }
             SelectToggle | SelectVisual | SelectAll | SelectClear | Compare => Group::Selection,
-            Help | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
+            Help | HelpHere | Settings | CheckUpdate | ReportIssue | Quit => Group::App,
         }
     }
 
@@ -785,7 +788,10 @@ impl Action {
 
     /// Vrai pour les actions encore actives quand une fenêtre (l'aide) est au premier plan.
     pub fn works_over_overlay(self) -> bool {
-        matches!(self, Action::Back | Action::Help | Action::Quit)
+        matches!(
+            self,
+            Action::Back | Action::Help | Action::HelpHere | Action::Quit
+        )
     }
 
     /// Identifiant stable, utilisé par le fichier de raccourcis.
@@ -971,6 +977,7 @@ impl Action {
             Action::PanDown => "core.view.pan_down",
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
+            Action::HelpHere => "core.app.help_here",
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",
             Action::ReportIssue => "core.app.report_issue",
@@ -1971,6 +1978,11 @@ impl Keymap {
         }
     }
 
+    /// Nom lisible du leader en vigueur (« Ctrl+b »), vide s'il n'y en a pas.
+    pub fn leader_label(&self) -> String {
+        self.leader.as_ref().map(chord_label).unwrap_or_default()
+    }
+
     /// Nom lisible d'un raccourci écrit dans `[keys]` (« gg » pour « g g »), le leader
     /// écrit `<leader>` (fenêtre de réglages) ; illisible : tel quel.
     pub fn spec_label(&self, spec: &str) -> String {
@@ -2855,10 +2867,11 @@ mod tests {
         assert_eq!(vim.keys_for(Action::NavLast), ["Maj+g"]);
         assert_eq!(vim.keys_for(Action::NavPrev), ["h"]);
         assert_eq!(vim.keys_for(Action::PanLeft), ["Maj+h"]);
-        assert_eq!(km.keys_for(Action::Help), ["F1", "?"]);
+        assert_eq!(km.keys_for(Action::Help), ["F1"]);
+        assert_eq!(km.keys_for(Action::HelpHere), ["?"]);
         assert_eq!(
             km.action(Key::Questionmark, Modifiers::SHIFT),
-            Some(Action::Help)
+            Some(Action::HelpHere)
         );
         assert_eq!(
             sequence_label(&[plain(Key::Escape), plain(Key::G)]),

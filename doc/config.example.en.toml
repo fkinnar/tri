@@ -778,6 +778,10 @@ help_width = 620.0
 # Keyboard scrolling of the help: per up / down arrow, in points (pages: Page Up /
 # Down, Ctrl+U / Ctrl+D).
 help_scroll_line = 40.0
+# "Help here" (?, the shortcuts of where you are, over the screen): text size and width
+# of a column of cards, in points.
+help_here_text = 16.0
+help_here_column = 420.0
 # During a wait (copy, network lookup, key sequence…), interval between two frames to see
 # how far it has got, in milliseconds.
 poll_ms = 100

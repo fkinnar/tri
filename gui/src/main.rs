@@ -32,6 +32,7 @@ macro_rules! t {
 
 mod actions;
 mod app;
+mod cheatsheet;
 mod compare;
 mod crash;
 mod crop;

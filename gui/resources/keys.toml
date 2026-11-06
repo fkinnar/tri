@@ -57,8 +57,11 @@ loupe = "m"
 "core.view.open" = ["Enter"]
 "core.view.zoom" = ["z"]
 "core.view.back" = ["Escape"]
-# "?" comes with or without Shift depending on the keyboard layout.
-"core.app.help" = ["F1", "?", "Shift+?"]
+# F1: every action, with a search. "?": the shortcuts of where you are (grid, full
+# screen, a panel…), over the screen. "?" comes with or without Shift depending on the
+# keyboard layout.
+"core.app.help" = ["F1"]
+"core.app.help_here" = ["?", "Shift+?"]
 # Search: Ctrl+F everywhere. "/" also works in the grid and in the folder panel; in
 # full screen, "/" stays "fit".
 "core.search" = ["Ctrl+f"]

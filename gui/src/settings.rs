@@ -717,6 +717,10 @@ pub struct DialogSettings {
     pub help_width: f32,
     /// Défilement de l'aide par flèche haut / bas (points).
     pub help_scroll_line: f32,
+    /// Aide « ici » (`?`) : taille du texte (points), en grand pour se lire d'un coup d'œil.
+    pub help_here_text: f32,
+    /// Aide « ici » : largeur d'une colonne de cartes (points).
+    pub help_here_column: f32,
     /// Pendant une attente (copie, recherche sur le réseau, touche de séquence…),
     /// intervalle entre deux images pour voir où elle en est (ms).
     pub poll_ms: u64,
@@ -744,6 +748,8 @@ impl Default for DialogSettings {
             icon_size: 34.0,
             help_width: 620.0,
             help_scroll_line: 40.0,
+            help_here_text: 16.0,
+            help_here_column: 420.0,
             poll_ms: 100,
             max_errors: 5,
             completions: 12,

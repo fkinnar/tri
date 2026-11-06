@@ -778,6 +778,10 @@ help_width = 620.0
 # Défilement de l'aide au clavier : par flèche haut / bas, en points (pages : Page préc. /
 # suiv., Ctrl+U / Ctrl+D).
 help_scroll_line = 40.0
+# Aide « ici » (?, les raccourcis de l'endroit où l'on est, par-dessus l'écran) : taille
+# du texte et largeur d'une colonne de cartes, en points.
+help_here_text = 16.0
+help_here_column = 420.0
 # Pendant une attente (copie, recherche sur le réseau, touche de séquence…), intervalle
 # entre deux images pour voir où elle en est, en millisecondes.
 poll_ms = 100

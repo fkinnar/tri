@@ -49,7 +49,8 @@ Plusieurs images côte à côte, c'est possible :
 
 ![Comparaison](../manual-images/fr/compare.jpg)
 
-Comment ? **F1** affiche tous les raccourcis, avec une recherche :
+Comment ? **?** montre les raccourcis de l'endroit où l'on est ; **F1** les affiche tous,
+avec une recherche :
 
 ![Aide](../manual-images/fr/help.jpg)
 
