@@ -108,6 +108,26 @@ pub fn clamp_center(view: Vec2, size: Vec2, center: Vec2) -> Vec2 {
     )
 }
 
+/// `rect` déplacé (sans changer de taille) pour tenir dans `bounds` ; plus grand que
+/// `bounds`, centré sur lui dans ce sens (loupe près du bord de l'écran).
+pub fn keep_inside(rect: Rect, bounds: Rect) -> Rect {
+    let shift = |min: f32, max: f32, lo: f32, hi: f32| {
+        if max - min > hi - lo {
+            (lo + hi) / 2.0 - (min + max) / 2.0
+        } else if min < lo {
+            lo - min
+        } else if max > hi {
+            hi - max
+        } else {
+            0.0
+        }
+    };
+    rect.translate(vec2(
+        shift(rect.min.x, rect.max.x, bounds.min.x, bounds.max.x),
+        shift(rect.min.y, rect.max.y, bounds.min.y, bounds.max.y),
+    ))
+}
+
 /// Coordonnées relatives (0..1) du point `pos` dans l'image affichée en `rect`.
 pub fn relative(rect: Rect, pos: Pos2) -> Vec2 {
     vec2(
@@ -304,6 +324,25 @@ mod tests {
             pick(MediaKind::Raw, Source::Developed, false, DT, |_| true),
             Some(DT)
         );
+    }
+
+    #[test]
+    fn a_rect_is_kept_inside_its_bounds() {
+        let bounds = Rect::from_min_max(pos2(0.0, 0.0), pos2(1000.0, 600.0));
+        let side = vec2(320.0, 320.0);
+        // Inside: unchanged.
+        let r = Rect::from_center_size(pos2(500.0, 300.0), side);
+        assert_eq!(keep_inside(r, bounds), r);
+        // Near the top and the bottom: pushed back inside.
+        let top = keep_inside(Rect::from_center_size(pos2(500.0, 20.0), side), bounds);
+        assert_eq!(top.min.y, 0.0);
+        let bottom = keep_inside(Rect::from_center_size(pos2(990.0, 590.0), side), bounds);
+        assert_eq!((bottom.max.x, bottom.max.y), (1000.0, 600.0));
+        assert_eq!(bottom.size(), side);
+        // Larger than the bounds: centred on them.
+        let small = Rect::from_min_max(pos2(0.0, 0.0), pos2(200.0, 200.0));
+        let big = keep_inside(Rect::from_center_size(pos2(10.0, 10.0), side), small);
+        assert_eq!(big.center(), small.center());
     }
 
     #[test]

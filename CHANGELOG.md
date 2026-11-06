@@ -110,6 +110,9 @@
 - **Labels without keys**: the stacks one spoke of "left / right arrows" (in vim, `h` /
   `l`); labels say what the action does, its keys are shown next to it, those of the
   chosen set.
+- **Loupe at the edge of the screen**: it stays inside the visible area (at the top or
+  bottom, half of it went off-screen, mostly in the grid and focus mode), the aimed point
+  at the centre of what it shows.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

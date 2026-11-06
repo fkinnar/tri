@@ -116,6 +116,9 @@
 - **Libellés sans touches** : celui des piles parlait de « flèches gauche / droite » (en
   vim, ce sont `h` / `l`) ; les libellés disent ce que fait l'action, ses touches sont à
   côté, celles du jeu choisi.
+- **Loupe au bord de l'écran** : elle reste dans la zone visible (en haut ou en bas, la
+  moitié sortait, surtout en grille et en mode concentration), le point visé au centre de
+  ce qu'elle montre.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
