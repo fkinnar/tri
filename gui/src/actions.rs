@@ -1521,6 +1521,8 @@ pub struct Keymap {
     /// Raccourcis propres au jeu choisi (`[classic]` ou `[vim]`) et ceux de `[keys]` :
     /// l'aide ne montre qu'eux pour une action qui en a ([`Keymap::keys_for`]).
     own: Vec<(Vec<Chord>, Action)>,
+    /// Jeu vim choisi : l'aide écrit `/` seul pour la recherche ([`Keymap::keys_for`]).
+    vim: bool,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -1568,6 +1570,7 @@ impl Keymap {
             loupe: crate::settings::LoupeKey::None,
             menus,
             own,
+            vim: profiles.contains(&Profile::Vim),
         }
     }
 
@@ -1879,6 +1882,21 @@ impl Keymap {
             .map(|(k, _)| k)
             .collect();
         let mut keys: Vec<String> = Vec::new();
+        // En grille, « ajusté » (`/`) lance la recherche (`TriApp::perform`) : l'aide
+        // l'écrit pour la recherche, seul en vim, comme dans vim (06/11/2026).
+        if action == Action::Search {
+            let custom = self.own.iter().any(|(_, a)| *a == Action::Search);
+            let fit: Vec<String> = self
+                .bindings
+                .iter()
+                .filter(|(k, a)| *a == Action::ZoomFit && k.len() == 1)
+                .map(|(k, _)| self.sequence_label(k))
+                .collect();
+            if self.vim && !custom && !fit.is_empty() {
+                return fit;
+            }
+            keys.extend(fit);
+        }
         for k in &mine {
             let unshifted: Vec<Chord> = k.iter().map(|c| Chord { shift: false, ..*c }).collect();
             let shift_variant = k.iter().any(|c| c.shift) && mine.contains(&&unshifted);
@@ -2656,6 +2674,9 @@ mod tests {
         );
         // Sans touche propre au jeu : les communes.
         assert_eq!(vim.keys_for(Action::Open), classic.keys_for(Action::Open));
+        // La recherche : `/` en grille (« ajusté » y cherche), seul en vim.
+        assert_eq!(vim.keys_for(Action::Search), ["/"]);
+        assert_eq!(classic.keys_for(Action::Search), ["/", "Ctrl+f"]);
         // `[keys]` : ce que l'utilisateur a choisi.
         let mut overrides = BTreeMap::new();
         overrides.insert(

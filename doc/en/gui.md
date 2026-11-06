@@ -982,7 +982,11 @@ a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). T
 effect: they follow the chosen set. For an action that has keys of its own in the chosen
 set (`[vim]` or `[classic]`, or `[keys]`), they show only those (2026-11-06: in vim, "x"
 deletes, without Delete or Backspace, common and still active; easier to read);
-otherwise, the common ones (`Keymap::keys_for`).
+otherwise, the common ones (`Keymap::keys_for`). Special case of the search: in the
+grid, "fit" (`/`) starts it (`TriApp::perform`), so the help writes `/` for it, alone in
+vim (as in vim), with `Ctrl+f` in classic. The search field is only shown in the grid
+(feedback of 2026-11-06: in the enlarged view it is useless, and `/` there goes back to
+"fit").
 
 ### Menu of continuations (2026-11-06)
 

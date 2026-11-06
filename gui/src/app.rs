@@ -7764,9 +7764,7 @@ impl TriApp {
 
     /// Touches de la recherche, pour les bulles et les indications.
     fn search_keys(&self) -> String {
-        let mut keys = vec!["/".to_string()];
-        keys.extend(self.keymap.keys_for(Action::Search));
-        keys.join(", ")
+        self.keymap.keys_for(Action::Search).join(", ")
     }
 
     /// « Se connecter à un serveur » : le champ de recherche du panneau des dossiers, avec
@@ -12336,27 +12334,31 @@ impl TriApp {
                     n = self.folder.files.len()
                 ))
                 .on_hover_text(t!("filter-bar-count-tip"));
-                // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf. Le
-                // champ prend la place qui reste, jusqu'à `search_width` (issue n° 71).
-                let grid = self.gui.grid;
-                let room = ui.available_width() - spacing;
-                let search_width = room.clamp(grid.search_min_width, grid.search_width);
-                let hint = t!("search-grid-hint", keys = self.search_keys());
-                let field = ui.add(
-                    egui::TextEdit::singleline(&mut self.name_query)
-                        .id(grid_search_id())
-                        .hint_text(hint)
-                        .desired_width(search_width),
-                );
-                if self.focus_request == Some(grid_search_id()) {
-                    field.request_focus();
-                    self.focus_request = None;
-                }
-                if field.changed() {
-                    refilter = true;
-                }
-                if field.has_focus() {
-                    self.search_focused = Some(grid_search_id());
+                // Recherche par nom : en grille seulement (retour du 06/11/2026 : en vue
+                // agrandie, elle ne sert à rien, et `/` y remet en « ajusté »).
+                if self.mode == Mode::Grid {
+                    // Recherche par nom (retour du 19/10/2026) : filtre en direct, à la fzf. Le
+                    // champ prend la place qui reste, jusqu'à `search_width` (issue n° 71).
+                    let grid = self.gui.grid;
+                    let room = ui.available_width() - spacing;
+                    let search_width = room.clamp(grid.search_min_width, grid.search_width);
+                    let hint = t!("search-grid-hint", keys = self.search_keys());
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut self.name_query)
+                            .id(grid_search_id())
+                            .hint_text(hint)
+                            .desired_width(search_width),
+                    );
+                    if self.focus_request == Some(grid_search_id()) {
+                        field.request_focus();
+                        self.focus_request = None;
+                    }
+                    if field.changed() {
+                        refilter = true;
+                    }
+                    if field.has_focus() {
+                        self.search_focused = Some(grid_search_id());
+                    }
                 }
             });
         });
@@ -16278,6 +16280,22 @@ mod tests {
         act(&mut h, Action::SortBy(SortKey::Name));
         assert_eq!(h.state().order.key, SortKey::Name);
         assert_eq!(h.state().order.descending, descending);
+    }
+
+    #[test]
+    fn the_name_search_is_only_in_the_grid() {
+        // Retour du 06/11/2026 : en vue agrandie, la recherche ne sert à rien.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let fields = |h: &Harness<'_, TriApp>| {
+            h.query_all_by_role(egui::accesskit::Role::TextInput)
+                .count()
+        };
+        assert!(fields(&h) >= 1, "en grille, le champ de recherche");
+        act(&mut h, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        assert!(h.state().filter_bar, "la barre des filtres reste");
+        assert_eq!(fields(&h), 0, "plus aucun champ en plein écran");
     }
 
     #[test]
