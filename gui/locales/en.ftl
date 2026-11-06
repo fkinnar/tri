@@ -1040,6 +1040,10 @@ offload-eject = Eject the card
 ## Keys and shortcuts (shown, and read in [keys] in every language)
 
 keys-error = [keys] { $id }: { $error }
+keys-file-error = keys.toml [{ $section }] { $id }: { $error }
+keys-file-unknown-action = unknown action
+keys-file-section = keys.toml: unknown section "{ $section }" (common, classic, vim or leader)
+keys-file-unreadable = Default shortcuts unreadable ({ $path }: { $error }): the ones built into the program are used.
 keys-conflict = [keys] "{ $spec }" assigned to { $first } and to { $second }: kept for { $first }
 keys-replaces = [keys] "{ $spec }" ({ $action }) replaces the shortcut of { $other }
 keys-unknown-key = unknown key "{ $text }"

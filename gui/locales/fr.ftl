@@ -1042,6 +1042,10 @@ offload-eject = Éjecter la carte
 ## Touches et raccourcis (affichés, et lus dans [keys] dans toutes les langues)
 
 keys-error = [keys] { $id } : { $error }
+keys-file-error = keys.toml [{ $section }] { $id } : { $error }
+keys-file-unknown-action = action inconnue
+keys-file-section = keys.toml : section inconnue « { $section } » (common, classic, vim ou leader)
+keys-file-unreadable = Raccourcis par défaut illisibles ({ $path } : { $error }) : ceux intégrés au programme sont utilisés.
 keys-conflict = [keys] « { $spec } » attribué à { $first } et à { $second } : gardé pour { $first }
 keys-replaces = [keys] « { $spec } » ({ $action }) remplace le raccourci de { $other }
 keys-unknown-key = touche inconnue « { $text } »

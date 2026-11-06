@@ -8,9 +8,9 @@
   cadence du dossier éloigne deux images (en studio, un changement de pose tombe souvent
   sur une pause). Deux nouveaux curseurs dans la fenêtre de regroupement (`Ctrl+G`),
   retenus par dossier : « Importance des pauses » (à gauche, le contenu seul ; à droite,
-  les pauses coupent davantage, en photo de rue par exemple) et « Progression du curseur
-  » (vers la gauche, chaque pixel retire la même part des piles ; au-delà de 1, départ
-  plus doux du centre et droite plus rapide). À fond à gauche, le curseur de sévérité
+  les pauses coupent davantage, en photo de rue par exemple) et
+  « Progression du curseur » (vers la gauche, chaque pixel retire la même part des
+  piles ; au-delà de 1, départ plus doux du centre et droite plus rapide). À fond à gauche, le curseur de sévérité
   regroupe désormais tout. Réglages `[similarity] pause_weight`, `pause_range`,
   `strictness_curve`, `strictness_curve_max`. Fermée par Échap ou `Ctrl+G`, la fenêtre
   retient aussi la sévérité.
@@ -19,6 +19,12 @@
   sous le pointeur, comme en plein écran.
 - **Bouton de la pile** dans la barre des filtres, en mode pile : seulement la pile
   courante (`f c`), allumé quand on la regarde, recliquer pour tout revoir.
+- **Raccourcis par défaut dans un fichier** (#280) : plus aucun raccourci écrit dans le
+  code. Les jeux classique, vim et communs sont dans `keys.toml`, livré à côté du
+  programme et lu au lancement. Il liste toutes les actions, avec `[]` pour celles sans
+  raccourci. Une copie intégrée prend le relais si le fichier manque ou est illisible ; un
+  fichier illisible est signalé dans la barre d'état. Vos propres raccourcis restent dans
+  `[keys]`.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

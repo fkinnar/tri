@@ -13725,20 +13725,32 @@ impl TriApp {
         let mut report = false;
         let opening = self.help_search.is_none();
         let mut query = self.help_search.take().unwrap_or_default();
-        // Défilement au clavier (retour du 18/10/2026) : flèches haut / bas, pages, et
-        // Ctrl+U / Ctrl+D ; pris avant le champ de recherche, à qui elles ne servent pas.
+        // Défilement au clavier (retour du 18/10/2026) : les touches de navigation du
+        // profil (ligne et page, `keys.toml`) qui ne tapent pas de texte (flèches, pages,
+        // Ctrl+U / Ctrl+D) ; prises avant le champ de recherche, à qui elles ne servent
+        // pas. Une page avec Ctrl (vim) : une demi-hauteur, comme dans vim.
         let max_height = ctx.content_rect().height() * 0.75;
         let line = self.gui.dialogs.help_scroll_line;
+        let mut steps = Vec::new();
+        for (action, sign) in [
+            (Action::NavDown, 1.0),
+            (Action::NavUp, -1.0),
+            (Action::NavPageDown, 1.0),
+            (Action::NavPageUp, -1.0),
+        ] {
+            let page = matches!(action, Action::NavPageDown | Action::NavPageUp);
+            for chord in self.keymap.scroll_keys(action) {
+                let step = match (page, chord.1.ctrl) {
+                    (false, _) => line,
+                    (true, false) => max_height * 0.9,
+                    (true, true) => max_height * 0.5,
+                };
+                steps.push((chord.1, chord.0, sign * step));
+            }
+        }
         let scroll = ctx.input_mut(|i| {
             let mut delta = 0.0;
-            for (modifiers, key, step) in [
-                (egui::Modifiers::NONE, egui::Key::ArrowDown, line),
-                (egui::Modifiers::NONE, egui::Key::ArrowUp, -line),
-                (egui::Modifiers::NONE, egui::Key::PageDown, max_height * 0.9),
-                (egui::Modifiers::NONE, egui::Key::PageUp, -max_height * 0.9),
-                (egui::Modifiers::CTRL, egui::Key::D, max_height * 0.5),
-                (egui::Modifiers::CTRL, egui::Key::U, -max_height * 0.5),
-            ] {
+            for &(modifiers, key, step) in &steps {
                 while i.consume_key(modifiers, key) {
                     delta += step;
                 }

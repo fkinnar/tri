@@ -1118,6 +1118,7 @@ const fn plain(key: Key) -> Chord {
     }
 }
 
+#[cfg(test)]
 const fn shifted(key: Key) -> Chord {
     Chord {
         trigger: Trigger::Key(key),
@@ -1126,14 +1127,7 @@ const fn shifted(key: Key) -> Chord {
     }
 }
 
-const fn ctrl_shift(key: Key) -> Chord {
-    Chord {
-        trigger: Trigger::Key(key),
-        shift: true,
-        ctrl: true,
-    }
-}
-
+#[cfg(test)]
 const fn ctrl(key: Key) -> Chord {
     Chord {
         trigger: Trigger::Key(key),
@@ -1141,9 +1135,6 @@ const fn ctrl(key: Key) -> Chord {
         ctrl: true,
     }
 }
-
-/// Un raccourci d'un profil : une touche, ou une séquence de touches (`g g`).
-type Binding = (&'static [Chord], Action);
 
 /// Jeu de raccourcis, au choix (`[gui] profile`, décidé le 18/10/2026 : un utilisateur
 /// d'outils classiques n'a que faire des touches de vim, et inversement ; un nouveau
@@ -1162,409 +1153,6 @@ pub enum Profile {
     /// Les deux ensemble (ils ne se recouvrent pas).
     Both,
 }
-
-/// Profil classique, en plus des listes communes.
-const CLASSIC: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::ArrowLeft)], NavPrev),
-        (&[plain(Key::ArrowRight)], NavNext),
-        (&[plain(Key::ArrowUp)], NavUp),
-        (&[plain(Key::ArrowDown)], NavDown),
-        (&[plain(Key::Home)], NavFirst),
-        (&[plain(Key::End)], NavLast),
-        // Début / fin de la pile (issue n° 62) : Maj en plus, Début / Fin restant le dossier.
-        (&[shifted(Key::Home)], StackFirst),
-        (&[shifted(Key::End)], StackLast),
-        (&[plain(Key::PageUp)], NavPageUp),
-        (&[plain(Key::PageDown)], NavPageDown),
-        (&[shifted(Key::ArrowLeft)], PanLeft),
-        (&[shifted(Key::ArrowRight)], PanRight),
-        (&[shifted(Key::ArrowUp)], PanUp),
-        (&[shifted(Key::ArrowDown)], PanDown),
-        // Recadrage : flèches pour déplacer le cadre, Maj pour le côté droit / le bas.
-        (&[plain(Key::ArrowLeft)], CropMove(Dir::Left)),
-        (&[plain(Key::ArrowRight)], CropMove(Dir::Right)),
-        (&[plain(Key::ArrowUp)], CropMove(Dir::Up)),
-        (&[plain(Key::ArrowDown)], CropMove(Dir::Down)),
-        (&[shifted(Key::ArrowLeft)], CropSize(Dir::Left)),
-        (&[shifted(Key::ArrowRight)], CropSize(Dir::Right)),
-        (&[shifted(Key::ArrowUp)], CropSize(Dir::Up)),
-        (&[shifted(Key::ArrowDown)], CropSize(Dir::Down)),
-        // Copier / déplacer vers… : `Ctrl+C` / `Ctrl+X`, comme copier / couper d'un
-        // gestionnaire de fichiers (`Cmd+C` sur macOS, voir `Chord::from_event`).
-        (&[ctrl(Key::C)], FileCopy),
-        (&[ctrl(Key::C)], FolderCopy),
-        // Toute la pile : Maj en plus (corbeille confirmée, comme toujours).
-        (&[ctrl_shift(Key::C)], FileCopyStack),
-        (&[shifted(Key::Delete)], FileDeleteStack),
-        (&[ctrl(Key::Y)], Redo),
-        // Panneau des dossiers.
-        (&[plain(Key::ArrowUp)], FolderUp),
-        (&[plain(Key::ArrowDown)], FolderDown),
-        (&[plain(Key::ArrowRight)], FolderExpand),
-        (&[plain(Key::ArrowLeft)], FolderCollapse),
-        (&[plain(Key::Home)], FolderFirst),
-        (&[plain(Key::End)], FolderLast),
-        // Panneau des métadonnées : Maj + flèches étendent la sélection.
-        (&[plain(Key::ArrowUp)], MetaUp),
-        (&[plain(Key::ArrowDown)], MetaDown),
-        (&[shifted(Key::ArrowUp)], MetaSelectUp),
-        (&[shifted(Key::ArrowDown)], MetaSelectDown),
-        (&[ctrl_shift(Key::C)], MetaCopyAll),
-        // Réglages du panneau de droite : ← / → font varier le réglage pointé ; Tab /
-        // Maj+Tab passent d'une section à l'autre (aussi dans les dossiers).
-        (&[plain(Key::ArrowLeft)], PanelLeft),
-        (&[plain(Key::ArrowRight)], PanelRight),
-        (&[plain(Key::Tab)], PanelSectionNext),
-        (&[shifted(Key::Tab)], PanelSectionPrev),
-        (&[plain(Key::Tab)], FolderSectionNext),
-        (&[shifted(Key::Tab)], FolderSectionPrev),
-    ]
-};
-
-/// Profil vim, en plus des listes communes. `u` annule, comme dans vim.
-const VIM: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::H)], NavPrev),
-        (&[plain(Key::L)], NavNext),
-        (&[plain(Key::K)], NavUp),
-        (&[plain(Key::J)], NavDown),
-        (&[plain(Key::G), plain(Key::G)], NavFirst),
-        (&[shifted(Key::G)], NavLast),
-        (&[ctrl(Key::U)], NavPageUp),
-        (&[ctrl(Key::D)], NavPageDown),
-        (&[shifted(Key::H)], PanLeft),
-        (&[shifted(Key::L)], PanRight),
-        (&[shifted(Key::K)], PanUp),
-        (&[shifted(Key::J)], PanDown),
-        // Recadrage : hjkl pour déplacer le cadre, Maj pour le côté droit / le bas.
-        (&[plain(Key::H)], CropMove(Dir::Left)),
-        (&[plain(Key::L)], CropMove(Dir::Right)),
-        (&[plain(Key::K)], CropMove(Dir::Up)),
-        (&[plain(Key::J)], CropMove(Dir::Down)),
-        (&[shifted(Key::H)], CropSize(Dir::Left)),
-        (&[shifted(Key::L)], CropSize(Dir::Right)),
-        (&[shifted(Key::K)], CropSize(Dir::Up)),
-        (&[shifted(Key::J)], CropSize(Dir::Down)),
-        // `y` copie (« yank »), `x` supprime (efface le caractère : ici l'image ; une
-        // confirmation suit). La pile est une phrase (choix de l'utilisateur, 25/10/2026,
-        // issue n° 62) : `(` / `)` son début et sa fin, `d)` / `y)` toute la pile (`dw` /
-        // `yw` avant : une pile comme un mot ; `[` / `]` écartés : Alt+Maj en AZERTY sur
-        // macOS). Caractères plutôt que touches : directs en AZERTY, Maj+9 / Maj+0 en
-        // QWERTY. `y` seul attend un court instant la suite
-        // (`[gui] key_ambiguous_timeout_ms`).
-        (&[plain(Key::Y)], FileCopy),
-        (&[plain(Key::Y), Chord::char(')')], FileCopyStack),
-        (&[plain(Key::D), Chord::char(')')], FileDeleteStack),
-        // `dd` : la photo entière, avec ses développements (30/10/2026).
-        (&[plain(Key::D), plain(Key::D)], FileDeletePhoto),
-        (&[Chord::char('(')], StackFirst),
-        (&[Chord::char(')')], StackLast),
-        (&[plain(Key::X)], FileDelete),
-        (&[plain(Key::U)], Undo),
-        (&[ctrl(Key::R)], Redo),
-        // Panneau des dossiers, comme nvim-tree.
-        (&[plain(Key::K)], FolderUp),
-        (&[plain(Key::J)], FolderDown),
-        (&[plain(Key::L)], FolderExpand),
-        (&[plain(Key::H)], FolderCollapse),
-        (&[plain(Key::G), plain(Key::G)], FolderFirst),
-        (&[shifted(Key::G)], FolderLast),
-        (&[plain(Key::X)], FolderDelete),
-        (&[plain(Key::Y)], FolderCopy),
-        // Panneau des métadonnées : `y` copie, Maj + j / k étendent, Maj+Y copie tout.
-        (&[plain(Key::K)], MetaUp),
-        (&[plain(Key::J)], MetaDown),
-        (&[plain(Key::Y)], MetaCopy),
-        (&[shifted(Key::K)], MetaSelectUp),
-        (&[shifted(Key::J)], MetaSelectDown),
-        (&[shifted(Key::Y)], MetaCopyAll),
-        // Réglages du panneau de droite : h / l font varier le réglage pointé ; `(` / `)`
-        // passent d'une section à l'autre, comme de phrase en phrase (aussi dans les
-        // dossiers).
-        (&[plain(Key::H)], PanelLeft),
-        (&[plain(Key::L)], PanelRight),
-        (&[Chord::char(')')], PanelSectionNext),
-        (&[Chord::char('(')], PanelSectionPrev),
-        (&[Chord::char(')')], FolderSectionNext),
-        (&[Chord::char('(')], FolderSectionPrev),
-    ]
-};
-
-/// Commun aux deux profils : ouvrir, zoom, source, revenir, aide, quitter.
-const BASICS: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::Enter)], Open),
-        (&[plain(Key::Z)], ToggleZoom),
-        (&[plain(Key::B)], ToggleSource),
-        (&[plain(Key::Escape)], Back),
-        (&[plain(Key::F1)], Help),
-        // Rechercher : Ctrl+F partout ; `/` aussi en grille et dans le panneau des
-        // dossiers (en plein écran, `/` reste « ajusté », voir `TriApp::perform`).
-        (&[ctrl(Key::F)], Search),
-        // Mode concentration : F11 (plein écran des applications), Ctrl+Maj+F (sur macOS,
-        // F11 montre le bureau).
-        (&[plain(Key::F11)], FocusMode),
-        // Développer dans darktable : à la demande seulement (quelques secondes).
-        (&[shifted(Key::B)], Develop),
-        // Tout le dossier, en fond (issue n° 69).
-        (&[ctrl_shift(Key::B)], DevelopFolder),
-        (&[ctrl_shift(Key::F)], FocusMode),
-        // « ? » arrive avec ou sans Maj selon la disposition du clavier.
-        (&[plain(Key::Questionmark)], Help),
-        (&[shifted(Key::Questionmark)], Help),
-        // `q q` (#244 : `q` seul quittait trop vite, à côté de Maj+Q).
-        (&[plain(Key::Q), plain(Key::Q)], Quit),
-    ]
-};
-
-/// Sélection multiple, commune aux deux profils : tout au clavier (demande du
-/// 17/10/2026) ; `v` comme le mode visuel de vim. Échap désélectionne aussi.
-const SELECTION: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::Space)], SelectToggle),
-        (&[plain(Key::V)], SelectVisual),
-        (&[plain(Key::C)], Compare),
-        (&[ctrl(Key::A)], SelectAll),
-        (
-            &[Chord {
-                shift: true,
-                ..ctrl(Key::A)
-            }],
-            SelectClear,
-        ),
-    ]
-};
-
-/// Panneau des dossiers quand il a le clavier, commun aux deux profils (déplacement :
-/// flèches ou hjkl selon le profil).
-const FOLDERS: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::Enter)], FolderOpen),
-        // Support amovible pointé : décharger, éjecter (une boîte confirme).
-        (&[plain(Key::O)], FolderOffload),
-        (&[plain(Key::E)], FolderEject),
-        // Comme nvim-tree : `a` crée, `r` renomme ; supprimer : Suppr (et `x` en vim).
-        // Une boîte confirme toujours.
-        (&[plain(Key::A)], FolderCreate),
-        (&[plain(Key::R)], FolderRename),
-        (&[plain(Key::F2)], FolderRename),
-        (&[plain(Key::Delete)], FolderDelete),
-        (&[plain(Key::Backspace)], FolderDelete),
-        // Favori : `m` (« mark »), comme les marque-pages de nvim-tree.
-        (&[plain(Key::M)], FolderFavorite),
-        // Nommer le favori : `n`.
-        (&[plain(Key::N)], FolderFavoriteName),
-        // Se connecter à un partage réseau : `c` (« connect ») ; l'oublier : Maj+C.
-        (&[plain(Key::C)], FolderConnect),
-        (&[shifted(Key::C)], FolderForget),
-        // Ouvrir le dossier dans darktable : `d`, comme le développement des images.
-        (
-            &[plain(Key::D)],
-            FolderOpenIn(tri::develop::Engine::Darktable),
-        ),
-        // Copier / déplacer le dossier vers… : comme pour les images (`Ctrl+C` / `y`,
-        // `Ctrl+X`), la boîte permet de passer de l'un à l'autre.
-        (&[ctrl(Key::X)], FolderMove),
-    ]
-};
-
-/// Panneau des métadonnées quand il a le clavier, commun aux deux profils.
-const METADATA: &[Binding] = {
-    use Action::*;
-    &[
-        // Comme partout ailleurs (Cmd+C sur macOS, voir `Chord::from_event`).
-        (&[ctrl(Key::C)], MetaCopy),
-        (&[plain(Key::Enter)], MetaOpen),
-        (&[plain(Key::Space)], PanelActivate),
-    ]
-};
-
-/// Grand histogramme ouvert : r, g, b, un canal ; a, tous (demandé le 18/10/2026) ; l, la
-/// luminance.
-const HISTOGRAM: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::R)], HistogramRed),
-        (&[plain(Key::G)], HistogramGreen),
-        (&[plain(Key::B)], HistogramBlue),
-        (&[plain(Key::A)], HistogramAll),
-        // l : la luminance (choix de l'utilisateur, 28/10/2026).
-        (&[plain(Key::L)], HistogramLuminance),
-        // p : la photo d'analyse (zones sur l'image en gris), à droite de l'histogramme.
-        (&[plain(Key::P)], HistogramPhoto),
-        // j : la courbe du JPEG boîtier, par-dessus les données RAW.
-        (&[plain(Key::J)], HistogramCamera),
-    ]
-};
-
-/// Actions sur les fichiers, communes aux deux profils. Supprimer : Suppr, ou la touche
-/// « effacer » des claviers Mac (Backspace) ; une confirmation suit toujours.
-const FILES: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::F2)], FileRename),
-        (&[plain(Key::Delete)], FileDelete),
-        (&[plain(Key::Backspace)], FileDelete),
-        // La photo avec tous ses développements (30/10/2026) : Ctrl en plus. Sans
-        // développement, Suppr suffit (même boîte).
-        (&[ctrl(Key::Delete)], FileDeletePhoto),
-        (&[ctrl(Key::Backspace)], FileDeletePhoto),
-        (&[shifted(Key::R)], FileReveal),
-        (&[plain(Key::E)], FileEdit),
-        // Comme la plupart des applications (Cmd+, sur macOS est pris par le système).
-        (&[ctrl(Key::Comma)], Settings),
-        // Déplacer : `Ctrl+X`, couper (retour du 18/10/2026).
-        (&[ctrl(Key::X)], FileMove),
-        // Exporter (profil d'export, darktable) : `Ctrl+E`, comme Lightroom (`Cmd+E` sur
-        // macOS, voir `Chord::from_event`).
-        (&[ctrl(Key::E)], FileExport),
-        // Rapport d'export : Ctrl+Maj+E, à côté de l'export.
-        (&[ctrl_shift(Key::E)], ExportReport),
-        // Recadrer : r, comme Lightroom (plein écran ; depuis la grille, l'ouvre).
-        (&[plain(Key::R)], Crop),
-        // Versions de l'image : n, l'original puis chaque version.
-        (&[plain(Key::N)], VersionNext),
-        // Annuler : `Ctrl+Z` / `Ctrl+Maj+Z` (et `Cmd+Z` / `Cmd+Maj+Z` sur macOS, voir
-        // `Chord::from_event`) dans les deux profils, réflexe de tous.
-        (&[ctrl(Key::Z)], Undo),
-        (&[ctrl_shift(Key::Z)], Redo),
-        (&[ctrl(Key::H)], History),
-        // Piles : s déplie / replie celle de l'image, Maj+S toutes ; Ctrl+G le
-        // regroupement (seuil).
-        (&[plain(Key::S)], StackToggle),
-        (&[shifted(Key::S)], StacksAll),
-        (&[ctrl(Key::G)], GroupingWindow),
-        // Développements d'une photo (30/10/2026) : Maj+V déplie / replie, Maj+W / Maj+Q
-        // le suivant / le précédent (grille et plein écran) ; Ctrl+Maj+V replie toutes
-        // les piles (31/10/2026).
-        // Les développements se plient avec les touches des piles (harmonisation du
-        // 31/10/2026) : `core.dev.toggle` et `core.dev.fold_all` n'ont plus de touche par
-        // défaut (réglables dans `[keys]`).
-        (&[shifted(Key::W)], DevNext),
-        (&[shifted(Key::Q)], DevPrev),
-        // Zoom par paliers, comme Lightroom : des caractères, pour la rangée du haut comme
-        // pour le pavé numérique, quelle que soit la disposition du clavier.
-        (&[Chord::char('+')], ZoomIn),
-        (&[Chord::char('-')], ZoomOut),
-        (&[Chord::char('*')], Zoom100),
-        (&[Chord::char('/')], ZoomFit),
-        // Mode pile (plein écran) ; la préférée de la pile : Maj+Entrée (Entrée aussi en
-        // mode pile, en plein écran).
-        (&[ctrl(Key::S)], StackMode),
-        // `((` ouvre un niveau (rafale, puis développements), `))` le ferme (idée de
-        // l'utilisateur, 31/10/2026) ; caractères : directs en AZERTY, Maj+9 / Maj+0 en
-        // QWERTY. Jamais `[` `]` ni `{` `}` (Alt+Maj sur macOS).
-        (&[Chord::char('('), Chord::char('(')], StackOpen),
-        (&[Chord::char(')'), Chord::char(')')], StackClose),
-        (&[shifted(Key::Enter)], StackChoose),
-        // En entrant dans une pile : couverture ou première photo (bouton du bandeau).
-        (&[ctrl_shift(Key::S)], StackEnterToggle),
-    ]
-};
-
-/// Listes communes aux deux profils.
-const COMMON: &[&[Binding]] = &[
-    BASICS, RATING, FILTERS, SELECTION, FILES, FOLDERS, METADATA, HISTOGRAM, CROP,
-];
-
-/// Recadrage, commun aux deux profils : chiffres pour le rapport (avec ou sans Maj, pour
-/// l'AZERTY), x pour l'orientation (comme Lightroom), Entrée pour enregistrer.
-const CROP: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::Num1)], CropRatio(0)),
-        (&[shifted(Key::Num1)], CropRatio(0)),
-        (&[plain(Key::Num2)], CropRatio(1)),
-        (&[shifted(Key::Num2)], CropRatio(1)),
-        (&[plain(Key::Num3)], CropRatio(2)),
-        (&[shifted(Key::Num3)], CropRatio(2)),
-        (&[plain(Key::Num4)], CropRatio(3)),
-        (&[shifted(Key::Num4)], CropRatio(3)),
-        (&[plain(Key::Num5)], CropRatio(4)),
-        (&[shifted(Key::Num5)], CropRatio(4)),
-        (&[plain(Key::Num6)], CropRatio(5)),
-        (&[shifted(Key::Num6)], CropRatio(5)),
-        (&[plain(Key::Num7)], CropRatio(6)),
-        (&[shifted(Key::Num7)], CropRatio(6)),
-        (&[plain(Key::X)], CropRotate),
-        (&[plain(Key::Enter)], CropSave),
-        // Préréglages : Tab / Maj+Tab (retour du 21/10/2026 : `p` était aussi la carte de
-        // netteté, restée affichée pendant le recadrage).
-        (&[plain(Key::Tab)], CropPreset),
-        (&[shifted(Key::Tab)], CropPresetPrev),
-    ]
-};
-
-/// Notation, commune aux deux profils, pensée aussi pour l'AZERTY : chiffres avec ou sans Maj
-/// (rangée du haut de l'AZERTY avec Maj, pavé numérique sans), violet sur « ° » (AZERTY),
-/// « , » et « . » (séparateur décimal du pavé numérique selon le système), drapeaux sur Maj + P / X / U (`u` seul est réservé à
-/// l'annulation).
-const RATING: &[Binding] = {
-    use Action::*;
-    &[
-        (&[plain(Key::Num0)], Stars(0)),
-        (&[shifted(Key::Num0)], Stars(0)),
-        (&[plain(Key::Num1)], Stars(1)),
-        (&[shifted(Key::Num1)], Stars(1)),
-        (&[plain(Key::Num2)], Stars(2)),
-        (&[shifted(Key::Num2)], Stars(2)),
-        (&[plain(Key::Num3)], Stars(3)),
-        (&[shifted(Key::Num3)], Stars(3)),
-        (&[plain(Key::Num4)], Stars(4)),
-        (&[shifted(Key::Num4)], Stars(4)),
-        (&[plain(Key::Num5)], Stars(5)),
-        (&[shifted(Key::Num5)], Stars(5)),
-        (&[plain(Key::Num6)], Color(tri::xmp::Color::Red)),
-        (&[shifted(Key::Num6)], Color(tri::xmp::Color::Red)),
-        (&[plain(Key::Num7)], Color(tri::xmp::Color::Yellow)),
-        (&[shifted(Key::Num7)], Color(tri::xmp::Color::Yellow)),
-        (&[plain(Key::Num8)], Color(tri::xmp::Color::Green)),
-        (&[shifted(Key::Num8)], Color(tri::xmp::Color::Green)),
-        (&[plain(Key::Num9)], Color(tri::xmp::Color::Blue)),
-        (&[shifted(Key::Num9)], Color(tri::xmp::Color::Blue)),
-        (&[Chord::char('°')], Color(tri::xmp::Color::Purple)),
-        (&[plain(Key::Comma)], Color(tri::xmp::Color::Purple)),
-        // Séparateur décimal du pavé numérique : « , » sur macOS, « . » sous Linux Mint.
-        (&[plain(Key::Period)], Color(tri::xmp::Color::Purple)),
-        (&[shifted(Key::P)], Flag(tri::xmp::Flag::Accepted)),
-        (&[shifted(Key::X)], Flag(tri::xmp::Flag::Rejected)),
-        (&[shifted(Key::U)], Flag(tri::xmp::Flag::None)),
-        (&[shifted(Key::A)], ToggleAutoAdvance),
-        (&[shifted(Key::N)], ToggleRatingBar),
-        (&[ctrl(Key::I)], ToggleImageInfo),
-        // « L » comme les lumières de Lightroom.
-        (&[ctrl(Key::L)], BackgroundNext),
-        // Infos des vignettes (« texte ») : nom, format, notes, badges.
-        (&[shifted(Key::T)], ToggleGridInfo),
-        (&[shifted(Key::D)], ToggleFolderPanel),
-        (&[plain(Key::F5)], RefreshFolders),
-        (&[plain(Key::I)], ToggleHistogram),
-        (&[shifted(Key::I)], HistogramScale),
-        (&[shifted(Key::E)], HistogramLarge),
-        (&[shifted(Key::C)], HistogramChannel),
-        // Zones saturées / bouchées : `w` (« warnings », alertes ; `o` est aux superpositions,
-        // comme dans Lightroom, retour du 19/10/2026).
-        (&[plain(Key::W)], ToggleClipping),
-        (&[plain(Key::P)], TogglePeaking),
-        (&[ctrl(Key::P)], PeakingColor),
-        // Sévérité de la netteté (curseur, carte et jugement) : Ctrl+J plus souple, Ctrl+K
-        // plus strict, comme bas / haut dans vim (Ctrl + flèches : au système).
-        (&[ctrl(Key::J)], SharpnessLenient),
-        (&[ctrl(Key::K)], SharpnessStrict),
-        (&[plain(Key::M)], ToggleFocusPoint),
-        // Superpositions, comme Lightroom : `o` la suivante (grilles, puis celles de
-        // l'utilisateur), Maj+O fait tourner la spirale (et les autres lignes).
-        (&[plain(Key::O)], OverlayNext),
-        (&[shifted(Key::O)], OverlayOrient),
-        (&[shifted(Key::M)], ToggleMetadata),
-    ]
-};
 
 /// Événements qu'egui-winit livre pour la touche `key` tenue avec `modifiers` (pour les
 /// tests : `egui_kittest` envoie toujours la touche elle-même). Comme `egui-winit` 0.37
@@ -1613,72 +1201,156 @@ fn clipboard_key(event: &Event, modifiers: Modifiers) -> Option<Key> {
     })
 }
 
-/// Filtres, communs aux deux profils : préfixe `f` (choix du 17/10/2026), suivi de la
-/// touche de notation correspondante ; `f f` change le type, `f Échap` efface tout.
-const FILTERS: &[Binding] = {
-    use Action::*;
-    use tri::xmp::Color as C;
-    const F: Chord = plain(Key::F);
-    &[
-        (&[F, F], FilterCycle),
-        (&[F, plain(Key::Num0)], FilterStars(0)),
-        (&[F, shifted(Key::Num0)], FilterStars(0)),
-        (&[F, plain(Key::Num1)], FilterStars(1)),
-        (&[F, shifted(Key::Num1)], FilterStars(1)),
-        (&[F, plain(Key::Num2)], FilterStars(2)),
-        (&[F, shifted(Key::Num2)], FilterStars(2)),
-        (&[F, plain(Key::Num3)], FilterStars(3)),
-        (&[F, shifted(Key::Num3)], FilterStars(3)),
-        (&[F, plain(Key::Num4)], FilterStars(4)),
-        (&[F, shifted(Key::Num4)], FilterStars(4)),
-        (&[F, plain(Key::Num5)], FilterStars(5)),
-        (&[F, shifted(Key::Num5)], FilterStars(5)),
-        // Comparaison : au moins, exactement, au plus (#165).
-        (&[F, plain(Key::Equals)], FilterStarsOp),
-        (&[F, plain(Key::P)], FilterFlag(FlagFilter::Accepted)),
-        (&[F, shifted(Key::P)], FilterFlag(FlagFilter::Accepted)),
-        (&[F, plain(Key::U)], FilterFlag(FlagFilter::NotRejected)),
-        (&[F, shifted(Key::U)], FilterFlag(FlagFilter::NotRejected)),
-        (&[F, plain(Key::X)], FilterFlag(FlagFilter::Rejected)),
-        (&[F, shifted(Key::X)], FilterFlag(FlagFilter::Rejected)),
-        (&[F, plain(Key::Num6)], FilterColor(C::Red)),
-        (&[F, shifted(Key::Num6)], FilterColor(C::Red)),
-        (&[F, plain(Key::Num7)], FilterColor(C::Yellow)),
-        (&[F, shifted(Key::Num7)], FilterColor(C::Yellow)),
-        (&[F, plain(Key::Num8)], FilterColor(C::Green)),
-        (&[F, shifted(Key::Num8)], FilterColor(C::Green)),
-        (&[F, plain(Key::Num9)], FilterColor(C::Blue)),
-        (&[F, shifted(Key::Num9)], FilterColor(C::Blue)),
-        (&[F, Chord::char('°')], FilterColor(C::Purple)),
-        (&[F, plain(Key::Comma)], FilterColor(C::Purple)),
-        (&[F, plain(Key::Period)], FilterColor(C::Purple)),
-        (&[F, plain(Key::Escape)], FilterClear),
-        (&[F, plain(Key::B)], FilterBlurry),
-        // Bien exposées : `w` comme les zones d'exposition (« warnings ») ; inverser : `i`.
-        (&[F, plain(Key::W)], FilterWellExposed),
-        // « pile courante » (issue n° 52).
-        (&[F, plain(Key::C)], FilterStack),
-        (&[F, plain(Key::I)], FilterInvert),
-        // Ordre (« sort ») : suivant, et sens (« reverse »).
-        (&[F, plain(Key::S)], SortNext),
-        (&[F, plain(Key::R)], SortReverse),
-        // Rendu des vignettes (« développé », #114).
-        (&[F, plain(Key::D)], GridRenderNext),
-        // Développées : Maj+D, à côté du rendu des vignettes.
-        (&[F, shifted(Key::D)], FilterDeveloped),
-        (&[shifted(Key::F)], ToggleFilterBar),
+/// Raccourcis par défaut, lus dans `keys.toml` (issue n° 280 : plus aucun raccourci écrit
+/// dans le code). Le fichier est livré à côté du programme ([`resource_file`]) pour
+/// pouvoir changer les défauts sans recompiler ; une copie est intégrée au programme, en
+/// secours.
+#[derive(Clone, Debug, Default)]
+pub struct Defaults {
+    /// Communs aux deux profils.
+    common: Vec<(Vec<Chord>, Action)>,
+    /// Profil classique.
+    classic: Vec<(Vec<Chord>, Action)>,
+    /// Profil vim.
+    vim: Vec<(Vec<Chord>, Action)>,
+    /// Touches tapées après le préfixe des panneaux (`[gui] leader`).
+    leader: Vec<(Vec<Chord>, Action)>,
+}
+
+/// Copie de `gui/resources/keys.toml` intégrée au programme.
+const EMBEDDED_KEYS: &str = include_str!("../resources/keys.toml");
+
+/// Nom du fichier des raccourcis par défaut.
+const KEYS_FILE: &str = "keys.toml";
+
+/// Raccourcis par défaut chargés (une fois, au premier usage) et les problèmes à
+/// signaler.
+static DEFAULTS: std::sync::OnceLock<(Defaults, Vec<String>)> = std::sync::OnceLock::new();
+
+impl Defaults {
+    /// Lit `text` (syntaxe de `keys.toml`) ; renvoie aussi les problèmes : action ou
+    /// touche inconnue (l'entrée est ignorée), section inconnue. `Err` si le fichier
+    /// n'est pas du TOML lisible.
+    pub fn parse(text: &str) -> Result<(Defaults, Vec<String>), String> {
+        let table: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
+        let mut defaults = Defaults::default();
+        let mut warnings = Vec::new();
+        for (section, entries) in &table {
+            let list = match section.as_str() {
+                "common" => &mut defaults.common,
+                "classic" => &mut defaults.classic,
+                "vim" => &mut defaults.vim,
+                "leader" => &mut defaults.leader,
+                _ => {
+                    warnings.push(t!("keys-file-section", section = section.as_str()));
+                    continue;
+                }
+            };
+            let Some(entries) = entries.as_table() else {
+                warnings.push(t!("keys-file-section", section = section.as_str()));
+                continue;
+            };
+            // Dans l'ordre du fichier : à touches égales, la première l'emporte.
+            for (id, specs) in entries {
+                let Some(action) = Action::from_id(id) else {
+                    let error = t!("keys-file-unknown-action");
+                    warnings.push(t!(
+                        "keys-file-error",
+                        section = section.as_str(),
+                        id = id.as_str(),
+                        error = error
+                    ));
+                    continue;
+                };
+                let specs: Vec<&str> = match specs.as_array() {
+                    Some(a) => a.iter().filter_map(|v| v.as_str()).collect(),
+                    None => specs.as_str().into_iter().collect(),
+                };
+                for spec in specs {
+                    match parse_keys(spec) {
+                        Ok(keys) => list.push((keys, action)),
+                        Err(e) => warnings.push(t!(
+                            "keys-file-error",
+                            section = section.as_str(),
+                            id = id.as_str(),
+                            error = e
+                        )),
+                    }
+                }
+            }
+        }
+        Ok((defaults, warnings))
+    }
+
+    /// Les raccourcis par défaut : `keys.toml` à côté du programme s'il y en a un, sinon
+    /// la copie intégrée (aussi si le fichier est illisible : le problème est signalé).
+    fn load() -> (Defaults, Vec<String>) {
+        let embedded = || Defaults::parse(EMBEDDED_KEYS).expect("keys.toml intégré valide");
+        // Les tests ne dépendent pas d'un fichier posé à côté de leur exécutable.
+        if cfg!(test) {
+            return embedded();
+        }
+        let Some(path) = resource_file() else {
+            return embedded();
+        };
+        let read = std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|text| Defaults::parse(&text));
+        match read {
+            Ok(loaded) => loaded,
+            Err(e) => {
+                let (defaults, mut warnings) = embedded();
+                warnings.insert(
+                    0,
+                    t!(
+                        "keys-file-unreadable",
+                        path = path.display().to_string(),
+                        error = e
+                    ),
+                );
+                (defaults, warnings)
+            }
+        }
+    }
+
+    /// Les raccourcis par défaut chargés (au premier appel).
+    pub fn get() -> &'static Defaults {
+        &DEFAULTS.get_or_init(Defaults::load).0
+    }
+
+    /// Problèmes rencontrés en chargeant les raccourcis par défaut.
+    pub fn warnings() -> &'static [String] {
+        &DEFAULTS.get_or_init(Defaults::load).1
+    }
+}
+
+/// `keys.toml` livré avec le programme, s'il existe : à côté de l'exécutable (Windows,
+/// archive), dans `../Resources` (paquet macOS `tri.app`), ou `../share/tri` (Linux :
+/// `/usr/bin` → `/usr/share/tri`).
+pub fn resource_file() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    [
+        dir.join(KEYS_FILE),
+        dir.join("../Resources").join(KEYS_FILE),
+        dir.join("../share/tri").join(KEYS_FILE),
     ]
-};
+    .into_iter()
+    .find(|p| p.is_file())
+}
 
 impl Profile {
-    /// Raccourcis du profil, notation et filtres compris.
-    pub fn bindings(self) -> impl Iterator<Item = &'static Binding> {
-        let own: &[&[Binding]] = match self {
-            Profile::Classic => &[CLASSIC],
-            Profile::Vim => &[VIM],
-            Profile::Both => &[CLASSIC, VIM],
+    /// Raccourcis du profil, notation et filtres compris (`keys.toml`).
+    pub fn defaults(self) -> impl Iterator<Item = &'static (Vec<Chord>, Action)> {
+        let d = Defaults::get();
+        let own: Vec<&'static Vec<(Vec<Chord>, Action)>> = match self {
+            Profile::Classic => vec![&d.classic],
+            Profile::Vim => vec![&d.vim],
+            Profile::Both => vec![&d.classic, &d.vim],
         };
-        own.iter().chain(COMMON).flat_map(|list| list.iter())
+        own.into_iter()
+            .chain([&d.common])
+            .flat_map(|list| list.iter())
     }
 }
 
@@ -1711,12 +1383,12 @@ impl Keymap {
     pub fn from_profiles(profiles: &[Profile]) -> Keymap {
         let mut bindings: Vec<(Vec<Chord>, Action)> = Vec::new();
         for profile in profiles {
-            for &(keys, action) in profile.bindings() {
+            for (keys, action) in profile.defaults() {
                 if !bindings
                     .iter()
-                    .any(|(k, a)| k == keys && conflict(*a, action))
+                    .any(|(k, a)| k == keys && conflict(*a, *action))
                 {
-                    bindings.push((keys.to_vec(), action));
+                    bindings.push((keys.clone(), *action));
                 }
             }
         }
@@ -1925,22 +1597,48 @@ impl Keymap {
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
         self.leader = Some(lead);
-        for (key, action) in [
-            (Key::H, Action::FocusLeft),
-            (Key::ArrowLeft, Action::FocusLeft),
-            (Key::L, Action::FocusRight),
-            (Key::ArrowRight, Action::FocusRight),
-            (Key::O, Action::FocusNext),
-            (Key::B, Action::ReportIssue),
-            // Développer (26/10/2026, choix de l'utilisateur) : `r` le logiciel de l'image
-            // (comme Maj+B), `d` darktable, `p` RapidRAW.
-            (Key::R, Action::Develop),
-            (Key::D, Action::DevelopWith(tri::develop::Engine::Darktable)),
-            (Key::P, Action::DevelopWith(tri::develop::Engine::RapidRaw)),
-        ] {
-            self.bindings.push((vec![lead, plain(key)], action));
+        // Touches suivantes : section `[leader]` de `keys.toml`.
+        for (keys, action) in &Defaults::get().leader {
+            let mut sequence = vec![lead];
+            sequence.extend(keys.iter().copied());
+            self.bindings.push((sequence, *action));
         }
         Ok(self)
+    }
+
+    /// Touches d'une action utilisables pour faire défiler un texte pendant qu'un champ a
+    /// le clavier (fenêtre d'aide) : une seule combinaison, qui ne tape pas de texte
+    /// (avec Ctrl, ou flèches, pages, Début / Fin). Avec ses modificateurs egui.
+    pub fn scroll_keys(&self, action: Action) -> Vec<(Key, Modifiers)> {
+        self.bindings
+            .iter()
+            .filter(|(_, a)| *a == action)
+            .filter_map(|(keys, _)| match keys.as_slice() {
+                [chord] => match chord.trigger {
+                    Trigger::Key(key)
+                        if chord.ctrl
+                            || matches!(
+                                key,
+                                Key::ArrowUp
+                                    | Key::ArrowDown
+                                    | Key::PageUp
+                                    | Key::PageDown
+                                    | Key::Home
+                                    | Key::End
+                            ) =>
+                    {
+                        let modifiers = Modifiers {
+                            shift: chord.shift,
+                            ctrl: chord.ctrl,
+                            ..Modifiers::NONE
+                        };
+                        Some((key, modifiers))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
     }
 
     /// Raccourcis d'une action tels qu'on les écrit dans `[keys]` (« Maj+P », « g g »),
@@ -2574,9 +2272,57 @@ mod tests {
     }
 
     #[test]
+    fn the_keys_file_lists_every_action_and_reads_cleanly() {
+        // Toutes les actions, même sans raccourci (`[]`) : un fichier à lire d'un coup
+        // d'œil, et un point de départ complet pour qui écrit le sien (choix de
+        // l'utilisateur, 06/11/2026). Une nouvelle action s'ajoute aussi à `keys.toml`.
+        assert!(
+            Defaults::warnings().is_empty(),
+            "{:?}",
+            Defaults::warnings()
+        );
+        let table: toml::Table = toml::from_str(EMBEDDED_KEYS).unwrap();
+        let ids: Vec<&String> = table
+            .values()
+            .filter_map(|v| v.as_table())
+            .flat_map(|t| t.keys())
+            .collect();
+        let missing: Vec<&str> = Action::ALL
+            .iter()
+            .map(|a| a.id())
+            .filter(|id| !ids.iter().any(|i| i == id))
+            .collect();
+        assert!(missing.is_empty(), "absentes de keys.toml : {missing:?}");
+        // Le fichier livré est celui intégré au programme.
+        let shipped = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/keys.toml"),
+        )
+        .unwrap();
+        assert_eq!(shipped, EMBEDDED_KEYS);
+    }
+
+    #[test]
+    fn a_broken_keys_file_is_reported_entry_by_entry() {
+        let text = r#"
+            [common]
+            "core.view.zoom" = ["z", "Ctrl+Pomme"]
+            "core.nope" = ["x"]
+            [vim]
+            "core.nav.next" = ["l"]
+            [autre]
+            "core.view.back" = ["Escape"]
+        "#;
+        let (d, warnings) = Defaults::parse(text).unwrap();
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+        assert_eq!(d.common, vec![(vec![plain(Key::Z)], Action::ToggleZoom)]);
+        assert_eq!(d.vim, vec![(vec![plain(Key::L)], Action::NavNext)]);
+        assert!(Defaults::parse("[common\n").is_err(), "TOML illisible");
+    }
+
+    #[test]
     fn profiles_cover_every_action_and_have_no_internal_conflict() {
         for profile in [Profile::Classic, Profile::Vim] {
-            let b: Vec<&Binding> = profile.bindings().collect();
+            let b: Vec<&(Vec<Chord>, Action)> = profile.defaults().collect();
             // Changement de panneau : lié après le leader (`Keymap::with_leader`).
             let by_leader = [
                 Action::FocusLeft,
@@ -2971,7 +2717,7 @@ mod tests {
         // sous Linux, Windows et macOS (Ctrl physique), et doit revenir intact.
         let km = Keymap::default();
         for profile in [Profile::Classic, Profile::Vim] {
-            for (chords, action) in profile.bindings() {
+            for (chords, action) in profile.defaults() {
                 for chord in chords.iter() {
                     let Trigger::Key(key) = chord.trigger else {
                         continue;

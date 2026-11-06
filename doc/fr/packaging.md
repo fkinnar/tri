@@ -56,6 +56,8 @@ publiée). Pour la bêta (prévu) : une branche
   chargé depuis Homebrew.
 - `Info.plist` (identifiant `io.github.fkinnar.tri`, catégorie photographie), icône
   `tri.icns` tirée de `gui/assets/icon-1024.png` (`sips`, `iconutil`).
+- `Contents/Resources/keys.toml` : raccourcis par défaut (`gui/resources/keys.toml`, lu
+  au lancement, voir `gui.md` ; 06/11/2026, issue n° 280).
 - Le `.dmg` contient l'app, un lien vers Applications et les fichiers de licence.
 - Ligne de commande depuis l'app : `/Applications/tri.app/Contents/MacOS/tri`.
 
@@ -90,6 +92,7 @@ tri-<version>-linux-<arch>/
   bin/tri-gui, bin/tri
   lib/          LibRaw et dépendances (libraw, liblcms2, libjpeg, libgomp)
   share/applications/tri.desktop, share/icons/hicolor/256x256/apps/tri.png
+  share/tri/keys.toml   raccourcis par défaut (lus depuis bin/../share/tri)
   licenses/, install.sh, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
@@ -137,7 +140,8 @@ Faits de la même arborescence que l'archive (même glibc minimale, mêmes bibli
 livrées), à la suite :
 
 - **`.deb`** (`package_deb`, `dpkg-deb`) : tout dans `/opt/tri`, liens `/usr/bin/tri-gui`
-  et `/usr/bin/tri`, lanceur et icône dans `/usr/share` ; le RPATH `$ORIGIN/../lib` suit
+  et `/usr/bin/tri`, lanceur et icône dans `/usr/share` (mais `keys.toml` dans
+  `/opt/tri/share/tri`, à côté du programme : le lien est résolu) ; le RPATH `$ORIGIN/../lib` suit
   le lien. Version Debian : `1.0.0~alpha.7` (`~` : avant la version finale), de nuit
   `1.0.0~alpha.7+nightly.20261025.d16c32f`. Dépend de la glibc 2.39 et du runtime C++ ;
   affichage (OpenGL, X11, Wayland) recommandé seulement, chargé par winit à
@@ -159,7 +163,7 @@ Ajouté le 21/10/2026 (pour qu'« une personne normale » puisse l'installer) : 
 tri-<version>-windows-x64/
   tri-gui.exe, tri.exe
   raw_r.dll et ses dépendances vcpkg, runtime Visual C++ (msvcp140.dll, vcruntime140*.dll…)
-  tri.ico, licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
+  tri.ico, keys.toml (raccourcis par défaut), licenses/, LICENSE, README.md, CHANGELOG.md, CHANGELOG.fr.md
 ```
 
 - **Installateur** (WiX 5, `dotnet tool install --global wix --version 5.0.2` ; la
