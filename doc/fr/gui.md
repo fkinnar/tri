@@ -891,7 +891,13 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   quelque chose qui existe) ; et quand un mot tapé apparaît **tel quel** quelque part,
   les correspondances à lettres éparpillées sont écartées (`tri::fuzzy::find` et
   `relevant`) : « vim » ne noie plus le bon réglage dans tous ceux où traînent un v, un i
-  et un m.
+  et un m. Revu le 06/11/2026 (refonte de l'aide) : l'aide cherche dans les libellés et
+  mots-clés de **toutes les langues** (`Action::search_texts` : « crop », « peaking »,
+  « stack » dans une interface en français), avec des **mots-clés par thème**
+  (`kw-group-<thème>` : « noter » trouve les étoiles) ; une **faute de frappe** est
+  pardonnée dans un mot assez long (« histrogramme », voir `fuzzy.md`) ; une action
+  trouvée dans son **libellé** passe devant celles qui n'ont le mot que dans leurs
+  mots-clés (« darktable »).
 - **Saisie dans un champ** (recherche de l'aide, nom de dossier du déchargement) : les
   touches sont du texte ; seules celles qui ne tapent rien (Échap, F1 à F12 :
   `Trigger::types_no_text`) restent des raccourcis.

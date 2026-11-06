@@ -19,3 +19,11 @@ servir aussi :
   mots-clés…), et `Match { exact, score }`, `exact` quand chaque mot y apparaît d'un seul
   tenant ; **`relevant`** ne garde que les exactes s'il y en a, pour que des lettres
   éparpillées ne noient pas le bon résultat.
+- **Fautes de frappe** (06/11/2026, refonte de l'aide) : un mot tapé introuvable lettre à
+  lettre est cherché à quelques fautes près (lettre en trop, en moins, remplacée, deux
+  lettres inversées : distance de Damerau-Levenshtein restreinte), dans un mot du texte ou
+  à son début (on tape encore) ; aucune faute sous 4 lettres, une jusqu'à 7, deux
+  au-delà (`typos_allowed`). Score toujours plus bas qu'une correspondance sans faute.
+  `Match` gagne **`close`** (chaque mot tel quel ou à quelques fautes près d'un mot) :
+  `relevant` garde les exactes, sinon les proches, sinon le reste (« noter » remontait 44
+  actions aux lettres éparpillées).

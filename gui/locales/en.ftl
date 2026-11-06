@@ -287,6 +287,16 @@ place-folders = Folders panel
 place-metadata = Metadata panel
 help-here-title = Shortcuts here: { $place }
 help-here-footer = { $help }: every action, with a search · { $leader } = { $keys } (a pause after a key shows what follows) · Esc or click: close
+kw-group-navigation = navigate go move next previous browse
+kw-group-selection = select choose several multiple
+kw-group-view = show see view display screen
+kw-group-rating = rate rating stars colours colors label flag
+kw-group-filters = filter sort hide show
+kw-group-panels = panel bar show hide
+kw-group-files = file files manage
+kw-group-edit = undo redo history mistake
+kw-group-crop = crop cropping frame version
+kw-group-app = application program
 crop-bar-title = Crop
 crop-ratio-free = Free
 crop-ratio-original = Original

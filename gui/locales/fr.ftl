@@ -286,6 +286,16 @@ place-folders = Panneau des dossiers
 place-metadata = Panneau des métadonnées
 help-here-title = Raccourcis ici : { $place }
 help-here-footer = { $help } : toutes les actions, avec recherche · { $leader } = { $keys } (une pause après une touche montre la suite) · Échap ou clic : fermer
+kw-group-navigation = naviguer aller déplacer suivante précédente parcourir
+kw-group-selection = sélectionner choisir plusieurs multiple
+kw-group-view = afficher voir vue affichage écran
+kw-group-rating = noter note notes notation étoiles couleurs drapeau étiquette
+kw-group-filters = filtrer trier masquer cacher montrer
+kw-group-panels = panneau barre afficher masquer
+kw-group-files = fichier fichiers gérer
+kw-group-edit = annuler rétablir historique erreur
+kw-group-crop = recadrer recadrage cadrer version
+kw-group-app = application programme
 crop-bar-title = Recadrer
 crop-ratio-free = Libre
 crop-ratio-original = Original

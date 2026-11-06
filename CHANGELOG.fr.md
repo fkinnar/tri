@@ -48,6 +48,11 @@
   (grille, plein écran, comparaison, recadrage, grand histogramme, panneau des dossiers
   ou des métadonnées), rangés par thème, en grand. `F1` reste la liste complète avec
   recherche. Réglages `[gui.dialogs] help_here_text` et `help_here_column`.
+- **Recherche de l'aide** : elle trouve aussi les mots anglais (« crop », « peaking »,
+  « stack ») et pardonne une faute de frappe dans un mot assez long (« histrogramme ») ;
+  des mots-clés par thème (« noter » trouve les étoiles) ; une action qui a le mot dans
+  son libellé passe devant. Fautes de frappe et classement valent aussi pour la recherche
+  des réglages.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
