@@ -788,9 +788,10 @@ help_scroll_line = 40.0
 # du texte et largeur d'une colonne de cartes, en points.
 help_here_text = 16.0
 help_here_column = 420.0
-# Palette de commandes (Ctrl+Maj+P, : en vim) : largeur en points, lignes montrées au plus.
+# Palette de commandes (Ctrl+Maj+P, : en vim) : largeur en points, lignes montrées au plus
+# (0 : toutes ; elle défile).
 palette_width = 640.0
-palette_max = 40
+palette_max = 0
 # Préfixes de la palette : ">" ne cherche que les actions (comme dans VS Code), "?" que les
 # réglages ; seuls, ils listent tout. Vide : aucun.
 palette_actions_prefix = ">"

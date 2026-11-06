@@ -99,6 +99,10 @@
   they jumped hundreds of pixels).
 - **Right panel**: each section starts at the same distance from its title ("View" and
   "Grid", which open on a subheading, started lower).
+- **Palette without filter**: it offers every action and every setting, wherever the
+  keyboard is (from a side panel, "passer" did not find the review of developments), with
+  no line limit by default (`[gui.dialogs] palette_max = 0`); what applies here comes
+  first, and an action greyed out here says why when run.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

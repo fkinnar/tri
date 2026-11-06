@@ -723,7 +723,7 @@ pub struct DialogSettings {
     pub help_here_column: f32,
     /// Palette de commandes : largeur (points).
     pub palette_width: f32,
-    /// Palette de commandes : lignes montrées au plus.
+    /// Palette de commandes : lignes montrées au plus ; 0 : toutes.
     pub palette_max: usize,
     /// Palette de commandes : préfixe d'une recherche d'actions seulement (`>`, comme
     /// dans VS Code) : un caractère ; vide : aucun.
@@ -786,7 +786,7 @@ impl Default for DialogSettings {
             help_here_text: 16.0,
             help_here_column: 420.0,
             palette_width: 640.0,
-            palette_max: 40,
+            palette_max: 0,
             palette_actions_prefix: Some('>'),
             palette_settings_prefix: Some('?'),
             poll_ms: 100,

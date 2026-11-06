@@ -1112,15 +1112,18 @@ les langues), le pluriel (« rendus vignette » : `fuzzy` tient un « s » ou «
 pour rien), les cases RAW / JPEG (actions `core.filter.kind.all|raw|flat`). Dans la
 palette comme dans l'aide, une ligne trouvée par des **mots** de son titre (pas par des
 lettres éparpillées) passe devant. Une action **grisée** ici (« Développées » sans photo
-développée dans le dossier : `TriApp::action_unusable`) est absente de la palette et
-refusée au clavier, avec la raison dans la barre d'état. La **loupe** (touche maintenue,
+développée dans le dossier : `TriApp::action_unusable`) vient après les autres dans la
+palette et est refusée quand on la lance, avec la raison dans la barre d'état. La **loupe** (touche maintenue,
 réglée à part) a son entrée d'aide, `Action::Loupe` (`core.view.loupe`), avec sa touche
 en vigueur ; elle ne se lie pas (`Action::bindable`) : absente de `keys.toml`, de `[keys]`
 et de la page des raccourcis ; lancée de la palette, elle rappelle sa touche. Chaque case du panneau a son
 action, pour la palette (retour du même soir : « passer en revue » ne trouvait que la
 valeur par défaut) : `core.view.review_developments` et `core.file.allow_actions`, sans
 raccourci, qui basculent l'état actuel ; les lignes de réglages s'y appellent
-« configuration ».
+« configuration ». La palette propose **tout, sans filtre** (retour du même soir : depuis
+un panneau latéral, « passer » ne trouvait pas la revue), sans limite de lignes par
+défaut ; à correspondance égale, ce qui vaut ici (`TriApp::palette_places` : le panneau
+qui a le clavier et les images) passe devant.
 
 ### Un seul rendu affiché (06/11/2026)
 

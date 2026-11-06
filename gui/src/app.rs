@@ -2060,9 +2060,10 @@ impl TriApp {
         open != clicked
     }
 
-    /// Action sans objet ici, grisée dans l'interface : absente de la palette, refusée au
-    /// clavier (retour du 06/11/2026 : « Développées », grisé sans photo développée dans le
-    /// dossier, s'allumait par la palette ou `f r`). Éteindre reste toujours possible.
+    /// Action sans objet ici, grisée dans l'interface : après les autres dans la palette,
+    /// refusée quand on la lance (retour du 06/11/2026 : « Développées », grisé sans photo
+    /// développée dans le dossier, s'allumait par la palette ou `f r`). Éteindre reste
+    /// toujours possible.
     fn action_unusable(&self, action: Action) -> Option<String> {
         match action {
             Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
@@ -6187,7 +6188,7 @@ impl TriApp {
                 self.help = false;
                 self.help_here = None;
                 self.palette = Some(PaletteState {
-                    place: self.help_place(),
+                    places: self.palette_places(),
                     settings: crate::settings_window::settings_list(&self.developers.engines()),
                     ..PaletteState::default()
                 });
@@ -13182,7 +13183,7 @@ impl TriApp {
                             &|a| self.action_unusable(a).is_none(),
                             &text,
                             self.gui.dialogs.palette_prefixes(),
-                            p.place,
+                            &p.places,
                             &p.settings,
                             self.gui.dialogs.palette_max,
                         );
@@ -13195,6 +13196,22 @@ impl TriApp {
                     }
                 }
             }
+        }
+    }
+
+    /// Endroits dont la palette met les actions en tête (elle propose tout) : celui de
+    /// l'aide « ici », et les images quand un panneau latéral a le clavier.
+    fn palette_places(&self) -> Vec<crate::cheatsheet::Place> {
+        use crate::cheatsheet::Place;
+        let here = self.help_place();
+        let images = match self.mode {
+            Mode::Grid => Place::Grid,
+            Mode::View => Place::View,
+            Mode::Compare => Place::Compare,
+        };
+        match here {
+            Place::Folders | Place::Metadata => vec![here, images],
+            _ => vec![here],
         }
     }
 
@@ -14225,7 +14242,7 @@ impl TriApp {
                 &|a| self.action_unusable(a).is_none(),
                 &query,
                 self.gui.dialogs.palette_prefixes(),
-                state.place,
+                &state.places,
                 &state.settings,
                 self.gui.dialogs.palette_max,
             );
@@ -15967,8 +15984,8 @@ struct PaletteState {
     hits: Vec<crate::palette::Hit>,
     /// Ligne choisie (Entrée la lance).
     selected: usize,
-    /// Endroit d'où on l'a ouverte : seules les actions qui y ont un sens.
-    place: crate::cheatsheet::Place,
+    /// Endroits d'où on l'a ouverte : seules les actions qui y ont un sens.
+    places: Vec<crate::cheatsheet::Place>,
     /// Les réglages, lus à l'ouverture.
     settings: Vec<crate::settings_window::SettingRef>,
     /// Le champ a reçu le clavier (une fois, à l'ouverture).
@@ -16484,6 +16501,51 @@ mod tests {
         assert!(h.state().review_developments);
         act(&mut h, Action::ReviewDevelopments);
         assert!(!h.state().review_developments);
+    }
+
+    #[test]
+    fn the_palette_offers_the_image_actions_from_a_side_panel() {
+        // Retour du 06/11/2026 : « passer » trouvait la revue des développements depuis
+        // les images, pas depuis un panneau latéral.
+        use crate::actions::Scope;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE); // pas en JPEG boîtier
+        let found = |h: &mut Harness<'_, TriApp>, focus: Scope| {
+            h.state_mut().metadata_panel = true;
+            h.state_mut().folder_panel = true;
+            h.state_mut().focus = focus;
+            press(h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+            type_text(h, "passer");
+            let hits: Vec<crate::palette::Item> = h
+                .state()
+                .palette
+                .as_ref()
+                .map(|p| p.hits.iter().map(|hit| hit.item.clone()).collect())
+                .unwrap_or_default();
+            press(h, Key::Escape, Modifiers::NONE);
+            hits.contains(&crate::palette::Item::Action(Action::ReviewDevelopments))
+        };
+        assert!(found(&mut h, Scope::Images));
+        assert!(
+            found(&mut h, Scope::Metadata),
+            "depuis le panneau de droite"
+        );
+        // Panneau de gauche, dans la grille (Échap rend d'abord le clavier aux images).
+        h.state_mut().focus = Scope::Images;
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        h.state_mut().folder_panel = true;
+        h.state_mut().focus = Scope::Folders;
+        assert_eq!(
+            h.state().palette_places(),
+            [
+                crate::cheatsheet::Place::Folders,
+                crate::cheatsheet::Place::Grid
+            ]
+        );
     }
 
     #[test]

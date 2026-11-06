@@ -69,18 +69,20 @@ pub fn split_prefix(query: &str, prefixes: Prefixes) -> (Only, &str) {
     (Only::All, query)
 }
 
-/// Lignes de la palette pour `query`, à l'endroit `place` : les actions qui y ont un sens
-/// ([`cheatsheet::applies`], sans la palette elle-même) et les réglages `settings`, les
-/// meilleurs d'abord (à égalité, une action avant un réglage, puis le titre le plus court),
-/// `max` au plus ; sans celles que `usable` refuse (grisées ici). Un préfixe ([`split_prefix`]) limite aux actions ou aux réglages ; seul,
-/// il les liste tous, dans l'ordre de l'aide ou du fichier (pour parcourir). Requête vide :
-/// rien (la palette invite à taper).
+/// Lignes de la palette pour `query` : toutes les actions (sans la palette elle-même) et
+/// les réglages `settings`, sans filtre (retour du 06/11/2026), les meilleurs d'abord ;
+/// à correspondance égale, celles qui valent ici (aux endroits `places`,
+/// [`cheatsheet::applies`], et que `usable` accepte) avant les autres, une action avant
+/// un réglage, puis le titre le plus court. `max` au plus (0 : sans limite). Un préfixe
+/// ([`split_prefix`]) limite aux actions ou aux réglages ; seul, il les liste tous, dans
+/// l'ordre de l'aide ou du fichier (pour parcourir). Requête vide : rien (la palette
+/// invite à taper).
 pub fn search(
     keymap: &Keymap,
     usable: &dyn Fn(Action) -> bool,
     query: &str,
     prefixes: Prefixes,
-    place: Place,
+    places: &[Place],
     settings: &[SettingRef],
     max: usize,
 ) -> Vec<Hit> {
@@ -91,15 +93,13 @@ pub fn search(
     }
     // Une touche tapée (« ctrl f ») : les actions qui lui sont liées, seulement.
     let typed = keymap.actions_for_typed_keys(query);
-    let mut found: Vec<((Hit, u8), tri::fuzzy::Match)> = Vec::new();
+    // (ligne, action ou réglage, vaut ici), correspondance.
+    let mut found: Vec<((Hit, u8, bool), tri::fuzzy::Match)> = Vec::new();
     for &action in Action::ALL.iter().filter(|_| only != Only::Settings) {
-        if action == Action::Palette
-            || !action.available()
-            || !cheatsheet::applies(action, place)
-            || !usable(action)
-        {
+        if action == Action::Palette || !action.available() {
             continue;
         }
+        let here = places.iter().any(|&p| cheatsheet::applies(action, p)) && usable(action);
         let keys = keymap.keys_for(action).join(" / ");
         let title = action.label();
         let mut fields = vec![title.clone(), keys.clone(), action.id().to_string()];
@@ -120,7 +120,7 @@ pub fn search(
                 keys,
                 detail: String::new(),
             };
-            found.push(((hit, 1), m));
+            found.push(((hit, 1, here), m));
         }
     }
     for s in settings
@@ -145,23 +145,23 @@ pub fn search(
                 keys: String::new(),
                 detail: s.doc.clone(),
             };
-            found.push(((hit, 0), m));
+            found.push(((hit, 0, true), m));
         }
     }
     if browsing {
         // Tout parcourir : dans l'ordre (thèmes de l'aide, fichier d'exemple).
-        found.sort_by_key(|((hit, _), _)| match hit.item {
+        found.sort_by_key(|((hit, _, _), _)| match hit.item {
             Item::Action(a) => crate::actions::Group::ALL
                 .iter()
                 .position(|g| *g == a.group()),
             Item::Setting(..) => None,
         });
-        return found.into_iter().map(|((hit, _), _)| hit).collect();
+        return found.into_iter().map(|((hit, _, _), _)| hit).collect();
     }
     let mut found = tri::fuzzy::relevant(found);
     // Trouvée dans son titre d'abord (« rendus vignette » : l'action « Rendu des
     // vignettes » avant un réglage qui n'a ces mots que dans sa description).
-    found.sort_by_cached_key(|((hit, kind), m)| {
+    found.sort_by_cached_key(|((hit, kind, here), m)| {
         // Des mots du titre, pas des lettres éparpillées (« crop » dans « Recadrage ›
         // shade_opacity »).
         let in_title = tri::fuzzy::find(query, &[&hit.title])
@@ -169,15 +169,17 @@ pub fn search(
             .map(|t| t.exact);
         (
             std::cmp::Reverse(in_title),
+            std::cmp::Reverse(*here),
             std::cmp::Reverse(*m),
             std::cmp::Reverse(*kind),
             hit.title.chars().count(),
         )
     });
+    let max = if max == 0 { usize::MAX } else { max };
     found
         .into_iter()
         .take(max)
-        .map(|((hit, _), _)| hit)
+        .map(|((hit, _, _), _)| hit)
         .collect()
 }
 
@@ -205,7 +207,7 @@ mod tests {
             &|_| true,
             "recadrer",
             PREFIXES,
-            Place::View,
+            &[Place::View],
             &settings(),
             20,
         );
@@ -217,7 +219,7 @@ mod tests {
             &|_| true,
             "crop",
             PREFIXES,
-            Place::View,
+            &[Place::View],
             &settings(),
             20,
         );
@@ -231,7 +233,7 @@ mod tests {
             &|_| true,
             "loupe_key",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
             20,
         );
@@ -243,28 +245,48 @@ mod tests {
     }
 
     #[test]
-    fn only_what_applies_here_and_never_itself() {
-        // Le recadrage n'a pas de sens dans la grille.
+    fn everything_is_offered_what_applies_here_first() {
+        // Retour du 06/11/2026 : tout, sans filtre. Le recadrage n'a pas de sens dans la
+        // grille : proposé quand même, après ce qui vaut ici.
         let hits = search(
             &keymap(),
             &|_| true,
             "recadrer",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
-            50,
+            0,
         );
-        assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Crop)));
+        assert!(hits.iter().any(|h| h.item == Item::Action(Action::Crop)));
         let hits = search(
             &keymap(),
             &|_| true,
             "palette",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
-            50,
+            0,
         );
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Palette)));
+        // À correspondance égale, ce qui vaut ici d'abord : « zoom » en grille, le zoom
+        // des vignettes avant le déplacement dans une image zoomée.
+        let hits = search(
+            &keymap(),
+            &|_| true,
+            "zoom",
+            PREFIXES,
+            &[Place::Grid],
+            &[],
+            0,
+        );
+        let first_elsewhere = hits.iter().position(
+            |h| matches!(h.item, Item::Action(a) if !cheatsheet::applies(a, Place::Grid)),
+        );
+        let last_here = hits.iter().rposition(
+            |h| matches!(h.item, Item::Action(a) if cheatsheet::applies(a, Place::Grid)),
+        );
+        assert!(first_elsewhere.is_some());
+        assert!(last_here < first_elsewhere, "{hits:?}");
     }
 
     #[test]
@@ -274,7 +296,7 @@ mod tests {
             &|_| true,
             "ctrl f",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
             20,
         );
@@ -291,7 +313,7 @@ mod tests {
             &|_| true,
             "tri nom",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
             20,
         );
@@ -309,7 +331,7 @@ mod tests {
                 &|_| true,
                 q,
                 PREFIXES,
-                Place::Grid,
+                &[Place::Grid],
                 &settings(),
                 500,
             );
@@ -333,7 +355,7 @@ mod tests {
             &|_| true,
             ">",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
             5,
         );
@@ -356,7 +378,7 @@ mod tests {
                 &|_| true,
                 q,
                 PREFIXES,
-                Place::Grid,
+                &[Place::Grid],
                 &settings(),
                 20,
             )[0]
@@ -369,7 +391,7 @@ mod tests {
                 &|_| true,
                 q,
                 PREFIXES,
-                Place::Grid,
+                &[Place::Grid],
                 &settings(),
                 20,
             )
@@ -394,29 +416,23 @@ mod tests {
     }
 
     #[test]
-    fn what_is_greyed_out_here_is_left_out() {
+    fn what_is_greyed_out_here_comes_after() {
         let developed = Item::Action(Action::FilterDeveloped);
-        let all = search(
-            &keymap(),
-            &|_| true,
-            "developpees",
-            PREFIXES,
-            Place::Grid,
-            &settings(),
-            20,
-        );
-        assert!(all.iter().any(|h| h.item == developed));
         let usable = |a: Action| a != Action::FilterDeveloped;
         let hits = search(
             &keymap(),
             &usable,
             "developpees",
             PREFIXES,
-            Place::Grid,
+            &[Place::Grid],
             &settings(),
-            20,
+            0,
         );
-        assert!(!hits.iter().any(|h| h.item == developed));
+        let at = hits.iter().position(|h| h.item == developed);
+        assert!(
+            at.is_some(),
+            "proposé quand même (refusé avec sa raison si lancé)"
+        );
     }
 
     #[test]
@@ -427,7 +443,7 @@ mod tests {
                 &|_| true,
                 "  ",
                 PREFIXES,
-                Place::Grid,
+                &[Place::Grid],
                 &settings(),
                 20
             )
@@ -439,7 +455,7 @@ mod tests {
                 &|_| true,
                 "e",
                 PREFIXES,
-                Place::Grid,
+                &[Place::Grid],
                 &settings(),
                 5
             )

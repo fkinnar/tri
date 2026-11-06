@@ -105,6 +105,10 @@
   vignette, ils sautaient des centaines de pixels).
 - **Panneau de droite** : chaque section commence à la même distance de son titre
   (« Vue » et « Grille », qui s'ouvrent sur un sous-titre, commençaient plus bas).
+- **Palette sans filtre** : elle propose toutes les actions et tous les réglages, où que
+  soit le clavier (depuis un panneau latéral, « passer » ne trouvait pas la revue des
+  développements), sans limite de lignes par défaut (`[gui.dialogs] palette_max = 0`) ;
+  ce qui vaut ici passe devant, et une action grisée ici dit pourquoi quand on la lance.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
