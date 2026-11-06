@@ -27,3 +27,6 @@ servir aussi :
   `Match` gagne **`close`** (chaque mot tel quel ou à quelques fautes près d'un mot) :
   `relevant` garde les exactes, sinon les proches, sinon le reste (« noter » remontait 44
   actions aux lettres éparpillées).
+- **Lettre seule** (06/11/2026, retour de l'utilisateur) : un mot tapé d'une seule lettre
+  n'est pas cherché dans les mots ; il ne trouve qu'une lettre seule du texte (une
+  touche, « x », « f f », ou un mot d'une lettre).

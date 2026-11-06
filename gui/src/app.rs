@@ -15954,6 +15954,17 @@ impl HelpLines {
 /// le thème le mieux trouvé d'abord et, dans un thème, la meilleure d'abord (22/10/2026 :
 /// les thèmes restent visibles pendant la recherche).
 fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
+    // Une touche tapée (« ctrl f ») : les actions qui lui sont liées, seulement.
+    if let Some(actions) = keymap.actions_for_typed_keys(query) {
+        let rank = |a: Action| Group::ALL.iter().position(|g| *g == a.group());
+        let mut rows: Vec<(Action, String)> = Action::ALL
+            .iter()
+            .filter(|a| actions.contains(a))
+            .map(|&a| (a, keymap.keys_for(a).join(" / ")))
+            .collect();
+        rows.sort_by_key(|(a, _)| rank(*a));
+        return rows;
+    }
     let found: Vec<((Action, String), tri::fuzzy::Match)> = Action::ALL
         .iter()
         .filter(|a| a.available())
@@ -20030,6 +20041,31 @@ mod tests {
             "{}",
             darktable.label()
         );
+    }
+
+    #[test]
+    fn typing_a_key_in_the_help_search_finds_its_actions_only() {
+        let km = crate::actions::Keymap::default()
+            .with_leader("Ctrl+b")
+            .unwrap();
+        let found =
+            |q: &str| -> Vec<Action> { help_rows(&km, q).into_iter().map(|(a, _)| a).collect() };
+        for query in ["ctrl f", "Ctrl+F", "ctrl+f", "CTRL F"] {
+            let actions = found(query);
+            assert!(actions.contains(&Action::Search), "{query}");
+            assert!(actions.contains(&Action::FocusMode), "{query} : Ctrl+Maj+f");
+            assert_eq!(actions.len(), 2, "{query} : {actions:?}");
+        }
+        // Avec Maj : seulement Ctrl+Maj+f.
+        assert_eq!(found("ctrl maj f"), [Action::FocusMode]);
+        // Au moins ces modificateurs : Maj+p, et Ctrl+Maj+p (la palette).
+        assert_eq!(
+            found("maj p"),
+            [Action::Flag(tri::xmp::Flag::Accepted), Action::Palette]
+        );
+        // Pas une touche : la recherche par mots.
+        assert!(found("ctrl").len() > 2);
+        assert!(found("netteté").contains(&Action::TogglePeaking));
     }
 
     #[test]

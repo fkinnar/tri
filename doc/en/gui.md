@@ -841,7 +841,12 @@ system one ("cold" measurements, experiments).
   "peaking", "stack" in a French interface), with **keywords per theme**
   (`kw-group-<theme>`: "noter" finds the stars); a **typo** is forgiven in a long
   enough word ("histrogramme", see `fuzzy.md`); an action found in its **label** comes
-  before those that only have the word in their keywords ("darktable").
+  before those that only have the word in their keywords ("darktable"). Feedback of the
+  same day ("ctrl f" brought up unrelated actions): a query that reads as a **key with
+  modifiers** ("ctrl f", "Ctrl+F", "shift p") only shows the actions bound to that key
+  alone, with at least those modifiers (`Keymap::actions_for_typed_keys`; help and
+  palette); and a **single letter** is not a word: it only finds a single letter (a key,
+  "x", or a one-letter word), no longer the "f" inside "filter".
 - **Typing in a field** (help search, offload folder name): keys are text; only those
   that type nothing (Esc, F1 to F12: `Trigger::types_no_text`) remain shortcuts.
 - Standard preview size **"Auto"**: largest side of the screen, in physical pixels.
@@ -974,7 +979,10 @@ The help window scrolls with the profile's navigation keys that type no text (ar
 pages, Ctrl+U / Ctrl+D). Left in the code are **widget keys**, interface conventions
 rather than shortcuts: Enter validates a field, Tab completes a path, Up / Down move in
 a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). The help and the texts that mention a key read it from the table in
-effect: they follow the chosen set.
+effect: they follow the chosen set. For an action that has keys of its own in the chosen
+set (`[vim]` or `[classic]`, or `[keys]`), they show only those (2026-11-06: in vim, "x"
+deletes, without Delete or Backspace, common and still active; easier to read);
+otherwise, the common ones (`Keymap::keys_for`).
 
 ### Menu of continuations (2026-11-06)
 

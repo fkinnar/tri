@@ -45,6 +45,8 @@ pub fn search(
     if query.trim().is_empty() {
         return Vec::new();
     }
+    // Une touche tapée (« ctrl f ») : les actions qui lui sont liées, seulement.
+    let typed = keymap.actions_for_typed_keys(query);
     let mut found: Vec<((Hit, u8), tri::fuzzy::Match)> = Vec::new();
     for &action in Action::ALL.iter() {
         if action == Action::Palette || !action.available() || !cheatsheet::applies(action, place) {
@@ -55,7 +57,15 @@ pub fn search(
         let mut fields = vec![title.clone(), keys.clone(), action.id().to_string()];
         fields.extend(action.search_texts());
         let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
-        if let Some(m) = tri::fuzzy::find(query, &fields) {
+        let found_here = match &typed {
+            Some(typed) => typed.contains(&action).then_some(tri::fuzzy::Match {
+                exact: true,
+                close: true,
+                score: 0,
+            }),
+            None => tri::fuzzy::find(query, &fields),
+        };
+        if let Some(m) = found_here {
             let hit = Hit {
                 item: Item::Action(action),
                 title,
@@ -65,7 +75,7 @@ pub fn search(
             found.push(((hit, 1), m));
         }
     }
-    for s in settings {
+    for s in settings.iter().filter(|_| typed.is_none()) {
         let id = format!("{}.{}", s.section, s.key);
         let keywords = crate::actions::keywords(&id);
         let section_keywords = crate::actions::keywords(&s.section);
@@ -141,6 +151,15 @@ mod tests {
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Crop)));
         let hits = search(&keymap(), "palette", Place::Grid, &settings(), 50);
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Palette)));
+    }
+
+    #[test]
+    fn a_typed_key_finds_its_actions_only() {
+        let hits = search(&keymap(), "ctrl f", Place::Grid, &settings(), 20);
+        let items: Vec<Item> = hits.into_iter().map(|h| h.item).collect();
+        assert!(items.contains(&Item::Action(Action::Search)));
+        assert!(items.contains(&Item::Action(Action::FocusMode)));
+        assert_eq!(items.len(), 2, "{items:?}");
     }
 
     #[test]
