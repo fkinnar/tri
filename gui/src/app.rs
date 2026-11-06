@@ -2485,6 +2485,18 @@ impl TriApp {
 
     /// Section « Vue », « Développements » (retour du 04/11/2026) : de photo en photo, ou
     /// chacun de ses développements ; grisée quand la source est le JPEG boîtier.
+    /// Bulle de « Passer en revue les développements », avec les touches du jeu choisi
+    /// (retour du 06/11/2026 : « ← / → » écrit en dur, `h` / `l` en vim).
+    fn review_tip(&self) -> String {
+        t!(
+            "panel-view-review-tip",
+            nav = [Action::NavPrev, Action::NavNext]
+                .map(|a| self.keymap.keys_for(a).join(", "))
+                .join(" / "),
+            open = self.keymap.keys_for(Action::StackOpen).join(", ")
+        )
+    }
+
     fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
         // Source « JPEG boîtier » : pas de développement à voir, tout est grisé et la revue
@@ -2494,12 +2506,7 @@ impl TriApp {
             let mut review = self.review_developments;
             if self
                 .side_checkbox(ui, &mut review, t!("panel-view-review"))
-                .on_hover_text(t!(
-                    "panel-view-review-tip",
-                    keys = [Action::DevPrev, Action::DevNext]
-                        .map(|a| self.keymap.keys_for(a).join(" / "))
-                        .join(", ")
-                ))
+                .on_hover_text(self.review_tip())
                 .changed()
             {
                 self.review_developments = review;
@@ -19801,6 +19808,25 @@ mod tests {
         h.state_mut().gui.notes.seconds = 0.0;
         assert_eq!(mark_top(&mut h), alone, "plus de notes, le repère revient");
         assert!(h.state().notes_key.is_none());
+    }
+
+    #[test]
+    fn the_review_tip_names_the_keys_of_the_chosen_set() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let tip = h.state().review_tip();
+        assert!(
+            tip.contains(&crate::actions::key_label(Key::ArrowLeft)),
+            "{tip}"
+        );
+        assert!(tip.contains("(("), "{tip}");
+        use_vim(&mut h);
+        let tip = h.state().review_tip();
+        assert!(tip.contains("h / l"), "{tip}");
+        assert!(
+            !tip.contains(&crate::actions::key_label(Key::ArrowLeft)),
+            "{tip}"
+        );
     }
 
     #[test]

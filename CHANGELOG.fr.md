@@ -86,6 +86,9 @@
   (JPEG boîtier, couverture, chaque logiciel, rendu RAW). `r` / `Maj+R` : rendu suivant /
   précédent pour tout le dossier, retenu d'une photo à l'autre ; sur un développement
   passé en revue, `r` reste l'avant / après.
+- **Bulle de la revue des développements** : elle cite les touches du jeu choisi (`h` /
+  `l` en vim, plus « ← / → » écrit en dur) et `( (` pour déplier une photo, au lieu de
+  touches qui n'existaient plus.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
