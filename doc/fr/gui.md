@@ -1115,6 +1115,23 @@ lettres éparpillées) passe devant. Une action **grisée** ici (« Développée
 développée dans le dossier : `TriApp::action_unusable`) est absente de la palette et
 refusée au clavier, avec la raison dans la barre d'état.
 
+### Un seul rendu affiché (06/11/2026)
+
+Discuté avec l'utilisateur (la section Vue du plein écran déroutait depuis le 05/11) :
+« Source affichée » et « Développement de chaque photo » ne font plus qu'**une liste,
+« Rendu affiché »**, la même en grille et en plein écran : JPEG boîtier, couverture
+(développement préféré, sinon le plus récent), chaque logiciel installé, rendu RAW
+(LibRaw, un développement comme un autre : sans aucun logiciel, la liste est « JPEG
+boîtier · Rendu RAW »). Chaque photo s'y montre, sinon dans son rendu RAW, comme sa
+vignette ; une image plate reste elle-même. **`r` / `Maj+R`** : rendu suivant /
+précédent, pour tout le dossier, retenu d'une photo à l'autre (`TriApp::change_render`).
+Le plein écran suit par `sync_source` (changement de rendu, ouverture, dossier rouvert) ;
+le logiciel montré est celui de la vignette (`developed_level`, relevé de la grille vidé
+à chaque changement, sinon calculé de même). Sur un développement passé en revue, `r`
+reste l'avant / après (JPEG boîtier). « Passer en revue les développements » reste à
+part (la navigation), grisée en JPEG boîtier. Disparus : la rotation propre à une photo
+(`Source::next`), la liste « Développement de chaque photo ».
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les
@@ -1150,8 +1167,8 @@ sélection dans `[keys]`.
 | Grand histogramme | `Maj+E` | `Maj+I` |
 | Échelle de l'histogramme | `Maj+I` | `<leader> i s` (`s` dans le grand) |
 | Canal suivant / un canal | `Maj+C` / (grand histogramme) | `<leader> i c` / `<leader> i r g b a l` (`c`, `r g b a l` dans le grand) |
-| Source (JPEG boîtier, RAW, développé) | `b` | `r` |
-| Rendu des vignettes | `f d` | `Maj+R` |
+| Source (JPEG boîtier, RAW, développé) | `b` | `r` (rendu affiché suivant, 06/11/2026) |
+| Rendu des vignettes | `f d` | `Maj+R` (rendu affiché précédent, 06/11/2026) |
 | Développer (logiciel de l'image / dossier) | `Maj+B` / `Ctrl+Maj+B` | `<leader> r r` / `<leader> r Maj+R` |
 | Développer dans darktable / RapidRAW / RawTherapee / ART | `<leader> d` / `p` / — / — | `<leader> r d` / `p` / `t` / `a` |
 | Ouvrir le dossier dans un logiciel (dossiers) | `d` | `<leader> r d` / `p` / `t` / `a` |

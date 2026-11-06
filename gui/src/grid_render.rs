@@ -112,6 +112,13 @@ impl GridRender {
         list[(at + 1) % list.len()]
     }
 
+    /// Le choix précédent (`Maj+R`), en boucle.
+    pub fn prev(self, engines: &[Engine]) -> GridRender {
+        let list = GridRender::choices(engines);
+        let at = list.iter().position(|&r| r == self).unwrap_or(0);
+        list[(at + list.len() - 1) % list.len()]
+    }
+
     /// Logiciel du développement montré pour `image` : le plus récent, ou celui choisi
     /// s'il a développé l'image ; `None` : rendu LibRaw.
     pub fn engine_for(self, image: &Path, engines: &[Engine]) -> Option<Engine> {
