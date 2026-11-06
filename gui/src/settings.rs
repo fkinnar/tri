@@ -105,12 +105,17 @@ impl AppSettings {
     /// Table des raccourcis : profils de `[gui] keys`, puis section `[keys]` ; avec les
     /// problèmes à signaler (touche inconnue, conflit...).
     pub fn keymap(&self) -> (Keymap, Vec<String>) {
-        let (keymap, mut warnings) = match self.gui.keymap().with_leader(&self.gui.leader) {
+        // Préfixe des panneaux : celui de `[gui] leader`, sinon celui de `keys.toml`.
+        let default = crate::actions::Defaults::get().prefix();
+        let leader = match self.gui.leader.trim() {
+            "" => default,
+            mine => mine,
+        };
+        let (keymap, mut warnings) = match self.gui.keymap().with_leader(leader) {
             Ok(keymap) => (keymap, Vec::new()),
             Err(e) => {
-                let default = GuiSettings::default().leader;
                 let warning = t!("keys-error", id = "gui.leader", error = e);
-                let keymap = self.gui.keymap().with_leader(&default).unwrap_or_default();
+                let keymap = self.gui.keymap().with_leader(default).unwrap_or_default();
                 (keymap, vec![warning])
             }
         };
@@ -138,7 +143,8 @@ pub struct GuiSettings {
     /// Jeu de raccourcis : classique (flèches), vim (hjkl), ou les deux.
     pub profile: Profile,
     /// Leader du changement de panneau, comme le préfixe de tmux : puis `h` / `l` (ou les
-    /// flèches) pour le panneau de gauche / de droite, `o` pour le suivant.
+    /// flèches) pour le panneau de gauche / de droite, `o` pour le suivant. Vide : celui
+    /// de `keys.toml` (« Ctrl+b »).
     pub leader: String,
     /// Délai maximal entre deux touches d'une séquence (`g g`), en ms, comme le
     /// `timeoutlen` de vim.
@@ -250,7 +256,7 @@ impl Default for GuiSettings {
             // Fond sombre et neutre : la norme pour juger des photos.
             theme: Theme::Dark,
             profile: Profile::Classic,
-            leader: "Ctrl+b".into(),
+            leader: String::new(),
             key_sequence_timeout_ms: 1000,
             key_ambiguous_timeout_ms: 300,
             trace_slow_ms: 100,

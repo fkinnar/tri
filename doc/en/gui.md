@@ -952,8 +952,9 @@ in the common section, what is specific to each set in its own. A test checks th
 set covers all actions, without conflict.
 
 **Default shortcuts file** (2026-11-06, issue #280: no shortcut left in the code):
-`gui/resources/keys.toml`, sections `[common]`, `[classic]`, `[vim]` and `[leader]` (keys
-after the panel prefix), in the syntax of `[keys]`, the sections adding up. **Every
+`gui/resources/keys.toml`: the panel prefix (`leader = "Ctrl+b"`, at the top; `[gui] leader`
+replaces it for oneself, empty by default), then sections `[common]`, `[classic]`, `[vim]`
+and `[after_leader]` (keys after the panel prefix), in the syntax of `[keys]`, the sections adding up. **Every
 action is listed**, `[]` for those without a shortcut (the user's choice: a file to read
 at a glance, and complete for whoever writes their own); a test checks it, so every new
 action is added there too. It is **shipped next to the program** and read at startup

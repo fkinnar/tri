@@ -511,8 +511,9 @@ profile = "classic"
 # the left / right panel, o for the next one. The panel that has the keyboard handles
 # its keys first (folders: arrows / hjkl, Enter opens; metadata: scroll,
 # y copies); the others keep their effect; Esc gives the keyboard back to the images. The
-# leader then b: report a problem (prefilled GitHub form).
-leader = "Ctrl+b"
+# leader then b: report a problem (prefilled GitHub form). Empty: the one of the default
+# shortcuts (keys.toml, shipped with the program: Ctrl+b, like tmux).
+leader = ""
 # Maximum delay between two keys of a sequence (ms), like vim's timeoutlen: "gg"
 # (first image, vim set) must be typed within this delay.
 key_sequence_timeout_ms = 1000
