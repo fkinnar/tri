@@ -1116,7 +1116,11 @@ développée dans le dossier : `TriApp::action_unusable`) est absente de la pale
 refusée au clavier, avec la raison dans la barre d'état. La **loupe** (touche maintenue,
 réglée à part) a son entrée d'aide, `Action::Loupe` (`core.view.loupe`), avec sa touche
 en vigueur ; elle ne se lie pas (`Action::bindable`) : absente de `keys.toml`, de `[keys]`
-et de la page des raccourcis ; lancée de la palette, elle rappelle sa touche.
+et de la page des raccourcis ; lancée de la palette, elle rappelle sa touche. Chaque case du panneau a son
+action, pour la palette (retour du même soir : « passer en revue » ne trouvait que la
+valeur par défaut) : `core.view.review_developments` et `core.file.allow_actions`, sans
+raccourci, qui basculent l'état actuel ; les lignes de réglages s'y appellent
+« configuration ».
 
 ### Un seul rendu affiché (06/11/2026)
 

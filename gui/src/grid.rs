@@ -238,6 +238,8 @@ pub fn navigate(
         | Action::Back
         | Action::Help
         | Action::HelpHere
+        | Action::ReviewDevelopments
+        | Action::FileActionsAllow
         | Action::Palette
         | Action::Settings
         | Action::CheckUpdate

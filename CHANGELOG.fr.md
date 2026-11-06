@@ -96,6 +96,10 @@
   au pointeur. Pas réglables : `[gui.zoom] loupe_step`, `loupe_step_large`. La loupe
   marche aussi **dans la grille**, sur la vignette sous le pointeur (au clavier : la
   sélectionnée).
+- **Les cases du panneau dans la palette** : « Passer en revue les développements » et
+  « Actions sur les fichiers » ont leur action, qui bascule l'état actuel (la palette ne
+  proposait que leur valeur par défaut). Les lignes de réglages de la palette s'appellent
+  désormais « configuration » : elles ouvrent la valeur par défaut.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

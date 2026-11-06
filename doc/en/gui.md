@@ -1059,7 +1059,10 @@ line found by **words** of its title (not by scattered letters) comes first. An 
 with the reason in the status bar. The **loupe** (a held key, set separately) has its
 help entry, `Action::Loupe` (`core.view.loupe`), with its key in force; it cannot be
 bound (`Action::bindable`): absent from `keys.toml`, `[keys]` and the shortcuts page; run
-from the palette, it recalls its key.
+from the palette, it recalls its key. Each panel checkbox has its action, for the palette
+(feedback of the same evening: "passer en revue" only found the default value):
+`core.view.review_developments` and `core.file.allow_actions`, without a shortcut, which
+toggle the current state; settings lines are called "configuration" there.
 
 ### One shown render (2026-11-06)
 

@@ -90,6 +90,10 @@
   back to the pointer. Steps: `[gui.zoom] loupe_step`, `loupe_step_large`. The loupe also
   works **in the grid**, on the thumbnail under the pointer (from the keyboard: the
   selected one).
+- **Panel checkboxes in the palette**: "Review the developments" and "Actions on files"
+  have their action, which toggles the current state (the palette only offered their
+  default value). Settings lines in the palette are now called "configuration": they
+  open the default value.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
