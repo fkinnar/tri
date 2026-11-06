@@ -5,7 +5,6 @@
 use eframe::egui::pos2;
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 use tri::cache::Level;
-use tri::develop::Engine;
 use tri::media::MediaKind;
 
 /// Source préférée pour les RAW en plein écran.
@@ -19,31 +18,6 @@ pub enum Source {
     /// Développé par darktable d'après le sidecar (19/10/2026) : l'image telle qu'on l'a
     /// développée, à la demande.
     Developed,
-}
-
-impl Source {
-    /// Source suivante (`b`) : boîtier, RAW, puis chacun des développements déjà rendus
-    /// de l'image (`rendered`, dans l'ordre du tour : #114, pour les comparer), et retour
-    /// au boîtier. `shown` : le logiciel du développement affiché. Renvoie la source et,
-    /// pour un développement, son logiciel.
-    pub fn next(self, shown: Option<Engine>, rendered: &[Engine]) -> (Source, Option<Engine>) {
-        match self {
-            Source::Embedded => (Source::Raw, None),
-            Source::Raw => match rendered.first() {
-                Some(&e) => (Source::Developed, Some(e)),
-                None => (Source::Embedded, None),
-            },
-            Source::Developed => {
-                let after = shown
-                    .and_then(|e| rendered.iter().position(|&r| r == e))
-                    .map_or(rendered.len(), |i| i + 1);
-                match rendered.get(after) {
-                    Some(&e) => (Source::Developed, Some(e)),
-                    None => (Source::Embedded, None),
-                }
-            }
-        }
-    }
 }
 
 /// Niveau du 1:1 pour une source : le JPEG embarqué à sa taille d'origine, ou le rendu RAW
@@ -329,26 +303,6 @@ mod tests {
         assert_eq!(
             pick(MediaKind::Raw, Source::Developed, false, DT, |_| true),
             Some(DT)
-        );
-        // `b` : boîtier, RAW, chaque développement rendu, boîtier.
-        use Engine::{Darktable as D, RapidRaw as R};
-        assert_eq!(Source::Embedded.next(None, &[]), (Source::Raw, None));
-        assert_eq!(Source::Raw.next(None, &[]), (Source::Embedded, None));
-        assert_eq!(
-            Source::Raw.next(Some(D), &[R, D]),
-            (Source::Developed, Some(R))
-        );
-        assert_eq!(
-            Source::Developed.next(Some(R), &[R, D]),
-            (Source::Developed, Some(D))
-        );
-        assert_eq!(
-            Source::Developed.next(Some(D), &[R, D]),
-            (Source::Embedded, None)
-        );
-        assert_eq!(
-            Source::Developed.next(Some(D), &[D]),
-            (Source::Embedded, None)
         );
     }
 

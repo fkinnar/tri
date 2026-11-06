@@ -83,6 +83,11 @@
   raison dans la barre d'état) ; l'éteindre reste possible.
 - **La loupe dans l'aide** : « loupe » la trouve dans l'aide, `?` et la palette, avec sa
   touche (`m`, maintenue) ; lancée depuis la palette, elle rappelle qu'il faut la tenir.
+- **Un seul rendu affiché** : « Source affichée » et « Développement de chaque photo »
+  deviennent une seule liste, « Rendu affiché », la même en grille et en plein écran
+  (JPEG boîtier, couverture, chaque logiciel, rendu RAW). `r` / `Maj+R` : rendu suivant /
+  précédent pour tout le dossier, retenu d'une photo à l'autre ; sur un développement
+  passé en revue, `r` reste l'avant / après.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

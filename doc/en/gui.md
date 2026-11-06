@@ -1061,6 +1061,22 @@ help entry, `Action::Loupe` (`core.view.loupe`), with its key in force; it canno
 bound (`Action::bindable`): absent from `keys.toml`, `[keys]` and the shortcuts page; run
 from the palette, it recalls its key.
 
+### One shown render (2026-11-06)
+
+Discussed with the user (the full-screen View section had been confusing since
+2026-11-05): "Shown source" and "Development of each photo" become **one list, "Shown
+render"**, the same in the grid and full screen: camera JPEG, cover (preferred
+development, else the latest), each installed software, RAW render (LibRaw, a
+development like any other: without any software, the list is "camera JPEG · RAW
+render"). Each photo shows in it, otherwise in its RAW render, like its thumbnail; a flat
+image stays itself. **`r` / `Shift+R`**: next / previous render, for the whole folder,
+kept from photo to photo (`TriApp::change_render`). Full screen follows through
+`sync_source` (render change, opening, folder reopened); the software shown is the
+thumbnail's (`developed_level`, grid record cleared on every change, otherwise computed
+the same way). On a development under review, `r` stays before / after (camera JPEG).
+"Review the developments" stays separate (navigation), greyed out in camera JPEG. Gone:
+the per-photo rotation (`Source::next`), the "Development of each photo" list.
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys
@@ -1095,8 +1111,8 @@ said); a leader on Space first requires moving the selection in `[keys]`.
 | Large histogram | `Shift+E` | `Shift+I` |
 | Histogram scale | `Shift+I` | `<leader> i s` (`s` in the large one) |
 | Next channel / one channel | `Shift+C` / (large histogram) | `<leader> i c` / `<leader> i r g b a l` (`c`, `r g b a l` in the large one) |
-| Source (camera JPEG, RAW, developed) | `b` | `r` |
-| Thumbnail render | `f d` | `Shift+R` |
+| Source (camera JPEG, RAW, developed) | `b` | `r` (next shown render, 2026-11-06) |
+| Thumbnail render | `f d` | `Shift+R` (previous shown render, 2026-11-06) |
 | Develop (image's software / folder) | `Shift+B` / `Ctrl+Shift+B` | `<leader> r r` / `<leader> r Shift+R` |
 | Develop in darktable / RapidRAW / RawTherapee / ART | `<leader> d` / `p` / — / — | `<leader> r d` / `p` / `t` / `a` |
 | Open the folder in a software (folders) | `d` | `<leader> r d` / `p` / `t` / `a` |

@@ -78,6 +78,10 @@
   the reason in the status bar); turning it off still works.
 - **The loupe in the help**: "loupe" finds it in the help, `?` and the palette, with its
   key (`m`, held); run from the palette, it reminds you to hold it.
+- **One shown render**: "Shown source" and "Development of each photo" become one list,
+  "Shown render", the same in the grid and full screen (camera JPEG, cover, each
+  software, RAW render). `r` / `Shift+R`: next / previous render for the whole folder,
+  kept from photo to photo; on a development under review, `r` stays before / after.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
