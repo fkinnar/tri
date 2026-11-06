@@ -1111,7 +1111,9 @@ panneau (« Empiler automatiquement » : `Action::interface_labels`, cherchés d
 les langues), le pluriel (« rendus vignette » : `fuzzy` tient un « s » ou « x » final
 pour rien), les cases RAW / JPEG (actions `core.filter.kind.all|raw|flat`). Dans la
 palette comme dans l'aide, une ligne trouvée par des **mots** de son titre (pas par des
-lettres éparpillées) passe devant.
+lettres éparpillées) passe devant. Une action **grisée** ici (« Développées » sans photo
+développée dans le dossier : `TriApp::action_unusable`) est absente de la palette et
+refusée au clavier, avec la raison dans la barre d'état.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

@@ -1053,7 +1053,10 @@ The user's first searches that found nothing, each now a test
 ("Empiler automatiquement": `Action::interface_labels`, searched in every language),
 the plural ("rendus vignette": `fuzzy` ignores a final "s" or "x"), the RAW / JPEG
 switches (actions `core.filter.kind.all|raw|flat`). In the palette as in the help, a
-line found by **words** of its title (not by scattered letters) comes first.
+line found by **words** of its title (not by scattered letters) comes first. An action
+**greyed out** here ("Developed" without a developed photo in the folder:
+`TriApp::action_unusable`) is left out of the palette and refused from the keyboard,
+with the reason in the status bar.
 
 ### Shortcut review (2026-11-06, issue #280)
 

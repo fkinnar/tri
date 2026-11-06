@@ -2035,6 +2035,18 @@ impl TriApp {
     /// netteté, exposition, et développées s'il y a un logiciel de développement.
     /// Filtres sur le contenu : action, allumé, utilisable. « Développées » n'est
     /// utilisable que si le dossier a un développement (#305), ou pour l'éteindre.
+    /// Action sans objet ici, grisée dans l'interface : absente de la palette, refusée au
+    /// clavier (retour du 06/11/2026 : « Développées », grisé sans photo développée dans le
+    /// dossier, s'allumait par la palette ou `f r`). Éteindre reste toujours possible.
+    fn action_unusable(&self, action: Action) -> Option<String> {
+        match action {
+            Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
+                Some(t!("filter-developed-unusable"))
+            }
+            _ => None,
+        }
+    }
+
     fn content_toggles(&self) -> Vec<(Action, bool, bool)> {
         let mut toggles = vec![
             (Action::FilterBlurry, self.blur_rule.is_some(), true),
@@ -7015,6 +7027,10 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::FilterDeveloped => {
+                if let Some(why) = self.action_unusable(action) {
+                    self.notice = Some((why, false));
+                    return;
+                }
                 self.developed_on = !self.developed_on;
                 self.apply_filter();
             }
@@ -13045,9 +13061,10 @@ impl TriApp {
                     }
                 }
                 Step::Search(text) => {
-                    if let Some(p) = &mut self.palette {
+                    if let Some(mut p) = self.palette.take() {
                         p.hits = crate::palette::search(
                             &self.keymap,
+                            &|a| self.action_unusable(a).is_none(),
                             &text,
                             self.gui.dialogs.palette_prefixes(),
                             p.place,
@@ -13055,6 +13072,7 @@ impl TriApp {
                             self.gui.dialogs.palette_max,
                         );
                         p.query = text;
+                        self.palette = Some(p);
                     } else if let Some(window) = &mut self.settings_window {
                         window.search(&text);
                     } else if self.help {
@@ -14089,6 +14107,7 @@ impl TriApp {
         if query != state.query {
             state.hits = crate::palette::search(
                 &self.keymap,
+                &|a| self.action_unusable(a).is_none(),
                 &query,
                 self.gui.dialogs.palette_prefixes(),
                 state.place,
@@ -16303,6 +16322,25 @@ mod tests {
     }
 
     #[test]
+    fn a_greyed_out_filter_cannot_be_turned_on_from_the_keyboard() {
+        // Retour du 06/11/2026 : « Développées », grisé sans photo développée, s'allumait
+        // par la palette ou `f r`.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().any_developed = false;
+        act(&mut h, Action::FilterDeveloped);
+        assert!(!h.state().developed_on);
+        assert!(h.state().notice.is_some(), "on dit pourquoi");
+        // Avec des développements : il s'allume, et s'éteint toujours.
+        h.state_mut().any_developed = true;
+        act(&mut h, Action::FilterDeveloped);
+        assert!(h.state().developed_on);
+        h.state_mut().any_developed = false;
+        act(&mut h, Action::FilterDeveloped);
+        assert!(!h.state().developed_on);
+    }
+
+    #[test]
     fn the_palette_finds_and_runs_an_action() {
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -16429,6 +16467,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
+        // Un développement quelque part dans le dossier : sinon le filtre est grisé.
+        h.state_mut().any_developed = true;
         let all = h.state().files.len();
         assert!(all > 0);
         let f_shift_d = |h: &mut Harness<'_, TriApp>| {

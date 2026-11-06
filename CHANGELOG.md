@@ -73,6 +73,9 @@
   automatically"), the plural ("thumbnails render"), and three actions for the RAW / JPEG
   switches (RAW only, JPEG only, both). A line found by the words of its title comes
   first (palette and help).
+- **Greyed-out filter**: "Developed", greyed out when no photo of the folder is
+  developed, no longer turns on from the palette (left out) nor with `f r` (refused, with
+  the reason in the status bar); turning it off still works.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
