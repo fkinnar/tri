@@ -6972,7 +6972,8 @@ impl TriApp {
                     Some(c) if c + 1 < tri::exposure::SERIES => Some(c + 1),
                     Some(_) => None,
                 };
-                self.histogram_large = true;
+                // N'ouvre plus le grand histogramme (retour du 06/11/2026) : le petit
+                // suit le canal choisi.
             }
             Action::ToggleClipping => self.clipping = !self.clipping,
             Action::ToggleMetadata => self.metadata_panel = !self.metadata_panel,
@@ -21594,16 +21595,18 @@ mod tests {
         assert!(h.state().clipping, "w : zones");
         // Masque calculé en fond : deux images ne suffisaient pas toujours (CI Windows).
         run_until(&mut h, |app| app.mask_textures.contains(&white_path));
-        // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
+        // <leader> i c : canal rouge (le grand histogramme reste fermé ; Maj+I l'ouvre), image d'analyse ; puis
         // vert, bleu, luminance, tous ; Échap ferme.
         leader(
             &mut h,
             &[(Key::I, Modifiers::NONE), (Key::C, Modifiers::NONE)],
         );
         assert!(
-            h.state().histogram_large,
-            "<leader> i c ouvre le grand histogramme"
+            !h.state().histogram_large,
+            "<leader> i c : le canal change, le grand histogramme reste fermé"
         );
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        assert!(h.state().histogram_large, "Maj+I l'ouvre");
         assert_eq!(h.state().histogram_channel, Some(0));
         // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
         // celle du rouge.
