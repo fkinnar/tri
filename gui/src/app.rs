@@ -1588,6 +1588,7 @@ impl TriApp {
         }
         if let Some(render) = s.grid_render {
             self.grid_render = render;
+            self.sync_source();
         }
         if let Some(folded) = &s.panel_folded {
             self.panel_folded = folded.iter().cloned().collect();
@@ -2269,25 +2270,7 @@ impl TriApp {
                 clicked.push(Action::SortReverse);
             }
         });
-        // Rendu des vignettes (#114) : les logiciels installés seulement, à plat.
-        self.subheading(ui, t!("panel-grid-render"))
-            .on_hover_text(self.action_tip(Action::GridRenderNext));
-        let engines = self.developers.engines();
-        let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines);
-        let weak = ui.visuals().weak_text_color();
-        let tip = self.action_tip(Action::GridRenderNext);
-        self.side_combo(
-            ui,
-            "grid_render",
-            &mut render,
-            &choices,
-            |c| c.label(weak),
-            Some(tip),
-        );
-        if self.shown_render() != self.grid_render {
-            ui.weak(t!("panel-grid-render-filtered"));
-        }
+        let render = self.render_choice(ui);
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
         if self.stacks_switch(ui) {
             clicked.push(Action::StackMode);
@@ -2422,14 +2405,45 @@ impl TriApp {
     /// n'y avait pas de sens) : la source affichée — rendu boîtier, rendu RAW, chaque
     /// développement déjà rendu ; sur un développement, « avant » —, et les actions sur
     /// les fichiers.
+    /// « Rendu affiché » (#114, un seul pour la grille et le plein écran depuis le
+    /// 06/11/2026) : JPEG boîtier, la couverture, chaque logiciel installé, le rendu RAW.
+    /// Renvoie le choix, à appliquer par l'appelant.
+    fn render_choice(&mut self, ui: &mut Ui) -> crate::grid_render::GridRender {
+        let tip = format!(
+            "{}\n{}\n{}",
+            t!("panel-render-tip"),
+            self.action_tip(Action::ToggleSource),
+            self.action_tip(Action::GridRenderNext)
+        );
+        self.subheading(ui, t!("panel-grid-render"))
+            .on_hover_text(&tip);
+        let engines = self.developers.engines();
+        let mut render = self.grid_render;
+        let choices = crate::grid_render::GridRender::choices(&engines);
+        let weak = ui.visuals().weak_text_color();
+        self.side_combo(
+            ui,
+            "grid_render",
+            &mut render,
+            &choices,
+            |c| c.label(weak),
+            Some(tip),
+        );
+        if self.shown_render() != self.grid_render {
+            ui.weak(t!("panel-grid-render-filtered"));
+        }
+        render
+    }
+
     fn view_settings(&mut self, ui: &mut Ui) {
         let Some(file) = self.files.get(self.selected).cloned() else {
             return;
         };
         let tip = self.action_tip(Action::ToggleSource);
-        self.subheading(ui, t!("panel-view-source"))
-            .on_hover_text(&tip);
         if let Some(development) = tri::developments::get(&file.path) {
+            // Un développement : avant / après (`r`), son rendu ou le JPEG boîtier.
+            self.subheading(ui, t!("panel-view-source"))
+                .on_hover_text(&tip);
             // Une liste comme pour une photo (retour du 05/11/2026 : une case ici, une
             // liste ailleurs) : le développement, ou le JPEG boîtier (« avant »).
             use crate::grid_render::GridRender;
@@ -2453,59 +2467,12 @@ impl TriApp {
                 self.request_zoom();
             }
         } else {
-            let rendered = self.rendered_engines(self.selected);
-            let shown = match self.developed_level_at(self.selected) {
-                Some(Level::Developed(e)) => Some(e),
-                _ => None,
-            };
-            // Même ordre que la grille (retour du 05/11/2026) : JPEG boîtier, les logiciels
-            // dans l'ordre de la grille, RAW en dernier.
-            let mut choices = vec![(Source::Embedded, None)];
-            choices.extend(
-                self.developers
-                    .engines()
-                    .into_iter()
-                    .filter(|e| rendered.contains(e))
-                    .map(|e| (Source::Developed, Some(e))),
-            );
-            if file.kind == MediaKind::Raw {
-                choices.push((Source::Raw, None));
-            }
-            let current = match self.source {
-                Source::Developed => match shown {
-                    Some(e) if rendered.contains(&e) => (Source::Developed, Some(e)),
-                    _ => (self.base_source, None),
-                },
-                source => (source, None),
-            };
-            let mut choice = if choices.contains(&current) {
-                current
-            } else {
-                choices[0]
-            };
-            let raw = file.kind == MediaKind::Raw;
-            // Mêmes libellés que « Rendu des vignettes » (05/11/2026 : « Rendu boîtier »,
-            // « Rendu RAW » sous « Source affichée » répétaient « rendu »).
-            use crate::grid_render::GridRender;
-            let weak = ui.visuals().weak_text_color();
-            let name = move |c: (Source, Option<tri::develop::Engine>)| -> egui::WidgetText {
-                match c {
-                    (Source::Developed, Some(e)) => GridRender::Engine(e).label(weak),
-                    (Source::Raw, _) => GridRender::LibRaw.label(weak),
-                    _ if raw => GridRender::Embedded.label(weak),
-                    _ => t!("shown-image").into(),
-                }
-            };
-            if self.side_combo(ui, "view_source", &mut choice, &choices, name, Some(tip)) {
-                if let Some(engine) = choice.1 {
-                    self.choose_developer(&file.path, engine);
-                }
-                self.set_source(choice.0);
+            let render = self.render_choice(ui);
+            if render != self.grid_render {
+                self.set_grid_render(render);
                 self.request_zoom();
             }
         }
-        // Sans logiciel de développement installé : rien à passer en revue (retour du
-        // 04/11/2026).
         if !self.developers.is_empty() {
             self.view_developments(ui);
         }
@@ -2541,49 +2508,9 @@ impl TriApp {
             // développement de chaque photo ; masqué pendant la revue (retours du
             // 05/11/2026 : grisé sous la case cochée, il semblait en dépendre à l'envers) :
             // ← / → passent alors par chaque développement, le choix ne s'applique plus.
-            if !self.review_developments {
-                self.view_render_list(ui);
-            }
         });
     }
 
-    /// Liste du développement de chaque photo (le rendu de la grille), sans le JPEG
-    /// boîtier, qui est une source (retour du 05/11/2026) : une grille en JPEG boîtier
-    /// s'y lit « Couverture » (la photo y montre son développement), sans rien changer
-    /// tant qu'on n'y touche pas.
-    fn view_render_list(&mut self, ui: &mut Ui) {
-        use crate::grid_render::GridRender;
-        let engines = self.developers.engines();
-        let shown = match self.grid_render {
-            GridRender::Embedded => GridRender::Cover,
-            other => other,
-        };
-        let mut render = shown;
-        let choices: Vec<GridRender> = GridRender::choices(&engines)
-            .into_iter()
-            .filter(|&c| c != GridRender::Embedded)
-            .collect();
-        let weak = ui.visuals().weak_text_color();
-        let tip = format!(
-            "{}\n{}",
-            t!("panel-view-render-tip"),
-            self.action_tip(Action::GridRenderNext)
-        );
-        self.side_combo(
-            ui,
-            "view_render",
-            &mut render,
-            &choices,
-            |c| c.label(weak),
-            Some(tip),
-        );
-        if render != shown {
-            self.set_grid_render(render);
-        }
-    }
-
-    /// Vrai si l'image affichée montre le JPEG boîtier par choix : la source « JPEG
-    /// boîtier » sur une photo, « avant » sur un développement.
     fn jpeg_source(&self) -> bool {
         self.files.get(self.selected).is_some_and(|f| {
             if tri::media::is_development(&f.path) {
@@ -4693,17 +4620,9 @@ impl TriApp {
             self.select(first);
         }
         // Le plein écran s'ouvre sur ce que montre la vignette (retour du 27/10/2026 : sous
-        // « développées dans RapidRAW », il montrait un autre rendu). En JPEG boîtier, la
-        // source choisie au plein écran (`b`) reste.
-        if self.shown_render() != crate::grid_render::GridRender::Embedded
-            && let Some(source) = match self.grid_level(self.selected) {
-                Level::Developed(_) => Some(Source::Developed),
-                Level::Standard => Some(Source::Raw),
-                _ => None,
-            }
-        {
-            self.set_source(source);
-        }
+        // « développées dans RapidRAW », il montrait un autre rendu) : un seul rendu
+        // affiché, grille et plein écran (06/11/2026).
+        self.sync_source();
         self.mode = Mode::View;
     }
 
@@ -5172,6 +5091,8 @@ impl TriApp {
             self.auto_develop_pending = true;
             self.stacks_dirty = true;
         }
+        // Le plein écran suit (un seul rendu affiché).
+        self.sync_source();
         self.folder_view = Some(self.current_folder_view());
     }
 
@@ -6487,23 +6408,10 @@ impl TriApp {
                     self.request_zoom();
                     return;
                 }
-                // Zoomé, on reste au même endroit : seul le 1:1 demandé change.
-                // Les développements n'entrent dans la rotation que s'ils existent déjà pour
-                // l'image (retour du 19/10/2026 : jamais 10 s d'attente pour rien) ; Maj+B
-                // les calcule. Tous ceux qui existent, pour les comparer (#114).
-                let rendered = self.rendered_engines(self.selected);
-                let shown = match self.developed_level_at(self.selected) {
-                    Some(Level::Developed(e)) => Some(e),
-                    _ => None,
-                };
-                let (source, engine) = self.source.next(shown, &rendered);
-                if let Some(engine) = engine
-                    && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
-                {
-                    self.choose_developer(&path, engine);
-                }
-                self.set_source(source);
-                self.request_zoom();
+                // Le rendu affiché suivant, pour tout le dossier, grille et plein écran
+                // (décidé le 06/11/2026) ; zoomé, on reste au même endroit.
+                let next = self.grid_render.next(&self.developers.engines());
+                self.change_render(next);
             }
             Action::Compare => self.start_compare(),
             Action::TogglePeaking => self.peaking = !self.peaking,
@@ -7035,12 +6943,8 @@ impl TriApp {
                 self.apply_filter();
             }
             Action::GridRenderNext => {
-                let next = self.grid_render.next(&self.developers.engines());
-                self.set_grid_render(next);
-                self.notice = Some((
-                    format!("{} : {}", t!("grid-render-tip"), next.name()),
-                    false,
-                ));
+                let prev = self.grid_render.prev(&self.developers.engines());
+                self.change_render(prev);
             }
             Action::SortNext => self.set_order(tri::sort::Order {
                 key: self.order.key.next(),
@@ -8359,6 +8263,32 @@ impl TriApp {
     /// est plus. Un développé déjà chargé mais périmé est oublié (état, texture) : `b` ne
     /// le montre plus, Maj+B le refait (retour du 19/10/2026 : recadrage changé, l'ancien
     /// restait affiché).
+    /// Change le rendu affiché (`r`, `Maj+R`), le dit dans la barre d'état, et redemande
+    /// l'image du plein écran (zoomé, au même endroit).
+    fn change_render(&mut self, render: crate::grid_render::GridRender) {
+        self.set_grid_render(render);
+        self.notice = Some((
+            format!("{} : {}", t!("grid-render-tip"), render.name()),
+            false,
+        ));
+        self.request_zoom();
+    }
+
+    /// La source du plein écran d'après le rendu affiché ([`TriApp::shown_render`], le
+    /// même que les vignettes, décidé le 06/11/2026) : JPEG boîtier, rendu RAW, ou un
+    /// développement (sinon le rendu RAW, comme la vignette).
+    fn sync_source(&mut self) {
+        use crate::grid_render::GridRender;
+        match self.shown_render() {
+            GridRender::Embedded => self.set_source(Source::Embedded),
+            GridRender::LibRaw => self.set_source(Source::Raw),
+            GridRender::Cover | GridRender::Engine(_) => {
+                self.set_source(Source::Raw);
+                self.set_source(Source::Developed);
+            }
+        }
+    }
+
     /// Change la source choisie ; boîtier ou RAW deviennent aussi la source des images
     /// sans développement quand on passe ensuite au développé.
     fn set_source(&mut self, source: Source) {
@@ -8413,11 +8343,23 @@ impl TriApp {
             .develop_choice
             .get(path)
             .copied()
-            // Le développement que montre la grille (filtre « développées dans », rendu
-            // choisi), pour l'ouvrir en plein écran tel qu'on l'a vu.
+            // Le développement que montre la vignette, pour l'ouvrir en plein écran tel
+            // qu'on l'a vu : relevé par la grille (vidé à chaque changement de rendu), sinon
+            // calculé de même (un développement : le sien ; filtre « développées dans » ;
+            // sinon le rendu affiché, le même en grille et en plein écran).
             .or_else(|| match self.grid_levels.get(path) {
                 Some(&Level::Developed(e)) => Some(e),
                 _ => None,
+            })
+            .or_else(|| {
+                let engines = self.developers.engines();
+                if let Some(development) = tri::developments::get(path) {
+                    return Some(development.engine);
+                }
+                match self.developed_rule().filter(|_| !self.filter_inverted) {
+                    Some(rule) => rule.engine_for(path, &engines),
+                    None => self.shown_render().engine_for(path, &engines),
+                }
             })
             .or_else(|| self.developers.resolve(path))
             .or_else(|| self.developers.engines().first().copied())
@@ -8438,31 +8380,10 @@ impl TriApp {
             .then_some(engine)
     }
 
-    /// Niveau développé de l'image `index`, s'il y en a une.
+    /// Niveau développé de l'image `index`, s'il y en a une (tests).
+    #[cfg(test)]
     fn developed_level_at(&self, index: usize) -> Option<Level> {
         self.files.get(index).map(|f| self.developed_level(&f.path))
-    }
-
-    /// Logiciels dont le développement de l'image `index` est déjà rendu (pour son sidecar
-    /// actuel), dans l'ordre du tour de `b` : celui de son développement d'abord
-    /// ([`tri::develop::Developers::resolve`]), puis les autres.
-    fn rendered_engines(&mut self, index: usize) -> Vec<tri::develop::Engine> {
-        // Le développé affiché, s'il est périmé, est oublié ici (et signalé).
-        self.developed_ready(index);
-        let (Some(file), Some(engine)) = (self.files.get(index), &self.engine) else {
-            return Vec::new();
-        };
-        let mut order = self.developers.engines();
-        if let Some(first) = self.developers.resolve(&file.path)
-            && let Some(i) = order.iter().position(|&e| e == first)
-        {
-            order[..=i].rotate_right(1);
-        }
-        order.retain(|&e| {
-            tri::preview::key(file, Level::Developed(e), &engine.preview)
-                .is_ok_and(|key| engine.cache.contains(&key))
-        });
-        order
     }
 
     fn developed_ready(&mut self, index: usize) -> bool {
@@ -10142,6 +10063,10 @@ impl TriApp {
             return;
         }
         self.grid_render = render;
+        // Un seul « rendu affiché », grille et plein écran (décidé le 06/11/2026) : le
+        // choix d'un logiciel par photo cède la place au choix du dossier.
+        self.develop_choice.clear();
+        self.sync_source();
         if let Some(engine) = &self.engine {
             engine.scheduler.set_raw_previews(self.raw_policy());
         }
@@ -16412,23 +16337,23 @@ mod tests {
 
     #[test]
     fn the_grid_shows_the_chosen_render_with_its_badge() {
-        // #114 : `f d` passe au rendu suivant (logiciels installés seulement), retenu d'une
+        // #114 : `r` passe au rendu suivant (grille et plein écran, 06/11/2026) (logiciels installés seulement), retenu d'une
         // session à l'autre ; un RAW sans développement montre son rendu LibRaw.
         use crate::grid_render::GridRender;
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().developers = fake_darktable();
         assert_eq!(h.state().grid_render, GridRender::Embedded);
-        press(&mut h, Key::R, Modifiers::SHIFT);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(h.state().grid_render, GridRender::Cover);
         assert_eq!(h.state().display().grid_render, Some(GridRender::Cover));
         assert_eq!(h.state().raw_policy(), RawPreviews::Background);
-        press(&mut h, Key::R, Modifiers::SHIFT);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(
             h.state().grid_render,
             GridRender::Engine(tri::develop::Engine::Darktable)
         );
-        press(&mut h, Key::R, Modifiers::SHIFT);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(h.state().grid_render, GridRender::LibRaw);
         // Une image vue comme un RAW, son rendu LibRaw dans le cache : il remplace la
         // vignette.
@@ -16451,7 +16376,7 @@ mod tests {
             app.texture_levels.get(&file.path) == Some(&Level::Standard)
         });
         // Retour au JPEG boîtier : la vignette revient.
-        press(&mut h, Key::R, Modifiers::SHIFT);
+        press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(h.state().grid_render, GridRender::Embedded);
         run_until(&mut h, |app| {
             app.texture_levels.get(&file.path) == Some(&Level::Thumbnail)
@@ -16609,21 +16534,24 @@ mod tests {
             h.state().developed_level(&path),
             Level::Developed(Engine::RapidRaw)
         );
-        // Rendu LibRaw dans la vignette : le rendu RAW en plein écran.
+        // Rendu LibRaw dans la vignette (pas de développement RapidRAW) : le rendu RAW en
+        // plein écran.
         press(&mut h, Key::Escape, Modifiers::NONE);
         let app = h.state_mut();
         app.grid_levels.insert(path.clone(), Level::Standard);
         app.selected = 0;
         press(&mut h, Key::Enter, Modifiers::NONE);
-        assert_eq!(h.state().source, Source::Raw);
-        // JPEG boîtier dans la grille : la source du plein écran reste.
+        let file = h.state().files[0].clone();
+        assert_eq!(h.state().source_for(&file), Source::Raw);
+        // JPEG boîtier dans la grille : JPEG boîtier en plein écran aussi (un seul rendu
+        // affiché, 06/11/2026 ; avant, la source du plein écran restait).
         press(&mut h, Key::Escape, Modifiers::NONE);
         let app = h.state_mut();
         app.grid_render = GridRender::Embedded;
         app.grid_levels.insert(path, Level::Thumbnail);
         app.selected = 0;
         press(&mut h, Key::Enter, Modifiers::NONE);
-        assert_eq!(h.state().source, Source::Raw);
+        assert_eq!(h.state().source, Source::Embedded);
     }
 
     #[test]
@@ -16925,7 +16853,7 @@ mod tests {
         // parcourt, ← revient.
         h.state_mut().review_developments = true;
         // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
-        h.state_mut().source = Source::Raw;
+        h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         press(&mut h, Key::S, Modifiers::NONE);
@@ -16956,7 +16884,7 @@ mod tests {
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().review_developments = true;
         // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
-        h.state_mut().source = Source::Raw;
+        h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert!(!h.state().stacking);
         let mut seen = vec![selected_name(&h)];
@@ -16978,6 +16906,14 @@ mod tests {
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0@dt-02.jpg", "← revient par eux");
+        // Sur un développement passé en revue, `r` : avant / après (JPEG boîtier), sans
+        // changer le rendu du dossier (06/11/2026).
+        let render = h.state().grid_render;
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert!(h.state().dev_before);
+        assert_eq!(h.state().grid_render, render);
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert!(!h.state().dev_before);
     }
 
     #[test]
@@ -17022,7 +16958,7 @@ mod tests {
         // En passant en revue les développements.
         h.state_mut().review_developments = true;
         // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
-        h.state_mut().source = Source::Raw;
+        h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         press(&mut h, Key::Enter, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::View);
         // Au début de la rafale.
@@ -17068,7 +17004,7 @@ mod tests {
         assert!(!h.state().position_text().contains("Dév."));
         h.state_mut().review_developments = true;
         // Pas en JPEG boîtier : la revue y est grisée (05/11/2026).
-        h.state_mut().source = Source::Raw;
+        h.state_mut().grid_render = crate::grid_render::GridRender::LibRaw;
         assert!(h.state().position_text().contains("Dév. 1 / 3"));
         h.state_mut().review_developments = false;
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
@@ -19880,34 +19816,21 @@ mod tests {
         h.state_mut().developers = fake_darktable();
         h.run_steps(3);
         assert!(!h.state().review_developments, "décochée par défaut");
-        // Source « JPEG boîtier » (par défaut) : grisée, sans effet (05/11/2026).
+        // Une seule liste « Rendu affiché », comme en grille (06/11/2026).
+        assert!(h.query_by_label(&t!("panel-grid-render")).is_some());
+        assert!(h.query_by_label(&t!("panel-view-source")).is_none());
+        // Rendu « JPEG boîtier » (par défaut) : grisée, sans effet (05/11/2026).
         assert_eq!(h.state().source, Source::Embedded);
         h.get_by_label(&t!("panel-view-review")).click();
         h.run_steps(2);
         assert!(!h.state().review_developments, "grisée en JPEG boîtier");
-        h.state_mut().source = Source::Raw;
-        h.run_steps(2);
+        // `r` : le rendu suivant (la couverture), pour la grille aussi ; la source suit.
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert_eq!(h.state().grid_render, crate::grid_render::GridRender::Cover);
+        assert_eq!(h.state().source, Source::Developed);
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
-        // La liste du développement de chaque photo, sans le JPEG boîtier (une grille en
-        // JPEG boîtier s'y lit « Couverture ») : masquée pendant la revue.
-        // La liste s'annonce par sa bulle ; sa valeur : « Couverture ».
-        let tip = t!("panel-view-render-tip");
-        let lists = |h: &Harness<'_, TriApp>| {
-            h.query_all_by_label_contains(&tip)
-                .filter(|n| format!("{n:?}").contains(&t!("grid-render-cover")))
-                .count()
-        };
-        let reviewing = lists(&h);
-        click_settled(&mut h, &t!("panel-view-review"));
-        h.run_steps(2);
-        assert_eq!(lists(&h), reviewing + 1, "la liste revient sous la case");
-        assert_eq!(
-            h.state().grid_render,
-            crate::grid_render::GridRender::Embedded,
-            "la grille ne change pas tant qu'on n'y touche pas"
-        );
     }
 
     #[test]
@@ -23243,62 +23166,55 @@ mod tests {
     }
 
     #[test]
-    fn source_toggles_between_embedded_and_raw() {
+    fn r_cycles_the_shown_render_for_grid_and_full_screen() {
+        // Décidé le 06/11/2026 : un seul rendu affiché, grille et plein écran ; `r` le fait
+        // tourner pour tout le dossier, `Maj+R` dans l'autre sens.
+        use crate::grid_render::GridRender;
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert_eq!(
             h.state().source,
             Source::Embedded,
-            "rendu boîtier par défaut"
+            "JPEG boîtier par défaut"
         );
         press(&mut h, Key::R, Modifiers::NONE);
+        assert_eq!(h.state().grid_render, GridRender::LibRaw);
         assert_eq!(h.state().source, Source::Raw);
         press(&mut h, Key::R, Modifiers::NONE);
         assert_eq!(
-            h.state().source,
-            Source::Embedded,
-            "sans darktable : deux sources"
+            h.state().grid_render,
+            GridRender::Embedded,
+            "sans logiciel : deux"
         );
-        // darktable là, mais rien de développé : b ne lance jamais de rendu (10 s pour
-        // rien) et reste boîtier ↔ RAW.
+        assert_eq!(h.state().source, Source::Embedded);
+        // Avec darktable : la couverture, darktable, le rendu RAW, le JPEG boîtier.
         h.state_mut().developers = fake_darktable();
-        for expected in [Source::Raw, Source::Embedded] {
+        for (render, source) in [
+            (GridRender::Cover, Source::Developed),
+            (
+                GridRender::Engine(tri::develop::Engine::Darktable),
+                Source::Developed,
+            ),
+            (GridRender::LibRaw, Source::Raw),
+            (GridRender::Embedded, Source::Embedded),
+        ] {
             press(&mut h, Key::R, Modifiers::NONE);
-            assert_eq!(h.state().source, expected);
+            assert_eq!(h.state().grid_render, render);
+            assert_eq!(h.state().source, source);
         }
-        assert!(
-            h.state()
-                .requested
-                .iter()
-                .all(|(_, l)| !matches!(l, Level::Developed(_)))
-        );
-        // Développé (fait plus tôt, ou retrouvé en cache) : il entre dans la rotation.
-        let key = {
-            let app = h.state();
-            let engine = app.engine.as_ref().unwrap();
-            let key = tri::preview::key(&app.files[0], DT, &engine.preview).unwrap();
-            engine.cache.put_bytes(&key, b"jpeg").unwrap();
-            key
-        };
-        set(&mut h.state_mut().status, 0, DT, Avail::Ready);
-        for expected in [Source::Raw, Source::Developed, Source::Embedded] {
-            press(&mut h, Key::R, Modifiers::NONE);
-            assert_eq!(h.state().source, expected);
-        }
-        // Développement modifié dans darktable (autre clé : le cache ne l'a plus) : oublié,
-        // b ne le montre plus (retour du 19/10/2026 : l'ancien recadrage restait).
-        h.state()
-            .engine
-            .as_ref()
-            .unwrap()
-            .cache
-            .remove(&key)
-            .unwrap();
-        for expected in [Source::Raw, Source::Embedded] {
-            press(&mut h, Key::R, Modifiers::NONE);
-            assert_eq!(h.state().source, expected);
-        }
-        assert_eq!(h.state().status[0].developed, Avail::Pending);
+        // Une photo sans développement montre son rendu RAW, comme sa vignette.
+        press(&mut h, Key::R, Modifiers::NONE);
+        let file = h.state().files[0].clone();
+        assert_eq!(h.state().source_for(&file), Source::Raw);
+        // Maj+R : dans l'autre sens.
+        press(&mut h, Key::R, Modifiers::SHIFT);
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        // En plein écran aussi, et ça reste d'une photo à l'autre.
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().grid_render, GridRender::Cover);
+        assert_eq!(h.state().source, Source::Developed);
     }
 
     #[test]
@@ -23720,9 +23636,9 @@ mod tests {
     }
 
     #[test]
-    fn b_goes_through_every_rendered_development() {
-        // #114 : en plein écran, `b` fait le tour de tout ce qui existe pour l'image, pour
-        // comparer : boîtier, RAW, darktable, RapidRAW, boîtier.
+    fn r_goes_through_every_render_of_the_list() {
+        // #114, revu le 06/11/2026 : `r` fait le tour du rendu affiché (pour tout le
+        // dossier) : couverture, chaque logiciel, rendu RAW, JPEG boîtier.
         use tri::develop::Engine;
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -23763,8 +23679,7 @@ mod tests {
             press(h, Key::R, Modifiers::NONE);
             (h.state().source, h.state().developed_level_at(0))
         };
-        assert_eq!(b(&mut h).0, Source::Raw);
-        // Le développement le plus récent d'abord (le .rrdata).
+        // La couverture : le développement le plus récent (le .rrdata).
         assert_eq!(
             b(&mut h),
             (Source::Developed, Some(Level::Developed(Engine::RapidRaw)))
@@ -23773,8 +23688,15 @@ mod tests {
             b(&mut h),
             (Source::Developed, Some(Level::Developed(Engine::Darktable)))
         );
+        assert_eq!(
+            b(&mut h),
+            (Source::Developed, Some(Level::Developed(Engine::RapidRaw)))
+        );
+        assert_eq!(b(&mut h).0, Source::Raw);
         assert_eq!(b(&mut h).0, Source::Embedded);
-        assert!(h.state().notice.is_none(), "{:?}", h.state().notice);
+        // `r` dit le rendu choisi.
+        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+        assert!(notice.contains(&t!("grid-render-jpeg")), "{notice}");
     }
 
     #[test]

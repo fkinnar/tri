@@ -112,9 +112,10 @@ loupe = "m"
 "core.view.compare" = ["="]
 
 # --- Render (r): what is shown, and developing ---
-# r: the source in full screen (camera JPEG, RAW, development); Shift+R: the thumbnail
-# render of the grid. Developing is on request (a few seconds): after the leader, see
-# [after_leader].
+# r / Shift+R: next / previous shown render (camera JPEG, cover, each software, RAW
+# render), one for the whole folder, grid and full screen alike; on a development under
+# review, r is before / after. Developing is on request (a few seconds): after the
+# leader, see [after_leader].
 "core.view.source" = ["r"]
 "core.grid.render" = ["Shift+r"]
 

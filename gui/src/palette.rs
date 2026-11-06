@@ -384,10 +384,10 @@ mod tests {
             Item::Action(Action::StackMode)
         );
         // Pluriel et singulier.
-        assert_eq!(
+        assert!(matches!(
             first("rendus vignette"),
-            Item::Action(Action::GridRenderNext)
-        );
+            Item::Action(Action::ToggleSource | Action::GridRenderNext)
+        ));
         // Les cases RAW / JPEG.
         let raw = Item::Action(Action::FilterKind(tri::filter::KindFilter::RawOnly));
         assert!(top("raw", 3).contains(&raw), "{:?}", top("raw", 5));

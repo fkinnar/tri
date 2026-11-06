@@ -666,7 +666,7 @@ search_width = 200.0
 # Largeur minimale de ce champ quand la barre manque de place (fenêtre étroite : le tri et
 # le nombre d'images passent alors dans un menu « … »).
 search_min_width = 80.0
-# Rendu des vignettes, à changer aussi dans la barre des filtres (f d), retenu par dossier
+# Rendu affiché, le même en grille et en plein écran (r / Maj+R), retenu par dossier
 # (ceci est la valeur d'un dossier jamais réglé) : "embedded" (JPEG boîtier, pour décharger
 # et trier ; une photo développée se replie sur son JPEG), "cover" (la couverture : le
 # développement préféré, sinon le plus récent), "darktable" ou "rapidraw" (toujours ce
@@ -716,7 +716,7 @@ zoom_on_focus_point = true
 stack_wrap = false
 # Plein écran, flèches gauche / droite : true : par chaque développement d'une photo
 # (darktable, ses clones, RapidRAW…) ; false : de photo en photo, chacune dans le rendu de
-# la grille (« Rendu des vignettes »), les autres développements avec Maj+W / Maj+Q. La
+# la grille (« Rendu affiché »), les autres développements avec Maj+W / Maj+Q. La
 # case « Passer en revue les développements » de la section Vue le change (retenu).
 review_developments = false
 # Piles actives, en plein écran, avance automatique après une note (Maj+A) : au bout de la
