@@ -143,6 +143,11 @@ loupe = "m"
 # Prefix "f", followed by the matching rating key. "f f" changes the file type,
 # "f Escape" clears everything.
 "core.filter.cycle" = ["f f"]
+# Show all, RAW only or JPEG only directly (the RAW / JPEG switches of the panel; no
+# default shortcut: from the command palette, or yours).
+"core.filter.kind.all" = []
+"core.filter.kind.raw" = []
+"core.filter.kind.flat" = []
 "core.filter.stars.0" = ["f 0", "f Shift+0"]
 "core.filter.stars.1" = ["f 1", "f Shift+1"]
 "core.filter.stars.2" = ["f 2", "f Shift+2"]

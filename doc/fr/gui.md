@@ -1105,6 +1105,15 @@ fichier, pour parcourir (`palette::split_prefix`, `Only` ; `[gui.dialogs]
 palette_actions_prefix` et `palette_settings_prefix`, un caractère, vide : aucun).
 L'indication grisée du champ les rappelle. La palette est dessinée dans le cadre commun
 des boîtes (`modal_at`, `Dialog` : couleurs, marges, titre et croix comme les autres).
+Premières recherches de l'utilisateur qui n'aboutissaient pas, chacune devenue un test
+(`palette::tests::what_the_user_looked_for_is_found`) : le libellé d'une case du
+panneau (« Empiler automatiquement » : `Action::interface_labels`, cherchés dans toutes
+les langues), le pluriel (« rendus vignette » : `fuzzy` tient un « s » ou « x » final
+pour rien), les cases RAW / JPEG (actions `core.filter.kind.all|raw|flat`). Dans la
+palette comme dans l'aide, une ligne trouvée par des **mots** de son titre (pas par des
+lettres éparpillées) passe devant. Une action **grisée** ici (« Développées » sans photo
+développée dans le dossier : `TriApp::action_unusable`) est absente de la palette et
+refusée au clavier, avec la raison dans la barre d'état.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

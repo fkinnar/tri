@@ -28,3 +28,5 @@ serve:
 - **Single letter** (2026-11-06, user feedback): a typed word of one letter is not looked
   for inside words; it only finds a single letter of the text (a key, "x", "f f", or a
   one-letter word).
+- **Plural** (2026-11-06): a final "s" or "x" (beyond 3 letters) does not count when
+  judging a word exact ("rendus vignette" finds "Rendu des vignettes").

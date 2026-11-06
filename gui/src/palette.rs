@@ -72,11 +72,12 @@ pub fn split_prefix(query: &str, prefixes: Prefixes) -> (Only, &str) {
 /// Lignes de la palette pour `query`, à l'endroit `place` : les actions qui y ont un sens
 /// ([`cheatsheet::applies`], sans la palette elle-même) et les réglages `settings`, les
 /// meilleurs d'abord (à égalité, une action avant un réglage, puis le titre le plus court),
-/// `max` au plus. Un préfixe ([`split_prefix`]) limite aux actions ou aux réglages ; seul,
+/// `max` au plus ; sans celles que `usable` refuse (grisées ici). Un préfixe ([`split_prefix`]) limite aux actions ou aux réglages ; seul,
 /// il les liste tous, dans l'ordre de l'aide ou du fichier (pour parcourir). Requête vide :
 /// rien (la palette invite à taper).
 pub fn search(
     keymap: &Keymap,
+    usable: &dyn Fn(Action) -> bool,
     query: &str,
     prefixes: Prefixes,
     place: Place,
@@ -92,7 +93,11 @@ pub fn search(
     let typed = keymap.actions_for_typed_keys(query);
     let mut found: Vec<((Hit, u8), tri::fuzzy::Match)> = Vec::new();
     for &action in Action::ALL.iter().filter(|_| only != Only::Settings) {
-        if action == Action::Palette || !action.available() || !cheatsheet::applies(action, place) {
+        if action == Action::Palette
+            || !action.available()
+            || !cheatsheet::applies(action, place)
+            || !usable(action)
+        {
             continue;
         }
         let keys = keymap.keys_for(action).join(" / ");
@@ -154,8 +159,16 @@ pub fn search(
         return found.into_iter().map(|((hit, _), _)| hit).collect();
     }
     let mut found = tri::fuzzy::relevant(found);
+    // Trouvée dans son titre d'abord (« rendus vignette » : l'action « Rendu des
+    // vignettes » avant un réglage qui n'a ces mots que dans sa description).
     found.sort_by_cached_key(|((hit, kind), m)| {
+        // Des mots du titre, pas des lettres éparpillées (« crop » dans « Recadrage ›
+        // shade_opacity »).
+        let in_title = tri::fuzzy::find(query, &[&hit.title])
+            .filter(|t| t.close)
+            .map(|t| t.exact);
         (
+            std::cmp::Reverse(in_title),
             std::cmp::Reverse(*m),
             std::cmp::Reverse(*kind),
             hit.title.chars().count(),
@@ -189,6 +202,7 @@ mod tests {
     fn the_best_action_comes_first() {
         let hits = search(
             &keymap(),
+            &|_| true,
             "recadrer",
             PREFIXES,
             Place::View,
@@ -198,7 +212,15 @@ mod tests {
         assert_eq!(hits[0].item, Item::Action(Action::Crop));
         assert!(!hits[0].keys.is_empty(), "les touches sont montrées");
         // Sans faute ni accent, en anglais.
-        let hits = search(&keymap(), "crop", PREFIXES, Place::View, &settings(), 20);
+        let hits = search(
+            &keymap(),
+            &|_| true,
+            "crop",
+            PREFIXES,
+            Place::View,
+            &settings(),
+            20,
+        );
         assert_eq!(hits[0].item, Item::Action(Action::Crop));
     }
 
@@ -206,6 +228,7 @@ mod tests {
     fn settings_are_found_too() {
         let hits = search(
             &keymap(),
+            &|_| true,
             "loupe_key",
             PREFIXES,
             Place::Grid,
@@ -224,6 +247,7 @@ mod tests {
         // Le recadrage n'a pas de sens dans la grille.
         let hits = search(
             &keymap(),
+            &|_| true,
             "recadrer",
             PREFIXES,
             Place::Grid,
@@ -231,13 +255,29 @@ mod tests {
             50,
         );
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Crop)));
-        let hits = search(&keymap(), "palette", PREFIXES, Place::Grid, &settings(), 50);
+        let hits = search(
+            &keymap(),
+            &|_| true,
+            "palette",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            50,
+        );
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Palette)));
     }
 
     #[test]
     fn a_typed_key_finds_its_actions_only() {
-        let hits = search(&keymap(), "ctrl f", PREFIXES, Place::Grid, &settings(), 20);
+        let hits = search(
+            &keymap(),
+            &|_| true,
+            "ctrl f",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            20,
+        );
         let items: Vec<Item> = hits.into_iter().map(|h| h.item).collect();
         assert!(items.contains(&Item::Action(Action::Search)));
         assert!(items.contains(&Item::Action(Action::FocusMode)));
@@ -246,7 +286,15 @@ mod tests {
 
     #[test]
     fn sorting_by_one_key_is_an_action() {
-        let hits = search(&keymap(), "tri nom", PREFIXES, Place::Grid, &settings(), 20);
+        let hits = search(
+            &keymap(),
+            &|_| true,
+            "tri nom",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            20,
+        );
         assert_eq!(
             hits[0].item,
             Item::Action(Action::SortBy(tri::sort::SortKey::Name))
@@ -256,7 +304,15 @@ mod tests {
     #[test]
     fn a_prefix_limits_to_actions_or_settings() {
         let kinds = |q: &str| -> (usize, usize) {
-            let hits = search(&keymap(), q, PREFIXES, Place::Grid, &settings(), 500);
+            let hits = search(
+                &keymap(),
+                &|_| true,
+                q,
+                PREFIXES,
+                Place::Grid,
+                &settings(),
+                500,
+            );
             let actions = hits
                 .iter()
                 .filter(|h| matches!(h.item, Item::Action(_)))
@@ -272,7 +328,15 @@ mod tests {
         let (a, s) = kinds(" ? zoom");
         assert!(a == 0 && s > 0, "espaces tolérés");
         // Le préfixe seul : tout parcourir, sans limite.
-        let all = search(&keymap(), ">", PREFIXES, Place::Grid, &settings(), 5);
+        let all = search(
+            &keymap(),
+            &|_| true,
+            ">",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            5,
+        );
         assert!(all.len() > 50, "{}", all.len());
         assert!(all.iter().all(|h| matches!(h.item, Item::Action(_))));
         // Préfixe vide : jamais reconnu.
@@ -284,8 +348,103 @@ mod tests {
     }
 
     #[test]
+    fn what_the_user_looked_for_is_found() {
+        // Retours du 06/11/2026, un par recherche qui n'aboutissait pas.
+        let first = |q: &str| {
+            search(
+                &keymap(),
+                &|_| true,
+                q,
+                PREFIXES,
+                Place::Grid,
+                &settings(),
+                20,
+            )[0]
+            .item
+            .clone()
+        };
+        let top = |q: &str, n: usize| -> Vec<Item> {
+            search(
+                &keymap(),
+                &|_| true,
+                q,
+                PREFIXES,
+                Place::Grid,
+                &settings(),
+                20,
+            )
+            .into_iter()
+            .take(n)
+            .map(|h| h.item)
+            .collect()
+        };
+        // Le libellé de la case du panneau.
+        assert_eq!(
+            first("Empiler automatiquement"),
+            Item::Action(Action::StackMode)
+        );
+        // Pluriel et singulier.
+        assert_eq!(
+            first("rendus vignette"),
+            Item::Action(Action::GridRenderNext)
+        );
+        // Les cases RAW / JPEG.
+        let raw = Item::Action(Action::FilterKind(tri::filter::KindFilter::RawOnly));
+        assert!(top("raw", 3).contains(&raw), "{:?}", top("raw", 5));
+    }
+
+    #[test]
+    fn what_is_greyed_out_here_is_left_out() {
+        let developed = Item::Action(Action::FilterDeveloped);
+        let all = search(
+            &keymap(),
+            &|_| true,
+            "developpees",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            20,
+        );
+        assert!(all.iter().any(|h| h.item == developed));
+        let usable = |a: Action| a != Action::FilterDeveloped;
+        let hits = search(
+            &keymap(),
+            &usable,
+            "developpees",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            20,
+        );
+        assert!(!hits.iter().any(|h| h.item == developed));
+    }
+
+    #[test]
     fn empty_query_lists_nothing_and_max_is_kept() {
-        assert!(search(&keymap(), "  ", PREFIXES, Place::Grid, &settings(), 20).is_empty());
-        assert!(search(&keymap(), "e", PREFIXES, Place::Grid, &settings(), 5).len() <= 5);
+        assert!(
+            search(
+                &keymap(),
+                &|_| true,
+                "  ",
+                PREFIXES,
+                Place::Grid,
+                &settings(),
+                20
+            )
+            .is_empty()
+        );
+        assert!(
+            search(
+                &keymap(),
+                &|_| true,
+                "e",
+                PREFIXES,
+                Place::Grid,
+                &settings(),
+                5
+            )
+            .len()
+                <= 5
+        );
     }
 }

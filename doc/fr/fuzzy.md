@@ -30,3 +30,5 @@ servir aussi :
 - **Lettre seule** (06/11/2026, retour de l'utilisateur) : un mot tapé d'une seule lettre
   n'est pas cherché dans les mots ; il ne trouve qu'une lettre seule du texte (une
   touche, « x », « f f », ou un mot d'une lettre).
+- **Pluriel** (06/11/2026) : un « s » ou « x » final (au-delà de 3 lettres) ne compte pas
+  pour juger un mot exact (« rendus vignette » trouve « Rendu des vignettes »).

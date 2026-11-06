@@ -171,6 +171,8 @@ pub enum Action {
     SortReverse,
     /// Trier selon cette clé (nom, prise de vue…), sans passer par les autres.
     SortBy(tri::sort::SortKey),
+    /// Montrer tout, les RAW seulement ou les JPEG (images plates) seulement.
+    FilterKind(tri::filter::KindFilter),
     /// Rendu des vignettes suivant : JPEG boîtier, dernier développement, un logiciel,
     /// LibRaw (#114).
     GridRenderNext,
@@ -466,7 +468,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 203] = [
+    pub const ALL: [Action; 206] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -505,6 +507,9 @@ impl Action {
         Action::SortBy(tri::sort::SortKey::Stars),
         Action::SortBy(tri::sort::SortKey::Color),
         Action::SortBy(tri::sort::SortKey::Flag),
+        Action::FilterKind(tri::filter::KindFilter::All),
+        Action::FilterKind(tri::filter::KindFilter::RawOnly),
+        Action::FilterKind(tri::filter::KindFilter::FlatOnly),
         Action::GridRenderNext,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
@@ -734,13 +739,36 @@ impl Action {
         args.set("os", tri::i18n::value(crate::i18n::os()));
         let mut texts = Vec::new();
         for language in Language::ALL {
-            for id in [&label_id, &keywords_id, &group_id, &group_keywords] {
+            for id in [label_id.as_str(), &keywords_id, &group_id, &group_keywords]
+                .into_iter()
+                .chain(self.interface_labels().iter().copied())
+            {
                 if tri::i18n::has(language, id) {
                     texts.push(tri::i18n::translate_in(language, id, Some(&args)));
                 }
             }
         }
         texts
+    }
+
+    /// Libellés des contrôles de l'interface qui font cette action (case « Empiler
+    /// automatiquement » des piles…) : la recherche les trouve sous ces mots aussi (retour
+    /// du 06/11/2026, la palette ne trouvait pas « Empiler automatiquement »).
+    pub fn interface_labels(self) -> &'static [&'static str] {
+        use Action::*;
+        match self {
+            StackMode => &["panel-grid-stacks-on", "panel-grid-stacks"],
+            StacksAll => &["panel-grid-unfold-all", "panel-grid-fold-all"],
+            GroupingWindow => &["panel-grid-grouping", "panel-grid-similarity"],
+            GridRenderNext => &["panel-grid-render"],
+            SortNext | SortBy(_) => &["panel-grid-sort"],
+            ToggleSource => &["panel-view-source"],
+            FilterBlurry => &["panel-filter-sharp"],
+            FilterWellExposed => &["panel-filter-exposed"],
+            FilterDeveloped => &["panel-filter-developed"],
+            FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
+            _ => &[],
+        }
     }
 
     /// Thème de l'action (aide).
@@ -761,9 +789,8 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | FilterDeveloped | SortNext | SortReverse | SortBy(_) | GridRenderNext => {
-                Group::Filters
-            }
+            | FilterDeveloped | SortNext | SortReverse | SortBy(_) | FilterKind(_)
+            | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove | Sidecars
@@ -871,6 +898,9 @@ impl Action {
             Action::SortBy(tri::sort::SortKey::Stars) => "core.filter.sort_by.stars",
             Action::SortBy(tri::sort::SortKey::Color) => "core.filter.sort_by.color",
             Action::SortBy(tri::sort::SortKey::Flag) => "core.filter.sort_by.flag",
+            Action::FilterKind(tri::filter::KindFilter::All) => "core.filter.kind.all",
+            Action::FilterKind(tri::filter::KindFilter::RawOnly) => "core.filter.kind.raw",
+            Action::FilterKind(tri::filter::KindFilter::FlatOnly) => "core.filter.kind.flat",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleImageInfo => "core.view.image_info",
@@ -2655,6 +2685,18 @@ mod tests {
             "pavé numérique sous Linux"
         );
         assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ",", "."]);
+    }
+
+    #[test]
+    fn interface_labels_exist_in_every_language() {
+        crate::i18n::ensure();
+        for action in Action::ALL {
+            for id in action.interface_labels() {
+                for language in Language::ALL {
+                    assert!(tri::i18n::has(language, id), "{id} ({language:?})");
+                }
+            }
+        }
     }
 
     #[test]

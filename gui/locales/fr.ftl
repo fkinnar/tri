@@ -12,6 +12,9 @@ action-core-nav-last = Dernière image
 action-core-nav-page_up = Page précédente
 action-core-nav-page_down = Page suivante
 action-core-filter-cycle = Filtre de type : tout, RAW, JPEG…
+action-core-filter-kind-all = Filtre de type : RAW et JPEG
+action-core-filter-kind-raw = Filtre de type : RAW seulement
+action-core-filter-kind-flat = Filtre de type : JPEG seulement
 action-core-filter-stars-0 = Filtre : étoiles indifférentes
 action-core-filter-stars-1 = Filtre : 1 étoile (au moins, exactement ou au plus : f =)
 action-core-filter-stars-2 = Filtre : 2 étoiles (au moins, exactement ou au plus : f =)
@@ -1005,6 +1008,7 @@ slider-strict = plus strict
 filter-developed-none = sans développement
 filter-developed-engine = développées dans { $engine }
 filter-developed-tip = Logiciels de développement : les images développées dans l'un des logiciels cochés, montrées dans le plus récent ; aucun coché : les images sans développement, en rendu LibRaw
+filter-developed-unusable = Aucune photo développée dans ce dossier : le filtre « Développées » n'a rien à montrer.
 develop-with = Développer avec
 develop-with-choose = choisir…
 develop-with-libraw = Rendu RAW (LibRaw)
@@ -1324,3 +1328,6 @@ settings-editor-program = Programme
 settings-editor-args = Arguments
 settings-editor-args-tip = { "{" }files{ "}" } : les images ouvertes (ajoutées à la fin s'il manque).
 settings-editor-missing = Programme introuvable.
+kw-core-filter-kind-all = tout montrer fichiers
+kw-core-filter-kind-raw = raw seuls masquer jpeg
+kw-core-filter-kind-flat = jpeg jpg seuls plates masquer raw
