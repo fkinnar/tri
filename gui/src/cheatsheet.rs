@@ -77,6 +77,7 @@ pub fn applies(action: Action, place: Place) -> bool {
     let image = matches!(
         action,
         ToggleZoom
+            | Loupe
             | ZoomFit
             | PanLeft
             | PanRight

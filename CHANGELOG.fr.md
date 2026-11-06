@@ -81,6 +81,8 @@
 - **Filtre grisé** : « Développées », grisé quand aucune photo du dossier n'est
   développée, ne s'allume plus par la palette (absent) ni par `f r` (refusé, avec la
   raison dans la barre d'état) ; l'éteindre reste possible.
+- **La loupe dans l'aide** : « loupe » la trouve dans l'aide, `?` et la palette, avec sa
+  touche (`m`, maintenue) ; lancée depuis la palette, elle rappelle qu'il faut la tenir.
 - **Un seul rendu affiché** : « Source affichée » et « Développement de chaque photo »
   deviennent une seule liste, « Rendu affiché », la même en grille et en plein écran
   (JPEG boîtier, couverture, chaque logiciel, rendu RAW). `r` / `Maj+R` : rendu suivant /
