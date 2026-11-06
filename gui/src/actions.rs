@@ -2726,6 +2726,25 @@ mod tests {
     }
 
     #[test]
+    fn action_labels_name_no_arrow_key() {
+        // Retour du 06/11/2026 (jeu vim) : « flèches gauche / droite » dans un libellé ;
+        // les touches du jeu choisi sont montrées à côté, le libellé dit ce que fait
+        // l'action.
+        crate::i18n::ensure();
+        for language in Language::ALL {
+            for action in Action::ALL {
+                let id = format!("action-{}", action.id().replace('.', "-"));
+                let mut args = tri::i18n::Args::new();
+                args.set("os", tri::i18n::value(crate::i18n::os()));
+                let label = tri::i18n::translate_in(language, &id, Some(&args)).to_lowercase();
+                for word in ["flèche", "arrow", "←", "→", "↑", "↓"] {
+                    assert!(!label.contains(word), "{id} ({language:?}) : {label}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn interface_labels_exist_in_every_language() {
         crate::i18n::ensure();
         for action in Action::ALL {
