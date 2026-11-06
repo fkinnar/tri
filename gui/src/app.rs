@@ -7030,6 +7030,10 @@ impl TriApp {
                 key: self.order.key.next(),
                 ..self.order
             }),
+            Action::FilterKind(kind) => {
+                self.filter = kind;
+                self.apply_filter();
+            }
             Action::SortBy(key) => self.set_order(tri::sort::Order { key, ..self.order }),
             Action::SortReverse => self.set_order(tri::sort::Order {
                 descending: !self.order.descending,
@@ -16006,8 +16010,12 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
         // le nom le plus court (le plus proche de la requête), d'abord.
         // Trouvée dans son libellé (« darktable » : « Développer dans Darktable » avant
         // les actions qui n'ont darktable que dans leurs mots-clés), puis la meilleure.
-        let in_label =
-            |a: Action| tri::fuzzy::find(query, &[&a.label()]).map(|m| (m.exact, m.close));
+        // Des mots du libellé, pas des lettres éparpillées.
+        let in_label = |a: Action| {
+            tri::fuzzy::find(query, &[&a.label()])
+                .filter(|m| m.close)
+                .map(|m| m.exact)
+        };
         let best = |g: Group| {
             rows.iter()
                 .filter(|((a, _), _)| a.group() == g)
@@ -16015,7 +16023,7 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
                 .max()
         };
         #[allow(clippy::type_complexity)]
-        let order: Vec<(Group, Option<(Option<(bool, bool)>, tri::fuzzy::Match)>)> =
+        let order: Vec<(Group, Option<(Option<bool>, tri::fuzzy::Match)>)> =
             Group::ALL.iter().map(|&g| (g, best(g))).collect();
         let group_best = |a: Action| {
             order
@@ -16023,10 +16031,6 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
                 .find(|(g, _)| *g == a.group())
                 .and_then(|o| o.1)
         };
-        // Trouvée dans son libellé (« darktable » : « Développer dans Darktable » avant
-        // les actions qui n'ont darktable que dans leurs mots-clés).
-        let in_label =
-            |a: Action| tri::fuzzy::find(query, &[&a.label()]).map(|m| (m.exact, m.close));
         rows.sort_by_cached_key(|((a, _), m)| {
             (
                 std::cmp::Reverse(group_best(*a)),

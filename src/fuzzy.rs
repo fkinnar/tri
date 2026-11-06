@@ -105,9 +105,11 @@ pub fn find(query: &str, fields: &[&str]) -> Option<Match> {
             .filter_map(|f| word_score(&word, f))
             .max()
             .or(typo)?;
+        // Au singulier comme au pluriel (« rendus vignette » : « Rendu des vignettes »).
+        let stem = singular(&word);
         let whole = fields
             .iter()
-            .any(|f| f.windows(word.len()).any(|w| w == word.as_slice()));
+            .any(|f| f.windows(stem.len()).any(|w| w == stem));
         exact &= whole;
         close &= whole || typo.is_some();
     }
@@ -116,6 +118,16 @@ pub fn find(query: &str, fields: &[&str]) -> Option<Match> {
         close,
         score,
     })
+}
+
+/// Le mot sans sa marque du pluriel (« s » ou « x » final, au-delà de 3 lettres) : le
+/// français et l'anglais l'ajoutent, et un texte au singulier contient alors le mot tapé
+/// au pluriel sans elle.
+fn singular(word: &[char]) -> &[char] {
+    match word {
+        [rest @ .., 's' | 'x'] if word.len() > 3 => rest,
+        _ => word,
+    }
 }
 
 /// Fautes tolérées dans un mot tapé de `len` lettres : aucune en dessous de 4 (trop de
@@ -288,6 +300,15 @@ mod tests {
         assert!(find("f", &["Filtre : floues", "Ctrl+Maj+s"]).is_none());
         assert!(find("zoom f", &["Zoom 100 %", "z"]).is_none());
         assert!(find("zoom z", &["Zoom 100 %", "z"]).is_some_and(|m| m.exact));
+    }
+
+    #[test]
+    fn plural_or_singular_is_exact() {
+        assert!(find("rendus vignette", &["Rendu des vignettes"]).is_some_and(|m| m.exact));
+        assert!(find("filtres", &["Filtre de type"]).is_some_and(|m| m.exact));
+        assert!(find("panneaux", &["panneau des dossiers"]).is_some_and(|m| m.exact));
+        // Trois lettres ou moins : tel quel (« gps », « iso »).
+        assert!(find("gps", &["gp"]).is_none_or(|m| !m.exact));
     }
 
     #[test]

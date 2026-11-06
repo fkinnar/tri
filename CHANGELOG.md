@@ -69,6 +69,10 @@
 - **Search in the grid only**: the name search field is no longer shown in full screen,
   where `/` goes back to "fit". The help writes `/` for the search (alone in vim, with
   `Ctrl+F` in classic).
+- **Palette, what it did not find**: the labels of the panel checkboxes ("Stack
+  automatically"), the plural ("thumbnails render"), and three actions for the RAW / JPEG
+  switches (RAW only, JPEG only, both). A line found by the words of its title comes
+  first (palette and help).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

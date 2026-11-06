@@ -74,6 +74,10 @@
 - **Recherche en grille seulement** : le champ de recherche par nom n'est plus montré en
   plein écran, où `/` remet en « ajusté ». L'aide écrit `/` pour la recherche (seul en
   vim, avec `Ctrl+F` en classique).
+- **Palette, ce qu'elle ne trouvait pas** : les libellés des cases du panneau
+  (« Empiler automatiquement »), le pluriel (« rendus vignette »), et trois actions pour
+  les cases RAW / JPEG (RAW seulement, JPEG seulement, les deux). Une ligne trouvée par
+  les mots de son titre passe devant (palette et aide).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

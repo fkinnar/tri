@@ -154,8 +154,16 @@ pub fn search(
         return found.into_iter().map(|((hit, _), _)| hit).collect();
     }
     let mut found = tri::fuzzy::relevant(found);
+    // Trouvée dans son titre d'abord (« rendus vignette » : l'action « Rendu des
+    // vignettes » avant un réglage qui n'a ces mots que dans sa description).
     found.sort_by_cached_key(|((hit, kind), m)| {
+        // Des mots du titre, pas des lettres éparpillées (« crop » dans « Recadrage ›
+        // shade_opacity »).
+        let in_title = tri::fuzzy::find(query, &[&hit.title])
+            .filter(|t| t.close)
+            .map(|t| t.exact);
         (
+            std::cmp::Reverse(in_title),
             std::cmp::Reverse(*m),
             std::cmp::Reverse(*kind),
             hit.title.chars().count(),
@@ -281,6 +289,36 @@ mod tests {
             settings: None,
         };
         assert_eq!(split_prefix(">zoom", none), (Only::All, ">zoom"));
+    }
+
+    #[test]
+    fn what_the_user_looked_for_is_found() {
+        // Retours du 06/11/2026, un par recherche qui n'aboutissait pas.
+        let first = |q: &str| {
+            search(&keymap(), q, PREFIXES, Place::Grid, &settings(), 20)[0]
+                .item
+                .clone()
+        };
+        let top = |q: &str, n: usize| -> Vec<Item> {
+            search(&keymap(), q, PREFIXES, Place::Grid, &settings(), 20)
+                .into_iter()
+                .take(n)
+                .map(|h| h.item)
+                .collect()
+        };
+        // Le libellé de la case du panneau.
+        assert_eq!(
+            first("Empiler automatiquement"),
+            Item::Action(Action::StackMode)
+        );
+        // Pluriel et singulier.
+        assert_eq!(
+            first("rendus vignette"),
+            Item::Action(Action::GridRenderNext)
+        );
+        // Les cases RAW / JPEG.
+        let raw = Item::Action(Action::FilterKind(tri::filter::KindFilter::RawOnly));
+        assert!(top("raw", 3).contains(&raw), "{:?}", top("raw", 5));
     }
 
     #[test]

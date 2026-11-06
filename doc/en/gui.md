@@ -1048,6 +1048,12 @@ file, to browse (`palette::split_prefix`, `Only`; `[gui.dialogs] palette_actions
 and `palette_settings_prefix`, one character, empty: none). The field's grey hint
 recalls them. The palette is drawn in the common dialog frame (`modal_at`, `Dialog`:
 colours, margins, title and cross like the others).
+The user's first searches that found nothing, each now a test
+(`palette::tests::what_the_user_looked_for_is_found`): the label of a panel checkbox
+("Empiler automatiquement": `Action::interface_labels`, searched in every language),
+the plural ("rendus vignette": `fuzzy` ignores a final "s" or "x"), the RAW / JPEG
+switches (actions `core.filter.kind.all|raw|flat`). In the palette as in the help, a
+line found by **words** of its title (not by scattered letters) comes first.
 
 ### Shortcut review (2026-11-06, issue #280)
 
