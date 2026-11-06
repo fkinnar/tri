@@ -63,6 +63,10 @@
 - **Chercher une touche** : dans l'aide et la palette, « ctrl f » (ou « Ctrl+F », « maj
   p ») ne montre que les actions liées à cette touche. Une lettre seule ne trouve plus
   que des lettres seules (une touche, « x »), plus le « f » au milieu des mots.
+- **Trier par…** : une action par ordre (nom, prise de vue, modification, étoiles,
+  couleur, drapeau), en plus de « Ordre suivant » : dans la palette (« tri nom »), sans
+  raccourci par défaut (à poser dans `[keys]`). La palette gagne un titre et un champ plus
+  aéré.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

@@ -59,6 +59,9 @@
 - **Search for a key**: in the help and the palette, "ctrl f" (or "Ctrl+F", "shift p")
   only shows the actions bound to that key. A single letter now only finds single
   letters (a key, "x"), no longer the "f" inside words.
+- **Sort by…**: one action per order (name, capture date, modification date, stars,
+  colour, flag), besides "Next order": in the palette ("sort name"), without a default
+  shortcut (set one in `[keys]`). The palette gets a title and a roomier field.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

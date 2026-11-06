@@ -169,6 +169,8 @@ pub enum Action {
     SortNext,
     /// Inverser le sens de l'ordre.
     SortReverse,
+    /// Trier selon cette clé (nom, prise de vue…), sans passer par les autres.
+    SortBy(tri::sort::SortKey),
     /// Rendu des vignettes suivant : JPEG boîtier, dernier développement, un logiciel,
     /// LibRaw (#114).
     GridRenderNext,
@@ -464,7 +466,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 197] = [
+    pub const ALL: [Action; 203] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -497,6 +499,12 @@ impl Action {
         Action::FilterDeveloped,
         Action::SortNext,
         Action::SortReverse,
+        Action::SortBy(tri::sort::SortKey::Name),
+        Action::SortBy(tri::sort::SortKey::Captured),
+        Action::SortBy(tri::sort::SortKey::Modified),
+        Action::SortBy(tri::sort::SortKey::Stars),
+        Action::SortBy(tri::sort::SortKey::Color),
+        Action::SortBy(tri::sort::SortKey::Flag),
         Action::GridRenderNext,
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
@@ -753,7 +761,9 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | FilterDeveloped | SortNext | SortReverse | GridRenderNext => Group::Filters,
+            | FilterDeveloped | SortNext | SortReverse | SortBy(_) | GridRenderNext => {
+                Group::Filters
+            }
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove | Sidecars
@@ -855,6 +865,12 @@ impl Action {
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
             Action::SortReverse => "core.filter.sort_reverse",
+            Action::SortBy(tri::sort::SortKey::Name) => "core.filter.sort_by.name",
+            Action::SortBy(tri::sort::SortKey::Captured) => "core.filter.sort_by.captured",
+            Action::SortBy(tri::sort::SortKey::Modified) => "core.filter.sort_by.modified",
+            Action::SortBy(tri::sort::SortKey::Stars) => "core.filter.sort_by.stars",
+            Action::SortBy(tri::sort::SortKey::Color) => "core.filter.sort_by.color",
+            Action::SortBy(tri::sort::SortKey::Flag) => "core.filter.sort_by.flag",
             Action::ToggleFilterBar => "core.view.filter_bar",
             Action::ToggleRatingBar => "core.view.rating_bar",
             Action::ToggleImageInfo => "core.view.image_info",

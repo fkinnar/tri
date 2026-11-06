@@ -1092,7 +1092,9 @@ de ligne ; **Entrée lance** l'action, ou ouvre la fenêtre de réglages filtré
 réglage (`section.clé`) ; un clic aussi ; Échap ferme. Chaque action montre ses touches :
 on apprend les raccourcis en passant, et les actions sans raccourci deviennent
 accessibles au clavier. Réglages `[gui.dialogs] palette_width`, `palette_max`. Plus tard
-peut-être : basculer un oui / non directement dans la palette.
+peut-être : basculer un oui / non directement dans la palette. Retours du même jour : un
+titre, un champ plus aéré, et des actions qui manquaient pour s'y trouver : **Trier par…**
+(`core.filter.sort_by.<clé>`, une par ordre, sans raccourci par défaut).
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

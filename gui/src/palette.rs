@@ -163,6 +163,15 @@ mod tests {
     }
 
     #[test]
+    fn sorting_by_one_key_is_an_action() {
+        let hits = search(&keymap(), "tri nom", Place::Grid, &settings(), 20);
+        assert_eq!(
+            hits[0].item,
+            Item::Action(Action::SortBy(tri::sort::SortKey::Name))
+        );
+    }
+
+    #[test]
     fn empty_query_lists_nothing_and_max_is_kept() {
         assert!(search(&keymap(), "  ", Place::Grid, &settings(), 20).is_empty());
         assert!(search(&keymap(), "e", Place::Grid, &settings(), 5).len() <= 5);

@@ -7030,6 +7030,7 @@ impl TriApp {
                 key: self.order.key.next(),
                 ..self.order
             }),
+            Action::SortBy(key) => self.set_order(tri::sort::Order { key, ..self.order }),
             Action::SortReverse => self.set_order(tri::sort::Order {
                 descending: !self.order.descending,
                 ..self.order
@@ -14031,9 +14032,17 @@ impl TriApp {
                     .inner_margin(12.0)
                     .show(ui, |ui| {
                         ui.set_width(width);
+                        ui.label(
+                            egui::RichText::new(t!("palette-title"))
+                                .size(self.gui.dialogs.title_size)
+                                .color(accent),
+                        );
+                        ui.add_space(4.0);
                         let field = ui.add(
                             egui::TextEdit::singleline(&mut query)
                                 .id(egui::Id::unique("palette_query"))
+                                // De l'air autour du texte (retour du 06/11/2026).
+                                .margin(vec2(10.0, 8.0))
                                 .hint_text(t!("palette-hint"))
                                 .desired_width(f32::INFINITY),
                         );
@@ -16247,6 +16256,19 @@ mod tests {
         h.state_mut().gui.key_menu = false;
         leader(&mut h, &[]);
         assert!(!h.state().sequencer.is_held());
+    }
+
+    #[test]
+    fn sort_by_one_key_keeps_the_direction() {
+        use tri::sort::SortKey;
+        let (mut h, _dir) = harness();
+        act(&mut h, Action::SortBy(SortKey::Stars));
+        assert_eq!(h.state().order.key, SortKey::Stars);
+        act(&mut h, Action::SortReverse);
+        let descending = h.state().order.descending;
+        act(&mut h, Action::SortBy(SortKey::Name));
+        assert_eq!(h.state().order.key, SortKey::Name);
+        assert_eq!(h.state().order.descending, descending);
     }
 
     #[test]
