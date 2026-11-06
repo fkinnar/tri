@@ -71,6 +71,9 @@
   que les réglages ; seul, le préfixe les liste tous. Réglables :
   `[gui.dialogs] palette_actions_prefix`, `palette_settings_prefix`. La palette prend
   l'aspect des autres boîtes (couleurs, marges, titre, croix).
+- **Recherche en grille seulement** : le champ de recherche par nom n'est plus montré en
+  plein écran, où `/` remet en « ajusté ». L'aide écrit `/` pour la recherche (seul en
+  vim, avec `Ctrl+F` en classique).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

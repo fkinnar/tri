@@ -66,6 +66,9 @@
   settings; alone, the prefix lists them all. Configurable:
   `[gui.dialogs] palette_actions_prefix`, `palette_settings_prefix`. The palette takes
   the look of the other dialogs (colours, margins, title, cross).
+- **Search in the grid only**: the name search field is no longer shown in full screen,
+  where `/` goes back to "fit". The help writes `/` for the search (alone in vim, with
+  `Ctrl+F` in classic).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
