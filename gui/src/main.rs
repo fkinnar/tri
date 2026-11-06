@@ -39,6 +39,7 @@ mod crop;
 mod develop_batch;
 mod export;
 mod files;
+mod fonts;
 mod grid;
 mod grid_render;
 mod histogram;
@@ -116,6 +117,12 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             trace::trace(|| "fenêtre ouverte".into());
             settings.gui.theme.apply(&cc.egui_ctx, &settings.gui.colors);
+            // Les flèches des noms de touches, d'une police du système (06/11/2026).
+            fonts::install(
+                &cc.egui_ctx,
+                &settings.gui.arrow_font,
+                settings.gui.arrow_font_scale,
+            );
             // Fichier de la fenêtre de réglages : celui lu, sinon celui demandé ou
             // l'emplacement par défaut (créé au premier changement).
             let path = loaded.path.or(config).or_else(tri::settings::default_path);

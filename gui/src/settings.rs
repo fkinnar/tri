@@ -202,6 +202,11 @@ pub struct GuiSettings {
     /// Trace (`TRI_GUI_TRACE`) : une image de l'interface plus lente que ce délai (ms)
     /// est tracée avec la durée de ses étapes.
     pub trace_slow_ms: u64,
+    /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
+    /// un chemin, cette police ; `"none"`, en toutes lettres.
+    pub arrow_font: String,
+    /// Taille de ces flèches, par rapport à leur police (fines et petites telles quelles).
+    pub arrow_font_scale: f32,
     /// Taille initiale de la fenêtre (points).
     pub window: [f32; 2],
     /// Rendus RAW : à la demande (image affichée et voisines, en mode RAW) ou tout le
@@ -309,6 +314,8 @@ impl Default for GuiSettings {
             key_menu: true,
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
+            arrow_font: String::new(),
+            arrow_font_scale: 1.4,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,
