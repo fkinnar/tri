@@ -42,6 +42,10 @@
   keys and what they do at the bottom of the screen. The menu then waits for the next
   key without a delay; Esc abandons it. Settings `[gui] key_menu` and
   `key_menu_delay_ms` (400 ms); sub-menus named in `keys.toml` (`[menus]`).
+- **Help here**: `?` shows over the screen the shortcuts of where you are (grid, full
+  screen, comparison, crop, large histogram, folders or metadata panel), arranged by
+  theme, in large type. `F1` remains the full list with a search. Settings
+  `[gui.dialogs] help_here_text` and `help_here_column`.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

@@ -861,7 +861,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
     portraits sur fond blanc (rien, -0,45 IL de marge).
 - **Paires RAW+JPEG** : noter `IMG.RAF` note aussi `IMG.JPG` (choix de l'utilisateur,
   17/10/2026), voir [notes.md](notes.md).
-- **Aide** (`F1` ou `?`, fermeture par Échap ou `F1`) : chaque action avec un libellé
+- **Aide** (`F1`, fermeture par Échap ou `F1` ; `?` montre l'aide « ici », plus bas) : chaque action avec un libellé
   compréhensible et ses touches, **rangée par thème** (Navigation, Affichage, Notation,
   Filtres, Panneaux, Application : `Action::group`) ; l'identifiant technique n'apparaît
   qu'au survol. L'aide est **modale** : tant qu'elle est ouverte, seules Échap, l'aide et
@@ -1046,6 +1046,22 @@ chose sont sur une ligne (`Maj+h / Maj+Flèche gauche`). Un sous-menu est nommé
 section `[menus]` de `keys.toml` (`"<leader> i" = "histogram"` : message
 `key-submenu-histogram` des catalogues, sinon le texte tel quel), à défaut par le thème
 le plus fréquent de ses actions. Capture : étape `keys:Ctrl+b r` de `TRI_GUI_ACTIONS`.
+
+### Aide « ici » (`?`, 06/11/2026)
+
+Deuxième morceau de la refonte de l'aide (idée de l'utilisateur : qu'un débutant trouve
+facilement quoi faire). `?` (`core.app.help_here`) montre par-dessus l'écran assombri
+**seulement les raccourcis de l'endroit où l'on est**, rangés par thème dans des cartes
+en colonnes, en grand (`[gui.dialogs] help_here_text`, `help_here_column`) ; `F1` reste la
+liste complète avec recherche. L'endroit (`cheatsheet::Place`) : recadrage, grand
+histogramme, panneau des dossiers ou des métadonnées s'il a le clavier, sinon le mode
+des images (grille, plein écran, comparaison). `cheatsheet::applies` dit ce qui vaut où :
+les actions du panneau ; pour les images, sauf ce qui ne vaut que sur une image en grand
+(zoom, carte de netteté, superpositions, source…) en grille, le recadrage et les versions
+hors du plein écran, ce qui ne vaut qu'en grille (rendu des vignettes, pages, tri…)
+ailleurs. Les actions sans touche n'y sont pas (elles restent dans F1). Modale : `?` ou
+Échap ferment, `F1` passe à la liste complète, un clic ferme ; les flèches et les pages
+font défiler. En bas, le rappel de F1 et du leader en vigueur.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
@@ -1400,8 +1416,8 @@ photos nettes.
 
 **Tests d'interface** avec [egui_kittest](https://crates.io/crates/egui_kittest) (banc de
 test officiel d'egui) : l'application tourne sans fenêtre, sur un dossier et un cache
-temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre avec F1 et
-`?` (avec ou sans Maj) et se ferme avec F1, Échap la ferme, elle est modale, elle affiche
+temporaires, et reçoit des touches simulées. Vérifié : l'aide s'ouvre et se ferme avec F1,
+l'aide « ici » avec `?` (avec ou sans Maj), Échap la ferme, elle est modale, elle affiche
 les libellés et non les identifiants, rangés par thème ; la recherche filtre (« pnd »),
 « q » tapé dans la recherche ne quitte pas, et la recherche est vide à la réouverture. Plein écran : ouverture par Entrée et retour par Échap, navigation
 image par image (haut/bas sans effet), bascule de source, aperçu standard réellement chargé

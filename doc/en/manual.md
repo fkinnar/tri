@@ -49,7 +49,8 @@ Several images side by side? Possible:
 
 ![Comparison](../manual-images/en/compare.jpg)
 
-How? **F1** lists every shortcut, with a search box:
+How? **?** shows the shortcuts of where you are; **F1** lists them all, with a search
+box:
 
 ![Help](../manual-images/en/help.jpg)
 

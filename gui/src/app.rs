@@ -804,6 +804,11 @@ pub struct TriApp {
     /// Recherche dans l'aide (`None` : aide fermée, le champ prendra le focus à
     /// l'ouverture).
     help_search: Option<String>,
+    /// Aide « ici » ouverte (`?`) : l'endroit dont elle montre les raccourcis, et ses
+    /// sections, calculées à l'ouverture.
+    help_here: Option<(crate::cheatsheet::Place, crate::cheatsheet::Sections)>,
+    /// Défilement de l'aide « ici » demandé au clavier, à faire à la prochaine image.
+    help_here_scroll: f32,
     /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
     /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
     help_lines: Option<HelpLines>,
@@ -1307,6 +1312,8 @@ impl TriApp {
             develop_toast: None,
             scroll_to_cursor: false,
             help_search: None,
+            help_here: None,
+            help_here_scroll: 0.0,
             help_lines: None,
             help_widths: None,
             visible_waiting: 0,
@@ -6026,6 +6033,31 @@ impl TriApp {
                 }
                 continue;
             }
+            // Aide « ici » : `?` ou Échap la ferment, F1 passe à la liste complète ; rien
+            // d'autre ne passe derrière.
+            if self.help_here.is_some() {
+                match action {
+                    Action::Back | Action::HelpHere => self.help_here = None,
+                    Action::Help => {
+                        self.help_here = None;
+                        self.help = true;
+                    }
+                    Action::Quit => self.perform(ctx, action),
+                    // Défiler, comme dans l'aide complète.
+                    Action::NavDown | Action::NavUp | Action::NavPageDown | Action::NavPageUp => {
+                        let line = self.gui.dialogs.help_scroll_line;
+                        let page = ctx.content_rect().height() * 0.6;
+                        self.help_here_scroll += match action {
+                            Action::NavDown => -line,
+                            Action::NavUp => line,
+                            Action::NavPageDown => -page,
+                            _ => page,
+                        };
+                    }
+                    _ => {}
+                }
+                continue;
+            }
             // L'aide est modale : derrière elle, la grille ne bouge pas.
             if self.help && !action.works_over_overlay() {
                 continue;
@@ -6161,6 +6193,14 @@ impl TriApp {
                 ctx.send_viewport_cmd(ViewportCommand::Close)
             }
             Action::Help => self.help = !self.help,
+            Action::HelpHere => {
+                if self.help_here.take().is_none() {
+                    self.help = false;
+                    let place = self.help_place();
+                    let sections = crate::cheatsheet::sections(&self.keymap, place);
+                    self.help_here = Some((place, sections));
+                }
+            }
             Action::Settings => self.open_settings(),
             Action::CheckUpdate => self.check_update(ctx),
             Action::ReportIssue => {
@@ -12988,6 +13028,24 @@ impl TriApp {
         }
     }
 
+    /// Endroit dont l'aide « ici » montre les raccourcis : le panneau qui a le clavier,
+    /// sinon le mode des images.
+    fn help_place(&self) -> crate::cheatsheet::Place {
+        use crate::actions::Scope;
+        use crate::cheatsheet::Place;
+        match self.effective_focus() {
+            Scope::Crop => Place::Crop,
+            Scope::Histogram => Place::Histogram,
+            Scope::Folders => Place::Folders,
+            Scope::Metadata => Place::Metadata,
+            Scope::Images => match self.mode {
+                Mode::Grid => Place::Grid,
+                Mode::View => Place::View,
+                Mode::Compare => Place::Compare,
+            },
+        }
+    }
+
     /// Panneau qui peut avoir le clavier : les dossiers seulement s'ils sont affichés (grille),
     /// les métadonnées aussi ; sinon les images.
     fn effective_focus(&self) -> crate::actions::Scope {
@@ -13885,6 +13943,86 @@ impl TriApp {
             });
     }
 
+    /// Aide « ici » (`?`) : par-dessus l'écran assombri, les raccourcis de l'endroit où
+    /// l'on est, par thème, en colonnes de cartes, en grand pour se lire d'un coup d'œil.
+    /// Un clic la ferme.
+    fn help_here_overlay(&mut self, ctx: &egui::Context) {
+        let Some((place, sections)) = &self.help_here else {
+            return;
+        };
+        let screen = ctx.content_rect();
+        let accent = crate::marks::accent_mark(ctx);
+        let size = self.gui.dialogs.help_here_text;
+        let title = t!("help-here-title", place = place.label());
+        let footer = t!(
+            "help-here-footer",
+            help = self.keymap.keys_for(Action::Help).join(" / "),
+            leader = t!("key-leader"),
+            keys = self.keymap.leader_label()
+        );
+        // Colonnes : cartes de thème réparties de gauche à droite, chacune dans la colonne
+        // la moins haute (lignes comptées), pour remplir l'écran sans défiler.
+        let card = self.gui.dialogs.help_here_column;
+        let columns =
+            ((screen.width() * 0.92 / card).floor() as usize).clamp(1, sections.len().max(1));
+        let mut stacks: Vec<(usize, Vec<usize>)> = vec![(0, Vec::new()); columns];
+        for (i, (_, rows)) in sections.iter().enumerate() {
+            let lowest = (0..columns).min_by_key(|&c| stacks[c].0).unwrap_or(0);
+            stacks[lowest].0 += rows.len() + 2;
+            stacks[lowest].1.push(i);
+        }
+        let mut close = false;
+        let scroll = std::mem::take(&mut self.help_here_scroll);
+        egui::Area::new(egui::Id::unique("help_here"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                let back = ui.allocate_rect(screen, Sense::click());
+                ui.painter()
+                    .rect_filled(screen, 0.0, Color32::from_black_alpha(235));
+                close = back.clicked();
+                let inner = screen.shrink2(vec2(screen.width() * 0.04, 24.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new(&title)
+                                .size(size * 1.5)
+                                .strong()
+                                .color(accent),
+                        );
+                    });
+                    ui.add_space(size);
+                    ScrollArea::vertical()
+                        .max_height(inner.height() - 4.0 * size)
+                        .show(ui, |ui| {
+                            ui.scroll_with_delta(vec2(0.0, scroll));
+                            ui.horizontal_top(|ui| {
+                                let used = columns as f32 * card;
+                                ui.add_space(((inner.width() - used) / 2.0).max(0.0));
+                                for (_, list) in &stacks {
+                                    ui.vertical(|ui| {
+                                        ui.set_width(card - size);
+                                        for &i in list {
+                                            let (group, rows) = &sections[i];
+                                            help_here_card(ui, *group, rows, size, accent);
+                                            ui.add_space(size * 0.8);
+                                        }
+                                    });
+                                    ui.add_space(size);
+                                }
+                            });
+                        });
+                    ui.add_space(size * 0.5);
+                    ui.vertical_centered(|ui| {
+                        ui.label(egui::RichText::new(&footer).size(size * 0.85).weak());
+                    });
+                });
+            });
+        if close {
+            self.help_here = None;
+        }
+    }
+
     /// Liste des actions, de leurs identifiants et de leurs touches.
     fn help_window(&mut self, ctx: &egui::Context) {
         let mut open = self.help;
@@ -14476,6 +14614,7 @@ impl eframe::App for TriApp {
         self.position_mark(&ctx, center.response.rect);
         self.end_mark(&ctx, center.response.rect);
         self.key_menu(&ctx);
+        self.help_here_overlay(&ctx);
         if self.help {
             self.help_window(&ctx);
         } else {
@@ -15511,6 +15650,60 @@ enum HelpLine {
     },
 }
 
+/// Une carte de l'aide « ici » : le thème, puis une ligne par action (touches à
+/// gauche, à l'accent ; ce qu'elle fait à droite).
+fn help_here_card(
+    ui: &mut egui::Ui,
+    group: crate::actions::Group,
+    rows: &[crate::cheatsheet::Row],
+    size: f32,
+    accent: Color32,
+) {
+    egui::Frame::new()
+        .fill(ui.visuals().panel_fill)
+        .corner_radius(8.0)
+        .inner_margin(size * 0.7)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new(group.label()).size(size * 1.1).strong());
+            ui.add_space(size * 0.3);
+            // Colonne des touches plafonnée (les séquences du leader sont longues) : elles
+            // passent à la ligne plutôt que d'écraser les libellés.
+            let font = egui::FontId::proportional(size);
+            let widest = rows
+                .iter()
+                .map(|r| {
+                    ui.fonts_mut(|f| {
+                        f.layout_no_wrap(r.keys.clone(), font.clone(), accent)
+                            .size()
+                            .x
+                    })
+                })
+                .fold(0.0, f32::max);
+            let keys_width = widest.min(ui.available_width() * 0.38);
+            for row in rows {
+                ui.horizontal_top(|ui| {
+                    ui.allocate_ui_with_layout(
+                        vec2(keys_width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_width(keys_width);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&row.keys).size(size).color(accent),
+                                )
+                                .wrap(),
+                            );
+                        },
+                    );
+                    ui.add_space(size * 0.5);
+                    ui.add(egui::Label::new(egui::RichText::new(&row.label).size(size)).wrap());
+                });
+                ui.add_space(size * 0.2);
+            }
+        });
+}
+
 /// Lignes de l'aide pour une recherche, préparées une fois (issue n° 11).
 #[derive(Default)]
 struct HelpLines {
@@ -15825,6 +16018,39 @@ mod tests {
         h.state_mut().gui.key_menu = false;
         leader(&mut h, &[]);
         assert!(!h.state().sequencer.is_held());
+    }
+
+    #[test]
+    fn question_mark_shows_the_keys_of_where_you_are() {
+        use crate::cheatsheet::Place;
+        let (mut h, _dir) = harness();
+        act(&mut h, Action::Open);
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        let place = h.state().help_here.as_ref().map(|(p, _)| *p);
+        assert_eq!(place, Some(Place::View));
+        // Derrière, rien ne bouge ; Échap ferme sans quitter le plein écran.
+        let selected = h.state().selected;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_eq!(h.state().selected, selected);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().help_here.is_none());
+        assert_eq!(h.state().mode, Mode::View);
+        // F1 passe à la liste complète.
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.state().help_here.is_none());
+        assert!(h.state().help);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Dans la grille, le panneau des dossiers au clavier : ses touches.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        h.state_mut().folder_panel = true;
+        h.state_mut().focus = crate::actions::Scope::Folders;
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        let place = h.state().help_here.as_ref().map(|(p, _)| *p);
+        assert_eq!(place, Some(Place::Folders));
+        press(&mut h, Key::Questionmark, Modifiers::SHIFT);
+        assert!(h.state().help_here.is_none());
     }
 
     #[test]
@@ -19529,17 +19755,17 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         assert!(!h.state().help);
-        // « ? » ouvre ; une fois ouverte, la recherche a le focus et « ? » s'y tape :
-        // F1 et Échap ferment.
-        for (key, modifiers) in [
-            (Key::F1, Modifiers::NONE),
-            (Key::Questionmark, Modifiers::NONE),
-            (Key::Questionmark, Modifiers::SHIFT),
-        ] {
-            press(&mut h, key, modifiers);
-            assert!(h.state().help, "{key:?} {modifiers:?} doit ouvrir l'aide");
-            press(&mut h, Key::F1, Modifiers::NONE);
-            assert!(!h.state().help, "F1 doit refermer l'aide");
+        // F1 ouvre et ferme ; une fois ouverte, la recherche a le focus et « ? » s'y tape.
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(h.state().help, "F1 doit ouvrir l'aide");
+        press(&mut h, Key::F1, Modifiers::NONE);
+        assert!(!h.state().help, "F1 doit refermer l'aide");
+        // « ? », avec ou sans Maj selon le clavier : l'aide « ici », qui se referme pareil.
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            press(&mut h, Key::Questionmark, modifiers);
+            assert!(h.state().help_here.is_some(), "{modifiers:?}");
+            press(&mut h, Key::Questionmark, modifiers);
+            assert!(h.state().help_here.is_none(), "{modifiers:?}");
         }
     }
 

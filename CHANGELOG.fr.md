@@ -44,6 +44,10 @@
   les touches possibles et ce qu'elles font. Le menu attend alors la touche suivante sans
   délai ; Échap l'abandonne. Réglages `[gui] key_menu` et `key_menu_delay_ms` (400 ms) ;
   sous-menus nommés dans `keys.toml` (`[menus]`).
+- **Aide « ici »** : `?` montre par-dessus l'écran les raccourcis de l'endroit où l'on est
+  (grille, plein écran, comparaison, recadrage, grand histogramme, panneau des dossiers
+  ou des métadonnées), rangés par thème, en grand. `F1` reste la liste complète avec
+  recherche. Réglages `[gui.dialogs] help_here_text` et `help_here_column`.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

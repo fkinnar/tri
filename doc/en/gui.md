@@ -809,7 +809,7 @@ system one ("cold" measurements, experiments).
     a white background (nothing, -0.45 EV of headroom).
 - **RAW+JPEG pairs**: rating `IMG.RAF` also rates `IMG.JPG` (user's choice, 2026-10-17),
   see [notes.md](notes.md).
-- **Help** (`F1` or `?`, closed by Esc or `F1`): each action with an understandable label
+- **Help** (`F1`, closed by Esc or `F1`; `?` shows the "help here", below): each action with an understandable label
   and its keys, **arranged by theme** (Navigation, Display, Rating, Filters, Panels,
   Application: `Action::group`); the technical identifier only appears on hover. The help
   is **modal**: while it is open, only Esc, help and Quit act. **Prepared beforehand**
@@ -991,6 +991,22 @@ the `[menus]` section of `keys.toml` (`"<leader> i" = "histogram"`: message
 `key-submenu-histogram` of the catalogues, otherwise the text as is), failing that by
 the most frequent theme of its actions. Screenshot: step `keys:Ctrl+b r` of
 `TRI_GUI_ACTIONS`.
+
+### "Help here" (`?`, 2026-11-06)
+
+Second part of the help redesign (the user's idea: a newcomer should easily find what to
+do). `?` (`core.app.help_here`) shows over the darkened screen **only the shortcuts of
+where you are**, arranged by theme in cards in columns, in large type
+(`[gui.dialogs] help_here_text`, `help_here_column`); `F1` remains the full list with a
+search. The place (`cheatsheet::Place`): crop, large histogram, folders or metadata panel
+if it has the keyboard, otherwise the mode of the images (grid, full screen, comparison).
+`cheatsheet::applies` says what applies where: the panel's actions; for the images,
+except what only applies to an image shown large (zoom, sharpness map, overlays,
+source…) in the grid, crop and versions outside full screen, what only applies to the
+grid (thumbnail render, pages, sort…) elsewhere. Actions without a key are left out
+(they stay in F1). Modal: `?` or Esc close, `F1` switches to the full list, a click
+closes; arrows and pages scroll. At the bottom, a reminder of F1 and of the leader in
+force.
 
 ### Shortcut review (2026-11-06, issue #280)
 
@@ -1332,8 +1348,8 @@ blurry background among landscapes), it wrongly flagged sharp photos.
 
 **Interface tests** with [egui_kittest](https://crates.io/crates/egui_kittest) (egui's
 official test harness): the application runs without a window, on a temporary folder and
-cache, and receives simulated keys. Checked: the help opens with F1 and `?` (with or
-without Shift) and closes with F1, Esc closes it, it is modal, it displays the labels and
+cache, and receives simulated keys. Checked: the help opens and closes with F1, the
+"help here" with `?` (with or without Shift), Esc closes it, it is modal, it displays the labels and
 not the identifiers, arranged by theme; the search filters ("pnd"), "q" typed in the
 search does not quit, and the search is empty on reopening. Full screen: opening with
 Enter and returning with Esc, image-by-image navigation (up/down without effect), source
