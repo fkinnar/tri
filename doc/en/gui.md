@@ -1107,6 +1107,18 @@ comparison). Moving the mouse, or releasing the key, gives the loupe back to the
 is requested as in full screen (`displayed`: the loupe's image), the thumbnail enlarged
 meanwhile.
 
+### Loupe magnification from the keyboard (2026-11-06)
+
+The user's idea. `Ctrl+K` / `Ctrl+J` (`core.view.loupe_zoom_in` / `_out`) change the
+magnification by one step (`[gui.zoom] steps`, within `min` / `max`), with the loupe held
+or for next time; with the loupe held, `+` / `-` too. `<leader> m`
+(`core.view.loupe_scale`) opens an entry without Enter, like a brush's opacity in
+Photoshop (`TriApp::loupe_entry_keys`): digits go to the number (not to the stars), three
+apply at once, one or two after `loupe_digits_ms` as hundreds or tens
+(`loupe_entry_percent`: `2` and `20` = 200 %, `01` = 10 %); 0 is ignored, Esc cancels,
+another key applies what was typed then acts. For the session (`TriApp::loupe_scale`);
+`loupe_scale` stays the starting value.
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys

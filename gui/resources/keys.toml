@@ -82,6 +82,9 @@ loupe = "m"
 "core.view.zoom_out" = ["-"]
 "core.view.zoom_100" = ["*"]
 "core.view.zoom_fit" = ["/"]
+# Loupe magnification, one step up / down (with the loupe key held, or for next time).
+"core.view.loupe_zoom_in" = ["Ctrl+k"]
+"core.view.loupe_zoom_out" = ["Ctrl+j"]
 
 # --- Rating ---
 # Designed for AZERTY keyboards too: digits with or without Shift (top row of an
@@ -469,6 +472,10 @@ loupe = "m"
 "core.histogram.all" = ["i a"]
 "core.histogram.luminance" = ["i l"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
+# m then a number, without Enter: the loupe magnification. Three digits apply at once
+# ("150": 150 %); after a short pause, two digits are tens ("20": 200 %), one digit
+# hundreds ("2": 200 %).
+"core.view.loupe_scale" = ["m"]
 "core.view.peaking_color" = ["p c"]
 "core.view.sharpness_lenient" = ["p j", "p Down"]
 "core.view.sharpness_strict" = ["p k", "p Up"]

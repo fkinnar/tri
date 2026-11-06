@@ -136,6 +136,10 @@
 - **Développements des seuls logiciels actifs** : sans logiciel de développement, ou un
   logiciel désactivé, ses développements disparaissent de la grille (plus de badge ni de
   pile à déplier) ; ses sidecars ne bougent pas, le réactiver les retrouve.
+- **Grossissement de la loupe au clavier** : `Ctrl+K` / `Ctrl+J` (ou `+` / `-` la loupe
+  tenue) d'un palier ; `<leader> m` puis un nombre, sans Entrée : trois chiffres aussitôt
+  (`150`), deux en dizaines (`20` = 200 %), un en centaines (`2` = 200 %) après une courte
+  pause (`[gui.zoom] loupe_digits_ms`). Pour la session.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

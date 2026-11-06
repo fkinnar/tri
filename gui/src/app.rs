@@ -854,6 +854,12 @@ pub struct TriApp {
     /// Taille de chaque image entière à l'échelle de la loupe (points) : les pas du
     /// clavier se mesurent dans la loupe, pareils en grille et en plein écran.
     loupe_sizes: HashMap<usize, Vec2>,
+    /// Grossissement de la loupe pour la session (`[gui.zoom] loupe_scale` au départ ;
+    /// Ctrl+K / Ctrl+J, `<leader> m 200`).
+    loupe_scale: f32,
+    /// Grossissement en cours de saisie après `<leader> m` : les chiffres tapés et
+    /// l'instant du dernier.
+    loupe_entry: Option<(String, Instant)>,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1351,6 +1357,8 @@ impl TriApp {
             loupe_point: None,
             loupe_rects: HashMap::new(),
             loupe_sizes: HashMap::new(),
+            loupe_scale: gui.zoom.loupe_scale,
+            loupe_entry: None,
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
@@ -5936,6 +5944,8 @@ impl TriApp {
         if !chords.is_empty() {
             self.mouse_active = false; // on tape : pointeur masqué
         }
+        // Grossissement de la loupe en cours de saisie : les chiffres sont pour lui.
+        let chords = self.loupe_entry_keys(ctx, chords);
         let now = Instant::now();
         let focus = self.effective_focus();
         // Le grand histogramme prend les touches le temps d'être ouvert ; le panneau actif
@@ -6199,6 +6209,21 @@ impl TriApp {
                     settings: crate::settings_window::settings_list(&self.developers.engines()),
                     ..PaletteState::default()
                 });
+            }
+            Action::LoupeZoomIn | Action::LoupeZoomOut => {
+                let z = &self.gui.zoom;
+                if let Some(scale) = view::next_step(
+                    self.loupe_scale,
+                    &z.steps,
+                    action == Action::LoupeZoomIn,
+                    (z.min, z.max),
+                ) {
+                    self.set_loupe_scale(scale);
+                }
+            }
+            Action::LoupeScaleEntry => {
+                self.loupe_entry = Some((String::new(), Instant::now()));
+                self.notice = Some((t!("loupe-entry", digits = "_"), false));
             }
             // La loupe se tient (palette, aide) : rappeler sa touche.
             Action::Loupe => {
@@ -9384,10 +9409,101 @@ impl TriApp {
         }
     }
 
+    /// Grossissement de la loupe pour la session, dans les bornes du zoom, et le dit.
+    fn set_loupe_scale(&mut self, scale: f32) {
+        let z = &self.gui.zoom;
+        self.loupe_scale = scale.clamp(z.min, z.max);
+        self.request_zoom();
+        let percent = (self.loupe_scale * 100.0).round() as u32;
+        self.notice = Some((t!("loupe-scale", percent = percent), false));
+    }
+
+    /// Grossissement tapé après `<leader> m` (idée de l'utilisateur, 06/11/2026 : sans
+    /// Entrée, comme l'opacité d'un pinceau dans Photoshop) : trois chiffres en
+    /// pourcentage aussitôt ; après une pause (`loupe_digits_ms`), deux chiffres en
+    /// dizaines, un en centaines. 0 n'a pas de sens : ignoré.
+    fn apply_loupe_entry(&mut self) {
+        let Some((digits, _)) = self.loupe_entry.take() else {
+            return;
+        };
+        let Some(percent) = loupe_entry_percent(&digits) else {
+            self.notice = None;
+            return;
+        };
+        if percent == 0 {
+            self.notice = Some((t!("loupe-entry-zero"), false));
+            return;
+        }
+        self.set_loupe_scale(percent as f32 / 100.0);
+    }
+
+    /// Les touches pendant la saisie du grossissement : les chiffres s'ajoutent (trois :
+    /// appliqué), Échap annule ; une autre touche applique ce qui est tapé puis agit
+    /// normalement. Renvoie les touches qui restent à traiter.
+    fn loupe_entry_keys(
+        &mut self,
+        ctx: &egui::Context,
+        chords: Vec<(crate::actions::Chord, bool)>,
+    ) -> Vec<(crate::actions::Chord, bool)> {
+        let now = Instant::now();
+        let pause = Duration::from_millis(self.gui.zoom.loupe_digits_ms);
+        if let Some((digits, last)) = &self.loupe_entry
+            && !digits.is_empty()
+            && now.duration_since(*last) >= pause
+        {
+            self.apply_loupe_entry();
+        }
+        let mut rest = Vec::new();
+        for (chord, repeated) in chords {
+            if self.loupe_entry.is_none() {
+                rest.push((chord, repeated));
+                continue;
+            }
+            if let Some(d) = crate::actions::digit(chord) {
+                if let Some((digits, last)) = &mut self.loupe_entry {
+                    digits.push(d);
+                    *last = now;
+                    let shown = digits.clone();
+                    self.notice = Some((t!("loupe-entry", digits = shown.as_str()), false));
+                    if shown.len() >= 3 {
+                        self.apply_loupe_entry();
+                    }
+                }
+                continue;
+            }
+            if chord == crate::actions::Chord::key(egui::Key::Escape) {
+                self.loupe_entry = None;
+                self.notice = None;
+                continue;
+            }
+            self.apply_loupe_entry();
+            rest.push((chord, repeated));
+        }
+        if let Some((digits, last)) = &self.loupe_entry
+            && !digits.is_empty()
+        {
+            ctx.request_repaint_after((*last + pause).saturating_duration_since(now));
+        }
+        rest
+    }
+
     /// Loupe au clavier (idée de l'utilisateur, 06/11/2026) : la touche de loupe
     /// maintenue, une touche de navigation la déplace d'un pas, une touche de défilement
     /// (avec Maj) d'un grand pas. Vrai si l'action est prise ainsi.
     fn loupe_key_move(&mut self, ctx: &egui::Context, action: Action) -> bool {
+        // + / - (zoom), la loupe tenue : son grossissement (comme Ctrl+K / Ctrl+J).
+        if matches!(action, Action::ZoomIn | Action::ZoomOut)
+            && self.zoom.is_none()
+            && ctx.input(|i| self.keymap.loupe().held(i))
+        {
+            let up = if action == Action::ZoomIn {
+                Action::LoupeZoomIn
+            } else {
+                Action::LoupeZoomOut
+            };
+            self.perform(ctx, up);
+            return true;
+        }
         let (dx, dy, large) = match action {
             Action::NavPrev => (-1.0, 0.0, false),
             Action::NavNext => (1.0, 0.0, false),
@@ -9541,7 +9657,7 @@ impl TriApp {
             .intersect(ctx.content_rect())
             .shrink(2.0);
         let square = view::keep_inside(Rect::from_center_size(pos, vec2(side, side)), bounds);
-        let size = px * z.loupe_scale / ppp;
+        let size = px * self.loupe_scale / ppp;
         self.loupe_sizes.insert(index, size);
         let point = view::relative(rect, pos);
         let center = square.center();
@@ -16183,6 +16299,17 @@ fn stripe(ui: &Ui, slot: egui::layers::ShapeIdx, rect: Rect) {
     );
 }
 
+/// Pourcentage d'un grossissement tapé : trois chiffres tels quels, deux en dizaines, un
+/// en centaines (`2` : 200, `20` : 200, `01` : 10, `150` : 150) ; `None` sans chiffre.
+fn loupe_entry_percent(digits: &str) -> Option<u32> {
+    let value: u32 = digits.parse().ok()?;
+    Some(match digits.len() {
+        1 => value * 100,
+        2 => value * 10,
+        _ => value,
+    })
+}
+
 /// Une carte de l'aide « ici » : le thème, puis une ligne par action (touches à
 /// gauche, à l'accent ; ce qu'elle fait à droite).
 fn help_here_card(
@@ -18514,6 +18641,54 @@ mod tests {
     }
 
     #[test]
+    fn the_loupe_magnification_is_typed_or_stepped() {
+        // Idée de l'utilisateur, 06/11/2026 : `<leader> m` puis 3 chiffres (aussitôt), 2
+        // (dizaines) ou 1 (centaines) après une pause ; Ctrl+K / Ctrl+J par paliers.
+        assert_eq!(loupe_entry_percent("150"), Some(150));
+        assert_eq!(loupe_entry_percent("20"), Some(200));
+        assert_eq!(loupe_entry_percent("01"), Some(10));
+        assert_eq!(loupe_entry_percent("2"), Some(200));
+        assert_eq!(loupe_entry_percent(""), None);
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().loupe_scale, 1.0);
+        // Trois chiffres : aussitôt, sans noter la photo.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        assert!(h.state().loupe_entry.is_some());
+        for key in [Key::Num1, Key::Num5, Key::Num0] {
+            press(&mut h, key, Modifiers::NONE);
+        }
+        assert_eq!(h.state().loupe_scale, 1.5);
+        assert!(h.state().loupe_entry.is_none());
+        let file = h.state().files[0].path.clone();
+        assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
+        // Un chiffre, puis la pause : en centaines.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        if let Some((_, last)) = &mut h.state_mut().loupe_entry {
+            *last -= Duration::from_secs(5);
+        }
+        h.run_steps(2);
+        assert_eq!(h.state().loupe_scale, 2.0);
+        // Échap annule ; 0 est ignoré.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().loupe_scale, 2.0);
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        for _ in 0..3 {
+            press(&mut h, Key::Num0, Modifiers::NONE);
+        }
+        assert_eq!(h.state().loupe_scale, 2.0);
+        // Paliers : Ctrl+K au suivant (400 %), Ctrl+J au précédent.
+        press(&mut h, Key::K, Modifiers::CTRL);
+        assert_eq!(h.state().loupe_scale, 4.0);
+        press(&mut h, Key::J, Modifiers::CTRL);
+        press(&mut h, Key::J, Modifiers::CTRL);
+        assert_eq!(h.state().loupe_scale, 1.0);
+    }
+
+    #[test]
     fn compare_needs_two_images_then_rates_and_eliminates_the_active_one() {
         let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
         let (mut h, dir) = harness_files(&names, 64, 48);
@@ -20686,8 +20861,8 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         let rows = help_rows(&h.state().keymap, "loupe");
-        assert_eq!(rows.first().map(|(a, _)| *a), Some(Action::Loupe));
-        assert_eq!(rows[0].1, "m");
+        let loupe = rows.iter().find(|(a, _)| *a == Action::Loupe);
+        assert_eq!(loupe.map(|(_, keys)| keys.as_str()), Some("m"), "{rows:?}");
         // Pas de ligne dans [keys] : sa touche se règle à part.
         let mut overrides = std::collections::BTreeMap::new();
         overrides.insert("core.view.loupe".to_string(), vec!["x".to_string()]);

@@ -454,6 +454,13 @@ pub enum Action {
     ReviewDevelopments,
     /// Autoriser ou non les actions sur les fichiers (case « Actions sur les fichiers »).
     FileActionsAllow,
+    /// Loupe : palier de grossissement suivant (la touche de loupe tenue, ou pour la
+    /// prochaine fois).
+    LoupeZoomIn,
+    /// Loupe : palier précédent.
+    LoupeZoomOut,
+    /// Loupe : grossissement tapé en chiffres (`<leader> m 200`, `20`, `2`).
+    LoupeScaleEntry,
     /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
     HelpHere,
     /// Palette de commandes : chercher une action ou un réglage et le lancer.
@@ -476,7 +483,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 209] = [
+    pub const ALL: [Action; 212] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -657,6 +664,9 @@ impl Action {
         Action::Open,
         Action::ToggleZoom,
         Action::Loupe,
+        Action::LoupeZoomIn,
+        Action::LoupeZoomOut,
+        Action::LoupeScaleEntry,
         Action::ToggleSource,
         Action::PanLeft,
         Action::PanRight,
@@ -796,13 +806,14 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back | Search => Group::Navigation,
-            ToggleZoom | Loupe | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100
-            | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
-            | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
-            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
-            | HistogramPhoto | HistogramCamera | ToggleClipping | TogglePeaking | PeakingColor
-            | SharpnessLenient | SharpnessStrict | ToggleFocusPoint | OverlayNext
-            | OverlayOrient | FocusMode | Develop | DevelopWith(_) | DevelopFolder => Group::View,
+            ToggleZoom | Loupe | LoupeZoomIn | LoupeZoomOut | LoupeScaleEntry
+            | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource
+            | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale
+            | HistogramLarge | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue
+            | HistogramAll | HistogramLuminance | HistogramPhoto | HistogramCamera
+            | ToggleClipping | TogglePeaking | PeakingColor | SharpnessLenient
+            | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
+            | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -1069,6 +1080,9 @@ impl Action {
             Action::Help => "core.app.help",
             Action::HelpHere => "core.app.help_here",
             Action::Loupe => "core.view.loupe",
+            Action::LoupeZoomIn => "core.view.loupe_zoom_in",
+            Action::LoupeZoomOut => "core.view.loupe_zoom_out",
+            Action::LoupeScaleEntry => "core.view.loupe_scale",
             Action::ReviewDevelopments => "core.view.review_developments",
             Action::FileActionsAllow => "core.file.allow_actions",
             Action::Palette => "core.app.palette",
@@ -2333,6 +2347,26 @@ pub fn keys_spec(keys: &[Chord]) -> String {
         _ => chord_label(c),
     };
     keys.iter().map(spec).collect::<Vec<_>>().join(" ")
+}
+
+/// Le chiffre d'une touche (rangée du haut, avec ou sans Maj selon le clavier, ou pavé
+/// numérique), sans Ctrl ; `None` pour les autres.
+pub fn digit(chord: Chord) -> Option<char> {
+    if chord.ctrl {
+        return None;
+    }
+    match chord.trigger {
+        Trigger::Key(key) => {
+            let name = key.name();
+            let mut chars = name.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) if c.is_ascii_digit() => Some(c),
+                _ => None,
+            }
+        }
+        Trigger::Char(c) if c.is_ascii_digit() => Some(c),
+        Trigger::Char(_) => None,
+    }
 }
 
 /// Nom lisible d'une combinaison (« Maj+Flèche gauche », « Ctrl+u », « g », « ° »).

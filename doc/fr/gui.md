@@ -1168,6 +1168,18 @@ dessinée (`grid_images`) ; `grid_loupe` pose la loupe sur celle sous le pointeu
 est demandé comme en plein écran (`displayed` : l'image de la loupe), la vignette
 agrandie en attendant.
 
+### Grossissement de la loupe au clavier (06/11/2026)
+
+Idée de l'utilisateur. `Ctrl+K` / `Ctrl+J` (`core.view.loupe_zoom_in` / `_out`) changent
+le grossissement d'un palier (`[gui.zoom] steps`, dans les bornes `min` / `max`), la
+loupe tenue ou pour la prochaine fois ; la loupe tenue, `+` / `-` aussi. `<leader> m`
+(`core.view.loupe_scale`) ouvre une saisie sans Entrée, comme l'opacité d'un pinceau dans
+Photoshop (`TriApp::loupe_entry_keys`) : les chiffres vont au nombre (pas aux étoiles),
+trois s'appliquent aussitôt, un ou deux après `loupe_digits_ms` en centaines ou en
+dizaines (`loupe_entry_percent` : `2` et `20` = 200 %, `01` = 10 %) ; 0 est ignoré, Échap
+annule, une autre touche applique ce qui est tapé puis agit. Pour la session
+(`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ.
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les

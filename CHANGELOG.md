@@ -129,6 +129,10 @@
 - **Developments of active software only**: without development software, or with one
   disabled, its developments leave the grid (no more badge nor stack to unfold); its
   sidecars stay, enabling it again brings them back.
+- **Loupe magnification from the keyboard**: `Ctrl+K` / `Ctrl+J` (or `+` / `-` with the
+  loupe held) one step; `<leader> m` then a number, without Enter: three digits at once
+  (`150`), two as tens (`20` = 200 %), one as hundreds (`2` = 200 %) after a short pause
+  (`[gui.zoom] loupe_digits_ms`). For the session.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
