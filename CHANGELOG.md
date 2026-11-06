@@ -46,6 +46,10 @@
   screen, comparison, crop, large histogram, folders or metadata panel), arranged by
   theme, in large type. `F1` remains the full list with a search. Settings
   `[gui.dialogs] help_here_text` and `help_here_column`.
+- **Help search**: it also finds the words of the other language and forgives a typo
+  in a long enough word ("histrogramme"); keywords per theme ("rate" finds the stars);
+  an action with the word in its label comes first. Typos and ranking also apply to the
+  settings search.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

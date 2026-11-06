@@ -18,3 +18,10 @@ serve:
   `Match { exact, score }`, `exact` when each word appears in one piece; **`relevant`**
   keeps only the exact ones if there are any, so that scattered letters do not drown the
   right result.
+- **Typos** (2026-11-06, help redesign): a typed word not found letter by letter is
+  looked for within a few typos (extra, missing or replaced letter, two letters swapped:
+  restricted Damerau-Levenshtein distance), in a word of the text or at its start (still
+  typing); no typo under 4 letters, one up to 7, two beyond (`typos_allowed`). Always
+  scores lower than a match without a typo. `Match` gains **`close`** (each word as is
+  or within a few typos of a word): `relevant` keeps the exact ones, else the close
+  ones, else the rest ("noter" brought up 44 actions with scattered letters).

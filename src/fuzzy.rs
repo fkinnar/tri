@@ -62,12 +62,16 @@ fn word_score(word: &[char], text: &[char]) -> Option<i32> {
 
 /// Correspondance d'une requête dans une entrée (réglage, action de l'aide), pour ranger
 /// les résultats : une correspondance **exacte** (chaque mot tapé apparaît tel quel,
-/// « vim » dans « … vim nvim … ») passe avant les lettres éparpillées (« v…i…m »), puis
-/// le score.
+/// « vim » dans « … vim nvim … ») passe avant une correspondance **proche** (chaque mot
+/// tel quel ou à une faute de frappe près d'un mot du texte, « noter » et « notation »),
+/// qui passe avant les lettres éparpillées (« v…i…m »), puis le score.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Match {
     /// Chaque mot de la requête apparaît d'un seul tenant (sans accents ni casse).
     pub exact: bool,
+    /// Chaque mot de la requête apparaît tel quel ou à quelques fautes près
+    /// ([`typos_allowed`]) d'un mot du texte, ou de son début.
+    pub close: bool,
     /// Score de [`score`].
     pub score: i32,
 }
@@ -80,23 +84,98 @@ pub fn find(query: &str, fields: &[&str]) -> Option<Match> {
         .iter()
         .map(|f| f.chars().map(fold).collect())
         .collect();
-    let (mut score, mut exact) = (0, true);
+    let (mut score, mut exact, mut close) = (0, true, true);
     for word in query.split_whitespace() {
         let word: Vec<char> = word.chars().map(fold).collect();
-        score += fields.iter().filter_map(|f| word_score(&word, f)).max()?;
-        exact &= fields
+        let typo = fields.iter().filter_map(|f| typo_score(&word, f)).max();
+        // Lettres dans l'ordre, sinon un mot à une faute près (« histrogramme »).
+        score += fields
+            .iter()
+            .filter_map(|f| word_score(&word, f))
+            .max()
+            .or(typo)?;
+        let whole = fields
             .iter()
             .any(|f| f.windows(word.len()).any(|w| w == word.as_slice()));
+        exact &= whole;
+        close &= whole || typo.is_some();
     }
-    Some(Match { exact, score })
+    Some(Match {
+        exact,
+        close,
+        score,
+    })
+}
+
+/// Fautes tolérées dans un mot tapé de `len` lettres : aucune en dessous de 4 (trop de
+/// mots courts se ressemblent), une jusqu'à 7, deux au-delà.
+fn typos_allowed(len: usize) -> usize {
+    match len {
+        0..=3 => 0,
+        4..=7 => 1,
+        _ => 2,
+    }
+}
+
+/// Score d'un mot tapé avec des fautes de frappe (lettre en trop, en moins, remplacée,
+/// deux lettres inversées) : retrouvé dans un mot du texte, ou au début d'un mot (on tape
+/// encore : « histr » pour « histogramme »), à [`typos_allowed`] fautes près. Plus bas que
+/// toute correspondance sans faute ; `None` sinon.
+fn typo_score(word: &[char], text: &[char]) -> Option<i32> {
+    let allowed = typos_allowed(word.len());
+    if allowed == 0 {
+        return None;
+    }
+    text.split(|c| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .filter_map(|candidate| {
+            // Le mot entier, ou son début de la longueur tapée (± les fautes permises).
+            let lengths = word.len().saturating_sub(allowed)..=word.len() + allowed;
+            lengths
+                .filter(|&n| n > 0 && n <= candidate.len())
+                .map(|n| distance(word, &candidate[..n]))
+                .min()
+        })
+        .filter(|&d| d <= allowed)
+        .map(|d| (word.len() as i32) * 4 - 10 * d as i32)
+        .max()
+}
+
+/// Distance d'édition entre `a` et `b` (Damerau-Levenshtein restreinte : insertion,
+/// suppression, remplacement, et inversion de deux lettres voisines comptent pour un).
+fn distance(a: &[char], b: &[char]) -> usize {
+    let (n, m) = (a.len(), b.len());
+    let mut d = vec![vec![0usize; m + 1]; n + 1];
+    for (i, row) in d.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
+    }
+    for i in 1..=n {
+        for j in 1..=m {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            let mut best = (d[i - 1][j] + 1)
+                .min(d[i][j - 1] + 1)
+                .min(d[i - 1][j - 1] + cost);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                best = best.min(d[i - 2][j - 2] + 1);
+            }
+            d[i][j] = best;
+        }
+    }
+    d[n][m]
 }
 
 /// Garde les meilleures correspondances : s'il y en a d'exactes, celles-là seulement
 /// (retour du 22/10/2026 : « vim » trouvait le bon réglage, perdu parmi tous ceux où
-/// traînent un v, un i et un m).
+/// traînent un v, un i et un m) ; sinon, s'il y en a de proches, celles-là (06/11/2026 :
+/// « noter » remontait 44 actions aux lettres éparpillées).
 pub fn relevant<T>(mut found: Vec<(T, Match)>) -> Vec<(T, Match)> {
     if found.iter().any(|(_, m)| m.exact) {
         found.retain(|(_, m)| m.exact);
+    } else if found.iter().any(|(_, m)| m.close) {
+        found.retain(|(_, m)| m.close);
     }
     found
 }
@@ -164,6 +243,41 @@ mod tests {
         assert_eq!(score("", "n'importe quoi"), Some(0));
         // Lettres consécutives et débuts de mots d'abord.
         assert!(score("dscf", "DSCF0305.RAF") > score("dscf", "d_s_c_f.jpg"));
+    }
+
+    #[test]
+    fn a_typo_is_forgiven_in_longer_words() {
+        // Lettre en trop, inversée, remplacée, en moins.
+        for typo in ["histrogramme", "hsitogramme", "histigramme", "histgramme"] {
+            assert!(find(typo, &["Afficher l'histogramme"]).is_some(), "{typo}");
+        }
+        // En cours de frappe, avec une faute.
+        assert!(find("histr", &["histogramme"]).is_some());
+        // Une faute dès 4 lettres, aucune en dessous (trop de mots courts se ressemblent).
+        assert!(find("pile", &["vile"]).is_some());
+        assert!(find("abc", &["abd"]).is_none());
+        // Deux fautes au-delà de 7 lettres, pas trois.
+        assert!(find("comparasion", &["comparaison"]).is_some());
+        assert!(find("xxmparasion", &["comparaison"]).is_none());
+        // Toujours plus bas qu'une correspondance sans faute.
+        let typo = find("histrogramme", &["histogramme"]).unwrap();
+        let clean = find("histogramme", &["histogramme"]).unwrap();
+        assert!(typo < clean);
+        assert!(!typo.exact);
+        assert!(typo.close);
+    }
+
+    #[test]
+    fn close_words_hide_scattered_letters() {
+        let found = vec![
+            ("note", find("noter", &["Retirer la note"]).unwrap()),
+            (
+                "scattered",
+                find("noter", &["nom de fichier : tout retirer"]).unwrap(),
+            ),
+        ];
+        let kept: Vec<&str> = relevant(found).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(kept, ["note"]);
     }
 
     #[test]

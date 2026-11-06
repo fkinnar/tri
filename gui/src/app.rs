@@ -15746,13 +15746,8 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
         .filter(|a| a.available())
         .filter_map(|&action| {
             let keys = keymap.keys_for(action).join(" / ");
-            let fields = [
-                action.label(),
-                keys.clone(),
-                action.id().to_string(),
-                action.group().label(),
-                crate::actions::keywords(action.id()),
-            ];
+            let mut fields = vec![action.label(), keys.clone(), action.id().to_string()];
+            fields.extend(action.search_texts());
             let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
             let found = tri::fuzzy::find(query, &fields)?;
             Some(((action, keys), found))
@@ -15765,13 +15760,18 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
     } else {
         // Thèmes par meilleure correspondance ; dans un thème, la meilleure, et à égalité
         // le nom le plus court (le plus proche de la requête), d'abord.
+        // Trouvée dans son libellé (« darktable » : « Développer dans Darktable » avant
+        // les actions qui n'ont darktable que dans leurs mots-clés), puis la meilleure.
+        let in_label =
+            |a: Action| tri::fuzzy::find(query, &[&a.label()]).map(|m| (m.exact, m.close));
         let best = |g: Group| {
             rows.iter()
                 .filter(|((a, _), _)| a.group() == g)
-                .map(|(_, m)| *m)
+                .map(|((a, _), m)| (in_label(*a), *m))
                 .max()
         };
-        let order: Vec<(Group, Option<tri::fuzzy::Match>)> =
+        #[allow(clippy::type_complexity)]
+        let order: Vec<(Group, Option<(Option<(bool, bool)>, tri::fuzzy::Match)>)> =
             Group::ALL.iter().map(|&g| (g, best(g))).collect();
         let group_best = |a: Action| {
             order
@@ -15779,10 +15779,15 @@ fn help_rows(keymap: &Keymap, query: &str) -> Vec<(Action, String)> {
                 .find(|(g, _)| *g == a.group())
                 .and_then(|o| o.1)
         };
-        rows.sort_by_key(|((a, _), m)| {
+        // Trouvée dans son libellé (« darktable » : « Développer dans Darktable » avant
+        // les actions qui n'ont darktable que dans leurs mots-clés).
+        let in_label =
+            |a: Action| tri::fuzzy::find(query, &[&a.label()]).map(|m| (m.exact, m.close));
+        rows.sort_by_cached_key(|((a, _), m)| {
             (
                 std::cmp::Reverse(group_best(*a)),
                 rank(*a),
+                std::cmp::Reverse(in_label(*a)),
                 std::cmp::Reverse(*m),
                 a.label().len(),
             )
@@ -19747,6 +19752,33 @@ mod tests {
                 .notice
                 .as_ref()
                 .is_some_and(|(n, _)| n.contains("tri-linux-x86_64.tar.gz"))
+        );
+    }
+
+    #[test]
+    fn help_search_finds_english_words_and_forgives_typos() {
+        let km = crate::actions::Keymap::default()
+            .with_leader("Ctrl+b")
+            .unwrap();
+        let first = |q: &str| help_rows(&km, q).first().map(|(a, _)| *a);
+        let found = |q: &str, a: Action| help_rows(&km, q).iter().any(|(x, _)| *x == a);
+        // Mots anglais dans une interface en français.
+        assert!(found("crop", Action::Crop));
+        assert!(found("peaking", Action::TogglePeaking));
+        // Fautes de frappe.
+        assert!(found("histrogramme", Action::ToggleHistogram));
+        assert!(found("recardrer", Action::Crop));
+        // Le mot juste reste devant.
+        assert_eq!(first("recadrer"), Some(Action::Crop));
+        // Les mots-clés du thème : « noter » trouve les étoiles, pas les lettres éparpillées.
+        assert!(found("noter", Action::Stars(3)));
+        assert!(help_rows(&km, "noter").len() < 30);
+        // Trouvée dans le libellé avant les mots-clés.
+        let darktable = first("darktable").expect("darktable");
+        assert!(
+            darktable.label().contains("Darktable"),
+            "{}",
+            darktable.label()
         );
     }
 

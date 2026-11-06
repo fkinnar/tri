@@ -836,7 +836,12 @@ system one ("cold" measurements, experiments).
   a test checks that each names something that exists); and when a typed word appears
   **as is** somewhere, matches with scattered letters are dropped (`tri::fuzzy::find` and
   `relevant`): "vim" no longer drowns the right setting among all those where a v, an i
-  and an m happen to be.
+  and an m happen to be. Revised on 2026-11-06 (help redesign): the help searches the
+  labels and keywords of **every language** (`Action::search_texts`: "crop",
+  "peaking", "stack" in a French interface), with **keywords per theme**
+  (`kw-group-<theme>`: "noter" finds the stars); a **typo** is forgiven in a long
+  enough word ("histrogramme", see `fuzzy.md`); an action found in its **label** comes
+  before those that only have the word in their keywords ("darktable").
 - **Typing in a field** (help search, offload folder name): keys are text; only those
   that type nothing (Esc, F1 to F12: `Trigger::types_no_text`) remain shortcuts.
 - Standard preview size **"Auto"**: largest side of the screen, in physical pixels.

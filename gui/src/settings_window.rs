@@ -2238,10 +2238,16 @@ mod tests {
                 }
             }
         }
-        let known: Vec<String> = known
+        let mut known: Vec<String> = known
             .iter()
             .map(|id| format!("kw-{}", id.replace(['.', '_'], "-")))
             .collect();
+        // Mots-clés d'un thème de l'aide (`kw-group-rating`).
+        known.extend(
+            crate::actions::Group::ALL
+                .iter()
+                .map(|g| format!("kw-group-{g:?}").to_lowercase()),
+        );
         for source in [
             include_str!("../locales/fr.ftl"),
             include_str!("../locales/en.ftl"),

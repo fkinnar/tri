@@ -710,6 +710,28 @@ impl Action {
         t!(&id, os = crate::i18n::os())
     }
 
+    /// Textes où la recherche de l'aide cherche, **dans toutes les langues** (retour du
+    /// 06/11/2026 : on cherche souvent avec le mot anglais, « crop », « peaking »,
+    /// « stack ») : libellé, mots-clés cachés, thème et mots-clés du thème
+    /// (`kw-group-<thème>` : « noter » trouve les étoiles).
+    pub fn search_texts(self) -> Vec<String> {
+        let label_id = format!("action-{}", self.id().replace('.', "-"));
+        let keywords_id = format!("kw-{}", self.id().replace(['.', '_'], "-"));
+        let group_id = format!("group-{:?}", self.group()).to_lowercase();
+        let group_keywords = format!("kw-{group_id}");
+        let mut args = tri::i18n::Args::new();
+        args.set("os", tri::i18n::value(crate::i18n::os()));
+        let mut texts = Vec::new();
+        for language in Language::ALL {
+            for id in [&label_id, &keywords_id, &group_id, &group_keywords] {
+                if tri::i18n::has(language, id) {
+                    texts.push(tri::i18n::translate_in(language, id, Some(&args)));
+                }
+            }
+        }
+        texts
+    }
+
     /// Thème de l'action (aide).
     pub fn group(self) -> Group {
         use Action::*;
