@@ -529,13 +529,14 @@ key_menu_delay_ms = 400
 # Diagnostic (TRI_GUI_TRACE=1) : une image de l'interface plus lente que ce délai (ms) est
 # tracée avec la durée de ses étapes.
 trace_slow_ms = 100
-# Flèches, Entrée et Espace dans l'aide, les menus et la palette : en symboles, pris dans
+# Flèches et Entrée dans l'aide, les menus et la palette : en symboles, pris dans
 # une police du système qui les a (Apple Symbols, DejaVu Sans, Segoe UI Symbol ; celle de
 # l'interface n'en a pas). Vide : la première trouvée ; un chemin : cette police ;
 # "none" : en toutes lettres (« Flèche gauche »).
 arrow_font = ""
-# Taille de ces flèches par rapport à leur police (fines et petites telles quelles).
-arrow_font_scale = 1.4
+# Taille de ces flèches, en plus de l'échelle que tri donne à chaque police du système
+# pour les mettre à la taille du texte (1 : telle quelle ; plus grand, plus gros).
+arrow_font_scale = 1.0
 # Taille initiale de la fenêtre (points).
 window = [1400.0, 900.0]
 # Rendus RAW : "on-demand" (image affichée et voisines, en mode RAW seulement) ou

@@ -205,7 +205,7 @@ pub struct GuiSettings {
     /// Flèches des noms de touches (←, →…) : vide, une police du système qui les a ;
     /// un chemin, cette police ; `"none"`, en toutes lettres.
     pub arrow_font: String,
-    /// Taille de ces flèches, par rapport à leur police (fines et petites telles quelles).
+    /// Taille de ces flèches, en plus de l'échelle propre à chaque police du système.
     pub arrow_font_scale: f32,
     /// Taille initiale de la fenêtre (points).
     pub window: [f32; 2],
@@ -315,7 +315,7 @@ impl Default for GuiSettings {
             key_menu_delay_ms: 400,
             trace_slow_ms: 100,
             arrow_font: String::new(),
-            arrow_font_scale: 1.4,
+            arrow_font_scale: 1.0,
             window: [1400.0, 900.0],
             // En mode JPEG boîtier, la machine reste libre.
             raw_previews: RawPreviews::OnDemand,

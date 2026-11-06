@@ -103,8 +103,8 @@
   keyboard is (from a side panel, "passer" did not find the review of developments), with
   no line limit by default (`[gui.dialogs] palette_max = 0`); what applies here comes
   first, and an action greyed out here says why when run.
-- **Arrows as symbols**: in the help, the menus and the palette, arrows, Enter and Space
-  are written as symbols instead of "Left arrow"…, taken from a system font (Apple
+- **Arrows as symbols**: in the help, the menus and the palette, arrows and Enter are
+  written as symbols instead of "Left arrow"…, taken from a system font (Apple
   Symbols, DejaVu Sans, Segoe UI Symbol). Without one, spelled out. Settings `[gui] arrow_font`,
   `arrow_font_scale`; `[keys]` still accepts the written names.
 - **Labels without keys**: the stacks one spoke of "left / right arrows" (in vim, `h` /

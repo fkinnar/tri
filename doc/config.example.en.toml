@@ -531,13 +531,14 @@ key_menu_delay_ms = 400
 # Diagnostics (TRI_GUI_TRACE=1): a frame of the interface slower than this delay (ms) is
 # traced with the duration of its steps.
 trace_slow_ms = 100
-# Arrows, Enter and Space in the help, the menus and the palette: as symbols, taken from
+# Arrows and Enter in the help, the menus and the palette: as symbols, taken from
 # a system font that has them (Apple Symbols, DejaVu Sans, Segoe UI Symbol; the
 # interface's has none). Empty: the first found; a path: that font; "none": spelled out
 # ("Left arrow").
 arrow_font = ""
-# Size of these arrows relative to their font (thin and small as they are).
-arrow_font_scale = 1.4
+# Size of these arrows, on top of the scale tri gives each system font to match the text
+# size (1: as is; larger, bigger).
+arrow_font_scale = 1.0
 # Initial window size (points).
 window = [1400.0, 900.0]
 # RAW renders: "on-demand" (displayed image and neighbours, in RAW mode only) or

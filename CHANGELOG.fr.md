@@ -109,8 +109,8 @@
   soit le clavier (depuis un panneau latéral, « passer » ne trouvait pas la revue des
   développements), sans limite de lignes par défaut (`[gui.dialogs] palette_max = 0`) ;
   ce qui vaut ici passe devant, et une action grisée ici dit pourquoi quand on la lance.
-- **Flèches en symboles** : dans l'aide, les menus et la palette, les flèches, Entrée et
-  Espace s'écrivent en symboles au lieu de « Flèche gauche »…, pris dans une police du
+- **Flèches en symboles** : dans l'aide, les menus et la palette, les flèches et Entrée
+  s'écrivent en symboles au lieu de « Flèche gauche »…, pris dans une police du
   système (Apple Symbols, DejaVu Sans, Segoe UI Symbol). Sans elle, en toutes lettres. Réglages
   `[gui] arrow_font`, `arrow_font_scale` ; `[keys]` accepte toujours les noms écrits.
 - **Libellés sans touches** : celui des piles parlait de « flèches gauche / droite » (en
