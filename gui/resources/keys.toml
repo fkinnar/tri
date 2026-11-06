@@ -173,6 +173,13 @@ loupe = "m"
 # n: the next sort; Shift+N: reverse it.
 "core.filter.sort" = ["n"]
 "core.filter.sort_reverse" = ["Shift+n"]
+# Sort by one key directly (no default shortcut: from the command palette, or yours).
+"core.filter.sort_by.name" = []
+"core.filter.sort_by.captured" = []
+"core.filter.sort_by.modified" = []
+"core.filter.sort_by.stars" = []
+"core.filter.sort_by.color" = []
+"core.filter.sort_by.flag" = []
 
 # --- Stacks (s) ---
 # s: stacks on / off (grid and full screen); Shift+S: expand / collapse all of them;

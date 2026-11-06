@@ -1035,7 +1035,9 @@ Ctrl+N / Ctrl+P change line; **Enter runs** the action, or opens the settings wi
 filtered on the setting (`section.key`); a click too; Esc closes. Each action shows its
 keys: shortcuts are learnt along the way, and actions without a shortcut become reachable
 from the keyboard. Settings `[gui.dialogs] palette_width`, `palette_max`. Maybe later:
-toggle a yes / no right in the palette.
+toggle a yes / no right in the palette. Feedback of the same day: a title, a roomier
+field, and actions that were missing to be found there: **Sort by…**
+(`core.filter.sort_by.<key>`, one per order, without a default shortcut).
 
 ### Shortcut review (2026-11-06, issue #280)
 
