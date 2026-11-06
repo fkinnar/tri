@@ -53,6 +53,12 @@
 - **Command palette**: `Ctrl+Shift+P` (classic) or `:` (vim), type a few letters, Enter
   runs the action found or opens the setting found in the settings window. Each action
   shows its keys; actions without a shortcut become reachable from the keyboard.
+- **Easier help**: for an action that has keys of its own in the chosen set (vim or
+  classic), the help, the help here and the texts show only those (in vim, "x" to
+  delete, without Delete); the common keys still work.
+- **Search for a key**: in the help and the palette, "ctrl f" (or "Ctrl+F", "shift p")
+  only shows the actions bound to that key. A single letter now only finds single
+  letters (a key, "x"), no longer the "f" inside words.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

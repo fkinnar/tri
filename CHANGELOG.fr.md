@@ -57,6 +57,12 @@
   lettres, Entrée lance l'action trouvée ou ouvre le réglage trouvé dans la fenêtre de
   réglages. Chaque action montre ses touches ; les actions sans raccourci deviennent
   accessibles au clavier.
+- **Aide plus lisible** : pour une action qui a des touches propres au jeu choisi (vim ou
+  classique), l'aide, l'aide « ici » et les textes ne montrent qu'elles (en vim, « x »
+  pour supprimer, sans Suppr) ; les touches communes marchent toujours.
+- **Chercher une touche** : dans l'aide et la palette, « ctrl f » (ou « Ctrl+F », « maj
+  p ») ne montre que les actions liées à cette touche. Une lettre seule ne trouve plus
+  que des lettres seules (une touche, « x »), plus le « f » au milieu des mots.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

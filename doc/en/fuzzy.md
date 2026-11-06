@@ -25,3 +25,6 @@ serve:
   scores lower than a match without a typo. `Match` gains **`close`** (each word as is
   or within a few typos of a word): `relevant` keeps the exact ones, else the close
   ones, else the rest ("noter" brought up 44 actions with scattered letters).
+- **Single letter** (2026-11-06, user feedback): a typed word of one letter is not looked
+  for inside words; it only finds a single letter of the text (a key, "x", "f f", or a
+  one-letter word).

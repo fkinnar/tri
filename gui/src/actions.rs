@@ -1464,6 +1464,16 @@ pub fn resource_file() -> Option<std::path::PathBuf> {
 }
 
 impl Profile {
+    /// Raccourcis propres au profil (section `[classic]` ou `[vim]` de `keys.toml`), sans
+    /// les communs.
+    fn own(self) -> &'static [(Vec<Chord>, Action)] {
+        let d = Defaults::get();
+        match self {
+            Profile::Vim => &d.vim,
+            Profile::Classic | Profile::Both => &d.classic,
+        }
+    }
+
     /// Raccourcis du profil, notation et filtres compris (`keys.toml`).
     pub fn defaults(self) -> impl Iterator<Item = &'static (Vec<Chord>, Action)> {
         let d = Defaults::get();
@@ -1492,6 +1502,9 @@ pub struct Keymap {
     /// Noms des sous-menus du menu des suites (`[menus]` de `keys.toml`), le leader en
     /// tête de ceux qui le suivent.
     menus: Vec<(Vec<Chord>, String)>,
+    /// Raccourcis propres au jeu choisi (`[classic]` ou `[vim]`) et ceux de `[keys]` :
+    /// l'aide ne montre qu'eux pour une action qui en a ([`Keymap::keys_for`]).
+    own: Vec<(Vec<Chord>, Action)>,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -1528,12 +1541,17 @@ impl Keymap {
             .filter(|(lead, _, _)| !lead)
             .map(|(_, keys, name)| (keys.clone(), name.clone()))
             .collect();
+        let own = profiles
+            .iter()
+            .flat_map(|p| p.own().iter().cloned())
+            .collect();
         Keymap {
             bindings,
             leader: None,
             focus: Scope::Images,
             loupe: crate::settings::LoupeKey::None,
             menus,
+            own,
         }
     }
 
@@ -1605,6 +1623,8 @@ impl Keymap {
             }
             added.push((keys, action));
         }
+        self.own.retain(|(_, a)| !replaced.contains(a));
+        self.own.extend(added.iter().cloned());
         self.bindings.extend(added);
         // Une touche qui commence aussi une séquence (`y`, `y w`) n'est plus un problème :
         // elle attend un court instant la suite (voir [`Sequencer`]).
@@ -1828,14 +1848,18 @@ impl Keymap {
     }
 
     /// Raccourcis associés à une action, lisibles (« Flèche gauche », « Maj+g », « gg »...),
-    /// pour l'aide. Une touche liée avec et sans Maj n'apparaît qu'une fois (« 3 », pas
+    /// pour l'aide : ceux du jeu choisi s'il en a, sinon les communs. Une touche liée avec et sans Maj n'apparaît qu'une fois (« 3 », pas
     /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
     /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
+        // Celles du jeu choisi (ou de `[keys]`) seulement, s'il y en a : en vim, « x »
+        // supprime, sans Suppr (retour du 06/11/2026 : plus lisible) ; sinon les communes.
+        let own = |k: &Vec<Chord>| self.own.iter().any(|(o, a)| o == k && *a == action);
+        let has_own = self.bindings.iter().any(|(k, a)| *a == action && own(k));
         let mine: Vec<&Vec<Chord>> = self
             .bindings
             .iter()
-            .filter(|(_, a)| *a == action)
+            .filter(|(k, a)| *a == action && (!has_own || own(k)))
             .map(|(k, _)| k)
             .collect();
         let mut keys: Vec<String> = Vec::new();
@@ -1994,6 +2018,55 @@ impl Keymap {
 }
 
 impl Keymap {
+    /// Actions liées à la touche que décrit `query` quand elle se lit comme une touche
+    /// avec modificateurs (« ctrl f », « Ctrl+F », « maj p ») : un de leurs raccourcis est
+    /// cette touche seule, avec au moins ces modificateurs (« ctrl f » : Ctrl+f et
+    /// Ctrl+Maj+f).
+    /// `None` si `query` ne se lit pas ainsi, ou si aucune action n'y est liée : la
+    /// recherche porte alors sur les mots (retour du 06/11/2026 : le « f » de « ctrl f »,
+    /// trouvé tel quel dans presque tous les libellés, remontait des actions sans rapport).
+    pub fn actions_for_typed_keys(&self, query: &str) -> Option<Vec<Action>> {
+        let shift_words: Vec<String> = Language::ALL
+            .iter()
+            .map(|&l| {
+                crate::i18n::ensure();
+                tri::i18n::translate_in(l, "key-shift-prefix", None)
+                    .trim_end_matches('+')
+                    .to_lowercase()
+            })
+            .chain(["shift".to_string()])
+            .collect();
+        let (mut ctrl, mut shift, mut key) = (false, false, None);
+        for token in query.split(|c: char| c.is_whitespace() || c == '+') {
+            let lower = token.to_lowercase();
+            if token.is_empty() {
+                continue;
+            } else if matches!(lower.as_str(), "ctrl" | "control" | "ctl") {
+                ctrl = true;
+            } else if shift_words.contains(&lower) {
+                shift = true;
+            } else if key.is_none() {
+                key = Some(parse_chord(&lower).ok()?);
+            } else {
+                return None;
+            }
+        }
+        let key = key?;
+        if !ctrl && !shift {
+            return None;
+        }
+        let mut found: Vec<Action> = Vec::new();
+        for (keys, action) in &self.bindings {
+            // Un raccourci d'une seule touche (`f Maj+p` est un filtre, pas Maj+p).
+            let hit = matches!(keys.as_slice(), [c]
+                if c.trigger == key.trigger && (!ctrl || c.ctrl) && (!shift || c.shift));
+            if hit && action.available() && !found.contains(action) {
+                found.push(*action);
+            }
+        }
+        (!found.is_empty()).then_some(found)
+    }
+
     /// Nom lisible d'une séquence, le leader écrit `<leader>` (« <leader> r », #175).
     fn sequence_label(&self, keys: &[Chord]) -> String {
         match keys.split_first() {
@@ -2548,6 +2621,33 @@ mod tests {
             "pavé numérique sous Linux"
         );
         assert_eq!(km.keys_for(Action::Color(Color::Purple)), ["°", ",", "."]);
+    }
+
+    #[test]
+    fn the_help_shows_the_keys_of_the_chosen_set_only() {
+        // Retour du 06/11/2026 : en vim, « x » supprime, sans Suppr ni Retour arrière
+        // (communs, qui marchent aussi) ; en classique, les communs.
+        let vim = vim();
+        assert_eq!(vim.keys_for(Action::FileDelete), ["x"]);
+        assert_eq!(vim.keys_for(Action::Undo), ["u"]);
+        let classic = Keymap::from_profiles(&[Profile::Classic]);
+        assert_eq!(classic.keys_for(Action::Undo), ["Ctrl+z"]);
+        assert_eq!(classic.keys_for(Action::FileDelete).len(), 2);
+        // Les communes marchent toujours.
+        assert_eq!(
+            vim.action(Key::Delete, Modifiers::NONE),
+            Some(Action::FileDelete)
+        );
+        // Sans touche propre au jeu : les communes.
+        assert_eq!(vim.keys_for(Action::Open), classic.keys_for(Action::Open));
+        // `[keys]` : ce que l'utilisateur a choisi.
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            "core.edit.undo".to_string(),
+            vec!["Ctrl+Shift+u".to_string()],
+        );
+        let (km, _) = vim.with_overrides(&overrides);
+        assert_eq!(km.keys_for(Action::Undo).len(), 1);
     }
 
     #[test]

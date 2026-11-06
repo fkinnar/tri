@@ -897,7 +897,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`kw-group-<thème>` : « noter » trouve les étoiles) ; une **faute de frappe** est
   pardonnée dans un mot assez long (« histrogramme », voir `fuzzy.md`) ; une action
   trouvée dans son **libellé** passe devant celles qui n'ont le mot que dans leurs
-  mots-clés (« darktable »).
+  mots-clés (« darktable »). Retour du même jour (« ctrl f » remontait des actions sans
+  rapport) : une requête qui se lit comme une **touche avec modificateurs** (« ctrl f »,
+  « Ctrl+F », « maj p ») ne montre que les actions liées à cette touche seule, avec au
+  moins ces modificateurs (`Keymap::actions_for_typed_keys` ; aide et palette) ; et une
+  **lettre seule** n'est pas un mot : elle ne trouve qu'une lettre seule (une touche,
+  « x », ou un mot d'une lettre), plus le « f » au milieu de « filtre ».
 - **Saisie dans un champ** (recherche de l'aide, nom de dossier du déchargement) : les
   touches sont du texte ; seules celles qui ne tapent rien (Échap, F1 à F12 :
   `Trigger::types_no_text`) restent des raccourcis.
@@ -1031,7 +1036,10 @@ qui ne tapent pas de texte (flèches, pages, Ctrl+U / Ctrl+D). Restent dans le c
 champ, Tab complète un chemin, ↑ / ↓ parcourent une liste de suggestions ; et la touche
 de loupe, réglable à part (`[gui.zoom] loupe_key`).
 L'aide et les textes qui citent une touche la lisent dans la table en vigueur : ils
-suivent le jeu choisi.
+suivent le jeu choisi. Pour une action qui a des touches propres au jeu choisi (`[vim]`
+ou `[classic]`, ou `[keys]`), ils ne montrent qu'elles (06/11/2026 : en vim, « x »
+supprime, sans Suppr ni Retour arrière, communs et toujours actifs ; plus lisible) ;
+sinon, les communes (`Keymap::keys_for`).
 
 ### Menu des suites (06/11/2026)
 

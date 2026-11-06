@@ -87,6 +87,17 @@ pub fn find(query: &str, fields: &[&str]) -> Option<Match> {
     let (mut score, mut exact, mut close) = (0, true, true);
     for word in query.split_whitespace() {
         let word: Vec<char> = word.chars().map(fold).collect();
+        // Une lettre seule n'est pas un mot (retour du 06/11/2026 : le « f » de « ctrl f »
+        // se trouvait dans presque tout) : elle ne trouve qu'une lettre seule, une touche
+        // (« x », « f f ») ou un mot d'une lettre.
+        if let [letter] = word.as_slice() {
+            fields
+                .iter()
+                .any(|f| f.split(|c| !c.is_alphanumeric()).any(|w| w == [*letter]))
+                .then_some(())?;
+            score += 30;
+            continue;
+        }
         let typo = fields.iter().filter_map(|f| typo_score(&word, f)).max();
         // Lettres dans l'ordre, sinon un mot à une faute près (« histrogramme »).
         score += fields
@@ -265,6 +276,18 @@ mod tests {
         assert!(typo < clean);
         assert!(!typo.exact);
         assert!(typo.close);
+    }
+
+    #[test]
+    fn a_single_letter_only_finds_a_single_letter() {
+        // Une touche, ou un mot d'une lettre.
+        assert!(find("x", &["Supprimer", "x"]).is_some());
+        assert!(find("f", &["Filtres", "f f"]).is_some());
+        assert!(find("a", &["photo à droite"]).is_some());
+        // Pas dans un mot.
+        assert!(find("f", &["Filtre : floues", "Ctrl+Maj+s"]).is_none());
+        assert!(find("zoom f", &["Zoom 100 %", "z"]).is_none());
+        assert!(find("zoom z", &["Zoom 100 %", "z"]).is_some_and(|m| m.exact));
     }
 
     #[test]
