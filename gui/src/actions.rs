@@ -1062,8 +1062,12 @@ impl Action {
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
             | CropPresetPrev => Some(Scope::Crop),
+            // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
+            // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
-            | HistogramPhoto | HistogramCamera => Some(Scope::Histogram),
+            | HistogramPhoto | HistogramCamera | HistogramScale | HistogramChannel => {
+                Some(Scope::Histogram)
+            }
             _ => None,
         }
     }

@@ -34,6 +34,9 @@
   to an action is refused. The full before / after table is in `doc/en/gui.md`.
 - **Previous version** of an image in full screen: `Shift+V`, the other way round from
   `v`.
+- **Small histogram** follows the chosen channel too (`<leader> i r`, `g`, `b`, `l`, `a`),
+  not only the large one. Choosing a channel no longer opens the large histogram. In
+  the large histogram, `s` changes the scale and `c` goes to the next channel.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

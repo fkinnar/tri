@@ -2365,11 +2365,7 @@ impl TriApp {
                 {
                     self.histogram_large = true;
                 }
-                let look = histogram::Look {
-                    scale: self.histogram_scale,
-                    details: false,
-                    channel: None,
-                };
+                let look = self.small_histogram_look();
                 histogram::draw(
                     ui.painter(),
                     rect,
@@ -6976,7 +6972,8 @@ impl TriApp {
                     Some(c) if c + 1 < tri::exposure::SERIES => Some(c + 1),
                     Some(_) => None,
                 };
-                self.histogram_large = true;
+                // N'ouvre plus le grand histogramme (retour du 06/11/2026) : le petit
+                // suit le canal choisi.
             }
             Action::ToggleClipping => self.clipping = !self.clipping,
             Action::ToggleMetadata => self.metadata_panel = !self.metadata_panel,
@@ -7014,6 +7011,17 @@ impl TriApp {
                     self.select(shown[new]);
                 }
             }
+        }
+    }
+
+    /// Ce que montre le petit histogramme (panneau de droite) : l'échelle et le canal
+    /// choisis, comme le grand (retour du 06/11/2026 : `<leader> i r` ne changeait que le
+    /// grand), sans les indicateurs.
+    fn small_histogram_look(&self) -> histogram::Look {
+        histogram::Look {
+            scale: self.histogram_scale,
+            details: false,
+            channel: self.histogram_channel,
         }
     }
 
@@ -21587,16 +21595,18 @@ mod tests {
         assert!(h.state().clipping, "w : zones");
         // Masque calculé en fond : deux images ne suffisaient pas toujours (CI Windows).
         run_until(&mut h, |app| app.mask_textures.contains(&white_path));
-        // Maj+C : grand histogramme ouvert sur le canal rouge, image d'analyse ; puis
+        // <leader> i c : canal rouge (le grand histogramme reste fermé ; Maj+I l'ouvre), image d'analyse ; puis
         // vert, bleu, luminance, tous ; Échap ferme.
         leader(
             &mut h,
             &[(Key::I, Modifiers::NONE), (Key::C, Modifiers::NONE)],
         );
         assert!(
-            h.state().histogram_large,
-            "<leader> i c ouvre le grand histogramme"
+            !h.state().histogram_large,
+            "<leader> i c : le canal change, le grand histogramme reste fermé"
         );
+        press(&mut h, Key::I, Modifiers::SHIFT);
+        assert!(h.state().histogram_large, "Maj+I l'ouvre");
         assert_eq!(h.state().histogram_channel, Some(0));
         // L'image d'analyse de tous les canaux peut encore être là (CI macOS) : attendre
         // celle du rouge.
@@ -22274,6 +22284,24 @@ mod tests {
     }
 
     #[test]
+    fn the_channel_chosen_after_the_leader_shows_in_the_small_histogram_too() {
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().small_histogram_look().channel, None);
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::R, Modifiers::NONE)],
+        );
+        assert!(!h.state().histogram_large, "sans ouvrir le grand");
+        assert_eq!(h.state().small_histogram_look().channel, Some(0));
+        leader(
+            &mut h,
+            &[(Key::I, Modifiers::NONE), (Key::A, Modifiers::NONE)],
+        );
+        assert_eq!(h.state().small_histogram_look().channel, None);
+    }
+
+    #[test]
     fn the_large_histogram_opens_and_closes() {
         let (mut h, _dir) = harness();
         press(&mut h, Key::I, Modifiers::SHIFT);
@@ -22308,6 +22336,15 @@ mod tests {
             HistogramScale::Linear,
             "<leader> i s dans la boîte"
         );
+        // s seul, et c le canal suivant, dans la boîte (retour du 06/11/2026).
+        press(&mut h, Key::S, Modifiers::NONE);
+        assert_ne!(h.state().histogram_scale, HistogramScale::Linear, "s");
+        assert!(h.state().histogram_large, "s ne ferme pas la boîte");
+        let stacking = h.state().stacking;
+        press(&mut h, Key::C, Modifiers::NONE);
+        assert_eq!(h.state().histogram_channel, Some(0), "c : canal suivant");
+        assert_eq!(h.state().stacking, stacking, "s n'a pas touché aux piles");
+        assert!(h.state().crop.is_none(), "c ne recadre pas");
         // Les déplacements passent sous la boîte : l'histogramme suit l'image courante.
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().selected, 1, "→ : image suivante");

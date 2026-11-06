@@ -1060,8 +1060,8 @@ sélection dans `[keys]`.
 | Déplier / replier la pile courante | `s` | `( (` / `) )` |
 | Développement suivant / précédent | `Maj+W` / `Maj+Q` | `( (` / `) )` et les flèches |
 | Grand histogramme | `Maj+E` | `Maj+I` |
-| Échelle de l'histogramme | `Maj+I` | `<leader> i s` |
-| Canal suivant / un canal | `Maj+C` / (grand histogramme) | `<leader> i c` / `<leader> i r g b a l` |
+| Échelle de l'histogramme | `Maj+I` | `<leader> i s` (`s` dans le grand) |
+| Canal suivant / un canal | `Maj+C` / (grand histogramme) | `<leader> i c` / `<leader> i r g b a l` (`c`, `r g b a l` dans le grand) |
 | Source (JPEG boîtier, RAW, développé) | `b` | `r` |
 | Rendu des vignettes | `f d` | `Maj+R` |
 | Développer (logiciel de l'image / dossier) | `Maj+B` / `Ctrl+Maj+B` | `<leader> r r` / `<leader> r Maj+R` |

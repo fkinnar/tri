@@ -1003,8 +1003,8 @@ said); a leader on Space first requires moving the selection in `[keys]`.
 | Expand / collapse the current stack | `s` | `( (` / `) )` |
 | Next / previous development | `Shift+W` / `Shift+Q` | `( (` / `) )` and the arrows |
 | Large histogram | `Shift+E` | `Shift+I` |
-| Histogram scale | `Shift+I` | `<leader> i s` |
-| Next channel / one channel | `Shift+C` / (large histogram) | `<leader> i c` / `<leader> i r g b a l` |
+| Histogram scale | `Shift+I` | `<leader> i s` (`s` in the large one) |
+| Next channel / one channel | `Shift+C` / (large histogram) | `<leader> i c` / `<leader> i r g b a l` (`c`, `r g b a l` in the large one) |
 | Source (camera JPEG, RAW, developed) | `b` | `r` |
 | Thumbnail render | `f d` | `Shift+R` |
 | Develop (image's software / folder) | `Shift+B` / `Ctrl+Shift+B` | `<leader> r r` / `<leader> r Shift+R` |
