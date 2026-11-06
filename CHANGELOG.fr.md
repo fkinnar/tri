@@ -122,6 +122,9 @@
 - **Flèches ou hjkl, selon le jeu** : après le leader, le menu des suites et l'aide
   montraient « h / Flèche gauche » ; ils ne montrent plus que `h` en vim, la flèche en
   classique (les deux touches marchent toujours).
+- **Menu des suites plus lisible** : chaque touche sur la ligne de son libellé, et
+  l'ordre de `keys.toml` (le violet avec les autres couleurs, plus en tête à cause de
+  « ° »).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

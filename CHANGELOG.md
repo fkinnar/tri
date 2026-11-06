@@ -116,6 +116,8 @@
 - **Arrows or hjkl, by key set**: after the leader, the menu of continuations and the
   help showed "h / Left"; they now show only `h` in vim, the arrow in classic (both keys
   still work).
+- **Easier menu of continuations**: each key on the line of its label, and the order of
+  `keys.toml` (purple with the other colours, no longer first because of "°").
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

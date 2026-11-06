@@ -14116,13 +14116,10 @@ impl TriApp {
                                                 let text = egui::RichText::new(text);
                                                 let text =
                                                     if *menu { text.italics() } else { text };
-                                                ui.allocate_ui_with_layout(
-                                                    vec2(text_width + gap, 0.0),
-                                                    egui::Layout::left_to_right(
-                                                        egui::Align::Center,
-                                                    ),
-                                                    |ui| ui.label(text),
-                                                );
+                                                // Une simple étiquette, alignée à gauche par la
+                                                // grille, sur la ligne de sa touche (retour du
+                                                // 06/11/2026 : décalée par un conteneur).
+                                                ui.label(text);
                                             }
                                             None => {
                                                 ui.label("");
