@@ -1056,7 +1056,10 @@ switches (actions `core.filter.kind.all|raw|flat`). In the palette as in the hel
 line found by **words** of its title (not by scattered letters) comes first. An action
 **greyed out** here ("Developed" without a developed photo in the folder:
 `TriApp::action_unusable`) is left out of the palette and refused from the keyboard,
-with the reason in the status bar.
+with the reason in the status bar. The **loupe** (a held key, set separately) has its
+help entry, `Action::Loupe` (`core.view.loupe`), with its key in force; it cannot be
+bound (`Action::bindable`): absent from `keys.toml`, `[keys]` and the shortcuts page; run
+from the palette, it recalls its key.
 
 ### Shortcut review (2026-11-06, issue #280)
 

@@ -446,6 +446,10 @@ pub enum Action {
     Back,
     /// Afficher / masquer l'aide des raccourcis.
     Help,
+    /// Loupe à 100 % sous le pointeur, tant qu'on tient sa touche (`loupe` de `keys.toml`,
+    /// `[gui.zoom] loupe_key`) : pour l'aide, la palette et l'aide « ici » seulement ;
+    /// elle ne se lie pas dans `[keys]` ([`Action::bindable`]).
+    Loupe,
     /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
     HelpHere,
     /// Palette de commandes : chercher une action ou un réglage et le lancer.
@@ -468,7 +472,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 206] = [
+    pub const ALL: [Action; 207] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -648,6 +652,7 @@ impl Action {
         Action::ToggleMetadata,
         Action::Open,
         Action::ToggleZoom,
+        Action::Loupe,
         Action::ToggleSource,
         Action::PanLeft,
         Action::PanRight,
@@ -680,6 +685,12 @@ impl Action {
     /// Action correspondant à un identifiant (fichier de raccourcis, scripts de capture).
     pub fn from_id(id: &str) -> Option<Action> {
         Action::ALL.into_iter().find(|a| a.id() == id)
+    }
+
+    /// Faux pour la loupe : sa touche se règle à part (`loupe` de `keys.toml`,
+    /// `[gui.zoom] loupe_key`), elle n'a pas de ligne dans `[keys]` ni dans `keys.toml`.
+    pub fn bindable(self) -> bool {
+        self != Action::Loupe
     }
 
     /// Plugin d'envoi d'une action [`Action::Send`] (`airdrop` pour
@@ -777,7 +788,7 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back | Search => Group::Navigation,
-            ToggleZoom | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
+            ToggleZoom | Loupe | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
             | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
             | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
             | HistogramLuminance | HistogramPhoto | HistogramCamera | ToggleClipping
@@ -1049,6 +1060,7 @@ impl Action {
             Action::Back => "core.view.back",
             Action::Help => "core.app.help",
             Action::HelpHere => "core.app.help_here",
+            Action::Loupe => "core.view.loupe",
             Action::Palette => "core.app.palette",
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",
@@ -1407,7 +1419,7 @@ impl Defaults {
             };
             // Dans l'ordre du fichier : à touches égales, la première l'emporte.
             for (id, specs) in entries {
-                let Some(action) = Action::from_id(id) else {
+                let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
                     let error = t!("keys-file-unknown-action");
                     warnings.push(t!(
                         "keys-file-error",
@@ -1628,7 +1640,7 @@ impl Keymap {
         let mut custom: Vec<(Vec<Chord>, Action, &str)> = Vec::new();
         let mut replaced: Vec<Action> = Vec::new();
         for (id, specs) in overrides {
-            let Some(action) = Action::from_id(id) else {
+            let Some(action) = Action::from_id(id).filter(|a| a.bindable()) else {
                 warnings.push(format!("[keys] : action inconnue « {id} »"));
                 continue;
             };
@@ -1901,6 +1913,17 @@ impl Keymap {
     /// « 3, Maj+3 »). Une séquence qui commence par le leader l'écrit `<leader>` (« <leader>
     /// r », #175) : il est réglable, l'aide le montre à part.
     pub fn keys_for(&self, action: Action) -> Vec<String> {
+        // La loupe : sa touche, maintenue.
+        if action == Action::Loupe {
+            use crate::settings::LoupeKey;
+            return match self.loupe {
+                LoupeKey::Key(key) => vec![key_label(key)],
+                LoupeKey::Shift => vec![t!("key-shift-prefix").trim_end_matches('+').to_string()],
+                LoupeKey::Ctrl => vec!["Ctrl".to_string()],
+                LoupeKey::Alt => vec!["Alt".to_string()],
+                LoupeKey::None | LoupeKey::Default => Vec::new(),
+            };
+        }
         // Celles du jeu choisi (ou de `[keys]`) seulement, s'il y en a : en vim, « x »
         // supprime, sans Suppr (retour du 06/11/2026 : plus lisible) ; sinon les communes.
         let own = |k: &Vec<Chord>| self.own.iter().any(|(o, a)| o == k && *a == action);
@@ -2968,6 +2991,7 @@ mod tests {
             .collect();
         let missing: Vec<&str> = Action::ALL
             .iter()
+            .filter(|a| a.bindable())
             .map(|a| a.id())
             .filter(|id| !ids.iter().any(|i| i == id))
             .collect();

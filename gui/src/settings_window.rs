@@ -1458,7 +1458,10 @@ impl SettingsWindow {
     ) -> impl Iterator<Item = Action> + 'a {
         Group::ALL.into_iter().flat_map(move |group| {
             Action::ALL.into_iter().filter(move |a| {
-                a.group() == group && a.available() && only.is_none_or(|o| o.contains(a))
+                a.group() == group
+                    && a.available()
+                    && a.bindable()
+                    && only.is_none_or(|o| o.contains(a))
             })
         })
     }

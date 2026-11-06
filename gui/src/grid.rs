@@ -229,6 +229,7 @@ pub fn navigate(
         | Action::ToggleMetadata
         | Action::Open
         | Action::ToggleZoom
+        | Action::Loupe
         | Action::ToggleSource
         | Action::PanLeft
         | Action::PanRight

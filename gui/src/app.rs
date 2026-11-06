@@ -6225,6 +6225,11 @@ impl TriApp {
                     ..PaletteState::default()
                 });
             }
+            // La loupe se tient (palette, aide) : rappeler sa touche.
+            Action::Loupe => {
+                let keys = self.keymap.keys_for(Action::Loupe).join(" / ");
+                self.notice = Some((t!("loupe-hold", keys = keys), false));
+            }
             Action::HelpHere => {
                 if self.help_here.take().is_none() {
                     self.help = false;
@@ -20159,6 +20164,26 @@ mod tests {
         // Pas une touche : la recherche par mots.
         assert!(found("ctrl").len() > 2);
         assert!(found("netteté").contains(&Action::TogglePeaking));
+    }
+
+    #[test]
+    fn the_loupe_is_in_the_help_with_its_held_key() {
+        // Retour du 06/11/2026 : « loupe » ne trouvait que le zoom ; la loupe est une
+        // touche maintenue, réglée à part (`loupe` de keys.toml).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let rows = help_rows(&h.state().keymap, "loupe");
+        assert_eq!(rows.first().map(|(a, _)| *a), Some(Action::Loupe));
+        assert_eq!(rows[0].1, "m");
+        // Pas de ligne dans [keys] : sa touche se règle à part.
+        let mut overrides = std::collections::BTreeMap::new();
+        overrides.insert("core.view.loupe".to_string(), vec!["x".to_string()]);
+        let (_, warnings) = h.state().keymap.clone().with_overrides(&overrides);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        // Lancée (palette) : rappeler qu'il faut la maintenir.
+        act(&mut h, Action::Loupe);
+        let notice = h.state().notice.clone().map(|(n, _)| n).unwrap_or_default();
+        assert!(notice.contains('m'), "{notice}");
     }
 
     #[test]

@@ -81,6 +81,8 @@
 - **Filtre grisé** : « Développées », grisé quand aucune photo du dossier n'est
   développée, ne s'allume plus par la palette (absent) ni par `f r` (refusé, avec la
   raison dans la barre d'état) ; l'éteindre reste possible.
+- **La loupe dans l'aide** : « loupe » la trouve dans l'aide, `?` et la palette, avec sa
+  touche (`m`, maintenue) ; lancée depuis la palette, elle rappelle qu'il faut la tenir.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

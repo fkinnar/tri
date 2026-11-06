@@ -1113,7 +1113,10 @@ pour rien), les cases RAW / JPEG (actions `core.filter.kind.all|raw|flat`). Dans
 palette comme dans l'aide, une ligne trouvée par des **mots** de son titre (pas par des
 lettres éparpillées) passe devant. Une action **grisée** ici (« Développées » sans photo
 développée dans le dossier : `TriApp::action_unusable`) est absente de la palette et
-refusée au clavier, avec la raison dans la barre d'état.
+refusée au clavier, avec la raison dans la barre d'état. La **loupe** (touche maintenue,
+réglée à part) a son entrée d'aide, `Action::Loupe` (`core.view.loupe`), avec sa touche
+en vigueur ; elle ne se lie pas (`Action::bindable`) : absente de `keys.toml`, de `[keys]`
+et de la page des raccourcis ; lancée de la palette, elle rappelle sa touche.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

@@ -76,6 +76,8 @@
 - **Greyed-out filter**: "Developed", greyed out when no photo of the folder is
   developed, no longer turns on from the palette (left out) nor with `f r` (refused, with
   the reason in the status bar); turning it off still works.
+- **The loupe in the help**: "loupe" finds it in the help, `?` and the palette, with its
+  key (`m`, held); run from the palette, it reminds you to hold it.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
