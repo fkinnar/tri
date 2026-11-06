@@ -14022,71 +14022,64 @@ impl TriApp {
         let accent = crate::marks::accent_mark(ctx);
         let mut clicked = None;
         let mut query = state.query.clone();
-        egui::Area::new(egui::Id::unique("palette"))
-            .order(egui::Order::Foreground)
-            .anchor(
-                Align2::CENTER_TOP,
-                vec2(0.0, ctx.content_rect().height() * 0.12),
-            )
+        // Le cadre commun des boîtes (retour du 06/11/2026 : couleurs, marges et espacements
+        // comme les autres), en haut, au centre.
+        let screen = ctx.content_rect();
+        let at = egui::pos2(
+            screen.center().x - width / 2.0,
+            screen.top() + screen.height() * 0.12,
+        );
+        let shown = modal_at("palette", at)
+            .title(t!("palette-title"))
+            .free_width()
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .inner_margin(12.0)
+                ui.set_width(width);
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut query)
+                        .id(egui::Id::unique("palette_query"))
+                        // De l'air autour du texte (retour du 06/11/2026).
+                        .margin(vec2(10.0, 8.0))
+                        .hint_text(t!(
+                            "palette-hint",
+                            actions = self
+                                .gui
+                                .dialogs
+                                .palette_actions_prefix
+                                .map(String::from)
+                                .unwrap_or_default(),
+                            settings = self
+                                .gui
+                                .dialogs
+                                .palette_settings_prefix
+                                .map(String::from)
+                                .unwrap_or_default()
+                        ))
+                        .desired_width(f32::INFINITY),
+                );
+                if !state.focused {
+                    field.request_focus();
+                    state.focused = true;
+                }
+                if !query.trim().is_empty() && state.hits.is_empty() {
+                    ui.weak(t!("palette-empty"));
+                }
+                ScrollArea::vertical()
+                    .max_height(ctx.content_rect().height() * 0.6)
                     .show(ui, |ui| {
-                        ui.set_width(width);
-                        ui.label(
-                            egui::RichText::new(t!("palette-title"))
-                                .size(self.gui.dialogs.title_size)
-                                .color(accent),
-                        );
-                        ui.add_space(4.0);
-                        let field = ui.add(
-                            egui::TextEdit::singleline(&mut query)
-                                .id(egui::Id::unique("palette_query"))
-                                // De l'air autour du texte (retour du 06/11/2026).
-                                .margin(vec2(10.0, 8.0))
-                                .hint_text(t!(
-                                    "palette-hint",
-                                    actions = self
-                                        .gui
-                                        .dialogs
-                                        .palette_actions_prefix
-                                        .map(String::from)
-                                        .unwrap_or_default(),
-                                    settings = self
-                                        .gui
-                                        .dialogs
-                                        .palette_settings_prefix
-                                        .map(String::from)
-                                        .unwrap_or_default()
-                                ))
-                                .desired_width(f32::INFINITY),
-                        );
-                        if !state.focused {
-                            field.request_focus();
-                            state.focused = true;
+                        for (i, hit) in state.hits.iter().enumerate() {
+                            let chosen = i == state.selected;
+                            let row = palette_row(ui, hit, chosen, accent);
+                            if chosen && (down > 0 || up > 0) {
+                                row.scroll_to_me(None);
+                            }
+                            if row.clicked() {
+                                clicked = Some(i);
+                            }
                         }
-                        ui.add_space(6.0);
-                        if !query.trim().is_empty() && state.hits.is_empty() {
-                            ui.weak(t!("palette-empty"));
-                        }
-                        ScrollArea::vertical()
-                            .max_height(ctx.content_rect().height() * 0.6)
-                            .show(ui, |ui| {
-                                for (i, hit) in state.hits.iter().enumerate() {
-                                    let chosen = i == state.selected;
-                                    let row = palette_row(ui, hit, chosen, accent);
-                                    if chosen && (down > 0 || up > 0) {
-                                        row.scroll_to_me(None);
-                                    }
-                                    if row.clicked() {
-                                        clicked = Some(i);
-                                    }
-                                }
-                            });
-                        ui.add_space(4.0);
-                        ui.weak(t!("palette-keys"));
                     });
+                ui.weak(t!("palette-keys"));
             });
+        let close = shown.should_close();
         if query != state.query {
             state.hits = crate::palette::search(
                 &self.keymap,
@@ -14111,7 +14104,7 @@ impl TriApp {
                     window.search(&format!("{section}.{key}"));
                 }
             }
-            None if run => {}
+            None if run || close => {}
             None => self.palette = Some(state),
         }
     }

@@ -1099,7 +1099,8 @@ titre, un champ plus aéré, et des actions qui manquaient pour s'y trouver : **
 Code), `?` que les réglages ; seul, le préfixe liste tout, dans l'ordre de l'aide ou du
 fichier, pour parcourir (`palette::split_prefix`, `Only` ; `[gui.dialogs]
 palette_actions_prefix` et `palette_settings_prefix`, un caractère, vide : aucun).
-L'indication grisée du champ les rappelle.
+L'indication grisée du champ les rappelle. La palette est dessinée dans le cadre commun
+des boîtes (`modal_at`, `Dialog` : couleurs, marges, titre et croix comme les autres).
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

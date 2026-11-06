@@ -1042,7 +1042,8 @@ field, and actions that were missing to be found there: **Sort by…**
 the settings; alone, the prefix lists everything, in the order of the help or of the
 file, to browse (`palette::split_prefix`, `Only`; `[gui.dialogs] palette_actions_prefix`
 and `palette_settings_prefix`, one character, empty: none). The field's grey hint
-recalls them.
+recalls them. The palette is drawn in the common dialog frame (`modal_at`, `Dialog`:
+colours, margins, title and cross like the others).
 
 ### Shortcut review (2026-11-06, issue #280)
 
