@@ -1135,6 +1135,21 @@ reste l'avant / après (JPEG boîtier). « Passer en revue les développements �
 part (la navigation), grisée en JPEG boîtier. Disparus : la rotation propre à une photo
 (`Source::next`), la liste « Développement de chaque photo ».
 
+### Loupe au clavier (06/11/2026)
+
+Idée de l'utilisateur : la touche de loupe maintenue, les touches de navigation du jeu
+choisi (flèches, `hjkl` en vim) déplacent la loupe de `[gui.zoom] loupe_step` points, les
+touches de défilement d'une image zoomée (avec Maj) de `loupe_step_large`, au lieu de
+changer d'image (`TriApp::loupe_key_move`, avant le reste des actions). Départ : sous le
+pointeur s'il est sur l'image, sinon au centre ; le point visé est relatif à l'image
+(`loupe_point`), dans le cadre relevé au dessin (`loupe_rects`, une entrée par image en
+comparaison). Bouger la souris, ou relâcher la touche, rend la loupe au pointeur.
+**Dans la grille** aussi (demandé le même soir) : chaque vignette retient où elle est
+dessinée (`grid_images`) ; `grid_loupe` pose la loupe sur celle sous le pointeur, sinon
+(clavier) sur la sélectionnée, dessinée au premier plan et coupée à la grille ; son 1:1
+est demandé comme en plein écran (`displayed` : l'image de la loupe), la vignette
+agrandie en attendant.
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les

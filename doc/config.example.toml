@@ -750,6 +750,11 @@ loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 1.0
+# Loupe au clavier, la touche maintenue : les touches de navigation (flèches, hjkl en vim)
+# la déplacent de loupe_step points, avec Maj (comme une image zoomée) de
+# loupe_step_large ; bouger la souris la rend au pointeur.
+loupe_step = 20.0
+loupe_step_large = 120.0
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :

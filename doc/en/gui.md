@@ -1077,6 +1077,21 @@ the same way). On a development under review, `r` stays before / after (camera J
 "Review the developments" stays separate (navigation), greyed out in camera JPEG. Gone:
 the per-photo rotation (`Source::next`), the "Development of each photo" list.
 
+### Loupe from the keyboard (2026-11-06)
+
+The user's idea: with the loupe key held, the navigation keys of the chosen set (arrows,
+`hjkl` in vim) move the loupe by `[gui.zoom] loupe_step` points, the scrolling keys of a
+zoomed image (with Shift) by `loupe_step_large`, instead of changing image
+(`TriApp::loupe_key_move`, before the other actions). Start: under the pointer if it is
+over the image, otherwise at the centre; the aimed point is relative to the image
+(`loupe_point`), in the frame recorded when drawing (`loupe_rects`, one entry per image in
+comparison). Moving the mouse, or releasing the key, gives the loupe back to the pointer.
+**In the grid** too (asked the same evening): each thumbnail records where it is drawn
+(`grid_images`); `grid_loupe` puts the loupe on the one under the pointer, otherwise
+(keyboard) on the selected one, drawn in the foreground and clipped to the grid; its 1:1
+is requested as in full screen (`displayed`: the loupe's image), the thumbnail enlarged
+meanwhile.
+
 ### Shortcut review (2026-11-06, issue #280)
 
 Done with the user, once the shortcuts were out of the code (`keys.toml`). The keys
