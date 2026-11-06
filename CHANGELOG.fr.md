@@ -100,6 +100,9 @@
   « Actions sur les fichiers » ont leur action, qui bascule l'état actuel (la palette ne
   proposait que leur valeur par défaut). Les lignes de réglages de la palette s'appellent
   désormais « configuration » : elles ouvrent la valeur par défaut.
+- **Pas de la loupe au clavier** : mesurés dans la loupe (l'image à 100 %), pareils en
+  grille et en plein écran : un quart de loupe, une loupe entière avec Maj (sur une
+  vignette, ils sautaient des centaines de pixels).
 
 ## 1.0.0-alpha.8 — 05/11/2026
 

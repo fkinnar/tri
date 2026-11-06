@@ -848,6 +848,9 @@ pub struct TriApp {
     loupe_point: Option<(usize, Vec2)>,
     /// Cadre de chaque image où la loupe peut se poser (pour la déplacer au clavier).
     loupe_rects: HashMap<usize, Rect>,
+    /// Taille de chaque image entière à l'échelle de la loupe (points) : les pas du
+    /// clavier se mesurent dans la loupe, pareils en grille et en plein écran.
+    loupe_sizes: HashMap<usize, Vec2>,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1341,6 +1344,7 @@ impl TriApp {
             loupe_on: false,
             loupe_point: None,
             loupe_rects: HashMap::new(),
+            loupe_sizes: HashMap::new(),
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
@@ -9404,11 +9408,14 @@ impl TriApp {
         } else {
             z.loupe_step
         };
-        let moved = start
-            + vec2(
-                dx * step / rect.width().max(1.0),
-                dy * step / rect.height().max(1.0),
-            );
+        // Le pas, en points de la loupe (l'image à 100 %), pas de l'image affichée :
+        // sur une vignette, 20 points faisaient des centaines de pixels (retour du
+        // 06/11/2026). Loupe pas encore dessinée sur cette image (taille inconnue) : le
+        // premier appui la pose seulement.
+        let moved = match self.loupe_sizes.get(&index) {
+            Some(whole) => start + vec2(dx * step / whole.x.max(1.0), dy * step / whole.y.max(1.0)),
+            None => start,
+        };
         self.loupe_point = Some((
             index,
             vec2(moved.x.clamp(0.0, 1.0), moved.y.clamp(0.0, 1.0)),
@@ -9508,6 +9515,7 @@ impl TriApp {
         let side = z.loupe_size;
         let square = Rect::from_center_size(pos, vec2(side, side));
         let size = px * z.loupe_scale / ppp;
+        self.loupe_sizes.insert(index, size);
         let point = view::relative(rect, pos);
         let whole = Rect::from_min_size(pos - vec2(point.x * size.x, point.y * size.y), size);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
@@ -18159,12 +18167,18 @@ mod tests {
         let selected = h.state().selected;
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         assert_eq!(h.state().selected, selected, "pas d'image suivante");
-        let (_, first) = h.state().loupe_point.expect("placée au clavier");
+        // Premier appui : la loupe se pose au centre (pointeur ailleurs) ; ensuite un pas,
+        // puis un grand pas avec Maj, mesurés dans la loupe.
+        let (_, anchor) = h.state().loupe_point.expect("placée au clavier");
+        assert_eq!(anchor, vec2(0.5, 0.5));
+        h.run_steps(2);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        let (_, first) = h.state().loupe_point.unwrap();
         assert!(first.x > 0.5 && (first.y - 0.5).abs() < 1e-3, "{first:?}");
         press(&mut h, Key::ArrowRight, Modifiers::SHIFT);
         let (_, second) = h.state().loupe_point.unwrap();
         assert!(
-            second.x - first.x > (first.x - 0.5) * 3.0,
+            second.x - first.x > (first.x - 0.5) * 3.0 || second.x >= 1.0,
             "grand pas : {second:?}"
         );
         assert!(h.state().loupe_on, "la loupe est là, au point visé");
@@ -18215,6 +18229,18 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().loupe_on);
         assert_eq!(h.state().loupe_index, selected);
+        // Le pas se mesure dans la loupe (retour du 06/11/2026 : sur une vignette, il
+        // sautait des centaines de pixels).
+        let before = h.state().loupe_point.unwrap().1;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        let after = h.state().loupe_point.unwrap().1;
+        let whole = h.state().loupe_sizes[&selected];
+        let moved = (after.x - before.x) * whole.x;
+        let step = h.state().gui.zoom.loupe_step;
+        assert!(
+            (moved - step).abs() < 1.0 || after.x >= 1.0,
+            "{moved} points pour un pas de {step}"
+        );
     }
 
     #[test]

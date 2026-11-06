@@ -1084,7 +1084,9 @@ the per-photo rotation (`Source::next`), the "Development of each photo" list.
 
 The user's idea: with the loupe key held, the navigation keys of the chosen set (arrows,
 `hjkl` in vim) move the loupe by `[gui.zoom] loupe_step` points, the scrolling keys of a
-zoomed image (with Shift) by `loupe_step_large`, instead of changing image
+zoomed image (with Shift) by `loupe_step_large`, **measured in the loupe** (the image at
+100 %, `loupe_sizes`; first measured on the shown image, they jumped hundreds of pixels
+on a thumbnail; a first press before the loupe is drawn only places it), instead of changing image
 (`TriApp::loupe_key_move`, before the other actions). Start: under the pointer if it is
 over the image, otherwise at the centre; the aimed point is relative to the image
 (`loupe_point`), in the frame recorded when drawing (`loupe_rects`, one entry per image in

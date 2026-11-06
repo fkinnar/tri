@@ -751,10 +751,11 @@ loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 1.0
 # Loupe from the keyboard, its key held: the navigation keys (arrows, hjkl in vim) move it
-# by loupe_step points, with Shift (as in a zoomed image) by loupe_step_large; moving the
-# mouse gives it back to the pointer.
-loupe_step = 20.0
-loupe_step_large = 120.0
+# by loupe_step points, with Shift (as in a zoomed image) by loupe_step_large, measured in
+# the loupe (the image at 100 %), the same in the grid and full screen: a quarter of a
+# loupe, a whole loupe; moving the mouse gives it back to the pointer.
+loupe_step = 80.0
+loupe_step_large = 320.0
 
 [gui.dialogs]
 # Dialogs opened near the click (rating, eject, offload, rename, trash):

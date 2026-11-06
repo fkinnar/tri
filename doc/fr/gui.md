@@ -1143,7 +1143,10 @@ part (la navigation), grisée en JPEG boîtier. Disparus : la rotation propre à
 
 Idée de l'utilisateur : la touche de loupe maintenue, les touches de navigation du jeu
 choisi (flèches, `hjkl` en vim) déplacent la loupe de `[gui.zoom] loupe_step` points, les
-touches de défilement d'une image zoomée (avec Maj) de `loupe_step_large`, au lieu de
+touches de défilement d'une image zoomée (avec Maj) de `loupe_step_large`, **mesurés dans
+la loupe** (l'image à 100 %, `loupe_sizes` ; mesurés d'abord sur l'image affichée, ils
+sautaient des centaines de pixels sur une vignette ; un premier appui avant tout dessin
+de la loupe la pose seulement), au lieu de
 changer d'image (`TriApp::loupe_key_move`, avant le reste des actions). Départ : sous le
 pointeur s'il est sur l'image, sinon au centre ; le point visé est relatif à l'image
 (`loupe_point`), dans le cadre relevé au dessin (`loupe_rects`, une entrée par image en
