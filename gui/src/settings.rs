@@ -1023,9 +1023,11 @@ pub struct ZoomSettings {
     pub loupe_size: f32,
     /// Loupe : grossissement (1,0 = 100 %).
     pub loupe_scale: f32,
-    /// Loupe au clavier : pas d'un déplacement (touches de navigation), en points.
+    /// Loupe au clavier : pas d'un déplacement (touches de navigation), en points de la
+    /// loupe (l'image à son échelle).
     pub loupe_step: f32,
-    /// Loupe au clavier : grand pas (touches de défilement, avec Maj), en points.
+    /// Loupe au clavier : grand pas (touches de défilement, avec Maj), en points de la
+    /// loupe.
     pub loupe_step_large: f32,
 }
 
@@ -1039,8 +1041,8 @@ impl Default for ZoomSettings {
             loupe_delay_ms: 150,
             loupe_size: 320.0,
             loupe_scale: 1.0,
-            loupe_step: 20.0,
-            loupe_step_large: 120.0,
+            loupe_step: 80.0,
+            loupe_step_large: 320.0,
         }
     }
 }

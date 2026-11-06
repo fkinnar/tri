@@ -752,9 +752,10 @@ loupe_size = 320.0
 loupe_scale = 1.0
 # Loupe au clavier, la touche maintenue : les touches de navigation (flèches, hjkl en vim)
 # la déplacent de loupe_step points, avec Maj (comme une image zoomée) de
-# loupe_step_large ; bouger la souris la rend au pointeur.
-loupe_step = 20.0
-loupe_step_large = 120.0
+# loupe_step_large, mesurés dans la loupe (l'image à 100 %), pareils en grille et en plein
+# écran : un quart de loupe, une loupe entière ; bouger la souris la rend au pointeur.
+loupe_step = 80.0
+loupe_step_large = 320.0
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :

@@ -94,6 +94,9 @@
   have their action, which toggles the current state (the palette only offered their
   default value). Settings lines in the palette are now called "configuration": they
   open the default value.
+- **Keyboard loupe steps**: measured in the loupe (the image at 100 %), the same in the
+  grid and full screen: a quarter of a loupe, a whole loupe with Shift (on a thumbnail
+  they jumped hundreds of pixels).
 
 ## 1.0.0-alpha.8 — 2026-11-05
 
