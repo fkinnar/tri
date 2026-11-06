@@ -725,6 +725,14 @@ pub struct DialogSettings {
     pub palette_width: f32,
     /// Palette de commandes : lignes montrées au plus.
     pub palette_max: usize,
+    /// Palette de commandes : préfixe d'une recherche d'actions seulement (`>`, comme
+    /// dans VS Code) : un caractère ; vide : aucun.
+    #[serde(deserialize_with = "one_char")]
+    pub palette_actions_prefix: Option<char>,
+    /// Palette de commandes : préfixe d'une recherche de réglages seulement (`?`) : un
+    /// caractère ; vide : aucun.
+    #[serde(deserialize_with = "one_char")]
+    pub palette_settings_prefix: Option<char>,
     /// Pendant une attente (copie, recherche sur le réseau, touche de séquence…),
     /// intervalle entre deux images pour voir où elle en est (ms).
     pub poll_ms: u64,
@@ -732,6 +740,29 @@ pub struct DialogSettings {
     pub max_errors: usize,
     /// Dossiers proposés sous un champ de chemin, après Tab.
     pub completions: usize,
+}
+
+impl DialogSettings {
+    /// Préfixes de la palette de commandes.
+    pub fn palette_prefixes(&self) -> crate::palette::Prefixes {
+        crate::palette::Prefixes {
+            actions: self.palette_actions_prefix,
+            settings: self.palette_settings_prefix,
+        }
+    }
+}
+
+/// Un caractère écrit en chaîne (`">"`) ; chaîne vide : aucun.
+fn one_char<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<char>, D::Error> {
+    let text = String::deserialize(d)?;
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        (None, _) => Ok(None),
+        (Some(c), None) => Ok(Some(c)),
+        _ => Err(serde::de::Error::custom(format!(
+            "un seul caractère attendu, pas « {text} »"
+        ))),
+    }
 }
 
 impl Default for DialogSettings {
@@ -756,6 +787,8 @@ impl Default for DialogSettings {
             help_here_column: 420.0,
             palette_width: 640.0,
             palette_max: 40,
+            palette_actions_prefix: Some('>'),
+            palette_settings_prefix: Some('?'),
             poll_ms: 100,
             max_errors: 5,
             completions: 12,

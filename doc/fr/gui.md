@@ -1094,7 +1094,12 @@ on apprend les raccourcis en passant, et les actions sans raccourci deviennent
 accessibles au clavier. Réglages `[gui.dialogs] palette_width`, `palette_max`. Plus tard
 peut-être : basculer un oui / non directement dans la palette. Retours du même jour : un
 titre, un champ plus aéré, et des actions qui manquaient pour s'y trouver : **Trier par…**
-(`core.filter.sort_by.<clé>`, une par ordre, sans raccourci par défaut).
+(`core.filter.sort_by.<clé>`, une par ordre, sans raccourci par défaut). Puis des
+**préfixes** (idée de l'utilisateur) : `>` ne cherche que les actions (comme dans VS
+Code), `?` que les réglages ; seul, le préfixe liste tout, dans l'ordre de l'aide ou du
+fichier, pour parcourir (`palette::split_prefix`, `Only` ; `[gui.dialogs]
+palette_actions_prefix` et `palette_settings_prefix`, un caractère, vide : aucun).
+L'indication grisée du champ les rappelle.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

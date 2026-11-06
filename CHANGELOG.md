@@ -62,6 +62,9 @@
 - **Sort by…**: one action per order (name, capture date, modification date, stars,
   colour, flag), besides "Next order": in the palette ("sort name"), without a default
   shortcut (set one in `[keys]`). The palette gets a title and a roomier field.
+- **Palette prefixes**: `>` only searches the actions (as in VS Code), `?` only the
+  settings; alone, the prefix lists them all. Configurable:
+  `[gui.dialogs] palette_actions_prefix`, `palette_settings_prefix`.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

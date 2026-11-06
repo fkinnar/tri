@@ -31,24 +31,67 @@ pub struct Hit {
     pub detail: String,
 }
 
+/// Ce que la palette cherche, d'après le préfixe tapé.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Only {
+    /// Actions et réglages.
+    All,
+    /// Les actions seulement (`>tri`).
+    Actions,
+    /// Les réglages seulement (`?tri`).
+    Settings,
+}
+
+/// Préfixes de la palette (`[gui.dialogs] palette_actions_prefix`,
+/// `palette_settings_prefix`), `None` : aucun.
+#[derive(Clone, Copy, Debug)]
+pub struct Prefixes {
+    /// Devant une recherche d'actions seulement (`>`, comme dans VS Code).
+    pub actions: Option<char>,
+    /// Devant une recherche de réglages seulement (`?`).
+    pub settings: Option<char>,
+}
+
+/// Ce que cherche `query` et le reste de la recherche, sans son préfixe (idée de
+/// l'utilisateur, 06/11/2026 : `>tri` les actions, comme VS Code, `?tri` les réglages).
+pub fn split_prefix(query: &str, prefixes: Prefixes) -> (Only, &str) {
+    let query = query.trim_start();
+    for (prefix, only) in [
+        (prefixes.actions, Only::Actions),
+        (prefixes.settings, Only::Settings),
+    ] {
+        if let Some(prefix) = prefix
+            && let Some(rest) = query.strip_prefix(prefix)
+        {
+            return (only, rest);
+        }
+    }
+    (Only::All, query)
+}
+
 /// Lignes de la palette pour `query`, à l'endroit `place` : les actions qui y ont un sens
 /// ([`cheatsheet::applies`], sans la palette elle-même) et les réglages `settings`, les
 /// meilleurs d'abord (à égalité, une action avant un réglage, puis le titre le plus court),
-/// `max` au plus. Requête vide : rien (la palette invite à taper).
+/// `max` au plus. Un préfixe ([`split_prefix`]) limite aux actions ou aux réglages ; seul,
+/// il les liste tous, dans l'ordre de l'aide ou du fichier (pour parcourir). Requête vide :
+/// rien (la palette invite à taper).
 pub fn search(
     keymap: &Keymap,
     query: &str,
+    prefixes: Prefixes,
     place: Place,
     settings: &[SettingRef],
     max: usize,
 ) -> Vec<Hit> {
-    if query.trim().is_empty() {
+    let (only, query) = split_prefix(query, prefixes);
+    let browsing = query.trim().is_empty();
+    if browsing && only == Only::All {
         return Vec::new();
     }
     // Une touche tapée (« ctrl f ») : les actions qui lui sont liées, seulement.
     let typed = keymap.actions_for_typed_keys(query);
     let mut found: Vec<((Hit, u8), tri::fuzzy::Match)> = Vec::new();
-    for &action in Action::ALL.iter() {
+    for &action in Action::ALL.iter().filter(|_| only != Only::Settings) {
         if action == Action::Palette || !action.available() || !cheatsheet::applies(action, place) {
             continue;
         }
@@ -75,7 +118,10 @@ pub fn search(
             found.push(((hit, 1), m));
         }
     }
-    for s in settings.iter().filter(|_| typed.is_none()) {
+    for s in settings
+        .iter()
+        .filter(|_| typed.is_none() && only != Only::Actions)
+    {
         let id = format!("{}.{}", s.section, s.key);
         let keywords = crate::actions::keywords(&id);
         let section_keywords = crate::actions::keywords(&s.section);
@@ -96,6 +142,16 @@ pub fn search(
             };
             found.push(((hit, 0), m));
         }
+    }
+    if browsing {
+        // Tout parcourir : dans l'ordre (thèmes de l'aide, fichier d'exemple).
+        found.sort_by_key(|((hit, _), _)| match hit.item {
+            Item::Action(a) => crate::actions::Group::ALL
+                .iter()
+                .position(|g| *g == a.group()),
+            Item::Setting(..) => None,
+        });
+        return found.into_iter().map(|((hit, _), _)| hit).collect();
     }
     let mut found = tri::fuzzy::relevant(found);
     found.sort_by_cached_key(|((hit, kind), m)| {
@@ -120,23 +176,42 @@ mod tests {
         Keymap::default().with_leader("Ctrl+b").unwrap()
     }
 
+    const PREFIXES: Prefixes = Prefixes {
+        actions: Some('>'),
+        settings: Some('?'),
+    };
+
     fn settings() -> Vec<SettingRef> {
         crate::settings_window::settings_list(&[])
     }
 
     #[test]
     fn the_best_action_comes_first() {
-        let hits = search(&keymap(), "recadrer", Place::View, &settings(), 20);
+        let hits = search(
+            &keymap(),
+            "recadrer",
+            PREFIXES,
+            Place::View,
+            &settings(),
+            20,
+        );
         assert_eq!(hits[0].item, Item::Action(Action::Crop));
         assert!(!hits[0].keys.is_empty(), "les touches sont montrées");
         // Sans faute ni accent, en anglais.
-        let hits = search(&keymap(), "crop", Place::View, &settings(), 20);
+        let hits = search(&keymap(), "crop", PREFIXES, Place::View, &settings(), 20);
         assert_eq!(hits[0].item, Item::Action(Action::Crop));
     }
 
     #[test]
     fn settings_are_found_too() {
-        let hits = search(&keymap(), "loupe_key", Place::Grid, &settings(), 20);
+        let hits = search(
+            &keymap(),
+            "loupe_key",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            20,
+        );
         assert_eq!(
             hits[0].item,
             Item::Setting("gui.zoom".to_string(), "loupe_key".to_string())
@@ -147,15 +222,22 @@ mod tests {
     #[test]
     fn only_what_applies_here_and_never_itself() {
         // Le recadrage n'a pas de sens dans la grille.
-        let hits = search(&keymap(), "recadrer", Place::Grid, &settings(), 50);
+        let hits = search(
+            &keymap(),
+            "recadrer",
+            PREFIXES,
+            Place::Grid,
+            &settings(),
+            50,
+        );
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Crop)));
-        let hits = search(&keymap(), "palette", Place::Grid, &settings(), 50);
+        let hits = search(&keymap(), "palette", PREFIXES, Place::Grid, &settings(), 50);
         assert!(!hits.iter().any(|h| h.item == Item::Action(Action::Palette)));
     }
 
     #[test]
     fn a_typed_key_finds_its_actions_only() {
-        let hits = search(&keymap(), "ctrl f", Place::Grid, &settings(), 20);
+        let hits = search(&keymap(), "ctrl f", PREFIXES, Place::Grid, &settings(), 20);
         let items: Vec<Item> = hits.into_iter().map(|h| h.item).collect();
         assert!(items.contains(&Item::Action(Action::Search)));
         assert!(items.contains(&Item::Action(Action::FocusMode)));
@@ -164,7 +246,7 @@ mod tests {
 
     #[test]
     fn sorting_by_one_key_is_an_action() {
-        let hits = search(&keymap(), "tri nom", Place::Grid, &settings(), 20);
+        let hits = search(&keymap(), "tri nom", PREFIXES, Place::Grid, &settings(), 20);
         assert_eq!(
             hits[0].item,
             Item::Action(Action::SortBy(tri::sort::SortKey::Name))
@@ -172,8 +254,38 @@ mod tests {
     }
 
     #[test]
+    fn a_prefix_limits_to_actions_or_settings() {
+        let kinds = |q: &str| -> (usize, usize) {
+            let hits = search(&keymap(), q, PREFIXES, Place::Grid, &settings(), 500);
+            let actions = hits
+                .iter()
+                .filter(|h| matches!(h.item, Item::Action(_)))
+                .count();
+            (actions, hits.len() - actions)
+        };
+        let (a, s) = kinds("zoom");
+        assert!(a > 0 && s > 0, "sans préfixe : les deux");
+        let (a, s) = kinds(">zoom");
+        assert!(a > 0 && s == 0, "> : les actions");
+        let (a, s) = kinds("?zoom");
+        assert!(a == 0 && s > 0, "? : les réglages");
+        let (a, s) = kinds(" ? zoom");
+        assert!(a == 0 && s > 0, "espaces tolérés");
+        // Le préfixe seul : tout parcourir, sans limite.
+        let all = search(&keymap(), ">", PREFIXES, Place::Grid, &settings(), 5);
+        assert!(all.len() > 50, "{}", all.len());
+        assert!(all.iter().all(|h| matches!(h.item, Item::Action(_))));
+        // Préfixe vide : jamais reconnu.
+        let none = Prefixes {
+            actions: None,
+            settings: None,
+        };
+        assert_eq!(split_prefix(">zoom", none), (Only::All, ">zoom"));
+    }
+
+    #[test]
     fn empty_query_lists_nothing_and_max_is_kept() {
-        assert!(search(&keymap(), "  ", Place::Grid, &settings(), 20).is_empty());
-        assert!(search(&keymap(), "e", Place::Grid, &settings(), 5).len() <= 5);
+        assert!(search(&keymap(), "  ", PREFIXES, Place::Grid, &settings(), 20).is_empty());
+        assert!(search(&keymap(), "e", PREFIXES, Place::Grid, &settings(), 5).len() <= 5);
     }
 }

@@ -13043,6 +13043,7 @@ impl TriApp {
                         p.hits = crate::palette::search(
                             &self.keymap,
                             &text,
+                            self.gui.dialogs.palette_prefixes(),
                             p.place,
                             &p.settings,
                             self.gui.dialogs.palette_max,
@@ -14043,7 +14044,21 @@ impl TriApp {
                                 .id(egui::Id::unique("palette_query"))
                                 // De l'air autour du texte (retour du 06/11/2026).
                                 .margin(vec2(10.0, 8.0))
-                                .hint_text(t!("palette-hint"))
+                                .hint_text(t!(
+                                    "palette-hint",
+                                    actions = self
+                                        .gui
+                                        .dialogs
+                                        .palette_actions_prefix
+                                        .map(String::from)
+                                        .unwrap_or_default(),
+                                    settings = self
+                                        .gui
+                                        .dialogs
+                                        .palette_settings_prefix
+                                        .map(String::from)
+                                        .unwrap_or_default()
+                                ))
                                 .desired_width(f32::INFINITY),
                         );
                         if !state.focused {
@@ -14076,6 +14091,7 @@ impl TriApp {
             state.hits = crate::palette::search(
                 &self.keymap,
                 &query,
+                self.gui.dialogs.palette_prefixes(),
                 state.place,
                 &state.settings,
                 self.gui.dialogs.palette_max,

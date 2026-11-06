@@ -295,7 +295,7 @@ place-metadata = Metadata panel
 help-here-title = Shortcuts here: { $place }
 help-here-footer = { $help }: every action, with a search · { $leader } = { $keys } (a pause after a key shows what follows) · Esc or click: close
 palette-title = Command palette
-palette-hint = An action or a setting…
+palette-hint = An action or a setting…  ({ $actions } actions only, { $settings } settings only)
 palette-empty = Nothing found
 palette-action = action
 palette-setting = setting
