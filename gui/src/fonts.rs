@@ -14,17 +14,19 @@ use eframe::egui;
 /// leurs textes restent stables.
 static ARROWS: AtomicBool = AtomicBool::new(false);
 
-/// Polices du système qui ont les flèches, essayées dans l'ordre.
-const SYSTEM_FONTS: &[&str] = &[
+/// Polices du système qui ont les flèches, essayées dans l'ordre, chacune avec l'échelle
+/// qui met ses flèches à la taille du texte (retour du 07/11/2026 : celles d'Apple Symbols
+/// sont petites et fines, celles de DejaVu Sans grosses).
+const SYSTEM_FONTS: &[(&str, f32)] = &[
     // macOS.
-    "/System/Library/Fonts/Apple Symbols.ttf",
+    ("/System/Library/Fonts/Apple Symbols.ttf", 1.4),
     // Linux (Debian / Ubuntu / Mint, Arch, Fedora).
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 1.0),
+    ("/usr/share/fonts/TTF/DejaVuSans.ttf", 1.0),
+    ("/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf", 1.0),
+    ("/usr/share/fonts/dejavu/DejaVuSans.ttf", 1.0),
     // Windows.
-    "C:\\Windows\\Fonts\\seguisym.ttf",
+    ("C:\\Windows\\Fonts\\seguisym.ttf", 1.1),
 ];
 
 /// Vrai si les noms de touches peuvent utiliser les flèches.
@@ -32,27 +34,30 @@ pub fn arrows() -> bool {
     ARROWS.load(Ordering::Relaxed)
 }
 
-/// Fichier de police à essayer d'après `[gui] arrow_font` : vide, ceux du système ;
-/// `"none"`, aucun (les mots) ; sinon ce fichier.
-pub fn candidates(setting: &str) -> Vec<String> {
+/// Fichiers de police à essayer d'après `[gui] arrow_font`, avec leur échelle : vide,
+/// ceux du système ; `"none"`, aucun (les mots) ; sinon ce fichier (échelle 1).
+pub fn candidates(setting: &str) -> Vec<(String, f32)> {
     match setting.trim() {
-        "" => SYSTEM_FONTS.iter().map(|s| s.to_string()).collect(),
+        "" => SYSTEM_FONTS
+            .iter()
+            .map(|(path, scale)| (path.to_string(), *scale))
+            .collect(),
         "none" => Vec::new(),
-        path => vec![path.to_string()],
+        path => vec![(path.to_string(), 1.0)],
     }
 }
 
 /// Ajoute la première police trouvée parmi les [`candidates`] en secours des polices
 /// d'egui, et passe les noms de touches aux flèches. Vrai si une police a été chargée.
 pub fn install(ctx: &egui::Context, setting: &str, scale: f32) -> bool {
-    for path in candidates(setting) {
+    for (path, own) in candidates(setting) {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
         let mut fonts = egui::FontDefinitions::default();
-        // Plus grandes que leur taille d'origine, fines et petites à côté du texte.
+        // À la taille du texte (l'échelle de cette police), puis le réglage par-dessus.
         let data = egui::FontData::from_owned(bytes).tweak(egui::FontTweak {
-            scale: scale.max(0.5),
+            scale: (own * scale).max(0.5),
             ..Default::default()
         });
         fonts
@@ -73,9 +78,10 @@ pub fn install(ctx: &egui::Context, setting: &str, scale: f32) -> bool {
     false
 }
 
-/// Le symbole d'une touche : les flèches, Entrée (↵) et Espace (␣) (demandé le
-/// 06/11/2026 : plus courts) ; `None` pour les autres. Tous dans les polices de
-/// [`SYSTEM_FONTS`] (↵ plutôt que ⏎ : du bloc des flèches, que DejaVu Sans a en entier).
+/// Le symbole d'une touche : les flèches et Entrée (↵) (demandé le 06/11/2026 : plus
+/// courts) ; `None` pour les autres. Dans les polices de [`SYSTEM_FONTS`] (↵ plutôt que
+/// ⏎ : du bloc des flèches, que DejaVu Sans a en entier). Espace reste écrite : ␣, collé
+/// au bas de la ligne, ne se lisait pas (« <leader> ␣ », « Maj+␣ »).
 pub fn arrow(key: egui::Key) -> Option<char> {
     match key {
         egui::Key::ArrowLeft => Some('←'),
@@ -83,7 +89,6 @@ pub fn arrow(key: egui::Key) -> Option<char> {
         egui::Key::ArrowUp => Some('↑'),
         egui::Key::ArrowDown => Some('↓'),
         egui::Key::Enter => Some('↵'),
-        egui::Key::Space => Some('␣'),
         _ => None,
     }
 }
@@ -97,7 +102,7 @@ mod tests {
         assert_eq!(arrow(egui::Key::ArrowLeft), Some('←'));
         assert_eq!(arrow(egui::Key::ArrowDown), Some('↓'));
         assert_eq!(arrow(egui::Key::Enter), Some('↵'));
-        assert_eq!(arrow(egui::Key::Space), Some('␣'));
+        assert_eq!(arrow(egui::Key::Space), None, "Espace reste écrite");
         assert_eq!(arrow(egui::Key::H), None);
     }
 
@@ -105,7 +110,7 @@ mod tests {
     fn the_setting_chooses_the_fonts() {
         assert!(!candidates("").is_empty());
         assert!(candidates("none").is_empty());
-        assert_eq!(candidates("/x/y.ttf"), ["/x/y.ttf"]);
+        assert_eq!(candidates("/x/y.ttf"), [("/x/y.ttf".to_string(), 1.0)]);
         // Fichier absent : rien d'installé, les mots restent.
         let ctx = egui::Context::default();
         assert!(!install(&ctx, "/nonexistent/font.ttf", 1.0));

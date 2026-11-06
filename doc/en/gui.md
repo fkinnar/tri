@@ -982,10 +982,11 @@ a suggestion list; and the loupe key, set separately (`[gui.zoom] loupe_key`). T
 effect: they follow the chosen set. For an action that has keys of its own in the chosen
 set (`[vim]` or `[classic]`, or `[keys]`), they show only those (2026-11-06: in vim, "x"
 deletes, without Delete or Backspace, common and still active; easier to read);
-otherwise, the common ones (`Keymap::keys_for`). Arrows, Enter and Space are written
-←, →, ↑, ↓, ↵, ␣ when a system font has them (`fonts.rs`: Apple Symbols, DejaVu Sans,
+otherwise, the common ones (`Keymap::keys_for`). Arrows and Enter are written
+←, →, ↑, ↓, ↵ (Space stays spelled out: ␣ did not read well) when a system font has them (`fonts.rs`: Apple Symbols, DejaVu Sans,
 Segoe UI Symbol, added as a fallback to egui's, which has none; nothing bundled;
-`[gui] arrow_font`, `arrow_font_scale`); otherwise spelled out. Tests do not install
+each font has its scale, its arrows at the text size: Apple Symbols 1.4, DejaVu Sans 1,
+Segoe UI Symbol 1.1; `[gui] arrow_font`, and `arrow_font_scale` on top); otherwise spelled out. Tests do not install
 it: their texts stay stable. Special case of the search: in the
 grid, "fit" (`/`) starts it (`TriApp::perform`), so the help writes `/` for it, alone in
 vim (as in vim), with `Ctrl+f` in classic. The search field is only shown in the grid

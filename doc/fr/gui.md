@@ -1039,10 +1039,12 @@ L'aide et les textes qui citent une touche la lisent dans la table en vigueur : 
 suivent le jeu choisi. Pour une action qui a des touches propres au jeu choisi (`[vim]`
 ou `[classic]`, ou `[keys]`), ils ne montrent qu'elles (06/11/2026 : en vim, « x »
 supprime, sans Suppr ni Retour arrière, communs et toujours actifs ; plus lisible) ;
-sinon, les communes (`Keymap::keys_for`). Les flèches, Entrée et Espace s'écrivent
-←, →, ↑, ↓, ↵, ␣ quand une police du système les a (`fonts.rs` : Apple Symbols, DejaVu
+sinon, les communes (`Keymap::keys_for`). Les flèches et Entrée s'écrivent
+←, →, ↑, ↓, ↵ (Espace reste écrite : ␣ se lisait mal) quand une police du système les a (`fonts.rs` : Apple Symbols, DejaVu
 Sans, Segoe UI Symbol, ajoutée en secours de celle d'egui, qui n'en a aucun ; rien
-d'embarqué ; `[gui] arrow_font`, `arrow_font_scale`) ; sinon en toutes lettres. Les tests
+d'embarqué ; chaque police a son échelle, ses flèches à la taille du texte : Apple
+Symbols 1,4, DejaVu Sans 1, Segoe UI Symbol 1,1 ; `[gui] arrow_font`, et
+`arrow_font_scale` par-dessus) ; sinon en toutes lettres. Les tests
 ne l'installent pas : leurs textes restent stables. Cas particulier de la recherche : en grille,
 « ajusté » (`/`) la lance (`TriApp::perform`), l'aide écrit donc `/` pour elle, seul en vim
 (comme dans vim), avec `Ctrl+f` en classique. Le champ de recherche n'est montré qu'en
