@@ -113,6 +113,9 @@
   Espace s'écrivent en symboles au lieu de « Flèche gauche »…, pris dans une police du
   système (Apple Symbols, DejaVu Sans, Segoe UI Symbol). Sans elle, en toutes lettres. Réglages
   `[gui] arrow_font`, `arrow_font_scale` ; `[keys]` accepte toujours les noms écrits.
+- **Libellés sans touches** : celui des piles parlait de « flèches gauche / droite » (en
+  vim, ce sont `h` / `l`) ; les libellés disent ce que fait l'action, ses touches sont à
+  côté, celles du jeu choisi.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
