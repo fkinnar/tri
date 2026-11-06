@@ -2055,6 +2055,14 @@ impl TriApp {
             Action::FilterDeveloped if !self.developed_on && !self.any_developed => {
                 Some(t!("filter-developed-unusable"))
             }
+            // Grisée en JPEG boîtier ou sans logiciel de développement ; la décocher reste
+            // possible.
+            Action::ReviewDevelopments
+                if !self.review_developments
+                    && (self.developers.is_empty() || self.jpeg_source()) =>
+            {
+                Some(t!("review-unusable"))
+            }
             _ => None,
         }
     }
@@ -2412,10 +2420,6 @@ impl TriApp {
         }
     }
 
-    /// Section « Vue » du panneau de droite, en plein écran (#239 : la section « Grille »
-    /// n'y avait pas de sens) : la source affichée — rendu boîtier, rendu RAW, chaque
-    /// développement déjà rendu ; sur un développement, « avant » —, et les actions sur
-    /// les fichiers.
     /// « Rendu affiché » (#114, un seul pour la grille et le plein écran depuis le
     /// 06/11/2026) : JPEG boîtier, la couverture, chaque logiciel installé, le rendu RAW.
     /// Renvoie le choix, à appliquer par l'appelant.
@@ -2446,6 +2450,9 @@ impl TriApp {
         render
     }
 
+    /// Section « Vue » du panneau de droite, en plein écran (#239 : la section « Grille »
+    /// n'y avait pas de sens) : le rendu affiché (sur un développement, avant / après), la
+    /// revue des développements, les piles et les actions sur les fichiers.
     fn view_settings(&mut self, ui: &mut Ui) {
         let Some(file) = self.files.get(self.selected).cloned() else {
             return;
@@ -6172,6 +6179,33 @@ impl TriApp {
             Action::Loupe => {
                 let keys = self.keymap.keys_for(Action::Loupe).join(" / ");
                 self.notice = Some((t!("loupe-hold", keys = keys), false));
+            }
+            Action::ReviewDevelopments => {
+                if let Some(why) = self.action_unusable(action) {
+                    self.notice = Some((why, false));
+                    return;
+                }
+                self.review_developments = !self.review_developments;
+                self.notice = Some((
+                    t!(if self.review_developments {
+                        "review-on"
+                    } else {
+                        "review-off"
+                    }),
+                    false,
+                ));
+            }
+            Action::FileActionsAllow => {
+                let allowed = !self.settings.files.allow_actions;
+                self.set_file_actions(allowed);
+                self.notice = Some((
+                    t!(if allowed {
+                        "file-actions-on"
+                    } else {
+                        "file-actions-off"
+                    }),
+                    false,
+                ));
             }
             Action::HelpHere => {
                 if self.help_here.take().is_none() {
@@ -16398,6 +16432,37 @@ mod tests {
         h.state_mut().any_developed = false;
         act(&mut h, Action::FilterDeveloped);
         assert!(!h.state().developed_on);
+    }
+
+    #[test]
+    fn the_palette_switches_the_review_of_developments_itself() {
+        // Retour du 06/11/2026 : « passer en revue » ne trouvait que la valeur par défaut
+        // (la configuration), pas la case de l'interface.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().developers = fake_darktable();
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        // En JPEG boîtier : refusée, avec la raison.
+        act(&mut h, Action::ReviewDevelopments);
+        assert!(!h.state().review_developments);
+        assert!(h.state().notice.is_some());
+        // Dans un autre rendu : la palette la trouve en tête, et la bascule.
+        press(&mut h, Key::R, Modifiers::NONE);
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        type_text(&mut h, "passer en revue");
+        let first = h
+            .state()
+            .palette
+            .as_ref()
+            .and_then(|p| p.hits.first().cloned());
+        assert_eq!(
+            first.map(|hit| hit.item),
+            Some(crate::palette::Item::Action(Action::ReviewDevelopments))
+        );
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().review_developments);
+        act(&mut h, Action::ReviewDevelopments);
+        assert!(!h.state().review_developments);
     }
 
     #[test]

@@ -450,6 +450,10 @@ pub enum Action {
     /// `[gui.zoom] loupe_key`) : pour l'aide, la palette et l'aide « ici » seulement ;
     /// elle ne se lie pas dans `[keys]` ([`Action::bindable`]).
     Loupe,
+    /// Passer en revue les développements (case de la section Vue), cochée ou non.
+    ReviewDevelopments,
+    /// Autoriser ou non les actions sur les fichiers (case « Actions sur les fichiers »).
+    FileActionsAllow,
     /// Afficher / masquer l'aide « ici » : les raccourcis de l'endroit où l'on est.
     HelpHere,
     /// Palette de commandes : chercher une action ou un réglage et le lancer.
@@ -472,7 +476,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 207] = [
+    pub const ALL: [Action; 209] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -661,6 +665,8 @@ impl Action {
         Action::Back,
         Action::Help,
         Action::HelpHere,
+        Action::ReviewDevelopments,
+        Action::FileActionsAllow,
         Action::Palette,
         Action::Settings,
         Action::CheckUpdate,
@@ -774,6 +780,8 @@ impl Action {
             GridRenderNext => &["panel-grid-render"],
             SortNext | SortBy(_) => &["panel-grid-sort"],
             ToggleSource => &["panel-view-source"],
+            ReviewDevelopments => &["panel-view-review", "panel-view-developments"],
+            FileActionsAllow => &["panel-grid-files-allow", "panel-grid-files"],
             FilterBlurry => &["panel-filter-sharp"],
             FilterWellExposed => &["panel-filter-exposed"],
             FilterDeveloped => &["panel-filter-developed"],
@@ -788,13 +796,13 @@ impl Action {
         match self {
             NavPrev | NavNext | NavUp | NavDown | NavFirst | NavLast | NavPageUp | NavPageDown
             | Open | Back | Search => Group::Navigation,
-            ToggleZoom | Loupe | ZoomIn | ZoomOut | ZoomFit | Zoom100 | ToggleSource | PanLeft
-            | PanRight | PanUp | PanDown | ToggleHistogram | HistogramScale | HistogramLarge
-            | HistogramChannel | HistogramRed | HistogramGreen | HistogramBlue | HistogramAll
-            | HistogramLuminance | HistogramPhoto | HistogramCamera | ToggleClipping
-            | TogglePeaking | PeakingColor | SharpnessLenient | SharpnessStrict
-            | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode | Develop
-            | DevelopWith(_) | DevelopFolder => Group::View,
+            ToggleZoom | Loupe | ReviewDevelopments | ZoomIn | ZoomOut | ZoomFit | Zoom100
+            | ToggleSource | PanLeft | PanRight | PanUp | PanDown | ToggleHistogram
+            | HistogramScale | HistogramLarge | HistogramChannel | HistogramRed
+            | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
+            | HistogramPhoto | HistogramCamera | ToggleClipping | TogglePeaking | PeakingColor
+            | SharpnessLenient | SharpnessStrict | ToggleFocusPoint | OverlayNext
+            | OverlayOrient | FocusMode | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
@@ -804,9 +812,9 @@ impl Action {
             | GridRenderNext => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
-            FileRename | FileDelete | FileReveal | FileEdit | FileCopy | FileMove | Sidecars
-            | FileDeleteStack | FileDeletePhoto | FileCopyStack | FileExport | ExportReport
-            | Send(_) => Group::Files,
+            FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
+            | FileMove | Sidecars | FileDeleteStack | FileDeletePhoto | FileCopyStack
+            | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1061,6 +1069,8 @@ impl Action {
             Action::Help => "core.app.help",
             Action::HelpHere => "core.app.help_here",
             Action::Loupe => "core.view.loupe",
+            Action::ReviewDevelopments => "core.view.review_developments",
+            Action::FileActionsAllow => "core.file.allow_actions",
             Action::Palette => "core.app.palette",
             Action::Settings => "core.app.settings",
             Action::CheckUpdate => "core.app.check_update",

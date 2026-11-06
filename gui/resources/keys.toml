@@ -62,6 +62,10 @@ loupe = "m"
 # keyboard layout.
 "core.app.help" = ["F1"]
 "core.app.help_here" = ["?", "Shift+?"]
+# Checkboxes of the right panel, for the command palette (no default shortcut): review
+# the developments (View section), allow the actions on files.
+"core.view.review_developments" = []
+"core.file.allow_actions" = []
 # Search: Ctrl+F everywhere. "/" also works in the grid and in the folder panel; in
 # full screen, "/" stays "fit".
 "core.search" = ["Ctrl+f"]
