@@ -6500,7 +6500,7 @@ impl TriApp {
             Action::CropSave => self.save_crop(),
             Action::CropPreset => self.next_preset(true),
             Action::CropPresetPrev => self.next_preset(false),
-            Action::VersionNext => {
+            Action::VersionNext | Action::VersionPrev => {
                 if self.mode == Mode::View
                     && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
                 {
@@ -6510,9 +6510,13 @@ impl TriApp {
                         .as_ref()
                         .filter(|(p, _)| *p == path)
                         .map(|(_, i)| *i);
-                    let next = match current {
-                        None if n > 0 => Some(0),
-                        Some(i) if i + 1 < n => Some(i + 1),
+                    // En boucle : l'original (`None`), puis chaque version ; Maj+V dans
+                    // l'autre sens.
+                    let next = match (action == Action::VersionNext, current) {
+                        (true, None) if n > 0 => Some(0),
+                        (true, Some(i)) if i + 1 < n => Some(i + 1),
+                        (false, None) if n > 0 => Some(n - 1),
+                        (false, Some(i)) if i > 0 => Some(i - 1),
                         _ => None,
                     };
                     self.version_shown = next.map(|i| (path, i));
@@ -22625,11 +22629,19 @@ mod tests {
             (f64::from(w) / f64::from(h2) - 1.5).abs() < 0.05,
             "3:2 : {w} × {h2}"
         );
-        // n : version suivante (ici la seule), puis l'original.
+        // v : version suivante (ici la seule), puis l'original ; Maj+V dans l'autre sens.
         press(&mut h, Key::V, Modifiers::NONE);
         assert_eq!(h.state().version_shown, None);
         press(&mut h, Key::V, Modifiers::NONE);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        assert_eq!(h.state().version_shown, None, "Maj+V : l'original");
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        assert_eq!(
+            h.state().version_shown,
+            Some((image.clone(), 0)),
+            "Maj+V : la dernière version"
+        );
         // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
         versions_list(&h);
         h.run_steps(2);

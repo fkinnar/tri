@@ -1013,7 +1013,7 @@ said); a leader on Space first requires moving the selection in `[keys]`.
 | Next sort / reverse | `f s` / `f r` | `n` / `Shift+N` |
 | "Current stack" / "developed" filter | `f c` / `f Shift+D` | `f s` / `f r` |
 | Crop | `r` | `c` |
-| Next version | `n` | `v` |
+| Next / previous version | `n` / — | `v` / `Shift+V` (added on 2026-11-06) |
 | Visual mode (range selection) | `v` | `Shift+Space` |
 | Compare | `c` | `=` |
 | Loupe (held) | `t` | `m` |
