@@ -18306,10 +18306,12 @@ mod tests {
         assert_eq!(h.state().loupe_index, selected);
         // Le pas se mesure dans la loupe (retour du 06/11/2026 : sur une vignette, il
         // sautait des centaines de pixels).
+        // La taille de l'image dans la loupe au moment de l'appui : le 1:1 peut finir de
+        // charger juste après et la changer (vu sur la CI Windows le 07/11/2026).
         let before = h.state().loupe_point.unwrap().1;
+        let whole = h.state().loupe_sizes[&selected];
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
         let after = h.state().loupe_point.unwrap().1;
-        let whole = h.state().loupe_sizes[&selected];
         let moved = (after.x - before.x) * whole.x;
         let step = h.state().gui.zoom.loupe_step;
         assert!(
