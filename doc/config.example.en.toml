@@ -504,8 +504,9 @@ enabled = true
 # colours: [gui.colors] neutral_*).
 theme = "dark"
 # Shortcut set: "classic" (arrows, Home / End, Delete, Ctrl+C / Ctrl+X copy /
-# move to, Ctrl+Z / Ctrl+Y), "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, dw / yw,
-# u / Ctrl+R) or "both". The rest (rating, filters, stacks, zoom…) is shared.
+# move to, Ctrl+Z / Ctrl+Y) or "vim" (hjkl, gg / G, Ctrl+U / Ctrl+D, x, y, d) / y),
+# u / Ctrl+R). The rest (rating, filters, stacks, zoom…) is shared. Every default
+# shortcut: keys.toml, shipped with the program.
 profile = "classic"
 # Switch panels from the keyboard, like tmux: the leader, then h / l (or the arrows) for
 # the left / right panel, o for the next one. The panel that has the keyboard handles
@@ -732,12 +733,13 @@ overlay_opacity = 0.6
 steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
 max = 4.0
 min = 0.1
-# Loupe, in the fitted view: while this key is held (a free key, written
-# as in [keys]: "t", "F3"…; or "shift", "ctrl", "alt"; "none": no loupe),
-# the image at 100 % (loupe_scale) under the pointer, in a square of loupe_size points,
-# after loupe_delay_ms (so as not to flicker on a short press). A key already
-# bound to an action is reported.
-loupe_key = "t"
+# Loupe, in the fitted view and in comparison: while this key is held (a free key,
+# written as in [keys]: "m", "F3"…; or "shift", "ctrl", "alt"; "none": no loupe), the
+# image at 100 % (loupe_scale) under the pointer, in a square of loupe_size points,
+# after loupe_delay_ms (so as not to flicker on a short press). Empty: the one of the
+# default shortcuts (keys.toml: m, for "magnify"). A key already bound to an action is
+# refused (reported).
+loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
 loupe_scale = 1.0

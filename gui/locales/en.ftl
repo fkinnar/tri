@@ -57,7 +57,7 @@ action-core-view-rating_bar = Show / hide the rating bar
 action-core-view-grid_info = Show / hide the thumbnail info (name, format, ratings, badges)
 action-core-rate-auto_advance = Auto-advance after rating: on / off
 action-core-select-toggle = Select / deselect the image
-action-core-select-visual = Visual mode: select a range (v to confirm)
+action-core-select-visual = Visual mode: select a range (the same key confirms)
 action-core-view-compare = Compare the selected images side by side (no selection: the collapsed stack, or the photo and its developments)
 action-core-view-peaking = Show / hide sharpness (sharp edges)
 action-core-view-sharpness_lenient = More lenient sharpness (fewer blurry photos, more sharp edges)
@@ -373,7 +373,7 @@ cache-unavailable = cache unavailable: { $error }
 ## Comparison, full screen, status bar
 
 rating-not-saved = rating not saved: { $error }
-compare-needs-two = compare: select at least 2 images (Space, v, Ctrl+A, Shift+click), or stand on a stack or a developed photo
+compare-needs-two = compare: select at least 2 images ({ $keys }, Shift+click), or stand on a stack or a developed photo
 compare-limited = comparison limited to the first { $max } ([gui.compare] max)
 view-info-selected = { " " }· selected
 view-info-peaking = { " " }· sharpness
@@ -469,7 +469,7 @@ download-format = { $format ->
 rating-bar-title = Rating
 filter-bar-title = Filter
 rating-bar-applies = ratings apply to the { $n } selected images
-filter-stack-none = f c: stand on a stack (stacks on)
+filter-stack-none = { $keys }: stand on a stack (stacks on)
 stack-enter-cover = Entering a stack: its cover
 stack-enter-first = Entering a stack: its first photo
 stack-enter-needs-stacks = { $now } (in full screen, stacks on: { $keys })
@@ -510,7 +510,7 @@ help-no-match = No matching action.
 help-close-hint = Esc or F1 to close.
 empty-folder-gone = The folder "{ $name }" is no longer there (drive unplugged?)
 empty-folder-gone-back = It will open again by itself when the drive is back.
-empty-no-folder = Choose a folder in the left panel (Shift+D shows it).
+empty-no-folder = Choose a folder in the left panel ({ $keys } shows it).
 empty-folder = No image in this folder.
 filter-toast = { $n ->
     [one] 1 image
@@ -705,7 +705,7 @@ settings-in-file = Set in your configuration file: "default" removes it.
 settings-save-failed = cannot save { $path }: { $error }
 settings-keys-doc = Shortcuts of each action: the chosen set's ([gui] profile), or those written here, which replace them for that action (in bold). Click a shortcut to remove it; “record…” adds the next key (or sequence) typed; the field takes a written shortcut (“Shift+P”, “g g”, “°”). Conflicts are reported.
 loupe-key-unknown = unknown loupe key: “{ $key }”
-loupe-key-taken = [gui.zoom] loupe_key: “{ $key }” is also used by an action
+loupe-key-taken = Loupe key “{ $key }” refused: it is already used by an action (change one or the other: [gui.zoom] loupe_key, [keys])
 settings-keys-none = no shortcut
 settings-keys-remove = Remove “{ $keys }”
 settings-keys-record = record…
@@ -1040,6 +1040,8 @@ offload-eject = Eject the card
 ## Keys and shortcuts (shown, and read in [keys] in every language)
 
 keys-error = [keys] { $id }: { $error }
+keys-leader-taken = “{ $key }” is already used by “{ $action }”: move that action first in [keys]
+keys-profile-both = [gui] profile: “both” no longer exists, the classic profile is used (“classic” or “vim”)
 keys-file-error = keys.toml [{ $section }] { $id }: { $error }
 keys-file-unknown-action = unknown action
 keys-file-section = keys.toml: unknown section "{ $section }" (common, classic, vim or after_leader)

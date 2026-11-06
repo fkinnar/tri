@@ -105,32 +105,75 @@ impl AppSettings {
     /// Table des raccourcis : profils de `[gui] keys`, puis section `[keys]` ; avec les
     /// problèmes à signaler (touche inconnue, conflit...).
     pub fn keymap(&self) -> (Keymap, Vec<String>) {
+        let defaults = crate::actions::Defaults::get();
+        // Problèmes de `keys.toml` (raccourcis par défaut) d'abord.
+        let mut warnings: Vec<String> = crate::actions::Defaults::warnings().to_vec();
+        if self.gui.profile == Profile::Both {
+            warnings.push(t!("keys-profile-both"));
+        }
         // Préfixe des panneaux : celui de `[gui] leader`, sinon celui de `keys.toml`.
-        let default = crate::actions::Defaults::get().prefix();
-        let leader = match self.gui.leader.trim() {
-            "" => default,
-            mine => mine,
-        };
-        let (keymap, mut warnings) = match self.gui.keymap().with_leader(leader) {
-            Ok(keymap) => (keymap, Vec::new()),
-            Err(e) => {
-                let warning = t!("keys-error", id = "gui.leader", error = e);
-                let keymap = self.gui.keymap().with_leader(default).unwrap_or_default();
-                (keymap, vec![warning])
+        // Refusé s'il est déjà le début d'un raccourci (revue du 06/11/2026 : un leader
+        // sur Espace aurait pris la sélection) ; on est strict, plutôt que de faire
+        // attendre cette action.
+        let (plain, _) = self.gui.keymap().with_overrides(&self.keys);
+        let leader_actions: Vec<_> = defaults.leader_actions().collect();
+        let taken = |spec: &str| -> Result<(), String> {
+            let chord = crate::actions::parse_keys(spec)?;
+            match (chord.as_slice(), plain.first_use(chord[0], &leader_actions)) {
+                ([_], None) => Ok(()),
+                ([_], Some(action)) => {
+                    Err(t!("keys-leader-taken", key = spec, action = action.label()))
+                }
+                _ => Err(t!("keys-unknown-key", text = spec)),
             }
         };
-        // Problèmes de `keys.toml` (raccourcis par défaut) d'abord.
-        warnings.splice(0..0, crate::actions::Defaults::warnings().iter().cloned());
+        let mut leader = Some(defaults.prefix());
+        let mine = self.gui.leader.trim();
+        if !mine.is_empty() {
+            match taken(mine) {
+                Ok(()) => leader = Some(mine),
+                Err(e) => warnings.push(t!("keys-error", id = "gui.leader", error = e)),
+            }
+        }
+        if leader == Some(defaults.prefix())
+            && let Err(e) = taken(defaults.prefix())
+        {
+            warnings.push(t!("keys-error", id = "leader", error = e));
+            leader = None;
+        }
+        let keymap = match leader {
+            Some(l) => self
+                .gui
+                .keymap()
+                .with_leader(l)
+                .unwrap_or_else(|_| self.gui.keymap()),
+            None => self.gui.keymap(),
+        };
         let (keymap, more) = keymap.with_overrides(&self.keys);
         warnings.extend(more);
-        // Touche de loupe aussi liée à une action : les deux se gêneraient.
-        if let LoupeKey::Key(key) = self.gui.zoom.loupe_key
-            && keymap.binds(key)
-        {
-            let name = crate::actions::key_label(key);
-            warnings.push(t!("loupe-key-taken", key = name));
+        // Touche de loupe : celle de `[gui.zoom] loupe_key`, sinon celle de `keys.toml` ;
+        // refusée si elle est déjà liée à une action (les deux se gêneraient).
+        let free = |loupe: LoupeKey| match loupe {
+            LoupeKey::Key(key) if keymap.binds(key) => {
+                Err(t!("loupe-key-taken", key = crate::actions::key_label(key)))
+            }
+            _ => Ok(loupe),
+        };
+        let mut loupe = defaults.loupe();
+        if self.gui.zoom.loupe_key != LoupeKey::Default {
+            match free(self.gui.zoom.loupe_key) {
+                Ok(mine) => loupe = mine,
+                Err(e) => warnings.push(e),
+            }
         }
-        (keymap, warnings)
+        let loupe = match free(loupe) {
+            Ok(l) => l,
+            Err(e) => {
+                warnings.push(e);
+                LoupeKey::None
+            }
+        };
+        (keymap.with_loupe(loupe), warnings)
     }
 }
 
@@ -854,7 +897,7 @@ impl Default for CompareSettings {
 /// Touche à maintenir pour la loupe : un modificateur, ou une touche ordinaire (retour du
 /// 19/10/2026 : avec Maj, chaque raccourci Maj+… faisait apparaître la loupe ; `t` par
 /// défaut, libre dans les deux jeux de raccourcis).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LoupeKey {
     /// Maj.
     Shift,
@@ -864,28 +907,36 @@ pub enum LoupeKey {
     Alt,
     /// Pas de loupe.
     None,
-    /// Une touche (nom comme dans `[keys]` : « t », « Espace », « F3 »).
+    /// Une touche (nom comme dans `[keys]` : « m », « Espace », « F3 »).
     Key(egui::Key),
+    /// Celle des raccourcis par défaut (`loupe` de `keys.toml`) : `[gui.zoom] loupe_key`
+    /// vide.
+    #[default]
+    Default,
 }
 
-impl Default for LoupeKey {
-    fn default() -> Self {
-        LoupeKey::Key(egui::Key::T)
+impl LoupeKey {
+    /// Lit une touche de loupe écrite comme dans la configuration : « shift », « ctrl »,
+    /// « alt », « none », un nom de touche, ou vide (celle de `keys.toml`).
+    pub fn parse(name: &str) -> Result<LoupeKey, String> {
+        Ok(match name.trim().to_lowercase().as_str() {
+            "" => LoupeKey::Default,
+            "shift" => LoupeKey::Shift,
+            "ctrl" => LoupeKey::Ctrl,
+            "alt" => LoupeKey::Alt,
+            "none" => LoupeKey::None,
+            _ => LoupeKey::Key(
+                crate::actions::key_named(name.trim())
+                    .ok_or_else(|| t!("loupe-key-unknown", key = name))?,
+            ),
+        })
     }
 }
 
 impl<'de> Deserialize<'de> for LoupeKey {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let name = String::deserialize(d)?;
-        Ok(match name.to_lowercase().as_str() {
-            "shift" => LoupeKey::Shift,
-            "ctrl" => LoupeKey::Ctrl,
-            "alt" => LoupeKey::Alt,
-            "none" => LoupeKey::None,
-            _ => LoupeKey::Key(crate::actions::key_named(&name).ok_or_else(|| {
-                serde::de::Error::custom(t!("loupe-key-unknown", key = name.as_str()))
-            })?),
-        })
+        LoupeKey::parse(&name).map_err(serde::de::Error::custom)
     }
 }
 
@@ -896,7 +947,7 @@ impl LoupeKey {
             LoupeKey::Shift => input.modifiers.shift,
             LoupeKey::Ctrl => input.modifiers.ctrl,
             LoupeKey::Alt => input.modifiers.alt,
-            LoupeKey::None => false,
+            LoupeKey::None | LoupeKey::Default => false,
             LoupeKey::Key(key) => input.key_down(key),
         }
     }
@@ -1639,14 +1690,14 @@ mod tests {
         let parsed: AppSettings = tri::settings::parse(
             r#"
             [keys]
-            "core.flag.accept" = ["a"]
+            "core.flag.accept" = ["g"]
             "core.nope" = ["z"]
             "#,
         )
         .unwrap();
         let (keymap, warnings) = parsed.keymap();
         assert_eq!(
-            keymap.action(egui::Key::A, egui::Modifiers::NONE),
+            keymap.action(egui::Key::G, egui::Modifiers::NONE),
             Some(crate::actions::Action::Flag(tri::xmp::Flag::Accepted))
         );
         assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -1791,6 +1842,11 @@ mod tests {
                 .map(|s| s.gui.zoom.loupe_key)
         };
         assert_eq!(parse("t"), Ok(LoupeKey::Key(egui::Key::T)));
+        assert_eq!(
+            parse(""),
+            Ok(LoupeKey::Default),
+            "vide : celle de keys.toml"
+        );
         assert_eq!(parse("F3"), Ok(LoupeKey::Key(egui::Key::F3)));
         assert_eq!(parse("shift"), Ok(LoupeKey::Shift));
         assert_eq!(parse("none"), Ok(LoupeKey::None));
@@ -1799,15 +1855,52 @@ mod tests {
                 .unwrap_err()
                 .contains("touche-magique")
         );
-        assert_eq!(
-            ZoomSettings::default().loupe_key,
-            LoupeKey::Key(egui::Key::T)
-        );
-        // Libre par défaut ; une touche déjà prise est signalée.
-        assert!(AppSettings::default().keymap().1.is_empty());
+        assert_eq!(ZoomSettings::default().loupe_key, LoupeKey::Default);
+        // Celle de keys.toml (m), libre ; une touche déjà prise est refusée, et le dit :
+        // celle de keys.toml reste.
+        let (keymap, warnings) = AppSettings::default().keymap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
         let mut taken = AppSettings::default();
         taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::O);
-        assert_eq!(taken.keymap().1.len(), 1, "o : superpositions");
+        let (keymap, warnings) = taken.keymap();
+        assert_eq!(warnings.len(), 1, "o : superpositions");
+        assert_eq!(keymap.loupe(), LoupeKey::Key(egui::Key::M));
+        taken.gui.zoom.loupe_key = LoupeKey::Key(egui::Key::F3);
+        assert_eq!(taken.keymap().0.loupe(), LoupeKey::Key(egui::Key::F3));
+    }
+
+    #[test]
+    fn a_leader_already_bound_to_an_action_is_refused() {
+        // Revue du 06/11/2026 : un leader sur Espace aurait pris la sélection. On est
+        // strict : refusé, celui de keys.toml reste, et c'est dit.
+        use crate::actions::{Action, Chord};
+        let mut space = AppSettings::default();
+        space.gui.leader = "Space".into();
+        let (keymap, warnings) = space.keymap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("Space") || warnings[0].contains("Espace"));
+        assert_eq!(
+            keymap.action(egui::Key::Space, egui::Modifiers::NONE),
+            Some(Action::SelectToggle),
+            "Espace sélectionne toujours, sans attendre"
+        );
+        // Une fois la sélection (et « actionner » du panneau de droite) déplacées dans
+        // [keys], Espace est accepté.
+        for id in ["core.select.toggle", "core.metadata.activate"] {
+            space.keys.insert(id.into(), vec!["Insert".into()]);
+        }
+        let (keymap, warnings) = space.keymap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let mut seq = crate::actions::Sequencer::new(std::time::Duration::from_secs(1));
+        let now = std::time::Instant::now();
+        let key = |k| Chord::from_event(k, egui::Modifiers::NONE).unwrap();
+        assert_eq!(seq.feed_one(&keymap, key(egui::Key::Space), now), None);
+        assert_eq!(
+            seq.feed_one(&keymap, key(egui::Key::Space), now),
+            Some(Action::ToggleAutoAdvance),
+            "<leader> Espace : l'avance automatique"
+        );
     }
 
     #[test]
@@ -1825,6 +1918,7 @@ mod tests {
             keymap(Profile::Vim),
             keymap(Profile::Both),
         );
+        // « both » n'existe plus : lu comme le classique (et signalé, voir `keymap`).
         use crate::actions::Action;
         use egui::Key::{ArrowRight, L, X, Y};
         assert_eq!(next(&classic, ArrowRight), Some(Action::NavNext));
@@ -1833,7 +1927,11 @@ mod tests {
         assert_eq!(next(&vim, L), Some(Action::NavNext));
         assert_eq!(next(&vim, ArrowRight), None, "pas de flèches en vim");
         assert_eq!(next(&vim, Y), Some(Action::FileCopy));
-        assert_eq!(next(&both, L), next(&both, ArrowRight));
+        assert_eq!(next(&both, ArrowRight), Some(Action::NavNext));
+        assert_eq!(next(&both, L), None);
+        let mut old = AppSettings::default();
+        old.gui.profile = Profile::Both;
+        assert_eq!(old.keymap().1.len(), 1, "« both » signalé");
         // Communs : la notation, dans les deux.
         for km in [&classic, &vim] {
             assert_eq!(next(km, egui::Key::Num3), Some(Action::Stars(3)));

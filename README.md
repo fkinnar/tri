@@ -57,7 +57,8 @@ Details (Windows, options, HEIC): [doc/en/build.md](doc/en/build.md).
 - `F1` or `?`: every key, with a search. `Ctrl+,`: the settings (key set, "neutral grey"
   theme, language…).
 - Ratings: `0`–`5` stars, `6`–`9` colours, `Shift+P` / `Shift+X` picked / rejected.
-- `Enter` full screen, `z` 100 %, `b` camera render or RAW rendering, `/` search.
+- `Enter` full screen, `z` 100 %, `r` camera render or RAW rendering, `/` search.
+- Every default shortcut: [`gui/resources/keys.toml`](gui/resources/keys.toml).
 
 ## Documentation
 

@@ -1217,6 +1217,8 @@ pub struct Defaults {
     leader: Vec<(Vec<Chord>, Action)>,
     /// Préfixe des panneaux (`leader`, en tête du fichier), tel qu'écrit : « Ctrl+b ».
     prefix: String,
+    /// Touche de loupe (`loupe`, en tête du fichier).
+    loupe: crate::settings::LoupeKey,
 }
 
 /// Copie de `gui/resources/keys.toml` intégrée au programme.
@@ -1238,6 +1240,18 @@ impl Defaults {
         let mut defaults = Defaults::default();
         let mut warnings = Vec::new();
         for (section, entries) in &table {
+            // La touche de loupe, en tête du fichier.
+            if section == "loupe"
+                && let Some(loupe) = entries.as_str()
+            {
+                match crate::settings::LoupeKey::parse(loupe) {
+                    Ok(key) => defaults.loupe = key,
+                    Err(e) => {
+                        warnings.push(t!("keys-file-error", section = "", id = "loupe", error = e))
+                    }
+                }
+                continue;
+            }
             // Le préfixe des panneaux, en tête du fichier.
             if section == "leader"
                 && let Some(prefix) = entries.as_str()
@@ -1340,6 +1354,16 @@ impl Defaults {
         &self.prefix
     }
 
+    /// Touche de loupe par défaut (« m »).
+    pub fn loupe(&self) -> crate::settings::LoupeKey {
+        self.loupe
+    }
+
+    /// Actions liées après le préfixe des panneaux (`[after_leader]`).
+    pub fn leader_actions(&self) -> impl Iterator<Item = Action> + '_ {
+        self.leader.iter().map(|(_, a)| *a)
+    }
+
     /// Problèmes rencontrés en chargeant les raccourcis par défaut.
     pub fn warnings() -> &'static [String] {
         &DEFAULTS.get_or_init(Defaults::load).1
@@ -1366,9 +1390,9 @@ impl Profile {
     pub fn defaults(self) -> impl Iterator<Item = &'static (Vec<Chord>, Action)> {
         let d = Defaults::get();
         let own: Vec<&'static Vec<(Vec<Chord>, Action)>> = match self {
-            Profile::Classic => vec![&d.classic],
             Profile::Vim => vec![&d.vim],
-            Profile::Both => vec![&d.classic, &d.vim],
+            // « both » n'existe plus (revue des raccourcis du 06/11/2026) : classique.
+            Profile::Classic | Profile::Both => vec![&d.classic],
         };
         own.into_iter()
             .chain([&d.common])
@@ -1384,6 +1408,9 @@ pub struct Keymap {
     leader: Option<Chord>,
     /// Panneau qui a le clavier ([`Keymap::set_focus`]).
     focus: Scope,
+    /// Touche de loupe en vigueur (`keys.toml`, sinon `[gui.zoom] loupe_key`), refusée si
+    /// elle est déjà liée à une action ([`Keymap::with_loupe`]).
+    loupe: crate::settings::LoupeKey,
 }
 
 /// Résultat d'une touche passée à [`Keymap::lookup`].
@@ -1418,6 +1445,7 @@ impl Keymap {
             bindings,
             leader: None,
             focus: Scope::Images,
+            loupe: crate::settings::LoupeKey::None,
         }
     }
 
@@ -1580,24 +1608,35 @@ impl Keymap {
     }
 
     fn lookup(&self, keys: &[Chord]) -> Lookup {
-        let usable = |a: &Action| a.scope().is_none_or(|s| s == self.focus);
-        // Une touche du panneau actif l'emporte sur une action générale.
+        // Une séquence du leader atteint les actions de tous les panneaux (`<leader> i r` :
+        // un canal de l'histogramme, sans l'ouvrir en grand).
+        let by_leader = |k: &[Chord]| k.len() > 1 && Some(k[0]) == self.leader;
+        let usable =
+            |k: &[Chord], a: &Action| a.scope().is_none_or(|s| s == self.focus) || by_leader(k);
+        // Une touche du panneau actif l'emporte sur une action générale, qui l'emporte sur
+        // celle d'un autre panneau (par le leader : `<leader> r d` développe dans darktable
+        // depuis les images, ouvre le dossier dans darktable depuis les dossiers).
+        let rank = |a: &Action| match a.scope() {
+            Some(s) if s == self.focus => 2,
+            None => 1,
+            Some(_) => 0,
+        };
         let exact = self
             .bindings
             .iter()
-            .filter(|(k, a)| k == keys && usable(a))
-            .max_by_key(|(_, a)| a.scope().is_some())
+            .filter(|(k, a)| k == keys && usable(k, a))
+            .max_by_key(|(_, a)| rank(a))
             .map(|&(_, a)| a);
         let longer = |same_scope: Option<Action>| {
             self.bindings.iter().any(|(k, a)| {
                 k.len() > keys.len()
                     && k.starts_with(keys)
-                    && usable(a)
+                    && usable(k, a)
                     && same_scope.is_none_or(|s| s.scope() == a.scope())
             })
         };
         // Une touche du panneau ne cède qu'à une séquence du même panneau.
-        if let Some(action) = exact.filter(|a| a.scope().is_some()) {
+        if let Some(action) = exact.filter(|a| a.scope().is_some_and(|s| s == self.focus)) {
             return if longer(Some(action)) {
                 Lookup::Ambiguous(action)
             } else {
@@ -1612,10 +1651,9 @@ impl Keymap {
         }
     }
 
-    /// Ajoute les raccourcis de changement de panneau, après le leader `leader` (« Ctrl+b »
-    /// par défaut, comme tmux) : `h` / ← à gauche, `l` / → à droite, `o` le suivant ; `b`
-    /// pour signaler un problème (« bug », demandé le 22/10/2026) ; `r`, `d`, `p` pour
-    /// développer.
+    /// Ajoute les raccourcis après le leader `leader` (« Ctrl+b » par défaut, comme tmux) :
+    /// section `[after_leader]` de `keys.toml` (panneaux, développer, réglages
+    /// secondaires).
     pub fn with_leader(mut self, leader: &str) -> Result<Keymap, String> {
         let lead = parse_chord(leader)?;
         self.leader = Some(lead);
@@ -1626,6 +1664,26 @@ impl Keymap {
             self.bindings.push((sequence, *action));
         }
         Ok(self)
+    }
+
+    /// Première action (hors `ignore`) dont un raccourci commence par `chord` : un leader
+    /// sur cette touche lui volerait son raccourci (refusé, revue du 06/11/2026).
+    pub fn first_use(&self, chord: Chord, ignore: &[Action]) -> Option<Action> {
+        self.bindings
+            .iter()
+            .find(|(k, a)| k.first() == Some(&chord) && !ignore.contains(a))
+            .map(|(_, a)| *a)
+    }
+
+    /// Fixe la touche de loupe en vigueur.
+    pub fn with_loupe(mut self, loupe: crate::settings::LoupeKey) -> Keymap {
+        self.loupe = loupe;
+        self
+    }
+
+    /// Touche de loupe en vigueur.
+    pub fn loupe(&self) -> crate::settings::LoupeKey {
+        self.loupe
     }
 
     /// Touches d'une action utilisables pour faire défiler un texte pendant qu'un champ a
@@ -1783,10 +1841,10 @@ fn parse_chord(text: &str) -> Result<Chord, String> {
     if single.is_some_and(|c| c.is_ascii_uppercase()) {
         shift = true;
     }
-    // « + - * / ( ) » : des caractères, pas des touches (le zoom, les piles) ; la touche
+    // « + - * / ( ) = » : des caractères, pas des touches (le zoom, les piles) ; la touche
     // dépend de la disposition (« + » demande Maj sur un AZERTY, « ( » sur un QWERTY), le
     // caractère est le même partout, pavé numérique compris.
-    if let Some(c) = single.filter(|c| "+-*/()".contains(*c))
+    if let Some(c) = single.filter(|c| "+-*/()=".contains(*c))
         && !shift
         && !ctrl
     {
@@ -1917,9 +1975,9 @@ fn key_label_in(language: Language, key: Key) -> String {
 }
 
 impl Default for Keymap {
-    /// Les deux profils ensemble ([`Profile::Both`]) : ils ne se recouvrent pas.
+    /// Le profil classique.
     fn default() -> Self {
-        Keymap::from_profiles(&[Profile::Both])
+        Keymap::from_profiles(&[Profile::Classic])
     }
 }
 
@@ -2037,7 +2095,7 @@ impl Sequencer {
 
     /// [`Sequencer::feed`] pour les tests : au plus une action.
     #[cfg(test)]
-    fn feed_one(&mut self, keymap: &Keymap, chord: Chord, now: Instant) -> Option<Action> {
+    pub fn feed_one(&mut self, keymap: &Keymap, chord: Chord, now: Instant) -> Option<Action> {
         let mut done = self.feed(keymap, chord, now);
         assert!(done.len() <= 1, "{done:?}");
         done.pop()
@@ -2047,6 +2105,11 @@ impl Sequencer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Le profil vim (le profil par défaut, [`Keymap::default`], est le classique).
+    fn vim() -> Keymap {
+        Keymap::from_profiles(&[Profile::Vim])
+    }
 
     #[test]
     fn every_default_shortcut_reads_back_from_its_spec() {
@@ -2088,23 +2151,27 @@ mod tests {
     }
 
     #[test]
-    fn both_profiles_work_together() {
-        let km = Keymap::default();
+    fn each_profile_has_its_own_moves() {
+        // « both » n'existe plus (revue du 06/11/2026) : chaque jeu seul.
+        let (classic, vim) = (Keymap::default(), vim());
         let none = Modifiers::NONE;
-        assert_eq!(km.action(Key::ArrowRight, none), Some(Action::NavNext));
-        assert_eq!(km.action(Key::L, none), Some(Action::NavNext));
-        assert_eq!(km.action(Key::J, none), Some(Action::NavDown));
-        assert_eq!(km.action(Key::G, none), None, "g seul : début de « gg »");
-        assert_eq!(km.action(Key::G, Modifiers::SHIFT), Some(Action::NavLast));
-        assert_eq!(km.action(Key::T, none), None, "touche libre");
+        assert_eq!(classic.action(Key::ArrowRight, none), Some(Action::NavNext));
+        assert_eq!(classic.action(Key::L, none), None);
+        assert_eq!(vim.action(Key::L, none), Some(Action::NavNext));
+        assert_eq!(vim.action(Key::ArrowRight, none), None);
+        assert_eq!(vim.action(Key::J, none), Some(Action::NavDown));
+        assert_eq!(vim.action(Key::G, none), None, "g seul : début de « gg »");
+        assert_eq!(vim.action(Key::G, Modifiers::SHIFT), Some(Action::NavLast));
+        assert_eq!(classic.action(Key::G, none), None, "touche libre");
     }
 
     #[test]
     fn shift_moves_inside_a_zoomed_image() {
-        let km = Keymap::default();
+        let classic = Keymap::default();
         let shift = Modifiers::SHIFT;
-        assert_eq!(km.action(Key::ArrowLeft, shift), Some(Action::PanLeft));
-        assert_eq!(km.action(Key::ArrowDown, shift), Some(Action::PanDown));
+        assert_eq!(classic.action(Key::ArrowLeft, shift), Some(Action::PanLeft));
+        assert_eq!(classic.action(Key::ArrowDown, shift), Some(Action::PanDown));
+        let km = vim();
         assert_eq!(km.action(Key::H, shift), Some(Action::PanLeft));
         assert_eq!(km.action(Key::J, shift), Some(Action::PanDown));
         assert_eq!(km.action(Key::K, shift), Some(Action::PanUp));
@@ -2139,7 +2206,7 @@ mod tests {
 
     #[test]
     fn vim_pages_with_ctrl_u_and_ctrl_d_and_u_undoes() {
-        let km = Keymap::default();
+        let km = vim();
         // Sous Linux et Windows, egui signale Ctrl aussi comme `command`.
         let linux_ctrl = Modifiers {
             ctrl: true,
@@ -2155,7 +2222,7 @@ mod tests {
         );
         assert_eq!(km.action(Key::R, linux_ctrl), Some(Action::Redo));
         assert_eq!(km.action(Key::D, Modifiers::NONE), None);
-        assert_eq!(km.keys_for(Action::NavPageUp), ["Page préc.", "Ctrl+u"]);
+        assert_eq!(km.keys_for(Action::NavPageUp), ["Ctrl+u"]);
     }
 
     #[test]
@@ -2209,7 +2276,7 @@ mod tests {
         // #175 : l'aide écrivait « Ctrl+B puis r » ; le leader est réglable, montré à part.
         let km = Keymap::default().with_leader("Ctrl+b").unwrap();
         let keys = km.keys_for(Action::Develop);
-        assert!(keys.contains(&"<leader> r".to_string()), "{keys:?}");
+        assert!(keys.contains(&"<leader> rr".to_string()), "{keys:?}");
         let keys = km.keys_for(Action::FocusLeft);
         assert!(keys.contains(&"<leader> h".to_string()), "{keys:?}");
         assert!(!keys.iter().any(|k| k.contains("Ctrl")), "{keys:?}");
@@ -2221,7 +2288,7 @@ mod tests {
 
     #[test]
     fn the_focused_panel_takes_its_keys_first_and_lets_the_rest_through() {
-        let mut km = Keymap::default().with_leader("Ctrl+b").unwrap();
+        let mut km = vim().with_leader("Ctrl+b").unwrap();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let now = Instant::now();
         let key = |k| Chord::from_event(k, Modifiers::NONE).unwrap();
@@ -2259,26 +2326,48 @@ mod tests {
         let lead = Chord::from_event(Key::B, Modifiers::CTRL).unwrap();
         assert_eq!(seq.feed_one(&km, lead, now), None, "en attente");
         assert_eq!(seq.feed_one(&km, key(Key::H), now), Some(Action::FocusLeft));
+        let question = key(Key::Questionmark);
         assert_eq!(seq.feed_one(&km, lead, now), None);
-        assert_eq!(
-            seq.feed_one(&km, key(Key::B), now),
-            Some(Action::ReportIssue)
-        );
-        // Développer (26/10/2026) : `r` le logiciel de l'image, `d` darktable, `p` RapidRAW.
+        assert_eq!(seq.feed_one(&km, question, now), Some(Action::ReportIssue));
+        // Développer (revue du 06/11/2026) : `r` puis `r` le logiciel de l'image, `d`
+        // darktable, `p` RapidRAW, `t` RawTherapee, `a` ART.
         use tri::develop::Engine;
         for (k, action) in [
             (Key::R, Action::Develop),
             (Key::D, Action::DevelopWith(Engine::Darktable)),
             (Key::P, Action::DevelopWith(Engine::RapidRaw)),
+            (Key::T, Action::DevelopWith(Engine::RawTherapee)),
+            (Key::A, Action::DevelopWith(Engine::Art)),
         ] {
             assert_eq!(seq.feed_one(&km, lead, now), None);
-            assert_eq!(seq.feed_one(&km, key(k), now), Some(action));
+            assert_eq!(seq.feed_one(&km, key(Key::R), now), None);
+            assert_eq!(seq.feed_one(&km, key(k), now), Some(action), "{k:?}");
         }
+        // Le leader atteint les actions des autres panneaux : un canal de l'histogramme
+        // sans l'ouvrir en grand ; dans les dossiers, `r d` ouvre le dossier dans
+        // darktable plutôt que de développer.
+        km.set_focus(Scope::Images);
+        for k in [lead, key(Key::I)] {
+            assert_eq!(seq.feed_one(&km, k, now), None);
+        }
+        assert_eq!(
+            seq.feed_one(&km, key(Key::R), now),
+            Some(Action::HistogramRed)
+        );
+        km.set_focus(Scope::Folders);
+        for k in [lead, key(Key::R)] {
+            assert_eq!(seq.feed_one(&km, k, now), None);
+        }
+        assert_eq!(
+            seq.feed_one(&km, key(Key::D), now),
+            Some(Action::FolderOpenIn(Engine::Darktable))
+        );
+        km.set_focus(Scope::Metadata);
         assert_eq!(
             Action::from_id("plugin.rapidraw.develop"),
             Some(Action::DevelopWith(Engine::RapidRaw))
         );
-        assert!(Keymap::default().with_leader("Ctrl+").is_err());
+        assert!(vim().with_leader("Ctrl+").is_err());
     }
 
     #[test]
@@ -2350,36 +2439,25 @@ mod tests {
     }
 
     #[test]
-    fn profiles_cover_every_action_and_have_no_internal_conflict() {
+    fn profiles_cover_the_same_actions_without_internal_conflict() {
+        // Les deux jeux donnent une touche aux mêmes actions (les touches après le leader
+        // valent pour les deux) ; celles sans touche par défaut sont listées avec `[]`
+        // dans `keys.toml` (voir `the_keys_file_lists_every_action_and_reads_cleanly`).
+        let leader: Vec<Action> = Defaults::get().leader_actions().collect();
+        let bound = |p: Profile| -> std::collections::BTreeSet<&'static str> {
+            p.defaults()
+                .map(|(_, a)| a.id())
+                .chain(leader.iter().map(|a| a.id()))
+                .collect()
+        };
+        let (classic, vim) = (bound(Profile::Classic), bound(Profile::Vim));
+        assert_eq!(
+            classic.symmetric_difference(&vim).collect::<Vec<_>>(),
+            Vec::<&&str>::new(),
+            "actions liées dans un seul jeu"
+        );
         for profile in [Profile::Classic, Profile::Vim] {
             let b: Vec<&(Vec<Chord>, Action)> = profile.defaults().collect();
-            // Changement de panneau : lié après le leader (`Keymap::with_leader`).
-            let by_leader = [
-                Action::FocusLeft,
-                Action::FocusRight,
-                Action::FocusNext,
-                Action::ReportIssue,
-            ];
-            // Les actions des plugins n'ont pas de touche par défaut (à régler dans
-            // `[keys]` ou la fenêtre de réglages).
-            let plugin = |a: &Action| a.id().starts_with("plugin.");
-            // Rares, par un bouton de l'aide ou du clic droit : pas de touche par défaut
-            // non plus.
-            let rare = [
-                Action::CheckUpdate,
-                Action::Sidecars,
-                Action::DevToggle,
-                Action::DevFoldAll,
-            ];
-            for a in Action::ALL
-                .into_iter()
-                .filter(|a| !by_leader.contains(a) && !plugin(a) && !rare.contains(a))
-            {
-                assert!(
-                    b.iter().any(|(_, x)| *x == a),
-                    "{profile:?} : {a:?} sans touche"
-                );
-            }
             // Même touche pour une action d'un panneau et une action générale : voulu.
             for (i, (k, x)) in b.iter().enumerate() {
                 assert!(
@@ -2417,10 +2495,15 @@ mod tests {
     #[test]
     fn help_lists_readable_keys() {
         let km = Keymap::default();
-        assert_eq!(km.keys_for(Action::NavFirst), ["Début", "gg"]);
-        assert_eq!(km.keys_for(Action::NavLast), ["Fin", "Maj+g"]);
-        assert_eq!(km.keys_for(Action::NavPrev), ["Flèche gauche", "h"]);
-        assert_eq!(km.keys_for(Action::PanLeft), ["Maj+Flèche gauche", "Maj+h"]);
+        assert_eq!(km.keys_for(Action::NavFirst), ["Début"]);
+        assert_eq!(km.keys_for(Action::NavLast), ["Fin"]);
+        assert_eq!(km.keys_for(Action::NavPrev), ["Flèche gauche"]);
+        assert_eq!(km.keys_for(Action::PanLeft), ["Maj+Flèche gauche"]);
+        let vim = vim();
+        assert_eq!(vim.keys_for(Action::NavFirst), ["gg"]);
+        assert_eq!(vim.keys_for(Action::NavLast), ["Maj+g"]);
+        assert_eq!(vim.keys_for(Action::NavPrev), ["h"]);
+        assert_eq!(vim.keys_for(Action::PanLeft), ["Maj+h"]);
         assert_eq!(km.keys_for(Action::Help), ["F1", "?"]);
         assert_eq!(
             km.action(Key::Questionmark, Modifiers::SHIFT),
@@ -2453,7 +2536,7 @@ mod tests {
 
     #[test]
     fn gg_goes_to_the_first_image() {
-        let km = Keymap::default();
+        let km = vim();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
         assert_eq!(seq.feed_one(&km, g(), t), None);
@@ -2467,7 +2550,7 @@ mod tests {
 
     #[test]
     fn a_too_slow_second_g_starts_over() {
-        let km = Keymap::default();
+        let km = vim();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
         seq.feed_one(&km, g(), t);
@@ -2508,7 +2591,7 @@ mod tests {
 
     #[test]
     fn an_interrupted_sequence_lets_the_last_key_act_alone() {
-        let km = Keymap::default();
+        let km = vim();
         let mut seq = Sequencer::new(Duration::from_millis(1000));
         let t = Instant::now();
         seq.feed_one(&km, g(), t);
@@ -2592,14 +2675,14 @@ mod tests {
     #[test]
     fn config_keys_replace_the_profile_keys_of_an_action() {
         let (km, warnings) =
-            Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["a"])]));
+            Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(
-            km.action(Key::A, Modifiers::NONE),
+            km.action(Key::G, Modifiers::NONE),
             Some(Action::Flag(Flag::Accepted))
         );
         assert_eq!(km.action(Key::P, Modifiers::SHIFT), None, "Maj+P remplacé");
-        assert_eq!(km.keys_for(Action::Flag(Flag::Accepted)), ["a"]);
+        assert_eq!(km.keys_for(Action::Flag(Flag::Accepted)), ["g"]);
 
         let (km, _) = Keymap::default().with_overrides(&overrides(&[("core.app.quit", &[])]));
         assert_eq!(
@@ -2619,8 +2702,8 @@ mod tests {
         let all = warnings.join("\n");
         assert!(all.contains("core.nope"), "{all}");
         assert!(all.contains("Hyper"), "{all}");
-        // « b » était la bascule JPEG / RAW : le fichier l'emporte, et le dit.
-        assert!(all.contains("core.view.source"), "{all}");
+        // « b » était le fond : le fichier l'emporte, et le dit.
+        assert!(all.contains("core.view.background"), "{all}");
         assert_eq!(
             km.action(Key::B, Modifiers::NONE),
             Some(Action::Flag(Flag::Accepted))
@@ -2631,12 +2714,12 @@ mod tests {
     #[test]
     fn two_actions_on_the_same_key_keep_the_first() {
         let (km, warnings) = Keymap::default().with_overrides(&overrides(&[
-            ("core.flag.accept", &["a"]),
-            ("core.flag.reject", &["a"]),
+            ("core.flag.accept", &["g"]),
+            ("core.flag.reject", &["g"]),
         ]));
         assert_eq!(warnings.len(), 1, "{warnings:?}");
         assert_eq!(
-            km.action(Key::A, Modifiers::NONE),
+            km.action(Key::G, Modifiers::NONE),
             Some(Action::Flag(Flag::Accepted))
         );
     }
@@ -2645,7 +2728,7 @@ mod tests {
     fn a_double_parenthesis_opens_or_closes_a_level() {
         // `((` ouvre, `))` ferme (31/10/2026) ; `(` seul reste « première de la pile »,
         // au bout du délai court.
-        let km = Keymap::default();
+        let km = vim();
         let mut seq =
             Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
         let t0 = Instant::now();
@@ -2667,7 +2750,7 @@ mod tests {
     #[test]
     fn a_key_that_starts_a_sequence_waits_for_the_rest() {
         // `y` copie, `y )` copie la pile : `y` attend la suite le temps du délai court.
-        let km = Keymap::default();
+        let km = vim();
         let mut seq =
             Sequencer::new(Duration::from_millis(1000)).with_ambiguous(Duration::from_millis(300));
         let t0 = Instant::now();
@@ -2701,8 +2784,7 @@ mod tests {
         assert!(seq.feed(&km, Chord::char(')'), ms(5000)).is_empty());
         assert_eq!(seq.expire(ms(5400)), Some(Action::StackLast));
         // Plus de signalement : la touche seule reste joignable.
-        let (_, warnings) =
-            Keymap::default().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));
+        let (_, warnings) = vim().with_overrides(&overrides(&[("core.flag.accept", &["g"])]));
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 

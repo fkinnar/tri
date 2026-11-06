@@ -25,6 +25,13 @@
   reported in the status bar. Your own shortcuts stay in `[keys]`. The panel prefix
   (`leader`, Ctrl+b) is in the file too; `[gui] leader` is now empty by default and
   replaces it only if you set it.
+- **Shortcut review** (#280): one letter per domain, from its English name (c crop, i
+  histogram, m magnify, n order, r render, s stacks, t text, v versions…). Shift + the
+  letter is its variant, Ctrl + the letter the settings of the domain, and `<leader>`
+  + the letter + a key a secondary setting (`<leader> i s`: histogram scale). The
+  panels show and hide with `<leader>` Shift + a direction. The "both" profile is gone,
+  and the loupe moves to `m` and into `keys.toml`. A leader or loupe key already bound
+  to an action is refused. The full before / after table is in `doc/en/gui.md`.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

@@ -57,7 +57,7 @@ action-core-view-rating_bar = Afficher / masquer le bandeau de notation
 action-core-view-grid_info = Afficher / masquer les infos des vignettes (nom, format, notes, badges)
 action-core-rate-auto_advance = Avance automatique après une note : oui / non
 action-core-select-toggle = Sélectionner / désélectionner l'image
-action-core-select-visual = Mode visuel : sélectionner une plage (v pour valider)
+action-core-select-visual = Mode visuel : sélectionner une plage (la même touche valide)
 action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : la pile repliée, ou la photo et ses développements)
 action-core-view-peaking = Afficher / masquer la netteté (contours nets)
 action-core-view-sharpness_lenient = Netteté plus souple (moins de photos floues, plus de contours nets)
@@ -372,7 +372,7 @@ cache-unavailable = cache inaccessible : { $error }
 ## Comparaison, plein écran, barre d'état
 
 rating-not-saved = note non enregistrée : { $error }
-compare-needs-two = comparer : sélectionnez au moins 2 images (Espace, v, Ctrl+A, Maj+clic), ou placez-vous sur une pile ou une photo développée
+compare-needs-two = comparer : sélectionnez au moins 2 images ({ $keys }, Maj+clic), ou placez-vous sur une pile ou une photo développée
 compare-limited = comparaison limitée aux { $max } premières ([gui.compare] max)
 view-info-selected = { " " }· sélectionnée
 view-info-peaking = { " " }· netteté
@@ -471,7 +471,7 @@ download-format = { $format ->
 rating-bar-title = Note
 filter-bar-title = Filtre
 rating-bar-applies = notes appliquées aux { $n } images sélectionnées
-filter-stack-none = f c : placez-vous sur une pile (piles actives)
+filter-stack-none = { $keys } : placez-vous sur une pile (piles actives)
 stack-enter-cover = En entrant dans une pile : sa couverture
 stack-enter-first = En entrant dans une pile : sa première photo
 stack-enter-needs-stacks = { $now } (en plein écran, piles actives : { $keys })
@@ -512,7 +512,7 @@ help-no-match = Aucune action ne correspond.
 help-close-hint = Échap ou F1 pour fermer.
 empty-folder-gone = Le dossier « { $name } » n'est plus là (disque débranché ?)
 empty-folder-gone-back = Il se rouvrira de lui-même quand le disque reviendra.
-empty-no-folder = Choisissez un dossier dans le panneau de gauche (Maj+D l'affiche).
+empty-no-folder = Choisissez un dossier dans le panneau de gauche ({ $keys } l'affiche).
 empty-folder = Aucune image dans ce dossier.
 filter-toast = { $n ->
     [one] 1 image
@@ -707,7 +707,7 @@ settings-color-order-sorted = Tri
 settings-color-order-available = Disponibles
 settings-keys-doc = Raccourcis de chaque action : ceux du jeu choisi ([gui] profile), ou ceux écrits ici, qui les remplacent pour cette action (en gras). Un clic sur un raccourci le retire ; « enregistrer… » ajoute la prochaine touche (ou séquence) tapée ; le champ accepte un raccourci écrit (« Maj+P », « g g », « ° »). Les conflits sont signalés.
 loupe-key-unknown = touche de loupe inconnue : « { $key } »
-loupe-key-taken = [gui.zoom] loupe_key : « { $key } » sert aussi à une action
+loupe-key-taken = Touche de loupe « { $key } » refusée : elle sert déjà à une action (changez l'une ou l'autre : [gui.zoom] loupe_key, [keys])
 settings-keys-none = aucun raccourci
 settings-keys-remove = Retirer « { $keys } »
 settings-keys-record = enregistrer…
@@ -1042,6 +1042,8 @@ offload-eject = Éjecter la carte
 ## Touches et raccourcis (affichés, et lus dans [keys] dans toutes les langues)
 
 keys-error = [keys] { $id } : { $error }
+keys-leader-taken = « { $key } » sert déjà à « { $action } » : déplacez d'abord cette action dans [keys]
+keys-profile-both = [gui] profile : « both » n'existe plus, le profil classique est utilisé (« classic » ou « vim »)
 keys-file-error = keys.toml [{ $section }] { $id } : { $error }
 keys-file-unknown-action = action inconnue
 keys-file-section = keys.toml : section inconnue « { $section } » (common, classic, vim ou after_leader)
