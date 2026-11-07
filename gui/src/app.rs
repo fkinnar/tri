@@ -18171,15 +18171,17 @@ mod tests {
                 .unwrap()
                 .click()
         };
+        // Les choix d'une liste une fois sa place arrêtée (clic tombé à côté sur la CI
+        // Windows, 07/11/2026).
         combo(&h, 0);
         h.run_steps(2);
-        h.get_by_label(&sort_name(other)).click();
+        click_settled(&mut h, &sort_name(other));
         h.run_steps(2);
         assert_eq!(h.state().order.key, other);
         combo(&h, 1);
         h.run_steps(2);
         // « RAW », puis « LibRaw » en gris.
-        h.get_by_label("RAW  LibRaw").click();
+        click_settled(&mut h, "RAW  LibRaw");
         h.run_steps(2);
         assert_eq!(
             h.state().grid_render,
