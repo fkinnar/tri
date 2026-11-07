@@ -7,6 +7,14 @@
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.
+- **Comparison from the bottom bar**: a button (lit while comparing, where it leaves the
+  comparison), and the back-to-grid button in comparison too. Without a selection or a
+  stack, everything shown is compared (at most `[gui.compare] max`, around the current
+  image).
+- **Cmd / Ctrl+click takes the current image too**: without a selection, the highlighted
+  image counts as chosen, so the first Cmd / Ctrl+click on another one selects both.
+  With a selection and the grid cursor hidden, `=` (and ratings, file actions) act at
+  once instead of only showing the cursor again.
 - **One zoom control in the bottom bar**: the zoom and loupe controls are merged. It sets
   the zoom (round magnifier), or the loupe while its key is held (square magnifier). A
   click on the icon resets, a click on the value lets you type it. The pointer stays

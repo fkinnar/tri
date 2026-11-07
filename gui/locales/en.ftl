@@ -74,7 +74,7 @@ action-core-view-grid_info = Show / hide the thumbnail info (name, format, ratin
 action-core-rate-auto_advance = Auto-advance after rating: on / off
 action-core-select-toggle = Select / deselect the image
 action-core-select-visual = Visual mode: select a range (the same key confirms)
-action-core-view-compare = Compare the selected images side by side (no selection: the collapsed stack, or the photo and its developments)
+action-core-view-compare = Compare the selected images side by side (no selection: the collapsed stack, the photo and its developments, otherwise all the images)
 action-core-view-peaking = Show / hide sharpness (sharp edges)
 action-core-view-sharpness_lenient = More lenient sharpness (fewer blurry photos, more sharp edges)
 action-core-view-sharpness_strict = Stricter sharpness (more blurry photos, fewer sharp edges)
@@ -426,6 +426,7 @@ cache-unavailable = cache unavailable: { $error }
 
 rating-not-saved = rating not saved: { $error }
 compare-needs-two = compare: select at least 2 images ({ $keys }, Shift+click), or stand on a stack or a developed photo
+compare-around = comparing the { $max } images around the current one ([gui.compare] max); select some to choose
 compare-limited = comparison limited to the first { $max } ([gui.compare] max)
 view-info-selected = { " " }· selected
 view-info-peaking = { " " }· sharpness

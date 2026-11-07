@@ -34,7 +34,7 @@ ne fait que traduire touches et clics en appels.
 | `Ctrl+A` / `Ctrl+Maj+A` | tout / rien (`core.select.all`, `core.select.clear`) |
 | Échap | annule le mode visuel, sinon désélectionne, sinon revient à la grille |
 | Maj+clic | plage depuis l'image courante |
-| Cmd+clic (macOS), Ctrl+clic | ajouter / retirer une image |
+| Cmd+clic (macOS), Ctrl+clic | ajouter / retirer une image ; sans sélection, l'image courante (en surbrillance) est prise avec (07/11/2026, comme Lightroom). Curseur de la grille masqué : ce qui vise la sélection (notes, fichiers, comparer) agit tout de suite (`acts_on_selection`), le reste remontre d'abord le curseur |
 | clic simple | sélection effacée, image courante choisie |
 
 Les **notes** (clavier, bandeau) s'appliquent aux cibles, sans avance automatique. Une

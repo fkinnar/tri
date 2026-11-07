@@ -34,7 +34,7 @@ interface, future TUI); the interface only translates keys and clicks into calls
 | `Ctrl+A` / `Ctrl+Shift+A` | all / none (`core.select.all`, `core.select.clear`) |
 | Esc | cancels visual mode, otherwise deselects, otherwise returns to the grid |
 | Shift+click | range from the current image |
-| Cmd+click (macOS), Ctrl+click | add / remove an image |
+| Cmd+click (macOS), Ctrl+click | add / remove an image; without a selection, the current image (highlighted) is taken too (2026-11-07, like Lightroom). Grid cursor hidden: what targets the selection (ratings, files, compare) acts at once (`acts_on_selection`), the rest first shows the cursor again |
 | simple click | selection cleared, current image chosen |
 
 **Ratings** (keyboard, rating bar) apply to the targets, without auto-advance. A RAW+JPEG
