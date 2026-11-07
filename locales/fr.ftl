@@ -121,6 +121,17 @@ cache-no-user-dir = dossier de cache utilisateur introuvable
 xmp-io = sidecar XMP : { $error }
 xmp-malformed = sidecar XMP mal formé (non modifié) : { $error }
 xmp-no-description = sidecar XMP sans rdf:Description (non modifié)
+embed-unsupported = ce format d'image ne porte pas de notes (JPEG, PNG, WebP, TIFF, HEIC seulement)
+embed-io = notes dans l'image : { $error }
+embed-write-failed = écriture des notes dans l'image impossible ({ $error }) ; une copie complète est gardée à côté : { $copy }
+embed-verify-failed = notes relues dans l'image différentes de celles écrites
+embed-malformed = image mal formée, laissée telle quelle
+embed-malformed-detail = image mal formée, laissée telle quelle : { $error }
+embed-bigtiff = TIFF de plus de 4 Go (BigTIFF) : notes non inscrites
+embed-too-large = notes trop volumineuses pour l'en-tête de l'image
+embed-compressed = XMP compressé dans le PNG : notes non inscrites (rien ne serait gardé)
+embed-heif-sequence = HEIF animé ou séquence d'images : notes non inscrites
+embed-xmp-not-utf8 = XMP de l'image illisible (pas en UTF-8), laissé tel quel
 settings-auto-or-integer = "auto" ou un entier positif
 offload-no-data-dir = dossier de données introuvable (HOME absent)
 offload-unnamed-file = fichier sans nom
@@ -167,6 +178,8 @@ cli-usage =
       tri --check-update
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
       tri <dossier> --metadata [--raw|--flat] [--depth N]
       tri <dossier> --groups [--threshold X]
@@ -237,6 +250,24 @@ cli-sidecars-summary = { $n } images : { $created } sidecars { $mode ->
     [dry-run] à réécrire
    *[write] réécrits
 }, { $unchanged } laissées (déjà pourvues), { $skipped } passées (sans notes, ou développements), { $errors } erreurs
+cli-embed-written = { $mode ->
+    [dry-run] à inscrire
+   *[write] inscrites
+}
+cli-embed-summary = { $n } images : notes { $mode ->
+    [dry-run] à inscrire dans { $written }
+   *[write] inscrites dans { $written }
+}, { $unchanged } inchangées, { $skipped } passées (RAW et autres formats), { $errors } erreurs
+cli-embed-some-failed = certaines images n'ont pas pu recevoir leurs notes
+cli-import-written = { $mode ->
+    [dry-run] à relire
+   *[write] relues
+}
+cli-import-summary = { $n } images : notes { $mode ->
+    [dry-run] à relire depuis { $written }
+   *[write] relues depuis { $written }
+}, { $unchanged } inchangées (sans notes inscrites, ou les mêmes), { $skipped } passées (RAW et autres formats), { $errors } erreurs
+cli-import-some-failed = les notes de certaines images n'ont pas pu être relues
 cli-rename-shared-copy = (copie : partagé)
 cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :

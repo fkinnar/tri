@@ -30,6 +30,12 @@
 //!   tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert` ;
+//!   tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
+//!       inscrit les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; les RAW
+//!       sont passés), voir `tri::embedded` ;
+//!   tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
+//!       recopie dans les sidecars les notes inscrites dans les images (changées dans un
+//!       autre logiciel), voir `tri::embedded` ;
 //!   tri --rename <image> <nom> [--dry-run]
 //!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;
 //!   tri --delete <image>... [--permanent] [--dry-run]
@@ -115,6 +121,10 @@ struct Args {
     cache: Option<PathBuf>,
     config: Option<PathBuf>,
     convert: Option<Convention>,
+    /// `--embed-notes`.
+    embed_notes: bool,
+    /// `--import-notes`.
+    import_notes: bool,
     /// `--sidecars <format|all>` : créer les sidecars manquants des photos notées.
     sidecars: Option<Vec<&'static dyn tri::sidecars::Format>>,
     /// `--rewrite` : réécrire aussi les notes des sidecars existants.
@@ -187,6 +197,8 @@ fn parse() -> AnyResult<Args> {
                 })
             }
             "--dry-run" => args.dry_run = true,
+            "--embed-notes" => args.embed_notes = true,
+            "--import-notes" => args.import_notes = true,
             "--rewrite" => args.rewrite = true,
             "--sidecars" => {
                 let wanted = value()?;
@@ -914,6 +926,66 @@ fn convert_xmp(
     }
 }
 
+/// `--embed-notes` : inscrit les notes dans les images elles-mêmes ; `--import-notes`
+/// (`import`) : les recopie des images dans les sidecars (voir `tri::embedded`). Les RAW
+/// et autres formats sans notes sont passés.
+fn embed_notes(
+    settings: &EngineSettings,
+    files: &[tri::media::MediaFile],
+    dry_run: bool,
+    import: bool,
+) -> AnyResult<()> {
+    let mut book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
+    let images: Vec<PathBuf> = files
+        .iter()
+        .map(|f| f.path.clone())
+        .filter(|p| tri::embedded::supports(p))
+        .collect();
+    let report = if import {
+        book.import(&images, dry_run)
+    } else {
+        book.embed(&images, dry_run)
+    };
+    let prefix = if import { "cli-import" } else { "cli-embed" };
+    let mode = if dry_run { "dry-run" } else { "write" };
+    let mut errors = 0;
+    let mut written = 0;
+    for (image, result) in &report {
+        match result {
+            Ok(true) => {
+                written += 1;
+                println!(
+                    "{}\t{}",
+                    t!(&format!("{prefix}-written"), mode = mode),
+                    image.display()
+                );
+            }
+            Ok(false) => {}
+            Err(error) => {
+                errors += 1;
+                eprintln!("{}\t{} : {error}", t!("cli-error"), image.display());
+            }
+        }
+    }
+    println!(
+        "{}",
+        t!(
+            &format!("{prefix}-summary"),
+            n = images.len(),
+            written = written,
+            mode = mode,
+            unchanged = report.len() - written - errors,
+            skipped = files.len() - images.len(),
+            errors = errors
+        )
+    );
+    if errors == 0 {
+        Ok(())
+    } else {
+        Err(t!(&format!("{prefix}-some-failed")).into())
+    }
+}
+
 /// `--sidecars <format|all>` : crée les sidecars manquants des photos notées, pour
 /// garder leurs notes dans un logiciel (voir `tri::sidecars`).
 fn generate_sidecars(
@@ -1347,6 +1419,14 @@ fn run() -> AnyResult<()> {
     if let Some(target) = args.convert {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return convert_xmp(&files, target, args.dry_run);
+    }
+    if args.embed_notes {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return embed_notes(&settings, &files, args.dry_run, false);
+    }
+    if args.import_notes {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return embed_notes(&settings, &files, args.dry_run, true);
     }
     if let Some(formats) = &args.sidecars {
         let files: Vec<_> = groups.into_iter().flatten().collect();

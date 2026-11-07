@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Ratings in the images themselves** (#276): JPEG, PNG, WebP, TIFF and HEIC can carry
+  their ratings (embedded XMP, without re-encoding, nothing else lost), to find them in
+  Windows Explorer, Spotlight, Lightroom, XnView… Read when an image has no sidecar
+  (stars set elsewhere). Two actions, on the selection or from the folder menu: "Write
+  the ratings into the images" and "Read the ratings back from the images" (changed in
+  another program; undoable); `tri <folder> --embed-notes` / `--import-notes`. Never
+  into a RAW.
 - **No more crash when the graphics memory is full** (21 images compared at 1:1): the
   large textures have a budget (`[gui.view] textures_mb`, 1500 MB); beyond it, an image
   keeps its preview. A graphics card error is now logged and shown instead of stopping

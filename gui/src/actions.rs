@@ -244,6 +244,12 @@ pub enum Action {
     /// Générer les sidecars de notes manquants (un logiciel ou tous) de la sélection ou
     /// du dossier (31/10/2026, suite de #253).
     Sidecars,
+    /// Inscrire les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC), de la
+    /// sélection ou du dossier (issue n° 276, 07/11/2026).
+    EmbedNotes,
+    /// Relire les notes inscrites dans les images (changées dans un autre logiciel) et
+    /// les recopier dans leurs sidecars (07/11/2026).
+    ImportNotes,
     /// Annuler la dernière modification.
     Undo,
     /// Rétablir la dernière modification annulée.
@@ -520,7 +526,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 228] = [
+    pub const ALL: [Action; 230] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -601,6 +607,8 @@ impl Action {
         Action::FileReveal,
         Action::FileEdit,
         Action::Sidecars,
+        Action::EmbedNotes,
+        Action::ImportNotes,
         Action::FileCopy,
         Action::FileMove,
         Action::FileDeleteStack,
@@ -893,8 +901,8 @@ impl Action {
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
-            | FileMove | Sidecars | FileDeleteStack | FileDeletePhoto | FileCopyStack
-            | FileExport | ExportReport | Send(_) => Group::Files,
+            | FileMove | Sidecars | EmbedNotes | ImportNotes | FileDeleteStack
+            | FileDeletePhoto | FileCopyStack | FileExport | ExportReport | Send(_) => Group::Files,
             Undo | Redo | History => Group::Edit,
             StackToggle | StackOpen | StackClose | StacksAll | GroupingWindow | StackMode
             | StackChoose | StackFirst | StackLast | StackEnterToggle | DevToggle | DevNext
@@ -1136,6 +1144,8 @@ impl Action {
             Action::FileReveal => "core.file.reveal",
             Action::FileEdit => "core.file.edit",
             Action::Sidecars => "core.file.sidecars",
+            Action::EmbedNotes => "core.file.embed_notes",
+            Action::ImportNotes => "core.file.import_notes",
             Action::ToggleFolderPanel => "core.view.folders",
             Action::Search => "core.search",
             Action::FocusMode => "core.view.focus_mode",

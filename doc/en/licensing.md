@@ -57,7 +57,10 @@ ejecting a volume (`places::eject`), Microsoft (microsoft/windows-rs, very activ
 already present through winit and others — under MIT OR Apache-2.0; `toml_edit` — settings
 window: edit the file without losing comments or layout, same
 maintainers as `toml` (toml-rs), very active, already present as an indirect dependency — under
-MIT OR Apache-2.0, with `indexmap` and `toml_writer` under MIT OR Apache-2.0; `quick-xml` — XMP sidecars —
+MIT OR Apache-2.0, with `indexmap` and `toml_writer` under MIT OR Apache-2.0; `img-parts` — ratings written into PNG and WebP files (`tri::embedded`), split into
+chunks without re-encoding, paolobarbolini/img-parts, active (0.4.2 of 2026-11-03), its
+dependencies `bytes`, `crc32fast` and `miniz_oxide` already present — under MIT OR
+Apache-2.0; `quick-xml` — XMP sidecars —
 under MIT, with `memchr` under Unlicense OR MIT; `kamadak-exif` — EXIF of flat
 images and of the embedded JPEG of RAWs — under BSD-2-Clause, with `mutate_once` under
 BSD-2-Clause; `trash` — system trash, maintained, version of 2026-09-13 — under

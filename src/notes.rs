@@ -97,7 +97,15 @@ fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
         });
     }
     let (notes, error) = match sidecars.first() {
-        None => (Notes::default(), None),
+        // Sans sidecar : les notes inscrites dans l'image elle-même, s'il y en a (étoiles
+        // posées dans l'Explorateur Windows, Lightroom…, issue n° 276). Illisibles : rien.
+        None => (
+            crate::embedded::read(image)
+                .ok()
+                .flatten()
+                .unwrap_or_default(),
+            None,
+        ),
         Some(sidecar) => match read_sidecar(sidecar) {
             Ok(notes) => (notes, None),
             Err(e) => (Notes::default(), Some(e)),
@@ -178,6 +186,55 @@ impl NoteBook {
                 .push(image.to_path_buf());
         }
         book
+    }
+
+    /// Inscrit les notes actuelles de `images` dans les images elles-mêmes (sur demande,
+    /// `tri --embed-notes`, action de l'interface). Pour chaque image : vrai si le fichier
+    /// a changé, ou l'erreur (format sans notes, image mal formée…). Les sidecars ne
+    /// changent pas.
+    /// `dry_run` : rien n'est écrit, le bilan dit ce qui changerait. Une image sans note
+    /// ni notes déjà inscrites reste telle quelle.
+    pub fn embed(&self, images: &[PathBuf], dry_run: bool) -> Vec<(PathBuf, Result<bool, String>)> {
+        images
+            .iter()
+            .map(|image| {
+                let notes = self.notes(image);
+                let result = match self.error(image) {
+                    Some(error) => Err(error.to_string()),
+                    None if dry_run => crate::embedded::would_change(image, notes),
+                    None => crate::embedded::write(image, notes),
+                };
+                (image.clone(), result)
+            })
+            .collect()
+    }
+
+    /// Relit les notes inscrites dans `images` et les recopie dans leurs sidecars (sur
+    /// demande : notes changées dans un autre logiciel qui les écrit dans l'image,
+    /// XnView MP…), comme une note posée dans `tri` : la paire RAW+JPEG suit. Pour chaque
+    /// image : vrai si ses notes ont changé, ou l'erreur. Une image sans notes inscrites, ou
+    /// aux mêmes notes, reste telle quelle. `dry_run` : rien n'est écrit.
+    pub fn import(
+        &mut self,
+        images: &[PathBuf],
+        dry_run: bool,
+    ) -> Vec<(PathBuf, Result<bool, String>)> {
+        images
+            .iter()
+            .map(|image| {
+                let result = match crate::embedded::read(image) {
+                    Err(e) => Err(crate::t!("embed-io", error = e.to_string())),
+                    Ok(None) => Ok(false),
+                    Ok(Some(inside)) if *self.notes(image) == inside => Ok(false),
+                    Ok(Some(_)) if dry_run => Ok(true),
+                    Ok(Some(inside)) => self
+                        .edit(image, |n| *n = inside)
+                        .map(|_| true)
+                        .map_err(|e| e.to_string()),
+                };
+                (image.clone(), result)
+            })
+            .collect()
     }
 
     /// Convention des sidecars créés par une écriture.
@@ -933,6 +990,72 @@ mod tests {
             [d.join("B.RAF")]
         );
         assert_eq!(book.notes(&d.join("B.RAF")).stars, 0);
+    }
+
+    /// Petit JPEG valide.
+    fn jpeg() -> Vec<u8> {
+        let mut out = Vec::new();
+        image::RgbImage::new(4, 4)
+            .write_to(
+                &mut std::io::Cursor::new(&mut out),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn notes_inside_an_image_are_read_when_it_has_no_sidecar() {
+        // Issue n° 276 : étoiles posées ailleurs (Explorateur Windows, Lightroom…).
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let (a, b) = (d.join("A.jpg"), d.join("B.jpg"));
+        std::fs::write(&a, jpeg()).unwrap();
+        std::fs::write(&b, jpeg()).unwrap();
+        let mut four = Notes::default();
+        four.set_stars(4);
+        crate::embedded::write(&a, &four).unwrap();
+        crate::embedded::write(&b, &four).unwrap();
+        // B a un sidecar : c'est lui qui compte.
+        let mut two = Notes::default();
+        two.set_stars(2);
+        xmp::write(&b, &two, Convention::Darktable).unwrap();
+        let mut book = NoteBook::load([a.as_path(), b.as_path()], Convention::Darktable);
+        assert_eq!(book.notes(&a).stars, 4, "lues dans l'image");
+        assert_eq!(book.notes(&b).stars, 2, "le sidecar d'abord");
+        // Noter A crée son sidecar (avec ce qui venait de l'image) ; l'image ne change pas
+        // (sur demande seulement, par défaut).
+        let before = std::fs::read(&a).unwrap();
+        book.edit(&a, |n| n.flag = Flag::Accepted).unwrap();
+        let sidecar = xmp::read(&a).unwrap();
+        assert_eq!((sidecar.stars, sidecar.flag), (4, Flag::Accepted));
+        assert_eq!(std::fs::read(&a).unwrap(), before, "image intacte");
+        // Sur demande : inscrites dans l'image.
+        let report = book.embed(std::slice::from_ref(&a), false);
+        assert_eq!(report[0].1, Ok(true));
+        let inside = crate::embedded::read(&a).unwrap().unwrap();
+        assert_eq!((inside.stars, inside.flag), (4, Flag::Accepted));
+        // Changées ailleurs dans l'image (XnView…) : le sidecar l'emporte, jusqu'à ce
+        // qu'on les relise.
+        let mut one = Notes::default();
+        one.set_stars(1);
+        crate::embedded::write(&a, &one).unwrap();
+        book.reload();
+        assert_eq!(book.notes(&a).stars, 4, "le sidecar d'abord");
+        let dry = book.import(std::slice::from_ref(&a), true);
+        assert_eq!(dry[0].1, Ok(true));
+        assert_eq!(xmp::read(&a).unwrap().stars, 4, "rien écrit à blanc");
+        let report = book.import(&[a.clone(), b.clone()], false);
+        assert_eq!(report[0].1, Ok(true));
+        assert_eq!(
+            report[1].1,
+            Ok(true),
+            "B : 4 dans l'image, 2 dans le sidecar"
+        );
+        assert_eq!(xmp::read(&a).unwrap().stars, 1);
+        assert_eq!(book.notes(&a).stars, 1);
+        assert_eq!(book.notes(&b).stars, 4);
+        assert_eq!(book.import(std::slice::from_ref(&a), false)[0].1, Ok(false));
     }
 
     #[test]
