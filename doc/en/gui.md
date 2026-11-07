@@ -1154,6 +1154,14 @@ Decided with the user: what applies to the loupe applies to the full-screen zoom
 set the loupe if its key is held, otherwise the zoom (one pair of keys, the held key
 chooses).
 
+**Back to 100 % and to fit** (the user's idea, 2026-11-07): `<leader> m m` sets the loupe
+back to `loupe_scale` (100 %), `<leader> z z` the zoom to 100 %, `<leader> z /` fits it.
+Not sequences of the sequencer: `<leader> m` would have become ambiguous (it would wait
+for a second `m`, and a digit typed meanwhile would open the entry *and* rate the photo).
+The entry recognises, before any digit, the key that opened it (`entry_trigger`, read
+with the action; none from the palette); `/` closes the empty entry then acts as always
+(fit).
+
 **One scale control in the bottom bar** (feedback of 2026-11-07: two controls side by
 side, zoom and loupe, were unclear; `TriApp::scale_control`): an icon, −, the value, +,
 left of the 1:1 button. It sets the **zoom** (round magnifier, `marks::loupe_icon`), or
