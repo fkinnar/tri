@@ -1174,6 +1174,31 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             })
         })
         .transpose()?;
+    // RawTherapee et ART, pour leurs développements (07/11/2026 : ils partaient comme leur
+    // photo).
+    let profile_tools = [
+        (
+            tri::develop::Engine::RawTherapee,
+            &settings.develop.rawtherapee,
+        ),
+        (tri::develop::Engine::Art, &settings.develop.art),
+    ]
+    .into_iter()
+    .filter(|_| developers)
+    .filter_map(|(engine, setting)| {
+        let cli = tri::develop::find_profile_cli(engine, setting)?;
+        let work_dir = settings
+            .open_cache()
+            .ok()?
+            .root()
+            .join(format!("{}-export", engine.id()));
+        Some(tri::develop::ProfileTool {
+            engine,
+            cli,
+            work_dir,
+        })
+    })
+    .collect::<Vec<_>>();
     let photos = match &darktable {
         Some(dt) => tri::export::Renderer::Darktable(dt),
         None => {
@@ -1187,9 +1212,12 @@ fn export(settings: &EngineSettings, args: &Args, images: &[PathBuf]) -> AnyResu
             })
         }
     };
-    let renderers = tri::export::Renderers::new(photos)
-        .darktable(darktable.as_ref())
-        .rapidraw(rapidraw.as_ref());
+    let renderers = profile_tools.iter().fold(
+        tri::export::Renderers::new(photos)
+            .darktable(darktable.as_ref())
+            .rapidraw(rapidraw.as_ref()),
+        |r, tool| r.profile_tool(Some(tool)),
+    );
     let report = tri::export::run(
         &batch,
         renderers,

@@ -36,6 +36,11 @@
   l'orientation est une icône (le rectangle du cadre, debout ou couché). La barre des
   filtres, et les filtres, la vue et l'histogramme du panneau de droite, disparaissent
   pendant l'édition.
+- **Gros bug : les développements RawTherapee et ART étaient exportés sans leur
+  développement** (comme leur photo, un simple rendu LibRaw). Ils sont maintenant rendus
+  par RawTherapee / ART, en pleine résolution (TIFF 16 bits dans l'espace couleur de leur
+  profil), puis convertis, recadrés, réduits et accentués comme les autres exports.
+  Interface et ligne de commande.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.

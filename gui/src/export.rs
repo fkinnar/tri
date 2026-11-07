@@ -529,6 +529,8 @@ pub struct Tools {
     pub darktable: Option<Darktable>,
     /// RapidRAW, fichiers de travail à part de ceux des rendus.
     pub rapidraw: Option<RapidRaw>,
+    /// RawTherapee et ART (07/11/2026 : leurs développements partaient comme leur photo).
+    pub profile_tools: Vec<tri::develop::ProfileTool>,
     /// L'image exportée pour les photos (ce qu'on regarde).
     pub render: Render,
 }
@@ -571,16 +573,25 @@ impl Job {
                     Render::Embedded => Local::Embedded,
                     _ => Local::LibRaw,
                 };
+                let tool = |engine: Engine| tools.profile_tools.iter().find(|t| t.engine == engine);
                 let photos = match (tools.render, &tools.darktable, &tools.rapidraw) {
                     (Render::Developed(Engine::Darktable), Some(dt), _) => Renderer::Darktable(dt),
                     (Render::Developed(Engine::RapidRaw), _, Some(rr)) => Renderer::RapidRaw(rr),
+                    (Render::Developed(e @ (Engine::RawTherapee | Engine::Art)), _, _)
+                        if tool(e).is_some() =>
+                    {
+                        Renderer::Profile(tool(e).expect("vérifié"))
+                    }
                     _ => Renderer::Local(local),
                 };
                 let embedded = matches!(photos, Renderer::Local(Local::Embedded));
                 let batch = tri::export::Batch::new(&images, embedded);
-                let renderers = Renderers::new(photos)
-                    .darktable(tools.darktable.as_ref())
-                    .rapidraw(tools.rapidraw.as_ref());
+                let renderers = tools.profile_tools.iter().fold(
+                    Renderers::new(photos)
+                        .darktable(tools.darktable.as_ref())
+                        .rapidraw(tools.rapidraw.as_ref()),
+                    |r, t| r.profile_tool(Some(t)),
+                );
                 let result =
                     tri::export::run(&batch, renderers, &req, &pair_suffix, &cancel, progress);
                 ctx.request_repaint();

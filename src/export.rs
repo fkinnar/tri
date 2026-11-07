@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::develop::{Darktable, DevelopError, Engine, RapidRaw};
+use crate::develop::{Darktable, DevelopError, Engine, ProfileTool, RapidRaw};
 use crate::media::{MediaKind, kind_of};
 
 /// Espaces couleur proposés (liste déroulante des réglages), dans l'ordre de darktable.
@@ -1269,6 +1269,8 @@ pub enum Renderer<'a> {
     Darktable(&'a Darktable),
     /// Par RapidRAW (voir [`export_rapidraw`]).
     RapidRaw(&'a RapidRaw),
+    /// Par RawTherapee ou ART (voir [`export_profile_tool`]).
+    Profile(&'a ProfileTool),
     /// Sans logiciel de développement : LibRaw ou JPEG boîtier.
     Local(Local),
 }
@@ -1286,6 +1288,9 @@ pub struct Renderers<'a> {
     pub darktable: Option<&'a Darktable>,
     /// RapidRAW, pour ses développements.
     pub rapidraw: Option<&'a RapidRaw>,
+    /// RawTherapee et ART, pour leurs développements (07/11/2026 : ils partaient comme
+    /// leur photo, sans leur développement).
+    pub profile_tools: [Option<&'a ProfileTool>; 2],
 }
 
 impl<'a> Renderers<'a> {
@@ -1301,7 +1306,33 @@ impl<'a> Renderers<'a> {
                 Renderer::RapidRaw(rr) => Some(rr),
                 _ => None,
             },
+            profile_tools: match photos {
+                Renderer::Profile(t) if t.engine == Engine::RawTherapee => [Some(t), None],
+                Renderer::Profile(t) => [None, Some(t)],
+                _ => [None, None],
+            },
         }
+    }
+
+    /// Avec RawTherapee ou ART (`tool`) pour ses développements.
+    pub fn profile_tool(self, tool: Option<&'a ProfileTool>) -> Renderers<'a> {
+        let mut tools = self.profile_tools;
+        if let Some(t) = tool {
+            let slot = usize::from(t.engine != Engine::RawTherapee);
+            tools[slot] = tools[slot].or(Some(t));
+        }
+        Renderers {
+            profile_tools: tools,
+            ..self
+        }
+    }
+
+    /// RawTherapee ou ART (`engine`), s'il est là.
+    fn tool(&self, engine: Engine) -> Option<&'a ProfileTool> {
+        self.profile_tools
+            .into_iter()
+            .flatten()
+            .find(|t| t.engine == engine)
     }
 
     /// Avec darktable pour ses développements.
@@ -1327,7 +1358,18 @@ impl<'a> Renderers<'a> {
         let mut split = Split::default();
         for raw in raws {
             let engine = crate::developments::get(raw).map(|d| d.engine);
+            let photos_engine = match self.photos {
+                Renderer::Profile(t) => Some(t.engine),
+                _ => None,
+            };
             match engine {
+                // RawTherapee, ART : chacun ses développements (sauf s'il rend déjà les
+                // photos : ils vont avec elles).
+                Some(e @ (Engine::RawTherapee | Engine::Art))
+                    if self.tool(e).is_some() && photos_engine != Some(e) =>
+                {
+                    split.profiles.push((e, raw.clone()));
+                }
                 Some(Engine::RapidRaw) if self.rapidraw.is_some() => {
                     split.rapidraw.push(raw.clone())
                 }
@@ -1353,6 +1395,8 @@ pub struct Split {
     pub darktable: Vec<PathBuf>,
     /// Le reste, rendu par [`Renderers::photos`].
     pub photos: Vec<PathBuf>,
+    /// Développements RawTherapee et ART, chacun rendu par son logiciel.
+    pub profiles: Vec<(Engine, PathBuf)>,
 }
 
 /// Exporte `batch` : les RAW par `renderers` (chaque développement par son logiciel ;
@@ -1380,6 +1424,21 @@ pub fn run(
         && !split.darktable.is_empty()
     {
         parts.push((Renderer::Darktable(dt), &split.darktable));
+    }
+    let by_tool: Vec<(&ProfileTool, Vec<PathBuf>)> = [Engine::RawTherapee, Engine::Art]
+        .into_iter()
+        .filter_map(|e| {
+            let images: Vec<PathBuf> = split
+                .profiles
+                .iter()
+                .filter(|(pe, _)| *pe == e)
+                .map(|(_, p)| p.clone())
+                .collect();
+            (!images.is_empty()).then(|| renderers.tool(e).map(|t| (t, images)))?
+        })
+        .collect();
+    for (tool, images) in &by_tool {
+        parts.push((Renderer::Profile(tool), images));
     }
     if !split.photos.is_empty() {
         parts.push((renderers.photos, &split.photos));
@@ -1417,6 +1476,7 @@ fn render_raws(
         }
         Renderer::Darktable(dt) => export(dt, images, req.profile, req.folder, cancel, progress),
         Renderer::RapidRaw(rr) => export_rapidraw(rr, images, req, cancel, progress),
+        Renderer::Profile(tool) => export_profile_tool(tool, images, req, cancel, progress),
         Renderer::Local(local) => export_libraw(images, req, local, cancel, progress),
     }
 }
@@ -1470,6 +1530,72 @@ pub fn export_rapidraw(
     result?;
     report.failed = report.errors.len();
     Ok(report)
+}
+
+/// Exporte `images` **par RawTherapee ou ART** (`tool`), en pleine résolution : chaque
+/// image est rendue avec son profil (`.pp3` / `.arp` : celui du développement, ou celui de
+/// la photo) en **TIFF 16 bits** temporaire, dans l'espace couleur du profil (son ICC est
+/// lu), puis convertie dans l'espace du préréglage, recadrée, réduite, accentuée et écrite
+/// comme les autres ([`finish`]). Avant le 07/11/2026, un développement RawTherapee ou
+/// ART était exporté comme sa photo (rendu LibRaw), sans son développement. Une image en
+/// échec n'arrête pas les autres ([`Report::errors`]).
+pub fn export_profile_tool(
+    tool: &ProfileTool,
+    images: &[PathBuf],
+    req: &Request<'_>,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &Path),
+) -> Result<Report, DevelopError> {
+    libraw_check(req.profile, Local::LibRaw).map_err(DevelopError::Other)?;
+    let images = sources(images);
+    let total = images.len();
+    let mut report = Report::default();
+    let tmp = tool
+        .work_dir
+        .join(format!("export-tiff-{}", std::process::id()));
+    let result = (|| {
+        for (i, image) in images.iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DevelopError::Cancelled);
+            }
+            match profile_tool_one(tool, &tmp.join(i.to_string()), image, req, cancel) {
+                Ok(out) => {
+                    report.written.push(out);
+                    progress(
+                        report.written.len(),
+                        total,
+                        report.written.last().expect("ajouté"),
+                    );
+                }
+                Err(DevelopError::Cancelled) => return Err(DevelopError::Cancelled),
+                Err(e) => report.errors.push((image.clone(), e.to_string())),
+            }
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    result?;
+    report.failed = report.errors.len();
+    Ok(report)
+}
+
+/// Un rendu RawTherapee / ART de `image` (TIFF 16 bits dans `dir`), fini comme les autres
+/// exports ; voir [`export_profile_tool`].
+fn profile_tool_one(
+    tool: &ProfileTool,
+    dir: &Path,
+    image: &Path,
+    req: &Request<'_>,
+    cancel: &AtomicBool,
+) -> Result<PathBuf, DevelopError> {
+    let sidecar = tool
+        .engine
+        .sidecar(image)
+        .ok_or_else(|| DevelopError::Failed(tool.engine, crate::t!("export-no-profile")))?;
+    let tiff = tool.render_tiff(image, &sidecar, dir, cancel)?;
+    let developed = developed(&tiff)?;
+    let (pixels, icc) = in_profile_space(developed, req.profile)?;
+    finish(image, pixels, icc.as_deref(), req)
 }
 
 /// Un rendu RapidRAW de `image` (TIFF 16 bits sRGB dans `tmp`), fini comme les autres
@@ -2265,6 +2391,131 @@ mod tests {
         let rapid = Renderers::new(Renderer::RapidRaw(&rr)).split(&raws);
         assert_eq!(rapid.rapidraw, [copy_a.path(), main_rr.path()]);
         assert_eq!(rapid.photos, [photo.clone(), clone.path()]);
+    }
+
+    /// Un faux `rawtherapee-cli` / `ART-cli` (script) : il copie `tiff` dans le dossier
+    /// `-o` (`<nom>.tif`), après avoir vérifié qu'on lui demande un TIFF 16 bits.
+    #[cfg(unix)]
+    fn fake_profile_tool(dir: &Path, engine: Engine, tiff: &Path) -> ProfileTool {
+        use std::os::unix::fs::PermissionsExt;
+        let script = dir.join(format!("{}-cli", engine.id()));
+        let body = format!(
+            "#!/bin/sh\n[ \"$1\" = -o ] || exit 2\n[ \"$3\" = -p ] || exit 3\n[ -f \"$4\" ] || exit 4\n[ \"$5\" = -t ] || exit 5\n[ \"$6\" = -b16 ] || exit 6\n[ \"$8\" = -c ] || exit 8\n[ -f \"$9\" ] || exit 9\ncp '{}' \"$2/photo.tif\"\n",
+            tiff.display()
+        );
+        std::fs::write(&script, body).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        ProfileTool {
+            engine,
+            cli: crate::develop::Cli::native(script),
+            work_dir: dir.join(format!("work-{}", engine.id())),
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn rawtherapee_and_art_developments_are_exported_by_their_software() {
+        // GROS bug du 07/11/2026 : un développement RawTherapee ou ART partait comme sa
+        // photo (rendu LibRaw), sans son développement. Il est rendu par son logiciel, en
+        // pleine résolution (TIFF 16 bits), puis fini comme les autres exports.
+        let dir = tempfile::tempdir().unwrap();
+        let tiff = dir.path().join("rendu.tif");
+        image::ImageBuffer::<image::Rgb<u16>, _>::from_pixel(
+            400,
+            300,
+            image::Rgb([40000, 20000, 10000]),
+        )
+        .save(&tiff)
+        .unwrap();
+        for engine in [Engine::RawTherapee, Engine::Art] {
+            let photo = dir.path().join(format!("{}.RAF", engine.id()));
+            std::fs::write(&photo, b"raw").unwrap();
+            let sidecar = crate::pp3::path(&photo, engine.profile_extension().unwrap());
+            std::fs::write(&sidecar, "[Exposure]\nCompensation=1\n").unwrap();
+            let development = crate::developments::Development {
+                engine,
+                copy: crate::developments::Copy::Main,
+                photo: photo.clone(),
+                sidecar: sidecar.clone(),
+            };
+            crate::developments::set_for(&photo, std::slice::from_ref(&development));
+            let tool = fake_profile_tool(dir.path(), engine, &tiff);
+            // Le développement va à son logiciel, la photo à `photos`.
+            let renderers =
+                Renderers::new(Renderer::Local(Local::LibRaw)).profile_tool(Some(&tool));
+            let raws = [development.path(), photo.clone()];
+            let split = renderers.split(&raws);
+            assert_eq!(split.profiles, [(engine, development.path())]);
+            assert_eq!(split.photos, std::slice::from_ref(&photo));
+            // L'export : le rendu du logiciel, à sa pleine taille.
+            let profile = Profiles::default().get("web").unwrap().clone();
+            let folder = dir.path().join(format!("out-{}", engine.id()));
+            let folder = folder.display().to_string();
+            let batch = Batch::new(&[development.path()], false);
+            let report = run(
+                &batch,
+                renderers,
+                &Request::new(&profile, &folder),
+                "-camera",
+                &AtomicBool::new(false),
+                |_, _, _| {},
+            )
+            .unwrap();
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert_eq!(report.written.len(), 1);
+            let img = image::open(&report.written[0]).unwrap().to_rgb8();
+            assert_eq!(img.dimensions(), (400, 300), "pleine résolution");
+            let p = img.get_pixel(200, 150);
+            assert!(p[0] > p[1] && p[1] > p[2], "le rendu du logiciel : {p:?}");
+            crate::developments::set_for(&photo, &[]);
+        }
+    }
+
+    /// Export réel par RawTherapee : `TRI_TEST_RAW` et `rawtherapee-cli` installé. Le RAW
+    /// est copié dans un dossier temporaire, avec un profil qui éclaircit d'un IL.
+    #[test]
+    #[ignore]
+    fn rawtherapee_exports_a_development_in_full_resolution() {
+        let Some(raw) = std::env::var_os("TRI_TEST_RAW").map(PathBuf::from) else {
+            return;
+        };
+        let Some(cli) = crate::develop::find_profile_cli(Engine::RawTherapee, "auto") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let photo = dir.path().join(raw.file_name().unwrap());
+        std::fs::copy(&raw, &photo).unwrap();
+        let sidecar = crate::pp3::path(&photo, "pp3");
+        std::fs::write(&sidecar, "[Exposure]\nCompensation=1\n").unwrap();
+        let development = crate::developments::Development {
+            engine: Engine::RawTherapee,
+            copy: crate::developments::Copy::Main,
+            photo: photo.clone(),
+            sidecar,
+        };
+        crate::developments::set_for(&photo, std::slice::from_ref(&development));
+        let tool = ProfileTool {
+            engine: Engine::RawTherapee,
+            cli,
+            work_dir: dir.path().join("work"),
+        };
+        let mut profile = Profiles::default().get("web").unwrap().clone();
+        profile.max_side = 0;
+        let folder = dir.path().join("out").display().to_string();
+        let report = export_profile_tool(
+            &tool,
+            &[development.path()],
+            &Request::new(&profile, &folder),
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        crate::developments::set_for(&photo, &[]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        let img = image::open(&report.written[0]).unwrap();
+        let long = img.width().max(img.height());
+        eprintln!("export RawTherapee : {} × {}", img.width(), img.height());
+        assert!(long > 4000, "pleine résolution, pas l'aperçu : {long}");
     }
 
     /// Export réel par RapidRAW : `TRI_TEST_RAW` et RapidRAW installé (interface fermée).
