@@ -1995,8 +1995,8 @@ pub struct Next {
 impl Keymap {
     /// Suites possibles du début de séquence `prefix`, dans le panneau actif, telles que
     /// [`Sequencer::feed`] les traiterait (même classement des panneaux que `lookup`).
-    /// Une touche liée avec et sans Maj à la même action n'apparaît qu'une fois. Triées
-    /// par touche (caractères d'abord), la variante avec Maj après la touche seule.
+    /// Une touche liée avec et sans Maj à la même action n'apparaît qu'une fois. Dans
+    /// l'ordre de `keys.toml`, les sous-menus à la fin.
     pub fn continuations(&self, prefix: &[Chord]) -> Vec<Next> {
         let mut chords: Vec<Chord> = Vec::new();
         for (k, _) in &self.bindings {
@@ -2061,21 +2061,18 @@ impl Keymap {
                     n.action,
                 ))
         });
-        next.sort_by_key(|n| {
-            let bare = Chord {
-                shift: false,
-                ctrl: false,
-                ..n.chord
-            };
-            // Caractères et lettres d'abord, puis les touches nommées (Espace, flèches).
-            let name = chord_label(&bare);
-            (
-                name.chars().count() > 1,
-                name.to_lowercase(),
-                n.chord.ctrl,
-                n.chord.shift,
-            )
-        });
+        // Dans l'ordre de `keys.toml` (retour du 06/11/2026 : par touche, « ° , . » du
+        // violet passaient avant les étoiles, loin des autres couleurs), les sous-menus à
+        // la fin.
+        let order = |chord: Chord| {
+            self.bindings
+                .iter()
+                .position(|(k, _)| {
+                    k.len() > prefix.len() && k.starts_with(prefix) && k[prefix.len()] == chord
+                })
+                .unwrap_or(usize::MAX)
+        };
+        next.sort_by_key(|n| (n.action.is_none(), order(n.chord)));
         next
     }
 
