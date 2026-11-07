@@ -21,6 +21,11 @@
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.
+- **Gros bug : les développements RawTherapee et ART étaient exportés sans leur
+  développement** (comme leur photo, un simple rendu LibRaw). Ils sont maintenant rendus
+  par RawTherapee / ART, en pleine résolution (TIFF 16 bits dans l'espace couleur de leur
+  profil), puis convertis, recadrés, réduits et accentués comme les autres exports.
+  Interface et ligne de commande.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.

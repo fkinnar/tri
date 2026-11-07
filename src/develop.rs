@@ -1461,32 +1461,41 @@ pub struct ProfileTool {
     pub work_dir: PathBuf,
 }
 
-impl Developer for ProfileTool {
-    fn engine(&self) -> Engine {
-        self.engine
-    }
-
-    fn render(
+impl ProfileTool {
+    /// Rendu complet de `image` avec le profil `sidecar`, en **TIFF 16 bits** à pleine
+    /// résolution dans `export_dir` (l'export, 07/11/2026 : un développement RawTherapee ou
+    /// ART partait sans son développement). L'espace couleur est celui du profil (son
+    /// ICC est intégré au TIFF). Renvoie le fichier écrit.
+    pub fn render_tiff(
         &self,
         image: &Path,
         sidecar: &Path,
-        out: &Path,
-        side: u32,
+        export_dir: &Path,
         cancel: &AtomicBool,
-    ) -> Result<(), DevelopError> {
+    ) -> Result<PathBuf, DevelopError> {
+        self.run(image, sidecar, export_dir, &["-t", "-b16"], "tif", cancel)
+    }
+
+    /// `rawtherapee-cli` / `ART-cli -o <export_dir> -p <sidecar> <format> -Y -c <photo>` :
+    /// le fichier produit, d'extension `ext` (le logiciel le nomme lui-même).
+    fn run(
+        &self,
+        image: &Path,
+        sidecar: &Path,
+        export_dir: &Path,
+        format: &[&str],
+        ext: &str,
+        cancel: &AtomicBool,
+    ) -> Result<PathBuf, DevelopError> {
         let engine = self.engine;
         let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(engine, e.to_string());
-        let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
         // Un développement (`IMG@rt.RAF`, chemin propre, jamais sur le disque) : le
         // logiciel reçoit la photo (vérifié sur RawTherapee 5.13 le 31/10/2026 : le lot
         // rendait l'entrée du développement et échouait).
         let photo =
             crate::developments::get(image).map_or_else(|| image.to_path_buf(), |d| d.photo);
-        // Un dossier de sortie par rendu : le logiciel nomme lui-même le fichier
-        // (`<nom sans extension>.jpg`).
-        let export_dir = self.work_dir.join(format!("export-{id}"));
-        std::fs::create_dir_all(&export_dir).map_err(|e| failed(&e))?;
-        let log = self.work_dir.join(format!("export-{id}.log"));
+        std::fs::create_dir_all(export_dir).map_err(|e| failed(&e))?;
+        let log = export_dir.with_extension("log");
         let messages = std::fs::File::create(&log).map_err(|e| failed(&e))?;
         // Une AppImage (le nom de la commande en argument, [`find_profile_cli`]) : son
         // binaire extrait, avec ses bibliothèques.
@@ -1508,10 +1517,11 @@ impl Developer for ProfileTool {
         };
         let child = command
             .arg("-o")
-            .arg(&export_dir)
+            .arg(export_dir)
             .arg("-p")
             .arg(sidecar)
-            .args(["-j95", "-Y", "-c"])
+            .args(format)
+            .args(["-Y", "-c"])
             .arg(&photo)
             .stdin(Stdio::null())
             .stdout(messages.try_clone().map_err(|e| failed(&e))?)
@@ -1521,16 +1531,18 @@ impl Developer for ProfileTool {
         let status = wait(child, engine, cancel);
         let text = std::fs::read_to_string(&log).unwrap_or_default();
         let _ = std::fs::remove_file(&log);
-        let produced = std::fs::read_dir(&export_dir)
+        let produced = std::fs::read_dir(export_dir)
             .into_iter()
             .flatten()
             .flatten()
             .map(|e| e.path())
-            .find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("jpg")));
-        let result = match (status, produced) {
-            (Ok(status), Some(export)) if status.success() => {
-                shrink(&export, out, side).map_err(|e| failed(&e))
-            }
+            .find(|p| {
+                p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    e.eq_ignore_ascii_case(ext) || (ext == "tif" && e.eq_ignore_ascii_case("tiff"))
+                })
+            });
+        match (status, produced) {
+            (Ok(status), Some(file)) if status.success() => Ok(file),
             (Ok(_), _) => {
                 let last = text.lines().rev().find(|l| !l.trim().is_empty());
                 Err(DevelopError::Failed(
@@ -1541,7 +1553,32 @@ impl Developer for ProfileTool {
                 ))
             }
             (Err(e), _) => Err(e),
-        };
+        }
+    }
+}
+
+impl Developer for ProfileTool {
+    fn engine(&self) -> Engine {
+        self.engine
+    }
+
+    fn render(
+        &self,
+        image: &Path,
+        sidecar: &Path,
+        out: &Path,
+        side: u32,
+        cancel: &AtomicBool,
+    ) -> Result<(), DevelopError> {
+        let engine = self.engine;
+        let failed = |e: &dyn std::fmt::Display| DevelopError::Failed(engine, e.to_string());
+        let id = format!("{}-{:?}", std::process::id(), std::thread::current().id());
+        // Un dossier de sortie par rendu : le logiciel nomme lui-même le fichier
+        // (`<nom sans extension>.jpg`).
+        let export_dir = self.work_dir.join(format!("export-{id}"));
+        let result = self
+            .run(image, sidecar, &export_dir, &["-j95"], "jpg", cancel)
+            .and_then(|export| shrink(&export, out, side).map_err(|e| failed(&e)));
         let _ = std::fs::remove_dir_all(&export_dir);
         result
     }
