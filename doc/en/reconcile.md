@@ -68,8 +68,10 @@ their ratings.
   and the previous ratings, one column per field. Only the fields in disagreement (in
   bold) are chosen, by clicking the value wanted; the others are already merged
   (`Conflict::merged`, feedback of 2026-11-07: a colour added in the image must not
-  depend on the choice of stars). The "Result" row shows the ratings that will be kept;
-  "Apply", or "Keep" (every field in disagreement of a row). "Same choice for the N other
+  depend on the choice of stars). Alternating rows, fixed-width columns, cells drawn by
+  hand (values centred). A row's thick arrow (`marks::take_row_arrow`) chooses every field
+  in disagreement there, without applying; the "Result" row, in the accent colour (it is
+  not clickable), shows the ratings that will be kept; "Apply" at the bottom right. "Same choice for the N other
   images in conflict in the folder": the same kind of source, field by field. One history
   step, undoable.
 

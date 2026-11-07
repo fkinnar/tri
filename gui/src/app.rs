@@ -11775,60 +11775,163 @@ impl TriApp {
             .show(ctx, |ui| {
                 ui.label(t!("conflict-intro", fields = names.join(", ")));
                 ui.add_space(6.0);
+                // Un vrai tableau (retour du 07/11/2026) : lignes alternées, colonnes de
+                // largeur fixe, valeurs centrées.
+                let h = ui.spacing().interact_size.y + 6.0;
+                let (label_w, field_w, icon) = (210.0, 110.0, self.gui.dialogs.icon_size);
+                let accent = marks::accent_mark(ui.ctx());
+                // Cellules de taille fixe, dessinées ici : texte centré ; une valeur à
+                // choisir est une zone cliquable à sa taille, fond de sélection du thème.
+                let text_cell = |ui: &mut Ui, w: f32, text: egui::RichText| {
+                    let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+                    let galley = egui::WidgetText::from(text).into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Truncate),
+                        w,
+                        egui::TextStyle::Body,
+                    );
+                    let color = ui.visuals().text_color();
+                    let at = rect.center() - galley.size() / 2.0;
+                    ui.painter().galley(at, galley, color);
+                };
+                let choice_cell = |ui: &mut Ui,
+                                   w: f32,
+                                   text: &str,
+                                   selected: bool,
+                                   id: egui::Id| {
+                    let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+                    let galley = egui::WidgetText::from(text).into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Truncate),
+                        w,
+                        egui::TextStyle::Button,
+                    );
+                    let pad = ui.spacing().button_padding;
+                    let zone = Rect::from_center_size(rect.center(), galley.size() + pad * 2.0);
+                    let response = ui
+                        .interact(zone, id, Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    response.widget_info(|| {
+                        egui::WidgetInfo::selected(
+                            egui::accesskit::Role::Button,
+                            true,
+                            selected,
+                            text,
+                        )
+                    });
+                    let visuals = ui.style().interact_selectable(&response, selected);
+                    if selected || response.hovered() {
+                        ui.painter()
+                            .rect_filled(zone, visuals.corner_radius, visuals.weak_bg_fill);
+                    }
+                    let at = zone.center() - galley.size() / 2.0;
+                    ui.painter().galley(at, galley, visuals.text_color());
+                    response.clicked()
+                };
+                let cell = |ui: &mut Ui, w: f32, add: &mut dyn FnMut(&mut Ui)| {
+                    ui.allocate_ui_with_layout(
+                        vec2(w, h),
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                        |ui| add(ui),
+                    );
+                };
+                let first = |ui: &mut Ui, text: egui::RichText| {
+                    ui.allocate_ui_with_layout(
+                        vec2(label_w, h),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.add_space(8.0);
+                            ui.label(text);
+                        },
+                    );
+                };
                 egui::Grid::new("conflict_sources")
                     .num_columns(5)
-                    .spacing(vec2(14.0, 6.0))
+                    .striped(true)
+                    .spacing(vec2(0.0, 0.0))
                     .show(ui, |ui| {
-                        ui.label("");
+                        first(ui, egui::RichText::new(""));
                         for field in Field::ALL {
-                            let title = field_title(field);
-                            if conflict.fields.contains(&field) {
-                                ui.strong(title);
+                            let title = egui::RichText::new(field_title(field));
+                            let title = if conflict.fields.contains(&field) {
+                                title.strong()
                             } else {
-                                ui.weak(title);
-                            }
+                                title.weak()
+                            };
+                            text_cell(ui, field_w, title);
                         }
+                        cell(ui, icon + 12.0, &mut |_| {});
                         ui.end_row();
                         for (pick, label, notes) in &rows {
-                            if *pick == Pick::Before {
-                                ui.weak(label);
-                            } else {
-                                ui.label(label);
-                            }
+                            let text = egui::RichText::new(label.as_str());
+                            first(
+                                ui,
+                                if *pick == Pick::Before {
+                                    text.weak()
+                                } else {
+                                    text
+                                },
+                            );
                             for field in Field::ALL {
                                 let text = field_text(field, notes);
                                 if conflict.fields.contains(&field) {
                                     let selected = dialog.pick(field) == Some(pick);
-                                    if ui.selectable_label(selected, text).clicked() {
+                                    let id = ui.scope_id().with((
+                                        "conflict_cell",
+                                        label,
+                                        field_title(field),
+                                    ));
+                                    if choice_cell(ui, field_w, &text, selected, id) {
                                         dialog.set(field, pick.clone());
                                     }
                                 } else {
-                                    ui.weak(text);
+                                    text_cell(ui, field_w, egui::RichText::new(text).weak());
                                 }
                             }
-                            if ui.button(t!("conflict-keep")).clicked() {
+                            // Prendre toute la ligne (sans valider : retour du 07/11/2026).
+                            let mut take = false;
+                            cell(ui, icon + 12.0, &mut |ui| {
+                                let (rect, response) = marks::icon_button(
+                                    ui,
+                                    icon,
+                                    &t!("conflict-keep"),
+                                    &t!("conflict-keep-tip"),
+                                );
+                                let color = ui.style().interact(&response).fg_stroke.color;
+                                marks::take_row_arrow(ui.painter(), rect.shrink(icon * 0.2), color);
+                                take = response.clicked();
+                            });
+                            if take {
                                 for &field in &conflict.fields {
                                     dialog.set(field, pick.clone());
                                 }
-                                apply = true;
                             }
                             ui.end_row();
                         }
-                        // Le résultat du choix.
+                        // Le résultat du choix, à l'accent : il ne se clique pas.
                         let result = dialog.result(&conflict);
-                        ui.strong(t!("conflict-result"));
+                        first(ui, egui::RichText::new(t!("conflict-result")).color(accent));
                         for field in Field::ALL {
-                            ui.strong(field_text(field, &result));
+                            let text =
+                                egui::RichText::new(field_text(field, &result)).color(accent);
+                            cell(ui, field_w, &mut |ui| {
+                                ui.label(text.clone());
+                            });
                         }
-                        if ui.button(t!("conflict-apply")).clicked() {
-                            apply = true;
-                        }
+                        cell(ui, icon + 12.0, &mut |_| {});
                         ui.end_row();
                     });
                 if others > 0 {
                     ui.add_space(6.0);
                     ui.checkbox(&mut dialog.all, t!("conflict-all", n = others));
                 }
+                // Valider en bas à droite, à part (retour du 07/11/2026).
+                ui.add_space(10.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(t!("conflict-apply")).clicked() {
+                        apply = true;
+                    }
+                });
             });
         if modal.should_close() {
             self.conflict_dialog = None;

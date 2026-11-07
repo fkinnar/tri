@@ -73,9 +73,11 @@ sources et leurs notes.
   « Dans l'image ») et les notes d'avant, une colonne par champ. Seuls les champs en
   désaccord (en gras) se choisissent, d'un clic sur la valeur voulue ; les autres sont
   déjà fusionnés (`Conflict::merged`, retour du 07/11/2026 : une couleur ajoutée dans
-  l'image ne doit pas dépendre du choix des étoiles). La ligne « Résultat » montre les
-  notes qui seront gardées ; « Valider », ou « Garder » (tous les champs en désaccord
-  d'une ligne). « Même choix pour les N autres images en conflit du dossier » : la même
+  l'image ne doit pas dépendre du choix des étoiles). Lignes alternées, colonnes de
+  largeur fixe, cellules dessinées à la main (valeurs centrées). La flèche épaisse d'une
+  ligne (`marks::take_row_arrow`) y choisit tous les champs en désaccord, sans valider ;
+  la ligne « Résultat », à l'accent (elle ne se clique pas), montre les notes qui seront
+  gardées ; « Valider » en bas à droite. « Même choix pour les N autres images en conflit du dossier » : la même
   sorte de source, champ par champ. Un pas d'historique, annulable.
 
 ## À venir

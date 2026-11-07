@@ -587,6 +587,19 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
     (rect, response)
 }
 
+/// Flèche épaisse vers la gauche dans `rect` : prendre toute la ligne (boîte des conflits
+/// de notes, issue n° 368).
+pub fn take_row_arrow(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    painter.add(Shape::convex_polygon(
+        vec![p(0.02, 0.5), p(0.48, 0.08), p(0.48, 0.92)],
+        color,
+        Stroke::NONE,
+    ));
+    painter.rect_filled(Rect::from_min_max(p(0.44, 0.33), p(0.98, 0.67)), 1.0, color);
+}
+
 /// Signe « notes en désaccord » (issue n° 368) dans `rect` : un triangle d'avertissement
 /// orange cerclé de sombre, avec son point d'exclamation.
 pub fn conflict_sign(painter: &Painter, rect: Rect) {
