@@ -31,8 +31,9 @@
   peut s'y taper (`17:23`, `1.91:1`) et s'ajouter à la liste avec « + » (gardé dans
   `[versions] ratios`). Chaque partie a ses touches (`r` rapport, `:` personnalisé, `e`
   export, `F2` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au cadre
-  d'origine). La barre des filtres, et les filtres et
-  l'histogramme du panneau de droite, disparaissent pendant l'édition.
+  d'origine) ; l'orientation est une icône (le rectangle du cadre, debout ou couché). La
+  barre des filtres, et les filtres, la vue et l'histogramme du panneau de droite,
+  disparaissent pendant l'édition.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.

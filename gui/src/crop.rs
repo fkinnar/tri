@@ -590,18 +590,27 @@ impl Crop {
         if reset {
             self.reset_frame();
         }
-        // Orientation : le libellé dit celle d'arrivée.
-        let portrait = self
-            .ratio
-            .value(self.aspect.unwrap_or(1.0))
-            .is_some_and(|r| r < 1.0);
-        let label = if portrait {
-            t!("crop-landscape")
-        } else {
-            t!("crop-portrait")
-        };
-        let can_turn = !matches!(self.ratio, Ratio::Free | Ratio::Fixed(1, 1));
-        if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
+        // Orientation : une icône, le rectangle du cadre actuel (retour du 07/11/2026 :
+        // « Portrait » sur un cadre paysage, pour dire celle d'arrivée, déroutait) ; la
+        // bulle dit celle d'arrivée.
+        let value = self.ratio.value(self.aspect.unwrap_or(1.0));
+        let portrait = value.is_some_and(|r| r < 1.0);
+        let square = matches!(self.ratio, Ratio::Fixed(1, 1));
+        let can_turn = !matches!(self.ratio, Ratio::Free) && !square;
+        let size = ui.spacing().interact_size.y;
+        let turn = ui
+            .add_enabled(
+                can_turn,
+                egui::Button::new("").min_size(egui::vec2(size * 1.4, size)),
+            )
+            .on_hover_text(if portrait {
+                t!("crop-turn-landscape")
+            } else {
+                t!("crop-turn-portrait")
+            })
+            .on_disabled_hover_text(t!("crop-turn-none"));
+        orientation_icon(ui, &turn, portrait, square);
+        if turn.clicked() {
             self.rotate();
         }
         ui.add_space(gap);
@@ -713,6 +722,31 @@ fn cursor(handle: Handle) -> CursorIcon {
         Handle::TopLeft | Handle::BottomRight => CursorIcon::ResizeNwSe,
         Handle::TopRight | Handle::BottomLeft => CursorIcon::ResizeNeSw,
     }
+}
+
+/// Icône du bouton d'orientation : un rectangle debout (portrait), couché (paysage) ou
+/// carré, dans la couleur du texte du bouton.
+fn orientation_icon(ui: &egui::Ui, response: &egui::Response, portrait: bool, square: bool) {
+    let rect = response.rect;
+    let long = rect.height() * 0.62;
+    let short = if square { long } else { long * 0.66 };
+    let size = if portrait {
+        egui::vec2(short, long)
+    } else {
+        egui::vec2(long, short)
+    };
+    let color = ui.style().interact(response).fg_stroke.color;
+    let color = if response.enabled() {
+        color
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    ui.painter().rect_stroke(
+        egui::Rect::from_center_size(rect.center(), size),
+        1.0,
+        egui::Stroke::new(1.5, color),
+        egui::StrokeKind::Inside,
+    );
 }
 
 #[cfg(test)]

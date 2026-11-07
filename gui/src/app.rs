@@ -1984,22 +1984,22 @@ impl TriApp {
         // Filtres en plein écran aussi (retour du 30/10/2026 : tout le panneau) ; la
         // grille y laisse place à la vue (#239).
         if matches!(self.mode, Mode::Grid | Mode::View) {
-            // Pas pendant l'édition d'une version : on y travaille une image, les filtres
-            // n'y ont pas de sens (retour du 07/11/2026).
+            // Pas pendant l'édition d'une version : on y travaille une image, ni les
+            // filtres ni la vue n'y ont de sens (retours du 07/11/2026).
             if self.crop.is_none() {
                 if self.panel_section(ui, "filters", t!("panel-section-filters")) {
                     self.filter_settings(ui);
                 }
                 ui.separator();
-            }
-            if self.mode == Mode::View {
-                if self.panel_section(ui, "view", t!("panel-section-view")) {
-                    self.view_settings(ui);
+                if self.mode == Mode::View {
+                    if self.panel_section(ui, "view", t!("panel-section-view")) {
+                        self.view_settings(ui);
+                    }
+                } else if self.panel_section(ui, "grid", t!("panel-section-grid")) {
+                    self.grid_settings(ui);
                 }
-            } else if self.panel_section(ui, "grid", t!("panel-section-grid")) {
-                self.grid_settings(ui);
+                ui.separator();
             }
-            ui.separator();
         }
         if self.panel_section(ui, "exif", t!("panel-section-exif")) {
             self.metadata_panel(ui);
@@ -26180,6 +26180,8 @@ mod tests {
         );
         let histogram = t!("panel-section-histogram").to_uppercase();
         assert!(h.query_by_label(&histogram).is_none(), "ni l'histogramme");
+        let view = t!("panel-section-view").to_uppercase();
+        assert!(h.query_by_label(&view).is_none(), "ni la vue");
         press(&mut h, Key::Escape, Modifiers::NONE);
         h.run_steps(3);
         assert_eq!(count(&h), shown, "de retour");

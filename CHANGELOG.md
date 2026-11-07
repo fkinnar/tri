@@ -28,8 +28,9 @@
   ratio can be typed there (`17:23`, `1.91:1`) and added to the list with "+" (kept in
   `[versions] ratios`). Each part has its keys (`r` ratio, `:` custom, `e` export, `F2`
   name, `Ctrl+S` save as a preset, `0` or Ctrl+click on "Original": back to the original
-  frame). The filter bar, and the filters and histogram of the right panel, disappear while
-  editing.
+  frame); the orientation is an icon (the frame's rectangle, standing or lying). The
+  filter bar, and the filters, view settings and histogram of the right panel, disappear
+  while editing.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.

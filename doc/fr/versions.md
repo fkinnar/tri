@@ -90,7 +90,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
   16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
   « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
-  simplifiés ; puis Portrait / Paysage) ;
+  simplifiés ; puis l'orientation, une icône : le rectangle du cadre, debout ou couché,
+  la bulle dit celle d'arrivée) ;
   **Export** (préréglage d'export facultatif) ; **Nom** (il suit le rapport tant qu'on ne
   l'a pas tapé) et, collée à lui, la disquette (enregistrer comme préréglage ; grisée
   sans nom) ; Enregistrer / Annuler à droite. Dans la liste des rapports, le champ du

@@ -90,7 +90,8 @@ The interface only draws; all the computation is here.
   (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
   shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
   `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
-  Portrait / Landscape); **Export** (optional
+  the orientation, an icon: the frame's rectangle, standing or lying, its tooltip names
+  the other one); **Export** (optional
   export preset); **Name** (it follows the ratio as long as it has not been typed) and,
   next to it, the floppy (save as a preset; greyed out without a name); Save / Cancel on
   the right. In the ratio list, the custom ratio field ("Custom" in grey inside it) and a
