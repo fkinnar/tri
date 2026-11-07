@@ -987,6 +987,7 @@ kw-core-file-import-notes = relire importer lire notes étoiles images fichiers 
 folder-menu-import-notes = Relire les notes depuis les images
 import-done = Notes relues depuis { $n } images
 import-none = Rien à relire (pas de notes dans les images, ou les mêmes)
+import-conflicts = Notes relues depuis { $done } images ; { $n } en conflit, à trancher
 import-failed = Notes de { $n } images non relues : { $first }
 notes-merged = Notes fusionnées depuis d'autres logiciels pour { $n } images
 conflict-badge = Notes en désaccord entre leurs sources : cliquer pour trancher

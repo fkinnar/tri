@@ -55,8 +55,13 @@ champs.
   écrites dans tous les sidecars, la paire suit, et retenues).
 - `NoteBook::conflict`, `conflicts`, `take_merged` (fusions faites depuis le dernier
   appel, pour un message discret).
-- « Relire les notes depuis les images » (`NoteBook::import`) tranche en faveur de
-  l'image, et recopie dans les sidecars une note fusionnée depuis elle.
+- **Un conflit ne se tranche jamais en silence** (bug du 07/11/2026 : « Relire les notes
+  depuis les images » le tranchait en faveur de l'image) : noter (`edit`), annuler
+  (`write_only`), relire depuis les images (`import`), inscrire dans les images
+  (`embed`), régénérer les sidecars (`generate`) refusent une image en conflit (« à
+  trancher d'abord ») ; l'interface ouvre alors la boîte. Seul `resolve` tranche.
+- « Relire les notes depuis les images » (`NoteBook::import`) recopie dans les sidecars
+  une note fusionnée depuis l'image.
 
 ## Ligne de commande
 

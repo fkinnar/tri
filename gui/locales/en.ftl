@@ -988,6 +988,7 @@ kw-core-file-import-notes = read import load ratings stars images files jpeg hea
 folder-menu-import-notes = Read the ratings back from the images
 import-done = Ratings read from { $n } images
 import-none = Nothing to read (no ratings in the images, or the same)
+import-conflicts = Ratings read from { $done } images; { $n } in conflict, to settle
 import-failed = Ratings of { $n } images not read: { $first }
 notes-merged = Ratings merged from other programs for { $n } images
 conflict-badge = Ratings disagree between their sources: click to settle

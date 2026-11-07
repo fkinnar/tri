@@ -302,6 +302,9 @@ impl NoteBook {
                 let notes = self.notes(image);
                 let result = match self.error(image) {
                     Some(error) => Err(error.to_string()),
+                    // En conflit : l'image est l'une des sources en désaccord, on ne
+                    // l'écrase pas.
+                    None if self.conflict(image).is_some() => Err(crate::t!("notes-conflict")),
                     None if dry_run => crate::embedded::would_change(image, notes),
                     None => crate::embedded::write(image, notes),
                 };
@@ -314,7 +317,8 @@ impl NoteBook {
     /// demande : notes changées dans un autre logiciel qui les écrit dans l'image,
     /// XnView MP…), comme une note posée dans `tri` : la paire RAW+JPEG suit. Pour chaque
     /// image : vrai si ses notes ont changé, ou l'erreur. Une image sans notes inscrites, ou
-    /// aux mêmes notes, reste telle quelle. `dry_run` : rien n'est écrit.
+    /// aux mêmes notes, reste telle quelle ; une image en conflit aussi (erreur : à
+    /// trancher d'abord, jamais en silence). `dry_run` : rien n'est écrit.
     pub fn import(
         &mut self,
         images: &[PathBuf],
@@ -333,12 +337,16 @@ impl NoteBook {
                             .iter()
                             .all(|s| read_sidecar(s).is_ok_and(|n| n == *inside))
                 };
+                // En conflit : jamais tranché en silence (retour du 07/11/2026), on
+                // demande d'abord ([`NoteBook::resolve`], boîte de l'interface).
+                if self.conflict(image).is_some() {
+                    return (image.clone(), Err(crate::t!("notes-conflict")));
+                }
                 let result = match crate::embedded::read(image) {
                     Err(e) => Err(crate::t!("embed-io", error = e.to_string())),
                     Ok(None) => Ok(false),
                     Ok(Some(inside)) if current(&inside) => Ok(false),
                     Ok(Some(_)) if dry_run => Ok(true),
-                    // Choisir l'image tranche un conflit.
                     Ok(Some(inside)) => self
                         .resolve(image, &inside)
                         .map(|_| true)
@@ -653,6 +661,13 @@ impl NoteBook {
             let Some(entry) = self.entries.get(image) else {
                 continue;
             };
+            // En conflit : on n'écrit rien tant que ce n'est pas tranché.
+            if entry.conflict.is_some() {
+                report
+                    .errors
+                    .push((image.clone(), crate::t!("notes-conflict")));
+                continue;
+            }
             if entry.notes == Notes::default() {
                 report.skipped += 1;
                 continue;
@@ -715,6 +730,13 @@ impl NoteBook {
             return Err(XmpError::Image {
                 image: image.to_path_buf(),
                 message: error.clone(),
+            });
+        }
+        // En conflit (changée ailleurs depuis) : annuler écraserait une source.
+        if entry.conflict.is_some() {
+            return Err(XmpError::Image {
+                image: image.to_path_buf(),
+                message: crate::t!("notes-conflict"),
             });
         }
         if entry.notes != *notes {
@@ -1246,20 +1268,28 @@ mod tests {
         assert_eq!(book.notes(&a).flag, Flag::None);
         assert_eq!(book.take_merged(), [(a.clone(), vec!["A.jpg".to_string()])]);
         assert_eq!(xmp::read(&a).unwrap().stars, 4, "le sidecar, lui, attend");
-        // Relire depuis les images : le sidecar suit ; B tranché en faveur de l'image.
+        // Relire depuis les images : le sidecar suit ; B, en conflit, n'est pas tranché en
+        // silence (retour du 07/11/2026).
         let dry = book.import(std::slice::from_ref(&a), true);
         assert_eq!(dry[0].1, Ok(true));
         assert_eq!(xmp::read(&a).unwrap().stars, 4, "rien écrit à blanc");
         let report = book.import(&[a.clone(), b.clone()], false);
         assert_eq!(report[0].1, Ok(true));
-        assert_eq!(
-            report[1].1,
-            Ok(true),
-            "B : 4 dans l'image, 2 dans le sidecar"
-        );
+        assert!(report[1].1.is_err(), "B en conflit : refusé");
         assert_eq!(xmp::read(&a).unwrap().stars, 1);
-        assert_eq!(book.notes(&b).stars, 4);
-        assert!(book.conflict(&b).is_none(), "tranché");
+        assert_eq!(xmp::read(&b).unwrap().stars, 2, "B intact");
+        assert!(book.conflict(&b).is_some(), "toujours à trancher");
+        // Rien d'autre ne l'écrase en silence : inscrire, annuler, régénérer.
+        assert!(book.embed(std::slice::from_ref(&b), false)[0].1.is_err());
+        assert!(book.write_only(&b, &Notes::default()).is_err());
+        let generated = book.generate(std::slice::from_ref(&b), sidecars::formats(), false, true);
+        assert_eq!(generated.errors.len(), 1);
+        assert_eq!(xmp::read(&b).unwrap().stars, 2, "B toujours intact");
+        assert_eq!(
+            crate::embedded::read(&b).unwrap().unwrap().stars,
+            4,
+            "son image aussi"
+        );
         assert_eq!(book.import(std::slice::from_ref(&a), false)[0].1, Ok(false));
     }
 

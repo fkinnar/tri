@@ -51,8 +51,13 @@ Not in the XMP: darktable rewrites its XMP from its database and may erase our f
   written to every sidecar, the pair follows, and kept).
 - `NoteBook::conflict`, `conflicts`, `take_merged` (merges made since the last call, for
   a discreet message).
-- "Read the ratings back from the images" (`NoteBook::import`) settles in favour of the
-  image, and copies a rating merged from it into the sidecars.
+- **A conflict is never settled silently** (bug of 2026-11-07: "Read the ratings back from
+  the images" settled it in favour of the image): rating (`edit`), undo (`write_only`),
+  reading back from the images (`import`), writing into the images (`embed`),
+  regenerating sidecars (`generate`) refuse an image in conflict ("resolve that first");
+  the interface then opens the dialog. Only `resolve` settles.
+- "Read the ratings back from the images" (`NoteBook::import`) copies a rating merged from
+  the image into the sidecars.
 
 ## Command line
 

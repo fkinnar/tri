@@ -14630,9 +14630,26 @@ impl TriApp {
             self.notice = Some((t!("embed-busy"), false));
             return;
         }
+        // En conflit : l'image est l'une des sources en désaccord, jamais écrasée en
+        // silence (retour du 07/11/2026) ; la boîte pour trancher s'ouvre.
+        if let Some(first) = images
+            .iter()
+            .find(|p| self.folder.notes.conflict(p).is_some())
+        {
+            let at = self
+                .repaint
+                .as_ref()
+                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
+                - vec2(200.0, 120.0);
+            self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
+        }
         let jobs: Vec<(PathBuf, tri::xmp::Notes)> = images
             .into_iter()
-            .filter(|p| tri::embedded::supports(p) && self.folder.notes.error(p).is_none())
+            .filter(|p| {
+                tri::embedded::supports(p)
+                    && self.folder.notes.error(p).is_none()
+                    && self.folder.notes.conflict(p).is_none()
+            })
             .map(|p| {
                 let notes = self.folder.notes.notes(&p).clone();
                 (p, notes)
@@ -14673,10 +14690,23 @@ impl TriApp {
             .filter(|p| tri::embedded::supports(p))
             .cloned()
             .collect();
+        // Les images en conflit ne sont pas tranchées en silence (retour du 07/11/2026) :
+        // relues sans elles, puis la boîte pour la première.
+        let (conflicted, images): (Vec<PathBuf>, Vec<PathBuf>) = images
+            .into_iter()
+            .partition(|p| self.folder.notes.conflict(p).is_some());
         let before = tri::history::snapshot(&self.folder.notes, &images);
         let report = self.folder.notes.import(&images, false);
         if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
             self.history.push(step);
+        }
+        if let Some(first) = conflicted.first() {
+            let at = self
+                .repaint
+                .as_ref()
+                .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
+                - vec2(200.0, 120.0);
+            self.conflict_dialog = Some(ConflictDialog::new(first.clone(), at));
         }
         let changed = report.iter().filter(|(_, r)| *r == Ok(true)).count();
         let errors: Vec<String> = report
@@ -14691,6 +14721,10 @@ impl TriApp {
             Some(first) => (
                 t!("import-failed", n = errors.len(), first = first.clone()),
                 true,
+            ),
+            None if !conflicted.is_empty() => (
+                t!("import-conflicts", done = changed, n = conflicted.len()),
+                false,
             ),
             None if changed == 0 => (t!("import-none"), false),
             None => (t!("import-done", n = changed), false),
@@ -26907,6 +26941,24 @@ mod tests {
         h.state_mut().folder.notes.reload();
         h.run_steps(2);
         assert!(h.state().folder.notes.conflict(&image).is_some());
+        // Relire depuis les images : pas tranché en silence (retour du 07/11/2026), la
+        // boîte s'ouvre.
+        let inside = std::fs::read(&image).unwrap();
+        for action in [Action::ImportNotes, Action::EmbedNotes] {
+            act(&mut h, action);
+            run_until(&mut h, |app| app.embed_job.is_none());
+            assert!(
+                h.state().conflict_dialog.is_some(),
+                "{action:?} : boîte ouverte"
+            );
+            assert!(
+                h.state().folder.notes.conflict(&image).is_some(),
+                "pas tranché"
+            );
+            assert_eq!(tri::xmp::read(&image).unwrap().stars, 2, "sidecar intact");
+            assert_eq!(std::fs::read(&image).unwrap(), inside, "image intacte");
+            h.state_mut().conflict_dialog = None;
+        }
         // Noter : la boîte s'ouvre, rien n'est écrit.
         press(&mut h, Key::Num5, Modifiers::NONE);
         h.run_steps(2);
