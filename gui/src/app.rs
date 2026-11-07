@@ -908,6 +908,9 @@ pub struct TriApp {
     zoom_anchor: Option<(Vec2, egui::Pos2)>,
     /// Grandes textures chargées, par fichier et niveau.
     big: Lru<(PathBuf, Level), Big>,
+    /// Grandes images non chargées faute de mémoire graphique (`[gui.view] textures_mb`) :
+    /// elles gardent leur aperçu, sans être redemandées tant qu'elles restent affichées.
+    over_budget: HashSet<(PathBuf, Level)>,
     /// Dernière liste envoyée au chargeur (pour ne pas la renvoyer à chaque image).
     wanted: Vec<(PathBuf, Level)>,
     /// Entrées annoncées prêtes mais introuvables dans le cache : ne pas les redemander.
@@ -1418,6 +1421,7 @@ impl TriApp {
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
             big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
+            over_budget: HashSet::new(),
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
@@ -7620,6 +7624,46 @@ impl TriApp {
         }
     }
 
+    /// Fait de la place pour `image` dans la mémoire graphique (`[gui.view] textures_mb`) :
+    /// sortent les grandes textures les moins récentes, sauf celles des images affichées.
+    /// Faux si elle ne tient toujours pas (dit une fois dans la barre d'état).
+    fn make_room(&mut self, key: &(PathBuf, Level), image: &ColorImage) -> bool {
+        let bytes = |w: usize, h: usize| (w * h * 4) as u64;
+        let budget = self.gui.view.textures_mb * 1024 * 1024;
+        let needed = bytes(image.size[0], image.size[1]);
+        let shown: HashSet<PathBuf> = self
+            .displayed()
+            .iter()
+            .map(|&i| self.files[i].path.clone())
+            .collect();
+        loop {
+            let used: u64 = self
+                .big
+                .values()
+                .map(|b| {
+                    let [w, h] = b.texture.size();
+                    bytes(w, h)
+                })
+                .sum();
+            if used + needed <= budget {
+                return true;
+            }
+            // Pas une des images affichées (ni l'ancienne version de celle-ci).
+            match self.big.oldest_where(|k| !shown.contains(&k.0) && k != key) {
+                Some(old) => self.big.remove(&old),
+                None => {
+                    if self.over_budget.is_empty() {
+                        self.notice = Some((
+                            t!("textures-over-budget", mb = self.gui.view.textures_mb),
+                            false,
+                        ));
+                    }
+                    return false;
+                }
+            }
+        }
+    }
+
     /// Plein écran : intègre les images chargées et indique au chargeur ce qu'il faut
     /// préparer (l'image affichée, puis ses voisines).
     fn update_loads(&mut self, ctx: &egui::Context) {
@@ -7647,6 +7691,9 @@ impl TriApp {
             }
             self.wanted.retain(|w| *w != key);
             match loaded.image {
+                Some(image) if !self.make_room(&key, &image) => {
+                    self.over_budget.insert(key);
+                }
                 Some(image) => {
                     let texture = ctx.load_texture(
                         format!("{}#{:?}", loaded.path.display(), loaded.level),
@@ -7670,6 +7717,13 @@ impl TriApp {
             }
         }
         let displayed = self.displayed();
+        // Une image qui n'est plus affichée pourra de nouveau charger son 1:1.
+        let shown: HashSet<&Path> = displayed
+            .iter()
+            .map(|&i| self.files[i].path.as_path())
+            .collect();
+        self.over_budget
+            .retain(|(p, _)| shown.contains(p.as_path()));
         if displayed.is_empty() {
             return;
         }
@@ -7719,7 +7773,10 @@ impl TriApp {
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
-                if !self.loaded(index, level) && !self.missing.contains(&key) {
+                if !self.loaded(index, level)
+                    && !self.missing.contains(&key)
+                    && !self.over_budget.contains(&key)
+                {
                     wanted.push((self.files[index].clone(), level));
                 }
             }
@@ -15281,6 +15338,10 @@ impl TriApp {
 
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).
+        if let Some(e) = crate::crash::take_gpu_error() {
+            self.notice = Some((t!("gpu-error", error = e), true));
+        }
         let ctx = ui.ctx().clone();
         let mut steps = crate::trace::Steps::start();
         if self.repaint.is_none() {
@@ -19777,6 +19838,34 @@ mod tests {
         assert_eq!(h.state().selection.len(), 3);
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
+    }
+
+    #[test]
+    fn the_large_textures_stay_within_their_memory_budget() {
+        // Plantage du 07/11/2026 (« wgpu error: Out of Memory ») : 21 images comparées à
+        // 1:1. Au-delà de `[gui.view] textures_mb`, une image garde son aperçu.
+        let (mut h, _dir) = harness_with(2400, 1600);
+        h.state_mut().gui.view.textures_mb = 20;
+        h.run_steps(3);
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        run_until(&mut h, |app| !app.over_budget.is_empty());
+        let used: u64 = h
+            .state()
+            .big
+            .values()
+            .map(|b| {
+                let [w, h] = b.texture.size();
+                (w * h * 4) as u64
+            })
+            .sum();
+        assert!(used <= 20 * 1024 * 1024, "{used} octets");
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("textures_mb"), "{notice}");
+        // Revenu à la grille : plus rien d'écarté, les 1:1 pourront revenir.
+        act(&mut h, Action::Back);
+        h.run_steps(3);
+        assert!(h.state().over_budget.is_empty());
     }
 
     #[test]

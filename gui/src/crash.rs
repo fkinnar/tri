@@ -63,9 +63,43 @@ pub fn install(dir: PathBuf) {
     }));
 }
 
+/// Dernière erreur de la carte graphique, pas encore montrée ([`gpu_error`],
+/// [`take_gpu_error`]).
+static GPU_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Une erreur de la carte graphique (mémoire pleine…), qui plantait `tri` avant le
+/// 07/11/2026 (le gestionnaire de wgpu par défaut arrête le programme) : consignée dans le
+/// journal de `dir` s'il y en a un, puis gardée pour la barre d'état. L'image en cause
+/// n'est pas dessinée, le reste continue.
+pub fn gpu_error(dir: Option<&Path>, message: &str) {
+    eprintln!("tri : erreur de la carte graphique : {message}");
+    if let Some(dir) = dir {
+        let text = report("(carte graphique, sans plantage)", "wgpu", message, "");
+        let _ = append(dir, &text);
+    }
+    if let Ok(mut last) = GPU_ERROR.lock() {
+        *last = Some(message.to_string());
+    }
+}
+
+/// L'erreur de la carte graphique à montrer, une fois.
+pub fn take_gpu_error() -> Option<String> {
+    GPU_ERROR.lock().ok()?.take()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_graphics_error_is_logged_and_shown_once() {
+        let dir = tempfile::tempdir().unwrap();
+        gpu_error(Some(dir.path()), "Out of Memory");
+        let log = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
+        assert!(log.contains("Out of Memory") && log.contains("sans plantage"));
+        assert_eq!(take_gpu_error().as_deref(), Some("Out of Memory"));
+        assert_eq!(take_gpu_error(), None, "une fois");
+    }
 
     #[test]
     fn reports_are_appended_with_their_location_and_message() {

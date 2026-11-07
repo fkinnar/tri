@@ -116,6 +116,16 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             trace::trace(|| "fenêtre ouverte".into());
+            // Une erreur de la carte graphique (mémoire pleine, 07/11/2026) : consignée et
+            // dite, sans arrêter le programme comme le gestionnaire de wgpu par défaut.
+            if let Some(render) = &cc.wgpu_render_state {
+                let data = settings.engine().data_dir();
+                render.device.on_uncaptured_error(std::sync::Arc::new(
+                    move |e: eframe::wgpu::Error| {
+                        crash::gpu_error(data.as_deref(), &e.to_string());
+                    },
+                ));
+            }
             settings.gui.theme.apply(&cc.egui_ctx, &settings.gui.colors);
             // Les flèches des noms de touches, d'une police du système (06/11/2026).
             fonts::install(

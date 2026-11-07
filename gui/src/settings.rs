@@ -1152,6 +1152,11 @@ pub struct ViewSettings {
     /// Grandes textures (aperçus, 1:1) gardées en mémoire : l'image affichée, ses voisines
     /// et quelques images récentes. Un 1:1 de 26 Mpx occupe ~100 Mo de mémoire graphique.
     pub textures: usize,
+    /// Mémoire graphique des grandes textures, au plus (Mo ; 07/11/2026 : 21 images
+    /// comparées à 1:1 faisaient planter une carte graphique intégrée). Au-delà, les
+    /// moins récentes non affichées sortent ; si ça ne suffit pas, une image garde son
+    /// aperçu au lieu de son 1:1.
+    pub textures_mb: u64,
     /// Déplacement d'une image zoomée par appui sur une touche (Maj + flèches, Maj + hjkl),
     /// en fraction de la largeur (ou hauteur) de la vue.
     pub pan_step: f32,
@@ -1200,6 +1205,7 @@ impl Default for ViewSettings {
         Self {
             full_raw_dwell_ms: 400,
             textures: 8,
+            textures_mb: 1500,
             pan_step: 0.2,
             marks: 18.0,
             focus_point: true,

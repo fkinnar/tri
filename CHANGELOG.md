@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **No more crash when the graphics memory is full** (21 images compared at 1:1): the
+  large textures have a budget (`[gui.view] textures_mb`, 1500 MB); beyond it, an image
+  keeps its preview. A graphics card error is now logged and shown instead of stopping
+  `tri`.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to

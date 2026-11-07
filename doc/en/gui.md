@@ -1460,6 +1460,15 @@ during a window's opening fade showed it half transparent.
   file and line, thread, backtrace) in `crash.log` in the data folder, before stopping; a
   crash while drawing the window (called from AppKit on macOS) otherwise left only a
   system report, without the message.
+- **Graphics memory** (2026-11-07, crash "wgpu error: Out of Memory": 21 images compared
+  at 1:1 on an integrated graphics card, ~100 MB per 26 Mpx 1:1): the large textures
+  have a budget, `[gui.view] textures_mb` (1500 MB). When an image arrives
+  (`TriApp::make_room`), the least recent ones not shown are dropped; if that is not
+  enough, it keeps its preview (`over_budget`, not asked again while it stays shown) and
+  the status bar says so. Safety net: a graphics card error no longer stops the program
+  (wgpu's default handler did); it is recorded in `crash.log` ("sans plantage") and shown
+  in the status bar (`crash::gpu_error`, hooked to `Device::on_uncaptured_error` in
+  `main.rs`).
 - `TRI_GUI_TRACE=1`: timed trace of the startup steps (configuration read, window opened,
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen
   on macOS) and of each step of image loading (request to the engine, image ready,

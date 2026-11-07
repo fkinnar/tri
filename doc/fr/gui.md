@@ -1532,6 +1532,15 @@ moitié transparente.
   consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de
   données, avant l'arrêt ; un plantage pendant le dessin de la fenêtre (appelé depuis
   AppKit sur macOS) ne laissait sinon qu'un rapport du système, sans le message.
+- **Mémoire graphique** (07/11/2026, plantage « wgpu error: Out of Memory » : 21 images
+  comparées à 1:1 sur une carte graphique intégrée, ~100 Mo par 1:1 de 26 Mpx) : les
+  grandes textures ont un budget, `[gui.view] textures_mb` (1500 Mo). À l'arrivée d'une
+  image (`TriApp::make_room`), les moins récentes non affichées sortent ; si ça ne suffit
+  pas, elle garde son aperçu (`over_budget`, pas redemandée tant qu'elle reste affichée)
+  et la barre d'état le dit. Filet de sécurité : une erreur de la carte graphique n'arrête
+  plus le programme (le gestionnaire de wgpu par défaut le faisait) ; elle est consignée
+  dans `crash.log` (« sans plantage ») et dite dans la barre d'état
+  (`crash::gpu_error`, branché sur `Device::on_uncaptured_error` dans `main.rs`).
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

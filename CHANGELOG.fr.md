@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Plus de plantage quand la mémoire graphique est pleine** (21 images comparées à
+  1:1) : les grandes textures ont un budget (`[gui.view] textures_mb`, 1500 Mo) ; au-delà,
+  une image garde son aperçu. Une erreur de la carte graphique est maintenant consignée et
+  dite au lieu d'arrêter `tri`.
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.
