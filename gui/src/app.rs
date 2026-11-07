@@ -18996,16 +18996,24 @@ mod tests {
         let names: Vec<&str> = names.iter().map(String::as_str).collect();
         let (mut h, _dir) = harness_files(&names, 640, 480);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
-        run_until(&mut h, |app| app.grid_images.len() >= 2);
-        // Une hauteur de fenêtre où une vignette passe sous le + de la barre.
+        // Toutes les vignettes calculées d'abord (lentes sur les machines de la CI : une
+        // vignette sans texture n'a pas de place dans `grid_images`).
+        run_until(&mut h, |app| {
+            app.status.iter().all(|s| s.thumbnail == Avail::Ready)
+        });
+        // Une hauteur de fenêtre où une vignette passe sous le + de la barre ; quelques
+        // images pour que les textures des vignettes devenues visibles arrivent.
         let mut found = None;
-        for height in (300..800).step_by(7) {
+        'heights: for height in (300..800).step_by(7) {
             h.set_size(vec2(1800.0, height as f32));
-            h.run_steps(4);
-            let plus = h.get_by_label("+").rect().center();
-            if h.state().grid_images.iter().any(|(_, r)| r.contains(plus)) {
-                found = Some(plus);
-                break;
+            for _ in 0..10 {
+                h.run_steps(1);
+                let plus = h.get_by_label("+").rect().center();
+                if h.state().grid_images.iter().any(|(_, r)| r.contains(plus)) {
+                    found = Some(plus);
+                    break 'heights;
+                }
+                std::thread::sleep(Duration::from_millis(5));
             }
         }
         let plus = found.expect("une vignette sous la barre");
