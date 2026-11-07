@@ -34,6 +34,11 @@
   In the menu of continuations, a label shared by most rows goes to the title (`f`:
   "Filter"); no details in brackets there (F1 and the palette keep them); shorter labels for the star
   filters and the colours (no "(add / remove)").
+- **No 1:1 button in the grid**: the adjustable loupe replaces it; `z` still opens the
+  selected image at 100 %.
+- **"All thumbnails on screen" is a switch** (button and `*` in the grid): on, the
+  thumbnails shrink to show them all; off, they get their size back. Changing the size by
+  hand turns it off.
 - **Palette history**: with an empty field, the command palette shows what was launched
   from it, most recent first; ↑ / ↓ and Enter launch it again. Kept between sessions
   (`[gui.dialogs] palette_history`, 20).

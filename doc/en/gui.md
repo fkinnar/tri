@@ -179,7 +179,8 @@ system one ("cold" measurements, experiments).
 - **Key hints** at the top right of the full screen view ("b : Camera render / RAW,
   z : 1:1…"): hidden by default since 2026-10-17 (it overlapped the image, F1 opens the
   full help with search); `[gui.view] key_hints = true` to bring it back.
-- **1:1 from the grid** (2026-10-17): `z` (or the bar's "1:1" button) opens the selected
+- **1:1 from the grid** (2026-10-17): `z` (keyboard only since 2026-11-07: in the grid,
+  the bar's "1:1" button gave way to the adjustable loupe) opens the selected
   image directly at 100 %, to check sharpness quickly; Esc goes back to the grid. With the
   keyboard and the button, the 1:1 is **centred on the focus point** when the camera
   recorded it (`[gui.view] zoom_on_focus_point`), otherwise in the middle; if the
@@ -1493,7 +1494,9 @@ blurry background among landscapes), it wrongly flagged sharp photos.
   and badges disappear, the image takes the text's room; `[gui.grid] info`, remembered.
 - **Thumbnail size**: slider at the bottom next to ‹ › (logarithmic,
   `[gui.grid] cell_min` / `cell_max`, double-click: `cell`), "all on screen" button
-  (`grid::fit_all`: the largest size that shows the whole filtered folder); on the
+  (`grid::fit_all`: the largest size that shows the whole filtered folder; a switch
+  since 2026-11-07, `TriApp::toggle_grid_fit`: off, it gives back the size before;
+  changing the size by hand turns it off); on the
   keyboard, like Lightroom, `+` / `-` (a quarter more or less, `grid::step_cell`) and
   `*`; with the mouse, Ctrl / Cmd + wheel or a pinch on the touchpad, continuously
   (2026-10-24, issue #44). Size remembered between launches. Controls shown only if the rating bar has room
