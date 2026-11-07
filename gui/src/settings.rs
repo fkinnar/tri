@@ -732,6 +732,9 @@ pub struct DialogSettings {
     pub palette_width: f32,
     /// Palette de commandes : lignes montrées au plus ; 0 : toutes.
     pub palette_max: usize,
+    /// Palette de commandes : commandes lancées gardées dans son historique (montré
+    /// quand le champ est vide), d'une session à l'autre ; 0 : aucun historique.
+    pub palette_history: usize,
     /// Palette de commandes : préfixe d'une recherche d'actions seulement (`>`, comme
     /// dans VS Code) : un caractère ; vide : aucun.
     #[serde(deserialize_with = "one_char")]
@@ -794,6 +797,7 @@ impl Default for DialogSettings {
             help_here_column: 420.0,
             palette_width: 640.0,
             palette_max: 0,
+            palette_history: 20,
             palette_actions_prefix: Some('>'),
             palette_settings_prefix: Some('?'),
             poll_ms: 100,

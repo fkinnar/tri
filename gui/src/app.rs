@@ -817,6 +817,9 @@ pub struct TriApp {
     help_here_scroll: f32,
     /// Palette de commandes ouverte (Ctrl+Maj+P, `:` en vim).
     palette: Option<PaletteState>,
+    /// Ce qu'on a lancé depuis la palette, le plus récent d'abord (`palette-history` du
+    /// dossier de données ; montré quand son champ est vide).
+    palette_history: Vec<crate::palette::Item>,
     /// Lignes de l'aide pour la recherche en cours, préparées une fois (issue n° 11 : les
     /// recalculer à chaque image, ~75 ms, faisait saccader l'ouverture).
     help_lines: Option<HelpLines>,
@@ -1352,6 +1355,10 @@ impl TriApp {
             help_here: None,
             help_here_scroll: 0.0,
             palette: None,
+            palette_history: data
+                .as_deref()
+                .map(crate::palette::load_history)
+                .unwrap_or_default(),
             help_lines: None,
             help_widths: None,
             visible_waiting: 0,
@@ -6254,9 +6261,11 @@ impl TriApp {
             Action::Palette => {
                 self.help = false;
                 self.help_here = None;
+                let settings = crate::settings_window::settings_list(&self.developers.engines());
                 self.palette = Some(PaletteState {
                     places: self.palette_places(),
-                    settings: crate::settings_window::settings_list(&self.developers.engines()),
+                    hits: self.palette_recent(&settings),
+                    settings,
                     ..PaletteState::default()
                 });
             }
@@ -13670,6 +13679,27 @@ impl TriApp {
         }
     }
 
+    /// L'historique de la palette, montré quand son champ est vide (07/11/2026).
+    fn palette_recent(
+        &self,
+        settings: &[crate::settings_window::SettingRef],
+    ) -> Vec<crate::palette::Hit> {
+        crate::palette::history_hits(&self.palette_history, &self.keymap, settings)
+    }
+
+    /// `item` lancé depuis la palette : en tête de son historique, écrit aussitôt dans le
+    /// dossier de données (une erreur d'écriture n'empêche rien : dite dans la barre
+    /// d'état).
+    fn remember_in_palette(&mut self, item: crate::palette::Item) {
+        let max = self.gui.dialogs.palette_history;
+        crate::palette::remember(&mut self.palette_history, item, max);
+        if let Some(data) = &self.data_dir
+            && let Err(e) = crate::palette::save_history(data, &self.palette_history)
+        {
+            self.notice = Some((e.to_string(), true));
+        }
+    }
+
     /// Endroits dont la palette met les actions en tête (elle propose tout) : celui de
     /// l'aide « ici », et les images quand un panneau latéral a le clavier.
     fn palette_places(&self) -> Vec<crate::cheatsheet::Place> {
@@ -14733,6 +14763,9 @@ impl TriApp {
                 if !query.trim().is_empty() && state.hits.is_empty() {
                     ui.weak(t!("palette-empty"));
                 }
+                if query.trim().is_empty() && !state.hits.is_empty() {
+                    ui.weak(t!("palette-recent"));
+                }
                 ScrollArea::vertical()
                     .max_height(ctx.content_rect().height() * 0.6)
                     .show(ui, |ui| {
@@ -14751,23 +14784,30 @@ impl TriApp {
             });
         let close = shown.should_close();
         if query != state.query {
-            state.hits = crate::palette::search(
-                &self.keymap,
-                &|a| self.action_unusable(a).is_none(),
-                &query,
-                self.gui.dialogs.palette_prefixes(),
-                &state.places,
-                &state.settings,
-                self.gui.dialogs.palette_max,
-            );
+            state.hits = if query.trim().is_empty() {
+                self.palette_recent(&state.settings)
+            } else {
+                crate::palette::search(
+                    &self.keymap,
+                    &|a| self.action_unusable(a).is_none(),
+                    &query,
+                    self.gui.dialogs.palette_prefixes(),
+                    &state.places,
+                    &state.settings,
+                    self.gui.dialogs.palette_max,
+                )
+            };
             state.selected = 0;
             state.query = query;
         }
         let chosen = clicked.or((run && count > 0).then_some(state.selected));
-        match chosen
+        let chosen = chosen
             .and_then(|i| state.hits.get(i))
-            .map(|h| h.item.clone())
-        {
+            .map(|h| h.item.clone());
+        if let Some(item) = &chosen {
+            self.remember_in_palette(item.clone());
+        }
+        match chosen {
             Some(crate::palette::Item::Action(action)) => self.perform(ctx, action),
             Some(crate::palette::Item::Setting(section, key)) => {
                 self.open_settings();
@@ -17188,6 +17228,63 @@ mod tests {
         assert!(h.state().review_developments);
         act(&mut h, Action::ReviewDevelopments);
         assert!(!h.state().review_developments);
+    }
+
+    #[test]
+    fn the_palette_remembers_what_was_launched() {
+        // Demandé le 07/11/2026 : le champ vide montre les dernières commandes lancées,
+        // la plus récente en haut ; ↑ / ↓ et Entrée les relancent ; gardées sur disque.
+        use crate::palette::Item;
+        use tri::sort::SortKey;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let palette = |h: &mut Harness<'_, TriApp>| {
+            press(h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        };
+        let shown = |h: &Harness<'_, TriApp>| -> Vec<Item> {
+            h.state()
+                .palette
+                .as_ref()
+                .map(|p| p.hits.iter().map(|hit| hit.item.clone()).collect())
+                .unwrap_or_default()
+        };
+        palette(&mut h);
+        assert!(shown(&h).is_empty(), "rien encore");
+        for query in ["trier par etoiles", "trier par nom"] {
+            type_text(&mut h, query);
+            press(&mut h, Key::Enter, Modifiers::NONE);
+            assert!(h.state().palette.is_none());
+            palette(&mut h);
+        }
+        assert_eq!(
+            shown(&h),
+            [
+                Item::Action(Action::SortBy(SortKey::Name)),
+                Item::Action(Action::SortBy(SortKey::Stars))
+            ]
+        );
+        assert!(h.query_by_label(&t!("palette-recent")).is_some());
+        // ↓ puis Entrée : la précédente.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert_eq!(h.state().order.key, SortKey::Stars);
+        // Relancée : de nouveau en tête ; écrit dans le dossier de données.
+        let data = h.state().data_dir.clone().unwrap();
+        assert_eq!(
+            crate::palette::load_history(&data),
+            [
+                Item::Action(Action::SortBy(SortKey::Stars)),
+                Item::Action(Action::SortBy(SortKey::Name))
+            ]
+        );
+        // Taper cherche ; effacer revient à l'historique.
+        palette(&mut h);
+        type_text(&mut h, "zoom");
+        assert_ne!(shown(&h)[0], Item::Action(Action::SortBy(SortKey::Stars)));
+        for _ in 0..4 {
+            press(&mut h, Key::Backspace, Modifiers::NONE);
+        }
+        assert_eq!(shown(&h)[0], Item::Action(Action::SortBy(SortKey::Stars)));
     }
 
     #[test]

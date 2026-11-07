@@ -31,6 +31,9 @@
   In the menu of continuations, a label shared by most rows goes to the title (`f`:
   "Filter"); no details in brackets there (F1 and the palette keep them); shorter labels for the star
   filters and the colours (no "(add / remove)").
+- **Palette history**: with an empty field, the command palette shows what was launched
+  from it, most recent first; ↑ / ↓ and Enter launch it again. Kept between sessions
+  (`[gui.dialogs] palette_history`, 20).
 - **Stacks: pauses and slider progression** (#306): a pause longer than the folder's
   pace moves two images apart (a change of pose in the studio often falls on one). Two
   new sliders in the grouping window (`Ctrl+G`), remembered per folder: "Weight of

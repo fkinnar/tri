@@ -183,6 +183,81 @@ pub fn search(
         .collect()
 }
 
+/// Fichier de l'historique de la palette, dans le dossier de données.
+const HISTORY_FILE: &str = "palette-history";
+
+/// Ligne du fichier pour `item` : `action<TAB>id` ou `setting<TAB>section<TAB>clé` (une
+/// clé de `[keys]` contient des points : la tabulation sépare sans ambiguïté).
+fn history_line(item: &Item) -> String {
+    match item {
+        Item::Action(a) => format!("action\t{}", a.id()),
+        Item::Setting(section, key) => format!("setting\t{section}\t{key}"),
+    }
+}
+
+/// L'inverse de [`history_line`] ; `None` pour une ligne illisible ou une action qui
+/// n'existe plus.
+fn history_item(line: &str) -> Option<Item> {
+    let mut parts = line.split('\t');
+    match (parts.next()?, parts.next()?, parts.next()) {
+        ("action", id, None) => Action::from_id(id).map(Item::Action),
+        ("setting", section, Some(key)) => Some(Item::Setting(section.into(), key.into())),
+        _ => None,
+    }
+}
+
+/// Historique de la palette (07/11/2026, choix de l'utilisateur : ce qui a été lancé
+/// depuis la palette, gardé d'une session à l'autre), le plus récent d'abord ; vide sans
+/// fichier.
+pub fn load_history(data: &std::path::Path) -> Vec<Item> {
+    std::fs::read_to_string(data.join(HISTORY_FILE))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(history_item)
+        .collect()
+}
+
+/// Écrit l'historique `items` dans le dossier de données.
+pub fn save_history(data: &std::path::Path, items: &[Item]) -> std::io::Result<()> {
+    let text: String = items.iter().map(|i| history_line(i) + "\n").collect();
+    std::fs::create_dir_all(data)?;
+    std::fs::write(data.join(HISTORY_FILE), text)
+}
+
+/// `item` vient d'être lancé : en tête de l'historique, sans doublon, `max` au plus
+/// (0 : pas d'historique).
+pub fn remember(history: &mut Vec<Item>, item: Item, max: usize) {
+    history.retain(|i| *i != item);
+    history.insert(0, item);
+    history.truncate(max);
+}
+
+/// Les lignes de l'historique, comme la recherche les montrerait : une action qui
+/// n'existe pas ici (`available`) ou un réglage disparu sont sautés.
+pub fn history_hits(history: &[Item], keymap: &Keymap, settings: &[SettingRef]) -> Vec<Hit> {
+    history
+        .iter()
+        .filter_map(|item| match item {
+            Item::Action(action) if action.available() && *action != Action::Palette => Some(Hit {
+                item: item.clone(),
+                title: action.label(),
+                keys: keymap.keys_for(*action).join(" / "),
+                detail: String::new(),
+            }),
+            Item::Setting(section, key) => settings
+                .iter()
+                .find(|s| s.section == *section && s.key == *key)
+                .map(|s| Hit {
+                    item: item.clone(),
+                    title: format!("{} › {}", s.section_label, s.key),
+                    keys: String::new(),
+                    detail: s.doc.clone(),
+                }),
+            Item::Action(_) => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,6 +442,45 @@ mod tests {
             settings: None,
         };
         assert_eq!(split_prefix(">zoom", none), (Only::All, ">zoom"));
+    }
+
+    #[test]
+    fn the_history_keeps_what_was_launched_most_recent_first() {
+        let zoom = Item::Action(Action::ZoomIn);
+        let sort = Item::Action(Action::SortNext);
+        let setting = Item::Setting("keys".into(), "core.flag.accept".into());
+        let mut history = Vec::new();
+        for item in [&zoom, &sort, &setting, &zoom] {
+            remember(&mut history, item.clone(), 20);
+        }
+        assert_eq!(
+            history,
+            [zoom.clone(), setting.clone(), sort.clone()],
+            "sans doublon"
+        );
+        remember(&mut history, sort.clone(), 2);
+        assert_eq!(history, [sort.clone(), zoom.clone()], "taille limitée");
+        // Écrit puis relu à l'identique ; une ligne illisible est sautée.
+        let dir = tempfile::tempdir().unwrap();
+        let history = vec![setting.clone(), zoom.clone()];
+        save_history(dir.path(), &history).unwrap();
+        assert_eq!(load_history(dir.path()), history);
+        std::fs::write(
+            dir.path().join(HISTORY_FILE),
+            "action\tcore.nothing\nn'importe quoi\naction\tcore.nav.next\n",
+        )
+        .unwrap();
+        assert_eq!(load_history(dir.path()), [Item::Action(Action::NavNext)]);
+        assert!(load_history(&dir.path().join("absent")).is_empty());
+        // Les lignes : titre et touches de l'action ; un réglage inconnu sauté.
+        let hits = history_hits(
+            &[zoom, Item::Setting("nulle".into(), "part".into())],
+            &keymap(),
+            &settings(),
+        );
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, Action::ZoomIn.label());
+        assert!(!hits[0].keys.is_empty());
     }
 
     #[test]
