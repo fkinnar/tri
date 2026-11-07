@@ -5394,8 +5394,10 @@ impl TriApp {
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded)
                 .with_developments(same_photo, dev_cover, dev_unfolded_in);
-        // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile.
-        let browsing = self.mode == Mode::View && self.stacking;
+        // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile ; en
+        // comparaison aussi (07/11/2026 : une pile recalculée pendant la comparaison, à
+        // l'arrivée d'une vignette, ramenait l'image active à la couverture).
+        let browsing = (self.mode == Mode::View && self.stacking) || self.mode == Mode::Compare;
         if !self.files.is_empty() && !browsing {
             let visible = self.stacks.visible(self.selected);
             if visible != self.selected {
@@ -22349,6 +22351,11 @@ mod tests {
         );
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg");
+        // Une pile recalculée pendant la comparaison (une vignette arrive) ne ramène pas
+        // l'image active à la couverture (vu sur Windows, plus lent).
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0.jpg", "toujours l'image active");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
         h.run_steps(2);

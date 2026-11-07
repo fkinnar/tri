@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Comparison**: the active image no longer jumps back to its stack's cover when the
+  stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.
