@@ -60,6 +60,12 @@ In [notes.md](notes.md), an image **without a sidecar** takes the ratings writte
   share, `places::outside_roots`), `"everywhere"`. The ratings always go to the sidecar
   too. Undo follows (`NoteBook::write_only`).
 
+## With other programs
+
+- **XnView MP** (checked on Linux Mint on 2026-11-07): the stars show at once; the
+  colour (`xmp:Label`) only after importing the file's metadata: XnView keeps colours in
+  its own database.
+
 ## To check
 
 - Windows Explorer: it reads `xmp:Rating` and the EXIF; a packet that also carries

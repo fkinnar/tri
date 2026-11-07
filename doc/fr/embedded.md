@@ -62,6 +62,12 @@ Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites 
   `places::outside_roots`), `"everywhere"`. Les notes vont toujours aussi dans le sidecar.
   L'annulation suit (`NoteBook::write_only`).
 
+## Avec les autres logiciels
+
+- **XnView MP** (vérifié sous Linux Mint le 07/11/2026) : les étoiles s'affichent tout
+  de suite ; la couleur (`xmp:Label`) seulement après avoir importé les métadonnées du
+  fichier : XnView garde les couleurs dans sa propre base.
+
 ## À vérifier
 
 - L'Explorateur Windows : il lit `xmp:Rating` et l'EXIF ; un paquet qui porte aussi
