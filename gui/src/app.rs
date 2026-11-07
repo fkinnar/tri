@@ -18716,30 +18716,6 @@ mod tests {
     }
 
     #[test]
-    fn the_loupe_buttons_of_the_bottom_bar_change_the_magnification() {
-        // 07/11/2026 : − et + partaient dans la notation et ne faisaient rien. Fenêtre
-        // large : le groupe ne s'affiche que s'il reste la place.
-        let (mut h, _dir) = harness();
-        h.set_size(vec2(1800.0, 700.0));
-        h.run_steps(3);
-        assert_eq!(h.state().loupe_scale, 1.0);
-        click_settled(&mut h, "+");
-        h.run_steps(2);
-        assert!(h.state().loupe_scale > 1.0, "{}", h.state().loupe_scale);
-        click_settled(&mut h, "−");
-        click_settled(&mut h, "−");
-        h.run_steps(2);
-        assert!(h.state().loupe_scale < 1.0, "{}", h.state().loupe_scale);
-        // La valeur, cliquée : 100 %.
-        let value = format!("{} %", (h.state().loupe_scale * 100.0).round() as u32);
-        click_settled(&mut h, &value);
-        h.run_steps(2);
-        assert_eq!(h.state().loupe_scale, 1.0);
-        let file = h.state().files[h.state().selected].path.clone();
-        assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
-    }
-
-    #[test]
     fn the_loupe_magnification_is_typed_or_stepped() {
         // Idée de l'utilisateur, 06/11/2026 : `<leader> m` puis 3 chiffres (aussitôt), 2
         // (dizaines) ou 1 (centaines) après une pause ; Ctrl+K / Ctrl+J par paliers.
@@ -19179,6 +19155,30 @@ mod tests {
         settings.gui.remember_display = false;
         let third = TriApp::new(None, settings, None);
         assert!(third.focus_point);
+    }
+
+    #[test]
+    fn the_loupe_buttons_of_the_bottom_bar_change_the_magnification() {
+        // 07/11/2026 : − et + partaient dans la notation et ne faisaient rien. Fenêtre
+        // large : le groupe ne s'affiche que s'il reste la place.
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1800.0, 700.0));
+        h.run_steps(3);
+        assert_eq!(h.state().loupe_scale, 1.0);
+        click_settled(&mut h, "+");
+        h.run_steps(2);
+        assert!(h.state().loupe_scale > 1.0, "{}", h.state().loupe_scale);
+        click_settled(&mut h, "−");
+        click_settled(&mut h, "−");
+        h.run_steps(2);
+        assert!(h.state().loupe_scale < 1.0, "{}", h.state().loupe_scale);
+        // La valeur, cliquée : 100 %.
+        let value = format!("{} %", (h.state().loupe_scale * 100.0).round() as u32);
+        click_settled(&mut h, &value);
+        h.run_steps(2);
+        assert_eq!(h.state().loupe_scale, 1.0);
+        let file = h.state().files[h.state().selected].path.clone();
+        assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
     }
 
     #[test]
