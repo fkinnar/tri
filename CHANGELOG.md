@@ -9,7 +9,10 @@
   keeps its preview. A graphics card error is now logged and shown instead of stopping
   `tri`; the texture in cause is dropped and the session's budget lowered to what fitted.
   In a zoomed comparison, such an image is enlarged at the same scale as the others, with
-  a warning sign. One line in the terminal, the details in `crash.log`.
+  a warning sign. One line in the terminal, the details in `crash.log`. A "Keep N MB"
+  button writes the lowered limit into the configuration.
+- **Leaving a comparison of everything** gives back the grid as it was: nothing
+  highlighted, so the next comparison takes everything again.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to

@@ -249,7 +249,9 @@ system one ("cold" measurements, experiments).
   a bottom-bar button since 2026-11-07, lit in comparison where it leaves it, and the
   back-to-grid button in comparison too; **without a selection or a stack, all the shown
   images**, at most `[gui.compare] max` around the current one; grid cursor hidden and
-  nothing selected: nothing is highlighted, so everything, and `=` acts at once):
+  nothing selected: nothing is highlighted, so everything, and `=` acts at once; when
+  leaving, the grid comes back as it was, cursor hidden on the image before,
+  `compare_from`):
   the selected images, or with no selection those of the current stack (2026-10-25,
   issue #52: `c` on a collapsed stack; Esc comes back to its cover; **2026-10-31: the
   burst stack if it is collapsed, else the photo and its developments** (camera JPEG,
@@ -1473,7 +1475,9 @@ during a window's opening fade showed it half transparent.
   preview: otherwise every frame drawn afterwards failed on it (a try at
   `textures_mb = 2000` on an old laptop: frozen screen, errors in bursts). The session's
   budget goes down to what fitted (`textures_cap_mb`, `TriApp::gpu_failed`), and the
-  status bar gives the value. In a zoomed comparison, an image without its full
+  status bar gives the value, with a "Keep N MB" button that writes it into the
+  configuration (`keep_textures_budget`: not enough memory today, likely not more
+  tomorrow). In a zoomed comparison, an image without its full
   definition shows its preview at the 1:1 scale (size known or estimated,
   `last_zoom_size`), with a warning at the top right explained on hover. The terminal
   gets one line per session ("détails dans …/crash.log"); a burst of errors (5 s) leaves

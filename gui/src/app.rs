@@ -592,6 +592,9 @@ pub struct TriApp {
     /// Comparaison réduite à `[gui.compare] max` images : le texte de la bulle et son
     /// départ ([`TriApp::compare_limit_mark`]).
     compare_limit: Option<(String, Instant)>,
+    /// La grille quand la comparaison a commencé : l'image courante et si le curseur
+    /// était masqué, pour y revenir à l'identique.
+    compare_from: Option<(Option<PathBuf>, bool)>,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -1276,6 +1279,7 @@ impl TriApp {
             developed_in: Vec::new(),
             end_notice: None,
             compare_limit: None,
+            compare_from: None,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -7430,6 +7434,11 @@ impl TriApp {
             _ => targets[0].clone(),
         };
         self.compare = targets;
+        // La grille telle qu'on la quitte : rendue à la sortie (07/11/2026).
+        self.compare_from = (self.mode == Mode::Grid).then(|| {
+            let path = self.files.get(self.selected).map(|f| f.path.clone());
+            (path, self.cursor_hidden)
+        });
         self.mode = Mode::Compare;
         self.zoom = None;
         self.zoom_anchor = None;
@@ -7464,6 +7473,21 @@ impl TriApp {
     fn leave_compare(&mut self) {
         self.mode = Mode::Grid;
         self.compare.clear();
+        // Entrée depuis la grille sans rien en surbrillance (« tout comparer ») : on y
+        // revient à l'identique, curseur masqué sur l'image d'avant (retour du 07/11/2026 :
+        // une image restait en surbrillance, et la comparaison suivante ne prenait plus que
+        // ses variantes).
+        if let Some((path, true)) = self.compare_from.take() {
+            if let Some(index) = path.and_then(|p| self.files.iter().position(|f| f.path == p)) {
+                self.selected = index;
+            }
+            self.cursor_hidden = true;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Minimal);
+            self.tell_shown();
+            return;
+        }
         // Image d'une pile de rafale repliée (comparaison de la pile) : la grille montre
         // sa couverture ; un développement caché dans sa pile repliée : montré à la place
         // de la couverture (comme Maj+W), on reste dessus.
@@ -11215,6 +11239,16 @@ impl TriApp {
                 {
                     clicked = Some(StatusClick::Action(Action::ExportReport));
                 }
+                // Budget de mémoire graphique abaissé : le garder (07/11/2026).
+                if let Some(cap) = self.textures_cap_mb
+                    && cap < self.gui.view.textures_mb
+                    && ui
+                        .small_button(t!("textures-keep", mb = cap))
+                        .on_hover_text(t!("textures-keep-tip"))
+                        .clicked()
+                {
+                    clicked = Some(StatusClick::KeepTexturesBudget);
+                }
                 // Un clic efface le message (#157 : une erreur restait affichée).
                 let label = if *error {
                     ui.colored_label(self.gui.colors.error, text)
@@ -13965,6 +13999,39 @@ impl TriApp {
 
     /// Autorise ou interdit les actions sur les fichiers, et l'écrit dans le fichier de
     /// configuration (`[files] allow_actions`) ; sans fichier possible, pour cette session.
+    /// Écrit le budget de mémoire graphique de la session dans la configuration
+    /// (`[gui.view] textures_mb`) : il vaut aussi aux lancements suivants.
+    fn keep_textures_budget(&mut self) {
+        let Some(cap) = self.textures_cap_mb else {
+            return;
+        };
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "gui.view",
+                "textures_mb",
+                &tri::config_edit::Value::Int(cap as i64),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        match result {
+            Ok(()) => {
+                self.gui.view.textures_mb = cap;
+                self.textures_cap_mb = None;
+                self.notice = Some((t!("textures-kept", mb = cap), false));
+            }
+            Err(e) => self.notice = Some((e, true)),
+        }
+    }
+
     fn set_file_actions(&mut self, allowed: bool) {
         self.settings.files.allow_actions = allowed;
         let Some(path) = self
@@ -15517,6 +15584,7 @@ impl eframe::App for TriApp {
                 self.note_error = None;
                 self.file_error = None;
             }
+            Some(StatusClick::KeepTexturesBudget) => self.keep_textures_budget(),
             Some(StatusClick::CancelExport) => {
                 if let Some(job) = &self.export_job {
                     job.cancel();
@@ -16106,6 +16174,9 @@ enum StatusClick {
     RetryEject,
     /// Effacer les messages de la barre d'état (#157 : une erreur en rouge restait).
     DismissMessages,
+    /// Garder dans la configuration le budget de mémoire graphique abaissé après une
+    /// erreur (07/11/2026 : pas assez de mémoire aujourd'hui, sans doute pas plus demain).
+    KeepTexturesBudget,
 }
 
 /// Comparaison du filtre d'étoiles, en clair.
@@ -17432,9 +17503,14 @@ mod tests {
         // Pas de piles : les images de test, des aplats de couleurs proches, seraient
         // groupées (le test des piles les active).
         settings.similarity.background = false;
+        // Un réglage écrit pendant un test (bouton, case) : dans le dossier temporaire,
+        // jamais la configuration de l'utilisateur (sans chemin, ce serait elle).
+        let config = dir.path().join("config.toml");
         let mut harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
-            .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
+            .build_eframe(move |_cc| {
+                TriApp::new(Some(photos), settings, None).with_config(Some(config))
+            });
         // Notes lues en fond (issue n° 15) : les tests partent, comme l'utilisateur après
         // un instant, d'un dossier dont les notes sont connues.
         run_until(&mut harness, |app| app.loading.is_none());
@@ -19922,9 +19998,18 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().cursor_hidden = true;
+        let before = h.state().selected;
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 3);
+        // Sortie : la grille à l'identique, rien en surbrillance (retour du 07/11/2026) ;
+        // et la comparaison suivante prend de nouveau tout.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        assert!(h.state().cursor_hidden, "toujours rien en surbrillance");
+        assert_eq!(h.state().selected, before);
+        type_text(&mut h, "=");
+        assert_eq!(h.state().compare.len(), 3, "de nouveau tout");
     }
 
     #[test]
@@ -20016,6 +20101,22 @@ mod tests {
         assert!(cap < h.state().gui.view.textures_mb);
         let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
         assert!(notice.contains("textures_mb"), "{notice}");
+        // « Garder N Mo » : écrit dans la configuration (du dossier temporaire), pour les
+        // lancements suivants (idée de l'utilisateur, 07/11/2026).
+        let config = h.state().config_path.clone().unwrap();
+        assert!(
+            config.starts_with(_dir.path()),
+            "jamais la vraie configuration"
+        );
+        click_settled(&mut h, &t!("textures-keep", mb = cap));
+        h.run_steps(2);
+        let written = std::fs::read_to_string(&config).unwrap();
+        assert!(
+            written.contains(&format!("textures_mb = {cap}")),
+            "{written}"
+        );
+        assert_eq!(h.state().gui.view.textures_mb, cap);
+        assert_eq!(h.state().textures_cap_mb, None);
     }
 
     #[test]

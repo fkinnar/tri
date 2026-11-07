@@ -10,7 +10,10 @@
   dite au lieu d'arrêter `tri` ; la texture en cause est libérée et le budget de la
   session ramené à ce qui tenait. En comparaison zoomée, une telle image est agrandie à la
   même échelle que les autres, avec un panneau d'avertissement. Une ligne dans le
-  terminal, le détail dans `crash.log`.
+  terminal, le détail dans `crash.log`. Un bouton « Garder N Mo » écrit la limite
+  abaissée dans la configuration.
+- **Sortir d'une comparaison de tout** rend la grille telle qu'elle était : rien en
+  surbrillance, la comparaison suivante reprend donc tout.
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.

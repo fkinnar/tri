@@ -259,7 +259,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et le retour à la grille aussi en comparaison ; **sans sélection ni pile, toutes les
   images montrées**, au plus `[gui.compare] max` autour de l'image courante ; curseur de
   la grille masqué et rien de sélectionné : rien n'est en surbrillance, donc tout, et `=`
-  agit du premier coup) :
+  agit du premier coup ; à la sortie, la grille revient à l'identique, curseur masqué
+  sur l'image d'avant, `compare_from`) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; **31/10/2026 :
   la pile de rafale si elle est repliée, sinon la photo et ses développements** (JPEG
@@ -1545,7 +1546,9 @@ moitié transparente.
   sinon la dernière chargée) et son image garde son aperçu : sans cela, chaque image
   dessinée ensuite échouait sur elle (essai à `textures_mb = 2000` sur un vieux portable :
   écran figé, erreurs en rafale). Le budget de la session descend à ce qui tenait
-  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur. En
+  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur, avec
+  un bouton « Garder N Mo » qui l'écrit dans la configuration (`keep_textures_budget` :
+  pas assez de mémoire aujourd'hui, sans doute pas plus demain). En
   comparaison zoomée, une image sans sa pleine définition montre son aperçu à l'échelle
   du 1:1 (taille connue ou estimée, `last_zoom_size`), avec un avertissement en haut à
   droite expliqué au survol. Le terminal n'a qu'une ligne par session (« détails dans
