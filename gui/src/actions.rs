@@ -399,6 +399,20 @@ pub enum Action {
     CropPreset,
     /// Recadrage : préréglage précédent.
     CropPresetPrev,
+    /// Version : rapport suivant (ceux fournis, puis ceux ajoutés ; 07/11/2026).
+    VersionRatioNext,
+    /// Version : rapport précédent.
+    VersionRatioPrev,
+    /// Version : taper un rapport à soi (la liste s'ouvre sur le champ).
+    VersionRatioCustom,
+    /// Version : préréglage d'export suivant (« aucun » compris).
+    VersionExportNext,
+    /// Version : préréglage d'export précédent.
+    VersionExportPrev,
+    /// Version : modifier le nom (le champ prend le clavier).
+    VersionName,
+    /// Version : enregistrer comme préréglage (la disquette).
+    VersionSavePreset,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
     /// Plein écran : version précédente (dans l'autre sens, 06/11/2026).
@@ -504,7 +518,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 220] = [
+    pub const ALL: [Action; 227] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -612,6 +626,13 @@ impl Action {
         Action::CropSave,
         Action::CropPreset,
         Action::CropPresetPrev,
+        Action::VersionRatioNext,
+        Action::VersionRatioPrev,
+        Action::VersionRatioCustom,
+        Action::VersionExportNext,
+        Action::VersionExportPrev,
+        Action::VersionName,
+        Action::VersionSavePreset,
         Action::VersionNext,
         Action::VersionPrev,
         Action::Send("plugin.airdrop.send"),
@@ -858,7 +879,9 @@ impl Action {
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
             | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
-            | CropPreset | CropPresetPrev | VersionNext | VersionPrev => Group::Crop,
+            | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
+            | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
+            | VersionName | VersionSavePreset => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
@@ -1030,6 +1053,13 @@ impl Action {
             Action::CropSave => "core.version.save",
             Action::CropPreset => "core.version.preset",
             Action::CropPresetPrev => "core.version.preset_prev",
+            Action::VersionRatioNext => "core.version.ratio_next",
+            Action::VersionRatioPrev => "core.version.ratio_prev",
+            Action::VersionRatioCustom => "core.version.ratio_custom",
+            Action::VersionExportNext => "core.version.export_next",
+            Action::VersionExportPrev => "core.version.export_prev",
+            Action::VersionName => "core.version.name",
+            Action::VersionSavePreset => "core.version.save_preset",
             Action::VersionNext => "core.version.next",
             Action::VersionPrev => "core.version.prev",
             Action::Undo => "core.edit.undo",
@@ -1233,7 +1263,10 @@ impl Action {
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
-            | CropPresetPrev => Some(Scope::Crop),
+            | CropPresetPrev | VersionRatioNext | VersionRatioPrev | VersionRatioCustom
+            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset => {
+                Some(Scope::Crop)
+            }
             // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
             // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance

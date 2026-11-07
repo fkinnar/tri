@@ -308,6 +308,16 @@ loupe = "m"
 # Presets: Tab / Shift+Tab.
 "core.version.preset" = ["Tab"]
 "core.version.preset_prev" = ["Shift+Tab"]
+# Each part of the version bar from the keyboard (2026-11-07): r / Shift+R the next /
+# previous ratio (added ones included), ":" a custom ratio; e / Shift+E the next /
+# previous export preset; F2 the name (like renaming); Ctrl+S save as a preset.
+"core.version.ratio_next" = ["r"]
+"core.version.ratio_prev" = ["Shift+r"]
+"core.version.ratio_custom" = [":"]
+"core.version.export_next" = ["e"]
+"core.version.export_prev" = ["Shift+e"]
+"core.version.name" = ["F2"]
+"core.version.save_preset" = ["Ctrl+s"]
 
 [classic]
 

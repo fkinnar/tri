@@ -92,8 +92,17 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
   simplifiés ; puis Portrait / Paysage) ;
   **Export** (préréglage d'export facultatif) ; **Nom** (il suit le rapport tant qu'on ne
-  l'a pas tapé) ; la disquette (enregistrer comme préréglage) ; Enregistrer / Annuler à
-  droite.
+  l'a pas tapé) et, collée à lui, la disquette (enregistrer comme préréglage ; grisée
+  sans nom) ; Enregistrer / Annuler à droite. Dans la liste des rapports, le champ du
+  rapport personnalisé (« Personnalisé » en gris dedans) et un « + » qui l'ajoute à la
+  liste, gardé dans la configuration (`[versions] ratios`). Les filtres et
+  l'histogramme quittent le panneau de droite pendant l'édition (rien à filtrer sur une
+  image ; l'histogramme vaut pour l'image entière, le faire suivre le cadre demanderait
+  un histogramme RAW recalculé sur la zone, plus tard).
+- **Chaque partie au clavier** (07/11/2026) : `r` / `Maj+R` rapport suivant / précédent
+  (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son
+  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `F2`
+  le nom, `Ctrl+S` la disquette ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en

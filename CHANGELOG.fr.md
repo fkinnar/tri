@@ -28,7 +28,10 @@
   actions deviennent `core.version.*` ; les anciens (`core.crop.*`, `core.view.crop`…)
   marchent encore dans `[keys]`. La barre des versions est rangée en parties titrées
   (Version, Recadrage avec les rapports dans une liste, Export, Nom) ; un rapport à soi
-  peut s'y taper (`17:23`, `1.91:1`).
+  peut s'y taper (`17:23`, `1.91:1`) et s'ajouter à la liste avec « + » (gardé dans
+  `[versions] ratios`). Chaque partie a ses touches (`r` rapport, `:` personnalisé, `e`
+  export, `F2` nom, `Ctrl+S` préréglage). Les filtres et l'histogramme quittent le panneau
+  de droite pendant l'édition.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.

@@ -249,8 +249,13 @@ passthrough = true
 applies_to = "all"
 sharpen = "screen"
 
-# Crop presets (versions, r in full screen): [versions.presets.<identifier>], as many as
-# wanted; chosen in the crop bar (or p), then the frame is adjusted.
+[versions]
+# Ratios added to the list of the version bar (the "+" next to the custom ratio writes
+# them here), after the built-in ones: "w:h" in the wanted orientation.
+ratios = []
+
+# Version presets (v in full screen): [versions.presets.<identifier>], as many as wanted;
+# chosen in the version bar (or p), then the frame is adjusted.
 # A missing key comes from the built-in preset with the same identifier (story, post).
 # name: name of the created version (empty: translated built-in name, otherwise the
 #   identifier);

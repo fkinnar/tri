@@ -91,8 +91,17 @@ The interface only draws; all the computation is here.
   shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
   `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
   Portrait / Landscape); **Export** (optional
-  export preset); **Name** (it follows the ratio as long as it has not been typed); the
-  floppy (save as a preset); Save / Cancel on the right.
+  export preset); **Name** (it follows the ratio as long as it has not been typed) and,
+  next to it, the floppy (save as a preset; greyed out without a name); Save / Cancel on
+  the right. In the ratio list, the custom ratio field ("Custom" in grey inside it) and a
+  "+" that adds it to the list, kept in the configuration (`[versions] ratios`). The
+  filters and the histogram leave the right panel while editing (nothing to filter on one
+  image; the histogram is the whole image's, following the frame would need a RAW
+  histogram recomputed on the area, later).
+- **Each part from the keyboard** (2026-11-07): `r` / `Shift+R` next / previous ratio
+  (added ones included, `Crop::step_ratio`), `:` a ratio of one's own (the list opens on
+  its field), `e` / `Shift+E` next / previous export preset ("none" included), `F2` the
+  name, `Ctrl+S` the floppy; with `1`–`7`, `x`, `Tab` / `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
   already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is

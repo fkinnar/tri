@@ -25,7 +25,9 @@
   the help and the palette. The action ids become `core.version.*`; the old ones
   (`core.crop.*`, `core.view.crop`…) still work in `[keys]`. The version bar is organised
   in titled parts (Version, Crop with the ratios in a drop-down, Export, Name); a custom
-  ratio can be typed there (`17:23`, `1.91:1`).
+  ratio can be typed there (`17:23`, `1.91:1`) and added to the list with "+" (kept in
+  `[versions] ratios`). Each part has its keys (`r` ratio, `:` custom, `e` export, `F2`
+  name, `Ctrl+S` save as a preset). The filters and the histogram leave the right panel while editing.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.

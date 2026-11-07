@@ -38,6 +38,10 @@ pub struct Crop {
     pub preset: Option<String>,
     /// Rapport personnalisé en cours de saisie dans la liste des rapports (« 17:23 »).
     custom: String,
+    /// Champ qui prendra le clavier au prochain dessin.
+    focus: Option<Focus>,
+    /// Identifiant de la liste des rapports (image précédente) : `:` l'ouvre.
+    ratio_list_id: Option<egui::Id>,
     /// Les autres versions de l'image : un nom déjà pris est refusé (issue n° 14).
     others: Versions,
 }
@@ -52,6 +56,29 @@ pub enum BarAction {
     Preset(usize),
     /// Enregistrer le cadre en cours comme préréglage.
     SavePreset,
+    /// Ajouter ce rapport à la liste, dans la configuration (`[versions] ratios`).
+    AddRatio(Ratio),
+}
+
+/// Champ de la barre qui prend le clavier à la demande (raccourcis, 07/11/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Focus {
+    /// Le rapport personnalisé (la liste des rapports s'ouvre dessus).
+    CustomRatio,
+    /// Le nom.
+    Name,
+}
+
+/// Les rapports de la liste : ceux fournis, puis ceux ajoutés (`[versions] ratios`), sans
+/// doublon.
+pub fn ratio_list(added: &[Ratio]) -> Vec<Ratio> {
+    let mut list: Vec<Ratio> = Ratio::PRESETS.to_vec();
+    for &r in added {
+        if !list.iter().any(|l| l.same_shape(r)) {
+            list.push(r);
+        }
+    }
+    list
 }
 
 /// Nom affiché d'un rapport (« Libre », « Original », « 4:5 »…).
@@ -93,6 +120,8 @@ impl Crop {
             drag: None,
             fresh: true,
             custom: String::new(),
+            focus: None,
+            ratio_list_id: None,
             preset: None,
             others,
         };
@@ -115,6 +144,8 @@ impl Crop {
             drag: None,
             fresh: true,
             custom: String::new(),
+            focus: None,
+            ratio_list_id: None,
             preset: None,
             others,
         }
@@ -191,6 +222,40 @@ impl Crop {
         if !self.name_edited {
             self.name = self.free_name(&default_name(ratio));
         }
+    }
+
+    /// Rapport suivant (`forward`) ou précédent de la liste (avec `added`), en boucle ;
+    /// l'orientation choisie est gardée.
+    pub fn step_ratio(&mut self, forward: bool, added: &[Ratio]) {
+        let list = ratio_list(added);
+        let n = list.len();
+        let next = match list.iter().position(|r| r.same_shape(self.ratio)) {
+            Some(i) if forward => (i + 1) % n,
+            Some(i) => (i + n - 1) % n,
+            None if forward => 0,
+            None => n - 1,
+        };
+        self.set_ratio(list[next]);
+    }
+
+    /// Préréglage d'export suivant (`forward`) ou précédent parmi `profiles`, « aucun »
+    /// compris, en boucle.
+    pub fn step_profile(&mut self, forward: bool, profiles: &[String]) {
+        let mut all: Vec<Option<String>> = vec![None];
+        all.extend(profiles.iter().cloned().map(Some));
+        let n = all.len();
+        let at = all.iter().position(|p| *p == self.profile).unwrap_or(0);
+        let next = if forward {
+            (at + 1) % n
+        } else {
+            (at + n - 1) % n
+        };
+        self.profile = all[next].clone();
+    }
+
+    /// Donne le clavier à un champ de la barre au prochain dessin.
+    pub fn focus(&mut self, field: Focus) {
+        self.focus = Some(field);
     }
 
     /// Portrait ↔ paysage.
@@ -363,6 +428,7 @@ impl Crop {
         ui: &mut Ui,
         profiles: &[(String, String)],
         presets: &[(String, String)],
+        ratios: &[Ratio],
     ) -> Option<BarAction> {
         let mut action = None;
         // Enregistrer et Annuler à droite, à part (retour du 20/10/2026) ; le reste à gauche,
@@ -380,7 +446,9 @@ impl Crop {
             }
             ui.add_space(ui.spacing().item_spacing.x * 4.0);
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.horizontal_wrapped(|ui| self.bar_left(ui, profiles, presets, &mut action));
+                ui.horizontal_wrapped(|ui| {
+                    self.bar_left(ui, profiles, presets, ratios, &mut action)
+                });
             });
         });
         self.fresh = false;
@@ -395,6 +463,7 @@ impl Crop {
         ui: &mut Ui,
         profiles: &[(String, String)],
         presets: &[(String, String)],
+        ratios: &[Ratio],
         action: &mut Option<BarAction>,
     ) {
         // De l'air entre deux parties, plus qu'entre deux boutons.
@@ -431,13 +500,19 @@ impl Crop {
         // sept boutons), puis l'orientation.
         section(ui, &t!("crop-section-frame"), ui.spacing().combo_width);
         let mut chosen = None;
-        egui::ComboBox::from_id_salt("crop_ratio")
+        // `:` : la liste s'ouvre, son champ prend le clavier.
+        let focus_custom = self.focus == Some(Focus::CustomRatio);
+        if focus_custom && let Some(id) = self.ratio_list_id {
+            egui::Popup::open_id(ui.ctx(), id.with("popup"));
+        }
+        let list = egui::ComboBox::from_id_salt("crop_ratio")
             .selected_text(ratio_name(self.ratio))
             // Ouverte tant qu'on tape un rapport à soi : fermée par un choix ou un clic
             // dehors (sinon, cliquer dans le champ la fermait).
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show_ui(ui, |ui| {
-                for preset in Ratio::PRESETS {
+                // Ceux fournis, puis ceux ajoutés (`[versions] ratios`), sans doublon.
+                for preset in ratio_list(ratios) {
                     let on = preset.same_shape(self.ratio);
                     // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours.
                     let shown = if on { self.ratio } else { preset };
@@ -447,24 +522,48 @@ impl Crop {
                     }
                 }
                 // Un rapport à soi (idée de l'utilisateur, 07/11/2026) : « 17:23 », « 1.91:1 »,
-                // Entrée l'applique.
+                // Entrée l'applique ; « + » l'ajoute à la liste, gardé dans la configuration.
+                // Le mot « Personnalisé » en gris dans le champ (un titre à côté était
+                // illisible).
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.weak(t!("crop-ratio-custom"));
+                    let ok = Ratio::parse_custom(&self.custom);
+                    let size = ui.spacing().interact_size.y;
                     let field = ui.add(
                         egui::TextEdit::singleline(&mut self.custom)
-                            .desired_width(70.0)
-                            .hint_text("17:23"),
+                            .desired_width(
+                                ui.available_width() - size - ui.spacing().item_spacing.x,
+                            )
+                            .hint_text(t!("crop-ratio-custom")),
                     );
-                    let ok = Ratio::parse_custom(&self.custom);
-                    if !self.custom.trim().is_empty() && ok.is_none() {
-                        field.on_hover_text(t!("crop-ratio-custom-bad"));
-                    } else if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    if focus_custom {
+                        field.request_focus();
+                        self.focus = None;
+                    }
+                    let field = field.on_hover_text(t!("crop-ratio-custom-bad"));
+                    if ok.is_some()
+                        && field.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    {
+                        // Appliqué : la liste le montre, le champ se vide.
                         chosen = ok;
+                        self.custom.clear();
+                        ui.close();
+                    }
+                    let add = ui
+                        .add_enabled(ok.is_some(), egui::Button::new("+"))
+                        .on_hover_text(t!("crop-ratio-add-tip"));
+                    if add.clicked()
+                        && let Some(r) = ok
+                    {
+                        chosen = Some(r);
+                        *action = Some(BarAction::AddRatio(r));
+                        self.custom.clear();
                         ui.close();
                     }
                 });
             });
+        self.ratio_list_id = Some(list.response.id);
         if let Some(preset) = chosen {
             self.set_ratio(preset);
         }
@@ -509,26 +608,34 @@ impl Crop {
             edit = edit.text_color(ui.visuals().error_fg_color);
         }
         let mut field = ui.add(edit);
+        // F2 : le nom prend le clavier.
+        if self.focus == Some(Focus::Name) {
+            field.request_focus();
+            self.focus = None;
+        }
         if taken {
             field = field.on_hover_text(t!("crop-name-taken"));
         }
         if field.changed() {
             self.name_edited = true;
         }
-        ui.add_space(gap);
-        // Enregistrer comme préréglage (rapport, nom, export) : la disquette, à la fin.
-        let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
-        let (rect, response) = crate::marks::icon_button(
-            ui,
-            size,
-            &t!("crop-preset-save"),
-            &t!("crop-preset-save-tip"),
-        );
-        let color = ui.style().interact(&response).fg_stroke.color;
-        crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
-        if response.clicked() {
-            *action = Some(BarAction::SavePreset);
-        }
+        // Enregistrer comme préréglage (rapport, nom, export) : la disquette, collée au nom
+        // (l'un ne va pas sans l'autre), grisée sans nom (retour du 07/11/2026).
+        let named = !self.name.trim().is_empty();
+        ui.add_enabled_ui(named, |ui| {
+            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            let (rect, response) = crate::marks::icon_button(
+                ui,
+                size,
+                &t!("crop-preset-save"),
+                &t!("crop-preset-save-tip"),
+            );
+            let color = ui.style().interact(&response).fg_stroke.color;
+            crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
+            if response.clicked() {
+                *action = Some(BarAction::SavePreset);
+            }
+        });
     }
 }
 

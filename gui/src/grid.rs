@@ -147,6 +147,13 @@ pub fn navigate(
         | Action::CropSave
         | Action::CropPreset
         | Action::CropPresetPrev
+        | Action::VersionRatioNext
+        | Action::VersionRatioPrev
+        | Action::VersionRatioCustom
+        | Action::VersionExportNext
+        | Action::VersionExportPrev
+        | Action::VersionName
+        | Action::VersionSavePreset
         | Action::VersionNext
         | Action::VersionPrev
         | Action::Send(_)

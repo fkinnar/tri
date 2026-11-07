@@ -487,7 +487,10 @@ impl<'de> Deserialize<'de> for Presets {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct VersionSettings {
-    /// Préréglages de recadrage (`[versions.presets.<id>]`).
+    /// Rapports ajoutés à la liste de la barre des versions (« + » à côté du rapport
+    /// personnalisé, 07/11/2026), après ceux fournis.
+    pub ratios: Vec<Ratio>,
+    /// Préréglages de version (`[versions.presets.<id>]`).
     pub presets: Presets,
 }
 
