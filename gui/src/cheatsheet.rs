@@ -78,6 +78,9 @@ pub fn applies(action: Action, place: Place) -> bool {
         action,
         ToggleZoom
             | Loupe
+            | LoupeZoomIn
+            | LoupeZoomOut
+            | LoupeScaleEntry
             | ReviewDevelopments
             | ZoomFit
             | PanLeft

@@ -1036,6 +1036,11 @@ pub struct ZoomSettings {
     /// Loupe au clavier : grand pas (touches de défilement, avec Maj), en points de la
     /// loupe.
     pub loupe_step_large: f32,
+    /// Grossissement de la loupe tapé (`<leader> m 2`) : pause après le dernier chiffre
+    /// avant d'appliquer un ou deux chiffres (ms).
+    pub loupe_digits_ms: u64,
+    /// Roulette, la loupe tenue : défilement (points) pour un palier de grossissement.
+    pub loupe_wheel_step: f32,
 }
 
 impl Default for ZoomSettings {
@@ -1050,6 +1055,8 @@ impl Default for ZoomSettings {
             loupe_scale: 1.0,
             loupe_step: 80.0,
             loupe_step_large: 320.0,
+            loupe_digits_ms: 600,
+            loupe_wheel_step: 50.0,
         }
     }
 }

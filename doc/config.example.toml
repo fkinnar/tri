@@ -764,6 +764,14 @@ loupe_scale = 1.0
 # écran : un quart de loupe, une loupe entière ; bouger la souris la rend au pointeur.
 loupe_step = 80.0
 loupe_step_large = 320.0
+# Grossissement de la loupe tapé après le leader et m, sans Entrée : trois chiffres
+# s'appliquent aussitôt (150 : 150 %) ; un ou deux chiffres après cette pause (ms), en
+# centaines ou en dizaines (2 : 200 %, 20 : 200 %, 01 : 10 %). Ctrl+K / Ctrl+J : un palier
+# (steps) de plus ou de moins. Pour la session ; loupe_scale reste la valeur de départ.
+loupe_digits_ms = 600
+# Roulette, la loupe tenue : un palier de grossissement tous les loupe_wheel_step points de
+# défilement (un cran de souris ; au pavé tactile, un glissement) ; la grille ne défile pas.
+loupe_wheel_step = 50.0
 
 [gui.dialogs]
 # Boîtes ouvertes près du clic (notation, éjection, déchargement, renommage, corbeille) :

@@ -230,6 +230,9 @@ pub fn navigate(
         | Action::Open
         | Action::ToggleZoom
         | Action::Loupe
+        | Action::LoupeZoomIn
+        | Action::LoupeZoomOut
+        | Action::LoupeScaleEntry
         | Action::ToggleSource
         | Action::PanLeft
         | Action::PanRight
