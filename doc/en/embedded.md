@@ -64,7 +64,9 @@ In [notes.md](notes.md), an image **without a sidecar** takes the ratings writte
 
 - **XnView MP** (checked on Linux Mint on 2026-11-07): it keeps stars and colours in its
   catalogue, read from the files the first time a folder is opened; after that, ratings
-  written by `tri` only show after "Update catalog from files".
+  written by `tri` only show after "Update catalog from files". The other way round, a
+  rating changed in XnView only goes into the image with "Metadata › Update file from
+  catalog"; `tri` then sees it at once (folder watching), if the image has no sidecar.
 
 ## To check
 

@@ -67,7 +67,9 @@ Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites 
 - **XnView MP** (vérifié sous Linux Mint le 07/11/2026) : il garde étoiles et couleurs
   dans son catalogue, lu dans les fichiers à la première ouverture d'un dossier ; ensuite,
   les notes inscrites par `tri` n'apparaissent qu'après « Mise à jour du catalogue à
-  partir des fichiers ».
+  partir des fichiers ». Dans l'autre sens, une note changée dans XnView ne va dans
+  l'image qu'avec « Métadonnées › Mettre à jour le fichier à partir du catalogue » ;
+  `tri` la voit alors aussitôt (surveillance du dossier), si l'image n'a pas de sidecar.
 
 ## À vérifier
 
