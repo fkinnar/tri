@@ -10,6 +10,10 @@
   visible while the loupe key is held, the loupe no longer shows over the bar, and the
   image info switch moves to the far right.
   `TRI_GUI_TRACE` also shows the keys received.
+- **Typed zoom and loupe on Linux**: after `<leader> m` or `<leader> z`, the top-row
+  digits of an AZERTY keyboard (with Shift) changed the rating instead of the value:
+  Linux also sends Shift itself as a key, which closed the entry. A lone modifier is now
+  ignored.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):

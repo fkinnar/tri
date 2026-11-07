@@ -19057,7 +19057,18 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().loupe_scale, 2.0);
         // Un chiffre tapé lentement après la pause (Maj sur AZERTY, 07/11/2026) complète
-        // encore le nombre, sans noter la photo.
+        // encore le nombre, sans noter la photo. Sous Linux, Maj arrive aussi comme une
+        // touche, avant le chiffre : elle ne ferme pas la saisie.
+        for key in [Key::ShiftLeft, Key::ShiftRight, Key::ControlLeft] {
+            h.event(UiEvent::Key {
+                key,
+                physical_key: Some(key),
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        h.run_steps(2);
         press(&mut h, Key::Num5, Modifiers::SHIFT);
         assert_eq!(
             h.state().loupe_entry.as_ref().map(|e| e.0.as_str()),
@@ -19083,6 +19094,27 @@ mod tests {
         press(&mut h, Key::Num3, Modifiers::NONE);
         assert_eq!(h.state().loupe_scale, 2.0);
         assert_eq!(h.state().folder.notes.notes(&file).stars, 3, "noté");
+        // Linux (trace de l'utilisateur, 07/11/2026) : Maj arrive comme une touche juste
+        // après `<leader> m`, puis les chiffres avec Maj.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        h.event(UiEvent::Key {
+            key: Key::ShiftRight,
+            physical_key: Some(Key::ShiftRight),
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        for key in [Key::Num1, Key::Num2, Key::Num5] {
+            press(&mut h, key, Modifiers::SHIFT);
+        }
+        assert_eq!(h.state().loupe_scale, 1.25);
+        assert_eq!(
+            h.state().folder.notes.notes(&file).stars,
+            3,
+            "note inchangée"
+        );
+        h.state_mut().set_loupe_scale(2.0);
         // Échap annule ; 0 est ignoré.
         leader(&mut h, &[(Key::M, Modifiers::NONE)]);
         press(&mut h, Key::Num4, Modifiers::NONE);

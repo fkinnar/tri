@@ -1466,6 +1466,10 @@ moitié transparente.
   Depuis le 07/11/2026, aussi les touches et le texte reçus de la fenêtre (« touche
   reçue : Key { key: Num1, … } », « Text("1") ») et les raccourcis qu'en tire `tri`
   (« raccourcis lus ») : de quoi voir ce qu'envoie un clavier ou un système particulier.
+  C'est elle qui a montré que sous Linux, egui-winit envoie aussi Maj et Ctrl comme
+  touches (`ShiftRight`…) : Maj, tapé avant un chiffre de la rangée du haut d'un clavier
+  AZERTY, fermait la saisie de `<leader> m` et le chiffre changeait la note. Un
+  modificateur seul n'est plus un raccourci (`Chord::from_event`).
 
 **Fermeture** : les calculs en fond (moteur, chargement des images, surveillance du
 dossier et des volumes) s'arrêtent sans être attendus (`detach`) ; une vignette en cours

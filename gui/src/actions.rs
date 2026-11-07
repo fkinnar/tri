@@ -1220,6 +1220,23 @@ impl Chord {
         if modifiers.alt || modifiers.mac_cmd || (modifiers.command && !modifiers.ctrl) {
             return None;
         }
+        // Un modificateur seul n'est pas un raccourci (07/11/2026 : sous Linux, egui-winit
+        // envoie aussi Maj et Ctrl comme touches ; Maj, tapé avant un chiffre de la rangée
+        // du haut d'un clavier AZERTY, fermait la saisie de `<leader> m` et le chiffre
+        // changeait la note). macOS ne les envoie pas.
+        if matches!(
+            key,
+            Key::ShiftLeft
+                | Key::ShiftRight
+                | Key::ControlLeft
+                | Key::ControlRight
+                | Key::AltLeft
+                | Key::AltRight
+                | Key::SuperLeft
+                | Key::SuperRight
+        ) {
+            return None;
+        }
         Some(Chord {
             trigger: Trigger::Key(key),
             shift: modifiers.shift,

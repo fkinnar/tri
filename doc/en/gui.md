@@ -1396,6 +1396,10 @@ during a window's opening fade showed it half transparent.
   Since 2026-11-07, also the keys and text received from the window ("touche reçue :
   Key { key: Num1, … }", "Text("1")") and the shortcuts `tri` reads from them
   ("raccourcis lus"): a way to see what a particular keyboard or system sends.
+  It showed that on Linux, egui-winit also sends Shift and Ctrl as keys (`ShiftRight`…):
+  Shift, typed before a top-row digit of an AZERTY keyboard, closed the `<leader> m`
+  entry and the digit changed the rating. A lone modifier is no longer a shortcut
+  (`Chord::from_event`).
 
 **Closing**: background work (engine, image loading, folder and volume watches) stops
 without being waited for (`detach`); a thumbnail in progress on a NAS no longer holds the

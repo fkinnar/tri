@@ -11,6 +11,10 @@
   s'affiche plus sur la barre, et l'interrupteur des infos sur l'image passe tout à
   droite. `TRI_GUI_TRACE` montre aussi
   les touches reçues.
+- **Zoom et loupe tapés sous Linux** : après `<leader> m` ou `<leader> z`, les chiffres
+  de la rangée du haut d'un clavier AZERTY (avec Maj) changeaient la note au lieu de la
+  valeur : Linux envoie aussi Maj comme une touche, ce qui fermait la saisie. Un
+  modificateur seul est maintenant ignoré.
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).
