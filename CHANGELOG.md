@@ -26,8 +26,8 @@
   (`core.crop.*`, `core.view.crop`…) still work in `[keys]`. The version bar is organised
   in titled parts (Version, Crop with the ratios in a drop-down, Export, Name); a custom
   ratio can be typed there (`17:23`, `1.91:1`) and added to the list with "+" (kept in
-  `[versions] ratios`). Each part has its keys (`r` ratio, `:` custom, `e` export, `F2`
-  name, `Ctrl+S` save as a preset, `0` or Ctrl+click on "Original": back to the original
+  `[versions] ratios`). Each part has its keys (`v` version preset, `r` ratio, `o` orientation, `:`
+  custom, `e` export, `n` name, `Ctrl+S` save as a preset, `0` or Ctrl+click on "Original": back to the original
   frame); the orientation is an icon (the frame's rectangle, standing or lying). The
   filter bar, and the filters, view settings and histogram of the right panel, disappear
   while editing.

@@ -99,10 +99,11 @@ The interface only draws; all the computation is here.
   filter bar, and the filters and histogram of the right panel, disappear while editing (nothing to filter on one
   image; the histogram is the whole image's, following the frame would need a RAW
   histogram recomputed on the area, later).
-- **Each part from the keyboard** (2026-11-07): `r` / `Shift+R` next / previous ratio
+- **Each part from the keyboard** (2026-11-07): `v` / `Shift+V` next / previous version
+  preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio
   (added ones included, `Crop::step_ratio`), `:` a ratio of one's own (the list opens on
-  its field), `e` / `Shift+E` next / previous export preset ("none" included), `F2` the
-  name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also Ctrl+click on
+  its field), `e` / `Shift+E` next / previous export preset ("none" included), `o` /
+  `Shift+O` the orientation (both turn it; `x` too), `n` (or `F2`) the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also Ctrl+click on
   "Original", `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` / `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
@@ -115,7 +116,7 @@ The interface only draws; all the computation is here.
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);
   - digits 1 to 7 (with or without Shift, AZERTY) for the ratio;
-  - `x` for the orientation;
+  - `o` / `Shift+O` (or `x`) for the orientation;
   - Enter to save, Esc to abandon.
 
   The keyboard step: `[gui.crop] step`. Everything is configurable in `[keys]`.
@@ -175,7 +176,7 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   `ratio` (`"free"`, `"original"`, or `"l:h"` in the desired orientation) and `profile`
   (`""`: none). A missing key comes from the built-in preset with the same identifier, as
   for export presets. Built-in presets: `story` (9:16, Web) and `post` (4:5, Web).
-- **Crop bar**: "Preset" list; `Tab` / `Shift+Tab` moves to the next / previous one
+- **Crop bar**: "Preset" list; `v` / `Shift+V` or `Tab` / `Shift+Tab` moves to the next / previous one
   (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
   during cropping too).
   - Choosing a preset applies its **exact** ratio, its name and its export preset.

@@ -100,10 +100,11 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   filtres et l'histogramme du panneau de droite disparaissent pendant l'édition (rien à filtrer sur une
   image ; l'histogramme vaut pour l'image entière, le faire suivre le cadre demanderait
   un histogramme RAW recalculé sur la zone, plus tard).
-- **Chaque partie au clavier** (07/11/2026) : `r` / `Maj+R` rapport suivant / précédent
+- **Chaque partie au clavier** (07/11/2026) : `v` / `Maj+V` préréglage de version
+  suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant / précédent
   (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son
-  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `F2`
-  le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
+  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `o` /
+  `Maj+O` l'orientation (les deux la tournent ; `x` aussi), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
   Ctrl+clic sur « Original », `Crop::reset_frame`) ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
@@ -118,7 +119,7 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
   - avec Maj : côté droit (gauche / droite) et bas (haut / bas) ;
   - chiffres 1 à 7 (avec ou sans Maj, AZERTY) pour le rapport ;
-  - `x` pour l'orientation ;
+  - `o` / `Maj+O` (ou `x`) pour l'orientation ;
   - Entrée pour enregistrer, Échap pour abandonner.
 
   Le pas du clavier : `[gui.crop] step`. Tout est réglable dans `[keys]`.
@@ -185,7 +186,7 @@ cadre, Entrée.
   (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
   pour les profils d'export. Préréglages fournis : `story` (9:16, Web) et `post` (4:5,
   Web).
-- **Barre du recadrage** : liste « Préréglage » ; `Tab` / `Maj+Tab` passe au suivant /
+- **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
   affichée ; `p` l'éteint aussi pendant le recadrage).
   - Choisir un préréglage applique son rapport **exact**, son nom et son profil.

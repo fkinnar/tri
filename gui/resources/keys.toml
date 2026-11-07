@@ -294,8 +294,8 @@ loupe = "m"
 "core.histogram.camera" = ["j"]
 
 # --- Crop (while cropping) ---
-# Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
-# (like Lightroom), Enter to save.
+# Digits for the ratio (with or without Shift, for AZERTY), o / Shift+O for the
+# orientation (both turn it; also "x", like Lightroom), Enter to save.
 "core.version.ratio.free" = ["1", "Shift+1"]
 "core.version.ratio.original" = ["2", "Shift+2"]
 "core.version.ratio.square" = ["3", "Shift+3"]
@@ -303,20 +303,20 @@ loupe = "m"
 "core.version.ratio.3_2" = ["5", "Shift+5"]
 "core.version.ratio.16_9" = ["6", "Shift+6"]
 "core.version.ratio.4_3" = ["7", "Shift+7"]
-"core.version.rotate" = ["x"]
+"core.version.rotate" = ["o", "Shift+o", "x"]
 "core.version.save" = ["Enter"]
-# Presets: Tab / Shift+Tab.
-"core.version.preset" = ["Tab"]
-"core.version.preset_prev" = ["Shift+Tab"]
-# Each part of the version bar from the keyboard (2026-11-07): r / Shift+R the next /
-# previous ratio (added ones included), ":" a custom ratio; e / Shift+E the next /
-# previous export preset; F2 the name (like renaming); Ctrl+S save as a preset.
+# Each part of the version bar from the keyboard (2026-11-07): v / Shift+V (or Tab /
+# Shift+Tab) the next / previous version preset; r / Shift+R the next / previous ratio
+# (added ones included), ":" a custom ratio; e / Shift+E the next / previous export
+# preset; n (or F2, like renaming) the name; Ctrl+S save as a preset.
+"core.version.preset" = ["v", "Tab"]
+"core.version.preset_prev" = ["Shift+v", "Shift+Tab"]
 "core.version.ratio_next" = ["r"]
 "core.version.ratio_prev" = ["Shift+r"]
 "core.version.ratio_custom" = [":"]
 "core.version.export_next" = ["e"]
 "core.version.export_prev" = ["Shift+e"]
-"core.version.name" = ["F2"]
+"core.version.name" = ["n", "F2"]
 "core.version.save_preset" = ["Ctrl+s"]
 # 0 (next to the ratios 1 to 7): back to the original frame, the whole image; also
 # Ctrl+click (Cmd+click on macOS) on "Original" in the ratio list.

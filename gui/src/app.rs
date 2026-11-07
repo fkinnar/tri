@@ -26096,8 +26096,9 @@ mod tests {
 
     #[test]
     fn every_part_of_the_version_bar_has_its_keys() {
-        // Demandé le 07/11/2026 : chaque partie de la barre au clavier. r / Maj+R le
-        // rapport, : un rapport à soi, e / Maj+E l'export, F2 le nom, Ctrl+S la disquette.
+        // Demandé le 07/11/2026 : chaque partie de la barre au clavier. v / Maj+V le
+        // préréglage de version, r / Maj+R le rapport, o / Maj+O l'orientation, : un
+        // rapport à soi, e / Maj+E l'export, n (ou F2) le nom, Ctrl+S la disquette.
         use tri::versions::Ratio;
         let (mut h, _dir) = harness();
         h.run_steps(3);
@@ -26139,8 +26140,13 @@ mod tests {
             h.state().crop.as_ref().unwrap().rect,
             tri::versions::Rect::FULL
         );
-        // F2 : le nom ; Ctrl+S : un préréglage (dans la configuration du test).
-        press(&mut h, Key::F2, Modifiers::NONE);
+        // o / Maj+O : l'orientation (les deux la tournent).
+        press(&mut h, Key::O, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: true }, "o : tournée");
+        press(&mut h, Key::O, Modifiers::SHIFT);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: false }, "Maj+O aussi");
+        // n : le nom (F2 aussi) ; Ctrl+S : un préréglage (dans la configuration du test).
+        press(&mut h, Key::N, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.ctx.egui_wants_keyboard_input(), "le nom a le clavier");
         press(&mut h, Key::Escape, Modifiers::NONE);
@@ -26155,6 +26161,15 @@ mod tests {
         }
         press(&mut h, Key::S, Modifiers::CTRL);
         assert_eq!(h.state().settings.versions.presets.0.len(), before + 1);
+        // v / Maj+V : de préréglage en préréglage, sans quitter la version en cours.
+        let preset = |h: &Harness<'_, TriApp>| h.state().crop.as_ref().unwrap().preset.clone();
+        press(&mut h, Key::V, Modifiers::NONE);
+        let first = preset(&h);
+        assert!(first.is_some(), "v : un préréglage de version");
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert_ne!(preset(&h), first, "v : le suivant");
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        assert_eq!(preset(&h), first, "Maj+V : le précédent");
     }
 
     #[test]
