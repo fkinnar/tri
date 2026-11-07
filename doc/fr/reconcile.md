@@ -69,14 +69,18 @@ sources et leurs notes.
   pour N images »).
 - Une image en conflit porte un triangle orange en haut à gauche de sa vignette
   (`marks::conflict_sign`) ; un clic, ou une note posée sur elle, ouvre la boîte « Notes
-  en désaccord » : chaque source (XMP, RapidRAW, RawTherapee, ART, « Dans l'image ») et
-  ses notes, un bouton « Garder » par source ; « Même choix pour les N autres images en
-  conflit du dossier » prend la même sorte de source pour chacune. Un pas d'historique,
-  annulable.
+  en désaccord » : un tableau, une ligne par source (XMP, RapidRAW, RawTherapee, ART,
+  « Dans l'image ») et les notes d'avant, une colonne par champ. Seuls les champs en
+  désaccord (en gras) se choisissent, d'un clic sur la valeur voulue ; les autres sont
+  déjà fusionnés (`Conflict::merged`, retour du 07/11/2026 : une couleur ajoutée dans
+  l'image ne doit pas dépendre du choix des étoiles). La ligne « Résultat » montre les
+  notes qui seront gardées ; « Valider », ou « Garder » (tous les champs en désaccord
+  d'une ligne). « Même choix pour les N autres images en conflit du dossier » : la même
+  sorte de source, champ par champ. Un pas d'historique, annulable.
 
 ## À venir
 
-Un filtre « en conflit », le choix champ par champ, puis l'automatisation (écrire
+Un filtre « en conflit », puis l'automatisation (écrire
 partout, fusion à la volée sur les changements vus par la surveillance). Renommer ou
 déplacer une image n'emporte pas encore son entrée : elle est relue comme la première
 fois.

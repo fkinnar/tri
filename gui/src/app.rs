@@ -411,9 +411,8 @@ pub struct TriApp {
     /// Boîte de notation ouverte par un clic droit : l'image cliquée. Modale : derrière
     /// elle, rien ne change de sélection.
     rating_dialog: Option<(PathBuf, egui::Pos2)>,
-    /// Boîte pour trancher un conflit de notes (issue n° 368) : l'image, la position, et
-    /// « même choix pour toutes les images en conflit ».
-    conflict_dialog: Option<(PathBuf, egui::Pos2, bool)>,
+    /// Boîte pour trancher un conflit de notes (issue n° 368).
+    conflict_dialog: Option<ConflictDialog>,
     /// Sélecteur ouvert par un clic sur une marque de la vignette (#257) : image, groupe
     /// (étoiles, drapeau, couleurs), coin de la boîte.
     mark_picker: Option<(PathBuf, marks::MarkKind, egui::Pos2)>,
@@ -7340,7 +7339,7 @@ impl TriApp {
                 .as_ref()
                 .map_or(pos2(200.0, 200.0), |c| c.content_rect().center())
                 - vec2(200.0, 120.0);
-            self.conflict_dialog = Some((path, at, false));
+            self.conflict_dialog = Some(ConflictDialog::new(path, at));
             return;
         }
         let before = tri::history::snapshot(&self.folder.notes, std::slice::from_ref(&path));
@@ -11739,93 +11738,123 @@ impl TriApp {
         );
     }
 
-    /// Boîte pour trancher un conflit de notes (issue n° 368) : chaque source et ses notes
-    /// (et celles d'avant) ; « Garder » écrit les notes choisies partout et les retient.
-    /// « Même choix pour toutes » : la même sorte de source (XMP, RapidRAW, l'image…) pour
-    /// chaque image en conflit du dossier.
+    /// Boîte pour trancher un conflit de notes (issue n° 368) : un tableau, une ligne par
+    /// source (et les notes d'avant), une colonne par champ. Seuls les champs en désaccord
+    /// se choisissent (un clic sur la valeur voulue) ; les autres sont déjà fusionnés. «
+    /// Garder » prend tous les champs en désaccord d'une ligne ; « Valider » le choix fait.
+    /// « Même choix pour les autres » : pour chaque autre image en conflit, la même sorte de
+    /// source (XMP, RapidRAW, l'image…) champ par champ.
     fn conflict_dialog(&mut self, ctx: &egui::Context) {
-        let Some((path, at, all)) = self.conflict_dialog.clone() else {
+        use tri::reconcile::Field;
+        let Some(mut dialog) = self.conflict_dialog.clone() else {
             return;
         };
-        let Some(conflict) = self.folder.notes.conflict(&path).cloned() else {
+        let Some(conflict) = self.folder.notes.conflict(&dialog.image).cloned() else {
             self.conflict_dialog = None;
             return;
         };
-        let image_name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        dialog.init(&conflict);
+        let image_name = file_name(&dialog.image);
         let others = self.folder.notes.conflicts().len().saturating_sub(1);
-        let mut all = all;
-        let mut chosen: Option<(String, tri::xmp::Notes)> = None;
-        let fields: Vec<String> = conflict.fields.iter().map(|f| field_name(*f)).collect();
-        let modal = modal_at("conflict_dialog", at)
-            .title(t!("conflict-title", name = shown_name(&path)))
+        let names: Vec<String> = conflict.fields.iter().map(|f| field_name(*f)).collect();
+        let mut apply = false;
+        // Lignes : (choix, libellé, notes).
+        let mut rows: Vec<(Pick, String, tri::xmp::Notes)> = Vec::new();
+        if let Some(before) = &conflict.before {
+            rows.push((Pick::Before, t!("conflict-before"), before.clone()));
+        }
+        for (source, notes) in &conflict.sources {
+            rows.push((
+                Pick::Source(source.clone()),
+                source_label(source, &image_name),
+                notes.clone(),
+            ));
+        }
+        let modal = modal_at("conflict_dialog", dialog.at)
+            .title(t!("conflict-title", name = shown_name(&dialog.image)))
             .show(ctx, |ui| {
-                ui.label(t!("conflict-intro", fields = fields.join(", ")));
+                ui.label(t!("conflict-intro", fields = names.join(", ")));
                 ui.add_space(6.0);
                 egui::Grid::new("conflict_sources")
-                    .num_columns(3)
-                    .spacing(vec2(12.0, 6.0))
+                    .num_columns(5)
+                    .spacing(vec2(14.0, 6.0))
                     .show(ui, |ui| {
-                        if let Some(before) = &conflict.before {
-                            ui.weak(t!("conflict-before"));
-                            ui.label(notes_summary(before));
-                            ui.end_row();
+                        ui.label("");
+                        for field in Field::ALL {
+                            let title = field_title(field);
+                            if conflict.fields.contains(&field) {
+                                ui.strong(title);
+                            } else {
+                                ui.weak(title);
+                            }
                         }
-                        for (source, notes) in &conflict.sources {
-                            ui.label(source_label(source, &image_name))
-                                .on_hover_text(source);
-                            ui.label(notes_summary(notes));
+                        ui.end_row();
+                        for (pick, label, notes) in &rows {
+                            if *pick == Pick::Before {
+                                ui.weak(label);
+                            } else {
+                                ui.label(label);
+                            }
+                            for field in Field::ALL {
+                                let text = field_text(field, notes);
+                                if conflict.fields.contains(&field) {
+                                    let selected = dialog.pick(field) == Some(pick);
+                                    if ui.selectable_label(selected, text).clicked() {
+                                        dialog.set(field, pick.clone());
+                                    }
+                                } else {
+                                    ui.weak(text);
+                                }
+                            }
                             if ui.button(t!("conflict-keep")).clicked() {
-                                chosen = Some((source.clone(), notes.clone()));
+                                for &field in &conflict.fields {
+                                    dialog.set(field, pick.clone());
+                                }
+                                apply = true;
                             }
                             ui.end_row();
                         }
+                        // Le résultat du choix.
+                        let result = dialog.result(&conflict);
+                        ui.strong(t!("conflict-result"));
+                        for field in Field::ALL {
+                            ui.strong(field_text(field, &result));
+                        }
+                        if ui.button(t!("conflict-apply")).clicked() {
+                            apply = true;
+                        }
+                        ui.end_row();
                     });
                 if others > 0 {
                     ui.add_space(6.0);
-                    ui.checkbox(&mut all, t!("conflict-all", n = others));
+                    ui.checkbox(&mut dialog.all, t!("conflict-all", n = others));
                 }
             });
         if modal.should_close() {
             self.conflict_dialog = None;
             return;
         }
-        if let Some(entry) = &mut self.conflict_dialog {
-            entry.2 = all;
-        }
-        let Some((source, notes)) = chosen else {
+        if !apply {
+            self.conflict_dialog = Some(dialog);
             return;
-        };
+        }
         self.conflict_dialog = None;
-        // Les images à trancher : celle-ci, et (même choix) les autres, avec la source de
-        // la même sorte.
-        let mut plan: Vec<(PathBuf, tri::xmp::Notes)> = vec![(path.clone(), notes)];
-        if all {
-            let kind = source_kind(&source, &image_name);
+        let mut plan: Vec<(PathBuf, tri::xmp::Notes)> =
+            vec![(dialog.image.clone(), dialog.result(&conflict))];
+        if dialog.all {
             let others: Vec<PathBuf> = self
                 .folder
                 .notes
                 .conflicts()
                 .into_iter()
-                .filter(|p| *p != path.as_path())
+                .filter(|p| *p != dialog.image.as_path())
                 .map(Path::to_path_buf)
                 .collect();
             for other in others {
-                let Some(c) = self.folder.notes.conflict(&other) else {
-                    continue;
-                };
-                let name = other
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                if let Some((_, n)) = c
-                    .sources
-                    .iter()
-                    .find(|(s, _)| source_kind(s, &name) == kind)
+                if let Some(c) = self.folder.notes.conflict(&other)
+                    && let Some(notes) = dialog.result_for(&image_name, &file_name(&other), c)
                 {
-                    plan.push((other.clone(), n.clone()));
+                    plan.push((other, notes));
                 }
             }
         }
@@ -14141,7 +14170,8 @@ impl TriApp {
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
                 .on_hover_text(tip);
             if hit.clicked() {
-                self.conflict_dialog = Some((file.path.clone(), zone.left_top(), false));
+                self.conflict_dialog =
+                    Some(ConflictDialog::new(file.path.clone(), zone.left_top()));
             }
         }
         // Noter à la souris sur la vignette (#257, 31/10/2026) : un clic sur les étoiles,
@@ -16749,6 +16779,139 @@ fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerRe
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
 }
 
+/// Choix d'une valeur dans la boîte des conflits : les notes d'avant, ou une source
+/// (son nom de fichier).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Pick {
+    Before,
+    Source(String),
+}
+
+/// Boîte « Notes en désaccord » (issue n° 368) : l'image, la position, le choix fait pour
+/// chaque champ en désaccord, et « même choix pour les autres ».
+#[derive(Clone, Debug)]
+struct ConflictDialog {
+    image: PathBuf,
+    at: egui::Pos2,
+    all: bool,
+    picks: Vec<(tri::reconcile::Field, Pick)>,
+}
+
+impl ConflictDialog {
+    fn new(image: PathBuf, at: egui::Pos2) -> ConflictDialog {
+        ConflictDialog {
+            image,
+            at,
+            all: false,
+            picks: Vec::new(),
+        }
+    }
+
+    /// Choix de départ pour chaque champ en désaccord : les notes d'avant, sinon la source
+    /// montrée en attendant (la plus récente).
+    fn init(&mut self, conflict: &tri::reconcile::Conflict) {
+        for &field in &conflict.fields {
+            if self.pick(field).is_some() {
+                continue;
+            }
+            let pick = if conflict.before.is_some() {
+                Pick::Before
+            } else {
+                conflict
+                    .sources
+                    .iter()
+                    .find(|(_, n)| field.same(n, &conflict.merged))
+                    .map_or(Pick::Before, |(s, _)| Pick::Source(s.clone()))
+            };
+            self.picks.push((field, pick));
+        }
+    }
+
+    fn pick(&self, field: tri::reconcile::Field) -> Option<&Pick> {
+        self.picks.iter().find(|(f, _)| *f == field).map(|(_, p)| p)
+    }
+
+    fn set(&mut self, field: tri::reconcile::Field, pick: Pick) {
+        self.picks.retain(|(f, _)| *f != field);
+        self.picks.push((field, pick));
+    }
+
+    /// Notes choisies : les champs fusionnés, et pour chaque champ en désaccord, la valeur
+    /// de la ligne choisie.
+    fn result(&self, conflict: &tri::reconcile::Conflict) -> tri::xmp::Notes {
+        let mut notes = conflict.merged.clone();
+        for (field, pick) in &self.picks {
+            let from = match pick {
+                Pick::Before => conflict.before.as_ref(),
+                Pick::Source(name) => conflict
+                    .sources
+                    .iter()
+                    .find(|(s, _)| s == name)
+                    .map(|(_, n)| n),
+            };
+            if let Some(from) = from {
+                field.copy(from, &mut notes);
+            }
+        }
+        notes
+    }
+
+    /// Le même choix pour une autre image en conflit (`name`) : champ par champ, la même
+    /// sorte de source que celle choisie ici (`own` : le nom de cette image-ci). `None` si
+    /// un de ses champs en désaccord n'a pas de choix équivalent (laissée en conflit).
+    fn result_for(
+        &self,
+        own: &str,
+        name: &str,
+        conflict: &tri::reconcile::Conflict,
+    ) -> Option<tri::xmp::Notes> {
+        let mut notes = conflict.merged.clone();
+        for &field in &conflict.fields {
+            let from = match self.pick(field)? {
+                Pick::Before => conflict.before.as_ref()?,
+                Pick::Source(source) => {
+                    let kind = source_kind(source, own);
+                    &conflict
+                        .sources
+                        .iter()
+                        .find(|(s, _)| source_kind(s, name) == kind)?
+                        .1
+                }
+            };
+            field.copy(from, &mut notes);
+        }
+        Some(notes)
+    }
+}
+
+/// Titre d'une colonne de la boîte des conflits.
+fn field_title(field: tri::reconcile::Field) -> String {
+    match field {
+        tri::reconcile::Field::Stars => t!("conflict-col-stars"),
+        tri::reconcile::Field::Flag => t!("conflict-col-flag"),
+        tri::reconcile::Field::Colors => t!("conflict-col-colors"),
+    }
+}
+
+/// Valeur d'un champ, en texte.
+fn field_text(field: tri::reconcile::Field, notes: &tri::xmp::Notes) -> String {
+    match field {
+        tri::reconcile::Field::Stars => t!("conflict-stars", n = notes.stars),
+        tri::reconcile::Field::Flag => match notes.flag {
+            tri::xmp::Flag::Accepted => t!("conflict-flag-accepted"),
+            tri::xmp::Flag::Rejected => t!("conflict-flag-rejected"),
+            tri::xmp::Flag::None => "—".into(),
+        },
+        tri::reconcile::Field::Colors if notes.colors.is_empty() => "—".into(),
+        tri::reconcile::Field::Colors => notes
+            .colors
+            .iter()
+            .map(|c| t!(&format!("color-{}", c.id())))
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
 /// Sorte d'une source de notes : l'image elle-même, ou l'extension du sidecar (`xmp`,
 /// `rrdata`, `pp3`, `arp`), pour « même choix pour toutes ».
 fn source_kind(source: &str, image_name: &str) -> String {
@@ -16780,23 +16943,6 @@ fn field_name(field: tri::reconcile::Field) -> String {
         tri::reconcile::Field::Flag => t!("conflict-field-flag"),
         tri::reconcile::Field::Colors => t!("conflict-field-colors"),
     }
-}
-
-/// Notes en une ligne : étoiles, drapeau, couleurs.
-fn notes_summary(notes: &tri::xmp::Notes) -> String {
-    let mut parts = vec![t!("conflict-stars", n = notes.stars)];
-    match notes.flag {
-        tri::xmp::Flag::Accepted => parts.push(t!("conflict-flag-accepted")),
-        tri::xmp::Flag::Rejected => parts.push(t!("conflict-flag-rejected")),
-        tri::xmp::Flag::None => {}
-    }
-    parts.extend(
-        notes
-            .colors
-            .iter()
-            .map(|c| t!(&format!("color-{}", c.id()))),
-    );
-    parts.join(" · ")
 }
 
 /// Bilan de l'inscription des notes dans les images ([`TriApp::embed_notes`]).
@@ -26614,6 +26760,7 @@ mod tests {
         let image = h.state().files[0].path.clone();
         let mut four = tri::xmp::Notes::default();
         four.set_stars(4);
+        four.colors = vec![tri::xmp::Color::Green];
         tri::embedded::write(&image, &four).unwrap();
         let mut two = tri::xmp::Notes::default();
         two.set_stars(2);
@@ -26626,18 +26773,28 @@ mod tests {
         h.run_steps(2);
         assert!(h.state().conflict_dialog.is_some(), "boîte ouverte");
         assert_eq!(tri::xmp::read(&image).unwrap().stars, 2, "rien écrit");
-        // Garder celles de l'image (la deuxième source).
-        let keep = t!("conflict-keep");
-        let buttons: Vec<_> = h.query_all_by_label(&keep).collect();
-        assert_eq!(buttons.len(), 2, "une par source");
-        buttons[1].click();
+        assert_eq!(
+            h.query_all_by_label(&t!("conflict-keep")).count(),
+            2,
+            "un « Garder » par source"
+        );
+        // Champ par champ (retour du 07/11/2026) : les étoiles du sidecar (choisies
+        // d'office : les plus récentes), la couleur de l'image.
+        let green = t!("color-green");
+        h.query_all_by_label(&green).next().unwrap().click();
+        h.run_steps(2);
+        h.get_by_label(&t!("conflict-apply")).click();
         h.run_steps(2);
         assert!(h.state().conflict_dialog.is_none());
         assert!(h.state().folder.notes.conflict(&image).is_none(), "tranché");
-        assert_eq!(h.state().folder.notes.notes(&image).stars, 4);
+        let kept = h.state().folder.notes.notes(&image).clone();
         assert_eq!(
-            tri::xmp::read(&image).unwrap().stars,
-            4,
+            (kept.stars, kept.colors.clone()),
+            (2, vec![tri::xmp::Color::Green])
+        );
+        assert_eq!(
+            tri::xmp::read(&image).unwrap(),
+            kept,
             "écrit dans le sidecar"
         );
         // Puis on note normalement ; et l'annulation revient en arrière.

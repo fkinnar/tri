@@ -64,12 +64,17 @@ their ratings.
 - A merge is told in the status bar ("Ratings merged from other programs for N images").
 - An image in conflict carries an orange triangle at the top left of its thumbnail
   (`marks::conflict_sign`); a click, or a rating set on it, opens the "Ratings disagree"
-  dialog: each source (XMP, RapidRAW, RawTherapee, ART, "In the image") and its ratings,
-  a "Keep" button per source; "Same choice for the N other images in conflict in the
-  folder" takes the same kind of source for each. One history step, undoable.
+  dialog: a table, one row per source (XMP, RapidRAW, RawTherapee, ART, "In the image")
+  and the previous ratings, one column per field. Only the fields in disagreement (in
+  bold) are chosen, by clicking the value wanted; the others are already merged
+  (`Conflict::merged`, feedback of 2026-11-07: a colour added in the image must not
+  depend on the choice of stars). The "Result" row shows the ratings that will be kept;
+  "Apply", or "Keep" (every field in disagreement of a row). "Same choice for the N other
+  images in conflict in the folder": the same kind of source, field by field. One history
+  step, undoable.
 
 ## To come
 
-A "in conflict" filter, choosing field by field, then automation (write everywhere, merge
+An "in conflict" filter, then automation (write everywhere, merge
 on the fly on changes seen by watching). Renaming or moving an image does not carry its
 entry yet: it is read again as the first time.

@@ -176,6 +176,32 @@ pub struct Conflict {
     pub sources: Vec<(String, Notes)>,
     /// Les notes retenues la dernière fois, s'il y en a.
     pub before: Option<Notes>,
+    /// Les champs qui ne sont pas en désaccord, déjà fusionnés (ceux en désaccord : les
+    /// notes d'avant, ou les plus récentes) : la base du choix champ par champ.
+    pub merged: Notes,
+}
+
+impl Field {
+    /// Tous les champs, dans l'ordre.
+    pub const ALL: [Field; 3] = [Field::Stars, Field::Flag, Field::Colors];
+
+    /// Recopie ce champ de `from` dans `into`.
+    pub fn copy(self, from: &Notes, into: &mut Notes) {
+        match self {
+            Field::Stars => into.set_stars(from.stars),
+            Field::Flag => into.flag = from.flag,
+            Field::Colors => into.colors = from.colors.clone(),
+        }
+    }
+
+    /// Vrai si `a` et `b` ont la même valeur pour ce champ.
+    pub fn same(self, a: &Notes, b: &Notes) -> bool {
+        match self {
+            Field::Stars => a.stars == b.stars,
+            Field::Flag => a.flag == b.flag,
+            Field::Colors => a.colors == b.colors,
+        }
+    }
 }
 
 /// Résultat d'une lecture.
@@ -280,6 +306,7 @@ pub fn reconcile(
             fields,
             sources: named(sources),
             before: None,
+            merged: newest.clone(),
         };
         return (newest, Outcome::Conflict(conflict), None);
     };
@@ -344,6 +371,7 @@ pub fn reconcile(
             fields: conflicts,
             sources: named(sources),
             before: Some(before.clone()),
+            merged,
         };
         return (before, Outcome::Conflict(conflict), None);
     }
@@ -636,6 +664,12 @@ mod tests {
             panic!("conflit attendu")
         };
         assert_eq!(c.fields, [Field::Stars], "le drapeau, lui, se fusionnerait");
+        assert_eq!(
+            c.merged.flag,
+            Flag::Accepted,
+            "déjà fusionné, pour le choix"
+        );
+        assert_eq!(c.merged.stars, 3, "en désaccord : celles d'avant");
         assert_eq!(c.before, Some(base));
         assert_eq!(c.sources.len(), 2);
     }
