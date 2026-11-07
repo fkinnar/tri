@@ -63,9 +63,71 @@ pub fn install(dir: PathBuf) {
     }));
 }
 
+thread_local! {
+    /// Dernière erreur de la carte graphique, pas encore montrée ([`gpu_error`],
+    /// [`take_gpu_error`]). Par fil : wgpu la signale sur le fil qui dessine, celui de
+    /// l'interface (et chaque test a ainsi la sienne).
+    static GPU_ERROR: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    /// Dernière erreur consignée dans le journal, et si le terminal a déjà été prévenu :
+    /// une rafale (une texture ratée fait échouer chaque image ensuite) n'y laisse que la
+    /// première (retour du 07/11/2026 : « des messages d'insulte dans le terminal »).
+    static GPU_LOGGED: std::cell::Cell<(Option<std::time::Instant>, bool)> =
+        const { std::cell::Cell::new((None, false)) };
+}
+
+/// Durée d'une rafale d'erreurs de la carte graphique : après la première, les suivantes
+/// ne vont plus au journal.
+const GPU_BURST: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Une erreur de la carte graphique (mémoire pleine…), qui plantait `tri` avant le
+/// 07/11/2026 (le gestionnaire de wgpu par défaut arrête le programme) : consignée dans le
+/// journal de `dir` s'il y en a un, puis gardée pour la barre d'état. L'image en cause
+/// n'est pas dessinée, le reste continue.
+pub fn gpu_error(dir: Option<&Path>, message: &str) {
+    let now = std::time::Instant::now();
+    let (last, told) = GPU_LOGGED.with(|l| l.get());
+    let burst = last.is_some_and(|t| now.duration_since(t) < GPU_BURST);
+    GPU_LOGGED.with(|l| l.set((Some(now), told)));
+    if !burst && let Some(dir) = dir {
+        let text = report("(carte graphique, sans plantage)", "wgpu", message, "");
+        if let Ok(path) = append(dir, &text)
+            && !told
+        {
+            // Une ligne par session dans le terminal ; le détail est au journal.
+            eprintln!(
+                "tri : erreur de la carte graphique, détails dans {}",
+                path.display()
+            );
+            GPU_LOGGED.with(|l| l.set((Some(now), true)));
+        }
+    }
+    GPU_ERROR.with(|last| *last.borrow_mut() = Some(message.to_string()));
+}
+
+/// L'erreur de la carte graphique à montrer, une fois.
+pub fn take_gpu_error() -> Option<String> {
+    GPU_ERROR.with(|last| last.borrow_mut().take())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_graphics_error_is_logged_and_shown_once() {
+        let dir = tempfile::tempdir().unwrap();
+        gpu_error(Some(dir.path()), "Out of Memory");
+        // La rafale qui suit (chaque image échoue sur la texture ratée) : pas au journal.
+        gpu_error(Some(dir.path()), "Validation Error");
+        let log = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
+        assert!(log.contains("Out of Memory") && log.contains("sans plantage"));
+        assert!(
+            !log.contains("Validation Error"),
+            "une seule entrée par rafale"
+        );
+        assert_eq!(take_gpu_error().as_deref(), Some("Validation Error"));
+        assert_eq!(take_gpu_error(), None, "une fois");
+    }
 
     #[test]
     fn reports_are_appended_with_their_location_and_message() {

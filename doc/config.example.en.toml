@@ -695,6 +695,10 @@ full_raw_dwell_ms = 400
 # Large textures (previews, 1:1) kept in graphics memory; a 26 Mpx 1:1 takes
 # ~100 MB.
 textures = 8
+# Graphics memory of these textures, at most (MB): beyond, the least recent ones not
+# shown are dropped; if that is not enough (many images compared at 1:1), an image keeps
+# its preview instead of its 1:1. An integrated graphics card has little.
+textures_mb = 1500
 # Movement of a zoomed image per key press (Shift + arrows, Shift + hjkl), as a fraction of
 # the view.
 pan_step = 0.2

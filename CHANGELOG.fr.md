@@ -4,6 +4,20 @@
 
 ## Non publié
 
+- **Plus de plantage quand la mémoire graphique est pleine** (21 images comparées à
+  1:1) : les grandes textures ont un budget (`[gui.view] textures_mb`, 1500 Mo) ; au-delà,
+  une image garde son aperçu. Une erreur de la carte graphique est maintenant consignée et
+  dite au lieu d'arrêter `tri` ; la texture en cause est libérée et le budget de la
+  session ramené à ce qui tenait. En comparaison zoomée, une telle image est agrandie à la
+  même échelle que les autres, avec un panneau d'avertissement. Une ligne dans le
+  terminal, le détail dans `crash.log`. Un bouton « Garder N Mo » écrit la limite
+  abaissée dans la configuration.
+- **Un développement zoomé à l'échelle de sa photo** : à 100 %, un développement
+  darktable ou RapidRAW (rendu à la taille de l'aperçu) apparaissait ~2,4 fois plus petit
+  que la photo à côté ; il correspond maintenant au 100 % de la photo. Une icône d'info
+  dit qu'il est agrandi, donc que sa netteté à cette échelle n'est pas celle du fichier.
+- **Sortir d'une comparaison de tout** rend la grille telle qu'elle était : rien en
+  surbrillance, la comparaison suivante reprend donc tout.
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.

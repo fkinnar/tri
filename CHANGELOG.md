@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- **No more crash when the graphics memory is full** (21 images compared at 1:1): the
+  large textures have a budget (`[gui.view] textures_mb`, 1500 MB); beyond it, an image
+  keeps its preview. A graphics card error is now logged and shown instead of stopping
+  `tri`; the texture in cause is dropped and the session's budget lowered to what fitted.
+  In a zoomed comparison, such an image is enlarged at the same scale as the others, with
+  a warning sign. One line in the terminal, the details in `crash.log`. A "Keep N MB"
+  button writes the lowered limit into the configuration.
+- **A development zoomed at the scale of its photo**: at 100 %, a darktable or RapidRAW
+  development (rendered at the preview size) looked ~2.4 times smaller than the photo
+  next to it; it now matches the photo's 100 %. An info icon says it is enlarged, so its
+  sharpness at that scale is not the file's.
+- **Leaving a comparison of everything** gives back the grid as it was: nothing
+  highlighted, so the next comparison takes everything again.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to

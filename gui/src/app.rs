@@ -592,6 +592,9 @@ pub struct TriApp {
     /// Comparaison réduite à `[gui.compare] max` images : le texte de la bulle et son
     /// départ ([`TriApp::compare_limit_mark`]).
     compare_limit: Option<(String, Instant)>,
+    /// La grille quand la comparaison a commencé : l'image courante et si le curseur
+    /// était masqué, pour y revenir à l'identique.
+    compare_from: Option<(Option<PathBuf>, bool)>,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -908,6 +911,13 @@ pub struct TriApp {
     zoom_anchor: Option<(Vec2, egui::Pos2)>,
     /// Grandes textures chargées, par fichier et niveau.
     big: Lru<(PathBuf, Level), Big>,
+    /// Grandes images non chargées faute de mémoire graphique (`[gui.view] textures_mb`) :
+    /// elles gardent leur aperçu, sans être redemandées tant qu'elles restent affichées.
+    over_budget: HashSet<(PathBuf, Level)>,
+    /// Budget des grandes textures abaissé pour la session après une erreur de la carte
+    /// graphique (Mo) : ce qui tenait alors (07/11/2026 : à 2000 Mo, la carte n'avait pas
+    /// la place).
+    textures_cap_mb: Option<u64>,
     /// Dernière liste envoyée au chargeur (pour ne pas la renvoyer à chaque image).
     wanted: Vec<(PathBuf, Level)>,
     /// Entrées annoncées prêtes mais introuvables dans le cache : ne pas les redemander.
@@ -1269,6 +1279,7 @@ impl TriApp {
             developed_in: Vec::new(),
             end_notice: None,
             compare_limit: None,
+            compare_from: None,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -1418,6 +1429,8 @@ impl TriApp {
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
             big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
+            over_budget: HashSet::new(),
+            textures_cap_mb: None,
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
@@ -7421,6 +7434,11 @@ impl TriApp {
             _ => targets[0].clone(),
         };
         self.compare = targets;
+        // La grille telle qu'on la quitte : rendue à la sortie (07/11/2026).
+        self.compare_from = (self.mode == Mode::Grid).then(|| {
+            let path = self.files.get(self.selected).map(|f| f.path.clone());
+            (path, self.cursor_hidden)
+        });
         self.mode = Mode::Compare;
         self.zoom = None;
         self.zoom_anchor = None;
@@ -7455,6 +7473,21 @@ impl TriApp {
     fn leave_compare(&mut self) {
         self.mode = Mode::Grid;
         self.compare.clear();
+        // Entrée depuis la grille sans rien en surbrillance (« tout comparer ») : on y
+        // revient à l'identique, curseur masqué sur l'image d'avant (retour du 07/11/2026 :
+        // une image restait en surbrillance, et la comparaison suivante ne prenait plus que
+        // ses variantes).
+        if let Some((path, true)) = self.compare_from.take() {
+            if let Some(index) = path.and_then(|p| self.files.iter().position(|f| f.path == p)) {
+                self.selected = index;
+            }
+            self.cursor_hidden = true;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Minimal);
+            self.tell_shown();
+            return;
+        }
         // Image d'une pile de rafale repliée (comparaison de la pile) : la grille montre
         // sa couverture ; un développement caché dans sa pile repliée : montré à la place
         // de la couverture (comme Maj+W), on reste dessus.
@@ -7620,6 +7653,98 @@ impl TriApp {
         }
     }
 
+    /// Budget des grandes textures en vigueur (Mo) : le réglage, abaissé après une erreur
+    /// de la carte graphique.
+    fn textures_budget_mb(&self) -> u64 {
+        let mine = self.gui.view.textures_mb;
+        self.textures_cap_mb.map_or(mine, |cap| cap.min(mine))
+    }
+
+    /// Mémoire graphique des grandes textures chargées (octets).
+    fn textures_used(&self) -> u64 {
+        self.big
+            .values()
+            .map(|b| {
+                let [w, h] = b.texture.size();
+                (w * h * 4) as u64
+            })
+            .sum()
+    }
+
+    /// Erreur de la carte graphique (07/11/2026 : à `textures_mb = 2000`, une texture n'a
+    /// pas pu être créée, et chaque image dessinée ensuite échouait sur elle) : la texture
+    /// en cause sort du cache (nommée dans le message, `egui_texid_Managed(n)` ; sinon la
+    /// dernière chargée), son image garde son aperçu, et le budget de la session descend à
+    /// ce qui tenait.
+    fn gpu_failed(&mut self, error: &str) {
+        let named = error
+            .split("egui_texid_Managed(")
+            .nth(1)
+            .and_then(|rest| rest.split(')').next())
+            .and_then(|n| n.parse::<u64>().ok())
+            .and_then(|n| {
+                self.big
+                    .key_where(|b| b.texture.id() == egui::TextureId::Managed(n))
+            });
+        let culprit = named.or_else(|| self.big.newest());
+        if let Some(key) = culprit {
+            self.big.remove(&key);
+            self.over_budget.insert(key);
+        }
+        let used = (self.textures_used() / (1024 * 1024)).max(64);
+        if used < self.textures_budget_mb() {
+            self.textures_cap_mb = Some(used);
+        }
+        self.notice = Some((
+            t!(
+                "gpu-error-budget",
+                mb = self.textures_budget_mb(),
+                error = error.lines().next().unwrap_or_default()
+            ),
+            true,
+        ));
+    }
+
+    /// Fait de la place pour `image` dans la mémoire graphique (`[gui.view] textures_mb`) :
+    /// sortent les grandes textures les moins récentes, sauf celles des images affichées.
+    /// Faux si elle ne tient toujours pas (dit une fois dans la barre d'état).
+    fn make_room(&mut self, key: &(PathBuf, Level), image: &ColorImage) -> bool {
+        let bytes = |w: usize, h: usize| (w * h * 4) as u64;
+        let budget = self.textures_budget_mb() * 1024 * 1024;
+        let needed = bytes(image.size[0], image.size[1]);
+        let shown: HashSet<PathBuf> = self
+            .displayed()
+            .iter()
+            .map(|&i| self.files[i].path.clone())
+            .collect();
+        loop {
+            let used: u64 = self
+                .big
+                .values()
+                .map(|b| {
+                    let [w, h] = b.texture.size();
+                    bytes(w, h)
+                })
+                .sum();
+            if used + needed <= budget {
+                return true;
+            }
+            // Pas une des images affichées (ni l'ancienne version de celle-ci).
+            match self.big.oldest_where(|k| !shown.contains(&k.0) && k != key) {
+                Some(old) => self.big.remove(&old),
+                None => {
+                    if self.over_budget.is_empty() {
+                        self.notice = Some((
+                            t!("textures-over-budget", mb = self.textures_budget_mb()),
+                            false,
+                        ));
+                    }
+                    return false;
+                }
+            }
+        }
+    }
+
     /// Plein écran : intègre les images chargées et indique au chargeur ce qu'il faut
     /// préparer (l'image affichée, puis ses voisines).
     fn update_loads(&mut self, ctx: &egui::Context) {
@@ -7647,6 +7772,9 @@ impl TriApp {
             }
             self.wanted.retain(|w| *w != key);
             match loaded.image {
+                Some(image) if !self.make_room(&key, &image) => {
+                    self.over_budget.insert(key);
+                }
                 Some(image) => {
                     let texture = ctx.load_texture(
                         format!("{}#{:?}", loaded.path.display(), loaded.level),
@@ -7670,6 +7798,13 @@ impl TriApp {
             }
         }
         let displayed = self.displayed();
+        // Une image qui n'est plus affichée pourra de nouveau charger son 1:1.
+        let shown: HashSet<&Path> = displayed
+            .iter()
+            .map(|&i| self.files[i].path.as_path())
+            .collect();
+        self.over_budget
+            .retain(|(p, _)| shown.contains(p.as_path()));
         if displayed.is_empty() {
             return;
         }
@@ -7719,7 +7854,10 @@ impl TriApp {
             let level = view::pick(kind, source, zoomed, developed, |l| self.ready(index, l));
             if let Some(level) = level.filter(|&l| l != Level::Thumbnail) {
                 let key = (self.files[index].path.clone(), level);
-                if !self.loaded(index, level) && !self.missing.contains(&key) {
+                if !self.loaded(index, level)
+                    && !self.missing.contains(&key)
+                    && !self.over_budget.contains(&key)
+                {
                     wanted.push((self.files[index].clone(), level));
                 }
             }
@@ -8639,6 +8777,56 @@ impl TriApp {
         Some((w.round() as u32, h.round() as u32))
     }
 
+    /// Petite icône d'info en haut à droite de `area` (après `slot` autres marques) : un
+    /// développement rendu en `render` pixels, agrandi à l'échelle de sa photo (`full`) ;
+    /// sa netteté n'est pas celle du fichier (idée de l'utilisateur, 07/11/2026).
+    fn resampled_mark(
+        &self,
+        ui: &Ui,
+        painter: &egui::Painter,
+        area: Rect,
+        slot: usize,
+        id: egui::Id,
+        (render, full): (Vec2, Vec2),
+    ) {
+        let size = self.gui.view.marks;
+        let right = area.right() - 10.0 - slot as f32 * (size + 6.0);
+        let mark = Rect::from_min_size(
+            egui::pos2(right - size, area.top() + 10.0),
+            vec2(size, size),
+        );
+        painter.circle_filled(mark.center(), size * 0.55, Color32::from_black_alpha(140));
+        marks::info_icon(painter, mark, Color32::WHITE);
+        let response = ui.interact(mark, id.with("resampled"), Sense::hover());
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, t!("resampled")));
+        let px = |v: Vec2| format!("{} × {}", v.x.round() as u32, v.y.round() as u32);
+        response.on_hover_text(t!("resampled-tip", render = px(render), full = px(full)));
+    }
+
+    /// Taille du 100 % d'un développement, pour le zoom (07/11/2026 : darktable et
+    /// RapidRAW le rendent à la taille de l'aperçu ; à « 100 % » de ses pixels, il était
+    /// ~2,4 fois plus petit que la photo à côté en comparaison) : sa vraie résolution si
+    /// elle est connue (darktable : recadrage lu dans le sidecar), sinon le côté long du
+    /// capteur à la proportion du rendu `aspect` (exact sans recadrage). `None` : la photo
+    /// n'est pas encore lue.
+    fn developed_full_size(
+        &mut self,
+        ctx: &egui::Context,
+        file: &MediaFile,
+        aspect: f32,
+    ) -> Option<Vec2> {
+        let read = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
+            .get(file)
+            .and_then(|m| m.as_ref().ok())
+            .cloned();
+        let full = read?.size?;
+        let known = self.developed_size(&file.path, full);
+        Some(view::developed_zoom_size(full, known, aspect))
+    }
+
     /// Taille du développé darktable de `path` (image de `full` pixels) : recadrage lu
     /// dans le sidecar (`develop::developed_size`), relu seulement s'il a changé.
     fn developed_size(&mut self, path: &Path, full: (u32, u32)) -> Option<(u32, u32)> {
@@ -9270,7 +9458,10 @@ impl TriApp {
                 self.developed_level(&file.path),
                 |l| self.ready(index, l) && self.loaded(index, l),
             );
-            waiting |= shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
+            // Écartée faute de mémoire graphique : elle n'attend plus son 1:1.
+            let without_full = self.over_budget.iter().any(|(p, _)| *p == file.path);
+            waiting |= !without_full
+                && (shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level)));
             let drawable: Option<(TextureHandle, Vec2)> = match shown {
                 Some(Level::Thumbnail) => self
                     .thumbnail_texture(&ctx, index, deadline)
@@ -9281,11 +9472,36 @@ impl TriApp {
                     .map(|b| (b.texture.clone(), b.original)),
                 None => None,
             };
+            let mut resampled = None;
             if let Some((texture, original)) = drawable {
-                let image_rect = match (self.zoom, shown == Some(zoom_level)) {
-                    // 1:1 au même point relatif de chaque image.
-                    (Some(center), true) => {
-                        let size = original * self.zoom_scale / ctx.pixels_per_point();
+                let image_rect = match self.zoom {
+                    // 1:1 au même point relatif de chaque image ; sans son 1:1 (en chemin,
+                    // ou mémoire graphique pleine), l'aperçu à la même échelle, à la taille
+                    // du 1:1 connue ou estimée (retour du 07/11/2026 : il s'affichait
+                    // entier au milieu des autres zoomées).
+                    Some(center) => {
+                        let full = if shown == Some(zoom_level) {
+                            // Un développé : à l'échelle de la photo, pas de ses pixels.
+                            let full = match zoom_level {
+                                Level::Developed(_) => self
+                                    .developed_full_size(&ctx, &file, original.x / original.y)
+                                    .unwrap_or(original),
+                                _ => original,
+                            };
+                            if full.x > original.x * 1.05 {
+                                resampled = Some((original, full));
+                            }
+                            self.last_zoom_size.insert(zoom_level, full);
+                            full
+                        } else {
+                            self.last_zoom_size
+                                .get(&zoom_level)
+                                .map(|&last| {
+                                    view::estimate_zoom_size(last, original.x / original.y)
+                                })
+                                .unwrap_or(original)
+                        };
+                        let size = full * self.zoom_scale / ctx.pixels_per_point();
                         let mut c = new_center.unwrap_or(center);
                         if new_center.is_none() {
                             if response.dragged() {
@@ -9303,7 +9519,7 @@ impl TriApp {
                         let c = view::clamp_center(rect.size(), size, c);
                         view::zoom_rect(rect, size, c)
                     }
-                    _ => view::fit_rect(rect, original),
+                    None => view::fit_rect(rect, original),
                 };
                 if pointer.is_some_and(|p| rect.contains(p)) {
                     loupe_target = Some((index, image_rect.intersect(rect)));
@@ -9350,6 +9566,23 @@ impl TriApp {
                 size,
                 &self.gui.colors,
             );
+            // Pas de 1:1, faute de mémoire graphique : un avertissement en haut à droite,
+            // expliqué au survol (07/11/2026, idée de l'utilisateur).
+            if without_full {
+                let mark = Rect::from_min_size(
+                    rect.right_top() + vec2(-10.0 - size, 10.0),
+                    vec2(size, size),
+                );
+                marks::warning(&painter, mark, self.gui.colors.error.into());
+                let response = ui.interact(mark, id.with("over_budget"), Sense::hover());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Image, true, t!("compare-no-full"))
+                });
+                response.on_hover_text(t!("compare-no-full-tip", mb = self.textures_budget_mb()));
+            }
+            if let Some(sizes) = resampled {
+                self.resampled_mark(ui, &painter, rect, usize::from(without_full), id, sizes);
+            }
             // Image active : cadre de la couleur de sélection.
             if index == self.selected {
                 let color = self.gui.theme.selection(&self.gui.colors, ui.visuals());
@@ -10038,6 +10271,7 @@ impl TriApp {
         };
         let mut image_rect = None;
         let mut sensor_ratio = None;
+        let mut resampled = None;
         // Version montrée (ni zoomée ni en cours de recadrage) : son cadre.
         let shown_crop = self
             .version_shown
@@ -10052,6 +10286,17 @@ impl TriApp {
             // attendant le 1:1, l'aperçu est ainsi déjà affiché à l'échelle 1:1 (flou un
             // instant), sans repasser par la vue ajustée.
             let zoom_px = match (self.zoom, shown) {
+                // Un développé : à l'échelle de la photo, pas de ses pixels.
+                (Some(_), Some(level @ Level::Developed(_))) if level == zoom_level => {
+                    let full = self
+                        .developed_full_size(&ctx, &file, original.x / original.y)
+                        .unwrap_or(original);
+                    if full.x > original.x * 1.05 {
+                        resampled = Some((original, full));
+                    }
+                    self.last_zoom_size.insert(zoom_level, full);
+                    Some(full)
+                }
                 (Some(_), Some(level)) if level == zoom_level => {
                     self.last_zoom_size.insert(zoom_level, original);
                     Some(original)
@@ -10146,6 +10391,10 @@ impl TriApp {
         let sensor_rect = image_rect
             .filter(|_| !matches!(shown, Some(Level::Developed(_))) && shown_crop.is_none());
         self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
+        if let Some(sizes) = resampled {
+            let id = ui.scope_id().with(("viewer", &file.path));
+            self.resampled_mark(ui, &painter, view_rect, 0, id, sizes);
+        }
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté, sur l'image affichée (ajustée ou 1:1 ; une version : son cadre).
         let peaking_uv = match shown_crop {
@@ -11069,6 +11318,16 @@ impl TriApp {
                         .clicked()
                 {
                     clicked = Some(StatusClick::Action(Action::ExportReport));
+                }
+                // Budget de mémoire graphique abaissé : le garder (07/11/2026).
+                if let Some(cap) = self.textures_cap_mb
+                    && cap < self.gui.view.textures_mb
+                    && ui
+                        .small_button(t!("textures-keep", mb = cap))
+                        .on_hover_text(t!("textures-keep-tip"))
+                        .clicked()
+                {
+                    clicked = Some(StatusClick::KeepTexturesBudget);
                 }
                 // Un clic efface le message (#157 : une erreur restait affichée).
                 let label = if *error {
@@ -13820,6 +14079,39 @@ impl TriApp {
 
     /// Autorise ou interdit les actions sur les fichiers, et l'écrit dans le fichier de
     /// configuration (`[files] allow_actions`) ; sans fichier possible, pour cette session.
+    /// Écrit le budget de mémoire graphique de la session dans la configuration
+    /// (`[gui.view] textures_mb`) : il vaut aussi aux lancements suivants.
+    fn keep_textures_budget(&mut self) {
+        let Some(cap) = self.textures_cap_mb else {
+            return;
+        };
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            file.set(
+                "gui.view",
+                "textures_mb",
+                &tri::config_edit::Value::Int(cap as i64),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        match result {
+            Ok(()) => {
+                self.gui.view.textures_mb = cap;
+                self.textures_cap_mb = None;
+                self.notice = Some((t!("textures-kept", mb = cap), false));
+            }
+            Err(e) => self.notice = Some((e, true)),
+        }
+    }
+
     fn set_file_actions(&mut self, allowed: bool) {
         self.settings.files.allow_actions = allowed;
         let Some(path) = self
@@ -15281,6 +15573,10 @@ impl TriApp {
 
 impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).
+        if let Some(e) = crate::crash::take_gpu_error() {
+            self.gpu_failed(&e);
+        }
         let ctx = ui.ctx().clone();
         let mut steps = crate::trace::Steps::start();
         if self.repaint.is_none() {
@@ -15368,6 +15664,7 @@ impl eframe::App for TriApp {
                 self.note_error = None;
                 self.file_error = None;
             }
+            Some(StatusClick::KeepTexturesBudget) => self.keep_textures_budget(),
             Some(StatusClick::CancelExport) => {
                 if let Some(job) = &self.export_job {
                     job.cancel();
@@ -15957,6 +16254,9 @@ enum StatusClick {
     RetryEject,
     /// Effacer les messages de la barre d'état (#157 : une erreur en rouge restait).
     DismissMessages,
+    /// Garder dans la configuration le budget de mémoire graphique abaissé après une
+    /// erreur (07/11/2026 : pas assez de mémoire aujourd'hui, sans doute pas plus demain).
+    KeepTexturesBudget,
 }
 
 /// Comparaison du filtre d'étoiles, en clair.
@@ -17283,9 +17583,14 @@ mod tests {
         // Pas de piles : les images de test, des aplats de couleurs proches, seraient
         // groupées (le test des piles les active).
         settings.similarity.background = false;
+        // Un réglage écrit pendant un test (bouton, case) : dans le dossier temporaire,
+        // jamais la configuration de l'utilisateur (sans chemin, ce serait elle).
+        let config = dir.path().join("config.toml");
         let mut harness = Harness::builder()
             .with_size(vec2(1000.0, 700.0))
-            .build_eframe(move |_cc| TriApp::new(Some(photos), settings, None));
+            .build_eframe(move |_cc| {
+                TriApp::new(Some(photos), settings, None).with_config(Some(config))
+            });
         // Notes lues en fond (issue n° 15) : les tests partent, comme l'utilisateur après
         // un instant, d'un dossier dont les notes sont connues.
         run_until(&mut harness, |app| app.loading.is_none());
@@ -18022,15 +18327,17 @@ mod tests {
                 .unwrap()
                 .click()
         };
+        // Les choix d'une liste une fois sa place arrêtée (clic tombé à côté sur la CI
+        // Windows, 07/11/2026).
         combo(&h, 0);
         h.run_steps(2);
-        h.get_by_label(&sort_name(other)).click();
+        click_settled(&mut h, &sort_name(other));
         h.run_steps(2);
         assert_eq!(h.state().order.key, other);
         combo(&h, 1);
         h.run_steps(2);
         // « RAW », puis « LibRaw » en gris.
-        h.get_by_label("RAW  LibRaw").click();
+        click_settled(&mut h, "RAW  LibRaw");
         h.run_steps(2);
         assert_eq!(
             h.state().grid_render,
@@ -19481,7 +19788,18 @@ mod tests {
         // Le pas se mesure dans la loupe (retour du 06/11/2026 : sur une vignette, il
         // sautait des centaines de pixels).
         // La taille de l'image dans la loupe au moment de l'appui : le 1:1 peut finir de
-        // charger juste après et la changer (vu sur la CI Windows le 07/11/2026).
+        // charger juste après et la changer (vu sur la CI Windows le 07/11/2026). Son 1:1
+        // d'abord (sur la CI Ubuntu, la mesure tombait encore pendant ce chargement).
+        run_until(&mut h, |app| {
+            let file = &app.files[selected];
+            let level = view::zoom_level(
+                file.kind,
+                app.source_for(file),
+                app.developed_level(&file.path),
+            );
+            app.loaded(selected, level)
+        });
+        h.run_steps(3);
         let before = h.state().loupe_point.unwrap().1;
         let whole = h.state().loupe_sizes[&selected];
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -19760,9 +20078,18 @@ mod tests {
         let (mut h, _dir) = harness();
         h.run_steps(3);
         h.state_mut().cursor_hidden = true;
+        let before = h.state().selected;
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 3);
+        // Sortie : la grille à l'identique, rien en surbrillance (retour du 07/11/2026) ;
+        // et la comparaison suivante prend de nouveau tout.
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert_eq!(h.state().mode, Mode::Grid);
+        assert!(h.state().cursor_hidden, "toujours rien en surbrillance");
+        assert_eq!(h.state().selected, before);
+        type_text(&mut h, "=");
+        assert_eq!(h.state().compare.len(), 3, "de nouveau tout");
     }
 
     #[test]
@@ -19777,6 +20104,99 @@ mod tests {
         assert_eq!(h.state().selection.len(), 3);
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
+    }
+
+    #[test]
+    fn the_large_textures_stay_within_their_memory_budget() {
+        // Plantage du 07/11/2026 (« wgpu error: Out of Memory ») : 21 images comparées à
+        // 1:1. Au-delà de `[gui.view] textures_mb`, une image garde son aperçu.
+        let (mut h, _dir) = harness_with(2400, 1600);
+        h.state_mut().gui.view.textures_mb = 20;
+        h.run_steps(3);
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        run_until(&mut h, |app| !app.over_budget.is_empty());
+        let used: u64 = h
+            .state()
+            .big
+            .values()
+            .map(|b| {
+                let [w, h] = b.texture.size();
+                (w * h * 4) as u64
+            })
+            .sum();
+        assert!(used <= 20 * 1024 * 1024, "{used} octets");
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("textures_mb"), "{notice}");
+        // Zoomé : l'image sans 1:1 le dit (avertissement), sans attendre sans fin.
+        act(&mut h, Action::ToggleZoom);
+        h.run_steps(5);
+        assert!(h.state().zoom.is_some());
+        assert!(h.query_by_label(&t!("compare-no-full")).is_some());
+        // Revenu à la grille : plus rien d'écarté, les 1:1 pourront revenir.
+        act(&mut h, Action::Back);
+        h.run_steps(3);
+        assert!(h.state().over_budget.is_empty());
+    }
+
+    #[test]
+    fn a_graphics_error_drops_its_texture_and_lowers_the_budget() {
+        // Retour du 07/11/2026 : à `textures_mb = 2000`, la carte n'avait pas la place ; la
+        // texture non créée faisait échouer chaque image ensuite (« BindGroup with
+        // 'egui_texid_Managed(68)' label is invalid »).
+        let (mut h, _dir) = harness_with(2400, 1600);
+        h.run_steps(3);
+        act(&mut h, Action::Compare);
+        run_until(&mut h, |app| app.textures_used() > 0);
+        let (key, id) = {
+            let app = h.state();
+            let key = app.big.newest().unwrap();
+            let id = app.big.values().map(|b| b.texture.id()).next().unwrap();
+            (key, id)
+        };
+        let key = h
+            .state()
+            .big
+            .key_where(|b| b.texture.id() == id)
+            .unwrap_or(key);
+        let egui::TextureId::Managed(n) = id else {
+            panic!("{id:?}")
+        };
+        crate::crash::gpu_error(
+            None,
+            &format!(
+                "Validation Error\n  BindGroup with 'egui_texid_Managed({n})' label is invalid"
+            ),
+        );
+        h.run_steps(2);
+        assert!(
+            !h.state().big.contains(&key),
+            "la texture fautive est sortie"
+        );
+        assert!(
+            h.state().over_budget.contains(&key),
+            "son image garde l'aperçu"
+        );
+        let cap = h.state().textures_cap_mb.expect("budget abaissé");
+        assert!(cap < h.state().gui.view.textures_mb);
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("textures_mb"), "{notice}");
+        // « Garder N Mo » : écrit dans la configuration (du dossier temporaire), pour les
+        // lancements suivants (idée de l'utilisateur, 07/11/2026).
+        let config = h.state().config_path.clone().unwrap();
+        assert!(
+            config.starts_with(_dir.path()),
+            "jamais la vraie configuration"
+        );
+        click_settled(&mut h, &t!("textures-keep", mb = cap));
+        h.run_steps(2);
+        let written = std::fs::read_to_string(&config).unwrap();
+        assert!(
+            written.contains(&format!("textures_mb = {cap}")),
+            "{written}"
+        );
+        assert_eq!(h.state().gui.view.textures_mb, cap);
+        assert_eq!(h.state().textures_cap_mb, None);
     }
 
     #[test]

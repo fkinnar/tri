@@ -54,6 +54,36 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
         }
     }
 
+    /// Les entrées, dans un ordre quelconque.
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.entries.values().map(|(v, _)| v)
+    }
+
+    /// La clé d'une entrée dont la valeur satisfait `wanted`.
+    pub fn key_where(&self, wanted: impl Fn(&V) -> bool) -> Option<K> {
+        self.entries
+            .iter()
+            .find(|(_, (v, _))| wanted(v))
+            .map(|(k, _)| k.clone())
+    }
+
+    /// La plus récemment ajoutée ou utilisée des entrées.
+    pub fn newest(&self) -> Option<K> {
+        self.entries
+            .iter()
+            .max_by_key(|(_, (_, used))| *used)
+            .map(|(k, _)| k.clone())
+    }
+
+    /// La moins récemment utilisée des entrées que `evictable` accepte.
+    pub fn oldest_where(&self, evictable: impl Fn(&K) -> bool) -> Option<K> {
+        self.entries
+            .iter()
+            .filter(|(k, _)| evictable(k))
+            .min_by_key(|(_, (_, used))| *used)
+            .map(|(k, _)| k.clone())
+    }
+
     /// Retire `key` (image périmée : développement modifié ailleurs).
     pub fn remove(&mut self, key: &K) {
         self.entries.remove(key);
@@ -74,6 +104,19 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_oldest_evictable_entry_is_found() {
+        let mut lru = Lru::new(10);
+        for k in [1, 2, 3] {
+            lru.insert(k, k * 10);
+        }
+        lru.get(&1);
+        assert_eq!(lru.oldest_where(|_| true), Some(2));
+        assert_eq!(lru.oldest_where(|k| *k != 2), Some(3));
+        assert_eq!(lru.oldest_where(|_| false), None);
+        assert_eq!(lru.values().sum::<i32>(), 60);
+    }
 
     #[test]
     fn evicts_least_recently_used() {

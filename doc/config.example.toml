@@ -696,6 +696,10 @@ full_raw_dwell_ms = 400
 # Grandes textures (aperçus, 1:1) gardées en mémoire graphique ; un 1:1 de 26 Mpx occupe
 # ~100 Mo.
 textures = 8
+# Mémoire graphique de ces textures, au plus (Mo) : au-delà, les moins récentes non
+# affichées sortent ; si ça ne suffit pas (beaucoup d'images comparées à 1:1), une image
+# garde son aperçu au lieu de son 1:1. Une carte graphique intégrée en a peu.
+textures_mb = 1500
 # Déplacement d'une image zoomée par appui (Maj + flèches, Maj + hjkl), en fraction de la
 # vue.
 pan_step = 0.2

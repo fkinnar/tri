@@ -259,7 +259,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   et le retour à la grille aussi en comparaison ; **sans sélection ni pile, toutes les
   images montrées**, au plus `[gui.compare] max` autour de l'image courante ; curseur de
   la grille masqué et rien de sélectionné : rien n'est en surbrillance, donc tout, et `=`
-  agit du premier coup) :
+  agit du premier coup ; à la sortie, la grille revient à l'identique, curseur masqué
+  sur l'image d'avant, `compare_from`) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; **31/10/2026 :
   la pile de rafale si elle est repliée, sinon la photo et ses développements** (JPEG
@@ -1253,6 +1254,17 @@ se voit dans la barre du bas (réglage d'échelle, ci-dessous).
 
 ### Le zoom comme la loupe (07/11/2026)
 
+**Un développement à l'échelle de sa photo** (même jour) : darktable et RapidRAW rendent
+à la taille de l'aperçu ; à « 100 % » de ses pixels, un développement apparaissait ~2,4
+fois plus petit que la photo à côté en comparaison. Zoomé, il prend la taille du 100 %
+de la photo (`view::developed_zoom_size`, `TriApp::developed_full_size`) : sa vraie
+résolution si elle est connue (darktable : recadrage lu dans le sidecar), sinon le côté
+long du capteur à la proportion du rendu (exact sans recadrage ; approché pour un
+recadrage fait dans RapidRAW, RawTherapee ou ART, qu'on ne lit pas). Agrandi ainsi, il
+porte une petite icône d'info en haut à droite (`resampled_mark`, plein écran et
+comparaison) : au survol, la taille du rendu et celle de la photo, et que sa netteté à
+cette échelle n'est pas celle du fichier.
+
 Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du plein écran.
 `<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centré comme `+` / `-`). `Ctrl+K` / `Ctrl+J`
@@ -1532,6 +1544,26 @@ moitié transparente.
   consignée (message, fichier et ligne, fil, pile d'appels) dans `crash.log` du dossier de
   données, avant l'arrêt ; un plantage pendant le dessin de la fenêtre (appelé depuis
   AppKit sur macOS) ne laissait sinon qu'un rapport du système, sans le message.
+- **Mémoire graphique** (07/11/2026, plantage « wgpu error: Out of Memory » : 21 images
+  comparées à 1:1 sur une carte graphique intégrée, ~100 Mo par 1:1 de 26 Mpx) : les
+  grandes textures ont un budget, `[gui.view] textures_mb` (1500 Mo). À l'arrivée d'une
+  image (`TriApp::make_room`), les moins récentes non affichées sortent ; si ça ne suffit
+  pas, elle garde son aperçu (`over_budget`, pas redemandée tant qu'elle reste affichée)
+  et la barre d'état le dit. Filet de sécurité : une erreur de la carte graphique n'arrête
+  plus le programme (le gestionnaire de wgpu par défaut le faisait) ; elle est consignée
+  dans `crash.log` (« sans plantage ») et dite dans la barre d'état
+  (`crash::gpu_error`, branché sur `Device::on_uncaptured_error` dans `main.rs`). La
+  texture en cause sort du cache (nommée dans le message, `egui_texid_Managed(n)` ;
+  sinon la dernière chargée) et son image garde son aperçu : sans cela, chaque image
+  dessinée ensuite échouait sur elle (essai à `textures_mb = 2000` sur un vieux portable :
+  écran figé, erreurs en rafale). Le budget de la session descend à ce qui tenait
+  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur, avec
+  un bouton « Garder N Mo » qui l'écrit dans la configuration (`keep_textures_budget` :
+  pas assez de mémoire aujourd'hui, sans doute pas plus demain). En
+  comparaison zoomée, une image sans sa pleine définition montre son aperçu à l'échelle
+  du 1:1 (taille connue ou estimée, `last_zoom_size`), avec un avertissement en haut à
+  droite expliqué au survol. Le terminal n'a qu'une ligne par session (« détails dans
+  …/crash.log ») ; une rafale d'erreurs (5 s) ne laisse que la première au journal.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au
