@@ -26128,7 +26128,7 @@ mod tests {
     #[test]
     fn every_part_of_the_version_bar_has_its_keys() {
         // Demandé le 07/11/2026 : chaque partie de la barre au clavier. v / Maj+V le
-        // préréglage de version, r / Maj+R le rapport, x l'orientation, o les guides, : un
+        // préréglage de version, r / Maj+R le rapport, x l'orientation, o les guides, / un
         // rapport à soi, e / Maj+E l'export, n (ou F2) le nom, Ctrl+S la disquette.
         use tri::versions::Ratio;
         let (mut h, _dir) = harness();
@@ -26149,8 +26149,8 @@ mod tests {
         assert!(profile(&h).is_some(), "e : un préréglage d'export");
         press(&mut h, Key::E, Modifiers::SHIFT);
         assert_eq!(profile(&h), None, "Maj+E : aucun");
-        // : : la liste s'ouvre sur le champ, qui prend le clavier.
-        type_text(&mut h, ":");
+        // / : la liste s'ouvre sur le champ, qui prend le clavier.
+        type_text(&mut h, "/");
         h.run_steps(3);
         assert!(
             h.ctx.egui_wants_keyboard_input(),

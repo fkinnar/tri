@@ -103,11 +103,13 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Échap** (ou Annuler) ramène là où la version a été commencée : la grille ou le plein
   écran (07/11/2026) ; enregistrée, elle est montrée en plein écran.
 - **Chaque partie au clavier** (07/11/2026) : `v` / `Maj+V` préréglage de version
-  suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant / précédent
-  (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son
-  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `x`
-  l'orientation, `o` / `Maj+O` les superpositions (calées sur le cadre), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
-  Ctrl+clic sur « Original », `Crop::reset_frame`) ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
+  suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant /
+  précédent (ajoutés compris, `Crop::step_ratio`), `/` un rapport à soi (pavé numérique
+  compris ; la liste s'ouvre sur son champ), `e` / `Maj+E` préréglage d'export suivant /
+  précédent (« aucun » compris), `x` l'orientation, `o` / `Maj+O` les superpositions
+  (calées sur le cadre), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre
+  d'origine (l'image entière ; aussi Ctrl+clic sur « Original », `Crop::reset_frame`) ;
+  avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en

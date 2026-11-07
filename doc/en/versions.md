@@ -102,11 +102,13 @@ The interface only draws; all the computation is here.
 - **Esc** (or Cancel) goes back to where the version was started: the grid or full
   screen (2026-11-07); once saved, it is shown full screen.
 - **Each part from the keyboard** (2026-11-07): `v` / `Shift+V` next / previous version
-  preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio
-  (added ones included, `Crop::step_ratio`), `:` a ratio of one's own (the list opens on
-  its field), `e` / `Shift+E` next / previous export preset ("none" included), `x`
-  the orientation, `o` / `Shift+O` the overlays (fitted to the frame), `n` (or `F2`) the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also Ctrl+click on
-  "Original", `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` / `Shift+Tab`, Enter, Esc.
+  preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio (added ones
+  included, `Crop::step_ratio`), `/` a ratio of one's own (numeric keypad too; the list
+  opens on its field), `e` / `Shift+E` next / previous export preset ("none" included),
+  `x` the orientation, `o` / `Shift+O` the overlays (fitted to the frame), `n` (or `F2`)
+  the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also
+  Ctrl+click on "Original", `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` /
+  `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
   already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is

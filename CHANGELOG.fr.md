@@ -21,20 +21,21 @@
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.
-- **Recadrage et version ne font qu'un : « Version »** : une version est un cadre avec un
-  préréglage d'export facultatif. L'interface dit « Version » partout ; `v` en crée une
-  (au lieu de `c`), `Maj+V` / `Ctrl+Maj+V` passent à la suivante / précédente ;
+- **Recadrage et version ne font qu'un : « Version »** : une version est un cadre avec
+  un préréglage d'export facultatif. L'interface dit « Version » partout ; `v` en crée
+  une (au lieu de `c`), `Maj+V` / `Ctrl+Maj+V` passent à la suivante / précédente ;
   « recadrer » la trouve toujours dans l'aide et la palette. Les identifiants des
   actions deviennent `core.version.*` ; les anciens (`core.crop.*`, `core.view.crop`…)
   marchent encore dans `[keys]`. La barre des versions est rangée en parties titrées
   (Version, Recadrage avec les rapports dans une liste, Export, Nom) ; un rapport à soi
   peut s'y taper (`17:23`, `1.91:1`) et s'ajouter à la liste avec « + » (gardé dans
-  `[versions] ratios`). Chaque partie a ses touches (`v` préréglage de version, `r` rapport, `x`
-  orientation, `o` superpositions sur le cadre, `:` personnalisé, `e` export, `n` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au cadre
-  d'origine) ; Échap ramène à la grille si la version y a été commencée ; l'orientation
-  est une icône (le rectangle du cadre, debout ou couché). La
-  barre des filtres, et les filtres, la vue et l'histogramme du panneau de droite,
-  disparaissent pendant l'édition.
+  `[versions] ratios`). Chaque partie a ses touches (`v` préréglage de version, `r`
+  rapport, `x` orientation, `o` superpositions sur le cadre, `/` personnalisé, `e`
+  export, `n` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au
+  cadre d'origine) ; Échap ramène à la grille si la version y a été commencée ;
+  l'orientation est une icône (le rectangle du cadre, debout ou couché). La barre des
+  filtres, et les filtres, la vue et l'histogramme du panneau de droite, disparaissent
+  pendant l'édition.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.
