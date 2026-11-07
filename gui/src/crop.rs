@@ -258,6 +258,16 @@ impl Crop {
         self.focus = Some(field);
     }
 
+    /// Le cadre d'origine : l'image entière, à son rapport (idée de l'utilisateur,
+    /// 07/11/2026 : `0`, ou Ctrl+clic sur « Original »).
+    pub fn reset_frame(&mut self) {
+        self.ratio = Ratio::Original { flipped: false };
+        self.rect = Rect::FULL;
+        if !self.name_edited {
+            self.name = self.free_name(&default_name(self.ratio));
+        }
+    }
+
     /// Portrait ↔ paysage.
     pub fn rotate(&mut self) {
         self.ratio = self.ratio.rotated();
@@ -500,6 +510,7 @@ impl Crop {
         // sept boutons), puis l'orientation.
         section(ui, &t!("crop-section-frame"), ui.spacing().combo_width);
         let mut chosen = None;
+        let mut reset = false;
         // `:` : la liste s'ouvre, son champ prend le clavier.
         let focus_custom = self.focus == Some(Focus::CustomRatio);
         if focus_custom && let Some(id) = self.ratio_list_id {
@@ -516,8 +527,18 @@ impl Crop {
                     let on = preset.same_shape(self.ratio);
                     // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours.
                     let shown = if on { self.ratio } else { preset };
-                    if ui.selectable_label(on, ratio_name(shown)).clicked() {
-                        chosen = Some(preset);
+                    let mut item = ui.selectable_label(on, ratio_name(shown));
+                    let original = matches!(preset, Ratio::Original { .. });
+                    if original {
+                        item = item.on_hover_text(t!("crop-ratio-original-tip"));
+                    }
+                    if item.clicked() {
+                        // Ctrl / Cmd+clic sur « Original » : tout le cadre d'origine.
+                        if original && ui.input(|i| i.modifiers.command) {
+                            reset = true;
+                        } else {
+                            chosen = Some(preset);
+                        }
                         ui.close();
                     }
                 }
@@ -566,6 +587,9 @@ impl Crop {
         self.ratio_list_id = Some(list.response.id);
         if let Some(preset) = chosen {
             self.set_ratio(preset);
+        }
+        if reset {
+            self.reset_frame();
         }
         // Orientation : le libellé dit celle d'arrivée.
         let portrait = self

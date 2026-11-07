@@ -413,6 +413,8 @@ pub enum Action {
     VersionName,
     /// Version : enregistrer comme préréglage (la disquette).
     VersionSavePreset,
+    /// Version : revenir au cadre d'origine, l'image entière (07/11/2026).
+    VersionReset,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
     /// Plein écran : version précédente (dans l'autre sens, 06/11/2026).
@@ -518,7 +520,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 227] = [
+    pub const ALL: [Action; 228] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -633,6 +635,7 @@ impl Action {
         Action::VersionExportPrev,
         Action::VersionName,
         Action::VersionSavePreset,
+        Action::VersionReset,
         Action::VersionNext,
         Action::VersionPrev,
         Action::Send("plugin.airdrop.send"),
@@ -881,7 +884,7 @@ impl Action {
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
             | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
             | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
-            | VersionName | VersionSavePreset => Group::Crop,
+            | VersionName | VersionSavePreset | VersionReset => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
@@ -1060,6 +1063,7 @@ impl Action {
             Action::VersionExportPrev => "core.version.export_prev",
             Action::VersionName => "core.version.name",
             Action::VersionSavePreset => "core.version.save_preset",
+            Action::VersionReset => "core.version.reset",
             Action::VersionNext => "core.version.next",
             Action::VersionPrev => "core.version.prev",
             Action::Undo => "core.edit.undo",
@@ -1264,9 +1268,8 @@ impl Action {
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
             | CropPresetPrev | VersionRatioNext | VersionRatioPrev | VersionRatioCustom
-            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset => {
-                Some(Scope::Crop)
-            }
+            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset
+            | VersionReset => Some(Scope::Crop),
             // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
             // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance

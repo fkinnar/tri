@@ -318,6 +318,9 @@ loupe = "m"
 "core.version.export_prev" = ["Shift+e"]
 "core.version.name" = ["F2"]
 "core.version.save_preset" = ["Ctrl+s"]
+# 0 (next to the ratios 1 to 7): back to the original frame, the whole image; also
+# Ctrl+click (Cmd+click on macOS) on "Original" in the ratio list.
+"core.version.reset" = ["0", "Shift+0"]
 
 [classic]
 

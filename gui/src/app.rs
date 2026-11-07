@@ -6064,6 +6064,7 @@ impl TriApp {
                     | Action::VersionExportPrev
                     | Action::VersionName
                     | Action::VersionSavePreset
+                    | Action::VersionReset
                     // La carte de netteté s'éteint aussi pendant le recadrage.
                     | Action::TogglePeaking => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
@@ -6603,6 +6604,11 @@ impl TriApp {
                     } else {
                         crate::crop::Focus::CustomRatio
                     });
+                }
+            }
+            Action::VersionReset => {
+                if let Some(crop) = &mut self.crop {
+                    crop.reset_frame();
                 }
             }
             Action::VersionSavePreset => {
@@ -26115,6 +26121,13 @@ mod tests {
         assert!(
             h.state().crop.is_some(),
             "Entrée n'a pas enregistré la version"
+        );
+        // 0 : le cadre d'origine, l'image entière (aussi Ctrl+clic sur « Original »).
+        press(&mut h, Key::Num0, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: false });
+        assert_eq!(
+            h.state().crop.as_ref().unwrap().rect,
+            tri::versions::Rect::FULL
         );
         // F2 : le nom ; Ctrl+S : un préréglage (dans la configuration du test).
         press(&mut h, Key::F2, Modifiers::NONE);

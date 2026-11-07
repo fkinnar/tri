@@ -102,7 +102,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Chaque partie au clavier** (07/11/2026) : `r` / `Maj+R` rapport suivant / précédent
   (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son
   champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `F2`
-  le nom, `Ctrl+S` la disquette ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
+  le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
+  Ctrl+clic sur « Original », `Crop::reset_frame`) ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en

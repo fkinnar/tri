@@ -154,6 +154,7 @@ pub fn navigate(
         | Action::VersionExportPrev
         | Action::VersionName
         | Action::VersionSavePreset
+        | Action::VersionReset
         | Action::VersionNext
         | Action::VersionPrev
         | Action::Send(_)
