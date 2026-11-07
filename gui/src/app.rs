@@ -872,6 +872,11 @@ pub struct TriApp {
     /// La touche lue avec l'action qui ouvre la saisie, prise à son ouverture (une saisie
     /// ouverte depuis la palette n'en a pas).
     entry_trigger_pending: Option<crate::actions::Chord>,
+    /// Quand montrer le menu de la saisie (après le délai du menu des suites ; tout de
+    /// suite si celui du leader était déjà affiché).
+    entry_menu_at: Option<Instant>,
+    /// Le menu des suites était affiché quand la saisie a été demandée au clavier.
+    entry_menu_held: bool,
     /// Valeur du zoom ou de la loupe tapée dans la barre du bas (un clic sur la valeur,
     /// 07/11/2026).
     scale_edit: Option<ScaleEdit>,
@@ -1387,6 +1392,8 @@ impl TriApp {
             entry_for_zoom: false,
             entry_trigger: None,
             entry_trigger_pending: None,
+            entry_menu_at: None,
+            entry_menu_held: false,
             scale_edit: None,
             loupe_wheel: 0.0,
             loupe_entry_done: None,
@@ -6038,15 +6045,7 @@ impl TriApp {
                 self.sequencer.cancel();
                 continue;
             }
-            let fed = self.sequencer.feed(&self.keymap, chord, now);
-            // La touche qui ouvre une saisie de grossissement (`m` de `<leader> m`) : tapée
-            // de nouveau tout de suite, elle remet à 100 % (07/11/2026).
-            if fed
-                .iter()
-                .any(|a| matches!(a, Action::LoupeScaleEntry | Action::ZoomScaleEntry))
-            {
-                self.entry_trigger_pending = Some(chord);
-            }
+            let fed = self.feed_chord(chord, now);
             // Touche tenue : seules les actions faites pour se répéter (#160).
             actions.extend(fed.into_iter().filter(|a| !repeated || a.repeats()));
         }
@@ -6304,6 +6303,13 @@ impl TriApp {
             Action::LoupeScaleEntry | Action::ZoomScaleEntry => {
                 self.entry_for_zoom = action == Action::ZoomScaleEntry;
                 self.entry_trigger = self.entry_trigger_pending.take();
+                let delay = Duration::from_millis(self.gui.key_menu_delay_ms);
+                let now = Instant::now();
+                self.entry_menu_at = Some(if std::mem::take(&mut self.entry_menu_held) {
+                    now
+                } else {
+                    now + delay
+                });
                 self.loupe_entry = Some((String::new(), Instant::now()));
                 self.notice = Some((self.entry_notice("_"), false));
             }
@@ -13682,7 +13688,7 @@ impl TriApp {
                     let focus = self.effective_focus();
                     self.keymap.set_focus(focus);
                     for chord in chords {
-                        for action in self.sequencer.feed(&self.keymap, chord, now) {
+                        for action in self.feed_chord(chord, now) {
                             self.perform(ctx, action);
                         }
                     }
@@ -14572,26 +14578,35 @@ impl TriApp {
         };
         let title = self.keymap.prefix_label(prefix);
         let next = self.keymap.continuations(prefix);
-        let accent = crate::marks::accent_mark(ctx);
         let mut rows: Vec<(String, String, bool)> = Vec::new();
         for n in &next {
             let menu = n
                 .menu
                 .as_ref()
                 .map(|m| t!("key-menu-more", group = m.as_str()));
-            let text = match (n.action, menu) {
-                (Some(a), Some(m)) => format!("{}  {m}", without_aside(&a.label())),
-                (Some(a), None) => without_aside(&a.label()),
-                (None, Some(m)) => m,
-                (None, None) => String::new(),
+            // Les saisies de grossissement ont leur propre suite (chiffres, 100 %,
+            // ajusté) : un sous-menu (retour du 07/11/2026).
+            let entry = match n.action {
+                Some(Action::LoupeScaleEntry) => Some(t!("key-menu-loupe")),
+                Some(Action::ZoomScaleEntry) => Some(t!("key-menu-zoom")),
+                _ => None,
             };
+            let entry = entry.map(|group| t!("key-menu-more", group = group));
+            let text = match (n.action, menu, &entry) {
+                (_, _, Some(e)) => e.clone(),
+                (Some(a), Some(m), None) => format!("{}  {m}", without_aside(&a.label())),
+                (Some(a), None, None) => without_aside(&a.label()),
+                (None, Some(m), None) => m,
+                (None, None, None) => String::new(),
+            };
+            let submenu = n.action.is_none() || entry.is_some();
             // Plusieurs touches pour la même chose (Maj+h, Maj+Flèche gauche) : une ligne.
             match rows.iter_mut().find(|r| r.1 == text) {
                 Some(row) => {
                     row.0.push_str(" / ");
                     row.0.push_str(&n.key);
                 }
-                None => rows.push((n.key.clone(), text, n.action.is_none())),
+                None => rows.push((n.key.clone(), text, submenu)),
             }
         }
         // « Filtre : » sur presque toutes les lignes du menu `f` : dans le titre plutôt
@@ -14604,105 +14619,79 @@ impl TriApp {
                 }
             }
         }
-        let font = egui::TextStyle::Body.resolve(&ctx.global_style());
-        let width_of = |text: &str| {
-            ctx.fonts_mut(|f| {
-                f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE)
-                    .size()
-                    .x
-            })
+        key_menu_area(ctx, &title, theme.as_deref(), &rows);
+    }
+
+    /// Donne `chord` au séquenceur ; s'il ouvre une saisie de grossissement, retient la
+    /// touche (retapée : 100 %) et si le menu des suites était affiché.
+    fn feed_chord(&mut self, chord: crate::actions::Chord, now: Instant) -> Vec<Action> {
+        let held = self.sequencer.is_held();
+        let fed = self.sequencer.feed(&self.keymap, chord, now);
+        // La touche qui ouvre une saisie de grossissement (`m` de `<leader> m`) : tapée
+        // de nouveau tout de suite, elle remet à 100 % (07/11/2026).
+        if fed
+            .iter()
+            .any(|a| matches!(a, Action::LoupeScaleEntry | Action::ZoomScaleEntry))
+        {
+            self.entry_trigger_pending = Some(chord);
+            self.entry_menu_held = held;
+        }
+        fed
+    }
+
+    /// Menu de la saisie d'un grossissement (`<leader> m`, `<leader> z` ; retour du
+    /// 07/11/2026 : « un niveau en plus », comme les autres sous-menus) : tant que rien
+    /// n'est tapé, ce qui peut suivre (les chiffres, la touche retapée pour 100 %, `/`
+    /// pour l'ajusté), après le délai du menu des suites (tout de suite s'il était déjà
+    /// affiché).
+    fn entry_menu(&mut self, ctx: &egui::Context) {
+        let Some((digits, _)) = &self.loupe_entry else {
+            return;
         };
-        let body = egui::TextStyle::Body.resolve(&ctx.global_style());
-        let key_width = rows.iter().map(|r| width_of(&r.0)).fold(0.0, f32::max);
-        let text_width = rows.iter().map(|r| width_of(&r.1)).fold(0.0, f32::max);
-        // Entre les colonnes, de l'air et un trait (retour du 06/11/2026 : la deuxième
-        // colonne commençait trop près de la fin de la première) ; sous chaque ligne, un
-        // trait discret.
-        let key_gap = 12.0;
-        let gap = 48.0;
-        let inner = key_width + key_gap + text_width;
-        let room = ctx.content_rect().width() * 0.9;
-        let columns = (((room + gap) / (inner + gap)).floor() as usize).clamp(1, rows.len().max(1));
-        let lines = rows.len().div_ceil(columns);
-        egui::Area::new(egui::Id::unique("key_menu"))
-            .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0))
-            .order(egui::Order::Foreground)
-            .interactable(false)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .inner_margin(12.0)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(&title).strong().color(accent));
-                            if let Some(theme) = &theme {
-                                ui.label(egui::RichText::new(theme).strong());
-                            }
-                            ui.weak(t!("key-menu-cancel"));
-                        });
-                        ui.separator();
-                        if rows.is_empty() {
-                            ui.weak(t!("key-menu-empty"));
-                        }
-                        let line_color = row_line_color(ui);
-                        ui.horizontal_top(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            for col in 0..columns {
-                                if col > 0 {
-                                    // Le trait entre deux colonnes, au milieu de l'espace.
-                                    let (space, _) = ui.allocate_exact_size(
-                                        vec2(gap, ui.available_height().min(1.0)),
-                                        Sense::hover(),
-                                    );
-                                    let x = space.center().x;
-                                    let top = space.top();
-                                    let height = lines as f32 * ui.spacing().interact_size.y;
-                                    ui.painter().vline(
-                                        x,
-                                        top..=top + height,
-                                        egui::Stroke::new(1.0, line_color),
-                                    );
-                                }
-                                // Chaque colonne à sa largeur (retour du 06/11/2026 : celle
-                                // de la plus longue ligne du menu laissait du vide à droite).
-                                let chunk = rows.iter().skip(col * lines).take(lines);
-                                let col_key =
-                                    chunk.clone().map(|r| width_of(&r.0)).fold(0.0, f32::max);
-                                let col_text = chunk.map(|r| width_of(&r.1)).fold(0.0, f32::max);
-                                let col_inner = col_key + key_gap + col_text;
-                                ui.vertical(|ui| {
-                                    ui.set_width(col_inner);
-                                    ui.spacing_mut().item_spacing.y = 0.0;
-                                    // Rempli colonne par colonne, comme une liste.
-                                    for line in 0..lines {
-                                        let Some((key, text, menu)) = rows.get(col * lines + line)
-                                        else {
-                                            break;
-                                        };
-                                        // Une ligne sur deux sur fond plus clair, comme F1.
-                                        let slot = ui.painter().add(egui::Shape::Noop);
-                                        let row = ui.horizontal(|ui| {
-                                            ui.set_min_height(ui.spacing().interact_size.y);
-                                            let weak = ui.visuals().weak_text_color();
-                                            let key =
-                                                ui.label(keys_job(key, body.clone(), accent, weak));
-                                            ui.add_space(col_key - key.rect.width() + key_gap);
-                                            let text = egui::RichText::new(text);
-                                            ui.label(if *menu { text.italics() } else { text });
-                                        });
-                                        if line % 2 == 1 {
-                                            let r = row.response.rect;
-                                            let band = Rect::from_min_size(
-                                                r.min,
-                                                vec2(col_inner, r.height()),
-                                            );
-                                            stripe(ui, slot, band);
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    });
-            });
+        if !self.gui.key_menu || !digits.is_empty() {
+            return;
+        }
+        let Some(at) = self.entry_menu_at else {
+            return;
+        };
+        let now = Instant::now();
+        if now < at {
+            ctx.request_repaint_after(at - now);
+            return;
+        }
+        let (action, theme) = if self.entry_for_zoom {
+            (Action::ZoomScaleEntry, t!("key-menu-zoom"))
+        } else {
+            (Action::LoupeScaleEntry, t!("key-menu-loupe"))
+        };
+        let title = match &self.entry_trigger {
+            Some(c) => format!("{} {}", t!("key-leader"), crate::actions::chord_label(c)),
+            None => without_aside(&action.label()),
+        };
+        let mut rows = vec![(t!("entry-menu-digits-keys"), t!("entry-menu-digits"), false)];
+        let percent = |scale: f32| (scale * 100.0).round() as u32;
+        if self.entry_for_zoom {
+            let mut keys: Vec<String> = self
+                .entry_trigger
+                .iter()
+                .map(crate::actions::chord_label)
+                .collect();
+            keys.extend(self.keymap.keys_for(Action::Zoom100));
+            if !keys.is_empty() {
+                rows.push((keys.join(" / "), "100 %".into(), false));
+            }
+            let fit = self.keymap.keys_for(Action::ZoomFit);
+            if !fit.is_empty() {
+                rows.push((fit.join(" / "), t!("zoom-fit-value"), false));
+            }
+        } else if let Some(c) = &self.entry_trigger {
+            rows.push((
+                crate::actions::chord_label(c),
+                format!("{} %", percent(self.gui.zoom.loupe_scale)),
+                false,
+            ));
+        }
+        key_menu_area(ctx, &title, Some(&theme), &rows);
     }
 
     /// Palette de commandes : un champ, et dessous les actions et réglages trouvés, le
@@ -15521,6 +15510,7 @@ impl eframe::App for TriApp {
         self.position_mark(&ctx, center.response.rect);
         self.end_mark(&ctx, center.response.rect);
         self.key_menu(&ctx);
+        self.entry_menu(&ctx);
         self.help_here_overlay(&ctx);
         self.palette_window(&ctx);
         if self.help {
@@ -16574,6 +16564,114 @@ struct PaletteState {
     settings: Vec<crate::settings_window::SettingRef>,
     /// Le champ a reçu le clavier (une fois, à l'ouverture).
     focused: bool,
+}
+
+/// Le menu des suites (comme which-key) : titre (la séquence tapée, le thème commun),
+/// puis les lignes (touches, texte, sous-menu en italique) en colonnes, en bas au centre.
+/// Aussi pour la saisie d'un grossissement (`<leader> m`, 07/11/2026).
+fn key_menu_area(
+    ctx: &egui::Context,
+    title: &str,
+    theme: Option<&str>,
+    rows: &[(String, String, bool)],
+) {
+    let accent = crate::marks::accent_mark(ctx);
+    let font = egui::TextStyle::Body.resolve(&ctx.global_style());
+    let width_of = |text: &str| {
+        ctx.fonts_mut(|f| {
+            f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE)
+                .size()
+                .x
+        })
+    };
+    let body = egui::TextStyle::Body.resolve(&ctx.global_style());
+    let key_width = rows.iter().map(|r| width_of(&r.0)).fold(0.0, f32::max);
+    let text_width = rows.iter().map(|r| width_of(&r.1)).fold(0.0, f32::max);
+    // Entre les colonnes, de l'air et un trait (retour du 06/11/2026 : la deuxième
+    // colonne commençait trop près de la fin de la première) ; sous chaque ligne, un
+    // trait discret.
+    let key_gap = 12.0;
+    let gap = 48.0;
+    let inner = key_width + key_gap + text_width;
+    let room = ctx.content_rect().width() * 0.9;
+    let columns = (((room + gap) / (inner + gap)).floor() as usize).clamp(1, rows.len().max(1));
+    let lines = rows.len().div_ceil(columns);
+    egui::Area::new(egui::Id::unique("key_menu"))
+        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -40.0))
+        .order(egui::Order::Foreground)
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style())
+                .inner_margin(12.0)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(title).strong().color(accent));
+                        if let Some(theme) = theme {
+                            ui.label(egui::RichText::new(theme).strong());
+                        }
+                        ui.weak(t!("key-menu-cancel"));
+                    });
+                    ui.separator();
+                    if rows.is_empty() {
+                        ui.weak(t!("key-menu-empty"));
+                    }
+                    let line_color = row_line_color(ui);
+                    ui.horizontal_top(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        for col in 0..columns {
+                            if col > 0 {
+                                // Le trait entre deux colonnes, au milieu de l'espace.
+                                let (space, _) = ui.allocate_exact_size(
+                                    vec2(gap, ui.available_height().min(1.0)),
+                                    Sense::hover(),
+                                );
+                                let x = space.center().x;
+                                let top = space.top();
+                                let height = lines as f32 * ui.spacing().interact_size.y;
+                                ui.painter().vline(
+                                    x,
+                                    top..=top + height,
+                                    egui::Stroke::new(1.0, line_color),
+                                );
+                            }
+                            // Chaque colonne à sa largeur (retour du 06/11/2026 : celle
+                            // de la plus longue ligne du menu laissait du vide à droite).
+                            let chunk = rows.iter().skip(col * lines).take(lines);
+                            let col_key = chunk.clone().map(|r| width_of(&r.0)).fold(0.0, f32::max);
+                            let col_text = chunk.map(|r| width_of(&r.1)).fold(0.0, f32::max);
+                            let col_inner = col_key + key_gap + col_text;
+                            ui.vertical(|ui| {
+                                ui.set_width(col_inner);
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                // Rempli colonne par colonne, comme une liste.
+                                for line in 0..lines {
+                                    let Some((key, text, menu)) = rows.get(col * lines + line)
+                                    else {
+                                        break;
+                                    };
+                                    // Une ligne sur deux sur fond plus clair, comme F1.
+                                    let slot = ui.painter().add(egui::Shape::Noop);
+                                    let row = ui.horizontal(|ui| {
+                                        ui.set_min_height(ui.spacing().interact_size.y);
+                                        let weak = ui.visuals().weak_text_color();
+                                        let key =
+                                            ui.label(keys_job(key, body.clone(), accent, weak));
+                                        ui.add_space(col_key - key.rect.width() + key_gap);
+                                        let text = egui::RichText::new(text);
+                                        ui.label(if *menu { text.italics() } else { text });
+                                    });
+                                    if line % 2 == 1 {
+                                        let r = row.response.rect;
+                                        let band =
+                                            Rect::from_min_size(r.min, vec2(col_inner, r.height()));
+                                        stripe(ui, slot, band);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+        });
 }
 
 /// Une ligne de la palette : étiquette (action ou réglage), titre, touches à droite,
@@ -19252,6 +19350,38 @@ mod tests {
         act(&mut h, Action::LoupeScaleEntry);
         press(&mut h, Key::M, Modifiers::NONE);
         assert_eq!(h.state().loupe_scale, 3.0);
+    }
+
+    #[test]
+    fn the_magnification_entries_have_their_own_menu() {
+        // Retour du 07/11/2026 : dans le menu des suites, `m` et `z` ont un niveau de plus
+        // (les chiffres, la touche retapée pour 100 %, `/` pour l'ajusté).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().gui.key_menu_delay_ms = 0;
+        act(&mut h, Action::Open);
+        leader(&mut h, &[]);
+        h.run_steps(3);
+        let loupe = t!("key-menu-more", group = t!("key-menu-loupe"));
+        let zoom = t!("key-menu-more", group = t!("key-menu-zoom"));
+        assert!(h.query_by_label(&loupe).is_some());
+        assert!(h.query_by_label(&zoom).is_some());
+        // La loupe : les chiffres et `m` (100 %).
+        press(&mut h, Key::M, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().loupe_entry.is_some());
+        assert!(h.query_by_label(&t!("entry-menu-digits")).is_some());
+        assert!(h.query_by_label("100 %").is_some());
+        // Un chiffre tapé : le menu s'efface.
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        assert!(h.query_by_label(&t!("entry-menu-digits")).is_none());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        // Le zoom : aussi l'ajusté.
+        leader(&mut h, &[(Key::Z, Modifiers::NONE)]);
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("entry-menu-digits")).is_some());
+        // « Ajusté » : la valeur de la barre du bas, et la ligne du menu.
+        assert_eq!(h.query_all_by_label(&t!("zoom-fit-value")).count(), 2);
     }
 
     #[test]
