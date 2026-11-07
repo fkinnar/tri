@@ -26188,6 +26188,18 @@ mod tests {
         press(&mut h, Key::N, Modifiers::NONE);
         h.run_steps(2);
         assert!(h.ctx.egui_wants_keyboard_input(), "le nom a le clavier");
+        // Ctrl+Échap (comme sur les listes) : le champ rend le clavier, la version reste
+        // ouverte (retour du 07/11/2026).
+        press(&mut h, Key::Escape, Modifiers::CTRL);
+        h.run_steps(2);
+        assert!(
+            !h.ctx.egui_wants_keyboard_input(),
+            "Ctrl+Échap : sorti du nom"
+        );
+        assert!(h.state().crop.is_some(), "Ctrl+Échap : version gardée");
+        press(&mut h, Key::N, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.ctx.egui_wants_keyboard_input());
         press(&mut h, Key::Escape, Modifiers::NONE);
         h.ctx.memory_mut(|m| m.stop_text_input());
         h.run_steps(2);

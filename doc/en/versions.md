@@ -106,7 +106,7 @@ The interface only draws; all the computation is here.
   included, `Crop::step_ratio`), `/` a ratio of one's own (numeric keypad too; the list
   opens on its field), `e` / `Shift+E` next / previous export preset ("none" included),
   `x` the orientation, `o` / `Shift+O` the overlays (fitted to the frame), `n` (or `F2`)
-  the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also
+  the name (Ctrl+Esc leaves it without leaving the version, as on the lists), `Ctrl+S` the floppy, `0` the original frame (the whole image; also
   Ctrl+click on "Original", `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` /
   `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)

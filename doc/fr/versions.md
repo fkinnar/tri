@@ -107,7 +107,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   précédent (ajoutés compris, `Crop::step_ratio`), `/` un rapport à soi (pavé numérique
   compris ; la liste s'ouvre sur son champ), `e` / `Maj+E` préréglage d'export suivant /
   précédent (« aucun » compris), `x` l'orientation, `o` / `Maj+O` les superpositions
-  (calées sur le cadre), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre
+  (calées sur le cadre), `n` (ou `F2`) le nom
+  (Ctrl+Échap en sort sans quitter la version, comme des listes), `Ctrl+S` la disquette, `0` le cadre
   d'origine (l'image entière ; aussi Ctrl+clic sur « Original », `Crop::reset_frame`) ;
   avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou

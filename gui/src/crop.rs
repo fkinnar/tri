@@ -639,7 +639,33 @@ impl Crop {
         let name_width = 140.0;
         section(ui, &t!("crop-name"), name_width);
         let taken = self.name_taken();
-        let mut edit = egui::TextEdit::singleline(&mut self.name).desired_width(name_width);
+        // Ctrl+Échap (ou Cmd+Échap) rend le clavier sans quitter la version, comme
+        // sur les listes (retour du 07/11/2026 : on ne sortait pas du nom au clavier). Pris
+        // avant le champ, qui ne le voit donc pas ; Échap seul quitte la version.
+        let name_id = ui.make_persistent_id("crop_name");
+        if ui.memory(|m| m.has_focus(name_id)) {
+            let escape = ui.input_mut(|i| {
+                let before = i.events.len();
+                i.events.retain(|e| {
+                    !matches!(
+                        e,
+                        egui::Event::Key {
+                            key: egui::Key::Escape,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.ctrl || modifiers.command
+                    )
+                });
+                i.events.len() != before
+            });
+            if escape {
+                ui.memory_mut(|m| m.surrender_focus(name_id));
+            }
+        }
+        let mut edit = egui::TextEdit::singleline(&mut self.name)
+            .id(name_id)
+            .desired_width(name_width);
         if taken {
             edit = edit.text_color(ui.visuals().error_fg_color);
         }
