@@ -10,7 +10,7 @@
 - **Comparaison depuis la barre du bas** : un bouton (allumé pendant la comparaison, où
   il la quitte), et le retour à la grille aussi en comparaison. Sans sélection ni pile,
   tout ce qui est montré est comparé (au plus `[gui.compare] max`, autour de l'image
-  courante).
+  courante) ; sans rien en surbrillance dans la grille, `=` le fait du premier coup.
 - **Cmd / Ctrl+clic prend aussi l'image courante** : sans sélection, l'image en
   surbrillance compte comme choisie ; le premier Cmd / Ctrl+clic sur une autre
   sélectionne les deux. Avec une sélection et le curseur de la grille masqué, `=` (et
