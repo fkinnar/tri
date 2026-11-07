@@ -4,6 +4,12 @@
 
 ## Non publié
 
+- **Un seul réglage de zoom dans la barre du bas** : les réglages du zoom et de la loupe
+  sont fusionnés. Il règle le zoom (loupe ronde), ou la loupe tant que sa touche est
+  tenue (loupe carrée). Un clic sur l'icône réinitialise, un clic sur la valeur permet de
+  la taper. Le pointeur reste visible pendant qu'on tient la touche de loupe, et
+  l'interrupteur des infos sur l'image passe tout à gauche. `TRI_GUI_TRACE` montre aussi
+  les touches reçues.
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).

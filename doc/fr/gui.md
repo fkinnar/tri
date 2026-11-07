@@ -1183,8 +1183,7 @@ annule, une autre touche applique ce qui est tapé puis agit. Pour la session
 (`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ. La roulette, la loupe
 tenue, change le grossissement d'un palier par cran (`loupe_wheel_step` points ;
 `TriApp::loupe_wheel_input` retire le défilement : la grille reste en place). La valeur
-se voit dans la barre du bas (`marks::loupe_icon`, −, la valeur, + ; un clic sur la
-valeur : 100 %).
+se voit dans la barre du bas (réglage d'échelle, ci-dessous).
 
 ### Le zoom comme la loupe (07/11/2026)
 
@@ -1192,9 +1191,20 @@ Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du ple
 `<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centré comme `+` / `-`). `Ctrl+K` / `Ctrl+J`
 règlent la loupe si sa touche est tenue, sinon le zoom (une paire de touches, la touche
-tenue choisit). Dans la barre du bas, le bouton 1:1 (ajusté ↔ 100 %) est suivi de −, la
-valeur (« Ajusté », son pourcentage en bulle, ou le pourcentage ; un clic : `z`) et +
-(`TriApp::zoom_controls`).
+tenue choisit).
+
+**Un seul réglage d'échelle dans la barre du bas** (retour du 07/11/2026 : deux réglages
+côte à côte, zoom et loupe, n'étaient pas clairs ; `TriApp::scale_control`) : une icône,
+−, la valeur, +, à gauche du bouton 1:1. Il règle le **zoom** (loupe ronde,
+`marks::loupe_icon`), ou la **loupe** tant que sa touche est tenue (loupe carrée,
+`marks::square_loupe_icon` ; un compte-fil, essayé, ne se lisait pas à cette taille). En
+grille, sans zoom, il règle toujours la loupe, et seulement s'il reste la place. Un clic
+sur l'**icône** réinitialise (zoom ajusté à la vue, loupe à `loupe_scale`) ; un clic sur
+la **valeur** la fait taper en pourcentage (`ScaleEdit` : Entrée applique, Échap ou un
+clic ailleurs annule ; la cible est fixée au clic, la touche de loupe peut être relâchée ;
+le champ prend tout le clavier). La touche de loupe tenue ne masque plus le pointeur
+(sa répétition le masquait, jusque sur la barre) ; main sur l'icône, − et +. L'interrupteur
+des infos sur l'image (`Ctrl+I`) est tout à gauche des outils.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
@@ -1451,6 +1461,9 @@ moitié transparente.
   `[gui] trace_slow_ms` (100 ms) est tracée avec la durée de ses étapes (« image lente :
   850 ms (événements 2, chargements 3, centre 840) ») : de quoi trouver un accès disque
   resté dans le fil de l'interface.
+  Depuis le 07/11/2026, aussi les touches et le texte reçus de la fenêtre (« touche
+  reçue : Key { key: Num1, … } », « Text("1") ») et les raccourcis qu'en tire `tri`
+  (« raccourcis lus ») : de quoi voir ce qu'envoie un clavier ou un système particulier.
 
 **Fermeture** : les calculs en fond (moteur, chargement des images, surveillance du
 dossier et des volumes) s'arrêtent sans être attendus (`detach`) ; une vignette en cours

@@ -1121,8 +1121,7 @@ keyboard one types slower, and the next digit changed the rating); 0 is ignored,
 another key applies what was typed then acts. For the session (`TriApp::loupe_scale`);
 `loupe_scale` stays the starting value. The wheel, with the loupe held, changes the magnification one step
 per notch (`loupe_wheel_step` points; `TriApp::loupe_wheel_input` removes the scrolling:
-the grid stays in place). The value shows in the bottom bar (`marks::loupe_icon`, −, the
-value, +; a click on the value: 100 %), when there is room.
+the grid stays in place). The value shows in the bottom bar (scale control, below).
 
 ### Zoom like the loupe (2026-11-07)
 
@@ -1130,9 +1129,20 @@ Decided with the user: what applies to the loupe applies to the full-screen zoom
 `<leader> z` (`core.view.zoom_scale`) opens the same entry as `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centred like `+` / `-`). `Ctrl+K` / `Ctrl+J`
 set the loupe if its key is held, otherwise the zoom (one pair of keys, the held key
-chooses). In the bottom bar, the 1:1 button (fit ↔ 100 %) is followed by −, the value
-("Fit", its percentage in a tooltip, or the percentage; a click: `z`) and +
-(`TriApp::zoom_controls`).
+chooses).
+
+**One scale control in the bottom bar** (feedback of 2026-11-07: two controls side by
+side, zoom and loupe, were unclear; `TriApp::scale_control`): an icon, −, the value, +,
+left of the 1:1 button. It sets the **zoom** (round magnifier, `marks::loupe_icon`), or
+the **loupe** while its key is held (square magnifier, `marks::square_loupe_icon`; a
+linen tester, tried, could not be read at that size). In the grid, without zoom, it
+always sets the loupe, and only when there is room. A click on the **icon** resets (zoom
+fitted to the view, loupe to `loupe_scale`); a click on the **value** lets one type it as
+a percentage (`ScaleEdit`: Enter applies, Esc or a click elsewhere cancels; the target is
+fixed at the click, the loupe key can be released; the field takes the whole keyboard).
+Holding the loupe key no longer hides the pointer (its repeat hid it, even over the bar);
+a hand over the icon, − and +. The image info switch (`Ctrl+I`) is at the far left of the
+tools.
 
 ### Shortcut review (2026-11-06, issue #280)
 
@@ -1381,6 +1391,9 @@ during a window's opening fade showed it half transparent.
   frame of the interface slower than `[gui] trace_slow_ms` (100 ms) is traced with the
   duration of its steps ("image lente : 850 ms (événements 2, chargements 3, centre
   840)"): a way to find a disk access left in the interface thread.
+  Since 2026-11-07, also the keys and text received from the window ("touche reçue :
+  Key { key: Num1, … }", "Text("1")") and the shortcuts `tri` reads from them
+  ("raccourcis lus"): a way to see what a particular keyboard or system sends.
 
 **Closing**: background work (engine, image loading, folder and volume watches) stops
 without being waited for (`detach`); a thumbnail in progress on a NAS no longer holds the
