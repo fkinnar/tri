@@ -4,6 +4,15 @@
 
 ## Non publié
 
+- **Notes changées dans plusieurs logiciels fusionnées** (#368) : quand darktable change
+  les étoiles et RapidRAW la couleur (ou XnView l'image elle-même), les deux sont
+  gardés, champ par champ, au lieu que le sidecar le plus récent l'emporte, et la barre
+  d'état le dit. `tri` retient ce que disait chaque source la dernière fois
+  (`.tri/notes.json` à côté des photos, dans le dossier de données de `tri` pour un
+  dossier en lecture seule). Deux sources qui changent le même champ différemment, ou
+  des sources jamais vues ensemble en désaccord : un signe orange sur la vignette, et
+  une boîte pour choisir les notes à garder (aussi pour tous les conflits du dossier
+  d'un coup) ; `tri <dossier> --conflicts` les liste.
 - **Notes dans les images elles-mêmes** (#276) : JPEG, PNG, WebP, TIFF et HEIC peuvent
   porter leurs notes (XMP embarqué, sans recompression, rien d'autre perdu), pour les
   retrouver dans l'Explorateur Windows, Spotlight, Lightroom, XnView… Lues quand une

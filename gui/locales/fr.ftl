@@ -39,6 +39,8 @@ action-core-filter-blurry = Filtre : masquer les floues
 action-core-filter-well_exposed = Filtre : bien exposées (ni brûlées ni bouchées)
 action-core-filter-stack = Filtre : seulement la pile courante, toute dépliée (encore : tout)
 action-core-filter-invert = Filtre : inverser (ce que les filtres retirent)
+action-core-filter-conflicts = Filtre : en conflit (notes en désaccord d'un logiciel à l'autre)
+kw-core-filter-conflicts = conflit désaccord notes logiciels trancher
 action-core-filter-developed = Filtre : développées (allumer / éteindre ; logiciels à cocher dans la liste)
 action-core-grid-render = Rendu affiché précédent (vignettes et plein écran)
 action-core-view-render-embedded = Rendu affiché : JPEG boîtier
@@ -987,7 +989,36 @@ kw-core-file-import-notes = relire importer lire notes étoiles images fichiers 
 folder-menu-import-notes = Relire les notes depuis les images
 import-done = Notes relues depuis { $n } images
 import-none = Rien à relire (pas de notes dans les images, ou les mêmes)
+import-conflicts = Notes relues depuis { $done } images ; { $n } en conflit, à trancher
 import-failed = Notes de { $n } images non relues : { $first }
+notes-merged = Notes fusionnées depuis d'autres logiciels pour { $n } images
+filter-conflicts = En conflit
+filter-conflicts-tip = Les images dont les notes se contredisent d'un logiciel à l'autre, à trancher
+conflict-badge = Notes en désaccord entre leurs sources : cliquer pour trancher
+conflict-title = Notes en désaccord — { $name }
+conflict-intro = Plusieurs logiciels ont changé les notes de cette photo différemment ({ $fields }). Cliquez la valeur à garder pour chaque champ en gras (ou la flèche d'une ligne) ; les autres sont déjà fusionnés.
+conflict-before = Avant
+conflict-col-stars = Étoiles
+conflict-col-flag = Drapeau
+conflict-col-colors = Couleurs
+conflict-result = Résultat
+conflict-apply = Valider
+conflict-keep-tip = Choisir toutes les valeurs de cette ligne
+conflict-keep = Garder
+conflict-all = Même choix pour les { $n } autres images en conflit du dossier
+conflict-resolved = Notes tranchées pour { $n } images
+conflict-source-image = Dans l'image
+conflict-source-xmp = XMP (darktable, Lightroom…)
+conflict-field-stars = étoiles
+conflict-field-flag = drapeau
+conflict-field-colors = couleurs
+conflict-stars = { $n ->
+    [0] sans étoile
+    [one] 1 étoile
+   *[other] { $n } étoiles
+}
+conflict-flag-accepted = acceptée
+conflict-flag-rejected = rejetée
 folder-menu-sidecars = Générer les sidecars…
 action-core-file-sidecars = Générer les sidecars de notes manquants (un logiciel, ou tous)
 kw-core-file-sidecars = sidecars rrdata xmp rapidraw notes métadonnées générer créer

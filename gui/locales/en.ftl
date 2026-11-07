@@ -39,6 +39,8 @@ action-core-filter-blurry = Filter: hide blurry
 action-core-filter-well_exposed = Filter: well exposed (neither blown nor blocked)
 action-core-filter-stack = Filter: only the current stack, fully expanded (again: everything)
 action-core-filter-invert = Filter: invert (what the filters remove)
+action-core-filter-conflicts = Filter: in conflict (ratings that disagree from one program to another)
+kw-core-filter-conflicts = conflict disagree ratings programs settle
 action-core-filter-developed = Filter: developed (on / off; software to check in the list)
 action-core-grid-render = Previous shown render (thumbnails and full screen)
 action-core-view-render-embedded = Shown render: camera JPEG
@@ -988,7 +990,36 @@ kw-core-file-import-notes = read import load ratings stars images files jpeg hea
 folder-menu-import-notes = Read the ratings back from the images
 import-done = Ratings read from { $n } images
 import-none = Nothing to read (no ratings in the images, or the same)
+import-conflicts = Ratings read from { $done } images; { $n } in conflict, to settle
 import-failed = Ratings of { $n } images not read: { $first }
+notes-merged = Ratings merged from other programs for { $n } images
+filter-conflicts = In conflict
+filter-conflicts-tip = Images whose ratings disagree from one program to another, to settle
+conflict-badge = Ratings disagree between their sources: click to settle
+conflict-title = Ratings disagree — { $name }
+conflict-intro = Several programs changed this photo's ratings differently ({ $fields }). Click the value to keep for each field in bold (or a row's arrow); the others are already merged.
+conflict-before = Before
+conflict-col-stars = Stars
+conflict-col-flag = Flag
+conflict-col-colors = Colours
+conflict-result = Result
+conflict-apply = Apply
+conflict-keep-tip = Choose every value of this row
+conflict-keep = Keep
+conflict-all = Same choice for the { $n } other images in conflict in the folder
+conflict-resolved = Ratings settled for { $n } images
+conflict-source-image = In the image
+conflict-source-xmp = XMP (darktable, Lightroom…)
+conflict-field-stars = stars
+conflict-field-flag = flag
+conflict-field-colors = colours
+conflict-stars = { $n ->
+    [0] no stars
+    [one] 1 star
+   *[other] { $n } stars
+}
+conflict-flag-accepted = accepted
+conflict-flag-rejected = rejected
 folder-menu-sidecars = Generate the sidecars…
 action-core-file-sidecars = Generate the missing rating sidecars (one software, or all)
 kw-core-file-sidecars = sidecars rrdata xmp rapidraw ratings metadata generate create

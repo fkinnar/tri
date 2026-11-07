@@ -120,6 +120,7 @@ cache-no-user-dir = user cache folder not found
 xmp-io = XMP sidecar: { $error }
 xmp-malformed = malformed XMP sidecar (left unchanged): { $error }
 xmp-no-description = XMP sidecar without rdf:Description (left unchanged)
+notes-conflict = ratings disagree between its sources (sidecars, image): resolve that first
 embed-unsupported = this image format cannot carry ratings (JPEG, PNG, WebP, TIFF, HEIC only)
 embed-io = ratings in the image: { $error }
 embed-write-failed = could not write the ratings into the image ({ $error }); a full copy is kept next to it: { $copy }
@@ -179,6 +180,7 @@ cli-usage =
       tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --import-notes [--dry-run] [--raw|--flat] [--depth N]
+      tri <folder> --conflicts [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
       tri <folder> --groups [--threshold X]
@@ -267,6 +269,15 @@ cli-import-summary = { $n } images: ratings { $mode ->
    *[write] read from { $written }
 }, { $unchanged } unchanged (nothing written inside, or the same), { $skipped } skipped (RAW and other formats), { $errors } errors
 cli-import-some-failed = the ratings of some images could not be read
+cli-merged = merged
+cli-conflict = conflict
+cli-conflict-before = before
+cli-conflicts-summary = { $n } images, { $conflicts } in conflict
+cli-field-stars = stars
+cli-field-flag = flag
+cli-field-colors = colours
+cli-flag-accepted = accepted
+cli-flag-rejected = rejected
 cli-rename-shared-copy = (copy: shared)
 cli-delete-trash = trash:
 cli-delete-permanent = deleted:

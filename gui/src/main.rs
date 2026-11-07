@@ -87,6 +87,8 @@ fn main() -> eframe::Result {
     }
     let mut settings = loaded.settings;
     // Journal des plantages, dans le dossier de données (voir `crash.rs`).
+    // Repli de la mémoire des notes pour les dossiers en lecture seule (issue n° 368).
+    tri::reconcile::set_data_dir(settings.engine().data_dir());
     if let Some(data) = settings.engine().data_dir() {
         crash::install(data);
     }

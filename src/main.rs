@@ -36,6 +36,9 @@
 //!   tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
 //!       recopie dans les sidecars les notes inscrites dans les images (changées dans un
 //!       autre logiciel), voir `tri::embedded` ;
+//!   tri <dossier> --conflicts [--raw|--flat] [--depth N]
+//!       liste les images dont les sources de notes (sidecars, image) se contredisent, et
+//!       les fusions faites, voir `tri::reconcile` ;
 //!   tri --rename <image> <nom> [--dry-run]
 //!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;
 //!   tri --delete <image>... [--permanent] [--dry-run]
@@ -125,6 +128,8 @@ struct Args {
     embed_notes: bool,
     /// `--import-notes`.
     import_notes: bool,
+    /// `--conflicts`.
+    conflicts: bool,
     /// `--sidecars <format|all>` : créer les sidecars manquants des photos notées.
     sidecars: Option<Vec<&'static dyn tri::sidecars::Format>>,
     /// `--rewrite` : réécrire aussi les notes des sidecars existants.
@@ -199,6 +204,7 @@ fn parse() -> AnyResult<Args> {
             "--dry-run" => args.dry_run = true,
             "--embed-notes" => args.embed_notes = true,
             "--import-notes" => args.import_notes = true,
+            "--conflicts" => args.conflicts = true,
             "--rewrite" => args.rewrite = true,
             "--sidecars" => {
                 let wanted = value()?;
@@ -939,7 +945,7 @@ fn embed_notes(
     let images: Vec<PathBuf> = files
         .iter()
         .map(|f| f.path.clone())
-        .filter(|p| tri::embedded::supports(p))
+        .filter(|p| tri::embedded::supports(p) && tri::developments::get(p).is_none())
         .collect();
     let report = if import {
         book.import(&images, dry_run)
@@ -984,6 +990,69 @@ fn embed_notes(
     } else {
         Err(t!(&format!("{prefix}-some-failed")).into())
     }
+}
+
+/// `--conflicts` : images dont les sources de notes se contredisent (chaque source et ses
+/// notes), et fusions faites à la lecture (voir `tri::reconcile`).
+fn conflicts(settings: &EngineSettings, files: &[tri::media::MediaFile]) -> AnyResult<()> {
+    let mut book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
+    for (image, from) in book.take_merged() {
+        println!(
+            "{}\t{}\t{}",
+            t!("cli-merged"),
+            image.display(),
+            from.join(", ")
+        );
+    }
+    let conflicts: Vec<PathBuf> = book.conflicts().iter().map(|p| p.to_path_buf()).collect();
+    for image in &conflicts {
+        let Some(conflict) = book.conflict(image) else {
+            continue;
+        };
+        let fields: Vec<String> = conflict.fields.iter().map(|f| field_name(*f)).collect();
+        println!(
+            "{}\t{}\t{}",
+            t!("cli-conflict"),
+            image.display(),
+            fields.join(", ")
+        );
+        if let Some(before) = &conflict.before {
+            println!("\t{}\t{}", t!("cli-conflict-before"), notes_text(before));
+        }
+        for (source, notes) in &conflict.sources {
+            println!("\t{source}\t{}", notes_text(notes));
+        }
+    }
+    println!(
+        "{}",
+        t!(
+            "cli-conflicts-summary",
+            n = files.len(),
+            conflicts = conflicts.len()
+        )
+    );
+    Ok(())
+}
+
+/// Nom d'un champ des notes.
+fn field_name(field: tri::reconcile::Field) -> String {
+    match field {
+        tri::reconcile::Field::Stars => t!("cli-field-stars"),
+        tri::reconcile::Field::Flag => t!("cli-field-flag"),
+        tri::reconcile::Field::Colors => t!("cli-field-colors"),
+    }
+}
+
+/// Notes en une ligne : étoiles, drapeau, couleurs.
+fn notes_text(notes: &tri::xmp::Notes) -> String {
+    let mut parts = vec![format!("{}★", notes.stars)];
+    match notes.flag {
+        tri::xmp::Flag::Accepted => parts.push(t!("cli-flag-accepted")),
+        tri::xmp::Flag::Rejected => parts.push(t!("cli-flag-rejected")),
+        tri::xmp::Flag::None => {}
+    }
+    parts.extend(notes.colors.iter().map(|c| c.id().to_string()));
+    parts.join(" ")
 }
 
 /// `--sidecars <format|all>` : crée les sidecars manquants des photos notées, pour
@@ -1318,6 +1387,7 @@ fn run() -> AnyResult<()> {
     let args = parse()?;
     let settings = settings(&args);
     tri::i18n::set_language(settings.i18n.language.resolve());
+    tri::reconcile::set_data_dir(settings.data_dir());
 
     if let Some(level) = args.clear {
         let cache = settings.open_cache()?;
@@ -1423,6 +1493,10 @@ fn run() -> AnyResult<()> {
     if args.embed_notes {
         let files: Vec<_> = groups.into_iter().flatten().collect();
         return embed_notes(&settings, &files, args.dry_run, false);
+    }
+    if args.conflicts {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return conflicts(&settings, &files);
     }
     if args.import_notes {
         let files: Vec<_> = groups.into_iter().flatten().collect();

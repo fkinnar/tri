@@ -189,6 +189,8 @@ loupe = "m"
 "core.filter.invert" = ["f i"]
 # Developed: "r" like the render.
 "core.filter.developed" = ["f r"]
+# In conflict (ratings that disagree between programs): "c".
+"core.filter.conflicts" = ["f c"]
 
 # --- Order (n) ---
 # n: the next sort; Shift+N: reverse it.

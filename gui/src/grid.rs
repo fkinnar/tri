@@ -104,6 +104,7 @@ pub fn navigate(
         | Action::FilterStack
         | Action::FilterInvert
         | Action::FilterDeveloped
+        | Action::FilterConflicts
         | Action::SortNext
         | Action::SortReverse
         | Action::SortBy(_)

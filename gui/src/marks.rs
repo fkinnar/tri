@@ -587,6 +587,49 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
     (rect, response)
 }
 
+/// Flèche épaisse vers la gauche dans `rect` : prendre toute la ligne (boîte des conflits
+/// de notes, issue n° 368).
+pub fn take_row_arrow(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    painter.add(Shape::convex_polygon(
+        vec![p(0.02, 0.5), p(0.48, 0.08), p(0.48, 0.92)],
+        color,
+        Stroke::NONE,
+    ));
+    painter.rect_filled(Rect::from_min_max(p(0.44, 0.33), p(0.98, 0.67)), 1.0, color);
+}
+
+/// Icône du filtre « en conflit » : le triangle d'avertissement en contour, d'une seule
+/// couleur `color` (grise ou à l'accent, comme les autres icônes de filtre).
+pub fn conflict_outline(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.1).max(1.2), color);
+    painter.add(Shape::closed_line(
+        vec![p(0.5, 0.08), p(0.95, 0.9), p(0.05, 0.9)],
+        stroke,
+    ));
+    painter.line_segment([p(0.5, 0.38), p(0.5, 0.62)], stroke);
+    painter.circle_filled(p(0.5, 0.76), w * 0.06, color);
+}
+
+/// Signe « notes en désaccord » (issue n° 368) dans `rect` : un triangle d'avertissement
+/// orange cerclé de sombre, avec son point d'exclamation.
+pub fn conflict_sign(painter: &Painter, rect: Rect) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let triangle = vec![p(0.5, 0.06), p(0.97, 0.92), p(0.03, 0.92)];
+    painter.add(Shape::convex_polygon(
+        triangle,
+        Color32::from_rgb(235, 150, 40),
+        Stroke::new(1.5, RIM),
+    ));
+    let stroke = Stroke::new((w * 0.12).max(1.5), Color32::from_gray(25));
+    painter.line_segment([p(0.5, 0.36), p(0.5, 0.64)], stroke);
+    painter.circle_filled(p(0.5, 0.78), w * 0.065, Color32::from_gray(25));
+}
+
 /// Icône d'une action sur un fichier dans `rect` : crayon (renommer), poubelle (corbeille),
 /// dossier (afficher dans le gestionnaire de fichiers), flèche sortant d'un cadre (ouvrir
 /// dans l'éditeur externe).
