@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Ratings changed in several programs are merged** (#368): when darktable changes the
+  stars and RapidRAW the colour (or XnView the image itself), both are kept, field by
+  field, instead of the most recent sidecar winning. `tri` remembers what each source
+  said last time (`.tri/notes.json` next to the photos, in `tri`'s data folder for a
+  read-only folder). Two sources changing the same field differently, or sources never
+  seen together that disagree: a conflict, to settle before rating that image; `tri
+  <folder> --conflicts` lists them.
 - **Ratings in the images themselves** (#276): JPEG, PNG, WebP, TIFF and HEIC can carry
   their ratings (embedded XMP, without re-encoding, nothing else lost), to find them in
   Windows Explorer, Spotlight, Lightroom, XnView… Read when an image has no sidecar

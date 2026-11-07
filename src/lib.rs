@@ -50,6 +50,7 @@ pub mod pp3;
 pub mod preview;
 pub mod process;
 pub mod raw;
+pub mod reconcile;
 pub mod remote;
 pub mod rrdata;
 pub mod scheduler;

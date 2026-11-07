@@ -53,6 +53,7 @@ existe.
 | [pp3.md](pp3.md) | Module `tri::pp3` : notes dans les profils de RawTherapee (`.pp3`) et d'ART (`.arp`), même format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars` : les formats de sidecars de notes (XMP, `.rrdata`, `.pp3`, `.arp`), tous écrits, les manquants créés selon `[sidecars]` ou à la demande |
 | [embedded.md](embedded.md) | Module `tri::embedded` : notes inscrites dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC), lues sans sidecar, inscrites et relues sur demande |
+| [reconcile.md](reconcile.md) | Module `tri::reconcile` : notes venues de plusieurs sources (sidecars, image), fusion champ par champ et conflits, mémoire `.tri/notes.json` |
 | [xmp.md](xmp.md) | Module `tri::xmp` : notes (étoiles, couleurs, accepté/rejeté) dans les sidecars XMP |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap` : type d'image RGB8 commun |
 | [flat.md](flat.md) | Module `tri::flat` : décodage JPEG, PNG, TIFF, WebP, HEIC |

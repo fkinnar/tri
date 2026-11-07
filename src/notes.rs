@@ -26,6 +26,9 @@ struct Entry {
     sidecars: Vec<PathBuf>,
     /// Sidecar illisible ou mal formé : notes vides, et jamais réécrit.
     error: Option<String>,
+    /// Sources en désaccord (issue n° 368) : notes d'avant montrées, pas de note possible
+    /// avant d'avoir tranché ([`NoteBook::resolve`]).
+    conflict: Option<crate::reconcile::Conflict>,
 }
 
 impl Entry {
@@ -52,6 +55,9 @@ pub struct NoteBook {
     /// Pendant une lecture en fond ([`NoteBook::pending`]) : les images lues ou écrites
     /// depuis, plus fraîches que ce que rapportera la lecture ([`NoteBook::adopt`]).
     touched: Option<HashSet<PathBuf>>,
+    /// Images dont les notes viennent d'être fusionnées depuis d'autres sources, et
+    /// lesquelles (à dire à l'utilisateur, [`NoteBook::take_merged`]).
+    merged: Vec<(PathBuf, Vec<String>)>,
 }
 
 /// Notes de `images` (toutes dans `dir`), lues avec une seule liste du dossier ; un
@@ -60,25 +66,36 @@ fn read_entries(
     dir: &Path,
     images: &[PathBuf],
     done: Option<&AtomicUsize>,
-) -> Vec<(PathBuf, Entry)> {
+) -> Vec<(PathBuf, Entry, Option<Vec<String>>)> {
     let index = SidecarIndex::new(dir);
-    images
+    let mut memory = crate::reconcile::Memory::open(dir);
+    let entries = images
         .iter()
         .map(|image| {
-            let entry = read_notes(image, &index);
+            let (entry, merged) = read_notes(image, &index, &mut memory);
             if let Some(done) = done {
                 done.fetch_add(1, Ordering::Relaxed);
             }
-            (image.clone(), entry)
+            (image.clone(), entry, merged)
         })
-        .collect()
+        .collect();
+    // Lecture seule partout (ni dossier, ni données) : rien n'est retenu, on relira.
+    let _ = memory.save();
+    entries
 }
 
-/// Notes de `image` et les sidecars qui les portent. Un développement
+/// Notes de `image` et les sources qui les portent. Un développement
 /// ([`crate::developments`]) a les siennes dans son sidecar : XMP de darktable, `.rrdata`
 /// de RapidRAW ([`crate::rrdata`]) ; une photo, dans tous ses sidecars
-/// ([`crate::sidecars`]), lues dans le plus récent.
-fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
+/// ([`crate::sidecars`]) et dans l'image elle-même ([`crate::embedded`]). Plusieurs
+/// sources : fusionnées d'après ce que `memory` en retenait ([`crate::reconcile`]) ;
+/// renvoie aussi les sources d'où vient une fusion.
+fn read_notes(
+    image: &Path,
+    index: &SidecarIndex,
+    memory: &mut crate::reconcile::Memory,
+) -> (Entry, Option<Vec<String>>) {
+    use crate::reconcile::{Outcome, reconcile};
     let mut sidecars: Vec<PathBuf> = match crate::developments::get(image) {
         Some(development) => vec![development.sidecar],
         None => sidecars::formats()
@@ -87,7 +104,7 @@ fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
             .collect(),
     };
     if sidecars.len() > 1 {
-        // Le plus récent en tête (noté ailleurs entre-temps : c'est lui qui a raison).
+        // Le plus récent en tête (celui qu'on montre comme « lu »).
         sidecars.sort_by_key(|p| {
             std::cmp::Reverse(
                 std::fs::metadata(p)
@@ -96,26 +113,106 @@ fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
             )
         });
     }
-    let (notes, error) = match sidecars.first() {
-        // Sans sidecar : les notes inscrites dans l'image elle-même, s'il y en a (étoiles
-        // posées dans l'Explorateur Windows, Lightroom…, issue n° 276). Illisibles : rien.
-        None => (
-            crate::embedded::read(image)
-                .ok()
-                .flatten()
-                .unwrap_or_default(),
-            None,
-        ),
-        Some(sidecar) => match read_sidecar(sidecar) {
-            Ok(notes) => (notes, None),
-            Err(e) => (Notes::default(), Some(e)),
-        },
+    let name = file_name(image);
+    let sources = match sources_of(image, &sidecars) {
+        Ok(sources) => sources,
+        Err(error) => {
+            let entry = Entry {
+                notes: Notes::default(),
+                sidecars,
+                error: Some(error),
+                conflict: None,
+            };
+            return (entry, None);
+        }
     };
-    Entry {
+    if sources.iter().all(|s| s.silent) {
+        memory.set(&name, None);
+        let entry = Entry {
+            notes: Notes::default(),
+            sidecars,
+            error: None,
+            conflict: None,
+        };
+        return (entry, None);
+    }
+    let (notes, outcome, keep) = reconcile(memory.get(&name), &sources);
+    if keep.is_some() {
+        memory.set(&name, keep);
+    }
+    let (conflict, merged) = match outcome {
+        Outcome::Same => (None, None),
+        Outcome::Merged { from } => (None, Some(from)),
+        Outcome::Conflict(c) => (Some(c), None),
+    };
+    let entry = Entry {
         notes,
         sidecars,
-        error,
+        error: None,
+        conflict,
+    };
+    (entry, merged)
+}
+
+/// Nom de fichier de `path`, clé de la mémoire des notes.
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Sources des notes de `image` telles qu'elles sont : ses sidecars, et l'image elle-même
+/// si elle en porte. Un sidecar illisible : erreur (rien n'est fusionné).
+fn sources_of(image: &Path, sidecars: &[PathBuf]) -> Result<Vec<crate::reconcile::Source>, String> {
+    use crate::reconcile::{Source, Stamp};
+    let mut sources = Vec::new();
+    for sidecar in sidecars {
+        let notes = read_sidecar(sidecar)?;
+        sources.push(Source {
+            name: file_name(sidecar),
+            stamp: Stamp::of(sidecar).unwrap_or_default(),
+            notes,
+            silent: false,
+        });
     }
+    // L'image elle-même (issue n° 276), si elle peut porter des notes : muette sans notes
+    // (une note qui y apparaît ensuite est alors un changement connu). Illisible : ignorée
+    // (une image abîmée ne bloque pas ses sidecars).
+    if crate::embedded::supports(image)
+        && let Ok(inside) = crate::embedded::read(image)
+    {
+        sources.push(Source {
+            name: file_name(image),
+            stamp: Stamp::of(image).unwrap_or_default(),
+            silent: inside.is_none(),
+            notes: inside.unwrap_or_default(),
+        });
+    }
+    Ok(sources)
+}
+
+/// Après une écriture par `tri` : les sources de `image` retenues telles qu'elles sont
+/// maintenant, avec `notes` (ce que `tri` vient d'écrire fait foi ; une source restée en
+/// retard, l'image non réécrite, n'est pas un changement).
+fn remember(image: &Path, notes: &Notes) {
+    let dir = dir_of(image);
+    let index = SidecarIndex::new(&dir);
+    let sidecars: Vec<PathBuf> = match crate::developments::get(image) {
+        Some(development) => vec![development.sidecar],
+        None => sidecars::formats()
+            .iter()
+            .filter_map(|f| f.existing(image, &index))
+            .collect(),
+    };
+    let Ok(sources) = sources_of(image, &sidecars) else {
+        return;
+    };
+    let mut memory = crate::reconcile::Memory::open(&dir);
+    let name = file_name(image);
+    let remembered = (!sources.iter().all(|s| s.silent))
+        .then(|| crate::reconcile::Remembered::agreed(notes, &sources));
+    memory.set(&name, remembered);
+    let _ = memory.save();
 }
 
 /// Notes du sidecar `sidecar`, de son format.
@@ -161,8 +258,12 @@ impl NoteBook {
         let mut book = NoteBook::pending(files.iter().map(|f| f.path.as_path()), convention);
         book.touched = None;
         for (dir, images) in &book.by_dir {
-            let entries = read_entries(dir, images, Some(done));
-            book.entries.extend(entries);
+            for (image, entry, merged) in read_entries(dir, images, Some(done)) {
+                if let Some(from) = merged {
+                    book.merged.push((image.clone(), from));
+                }
+                book.entries.insert(image, entry);
+            }
         }
         book
     }
@@ -222,13 +323,24 @@ impl NoteBook {
         images
             .iter()
             .map(|image| {
+                // À jour : mêmes notes montrées, et chaque sidecar les porte déjà (une
+                // fusion depuis l'image laisse les sidecars en retard).
+                let current = |inside: &Notes| {
+                    *self.notes(image) == *inside
+                        && self.conflict(image).is_none()
+                        && self
+                            .sidecars(image)
+                            .iter()
+                            .all(|s| read_sidecar(s).is_ok_and(|n| n == *inside))
+                };
                 let result = match crate::embedded::read(image) {
                     Err(e) => Err(crate::t!("embed-io", error = e.to_string())),
                     Ok(None) => Ok(false),
-                    Ok(Some(inside)) if *self.notes(image) == inside => Ok(false),
+                    Ok(Some(inside)) if current(&inside) => Ok(false),
                     Ok(Some(_)) if dry_run => Ok(true),
+                    // Choisir l'image tranche un conflit.
                     Ok(Some(inside)) => self
-                        .edit(image, |n| *n = inside)
+                        .resolve(image, &inside)
                         .map(|_| true)
                         .map_err(|e| e.to_string()),
                 };
@@ -310,7 +422,10 @@ impl NoteBook {
             by_dir.entry(dir_of(image)).or_default().push(image.clone());
         }
         for (dir, images) in by_dir {
-            for (image, entry) in read_entries(&dir, &images, None) {
+            for (image, entry, merged) in read_entries(&dir, &images, None) {
+                if let Some(from) = merged {
+                    self.merged.push((image.clone(), from));
+                }
                 if let Some(touched) = &mut self.touched {
                     touched.insert(image.clone());
                 }
@@ -366,6 +481,7 @@ impl NoteBook {
                 continue;
             };
             let index = SidecarIndex::new(&dir);
+            let mut memory = crate::reconcile::Memory::open(&dir);
             let lower = |s: Option<&std::ffi::OsStr>| s.map(|s| s.to_string_lossy().to_lowercase());
             for image in images {
                 let (name, stem) = (lower(image.file_name()), lower(image.file_stem()));
@@ -381,9 +497,14 @@ impl NoteBook {
                 {
                     continue;
                 }
-                let entry = read_notes(&image, &index);
+                let (entry, merged) = read_notes(&image, &index, &mut memory);
+                if let Some(from) = merged {
+                    self.merged.push((image.clone(), from));
+                }
                 let old = self.entries.get(&image);
-                if old.is_none_or(|e| e.notes != entry.notes || e.error != entry.error) {
+                if old.is_none_or(|e| {
+                    e.notes != entry.notes || e.error != entry.error || e.conflict != entry.conflict
+                }) {
                     changed.push(image.clone());
                 }
                 if let Some(touched) = &mut self.touched {
@@ -391,6 +512,7 @@ impl NoteBook {
                 }
                 self.entries.insert(image, entry);
             }
+            let _ = memory.save();
         }
         changed.sort();
         changed
@@ -399,6 +521,29 @@ impl NoteBook {
     /// Notes de `image` (vides si elle est inconnue ou sans sidecar).
     pub fn notes(&self, image: &Path) -> &Notes {
         self.entries.get(image).map(|e| &e.notes).unwrap_or(&EMPTY)
+    }
+
+    /// Conflit entre les sources des notes de `image` (issue n° 368), à trancher.
+    pub fn conflict(&self, image: &Path) -> Option<&crate::reconcile::Conflict> {
+        self.entries.get(image).and_then(|e| e.conflict.as_ref())
+    }
+
+    /// Images en conflit, triées.
+    pub fn conflicts(&self) -> Vec<&Path> {
+        let mut out: Vec<&Path> = self
+            .entries
+            .iter()
+            .filter(|(_, e)| e.conflict.is_some())
+            .map(|(p, _)| p.as_path())
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Fusions faites depuis le dernier appel : chaque image et les sources d'où viennent
+    /// ses nouvelles notes (pour un message discret).
+    pub fn take_merged(&mut self) -> Vec<(PathBuf, Vec<String>)> {
+        std::mem::take(&mut self.merged)
     }
 
     /// Erreur de lecture du sidecar de `image`, s'il est illisible ou mal formé.
@@ -584,6 +729,7 @@ impl NoteBook {
                     message,
                 })?;
             }
+            remember(image, notes);
         }
         // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
         // tout le dossier coûtait cher sur un disque lent ou un NAS (issue n° 15).
@@ -607,6 +753,24 @@ impl NoteBook {
         image: &Path,
         edit: impl FnOnce(&mut Notes),
     ) -> Result<Vec<PathBuf>, XmpError> {
+        self.edit_with(image, edit, false)
+    }
+
+    /// Tranche le conflit de `image` (issue n° 368) : `notes` écrites dans tous ses
+    /// sidecars, comme une note posée dans `tri` (la paire suit), et retenues ; les sources
+    /// qui n'en sont pas réécrites (l'image elle-même) ne sont plus un désaccord.
+    pub fn resolve(&mut self, image: &Path, notes: &Notes) -> Result<Vec<PathBuf>, XmpError> {
+        let notes = notes.clone();
+        self.edit_with(image, |n| *n = notes, true)
+    }
+
+    /// [`NoteBook::edit`] ; `force` : aussi sur une image en conflit ([`NoteBook::resolve`]).
+    fn edit_with(
+        &mut self,
+        image: &Path,
+        edit: impl FnOnce(&mut Notes),
+        force: bool,
+    ) -> Result<Vec<PathBuf>, XmpError> {
         if !self.entries.contains_key(image) {
             self.add(image);
         }
@@ -617,16 +781,34 @@ impl NoteBook {
                 message: error.clone(),
             });
         }
+        // Sources en désaccord : noter maintenant écraserait l'une d'elles sans le savoir.
+        if entry.conflict.is_some() && !force {
+            return Err(XmpError::Image {
+                image: image.to_path_buf(),
+                message: crate::t!("notes-conflict"),
+            });
+        }
         let mut notes = entry.notes.clone();
         edit(&mut notes);
         let targets = self.shared_with(image);
         let mut written: Vec<PathBuf> = Vec::new();
         let mut failure = None;
+        let mut remembered: Vec<PathBuf> = Vec::new();
         for target in &targets {
             let entry = &self.entries[target];
-            if entry.notes == notes && !entry.sidecars.is_empty() {
+            if entry.conflict.is_some() && !force {
+                failure.get_or_insert(XmpError::Image {
+                    image: target.clone(),
+                    message: crate::t!("notes-conflict"),
+                });
                 continue;
             }
+            // Trancher (`force`) écrit toujours : des sidecars peuvent être en retard sur
+            // des notes fusionnées.
+            if !force && entry.notes == notes && !entry.sidecars.is_empty() {
+                continue;
+            }
+            remembered.push(target.clone());
             if let Some(error) = &entry.error {
                 failure.get_or_insert(XmpError::Image {
                     image: target.clone(),
@@ -668,6 +850,11 @@ impl NoteBook {
         }
         if written.is_empty() && failure.is_none() {
             return Ok(Vec::new());
+        }
+        // Ce que `tri` vient d'écrire fait foi (une source restée en retard n'est pas un
+        // changement, ni, sans mémoire, un désaccord).
+        for target in &remembered {
+            remember(target, &notes);
         }
         // Des sidecars ont pu être créés, et les images de la paire les partager : on les
         // relit, elles seules (tout le dossier coûtait cher sur un disque lent ou un NAS,
@@ -1016,32 +1203,49 @@ mod tests {
         four.set_stars(4);
         crate::embedded::write(&a, &four).unwrap();
         crate::embedded::write(&b, &four).unwrap();
-        // B a un sidecar : c'est lui qui compte.
+        // B a aussi un sidecar, en désaccord : jamais vus, on demande (issue n° 368 ; en
+        // attendant, les plus récentes : le sidecar).
         let mut two = Notes::default();
         two.set_stars(2);
         xmp::write(&b, &two, Convention::Darktable).unwrap();
         let mut book = NoteBook::load([a.as_path(), b.as_path()], Convention::Darktable);
         assert_eq!(book.notes(&a).stars, 4, "lues dans l'image");
-        assert_eq!(book.notes(&b).stars, 2, "le sidecar d'abord");
+        assert_eq!(book.notes(&b).stars, 2);
+        assert!(book.conflict(&b).is_some(), "image et sidecar en désaccord");
+        assert_eq!(book.conflicts(), [b.as_path()]);
+        assert!(
+            book.edit(&b, |n| n.set_stars(3)).is_err(),
+            "à trancher d'abord"
+        );
         // Noter A crée son sidecar (avec ce qui venait de l'image) ; l'image ne change pas
-        // (sur demande seulement, par défaut).
+        // (sur demande seulement).
         let before = std::fs::read(&a).unwrap();
         book.edit(&a, |n| n.flag = Flag::Accepted).unwrap();
         let sidecar = xmp::read(&a).unwrap();
         assert_eq!((sidecar.stars, sidecar.flag), (4, Flag::Accepted));
         assert_eq!(std::fs::read(&a).unwrap(), before, "image intacte");
+        book.reload();
+        assert!(
+            book.conflict(&a).is_none(),
+            "l'image en retard n'est pas un désaccord"
+        );
         // Sur demande : inscrites dans l'image.
         let report = book.embed(std::slice::from_ref(&a), false);
         assert_eq!(report[0].1, Ok(true));
         let inside = crate::embedded::read(&a).unwrap().unwrap();
         assert_eq!((inside.stars, inside.flag), (4, Flag::Accepted));
-        // Changées ailleurs dans l'image (XnView…) : le sidecar l'emporte, jusqu'à ce
-        // qu'on les relise.
+        book.reload();
+        assert!(book.take_merged().is_empty(), "rien de neuf");
+        // Changées ailleurs dans l'image (XnView…) : fusionnées, et dites.
         let mut one = Notes::default();
         one.set_stars(1);
         crate::embedded::write(&a, &one).unwrap();
         book.reload();
-        assert_eq!(book.notes(&a).stars, 4, "le sidecar d'abord");
+        assert_eq!(book.notes(&a).stars, 1, "fusionnées depuis l'image");
+        assert_eq!(book.notes(&a).flag, Flag::None);
+        assert_eq!(book.take_merged(), [(a.clone(), vec!["A.jpg".to_string()])]);
+        assert_eq!(xmp::read(&a).unwrap().stars, 4, "le sidecar, lui, attend");
+        // Relire depuis les images : le sidecar suit ; B tranché en faveur de l'image.
         let dry = book.import(std::slice::from_ref(&a), true);
         assert_eq!(dry[0].1, Ok(true));
         assert_eq!(xmp::read(&a).unwrap().stars, 4, "rien écrit à blanc");
@@ -1053,8 +1257,8 @@ mod tests {
             "B : 4 dans l'image, 2 dans le sidecar"
         );
         assert_eq!(xmp::read(&a).unwrap().stars, 1);
-        assert_eq!(book.notes(&a).stars, 1);
         assert_eq!(book.notes(&b).stars, 4);
+        assert!(book.conflict(&b).is_none(), "tranché");
         assert_eq!(book.import(std::slice::from_ref(&a), false)[0].1, Ok(false));
     }
 
@@ -1221,6 +1425,13 @@ mod tests {
         );
         assert_eq!(book.notes(&rr).stars, 1, "lu dans le .rrdata");
         assert_eq!(book.notes(&copy).stars, 2, "lu dans le .rrdata de la copie");
+        // La photo : XMP sans note, `.rrdata` à 1, jamais vus ensemble : on demande
+        // (issue n° 368).
+        assert!(book.conflict(&photo).is_some());
+        let mut one = Notes::default();
+        one.set_stars(1);
+        book.resolve(&photo, &one).unwrap();
+        assert!(book.conflict(&photo).is_none());
         // Noter le développement darktable principal : la photo, sa paire et le
         // développement RapidRAW principal suivent (XMP et .rrdata écrits).
         let changed = book.edit(&main, |n| n.set_stars(3)).unwrap();

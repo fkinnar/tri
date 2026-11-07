@@ -121,6 +121,7 @@ cache-no-user-dir = dossier de cache utilisateur introuvable
 xmp-io = sidecar XMP : { $error }
 xmp-malformed = sidecar XMP mal formé (non modifié) : { $error }
 xmp-no-description = sidecar XMP sans rdf:Description (non modifié)
+notes-conflict = notes en désaccord entre ses sources (sidecars, image) : à trancher d'abord
 embed-unsupported = ce format d'image ne porte pas de notes (JPEG, PNG, WebP, TIFF, HEIC seulement)
 embed-io = notes dans l'image : { $error }
 embed-write-failed = écriture des notes dans l'image impossible ({ $error }) ; une copie complète est gardée à côté : { $copy }
@@ -180,6 +181,7 @@ cli-usage =
       tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --conflicts [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
       tri <dossier> --metadata [--raw|--flat] [--depth N]
       tri <dossier> --groups [--threshold X]
@@ -268,6 +270,15 @@ cli-import-summary = { $n } images : notes { $mode ->
    *[write] relues depuis { $written }
 }, { $unchanged } inchangées (sans notes inscrites, ou les mêmes), { $skipped } passées (RAW et autres formats), { $errors } erreurs
 cli-import-some-failed = les notes de certaines images n'ont pas pu être relues
+cli-merged = fusionnées
+cli-conflict = conflit
+cli-conflict-before = avant
+cli-conflicts-summary = { $n } images, { $conflicts } en conflit
+cli-field-stars = étoiles
+cli-field-flag = drapeau
+cli-field-colors = couleurs
+cli-flag-accepted = acceptée
+cli-flag-rejected = rejetée
 cli-rename-shared-copy = (copie : partagé)
 cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :
