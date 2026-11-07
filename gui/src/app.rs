@@ -17374,7 +17374,8 @@ mod tests {
         );
         // Les piles : une case, et leurs réglages quand elles sont actives.
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_none());
-        h.get_by_label(&t!("panel-grid-stacks-on")).click();
+        // Une fois sa place arrêtée (clic tombé à côté sur la CI, 07/11/2026).
+        click_settled(&mut h, &t!("panel-grid-stacks-on"));
         h.run_steps(2);
         assert!(h.state().stacking);
         assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
@@ -20848,7 +20849,8 @@ mod tests {
         assert!(h.query_by_label(&t!("panel-grid-files-allow")).is_some());
         // Et l'interrupteur des piles (retour du 31/10/2026 : il manquait dans « Vue »).
         assert!(!h.state().stacking);
-        h.get_by_label(&t!("panel-grid-stacks-on")).click();
+        // Une fois sa place arrêtée (clic tombé à côté sur la CI, 07/11/2026).
+        click_settled(&mut h, &t!("panel-grid-stacks-on"));
         h.run_steps(3);
         assert!(h.state().stacking, "la section « Vue » allume les piles");
         leader(&mut h, &[(Key::K, Modifiers::SHIFT)]);
