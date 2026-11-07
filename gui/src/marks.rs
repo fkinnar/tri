@@ -600,6 +600,20 @@ pub fn take_row_arrow(painter: &Painter, rect: Rect, color: Color32) {
     painter.rect_filled(Rect::from_min_max(p(0.44, 0.33), p(0.98, 0.67)), 1.0, color);
 }
 
+/// Icône du filtre « en conflit » : le triangle d'avertissement en contour, d'une seule
+/// couleur `color` (grise ou à l'accent, comme les autres icônes de filtre).
+pub fn conflict_outline(painter: &Painter, rect: Rect, color: Color32) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let stroke = Stroke::new((w * 0.1).max(1.2), color);
+    painter.add(Shape::closed_line(
+        vec![p(0.5, 0.08), p(0.95, 0.9), p(0.05, 0.9)],
+        stroke,
+    ));
+    painter.line_segment([p(0.5, 0.38), p(0.5, 0.62)], stroke);
+    painter.circle_filled(p(0.5, 0.76), w * 0.06, color);
+}
+
 /// Signe « notes en désaccord » (issue n° 368) dans `rect` : un triangle d'avertissement
 /// orange cerclé de sombre, avec son point d'exclamation.
 pub fn conflict_sign(painter: &Painter, rect: Rect) {

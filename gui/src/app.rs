@@ -2267,12 +2267,16 @@ impl TriApp {
                 let mut checked = self.conflicts_only;
                 let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
                 let (rect, icon) = marks::clickable(ui, size, &tip);
-                marks::conflict_sign(ui.painter(), rect.shrink(size * 0.12));
+                // Grise, à l'accent allumée : comme les autres icônes de filtre (retour du
+                // 07/11/2026 ; l'orange reste aux vignettes).
+                let color = if self.conflicts_only {
+                    marks::accent_mark(ui.ctx())
+                } else {
+                    ui.visuals().weak_text_color()
+                };
+                marks::conflict_outline(ui.painter(), rect.shrink(size * 0.12), color);
                 let label = ui
-                    .add(
-                        egui::Label::new(t!("filter-conflicts", n = conflicts))
-                            .sense(Sense::click()),
-                    )
+                    .add(egui::Label::new(t!("filter-conflicts")).sense(Sense::click()))
                     .on_hover_text(&tip);
                 check.changed() || icon.clicked() || label.clicked()
             });
@@ -26998,11 +27002,11 @@ mod tests {
         // Filtre « en conflit », dans le panneau de droite : elle seule.
         h.state_mut().metadata_panel = true;
         h.run_steps(2);
-        h.get_by_label(&t!("filter-conflicts", n = 1)).click();
+        h.get_by_label(&t!("filter-conflicts")).click();
         h.run_steps(2);
         assert!(h.state().conflicts_only);
         assert_eq!(h.state().files.len(), 1, "l'image en conflit seule");
-        h.get_by_label(&t!("filter-conflicts", n = 1)).click();
+        h.get_by_label(&t!("filter-conflicts")).click();
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 3);
         let inside = std::fs::read(&image).unwrap();

@@ -87,7 +87,7 @@ sources et leurs notes.
   gardées ; « Valider » en bas à droite. « Même choix pour les N autres images en conflit du dossier » : la même
   sorte de source, champ par champ. Un pas d'historique, annulable.
 
-- Filtre « En conflit (N) » dans la section Filtres du panneau de droite, sous les
+- Filtre « En conflit » dans la section Filtres du panneau de droite, sous les
   autres (filtre secondaire : pas dans la barre du haut), seulement quand il y a des
   conflits (`notes::ConflictFilter`).
 - Le triangle et les icônes d'écrêtage de la vignette sont sur une rangée, centrés sur
