@@ -2014,7 +2014,7 @@ impl TriApp {
                     p.clicked = Some(i);
                 }
                 if p.cursor == Some(i) {
-                    cursor_row(ui, rect, tint);
+                    cursor_band(ui, p.band, rect, tint);
                 }
             }
             return;
@@ -14667,12 +14667,16 @@ impl TriApp {
                             cursor: state.item,
                             key: item_key,
                             clicked: None,
+                            band: ui.max_rect().x_range(),
                         });
                         let mut stops = Vec::new();
                         for (i, hit) in state.hits.iter().enumerate() {
                             stops.push((i, None));
                             let chosen = i == state.selected && state.item.is_none();
                             let row = palette_row(ui, hit, chosen, accent);
+                            if let Some(p) = &mut self.palette_items {
+                                p.band = row.rect.x_range();
+                            }
                             if chosen && (down > 0 || up > 0) {
                                 row.scroll_to_me(None);
                             }
@@ -15998,6 +16002,9 @@ struct PaletteItems {
     key: Option<SideKey>,
     /// Élément cliqué à la souris (il prend le clavier).
     clicked: Option<usize>,
+    /// Largeur de la bande du curseur : celle des lignes (retour du 07/11/2026 : elle
+    /// traversait l'écran).
+    band: egui::Rangef,
 }
 
 /// Numéros d'éléments du panneau réservés à la palette ([`TriApp::side_begin`]).
@@ -16118,8 +16125,13 @@ fn panel_focus_fill(ui: &Ui, dialogs: &crate::settings::DialogSettings) {
 /// le cadre d'accent (retour du 25/10/2026 : trop voyant, et coupé à gauche quand le
 /// panneau défile).
 fn cursor_row(ui: &Ui, rect: Rect, tint: f32) {
-    let clip = ui.clip_rect();
-    let band = Rect::from_x_y_ranges(clip.x_range(), rect.expand(1.0).y_range());
+    cursor_band(ui, ui.clip_rect().x_range(), rect, tint);
+}
+
+/// La bande du curseur sur la largeur `x` (la palette : celle de ses lignes, pas l'écran,
+/// retour du 07/11/2026).
+fn cursor_band(ui: &Ui, x: egui::Rangef, rect: Rect, tint: f32) {
+    let band = Rect::from_x_y_ranges(x, rect.expand(1.0).y_range());
     let fill = ui
         .visuals()
         .text_color()
