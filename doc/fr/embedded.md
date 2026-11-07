@@ -55,8 +55,8 @@ Ensuite le sidecar l'emporte : une note changée plus tard dans l'image se relit
 
 ## Quand
 
-Sur demande seulement (décidé le 07/11/2026 : l'automatique viendra après réflexion),
-deux actions symétriques, sur la sélection ou, par le menu du dossier, tout le dossier :
+Sur demande, ou d'office selon `[xmp] embed` et le réglage du dossier (voir
+[reconcile.md](reconcile.md), « Automatisation »). Deux actions symétriques, sur la sélection ou, par le menu du dossier, tout le dossier :
 
 - **« Inscrire les notes dans les images »** (`core.file.embed_notes`, en fond) : les
   notes de `tri` vont dans les images. `tri <dossier> --embed-notes [--dry-run]`,

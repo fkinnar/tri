@@ -54,8 +54,8 @@ ratings back from the images".
 
 ## When
 
-On demand only (decided on 2026-11-07: automatic writing will come after some thought),
-two symmetric actions, on the selection or, from the folder menu, the whole folder:
+On demand, or by itself according to `[xmp] embed` and the folder setting (see
+[reconcile.md](reconcile.md), "Automation"). Two symmetric actions, on the selection or, from the folder menu, the whole folder:
 
 - **"Write the ratings into the images"** (`core.file.embed_notes`, in the background):
   `tri`'s ratings go into the images. `tri <folder> --embed-notes [--dry-run]`,

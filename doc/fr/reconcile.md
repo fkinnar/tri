@@ -102,7 +102,24 @@ en retard (l'image non réécrite) passerait en conflit à sa nouvelle place. Un
 copié ou déplacé emporte son `.tri` avec lui. L'annulation passe par les mêmes
 fonctions.
 
-## À venir
+## Automatisation (07/11/2026)
 
-L'automatisation : écrire partout, fusion à la volée sur les changements vus par la
-surveillance.
+- **Écriture d'office** (`[xmp] embed`) : `never` (défaut), `internal` (disques internes
+  et fixés ; pas un disque amovible ni un partage réseau, `places::outside_roots`),
+  `everywhere`. À chaque note (et annulation, choix d'un conflit), les notes vont aussi
+  dans l'image (`NoteBook::embeds`). Jamais une image en conflit.
+- **Réglage du dossier**, prioritaire (« ce support amovible-là, oui ») : selon les
+  réglages, toujours ou jamais ; gardé dans `.tri/notes.json` (champ `embed`,
+  `Memory::embed`), donc il voyage avec le dossier ; le dossier seul, pas ses
+  sous-dossiers (exceptions posées en connaissance de cause). Clic droit sur le dossier,
+  « Notes dans les images » ; un repère dans le panneau des dossiers (à l'accent :
+  toujours ; gris barré : jamais). `NoteBook::folder_embed`, `set_folder_embed`.
+- **Fusion à la volée** : la surveillance relit le dossier quand une image ou un sidecar
+  bouge ; la fusion se fait à la lecture, et un conflit fait apparaître le triangle.
+- **Propagation** : une fusion venue d'une source est récrite aussitôt dans les autres
+  (sidecars existants ; l'image si elle reçoit les notes d'office), là où `tri` écrit de
+  lui-même (`NoteBook::writes_automatically`, `propagate`).
+- Après ses propres écritures dans les images, `tri` recale la surveillance
+  (`own_writes_done`) : pas de relecture du dossier comme pour un changement venu
+  d'ailleurs.
+- Abandonné pour l'instant : un dossier « notes dans les fichiers, sans sidecar ».

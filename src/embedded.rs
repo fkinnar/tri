@@ -62,6 +62,22 @@ pub fn supports(path: &Path) -> bool {
     Container::of(path).is_some()
 }
 
+/// Quand inscrire les notes dans les images à chaque note (`[xmp] embed`, décidé le
+/// 07/11/2026). Elles vont toujours aussi dans les sidecars ; un dossier peut avoir son
+/// propre réglage ([`crate::reconcile::Memory::embed`]), prioritaire.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Auto {
+    /// Jamais : sur demande seulement (défaut).
+    #[default]
+    Never,
+    /// Sur les disques internes et fixés (`[places] fixed`), pas sur un disque amovible
+    /// ni un partage réseau.
+    Internal,
+    /// Partout.
+    Everywhere,
+}
+
 /// Ce que l'en-tête d'une image dit des notes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Found {

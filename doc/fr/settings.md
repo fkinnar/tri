@@ -34,7 +34,7 @@ peut pas changer une valeur par défaut sans mettre à jour sa documentation.
 | `[render]` | Développement LibRaw : balance des blancs, luminosité, luminosité automatique | moteur |
 | `[cache]` | Dossier, qualité JPEG, taille maximale des 1:1 (éviction des moins récemment utilisés) | moteur |
 | `[scheduler]` | Workers légers (« auto » = moitié des cœurs), vignettes d'abord, analyse d'exposition en fond | moteur |
-| `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs | moteur |
+| `[xmp]` | Convention d'un nouveau sidecar (`darktable` / `adobe`), une ou plusieurs couleurs, notes inscrites d'office dans les images (`embed`) | moteur |
 | `[sidecars.<logiciel>]` | Création du sidecar manquant d'un logiciel quand on note (`auto` / `always` / `never`, `sidecars.md`) | moteur |
 | `[sort]` | Ordre des couleurs pour le tri par couleur (`color_order`, `sort.md`) | moteur |
 | `[places]` | Emplacements du panneau des dossiers : masquer Time Machine, motifs à exclure, volumes fixés (sans éjection), intervalle de surveillance des volumes | moteur |

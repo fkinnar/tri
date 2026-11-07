@@ -4,6 +4,14 @@
 
 ## Non publié
 
+- **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
+  (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,
+  PNG, WebP, TIFF, HEIC), et une note fusionnée depuis un autre logiciel est récrite
+  aussitôt dans les autres sources (une couleur de XnView arrive dans le XMP de
+  darktable). Un dossier peut avoir son propre réglage, prioritaire (clic droit sur le
+  dossier, « Notes dans les images » : selon les réglages, toujours, jamais), gardé dans
+  son dossier `.tri` et signalé dans le panneau des dossiers ; il ne vaut pas pour les
+  sous-dossiers.
 - **Notes changées dans plusieurs logiciels fusionnées** (#368) : quand darktable change
   les étoiles et RapidRAW la couleur (ou XnView l'image elle-même), les deux sont
   gardés, champ par champ, au lieu que le sidecar le plus récent l'emporte, et la barre

@@ -2872,6 +2872,7 @@ impl TriApp {
         let mut menu: Option<(PathBuf, Action)> = None;
         // Clic droit : garder le cache dans ce dossier / sur ce disque, ou plus ici.
         let mut cache_menu: Option<(PathBuf, bool)> = None;
+        let mut embed_menu: Option<(PathBuf, Option<bool>)> = None;
         let location = self.settings.cache.location;
         let cache = self.engine.as_ref().map(|e| e.cache.clone());
         let mut dropped: Option<(Dragged, PathBuf)> = None;
@@ -3032,6 +3033,31 @@ impl TriApp {
                     } else {
                         ui.selectable_label(current, &row.name)
                     };
+                    // Dossier à son propre réglage des notes dans les images : un repère
+                    // (à l'accent : toujours ; gris : jamais).
+                    if row.depth > 0
+                        && let Some(on) = self.folder.notes.folder_embed(&row.path)
+                    {
+                        let side = ui.spacing().interact_size.y * 0.6;
+                        let (rect, mark) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                        let color = if on {
+                            marks::accent_mark(ui.ctx())
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        marks::file_action(ui.painter(), rect, Action::EmbedNotes, color);
+                        if !on {
+                            ui.painter().line_segment(
+                                [rect.left_bottom(), rect.right_top()],
+                                egui::Stroke::new(1.5, color),
+                            );
+                        }
+                        mark.on_hover_text(if on {
+                            t!("folder-embed-mark-always")
+                        } else {
+                            t!("folder-embed-mark-never")
+                        });
+                    }
                     // Glisser-déposer : un dossier se glisse (pas un emplacement) ; tout
                     // dossier reçoit un dossier ou des images de la grille.
                     let label = if row.depth > 0 {
@@ -3171,6 +3197,26 @@ impl TriApp {
                             entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
                             entry(ui, Action::ImportNotes, t!("folder-menu-import-notes"));
                         }
+                        // Notes dans les images, propre à ce dossier (issue n° 368 :
+                        // « ce support amovible-là, oui ») ; pas ses sous-dossiers.
+                        if row.depth > 0 {
+                            let current = self.folder.notes.folder_embed(&row.path);
+                            let global = embed_level_name(self.settings.xmp.embed);
+                            ui.menu_button(t!("folder-menu-embed"), |ui| {
+                                for (value, label) in [
+                                    (None, t!("folder-embed-default", level = global)),
+                                    (Some(true), t!("folder-embed-always")),
+                                    (Some(false), t!("folder-embed-never")),
+                                ] {
+                                    if ui.radio(current == value, label).clicked() {
+                                        embed_menu = Some((row.path.clone(), value));
+                                        ui.close();
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text(t!("folder-menu-embed-tip"));
+                        }
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
                         // Grisé s'il ne peut pas le recevoir : darktable déjà ouvert sous
@@ -3308,6 +3354,22 @@ impl TriApp {
         // action qu'au clavier.
         if let Some((path, on)) = cache_menu {
             self.keep_cache_in(path, on);
+        }
+        if let Some((path, value)) = embed_menu {
+            match self.folder.notes.set_folder_embed(&path, value) {
+                Ok(()) => {
+                    let name = folder_name(&path);
+                    self.notice = Some((
+                        match value {
+                            None => t!("folder-embed-set-default", name = name),
+                            Some(true) => t!("folder-embed-set-always", name = name),
+                            Some(false) => t!("folder-embed-set-never", name = name),
+                        },
+                        false,
+                    ));
+                }
+                Err(e) => self.file_error = Some(format!("{} : {e}", path.display())),
+            }
         }
         if let Some((path, action)) = menu {
             self.tree.point_at(&path);
@@ -5063,6 +5125,15 @@ impl TriApp {
     /// sous un tri par note (31/10/2026 : l'image prend sa place tout de suite, la
     /// sélection la suit), refiltrée sous un filtre sur les notes.
     fn notes_changed(&mut self) {
+        // Notes peut-être inscrites d'office dans les images : pas un changement venu
+        // d'ailleurs pour la surveillance.
+        if self
+            .folder
+            .notes
+            .writes_automatically(&self.folder.dir.join("_"))
+        {
+            self.own_writes_done();
+        }
         if self.order.key.by_notes() {
             self.apply_sort();
             self.refilter(Reveal::Minimal);
@@ -5139,6 +5210,25 @@ impl TriApp {
             .sidecars
             .creates(&installed, |f| notes.has_format(f));
         self.folder.notes.set_creates(creates);
+        // Écriture automatique (`[xmp] embed`, issue n° 368) : les racines amovibles et
+        // réseau, seulement si le niveau « internes » en a besoin.
+        let embed = self.settings.xmp.embed;
+        let outside = if embed == tri::embedded::Auto::Internal {
+            tri::places::outside_roots(&self.settings.places)
+        } else {
+            Vec::new()
+        };
+        self.folder.notes.set_embed(embed, outside);
+    }
+
+    /// Après des écritures de `tri` dans les images (notes inscrites d'office, fusion
+    /// propagée) : la surveillance repart de cet état, sans relire tout le dossier comme
+    /// si un autre logiciel les avait changées.
+    fn own_writes_done(&mut self) {
+        if let Some((watch, rx, _)) = &self.watch {
+            watch.sync();
+            rx.try_iter().for_each(drop);
+        }
     }
 
     /// Filtres ou tri changés depuis la dernière fois : retenus pour le dossier ouvert.
@@ -16276,6 +16366,15 @@ impl eframe::App for TriApp {
         let merged = self.folder.notes.take_merged();
         if !merged.is_empty() {
             self.notice = Some((t!("notes-merged", n = merged.len()), false));
+            // Propagée aux autres sources là où `tri` écrit de lui-même (issue n° 368).
+            let images: Vec<PathBuf> = merged.into_iter().map(|(p, _)| p).collect();
+            let (written, error) = self.folder.notes.propagate(&images);
+            if !written.is_empty() {
+                self.own_writes_done();
+            }
+            if let Some(e) = error {
+                self.note_error = Some(t!("rating-not-saved", error = e));
+            }
             self.notes_changed();
         }
         steps.mark("événements");
@@ -17142,6 +17241,15 @@ fn field_text(field: tri::reconcile::Field, notes: &tri::xmp::Notes) -> String {
             .map(|c| t!(&format!("color-{}", c.id())))
             .collect::<Vec<_>>()
             .join(", "),
+    }
+}
+
+/// Nom traduit d'un niveau de `[xmp] embed`.
+fn embed_level_name(auto: tri::embedded::Auto) -> String {
+    match auto {
+        tri::embedded::Auto::Never => t!("embed-level-never"),
+        tri::embedded::Auto::Internal => t!("embed-level-internal"),
+        tri::embedded::Auto::Everywhere => t!("embed-level-everywhere"),
     }
 }
 
@@ -26983,6 +27091,59 @@ mod tests {
         act(&mut h, Action::Undo);
         h.run_steps(2);
         assert_eq!(h.state().folder.notes.notes(&image).stars, 4, "annulé");
+    }
+
+    #[test]
+    fn ratings_are_synced_by_themselves_where_the_setting_says() {
+        // Issue n° 368, automatisation : `[xmp] embed`, le réglage du dossier, et la
+        // propagation d'une fusion venue d'un autre logiciel.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let image = h.state().files[0].path.clone();
+        let folder = h.state().folder.dir.clone();
+        let inside = |p: &Path| tri::embedded::read(p).unwrap().map(|n| n.stars);
+        // Par défaut : rien dans l'image.
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(inside(&image), None);
+        // Partout : la note va aussi dans l'image.
+        h.state_mut().settings.xmp.embed = tri::embedded::Auto::Everywhere;
+        h.state_mut().apply_sidecar_policy();
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(inside(&image), Some(3));
+        assert!(h.state().note_error.is_none());
+        // Ce dossier-là, jamais (le réglage du dossier l'emporte).
+        h.state_mut()
+            .folder
+            .notes
+            .set_folder_embed(&folder, Some(false))
+            .unwrap();
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(inside(&image), Some(3), "plus d'écriture dans ce dossier");
+        h.state_mut()
+            .folder
+            .notes
+            .set_folder_embed(&folder, None)
+            .unwrap();
+        // Une couleur posée ailleurs dans l'image : fusionnée, et propagée au sidecar.
+        let mut red = tri::xmp::Notes::default();
+        red.set_stars(4);
+        red.colors = vec![tri::xmp::Color::Red];
+        tri::embedded::write(&image, &red).unwrap();
+        h.state_mut().folder.notes.reload();
+        h.run_steps(3);
+        assert_eq!(
+            h.state().folder.notes.notes(&image).colors,
+            [tri::xmp::Color::Red]
+        );
+        assert_eq!(
+            tri::xmp::read(&image).unwrap().colors,
+            [tri::xmp::Color::Red],
+            "propagée au sidecar"
+        );
+        assert!(h.state().folder.notes.conflicts().is_empty());
     }
 
     #[test]
