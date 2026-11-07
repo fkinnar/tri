@@ -71,8 +71,10 @@ sources et leurs notes.
   (`marks::conflict_sign`) ; un clic, ou une note posée sur elle, ouvre la boîte « Notes
   en désaccord » : un tableau, une ligne par source (XMP, RapidRAW, RawTherapee, ART,
   « Dans l'image ») et les notes d'avant, une colonne par champ. Seuls les champs en
-  désaccord (en gras) se choisissent, d'un clic sur la valeur voulue ; les autres sont
-  déjà fusionnés (`Conflict::merged`, retour du 07/11/2026 : une couleur ajoutée dans
+  désaccord (titre en gras) se choisissent, d'un clic sur la valeur voulue ; un champ où
+  les lignes diffèrent sans conflit (une seule source l'a changé) est présélectionné sur
+  la valeur fusionnée, et modifiable aussi (retour du 07/11/2026 : une couleur différente
+  qu'on ne pouvait pas choisir) ; les autres sont déjà fusionnés (`Conflict::merged`, retour du 07/11/2026 : une couleur ajoutée dans
   l'image ne doit pas dépendre du choix des étoiles). Lignes alternées, colonnes de
   largeur fixe, cellules dessinées à la main (valeurs centrées). La flèche épaisse d'une
   ligne (`marks::take_row_arrow`) y choisit tous les champs en désaccord, sans valider ;

@@ -11753,7 +11753,6 @@ impl TriApp {
             self.conflict_dialog = None;
             return;
         };
-        dialog.init(&conflict);
         let image_name = file_name(&dialog.image);
         let others = self.folder.notes.conflicts().len().saturating_sub(1);
         let names: Vec<String> = conflict.fields.iter().map(|f| field_name(*f)).collect();
@@ -11770,6 +11769,16 @@ impl TriApp {
                 notes.clone(),
             ));
         }
+        // Se choisissent : les champs en désaccord, et ceux où les lignes diffèrent sans
+        // conflit (une seule source les a changés : fusionnés, mais modifiables ; retour
+        // du 07/11/2026 : une couleur différente qu'on ne pouvait pas choisir).
+        let choosable: Vec<Field> = Field::ALL
+            .into_iter()
+            .filter(|&f| {
+                conflict.fields.contains(&f) || rows.windows(2).any(|w| !f.same(&w[0].2, &w[1].2))
+            })
+            .collect();
+        dialog.init(&conflict, &choosable);
         let modal = modal_at("conflict_dialog", dialog.at)
             .title(t!("conflict-title", name = shown_name(&dialog.image)))
             .show(ctx, |ui| {
@@ -11855,6 +11864,8 @@ impl TriApp {
                             let title = egui::RichText::new(field_title(field));
                             let title = if conflict.fields.contains(&field) {
                                 title.strong()
+                            } else if choosable.contains(&field) {
+                                title
                             } else {
                                 title.weak()
                             };
@@ -11874,7 +11885,7 @@ impl TriApp {
                             );
                             for field in Field::ALL {
                                 let text = field_text(field, notes);
-                                if conflict.fields.contains(&field) {
+                                if choosable.contains(&field) {
                                     let selected = dialog.pick(field) == Some(pick);
                                     let id = ui.scope_id().with((
                                         "conflict_cell",
@@ -11905,8 +11916,9 @@ impl TriApp {
                             let color = child.style().interact(&response).fg_stroke.color;
                             marks::take_row_arrow(child.painter(), rect.shrink(icon * 0.3), color);
                             let take = response.clicked();
+                            // Toute la ligne : chaque champ qui se choisit.
                             if take {
-                                for &field in &conflict.fields {
+                                for &field in &choosable {
                                     dialog.set(field, pick.clone());
                                 }
                             }
@@ -14269,7 +14281,12 @@ impl TriApp {
         // gauche ; un clic ouvre la boîte pour trancher.
         if self.folder.notes.conflict(&file.path).is_some() {
             let size = g.marks + 4.0;
-            let zone = Rect::from_min_size(image_area.min + vec2(4.0, 4.0), vec2(size, size));
+            // À la hauteur de la pastille de couleur d'en face (même retrait que les
+            // marques), un peu plus haut : la pointe le fait paraître plus bas (retour du
+            // 07/11/2026).
+            let inset = g.marks / 2.0 + 3.0;
+            let zone =
+                Rect::from_center_size(image_area.min + vec2(inset, inset - 1.5), vec2(size, size));
             marks::conflict_sign(ui.painter(), zone);
             let tip = t!("conflict-badge");
             let hit = ui
@@ -16916,12 +16933,27 @@ impl ConflictDialog {
 
     /// Choix de départ pour chaque champ en désaccord : les notes d'avant, sinon la source
     /// montrée en attendant (la plus récente).
-    fn init(&mut self, conflict: &tri::reconcile::Conflict) {
-        for &field in &conflict.fields {
+    /// Champs fusionnés mais modifiables (`choosable` hors conflit) : la ligne qui porte la
+    /// valeur fusionnée, la source qui l'a changée de préférence.
+    fn init(&mut self, conflict: &tri::reconcile::Conflict, choosable: &[tri::reconcile::Field]) {
+        for &field in choosable {
             if self.pick(field).is_some() {
                 continue;
             }
-            let pick = if conflict.before.is_some() {
+            let carries = |n: &tri::xmp::Notes| field.same(n, &conflict.merged);
+            let pick = if !conflict.fields.contains(&field) {
+                match conflict.sources.iter().find(|(_, n)| {
+                    carries(n) && conflict.before.as_ref().is_none_or(|b| !field.same(n, b))
+                }) {
+                    Some((s, _)) => Pick::Source(s.clone()),
+                    None if conflict.before.as_ref().is_some_and(carries) => Pick::Before,
+                    None => conflict
+                        .sources
+                        .iter()
+                        .find(|(_, n)| carries(n))
+                        .map_or(Pick::Before, |(s, _)| Pick::Source(s.clone())),
+                }
+            } else if conflict.before.is_some() {
                 Pick::Before
             } else {
                 conflict

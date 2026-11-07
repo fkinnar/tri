@@ -66,7 +66,10 @@ their ratings.
   (`marks::conflict_sign`); a click, or a rating set on it, opens the "Ratings disagree"
   dialog: a table, one row per source (XMP, RapidRAW, RawTherapee, ART, "In the image")
   and the previous ratings, one column per field. Only the fields in disagreement (in
-  bold) are chosen, by clicking the value wanted; the others are already merged
+  bold) are chosen, by clicking the value wanted; a field where rows differ without a
+  conflict (only one source changed it) is preselected on the merged value, and can be
+  changed too (feedback of 2026-11-07: a different colour that could not be chosen); the
+  others are already merged
   (`Conflict::merged`, feedback of 2026-11-07: a colour added in the image must not
   depend on the choice of stars). Alternating rows, fixed-width columns, cells drawn by
   hand (values centred). A row's thick arrow (`marks::take_row_arrow`) chooses every field
