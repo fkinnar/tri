@@ -745,7 +745,7 @@ overlay_opacity = 0.6
 # pixel; * goes to 100 %, / back to fit, z toggles fit / 100 %). With the mouse
 # and the trackpad, continuous: pinch, or Ctrl / Cmd + wheel (scrolling moves
 # the image). Between min (at most 100) and max (at least 100); below fit, the image
-# is smaller than the screen. Values outside 1 to 3200 are refused.
+# is smaller than the screen. Values outside 1 to 999 are refused.
 steps = [12.5, 25, 50, 100, 200, 400]
 max = 400
 min = 10

@@ -1014,8 +1014,9 @@ impl LoupeKey {
 /// Bornes de bon sens d'un pourcentage de zoom de la configuration (garde-fou demandé le
 /// 07/11/2026 : « une valeur débile, genre 20000 ») : en dehors, la valeur est refusée
 /// (fenêtre de réglages : message ; fichier : réglages par défaut et avertissement). Pas
-/// des réglages : seulement ce qui n'a aucun sens.
-const ZOOM_PERCENT: (f32, f32) = (1.0, 3200.0);
+/// des réglages : seulement ce qui n'a aucun sens. 999 % au plus : la saisie au clavier
+/// (`<leader> z`, `<leader> m`, la valeur de la barre du bas) prend trois chiffres.
+const ZOOM_PERCENT: (f32, f32) = (1.0, 999.0);
 
 /// Un pourcentage de zoom entre `low` et `high` (`ZOOM_PERCENT` au plus large), rendu en
 /// échelle (100 % : 1,0).

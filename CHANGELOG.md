@@ -16,8 +16,10 @@
   ignored.
 - **Zoom settings in percent**: `[gui.zoom] steps`, `max`, `min` and `loupe_scale` are
   written as percentages (`max = 400`), and absurd values are refused (outside 1 to
-  3200 %, `max` below 100 %, `min` above). An existing file with the old values
+  999 %, `max` below 100 %, `min` above). An existing file with the old values
   (`max = 4.0`) is reported as invalid. The value in the bottom bar keeps a fixed width.
+  In the settings window, a typed number is checked on Enter or when leaving the field
+  (not at each digit), and the error shows the message alone.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):

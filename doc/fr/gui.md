@@ -465,8 +465,12 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
   qu'à 100 %. Dans la configuration, `steps`, `max`, `min` et `loupe_scale` s'écrivent
   en **pourcentages** (07/11/2026 : `max = 400`, plus lisible que `4.0`), triés à la
-  lecture ; garde-fou : refusés hors de 1 à 3200 %, `max` sous 100 % et `min` au-dessus
-  (`ZOOM_PERCENT`, bornes de bon sens, pas des réglages).
+  lecture ; garde-fou : refusés hors de 1 à 999 %, `max` sous 100 % et `min` au-dessus
+  (`ZOOM_PERCENT`, bornes de bon sens, pas des réglages ; 999 % : la saisie au clavier
+  prend trois chiffres). Dans la fenêtre de réglages, l'erreur sous la valeur est le
+  message seul (`tri::settings::parse_message`), sans la ligne du fichier. Un nombre tapé
+  n'est vérifié qu'à Entrée ou en quittant le champ (`update_while_editing(false)`) :
+  « 800 » passait par « 8 », refusé, et `max` ne se changeait pas au clavier.
 - **Retour à la grille à la souris** (issue n° 193) : en plein écran, une icône de grille
   tout à droite de la barre du bas (comme Échap).
   Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour

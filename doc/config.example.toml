@@ -745,7 +745,7 @@ overlay_opacity = 0.6
 # pixel de l'écran ; * passe à 100 %, / revient à l'ajusté, z bascule ajusté / 100 %). À la souris
 # et au pavé tactile, en continu : pincer, ou Ctrl / Cmd + molette (défiler déplace
 # l'image). Entre min (100 au plus) et max (100 au moins) ; sous l'ajusté, l'image est plus
-# petite que l'écran. Valeurs refusées hors de 1 à 3200.
+# petite que l'écran. Valeurs refusées hors de 1 à 999.
 steps = [12.5, 25, 50, 100, 200, 400]
 max = 400
 min = 10

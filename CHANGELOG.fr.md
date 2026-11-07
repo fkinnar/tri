@@ -17,9 +17,11 @@
   modificateur seul est maintenant ignoré.
 - **Réglages du zoom en pourcentages** : `[gui.zoom] steps`, `max`, `min` et
   `loupe_scale` s'écrivent en pourcentages (`max = 400`), et les valeurs absurdes sont
-  refusées (hors de 1 à 3200 %, `max` sous 100 %, `min` au-dessus). Un fichier avec les
+  refusées (hors de 1 à 999 %, `max` sous 100 %, `min` au-dessus). Un fichier avec les
   anciennes valeurs (`max = 4.0`) est signalé comme invalide. La valeur de la barre du
-  bas garde une largeur fixe.
+  bas garde une largeur fixe. Dans la fenêtre de réglages, un nombre tapé est vérifié à
+  Entrée ou en quittant le champ (pas à chaque chiffre), et l'erreur montre le message
+  seul.
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).

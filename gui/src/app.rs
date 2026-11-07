@@ -9647,7 +9647,7 @@ impl TriApp {
         let response = ui.add_sized(
             size,
             egui::TextEdit::singleline(&mut edit.text)
-                .char_limit(4)
+                .char_limit(3)
                 .align(egui::Align2::CENTER_CENTER)
                 .hint_text(value.trim_end_matches(" %")),
         );
