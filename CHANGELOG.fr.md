@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Un seul style pour les listes de raccourcis** (F1, `?`, le menu des suites, la
+  palette) : touches à la couleur d'accent, une ligne sur deux sur fond plus clair, et
+  le « / » entre plusieurs touches en gris, pour faire ressortir les touches.
+  Dans le menu des suites, le début commun à la plupart des lignes passe dans le titre
+  (`f` : « Filtre ») ; plus de précisions entre parenthèses (F1 et la palette les gardent) ;
+  libellés plus courts pour les filtres d'étoiles et les couleurs
+  (plus de « (ajouter / retirer) »).
 - **Piles : pauses et progression du curseur** (#306) : une pause plus longue que la
   cadence du dossier éloigne deux images (en studio, un changement de pose tombe souvent
   sur une pause). Deux nouveaux curseurs dans la fenêtre de regroupement (`Ctrl+G`),

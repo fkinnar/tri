@@ -16,11 +16,11 @@ action-core-filter-kind-all = Type filter: RAW and JPEG
 action-core-filter-kind-raw = Type filter: RAW only
 action-core-filter-kind-flat = Type filter: JPEG only
 action-core-filter-stars-0 = Filter: any stars
-action-core-filter-stars-1 = Filter: 1 star (at least, exactly or at most: f =)
-action-core-filter-stars-2 = Filter: 2 stars (at least, exactly or at most: f =)
-action-core-filter-stars-3 = Filter: 3 stars (at least, exactly or at most: f =)
-action-core-filter-stars-4 = Filter: 4 stars (at least, exactly or at most: f =)
-action-core-filter-stars-5 = Filter: 5 stars (at least, exactly or at most: f =)
+action-core-filter-stars-1 = Filter: 1 star
+action-core-filter-stars-2 = Filter: 2 stars
+action-core-filter-stars-3 = Filter: 3 stars
+action-core-filter-stars-4 = Filter: 4 stars
+action-core-filter-stars-5 = Filter: 5 stars
 action-core-filter-stars-op = Star filter: at least, exactly, at most
 filter-flag-toggle-accepted = Filter: keep the accepted ones (combines with the other flags)
 filter-flag-toggle-neutral = Filter: keep the neutral ones, without a flag (combines)
@@ -29,11 +29,11 @@ action-core-filter-flag-accepted = Filter: picked only
 action-core-filter-flag-not_rejected = Filter: hide rejected
 volume-back = Drive back: folder read again, computations resumed.
 action-core-filter-flag-rejected = Filter: rejected only
-action-core-filter-color-red = Filter: red (add / remove)
-action-core-filter-color-yellow = Filter: yellow (add / remove)
-action-core-filter-color-green = Filter: green (add / remove)
-action-core-filter-color-blue = Filter: blue (add / remove)
-action-core-filter-color-purple = Filter: purple (add / remove)
+action-core-filter-color-red = Filter: red
+action-core-filter-color-yellow = Filter: yellow
+action-core-filter-color-green = Filter: green
+action-core-filter-color-blue = Filter: blue
+action-core-filter-color-purple = Filter: purple
 action-core-filter-clear = Clear all filters
 action-core-filter-blurry = Filter: hide blurry
 action-core-filter-well_exposed = Filter: well exposed (neither blown nor blocked)
@@ -270,11 +270,11 @@ action-core-rate-star-2 = 2 stars
 action-core-rate-star-3 = 3 stars
 action-core-rate-star-4 = 4 stars
 action-core-rate-star-5 = 5 stars
-action-core-rate-color-red = Red label (add / remove)
-action-core-rate-color-yellow = Yellow label (add / remove)
-action-core-rate-color-green = Green label (add / remove)
-action-core-rate-color-blue = Blue label (add / remove)
-action-core-rate-color-purple = Purple label (add / remove)
+action-core-rate-color-red = Red label
+action-core-rate-color-yellow = Yellow label
+action-core-rate-color-green = Green label
+action-core-rate-color-blue = Blue label
+action-core-rate-color-purple = Purple label
 action-core-flag-accept = Pick
 action-core-flag-reject = Reject
 action-core-flag-none = Neither picked nor rejected

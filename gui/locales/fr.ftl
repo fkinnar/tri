@@ -16,11 +16,11 @@ action-core-filter-kind-all = Filtre de type : RAW et JPEG
 action-core-filter-kind-raw = Filtre de type : RAW seulement
 action-core-filter-kind-flat = Filtre de type : JPEG seulement
 action-core-filter-stars-0 = Filtre : étoiles indifférentes
-action-core-filter-stars-1 = Filtre : 1 étoile (au moins, exactement ou au plus : f =)
-action-core-filter-stars-2 = Filtre : 2 étoiles (au moins, exactement ou au plus : f =)
-action-core-filter-stars-3 = Filtre : 3 étoiles (au moins, exactement ou au plus : f =)
-action-core-filter-stars-4 = Filtre : 4 étoiles (au moins, exactement ou au plus : f =)
-action-core-filter-stars-5 = Filtre : 5 étoiles (au moins, exactement ou au plus : f =)
+action-core-filter-stars-1 = Filtre : 1 étoile
+action-core-filter-stars-2 = Filtre : 2 étoiles
+action-core-filter-stars-3 = Filtre : 3 étoiles
+action-core-filter-stars-4 = Filtre : 4 étoiles
+action-core-filter-stars-5 = Filtre : 5 étoiles
 action-core-filter-stars-op = Filtre d'étoiles : au moins, exactement, au plus
 filter-flag-toggle-accepted = Filtre : garder les acceptées (cumulable avec les autres drapeaux)
 filter-flag-toggle-neutral = Filtre : garder les neutres, sans drapeau (cumulable)
@@ -29,11 +29,11 @@ action-core-filter-flag-accepted = Filtre : acceptées seulement
 action-core-filter-flag-not_rejected = Filtre : masquer les rejetées
 volume-back = Disque revenu : dossier relu, calculs repris.
 action-core-filter-flag-rejected = Filtre : rejetées seulement
-action-core-filter-color-red = Filtre : rouge (ajouter / retirer)
-action-core-filter-color-yellow = Filtre : jaune (ajouter / retirer)
-action-core-filter-color-green = Filtre : vert (ajouter / retirer)
-action-core-filter-color-blue = Filtre : bleu (ajouter / retirer)
-action-core-filter-color-purple = Filtre : violet (ajouter / retirer)
+action-core-filter-color-red = Filtre : rouge
+action-core-filter-color-yellow = Filtre : jaune
+action-core-filter-color-green = Filtre : vert
+action-core-filter-color-blue = Filtre : bleu
+action-core-filter-color-purple = Filtre : violet
 action-core-filter-clear = Effacer tous les filtres
 action-core-filter-blurry = Filtre : masquer les floues
 action-core-filter-well_exposed = Filtre : bien exposées (ni brûlées ni bouchées)
@@ -269,11 +269,11 @@ action-core-rate-star-2 = 2 étoiles
 action-core-rate-star-3 = 3 étoiles
 action-core-rate-star-4 = 4 étoiles
 action-core-rate-star-5 = 5 étoiles
-action-core-rate-color-red = Couleur rouge (ajouter / retirer)
-action-core-rate-color-yellow = Couleur jaune (ajouter / retirer)
-action-core-rate-color-green = Couleur verte (ajouter / retirer)
-action-core-rate-color-blue = Couleur bleue (ajouter / retirer)
-action-core-rate-color-purple = Couleur violette (ajouter / retirer)
+action-core-rate-color-red = Couleur rouge
+action-core-rate-color-yellow = Couleur jaune
+action-core-rate-color-green = Couleur verte
+action-core-rate-color-blue = Couleur bleue
+action-core-rate-color-purple = Couleur violette
 action-core-flag-accept = Accepter
 action-core-flag-reject = Rejeter
 action-core-flag-none = Ni acceptée ni rejetée
