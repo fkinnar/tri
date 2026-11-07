@@ -64,9 +64,10 @@ Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites 
 
 ## Avec les autres logiciels
 
-- **XnView MP** (vérifié sous Linux Mint le 07/11/2026) : les étoiles s'affichent tout
-  de suite ; la couleur (`xmp:Label`) seulement après avoir importé les métadonnées du
-  fichier : XnView garde les couleurs dans sa propre base.
+- **XnView MP** (vérifié sous Linux Mint le 07/11/2026) : il garde étoiles et couleurs
+  dans son catalogue, lu dans les fichiers à la première ouverture d'un dossier ; ensuite,
+  les notes inscrites par `tri` n'apparaissent qu'après « Mise à jour du catalogue à
+  partir des fichiers ».
 
 ## À vérifier
 

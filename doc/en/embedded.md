@@ -62,9 +62,9 @@ In [notes.md](notes.md), an image **without a sidecar** takes the ratings writte
 
 ## With other programs
 
-- **XnView MP** (checked on Linux Mint on 2026-11-07): the stars show at once; the
-  colour (`xmp:Label`) only after importing the file's metadata: XnView keeps colours in
-  its own database.
+- **XnView MP** (checked on Linux Mint on 2026-11-07): it keeps stars and colours in its
+  catalogue, read from the files the first time a folder is opened; after that, ratings
+  written by `tri` only show after "Update catalog from files".
 
 ## To check
 
