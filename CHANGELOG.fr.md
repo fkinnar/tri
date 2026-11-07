@@ -7,6 +7,9 @@
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).
+- **Un rendu affiché précis depuis la palette** : une action par rendu (JPEG boîtier,
+  couverture, chaque logiciel de développement, rendu RAW), sans passer par les autres.
+  Pas de touche par défaut ; `[keys]` peut leur en donner une.
 - **Un seul style pour les listes de raccourcis** (F1, `?`, le menu des suites, la
   palette) : touches à la couleur d'accent, une ligne sur deux sur fond plus clair, et
   le « / » entre plusieurs touches en gris, pour faire ressortir les touches.

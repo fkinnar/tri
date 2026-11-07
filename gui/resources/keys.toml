@@ -125,6 +125,14 @@ loupe = "m"
 # leader, see [after_leader].
 "core.view.source" = ["r"]
 "core.grid.render" = ["Shift+r"]
+# Un rendu précis, sans passer par les autres (palette ; pas de touche par défaut).
+"core.view.render.embedded" = []
+"core.view.render.cover" = []
+"core.view.render.darktable" = []
+"core.view.render.rapidraw" = []
+"core.view.render.rawtherapee" = []
+"core.view.render.art" = []
+"core.view.render.libraw" = []
 
 # --- On the image ---
 # i: the histogram; Shift+I: the large one. Its scale and channel: after the leader.
