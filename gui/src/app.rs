@@ -11889,18 +11889,22 @@ impl TriApp {
                                 }
                             }
                             // Prendre toute la ligne (sans valider : retour du 07/11/2026).
-                            let mut take = false;
-                            cell(ui, icon + 12.0, &mut |ui| {
-                                let (rect, response) = marks::icon_button(
-                                    ui,
-                                    icon,
-                                    &t!("conflict-keep"),
-                                    &t!("conflict-keep-tip"),
-                                );
-                                let color = ui.style().interact(&response).fg_stroke.color;
-                                marks::take_row_arrow(ui.painter(), rect.shrink(icon * 0.3), color);
-                                take = response.clicked();
-                            });
+                            // Centrée dans sa cellule, comme le texte (retour du 07/11/2026) :
+                            // la cellule d'abord, l'icône dans un enfant qui n'occupe pas de
+                            // place de plus dans la grille.
+                            let (slot, _) =
+                                ui.allocate_exact_size(vec2(icon + 12.0, h), Sense::hover());
+                            let zone = Rect::from_center_size(slot.center(), vec2(icon, icon));
+                            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(zone));
+                            let (rect, response) = marks::icon_button(
+                                &mut child,
+                                icon,
+                                &t!("conflict-keep"),
+                                &t!("conflict-keep-tip"),
+                            );
+                            let color = child.style().interact(&response).fg_stroke.color;
+                            marks::take_row_arrow(child.painter(), rect.shrink(icon * 0.3), color);
+                            let take = response.clicked();
                             if take {
                                 for &field in &conflict.fields {
                                     dialog.set(field, pick.clone());
