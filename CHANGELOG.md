@@ -4,8 +4,6 @@
 
 ## Unreleased
 
-- **Loupe in the bottom bar**: − and + change the magnification (they did nothing), and
-  the magnifier icon is no longer a button.
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.
@@ -81,6 +79,8 @@
   automatically"), the plural ("thumbnails render"), and three actions for the RAW / JPEG
   switches (RAW only, JPEG only, both). A line found by the words of its title comes
   first (palette and help).
+- **Loupe in the bottom bar**: − and + change the magnification (they did nothing), and
+  the magnifier icon is no longer a button.
 - **Greyed-out filter**: "Developed", greyed out when no photo of the folder is
   developed, no longer turns on from the palette (left out) nor with `f r` (refused, with
   the reason in the status bar); turning it off still works.

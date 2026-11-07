@@ -4,8 +4,6 @@
 
 ## Non publié
 
-- **Loupe dans la barre du bas** : − et + changent le grossissement (ils ne faisaient
-  rien), et l'icône de loupe n'est plus un bouton.
 - **Un seul style pour les listes de raccourcis** (F1, `?`, le menu des suites, la
   palette) : touches à la couleur d'accent, une ligne sur deux sur fond plus clair, et
   le « / » entre plusieurs touches en gris, pour faire ressortir les touches.
@@ -87,6 +85,8 @@
   (« Empiler automatiquement »), le pluriel (« rendus vignette »), et trois actions pour
   les cases RAW / JPEG (RAW seulement, JPEG seulement, les deux). Une ligne trouvée par
   les mots de son titre passe devant (palette et aide).
+- **Loupe dans la barre du bas** : − et + changent le grossissement (ils ne faisaient
+  rien), et l'icône de loupe n'est plus un bouton.
 - **Filtre grisé** : « Développées », grisé quand aucune photo du dossier n'est
   développée, ne s'allume plus par la palette (absent) ni par `f r` (refusé, avec la
   raison dans la barre d'état) ; l'éteindre reste possible.
