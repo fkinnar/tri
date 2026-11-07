@@ -82,7 +82,7 @@ loupe = "m"
 "core.view.zoom_out" = ["-"]
 "core.view.zoom_100" = ["*"]
 "core.view.zoom_fit" = ["/"]
-# Loupe magnification, one step up / down (with the loupe key held, or for next time).
+# One step up / down: the loupe magnification with the loupe key held, otherwise the zoom.
 "core.view.loupe_zoom_in" = ["Ctrl+k"]
 "core.view.loupe_zoom_out" = ["Ctrl+j"]
 
@@ -472,6 +472,8 @@ loupe = "m"
 "core.histogram.all" = ["i a"]
 "core.histogram.luminance" = ["i l"]
 # p: the sharpness map. c: its colour; j / k (or Down / Up): more lenient / stricter.
+# z then a number, without Enter: the full-screen zoom (same rules as m below).
+"core.view.zoom_scale" = ["z"]
 # m then a number, without Enter: the loupe magnification. Three digits apply at once
 # ("150": 150 %); after a short pause, two digits are tens ("20": 200 %), one digit
 # hundreds ("2": 200 %).

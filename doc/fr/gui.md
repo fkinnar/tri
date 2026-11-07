@@ -1184,6 +1184,16 @@ tenue, change le grossissement d'un palier par cran (`loupe_wheel_step` points ;
 se voit dans la barre du bas (`marks::loupe_icon`, −, la valeur, + ; un clic sur la
 valeur : 100 %).
 
+### Le zoom comme la loupe (07/11/2026)
+
+Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du plein écran.
+`<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`
+(`entry_for_zoom`, `TriApp::set_zoom_scale`, centré comme `+` / `-`). `Ctrl+K` / `Ctrl+J`
+règlent la loupe si sa touche est tenue, sinon le zoom (une paire de touches, la touche
+tenue choisit). Dans la barre du bas, le bouton 1:1 (ajusté ↔ 100 %) est suivi de −, la
+valeur (« Ajusté », son pourcentage en bulle, ou le pourcentage ; un clic : `z`) et +
+(`TriApp::zoom_controls`).
+
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
 Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). Les

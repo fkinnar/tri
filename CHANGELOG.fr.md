@@ -44,6 +44,10 @@
   Maj + une direction. Le profil « both » disparaît, et la loupe passe sur `m` et dans
   `keys.toml`. Un leader ou une touche de loupe déjà liés à une action sont refusés. Le
   tableau complet avant / après est dans `doc/fr/gui.md`.
+- **Le zoom comme la loupe** : `<leader> z` puis un nombre sans Entrée (`150`, `20` =
+  200 %, `2` = 200 %) ; `Ctrl+K` / `Ctrl+J` changent le zoom d'un palier (la loupe si sa
+  touche est tenue) ; dans la barre du bas, à côté du 1:1, −, la valeur (« Ajusté » ou le
+  pourcentage ; un clic : ajusté ou 100 %) et +.
 - **Version précédente** d'une image en plein écran : `Maj+V`, dans l'autre sens que
   `v`.
 - **Petit histogramme** : il suit lui aussi le canal choisi (`<leader> i r`, `g`, `b`,

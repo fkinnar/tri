@@ -40,6 +40,10 @@
   panels show and hide with `<leader>` Shift + a direction. The "both" profile is gone,
   and the loupe moves to `m` and into `keys.toml`. A leader or loupe key already bound
   to an action is refused. The full before / after table is in `doc/en/gui.md`.
+- **Zoom like the loupe**: `<leader> z` then a number without Enter (`150`, `20` =
+  200 %, `2` = 200 %); `Ctrl+K` / `Ctrl+J` change the zoom one step (the loupe if its key
+  is held); in the bottom bar, next to 1:1, −, the value ("Fit" or the percentage; a
+  click: fit or 100 %) and +.
 - **Previous version** of an image in full screen: `Shift+V`, the other way round from
   `v`.
 - **Small histogram** follows the chosen channel too (`<leader> i r`, `g`, `b`, `l`, `a`),
