@@ -5,6 +5,16 @@ Décidé le 19/10/2026 avec l'utilisateur, première pièce de l'« après-déve
 4:5…). Ce sont des **instructions** de recadrage, jamais des copies : corriger le
 développement suffit, toutes les versions suivent à l'export.
 
+**Un seul concept, « Version »** (07/11/2026, retour de l'utilisateur : recadrage et
+version se confondaient) : une version est un cadre (recadrage, rapport) avec un
+préréglage d'export **facultatif** ; un « recadrage seul » est une version sans
+préréglage. L'interface dit « Version » partout (« Nouvelle version », « Préréglages de
+version ») ; « recadrer » trouve encore l'action dans l'aide et la palette. Identifiants
+`core.version.*` (`core.version.new`, `.next`, `.prev`, `.save`, `.ratio.*`…) ; les
+anciens (`core.view.crop`, `core.view.version_next` / `_prev`, `core.crop.*`) restent
+acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs`,
+`Action::Crop`) et clés TOML (`[versions.presets]`, `[gui.crop]`) inchangés.
+
 ## Décisions de l'utilisateur
 
 - **On recadre ce qu'on voit** : le développé de darktable (par-dessus son éventuel
@@ -69,27 +79,52 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 
 ## Interface (`gui/src/crop.rs`)
 
-- **`r`** (`core.view.crop`) : recadrer l'image affichée (depuis la grille, ouvre le plein
-  écran). On recadre ce qu'on voit, à l'échelle ajustée.
+- **`v`** (`core.version.new`, 07/11/2026 ; `c` avant, `r` au départ) : nouvelle version
+  de l'image affichée (depuis la grille, ouvre le plein écran). On recadre ce qu'on voit,
+  à l'échelle ajustée. **`Maj+V`** / **`Ctrl+Maj+V`** : version suivante / précédente
+  (l'original, puis chaque version).
 - **Voile** gris translucide autour du cadre, cadre blanc avec liseré sombre, huit
   **poignées** : angles et côtés à la souris, glisser dedans pour déplacer. La
   superposition choisie (`o`) se cale sur le cadre.
-- **Barre** sous l'image : rapports (libre, original, 1:1, 5:4, 3:2, 16:9, 4:3), le
-  bouton allumé dans l'orientation choisie (4:5) ; Portrait / Paysage ; nom (il suit le
-  rapport tant qu'on ne l'a pas tapé) ; profil d'export facultatif ; Enregistrer / Annuler.
+- **Barre** sous l'image, en parties titrées d'un libellé à l'accent, comme les autres barres (07/11/2026) : **Version**
+  (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
+  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
+  « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
+  simplifiés ; puis l'orientation, une icône : le rectangle du cadre, debout ou couché,
+  la bulle dit celle d'arrivée) ;
+  **Export** (préréglage d'export facultatif) ; **Nom** (il suit le rapport tant qu'on ne
+  l'a pas tapé) et, collée à lui, la disquette (enregistrer comme préréglage ; grisée
+  sans nom) ; Enregistrer / Annuler à droite. Dans la liste des rapports, le champ du
+  rapport personnalisé (« Personnalisé » en gris dedans) et un « + » qui l'ajoute à la
+  liste, gardé dans la configuration (`[versions] ratios`). La barre des filtres, les
+  filtres et l'histogramme du panneau de droite disparaissent pendant l'édition (rien à filtrer sur une
+  image ; l'histogramme vaut pour l'image entière, le faire suivre le cadre demanderait
+  un histogramme RAW recalculé sur la zone, plus tard).
+- **Échap** (ou Annuler) ramène là où la version a été commencée : la grille ou le plein
+  écran (07/11/2026) ; enregistrée, elle est montrée en plein écran.
+- **Chaque partie au clavier** (07/11/2026) : `v` / `Maj+V` préréglage de version
+  suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant /
+  précédent (ajoutés compris, `Crop::step_ratio`), `/` un rapport à soi (pavé numérique
+  compris ; la liste s'ouvre sur son champ), `e` / `Maj+E` préréglage d'export suivant /
+  précédent (« aucun » compris), `x` l'orientation, `o` / `Maj+O` les superpositions
+  (calées sur le cadre), `n` (ou `F2`) le nom (Ctrl+Échap en sort sans quitter la
+  version, comme sur les listes), `Ctrl+S` la disquette, `0` le cadre d'origine (l'image
+  entière ; aussi Ctrl+clic sur « Original », `Crop::reset_frame`) ; avec `1`–`7`, `x`,
+  `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en
   rouge et Enregistrer est grisé (Entrée aussi : message). Une version reprise garde son
   nom (`Versions::without`). « Original » est **réservé** à l'image non recadrée de la
   liste des versions (retour du 23/10/2026 : deux « Original » indiscernables) : une
-  version au rapport de l'image s'appelle d'abord « Recadrage ».
+  version au rapport de l'image s'appelle d'abord « Version » (« Recadrage » avant le
+  07/11/2026).
 - **Clavier**, contexte « recadrage » (`Scope::Crop`, prioritaire tant que le cadre est
   affiché) :
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
   - avec Maj : côté droit (gauche / droite) et bas (haut / bas) ;
   - chiffres 1 à 7 (avec ou sans Maj, AZERTY) pour le rapport ;
-  - `x` pour l'orientation ;
+  - `x` pour l'orientation, `o` / `Maj+O` pour les superpositions ;
   - Entrée pour enregistrer, Échap pour abandonner.
 
   Le pas du clavier : `[gui.crop] step`. Tout est réglable dans `[keys]`.
@@ -156,7 +191,7 @@ cadre, Entrée.
   (`""` : aucun). Une clé absente vient du préréglage fourni de même identifiant, comme
   pour les profils d'export. Préréglages fournis : `story` (9:16, Web) et `post` (4:5,
   Web).
-- **Barre du recadrage** : liste « Préréglage » ; `Tab` / `Maj+Tab` passe au suivant /
+- **Barre du recadrage** : liste « Préréglage » ; `v` / `Maj+V` ou `Tab` / `Maj+Tab` passe au suivant /
   précédent (`p` jusqu'au 21/10/2026 : c'est aussi la carte de netteté, qui restait
   affichée ; `p` l'éteint aussi pendant le recadrage).
   - Choisir un préréglage applique son rapport **exact**, son nom et son profil.

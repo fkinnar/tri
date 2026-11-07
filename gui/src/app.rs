@@ -504,6 +504,9 @@ pub struct TriApp {
     background_transfers: Vec<crate::files::FileDialog>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
+    /// Version commencée depuis la grille : on y revient en la quittant (retour du
+    /// 07/11/2026).
+    crop_from_grid: bool,
     /// Version montrée en plein écran : (image, place dans sa liste).
     version_shown: Option<(PathBuf, usize)>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
@@ -1200,6 +1203,7 @@ impl TriApp {
             file_dialog: None,
             background_transfers: Vec::new(),
             crop: None,
+            crop_from_grid: false,
             version_shown: None,
             versions: HashMap::new(),
             versions_pending: HashSet::new(),
@@ -1968,7 +1972,14 @@ impl TriApp {
     fn side_panel(&mut self, ui: &mut Ui) {
         self.meta_has_histogram = false;
         self.side_items.clear();
-        if self.gui.metadata.histogram && self.histogram && !self.files.is_empty() {
+        // Pas pendant l'édition d'une version : il vaut pour l'image entière, pas pour le
+        // cadre (retour du 07/11/2026 ; le suivre demanderait un histogramme RAW recalculé
+        // sur la zone).
+        if self.gui.metadata.histogram
+            && self.histogram
+            && !self.files.is_empty()
+            && self.crop.is_none()
+        {
             if self.panel_section(ui, "histogram", t!("panel-section-histogram")) {
                 self.histogram_section(ui);
             }
@@ -1977,18 +1988,22 @@ impl TriApp {
         // Filtres en plein écran aussi (retour du 30/10/2026 : tout le panneau) ; la
         // grille y laisse place à la vue (#239).
         if matches!(self.mode, Mode::Grid | Mode::View) {
-            if self.panel_section(ui, "filters", t!("panel-section-filters")) {
-                self.filter_settings(ui);
-            }
-            ui.separator();
-            if self.mode == Mode::View {
-                if self.panel_section(ui, "view", t!("panel-section-view")) {
-                    self.view_settings(ui);
+            // Pas pendant l'édition d'une version : on y travaille une image, ni les
+            // filtres ni la vue n'y ont de sens (retours du 07/11/2026).
+            if self.crop.is_none() {
+                if self.panel_section(ui, "filters", t!("panel-section-filters")) {
+                    self.filter_settings(ui);
                 }
-            } else if self.panel_section(ui, "grid", t!("panel-section-grid")) {
-                self.grid_settings(ui);
+                ui.separator();
+                if self.mode == Mode::View {
+                    if self.panel_section(ui, "view", t!("panel-section-view")) {
+                        self.view_settings(ui);
+                    }
+                } else if self.panel_section(ui, "grid", t!("panel-section-grid")) {
+                    self.grid_settings(ui);
+                }
+                ui.separator();
             }
-            ui.separator();
         }
         if self.panel_section(ui, "exif", t!("panel-section-exif")) {
             self.metadata_panel(ui);
@@ -6038,7 +6053,7 @@ impl TriApp {
             // Recadrage : ses touches, Échap abandonne.
             if self.crop.is_some() {
                 match action {
-                    Action::Back => self.crop = None,
+                    Action::Back => self.close_crop(),
                     Action::CropMove(_)
                     | Action::CropSize(_)
                     | Action::CropRatio(_)
@@ -6046,8 +6061,20 @@ impl TriApp {
                     | Action::CropSave
                     | Action::CropPreset
                     | Action::CropPresetPrev
-                    // La carte de netteté s'éteint aussi pendant le recadrage.
-                    | Action::TogglePeaking => self.perform(ctx, action),
+                    | Action::VersionRatioNext
+                    | Action::VersionRatioPrev
+                    | Action::VersionRatioCustom
+                    | Action::VersionExportNext
+                    | Action::VersionExportPrev
+                    | Action::VersionName
+                    | Action::VersionSavePreset
+                    | Action::VersionReset
+                    // La carte de netteté s'éteint aussi pendant le recadrage ; les
+                    // superpositions s'y calent sur le cadre (o / Maj+O, retour du
+                    // 07/11/2026 : elles ne s'allumaient pas).
+                    | Action::TogglePeaking
+                    | Action::OverlayNext
+                    | Action::OverlayOrient => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -6562,6 +6589,45 @@ impl TriApp {
             Action::CropSave => self.save_crop(),
             Action::CropPreset => self.next_preset(true),
             Action::CropPresetPrev => self.next_preset(false),
+            Action::VersionRatioNext | Action::VersionRatioPrev => {
+                let ratios = self.settings.versions.ratios.clone();
+                if let Some(crop) = &mut self.crop {
+                    crop.step_ratio(action == Action::VersionRatioNext, &ratios);
+                }
+            }
+            Action::VersionExportNext | Action::VersionExportPrev => {
+                let profiles: Vec<String> = self
+                    .version_profiles()
+                    .into_iter()
+                    .map(|(id, _)| id)
+                    .collect();
+                if let Some(crop) = &mut self.crop {
+                    crop.step_profile(action == Action::VersionExportNext, &profiles);
+                }
+            }
+            Action::VersionRatioCustom | Action::VersionName => {
+                if let Some(crop) = &mut self.crop {
+                    crop.focus(if action == Action::VersionName {
+                        crate::crop::Focus::Name
+                    } else {
+                        crate::crop::Focus::CustomRatio
+                    });
+                }
+            }
+            Action::VersionReset => {
+                if let Some(crop) = &mut self.crop {
+                    crop.reset_frame();
+                }
+            }
+            Action::VersionSavePreset => {
+                if self
+                    .crop
+                    .as_ref()
+                    .is_some_and(|c| !c.name.trim().is_empty())
+                {
+                    self.save_preset();
+                }
+            }
             Action::VersionNext | Action::VersionPrev => {
                 if self.mode == Mode::View
                     && let Some(path) = self.files.get(self.selected).map(|f| f.path.clone())
@@ -8957,6 +9023,7 @@ impl TriApp {
             return;
         };
         let path = file.path.clone();
+        self.crop_from_grid = self.mode == Mode::Grid;
         if self.mode != Mode::View {
             self.mode = Mode::View;
         }
@@ -8971,6 +9038,19 @@ impl TriApp {
         let others = self.versions_of(&path).clone();
         self.crop = Some(crate::crop::Crop::new(path, source, aspect, others));
         self.request_zoom();
+    }
+
+    /// Abandonne la version en cours : retour à la grille si elle a été commencée là
+    /// (retour du 07/11/2026), plein écran sinon. Enregistrée, elle reste montrée en plein
+    /// écran (issue n° 5).
+    fn close_crop(&mut self) {
+        self.crop = None;
+        if std::mem::take(&mut self.crop_from_grid) && self.mode == Mode::View {
+            self.mode = Mode::Grid;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Minimal);
+        }
     }
 
     /// Applique le préréglage n° `index` au recadrage en cours.
@@ -9014,6 +9094,63 @@ impl TriApp {
             (Some(i), false) => (i + n - 1) % n,
         };
         self.apply_preset(next);
+    }
+
+    /// Préréglages d'export proposés pour la version en cours (identifiant, nom) : ceux
+    /// qui s'appliquent à l'image recadrée (pas « JPEG tel quel » sur un rendu de RAW,
+    /// retour du 19/10/2026 ; une version n'est jamais « telle quelle »).
+    fn version_profiles(&self) -> Vec<(String, String)> {
+        let Some(crop) = &self.crop else {
+            return Vec::new();
+        };
+        let flat = crop.source == tri::versions::Source::Embedded
+            || tri::media::kind_of(&crop.image) == Some(MediaKind::Flat);
+        self.settings
+            .export
+            .applicable(flat)
+            .into_iter()
+            .filter(|p| !p.is_as_is())
+            .map(|p| (p.id.clone(), crate::export::profile_name(p)))
+            .collect()
+    }
+
+    /// Ajoute `ratio` à la liste de la barre des versions, gardé dans la configuration
+    /// (`[versions] ratios`, idée de l'utilisateur du 07/11/2026).
+    fn add_ratio(&mut self, ratio: tri::versions::Ratio) {
+        let mut ratios = self.settings.versions.ratios.clone();
+        if ratios.iter().any(|r| r.same_shape(ratio))
+            || tri::versions::Ratio::PRESETS
+                .iter()
+                .any(|r| r.same_shape(ratio))
+        {
+            return;
+        }
+        ratios.push(ratio);
+        let Some(path) = self
+            .config_path
+            .clone()
+            .or_else(tri::settings::default_path)
+        else {
+            self.notice = Some((t!("settings-no-path"), true));
+            return;
+        };
+        let result = tri::config_edit::ConfigFile::open(&path).and_then(|mut file| {
+            let labels = ratios.iter().map(|r| r.label()).collect();
+            file.set(
+                "versions",
+                "ratios",
+                &tri::config_edit::Value::Strings(labels),
+            )?;
+            tri::settings::parse::<AppSettings>(&file.text())?;
+            file.save().map_err(|e| format!("{} : {e}", path.display()))
+        });
+        match result {
+            Ok(()) => {
+                self.settings.versions.ratios = ratios;
+                self.notice = Some((t!("crop-ratio-added", ratio = ratio.label()), false));
+            }
+            Err(e) => self.notice = Some((e, true)),
+        }
     }
 
     /// Enregistre le cadre en cours comme préréglage (rapport, nom, profil), dans le
@@ -9116,6 +9253,8 @@ impl TriApp {
                     change,
                 });
                 self.notice = Some((t!("crop-saved", name = name), false));
+                // Enregistrée : montrée en plein écran (issue n° 5), même depuis la grille.
+                self.crop_from_grid = false;
             }
             Err(e) => {
                 self.notice = Some((t!("crop-failed", error = e.to_string()), true));
@@ -15777,20 +15916,8 @@ impl eframe::App for TriApp {
             folders_rect = Some(panel.response.rect);
         }
         // Recadrage : sa barre, à la place du bandeau de notation.
-        if let Some(crop) = &self.crop {
-            // Profils qui s'appliquent à l'image recadrée (pas « JPEG tel quel » sur un
-            // rendu de RAW, retour du 19/10/2026).
-            let flat = crop.source == tri::versions::Source::Embedded
-                || tri::media::kind_of(&crop.image) == Some(MediaKind::Flat);
-            let profiles: Vec<(String, String)> = self
-                .settings
-                .export
-                .applicable(flat)
-                .into_iter()
-                // Une version recadrée n'est jamais « telle quelle ».
-                .filter(|p| !p.is_as_is())
-                .map(|p| (p.id.clone(), crate::export::profile_name(p)))
-                .collect();
+        if self.crop.is_some() {
+            let profiles = self.version_profiles();
             let presets: Vec<(String, String)> = self
                 .settings
                 .versions
@@ -15802,14 +15929,21 @@ impl eframe::App for TriApp {
             let mut action = None;
             egui::Panel::bottom("crop").show(ui, |ui| {
                 if let Some(crop) = &mut self.crop {
-                    action = crop.bar(ui, &profiles, &presets);
+                    action = crop.bar(
+                        ui,
+                        &profiles,
+                        &presets,
+                        &self.settings.versions.ratios,
+                        self.gui.grid.bar_label_scale,
+                    );
                 }
             });
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
-                Some(crate::crop::BarAction::Cancel) => self.crop = None,
+                Some(crate::crop::BarAction::Cancel) => self.close_crop(),
                 Some(crate::crop::BarAction::Preset(i)) => self.apply_preset(i),
                 Some(crate::crop::BarAction::SavePreset) => self.save_preset(),
+                Some(crate::crop::BarAction::AddRatio(ratio)) => self.add_ratio(ratio),
                 None => {}
             }
         } else if self.rating_bar
@@ -15825,6 +15959,8 @@ impl eframe::App for TriApp {
             && !self.focus_mode
             && matches!(self.mode, Mode::Grid | Mode::View)
             && self.error.is_none()
+            // Pas pendant l'édition d'une version (retour du 07/11/2026 : sans objet).
+            && self.crop.is_none()
         {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
@@ -16342,10 +16478,11 @@ fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerRe
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
 }
 
-/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche) : en majuscules, un peu plus petit
+/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche, parties de la
+/// barre des versions) : en majuscules, un peu plus petit
 /// que le texte (`scale`), à l'accent, comme les titres des sections des panneaux (retour
 /// du 27/10/2026).
-fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
+pub(crate) fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
     let size = egui::TextStyle::Body.resolve(ui.style()).size * scale;
     ui.label(
         egui::RichText::new(text.to_uppercase())
@@ -22953,7 +23090,8 @@ mod tests {
                 }
                 2 => {
                     press(&mut h, Key::A, Modifiers::CTRL);
-                    press(&mut h, Key::C, Modifiers::NONE);
+                    type_text(&mut h, "=");
+                    assert_eq!(h.state().mode, Mode::Compare);
                 }
                 _ => {}
             }
@@ -25816,8 +25954,8 @@ mod tests {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
-        // r depuis la grille : plein écran et recadrage.
-        press(&mut h, Key::C, Modifiers::NONE);
+        // v depuis la grille : plein écran et nouvelle version (07/11/2026 : c avant).
+        press(&mut h, Key::V, Modifiers::NONE);
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().crop.is_some());
@@ -25825,12 +25963,16 @@ mod tests {
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
-        // Rapport de l'image : « Recadrage », pas « Original », réservé à l'image non
-        // recadrée dans la liste des versions (retour du 23/10/2026).
-        assert_eq!(h.state().crop.as_ref().unwrap().name, "Recadrage");
+        // Rapport de l'image : « Version » (« Recadrage » avant le 07/11/2026), pas
+        // « Original », réservé à l'image non recadrée dans la liste des versions (retour
+        // du 23/10/2026).
+        assert_eq!(
+            h.state().crop.as_ref().unwrap().name,
+            t!("crop-name-original-ratio")
+        );
         h.state_mut().crop.as_mut().unwrap().name = "original".into();
         assert!(h.state().crop.as_ref().unwrap().name_taken());
-        h.state_mut().crop.as_mut().unwrap().name = "Recadrage".into();
+        h.state_mut().crop.as_mut().unwrap().name = t!("crop-name-original-ratio");
         // 5 : 3:2 ; flèches : le cadre bouge, l'image reste la même.
         press(&mut h, Key::Num5, Modifiers::NONE);
         let before = h.state().crop.as_ref().unwrap().rect;
@@ -25885,18 +26027,21 @@ mod tests {
             (f64::from(w) / f64::from(h2) - 1.5).abs() < 0.05,
             "3:2 : {w} × {h2}"
         );
-        // v : version suivante (ici la seule), puis l'original ; Maj+V dans l'autre sens.
-        press(&mut h, Key::V, Modifiers::NONE);
+        // Maj+V : version suivante (ici la seule), puis l'original ; Ctrl+Maj+V dans
+        // l'autre sens (07/11/2026 : v crée une version).
+        let shift = Modifiers::SHIFT;
+        let back = Modifiers::CTRL | Modifiers::SHIFT;
+        press(&mut h, Key::V, shift);
         assert_eq!(h.state().version_shown, None);
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::V, shift);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
-        press(&mut h, Key::V, Modifiers::SHIFT);
-        assert_eq!(h.state().version_shown, None, "Maj+V : l'original");
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::V, back);
+        assert_eq!(h.state().version_shown, None, "Ctrl+Maj+V : l'original");
+        press(&mut h, Key::V, back);
         assert_eq!(
             h.state().version_shown,
             Some((image.clone(), 0)),
-            "Maj+V : la dernière version"
+            "Ctrl+Maj+V : la dernière version"
         );
         // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
         versions_list(&h);
@@ -25910,7 +26055,7 @@ mod tests {
         press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
         // Échap abandonne sans rien écrire.
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().crop.is_none());
         assert_eq!(
@@ -25922,13 +26067,242 @@ mod tests {
     }
 
     #[test]
+    fn a_custom_ratio_is_typed_in_the_ratio_list() {
+        // Idée de l'utilisateur (07/11/2026) : un rapport à soi, « 17:23 ».
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::V, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        // La liste du rapport s'ouvre (elle montre le rapport en cours).
+        let current = crate::crop::ratio_name(h.state().crop.as_ref().unwrap().ratio);
+        let list = h
+            .get_all_by_role(egui::accesskit::Role::ComboBox)
+            .find(|n| n.value().as_deref() == Some(current.as_str()))
+            .expect("la liste du rapport");
+        list.click();
+        h.run_steps(3);
+        // La liste ouverte garde sa largeur (07/11/2026 : elle s'élargissait à chaque
+        // image).
+        let width = |h: &Harness<'_, TriApp>| {
+            h.get_all_by_role(egui::accesskit::Role::TextInput)
+                .map(|n| n.rect().width())
+                .fold(0.0, f32::max)
+        };
+        let before = width(&h);
+        h.run_steps(20);
+        assert_eq!(width(&h), before, "largeur stable");
+        // Le champ du rapport : vide (celui du nom porte le nom).
+        let name = h.state().crop.as_ref().unwrap().name.clone();
+        h.get_all_by_role(egui::accesskit::Role::TextInput)
+            .find(|n| n.value().as_deref() != Some(name.as_str()))
+            .expect("le champ du rapport")
+            .click();
+        h.run_steps(2);
+        type_text(&mut h, "17:23");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(2);
+        let crop = h
+            .state()
+            .crop
+            .as_ref()
+            .expect("toujours en cours, Entrée ne l'a pas fermé");
+        assert_eq!(crop.ratio, tri::versions::Ratio::Fixed(17, 23));
+        assert_eq!(crop.name, "17:23", "le nom suit le rapport");
+        // « + » : le rapport rejoint la liste, gardé dans la configuration.
+        let current = crate::crop::ratio_name(h.state().crop.as_ref().unwrap().ratio);
+        h.get_all_by_role(egui::accesskit::Role::ComboBox)
+            .find(|n| n.value().as_deref() == Some(current.as_str()))
+            .expect("la liste du rapport")
+            .click();
+        h.run_steps(3);
+        let name = h.state().crop.as_ref().unwrap().name.clone();
+        h.get_all_by_role(egui::accesskit::Role::TextInput)
+            .find(|n| n.value().as_deref() != Some(name.as_str()))
+            .expect("le champ du rapport")
+            .click();
+        h.run_steps(2);
+        type_text(&mut h, "1.91:1");
+        h.run_steps(2);
+        h.get_by_label("+").click();
+        h.run_steps(3);
+        let wide = tri::versions::Ratio::Fixed(191, 100);
+        assert_eq!(h.state().crop.as_ref().unwrap().ratio, wide);
+        assert_eq!(h.state().settings.versions.ratios, [wide]);
+        let config = h.state().config_path.clone().unwrap();
+        let written = std::fs::read_to_string(config).unwrap();
+        assert!(written.contains("191:100"), "{written}");
+        // Sans nom, la disquette est grisée.
+        h.state_mut().crop.as_mut().unwrap().name.clear();
+        h.run_steps(2);
+        assert!(
+            format!("{:?}", h.get_by_label(&t!("crop-preset-save"))).contains("disabled: true"),
+            "disquette grisée"
+        );
+    }
+
+    #[test]
+    fn every_part_of_the_version_bar_has_its_keys() {
+        // Demandé le 07/11/2026 : chaque partie de la barre au clavier. v / Maj+V le
+        // préréglage de version, r / Maj+R le rapport, x l'orientation, o les guides, / un
+        // rapport à soi, e / Maj+E l'export, n (ou F2) le nom, Ctrl+S la disquette.
+        use tri::versions::Ratio;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::V, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        let ratio = |h: &Harness<'_, TriApp>| h.state().crop.as_ref().unwrap().ratio;
+        let start = ratio(&h);
+        press(&mut h, Key::R, Modifiers::NONE);
+        assert_ne!(ratio(&h), start, "r : le rapport suivant");
+        press(&mut h, Key::R, Modifiers::SHIFT);
+        assert!(ratio(&h).same_shape(start), "Maj+R : de retour");
+        let profile = |h: &Harness<'_, TriApp>| h.state().crop.as_ref().unwrap().profile.clone();
+        assert_eq!(profile(&h), None);
+        press(&mut h, Key::E, Modifiers::NONE);
+        assert!(profile(&h).is_some(), "e : un préréglage d'export");
+        press(&mut h, Key::E, Modifiers::SHIFT);
+        assert_eq!(profile(&h), None, "Maj+E : aucun");
+        // / : la liste s'ouvre sur le champ, qui prend le clavier.
+        type_text(&mut h, "/");
+        h.run_steps(3);
+        assert!(
+            h.ctx.egui_wants_keyboard_input(),
+            "le champ du rapport a le clavier"
+        );
+        type_text(&mut h, "17:23");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(ratio(&h), Ratio::Fixed(17, 23));
+        assert!(
+            h.state().crop.is_some(),
+            "Entrée n'a pas enregistré la version"
+        );
+        // 0 : le cadre d'origine, l'image entière (aussi Ctrl+clic sur « Original »).
+        press(&mut h, Key::Num0, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: false });
+        assert_eq!(
+            h.state().crop.as_ref().unwrap().rect,
+            tri::versions::Rect::FULL
+        );
+        // x : l'orientation ; o : les superpositions, qui se calent sur le cadre.
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: true }, "x : tournée");
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: false });
+        let overlay = h.state().overlay;
+        press(&mut h, Key::O, Modifiers::NONE);
+        assert_ne!(h.state().overlay, overlay, "o : une superposition");
+        assert_eq!(
+            ratio(&h),
+            Ratio::Original { flipped: false },
+            "o ne tourne pas"
+        );
+        // n : le nom (F2 aussi) ; Ctrl+S : un préréglage (dans la configuration du test).
+        press(&mut h, Key::N, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.ctx.egui_wants_keyboard_input(), "le nom a le clavier");
+        // Ctrl+Échap (comme sur les listes) : le champ rend le clavier, la version reste
+        // ouverte (retour du 07/11/2026).
+        press(&mut h, Key::Escape, Modifiers::CTRL);
+        h.run_steps(2);
+        assert!(
+            !h.ctx.egui_wants_keyboard_input(),
+            "Ctrl+Échap : sorti du nom"
+        );
+        assert!(h.state().crop.is_some(), "Ctrl+Échap : version gardée");
+        press(&mut h, Key::N, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.ctx.egui_wants_keyboard_input());
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.ctx.memory_mut(|m| m.stop_text_input());
+        h.run_steps(2);
+        let before = h.state().settings.versions.presets.0.len();
+        if h.state().crop.is_none() {
+            press(&mut h, Key::V, Modifiers::NONE);
+            run_until(&mut h, |app| {
+                app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+            });
+        }
+        press(&mut h, Key::S, Modifiers::CTRL);
+        assert_eq!(h.state().settings.versions.presets.0.len(), before + 1);
+        // v / Maj+V : de préréglage en préréglage, sans quitter la version en cours.
+        let preset = |h: &Harness<'_, TriApp>| h.state().crop.as_ref().unwrap().preset.clone();
+        press(&mut h, Key::V, Modifiers::NONE);
+        let first = preset(&h);
+        assert!(first.is_some(), "v : un préréglage de version");
+        press(&mut h, Key::V, Modifiers::NONE);
+        assert_ne!(preset(&h), first, "v : le suivant");
+        press(&mut h, Key::V, Modifiers::SHIFT);
+        assert_eq!(preset(&h), first, "Maj+V : le précédent");
+    }
+
+    #[test]
+    fn leaving_a_version_goes_back_where_it_was_started() {
+        // Retour du 07/11/2026 : commencée depuis la grille, Échap y ramène ; depuis le
+        // plein écran, on y reste.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::Grid);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_some());
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_none());
+        assert_eq!(h.state().mode, Mode::Grid, "de retour dans la grille");
+        act(&mut h, Action::Open);
+        h.run_steps(2);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(2);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_none());
+        assert_eq!(h.state().mode, Mode::View, "le plein écran reste");
+    }
+
+    #[test]
+    fn the_filters_leave_the_panel_while_editing_a_version() {
+        // Retour du 07/11/2026 : les filtres n'ont pas de sens pendant qu'on crée une
+        // version.
+        let (mut h, _dir) = harness();
+        h.state_mut().metadata_panel = true;
+        h.run_steps(3);
+        let filters = t!("panel-section-filters").to_uppercase();
+        act(&mut h, Action::Open);
+        h.run_steps(2);
+        // « FILTRE » : la barre du haut, et la section du panneau.
+        let count = |h: &Harness<'_, TriApp>| h.query_all_by_label(&filters).count();
+        let shown = count(&h);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(3);
+        assert!(h.state().crop.is_some());
+        assert_eq!(
+            count(&h),
+            0,
+            "ni la section des filtres, ni la barre du haut"
+        );
+        let histogram = t!("panel-section-histogram").to_uppercase();
+        assert!(h.query_by_label(&histogram).is_none(), "ni l'histogramme");
+        let view = t!("panel-section-view").to_uppercase();
+        assert!(h.query_by_label(&view).is_none(), "ni la vue");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(3);
+        assert_eq!(count(&h), shown, "de retour");
+    }
+
+    #[test]
     fn presets_set_ratio_name_and_profile_and_new_ones_are_saved() {
         let (mut h, dir) = harness();
         let config = dir.path().join("config.toml");
         h.state_mut().config_path = Some(config.clone());
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
@@ -25954,8 +26328,7 @@ mod tests {
         assert_eq!(crop.name, "Story");
         assert_eq!(crop.profile.as_deref(), Some("web"));
         // Enregistrer comme préréglage : écrit dans le fichier, identifiant libre.
-        h.get_by_label("Enregistrer comme préréglage de recadrage")
-            .click();
+        h.get_by_label(&t!("crop-preset-save")).click();
         h.run_steps(2);
         let text = std::fs::read_to_string(&config).unwrap();
         assert!(text.contains("[versions.presets.story-2]"), "{text}");
@@ -25976,7 +26349,7 @@ mod tests {
         assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
         // Issue n° 14 : pas deux versions du même nom. Le préréglage propose « Story (2) » ;
         // un nom tapé déjà pris (casse comprise) n'est pas enregistré, le recadrage reste.
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });

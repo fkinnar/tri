@@ -36,6 +36,12 @@ pub struct Crop {
     pub fresh: bool,
     /// Préréglage appliqué (identifiant).
     pub preset: Option<String>,
+    /// Rapport personnalisé en cours de saisie dans la liste des rapports (« 17:23 »).
+    custom: String,
+    /// Champ qui prendra le clavier au prochain dessin.
+    focus: Option<Focus>,
+    /// Identifiant de la liste des rapports (image précédente) : `:` l'ouvre.
+    ratio_list_id: Option<egui::Id>,
     /// Les autres versions de l'image : un nom déjà pris est refusé (issue n° 14).
     others: Versions,
 }
@@ -50,6 +56,29 @@ pub enum BarAction {
     Preset(usize),
     /// Enregistrer le cadre en cours comme préréglage.
     SavePreset,
+    /// Ajouter ce rapport à la liste, dans la configuration (`[versions] ratios`).
+    AddRatio(Ratio),
+}
+
+/// Champ de la barre qui prend le clavier à la demande (raccourcis, 07/11/2026).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Focus {
+    /// Le rapport personnalisé (la liste des rapports s'ouvre dessus).
+    CustomRatio,
+    /// Le nom.
+    Name,
+}
+
+/// Les rapports de la liste : ceux fournis, puis ceux ajoutés (`[versions] ratios`), sans
+/// doublon.
+pub fn ratio_list(added: &[Ratio]) -> Vec<Ratio> {
+    let mut list: Vec<Ratio> = Ratio::PRESETS.to_vec();
+    for &r in added {
+        if !list.iter().any(|l| l.same_shape(r)) {
+            list.push(r);
+        }
+    }
+    list
 }
 
 /// Nom affiché d'un rapport (« Libre », « Original », « 4:5 »…).
@@ -90,6 +119,9 @@ impl Crop {
             source,
             drag: None,
             fresh: true,
+            custom: String::new(),
+            focus: None,
+            ratio_list_id: None,
             preset: None,
             others,
         };
@@ -111,6 +143,9 @@ impl Crop {
             source: version.source,
             drag: None,
             fresh: true,
+            custom: String::new(),
+            focus: None,
+            ratio_list_id: None,
             preset: None,
             others,
         }
@@ -186,6 +221,50 @@ impl Crop {
         }
         if !self.name_edited {
             self.name = self.free_name(&default_name(ratio));
+        }
+    }
+
+    /// Rapport suivant (`forward`) ou précédent de la liste (avec `added`), en boucle ;
+    /// l'orientation choisie est gardée.
+    pub fn step_ratio(&mut self, forward: bool, added: &[Ratio]) {
+        let list = ratio_list(added);
+        let n = list.len();
+        let next = match list.iter().position(|r| r.same_shape(self.ratio)) {
+            Some(i) if forward => (i + 1) % n,
+            Some(i) => (i + n - 1) % n,
+            None if forward => 0,
+            None => n - 1,
+        };
+        self.set_ratio(list[next]);
+    }
+
+    /// Préréglage d'export suivant (`forward`) ou précédent parmi `profiles`, « aucun »
+    /// compris, en boucle.
+    pub fn step_profile(&mut self, forward: bool, profiles: &[String]) {
+        let mut all: Vec<Option<String>> = vec![None];
+        all.extend(profiles.iter().cloned().map(Some));
+        let n = all.len();
+        let at = all.iter().position(|p| *p == self.profile).unwrap_or(0);
+        let next = if forward {
+            (at + 1) % n
+        } else {
+            (at + n - 1) % n
+        };
+        self.profile = all[next].clone();
+    }
+
+    /// Donne le clavier à un champ de la barre au prochain dessin.
+    pub fn focus(&mut self, field: Focus) {
+        self.focus = Some(field);
+    }
+
+    /// Le cadre d'origine : l'image entière, à son rapport (idée de l'utilisateur,
+    /// 07/11/2026 : `0`, ou Ctrl+clic sur « Original »).
+    pub fn reset_frame(&mut self) {
+        self.ratio = Ratio::Original { flipped: false };
+        self.rect = Rect::FULL;
+        if !self.name_edited {
+            self.name = self.free_name(&default_name(self.ratio));
         }
     }
 
@@ -359,6 +438,8 @@ impl Crop {
         ui: &mut Ui,
         profiles: &[(String, String)],
         presets: &[(String, String)],
+        ratios: &[Ratio],
+        label_scale: f32,
     ) -> Option<BarAction> {
         let mut action = None;
         // Enregistrer et Annuler à droite, à part (retour du 20/10/2026) ; le reste à gauche,
@@ -376,23 +457,39 @@ impl Crop {
             }
             ui.add_space(ui.spacing().item_spacing.x * 4.0);
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.horizontal_wrapped(|ui| self.bar_left(ui, profiles, presets, &mut action));
+                ui.horizontal_wrapped(|ui| {
+                    self.bar_left(ui, profiles, presets, ratios, label_scale, &mut action)
+                });
             });
         });
         self.fresh = false;
         action
     }
 
-    /// Partie gauche de la barre : préréglages, rapports, orientation, nom et profil.
+    /// Partie gauche de la barre, en parties titrées d'un libellé à l'accent (retour du
+    /// 07/11/2026 : « un peu le souk ») : Version (préréglage), Recadrage (rapports,
+    /// orientation), Export, Nom, puis la disquette (enregistrer comme préréglage).
     fn bar_left(
         &mut self,
         ui: &mut Ui,
         profiles: &[(String, String)],
         presets: &[(String, String)],
+        ratios: &[Ratio],
+        label_scale: f32,
         action: &mut Option<BarAction>,
     ) {
-        ui.label(t!("crop-bar-title"));
+        // De l'air entre deux parties, plus qu'entre deux boutons.
+        let gap = ui.spacing().item_spacing.x * 4.0;
+        // Le libellé d'une partie reste avec ce qui le suit (à la ligne ensemble).
+        // À l'accent, en majuscules, comme les libellés des autres barres (retour du
+        // 07/11/2026).
+        let section = |ui: &mut Ui, label: &str, first: f32| {
+            keep_together(ui, label, first);
+            crate::app::bar_label(ui, label, label_scale);
+        };
+        // Version : le préréglage.
         if !presets.is_empty() {
+            section(ui, &t!("crop-bar-title"), ui.spacing().combo_width);
             let none = t!("crop-preset-none");
             let current = self
                 .preset
@@ -411,63 +508,118 @@ impl Crop {
                 })
                 .response
                 .on_hover_text(t!("crop-preset-tip"));
-            // Enregistrer comme préréglage : petite disquette collée à la liste.
-            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
-            let (rect, response) = crate::marks::icon_button(
-                ui,
-                size,
-                &t!("crop-preset-save"),
-                &t!("crop-preset-save-tip"),
-            );
-            let color = ui.style().interact(&response).fg_stroke.color;
-            crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
-            if response.clicked() {
-                *action = Some(BarAction::SavePreset);
-            }
-            ui.separator();
+            ui.add_space(gap);
         }
-        for preset in Ratio::PRESETS {
-            let on = preset.same_shape(self.ratio);
-            // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
-            let shown = if on { self.ratio } else { preset };
-            if ui.selectable_label(on, ratio_name(shown)).clicked() {
-                self.set_ratio(preset);
-            }
+        // Recadrage : le rapport dans une liste (retour du 07/11/2026 : plus lisible que
+        // sept boutons), puis l'orientation.
+        section(ui, &t!("crop-section-frame"), ui.spacing().combo_width);
+        let mut chosen = None;
+        let mut reset = false;
+        // `:` : la liste s'ouvre, son champ prend le clavier.
+        let focus_custom = self.focus == Some(Focus::CustomRatio);
+        if focus_custom && let Some(id) = self.ratio_list_id {
+            egui::Popup::open_id(ui.ctx(), id.with("popup"));
         }
-        // Orientation : le libellé dit celle d'arrivée.
-        let portrait = self
-            .ratio
-            .value(self.aspect.unwrap_or(1.0))
-            .is_some_and(|r| r < 1.0);
-        let label = if portrait {
-            t!("crop-landscape")
-        } else {
-            t!("crop-portrait")
-        };
-        let can_turn = !matches!(self.ratio, Ratio::Free | Ratio::Fixed(1, 1));
-        if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
+        let list = egui::ComboBox::from_id_salt("crop_ratio")
+            .selected_text(ratio_name(self.ratio))
+            // Ouverte tant qu'on tape un rapport à soi : fermée par un choix ou un clic
+            // dehors (sinon, cliquer dans le champ la fermait).
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show_ui(ui, |ui| {
+                // Ceux fournis, puis ceux ajoutés (`[versions] ratios`), sans doublon.
+                for preset in ratio_list(ratios) {
+                    let on = preset.same_shape(self.ratio);
+                    // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours.
+                    let shown = if on { self.ratio } else { preset };
+                    let mut item = ui.selectable_label(on, ratio_name(shown));
+                    let original = matches!(preset, Ratio::Original { .. });
+                    if original {
+                        item = item.on_hover_text(t!("crop-ratio-original-tip"));
+                    }
+                    if item.clicked() {
+                        // Ctrl / Cmd+clic sur « Original » : tout le cadre d'origine.
+                        if original && ui.input(|i| i.modifiers.command) {
+                            reset = true;
+                        } else {
+                            chosen = Some(preset);
+                        }
+                        ui.close();
+                    }
+                }
+                // Un rapport à soi (idée de l'utilisateur, 07/11/2026) : « 17:23 », « 1.91:1 »,
+                // Entrée l'applique ; « + » l'ajoute à la liste, gardé dans la configuration.
+                // Le mot « Personnalisé » en gris dans le champ (un titre à côté était
+                // illisible).
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let ok = Ratio::parse_custom(&self.custom);
+                    // Largeur fixe (07/11/2026 : celle « disponible » grandissait avec la
+                    // liste, qui s'élargissait à chaque image).
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut self.custom)
+                            .desired_width(ui.spacing().combo_width)
+                            .hint_text(t!("crop-ratio-custom")),
+                    );
+                    if focus_custom {
+                        field.request_focus();
+                        self.focus = None;
+                    }
+                    let field = field.on_hover_text(t!("crop-ratio-custom-bad"));
+                    if ok.is_some()
+                        && field.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    {
+                        // Appliqué : la liste le montre, le champ se vide.
+                        chosen = ok;
+                        self.custom.clear();
+                        ui.close();
+                    }
+                    let add = ui
+                        .add_enabled(ok.is_some(), egui::Button::new("+"))
+                        .on_hover_text(t!("crop-ratio-add-tip"));
+                    if add.clicked()
+                        && let Some(r) = ok
+                    {
+                        chosen = Some(r);
+                        *action = Some(BarAction::AddRatio(r));
+                        self.custom.clear();
+                        ui.close();
+                    }
+                });
+            });
+        self.ratio_list_id = Some(list.response.id);
+        if let Some(preset) = chosen {
+            self.set_ratio(preset);
+        }
+        if reset {
+            self.reset_frame();
+        }
+        // Orientation : une icône, le rectangle du cadre actuel (retour du 07/11/2026 :
+        // « Portrait » sur un cadre paysage, pour dire celle d'arrivée, déroutait) ; la
+        // bulle dit celle d'arrivée.
+        let value = self.ratio.value(self.aspect.unwrap_or(1.0));
+        let portrait = value.is_some_and(|r| r < 1.0);
+        let square = matches!(self.ratio, Ratio::Fixed(1, 1));
+        let can_turn = !matches!(self.ratio, Ratio::Free) && !square;
+        let size = ui.spacing().interact_size.y;
+        let turn = ui
+            .add_enabled(
+                can_turn,
+                egui::Button::new("").min_size(egui::vec2(size * 1.4, size)),
+            )
+            .on_hover_text(if portrait {
+                t!("crop-turn-landscape")
+            } else {
+                t!("crop-turn-portrait")
+            })
+            .on_disabled_hover_text(t!("crop-turn-none"));
+        orientation_icon(ui, &turn, portrait, square);
+        if turn.clicked() {
             self.rotate();
         }
-        ui.separator();
-        // Chaque libellé reste avec son champ : à la ligne avant le libellé s'ils ne tiennent
-        // pas ensemble.
-        let name_width = 140.0;
-        keep_together(ui, &t!("crop-name"), name_width);
-        ui.label(t!("crop-name"));
-        let taken = self.name_taken();
-        let mut edit = egui::TextEdit::singleline(&mut self.name).desired_width(name_width);
-        if taken {
-            edit = edit.text_color(ui.visuals().error_fg_color);
-        }
-        let mut field = ui.add(edit);
-        if taken {
-            field = field.on_hover_text(t!("crop-name-taken"));
-        }
-        if field.changed() {
-            self.name_edited = true;
-        }
-        keep_together(ui, &t!("crop-profile"), ui.spacing().combo_width);
-        ui.label(t!("crop-profile"));
+        ui.add_space(gap);
+        // Export : le préréglage d'export, facultatif.
+        section(ui, &t!("crop-profile"), ui.spacing().combo_width);
         let none = t!("crop-profile-none");
         let current = self
             .profile
@@ -482,6 +634,70 @@ impl Crop {
                     ui.selectable_value(&mut self.profile, Some(id.clone()), name);
                 }
             });
+        ui.add_space(gap);
+        // Nom.
+        let name_width = 140.0;
+        section(ui, &t!("crop-name"), name_width);
+        let taken = self.name_taken();
+        // Ctrl+Échap (ou Cmd+Échap) rend le clavier sans quitter la version, comme
+        // sur les listes (retour du 07/11/2026 : on ne sortait pas du nom au clavier). Pris
+        // avant le champ, qui ne le voit donc pas ; Échap seul quitte la version.
+        let name_id = ui.make_persistent_id("crop_name");
+        if ui.memory(|m| m.has_focus(name_id)) {
+            let escape = ui.input_mut(|i| {
+                let before = i.events.len();
+                i.events.retain(|e| {
+                    !matches!(
+                        e,
+                        egui::Event::Key {
+                            key: egui::Key::Escape,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.ctrl || modifiers.command
+                    )
+                });
+                i.events.len() != before
+            });
+            if escape {
+                ui.memory_mut(|m| m.surrender_focus(name_id));
+            }
+        }
+        let mut edit = egui::TextEdit::singleline(&mut self.name)
+            .id(name_id)
+            .desired_width(name_width);
+        if taken {
+            edit = edit.text_color(ui.visuals().error_fg_color);
+        }
+        let mut field = ui.add(edit);
+        // F2 : le nom prend le clavier.
+        if self.focus == Some(Focus::Name) {
+            field.request_focus();
+            self.focus = None;
+        }
+        if taken {
+            field = field.on_hover_text(t!("crop-name-taken"));
+        }
+        if field.changed() {
+            self.name_edited = true;
+        }
+        // Enregistrer comme préréglage (rapport, nom, export) : la disquette, collée au nom
+        // (l'un ne va pas sans l'autre), grisée sans nom (retour du 07/11/2026).
+        let named = !self.name.trim().is_empty();
+        ui.add_enabled_ui(named, |ui| {
+            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+            let (rect, response) = crate::marks::icon_button(
+                ui,
+                size,
+                &t!("crop-preset-save"),
+                &t!("crop-preset-save-tip"),
+            );
+            let color = ui.style().interact(&response).fg_stroke.color;
+            crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
+            if response.clicked() {
+                *action = Some(BarAction::SavePreset);
+            }
+        });
     }
 }
 
@@ -536,6 +752,39 @@ fn cursor(handle: Handle) -> CursorIcon {
         Handle::TopLeft | Handle::BottomRight => CursorIcon::ResizeNwSe,
         Handle::TopRight | Handle::BottomLeft => CursorIcon::ResizeNeSw,
     }
+}
+
+/// Icône du bouton d'orientation : un rectangle debout (portrait), couché (paysage) ou
+/// carré, dans la couleur du texte du bouton.
+fn orientation_icon(ui: &egui::Ui, response: &egui::Response, portrait: bool, square: bool) {
+    let rect = response.rect;
+    let long = rect.height() * 0.62;
+    let short = if square { long } else { long * 0.66 };
+    let size = if portrait {
+        egui::vec2(short, long)
+    } else {
+        egui::vec2(long, short)
+    };
+    let color = ui.style().interact(response).fg_stroke.color;
+    let color = if response.enabled() {
+        color
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    // Calé sur les pixels, largeur et hauteur arrondies une fois : sinon l'anticrénelage
+    // d'un bord à cheval sur deux pixels amincissait le rectangle couché (retour du
+    // 07/11/2026), debout et couché doivent avoir exactement les mêmes côtés.
+    let ppp = ui.ctx().pixels_per_point();
+    let px = |v: f32| (v * ppp).round() / ppp;
+    let size = egui::vec2(px(size.x), px(size.y));
+    let min = rect.center() - size / 2.0;
+    let icon = egui::Rect::from_min_size(egui::pos2(px(min.x), px(min.y)), size);
+    ui.painter().rect_stroke(
+        icon,
+        1.0,
+        egui::Stroke::new(1.5, color),
+        egui::StrokeKind::Inside,
+    );
 }
 
 #[cfg(test)]

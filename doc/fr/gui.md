@@ -1304,7 +1304,7 @@ Faite avec l'utilisateur, une fois les raccourcis sortis du code (`keys.toml`). 
 touches citées ailleurs dans ce document sont **celles de leur date** : la référence
 est `gui/resources/keys.toml` et l'aide (F1). Règle retenue (en tête de `keys.toml`) :
 
-- **une lettre par domaine**, tirée du nom **anglais** : `c` crop, `i` histogramme, `m`
+- **une lettre par domaine**, tirée du nom **anglais** : `i` histogramme, `m`
   magnify (loupe), `n` ordre, `o` overlays, `p` peaking, `r` render, `s` stacks, `t`
   text (infos), `v` versions, `a` AF point, `b` background, `e` external, `w` warnings ;
 - **lettre seule** : l'action principale ; **Maj+lettre** : sa variante ; **Ctrl+lettre** :
@@ -1340,8 +1340,8 @@ sélection dans `[keys]`.
 | Ouvrir le dossier dans un logiciel (dossiers) | `d` | `<leader> r d` / `p` / `t` / `a` |
 | Tri suivant / inverser | `f s` / `f r` | `n` / `Maj+N` |
 | Filtre « pile courante » / « développées » | `f c` / `f Maj+D` | `f s` / `f r` |
-| Recadrer | `r` | `c` |
-| Version suivante / précédente | `n` / — | `v` / `Maj+V` (ajoutée le 06/11/2026) |
+| Nouvelle version (recadrer) | `r` | `c`, puis `v` (07/11/2026 : recadrage et version ne font qu'un) |
+| Version suivante / précédente | `n` / — | `v` / `Maj+V` (06/11/2026), puis `Maj+V` / `Ctrl+Maj+V` (07/11/2026) |
 | Mode visuel (sélection d'une plage) | `v` | `Maj+Espace` |
 | Comparer | `c` | `=` |
 | Loupe (maintenue) | `t` | `m` |

@@ -73,6 +73,22 @@ pub fn keywords(id: &str) -> String {
     }
 }
 
+/// Identifiant actuel d'une action renommée : les anciens restent acceptés (un `[keys]`
+/// écrit avant continue de marcher). 07/11/2026 : recadrage et versions ne font qu'un,
+/// `core.view.crop` → `core.version.new`, `core.view.version_next` / `_prev` →
+/// `core.version.next` / `prev`, `core.crop.*` → `core.version.*`.
+pub fn renamed_id(id: &str) -> std::borrow::Cow<'_, str> {
+    match id {
+        "core.view.crop" => "core.version.new".into(),
+        "core.view.version_next" => "core.version.next".into(),
+        "core.view.version_prev" => "core.version.prev".into(),
+        _ => match id.strip_prefix("core.crop.") {
+            Some(rest) => format!("core.version.{rest}").into(),
+            None => id.into(),
+        },
+    }
+}
+
 /// Direction (recadrage au clavier).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Dir {
@@ -383,6 +399,22 @@ pub enum Action {
     CropPreset,
     /// Recadrage : préréglage précédent.
     CropPresetPrev,
+    /// Version : rapport suivant (ceux fournis, puis ceux ajoutés ; 07/11/2026).
+    VersionRatioNext,
+    /// Version : rapport précédent.
+    VersionRatioPrev,
+    /// Version : taper un rapport à soi (la liste s'ouvre sur le champ).
+    VersionRatioCustom,
+    /// Version : préréglage d'export suivant (« aucun » compris).
+    VersionExportNext,
+    /// Version : préréglage d'export précédent.
+    VersionExportPrev,
+    /// Version : modifier le nom (le champ prend le clavier).
+    VersionName,
+    /// Version : enregistrer comme préréglage (la disquette).
+    VersionSavePreset,
+    /// Version : revenir au cadre d'origine, l'image entière (07/11/2026).
+    VersionReset,
     /// Plein écran : version suivante de l'image (l'original, puis chaque version).
     VersionNext,
     /// Plein écran : version précédente (dans l'autre sens, 06/11/2026).
@@ -488,7 +520,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 220] = [
+    pub const ALL: [Action; 228] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -596,6 +628,14 @@ impl Action {
         Action::CropSave,
         Action::CropPreset,
         Action::CropPresetPrev,
+        Action::VersionRatioNext,
+        Action::VersionRatioPrev,
+        Action::VersionRatioCustom,
+        Action::VersionExportNext,
+        Action::VersionExportPrev,
+        Action::VersionName,
+        Action::VersionSavePreset,
+        Action::VersionReset,
         Action::VersionNext,
         Action::VersionPrev,
         Action::Send("plugin.airdrop.send"),
@@ -721,6 +761,7 @@ impl Action {
 
     /// Action correspondant à un identifiant (fichier de raccourcis, scripts de capture).
     pub fn from_id(id: &str) -> Option<Action> {
+        let id = renamed_id(id);
         Action::ALL.into_iter().find(|a| a.id() == id)
     }
 
@@ -817,6 +858,8 @@ impl Action {
             FilterWellExposed => &["panel-filter-exposed"],
             FilterDeveloped => &["panel-filter-developed"],
             FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
+            // « Recadrer » : l'ancien nom de la nouvelle version (07/11/2026), trouvé en tête.
+            Crop => &["version-crop-alias"],
             // En grille, * met toutes les vignettes à l'écran ; leur taille est un contrôle
             // à part dans la palette (07/11/2026).
             Zoom100 => &["grid-fit"],
@@ -839,7 +882,9 @@ impl Action {
             | SharpnessStrict | ToggleFocusPoint | OverlayNext | OverlayOrient | FocusMode
             | Develop | DevelopWith(_) | DevelopFolder => Group::View,
             Crop | CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave
-            | CropPreset | CropPresetPrev | VersionNext | VersionPrev => Group::Crop,
+            | CropPreset | CropPresetPrev | VersionNext | VersionPrev | VersionRatioNext
+            | VersionRatioPrev | VersionRatioCustom | VersionExportNext | VersionExportPrev
+            | VersionName | VersionSavePreset | VersionReset => Group::Crop,
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
@@ -991,28 +1036,36 @@ impl Action {
             Action::FileCopy => "core.file.copy",
             Action::FileExport => "core.file.export",
             Action::ExportReport => "core.file.export.report",
-            Action::Crop => "core.view.crop",
-            Action::CropMove(Dir::Left) => "core.crop.move.left",
-            Action::CropMove(Dir::Right) => "core.crop.move.right",
-            Action::CropMove(Dir::Up) => "core.crop.move.up",
-            Action::CropMove(Dir::Down) => "core.crop.move.down",
-            Action::CropSize(Dir::Left) => "core.crop.size.left",
-            Action::CropSize(Dir::Right) => "core.crop.size.right",
-            Action::CropSize(Dir::Up) => "core.crop.size.up",
-            Action::CropSize(Dir::Down) => "core.crop.size.down",
-            Action::CropRatio(0) => "core.crop.ratio.free",
-            Action::CropRatio(1) => "core.crop.ratio.original",
-            Action::CropRatio(2) => "core.crop.ratio.square",
-            Action::CropRatio(3) => "core.crop.ratio.5_4",
-            Action::CropRatio(4) => "core.crop.ratio.3_2",
-            Action::CropRatio(5) => "core.crop.ratio.16_9",
-            Action::CropRatio(_) => "core.crop.ratio.4_3",
-            Action::CropRotate => "core.crop.rotate",
-            Action::CropSave => "core.crop.save",
-            Action::CropPreset => "core.crop.preset",
-            Action::CropPresetPrev => "core.crop.preset_prev",
-            Action::VersionNext => "core.view.version_next",
-            Action::VersionPrev => "core.view.version_prev",
+            Action::Crop => "core.version.new",
+            Action::CropMove(Dir::Left) => "core.version.move.left",
+            Action::CropMove(Dir::Right) => "core.version.move.right",
+            Action::CropMove(Dir::Up) => "core.version.move.up",
+            Action::CropMove(Dir::Down) => "core.version.move.down",
+            Action::CropSize(Dir::Left) => "core.version.size.left",
+            Action::CropSize(Dir::Right) => "core.version.size.right",
+            Action::CropSize(Dir::Up) => "core.version.size.up",
+            Action::CropSize(Dir::Down) => "core.version.size.down",
+            Action::CropRatio(0) => "core.version.ratio.free",
+            Action::CropRatio(1) => "core.version.ratio.original",
+            Action::CropRatio(2) => "core.version.ratio.square",
+            Action::CropRatio(3) => "core.version.ratio.5_4",
+            Action::CropRatio(4) => "core.version.ratio.3_2",
+            Action::CropRatio(5) => "core.version.ratio.16_9",
+            Action::CropRatio(_) => "core.version.ratio.4_3",
+            Action::CropRotate => "core.version.rotate",
+            Action::CropSave => "core.version.save",
+            Action::CropPreset => "core.version.preset",
+            Action::CropPresetPrev => "core.version.preset_prev",
+            Action::VersionRatioNext => "core.version.ratio_next",
+            Action::VersionRatioPrev => "core.version.ratio_prev",
+            Action::VersionRatioCustom => "core.version.ratio_custom",
+            Action::VersionExportNext => "core.version.export_next",
+            Action::VersionExportPrev => "core.version.export_prev",
+            Action::VersionName => "core.version.name",
+            Action::VersionSavePreset => "core.version.save_preset",
+            Action::VersionReset => "core.version.reset",
+            Action::VersionNext => "core.version.next",
+            Action::VersionPrev => "core.version.prev",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
@@ -1214,7 +1267,9 @@ impl Action {
             | MetaCopyAll | PanelSectionNext | PanelSectionPrev | PanelActivate | PanelLeft
             | PanelRight => Some(Scope::Metadata),
             CropMove(_) | CropSize(_) | CropRatio(_) | CropRotate | CropSave | CropPreset
-            | CropPresetPrev => Some(Scope::Crop),
+            | CropPresetPrev | VersionRatioNext | VersionRatioPrev | VersionRatioCustom
+            | VersionExportNext | VersionExportPrev | VersionName | VersionSavePreset
+            | VersionReset => Some(Scope::Crop),
             // Échelle et canal suivant : `s` et `c` dans le grand histogramme (retour du
             // 06/11/2026), ailleurs `<leader> i s` / `<leader> i c`.
             HistogramRed | HistogramGreen | HistogramBlue | HistogramAll | HistogramLuminance
@@ -2697,6 +2752,26 @@ mod tests {
             }
         }
         assert_eq!(Keymap::default().spec_label("g g"), "gg");
+    }
+
+    #[test]
+    fn old_crop_ids_still_name_their_version_actions() {
+        // 07/11/2026 : `core.crop.*` et `core.view.crop` deviennent `core.version.*` ; un
+        // `[keys]` écrit avant marche encore.
+        assert_eq!(Action::from_id("core.view.crop"), Some(Action::Crop));
+        assert_eq!(Action::from_id("core.version.new"), Some(Action::Crop));
+        assert_eq!(Action::from_id("core.crop.save"), Some(Action::CropSave));
+        assert_eq!(
+            Action::from_id("core.crop.ratio.square"),
+            Some(Action::CropRatio(2))
+        );
+        assert_eq!(
+            Action::from_id("core.view.version_next"),
+            Some(Action::VersionNext)
+        );
+        assert_eq!(Action::Crop.id(), "core.version.new");
+        assert_eq!(Action::CropSave.id(), "core.version.save");
+        assert_eq!(Action::from_id("core.crop.nothing"), None);
     }
 
     #[test]

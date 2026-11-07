@@ -5,6 +5,15 @@ Decided on 2026-10-19 with the user, first piece of the "post-development" (see
 **instructions**, never copies: correcting the development is enough, all the versions
 follow at export.
 
+**One concept, "Version"** (2026-11-07, the user's feedback: crop and version were
+mixed up): a version is a frame (crop, ratio) with an **optional** export preset; a "crop
+alone" is a version without a preset. The interface says "Version" everywhere ("New
+version", "Version presets"); "crop" still finds the action in the help and the palette.
+Ids `core.version.*` (`core.version.new`, `.next`, `.prev`, `.save`, `.ratio.*`…); the old
+ones (`core.view.crop`, `core.view.version_next` / `_prev`, `core.crop.*`) are still
+accepted in `[keys]` (`actions::renamed_id`). Internal code names (`crop.rs`,
+`Action::Crop`) and TOML keys (`[versions.presets]`, `[gui.crop]`) unchanged.
+
 ## User decisions
 
 - **You crop what you see**: darktable's developed image (on top of its own crop, if any),
@@ -70,26 +79,48 @@ The interface only draws; all the computation is here.
 
 ## Interface (`gui/src/crop.rs`)
 
-- **`r`** (`core.view.crop`): crop the displayed image (from the grid, opens full screen).
-  You crop what you see, at the fitted scale.
+- **`v`** (`core.version.new`, 2026-11-07; `c` before, `r` at first): a new version of
+  the displayed image (from the grid, opens full screen). You crop what you see, at the
+  fitted scale. **`Shift+V`** / **`Ctrl+Shift+V`**: next / previous version (the original,
+  then each version).
 - Translucent grey **veil** around the frame, white frame with a dark edge, eight
   **handles**: corners and sides with the mouse, drag inside to move. The chosen overlay
   (`o`) snaps to the frame.
-- **Bar** under the image: ratios (free, original, 1:1, 5:4, 3:2, 16:9, 4:3), the button
-  lit in the chosen orientation (4:5); Portrait / Landscape; name (it follows the ratio as
-  long as it has not been typed); optional export preset; Save / Cancel.
+- **Bar** under the image, in parts titled by a label in the accent colour, like the other bars (2026-11-07): **Version**
+  (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
+  shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
+  `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
+  the orientation, an icon: the frame's rectangle, standing or lying, its tooltip names
+  the other one); **Export** (optional
+  export preset); **Name** (it follows the ratio as long as it has not been typed) and,
+  next to it, the floppy (save as a preset; greyed out without a name); Save / Cancel on
+  the right. In the ratio list, the custom ratio field ("Custom" in grey inside it) and a
+  "+" that adds it to the list, kept in the configuration (`[versions] ratios`). The
+  filter bar, and the filters and histogram of the right panel, disappear while editing (nothing to filter on one
+  image; the histogram is the whole image's, following the frame would need a RAW
+  histogram recomputed on the area, later).
+- **Esc** (or Cancel) goes back to where the version was started: the grid or full
+  screen (2026-11-07); once saved, it is shown full screen.
+- **Each part from the keyboard** (2026-11-07): `v` / `Shift+V` next / previous version
+  preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio (added ones
+  included, `Crop::step_ratio`), `/` a ratio of one's own (numeric keypad too; the list
+  opens on its field), `e` / `Shift+E` next / previous export preset ("none" included),
+  `x` the orientation, `o` / `Shift+O` the overlays (fitted to the frame), `n` (or `F2`)
+  the name (Ctrl+Esc leaves it without leaving the version, as on the lists), `Ctrl+S`
+  the floppy, `0` the original frame (the whole image; also Ctrl+click on "Original",
+  `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` / `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
   already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is
   greyed out (Enter too: message). A reopened version keeps its own name
   (`Versions::without`). "Original" is **reserved** for the uncropped image in the
   versions list (feedback of 2026-10-23: two indistinguishable "Original" entries): a
-  version at the image's ratio is first named "Crop".
+  version at the image's ratio is first named "Version" ("Crop" before 2026-11-07).
 - **Keyboard**, "crop" context (`Scope::Crop`, takes precedence while the frame is shown):
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);
   - digits 1 to 7 (with or without Shift, AZERTY) for the ratio;
-  - `x` for the orientation;
+  - `x` for the orientation, `o` / `Shift+O` for the overlays;
   - Enter to save, Esc to abandon.
 
   The keyboard step: `[gui.crop] step`. Everything is configurable in `[keys]`.
@@ -149,7 +180,7 @@ export preset (Web). You choose the preset, adjust the frame, Enter.
   `ratio` (`"free"`, `"original"`, or `"l:h"` in the desired orientation) and `profile`
   (`""`: none). A missing key comes from the built-in preset with the same identifier, as
   for export presets. Built-in presets: `story` (9:16, Web) and `post` (4:5, Web).
-- **Crop bar**: "Preset" list; `Tab` / `Shift+Tab` moves to the next / previous one
+- **Crop bar**: "Preset" list; `v` / `Shift+V` or `Tab` / `Shift+Tab` moves to the next / previous one
   (`p` until 2026-10-21: it is also the sharpness map, which stayed on; `p` turns it off
   during cropping too).
   - Choosing a preset applies its **exact** ratio, its name and its export preset.

@@ -1239,7 +1239,7 @@ Done with the user, once the shortcuts were out of the code (`keys.toml`). The k
 mentioned elsewhere in this document are **those of their date**: the reference is
 `gui/resources/keys.toml` and the help (F1). The rule (at the top of `keys.toml`):
 
-- **one letter per domain**, from its **English** name: `c` crop, `i` histogram, `m`
+- **one letter per domain**, from its **English** name: `i` histogram, `m`
   magnify (loupe), `n` order, `o` overlays, `p` peaking, `r` render, `s` stacks, `t`
   text (infos), `v` versions, `a` AF point, `b` background, `e` external, `w` warnings;
 - **the letter alone**: the main action; **Shift+letter**: its variant;
@@ -1274,8 +1274,8 @@ said); a leader on Space first requires moving the selection in `[keys]`.
 | Open the folder in a software (folders) | `d` | `<leader> r d` / `p` / `t` / `a` |
 | Next sort / reverse | `f s` / `f r` | `n` / `Shift+N` |
 | "Current stack" / "developed" filter | `f c` / `f Shift+D` | `f s` / `f r` |
-| Crop | `r` | `c` |
-| Next / previous version | `n` / — | `v` / `Shift+V` (added on 2026-11-06) |
+| New version (crop) | `r` | `c`, then `v` (2026-11-07: crop and version are one) |
+| Next / previous version | `n` / — | `v` / `Shift+V` (2026-11-06), then `Shift+V` / `Ctrl+Shift+V` (2026-11-07) |
 | Visual mode (range selection) | `v` | `Shift+Space` |
 | Compare | `c` | `=` |
 | Loupe (held) | `t` | `m` |

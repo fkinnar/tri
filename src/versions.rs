@@ -94,6 +94,33 @@ impl Ratio {
         }
     }
 
+    /// Un rapport tapé par l'utilisateur (07/11/2026, idée de l'utilisateur : « 17:23 ») :
+    /// `l:h`, `l/h`, `lxh` ou `l×h`, avec des décimales au besoin (`1.91:1`, le paysage
+    /// d'Instagram), ramené à des entiers simplifiés (191:100). `None` : illisible, nul,
+    /// ou plus de mille fois plus long que large.
+    pub fn parse_custom(text: &str) -> Option<Ratio> {
+        let text = text
+            .trim()
+            .replace(['/', 'x', 'X', '×'], ":")
+            .replace(',', ".");
+        let (w, h) = text.split_once(':')?;
+        let (w, h): (f64, f64) = (w.trim().parse().ok()?, h.trim().parse().ok()?);
+        if !(w > 0.0 && h > 0.0) || w / h > 1000.0 || h / w > 1000.0 {
+            return None;
+        }
+        // Deux décimales au plus, en entiers.
+        let (mut a, mut b) = ((w * 100.0).round() as u64, (h * 100.0).round() as u64);
+        let gcd = |mut x: u64, mut y: u64| {
+            while y != 0 {
+                (x, y) = (y, x % y);
+            }
+            x
+        };
+        let g = gcd(a, b).max(1);
+        (a, b) = (a / g, b / g);
+        Some(Ratio::Fixed(u32::try_from(a).ok()?, u32::try_from(b).ok()?))
+    }
+
     /// Lit un libellé de [`Ratio::label`].
     pub fn parse(text: &str) -> Option<Ratio> {
         match text.trim() {
@@ -460,7 +487,10 @@ impl<'de> Deserialize<'de> for Presets {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct VersionSettings {
-    /// Préréglages de recadrage (`[versions.presets.<id>]`).
+    /// Rapports ajoutés à la liste de la barre des versions (« + » à côté du rapport
+    /// personnalisé, 07/11/2026), après ceux fournis.
+    pub ratios: Vec<Ratio>,
+    /// Préréglages de version (`[versions.presets.<id>]`).
     pub presets: Presets,
 }
 
@@ -611,6 +641,24 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_ratio_is_read_in_several_forms() {
+        assert_eq!(Ratio::parse_custom("17:23"), Some(Ratio::Fixed(17, 23)));
+        assert_eq!(Ratio::parse_custom(" 17 / 23 "), Some(Ratio::Fixed(17, 23)));
+        assert_eq!(Ratio::parse_custom("4x5"), Some(Ratio::Fixed(4, 5)));
+        assert_eq!(Ratio::parse_custom("4×5"), Some(Ratio::Fixed(4, 5)));
+        assert_eq!(Ratio::parse_custom("1.91:1"), Some(Ratio::Fixed(191, 100)));
+        assert_eq!(Ratio::parse_custom("1,5:1"), Some(Ratio::Fixed(3, 2)));
+        assert_eq!(
+            Ratio::parse_custom("10:8"),
+            Some(Ratio::Fixed(5, 4)),
+            "simplifié"
+        );
+        for bad in ["", "17", "0:1", "a:b", "-1:2", "5000:1"] {
+            assert_eq!(Ratio::parse_custom(bad), None, "{bad}");
+        }
+    }
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-9

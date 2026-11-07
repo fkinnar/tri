@@ -19,6 +19,19 @@
   highlighted, so the next comparison takes everything again.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
+- **Crop and version are one concept: "Version"**: a version is a frame with an optional
+  export preset. The interface says "Version" everywhere; `v` creates one (instead of
+  `c`), `Shift+V` / `Ctrl+Shift+V` go to the next / previous one; "crop" still finds it
+  in the help and the palette. The action ids become `core.version.*`; the old ones
+  (`core.crop.*`, `core.view.crop`…) still work in `[keys]`. The version bar is
+  organised in titled parts (Version, Crop with the ratios in a drop-down, Export,
+  Name); a custom ratio can be typed there (`17:23`, `1.91:1`) and added to the list
+  with "+" (kept in `[versions] ratios`). Each part has its keys (`v` version preset,
+  `r` ratio, `x` orientation, `o` overlays on the frame, `/` custom, `e` export, `n`
+  name, `Ctrl+S` save as a preset, `0` or Ctrl+click on "Original": back to the original
+  frame); Esc goes back to the grid when the version was started there; the orientation
+  is an icon (the frame's rectangle, standing or lying). The filter bar, and the
+  filters, view settings and histogram of the right panel, disappear while editing.
 - **Big bug: RawTherapee and ART developments were exported without their development**
   (as their photo, a plain LibRaw render). They are now rendered by RawTherapee / ART, in
   full resolution (16-bit TIFF in the colour space of their profile), then converted,
