@@ -19,6 +19,11 @@
   highlighted, so the next comparison takes everything again.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
+- **Crop and version are one concept: "Version"**: a version is a frame with an optional
+  export preset. The interface says "Version" everywhere; `v` creates one (instead of
+  `c`), `Shift+V` / `Ctrl+Shift+V` go to the next / previous one; "crop" still finds it in
+  the help and the palette. The action ids become `core.version.*`; the old ones
+  (`core.crop.*`, `core.view.crop`…) still work in `[keys]`.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.

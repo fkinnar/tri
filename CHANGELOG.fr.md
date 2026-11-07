@@ -21,6 +21,12 @@
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.
+- **Recadrage et version ne font qu'un : « Version »** : une version est un cadre avec un
+  préréglage d'export facultatif. L'interface dit « Version » partout ; `v` en crée une
+  (au lieu de `c`), `Maj+V` / `Ctrl+Maj+V` passent à la suivante / précédente ;
+  « recadrer » la trouve toujours dans l'aide et la palette. Les identifiants des
+  actions deviennent `core.version.*` ; les anciens (`core.crop.*`, `core.view.crop`…)
+  marchent encore dans `[keys]`.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.

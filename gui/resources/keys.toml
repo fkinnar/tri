@@ -229,9 +229,9 @@ loupe = "m"
 # (2026-11-07: one concept, no separate "crop"). v: a new version (full screen; from the
 # grid, opens it). Shift+V / Ctrl+Shift+V: the next / previous version of the image (the
 # original, then each version).
-"core.view.crop" = ["v"]
-"core.view.version_next" = ["Shift+v"]
-"core.view.version_prev" = ["Ctrl+Shift+v"]
+"core.version.new" = ["v"]
+"core.version.next" = ["Shift+v"]
+"core.version.prev" = ["Ctrl+Shift+v"]
 
 # --- External (e) and files ---
 # e: open in the external editor; Shift+E: reveal in the file manager (explorer);
@@ -296,18 +296,18 @@ loupe = "m"
 # --- Crop (while cropping) ---
 # Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
 # (like Lightroom), Enter to save.
-"core.crop.ratio.free" = ["1", "Shift+1"]
-"core.crop.ratio.original" = ["2", "Shift+2"]
-"core.crop.ratio.square" = ["3", "Shift+3"]
-"core.crop.ratio.5_4" = ["4", "Shift+4"]
-"core.crop.ratio.3_2" = ["5", "Shift+5"]
-"core.crop.ratio.16_9" = ["6", "Shift+6"]
-"core.crop.ratio.4_3" = ["7", "Shift+7"]
-"core.crop.rotate" = ["x"]
-"core.crop.save" = ["Enter"]
+"core.version.ratio.free" = ["1", "Shift+1"]
+"core.version.ratio.original" = ["2", "Shift+2"]
+"core.version.ratio.square" = ["3", "Shift+3"]
+"core.version.ratio.5_4" = ["4", "Shift+4"]
+"core.version.ratio.3_2" = ["5", "Shift+5"]
+"core.version.ratio.16_9" = ["6", "Shift+6"]
+"core.version.ratio.4_3" = ["7", "Shift+7"]
+"core.version.rotate" = ["x"]
+"core.version.save" = ["Enter"]
 # Presets: Tab / Shift+Tab.
-"core.crop.preset" = ["Tab"]
-"core.crop.preset_prev" = ["Shift+Tab"]
+"core.version.preset" = ["Tab"]
+"core.version.preset_prev" = ["Shift+Tab"]
 
 [classic]
 
@@ -331,14 +331,14 @@ loupe = "m"
 "core.view.pan_up" = ["Shift+Up"]
 "core.view.pan_down" = ["Shift+Down"]
 # Crop: arrows move the frame, Shift resizes it (right side / bottom).
-"core.crop.move.left" = ["Left"]
-"core.crop.move.right" = ["Right"]
-"core.crop.move.up" = ["Up"]
-"core.crop.move.down" = ["Down"]
-"core.crop.size.left" = ["Shift+Left"]
-"core.crop.size.right" = ["Shift+Right"]
-"core.crop.size.up" = ["Shift+Up"]
-"core.crop.size.down" = ["Shift+Down"]
+"core.version.move.left" = ["Left"]
+"core.version.move.right" = ["Right"]
+"core.version.move.up" = ["Up"]
+"core.version.move.down" = ["Down"]
+"core.version.size.left" = ["Shift+Left"]
+"core.version.size.right" = ["Shift+Right"]
+"core.version.size.up" = ["Shift+Up"]
+"core.version.size.down" = ["Shift+Down"]
 # Copy / move to…: Ctrl+C / Ctrl+X, like copy / cut in a file manager (Cmd+C on
 # macOS). Shift as well: the whole stack.
 "core.file.copy" = ["Ctrl+c"]
@@ -391,14 +391,14 @@ loupe = "m"
 "core.view.pan_up" = ["Shift+k"]
 "core.view.pan_down" = ["Shift+j"]
 # Crop: hjkl move the frame, Shift resizes it (right side / bottom).
-"core.crop.move.left" = ["h"]
-"core.crop.move.right" = ["l"]
-"core.crop.move.up" = ["k"]
-"core.crop.move.down" = ["j"]
-"core.crop.size.left" = ["Shift+h"]
-"core.crop.size.right" = ["Shift+l"]
-"core.crop.size.up" = ["Shift+k"]
-"core.crop.size.down" = ["Shift+j"]
+"core.version.move.left" = ["h"]
+"core.version.move.right" = ["l"]
+"core.version.move.up" = ["k"]
+"core.version.move.down" = ["j"]
+"core.version.size.left" = ["Shift+h"]
+"core.version.size.right" = ["Shift+l"]
+"core.version.size.up" = ["Shift+k"]
+"core.version.size.down" = ["Shift+j"]
 # "y" copies (yank), "x" deletes (deletes the character: here the image; a
 # confirmation follows). The stack is a sentence (issue #62): "(" / ")" its start and
 # end, "d )" / "y )" the whole stack. "y" alone waits a short moment for what follows

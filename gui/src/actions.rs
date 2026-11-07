@@ -73,6 +73,22 @@ pub fn keywords(id: &str) -> String {
     }
 }
 
+/// Identifiant actuel d'une action renommée : les anciens restent acceptés (un `[keys]`
+/// écrit avant continue de marcher). 07/11/2026 : recadrage et versions ne font qu'un,
+/// `core.view.crop` → `core.version.new`, `core.view.version_next` / `_prev` →
+/// `core.version.next` / `prev`, `core.crop.*` → `core.version.*`.
+pub fn renamed_id(id: &str) -> std::borrow::Cow<'_, str> {
+    match id {
+        "core.view.crop" => "core.version.new".into(),
+        "core.view.version_next" => "core.version.next".into(),
+        "core.view.version_prev" => "core.version.prev".into(),
+        _ => match id.strip_prefix("core.crop.") {
+            Some(rest) => format!("core.version.{rest}").into(),
+            None => id.into(),
+        },
+    }
+}
+
 /// Direction (recadrage au clavier).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Dir {
@@ -721,6 +737,7 @@ impl Action {
 
     /// Action correspondant à un identifiant (fichier de raccourcis, scripts de capture).
     pub fn from_id(id: &str) -> Option<Action> {
+        let id = renamed_id(id);
         Action::ALL.into_iter().find(|a| a.id() == id)
     }
 
@@ -993,28 +1010,28 @@ impl Action {
             Action::FileCopy => "core.file.copy",
             Action::FileExport => "core.file.export",
             Action::ExportReport => "core.file.export.report",
-            Action::Crop => "core.view.crop",
-            Action::CropMove(Dir::Left) => "core.crop.move.left",
-            Action::CropMove(Dir::Right) => "core.crop.move.right",
-            Action::CropMove(Dir::Up) => "core.crop.move.up",
-            Action::CropMove(Dir::Down) => "core.crop.move.down",
-            Action::CropSize(Dir::Left) => "core.crop.size.left",
-            Action::CropSize(Dir::Right) => "core.crop.size.right",
-            Action::CropSize(Dir::Up) => "core.crop.size.up",
-            Action::CropSize(Dir::Down) => "core.crop.size.down",
-            Action::CropRatio(0) => "core.crop.ratio.free",
-            Action::CropRatio(1) => "core.crop.ratio.original",
-            Action::CropRatio(2) => "core.crop.ratio.square",
-            Action::CropRatio(3) => "core.crop.ratio.5_4",
-            Action::CropRatio(4) => "core.crop.ratio.3_2",
-            Action::CropRatio(5) => "core.crop.ratio.16_9",
-            Action::CropRatio(_) => "core.crop.ratio.4_3",
-            Action::CropRotate => "core.crop.rotate",
-            Action::CropSave => "core.crop.save",
-            Action::CropPreset => "core.crop.preset",
-            Action::CropPresetPrev => "core.crop.preset_prev",
-            Action::VersionNext => "core.view.version_next",
-            Action::VersionPrev => "core.view.version_prev",
+            Action::Crop => "core.version.new",
+            Action::CropMove(Dir::Left) => "core.version.move.left",
+            Action::CropMove(Dir::Right) => "core.version.move.right",
+            Action::CropMove(Dir::Up) => "core.version.move.up",
+            Action::CropMove(Dir::Down) => "core.version.move.down",
+            Action::CropSize(Dir::Left) => "core.version.size.left",
+            Action::CropSize(Dir::Right) => "core.version.size.right",
+            Action::CropSize(Dir::Up) => "core.version.size.up",
+            Action::CropSize(Dir::Down) => "core.version.size.down",
+            Action::CropRatio(0) => "core.version.ratio.free",
+            Action::CropRatio(1) => "core.version.ratio.original",
+            Action::CropRatio(2) => "core.version.ratio.square",
+            Action::CropRatio(3) => "core.version.ratio.5_4",
+            Action::CropRatio(4) => "core.version.ratio.3_2",
+            Action::CropRatio(5) => "core.version.ratio.16_9",
+            Action::CropRatio(_) => "core.version.ratio.4_3",
+            Action::CropRotate => "core.version.rotate",
+            Action::CropSave => "core.version.save",
+            Action::CropPreset => "core.version.preset",
+            Action::CropPresetPrev => "core.version.preset_prev",
+            Action::VersionNext => "core.version.next",
+            Action::VersionPrev => "core.version.prev",
             Action::Undo => "core.edit.undo",
             Action::Redo => "core.edit.redo",
             Action::History => "core.edit.history",
@@ -2699,6 +2716,26 @@ mod tests {
             }
         }
         assert_eq!(Keymap::default().spec_label("g g"), "gg");
+    }
+
+    #[test]
+    fn old_crop_ids_still_name_their_version_actions() {
+        // 07/11/2026 : `core.crop.*` et `core.view.crop` deviennent `core.version.*` ; un
+        // `[keys]` écrit avant marche encore.
+        assert_eq!(Action::from_id("core.view.crop"), Some(Action::Crop));
+        assert_eq!(Action::from_id("core.version.new"), Some(Action::Crop));
+        assert_eq!(Action::from_id("core.crop.save"), Some(Action::CropSave));
+        assert_eq!(
+            Action::from_id("core.crop.ratio.square"),
+            Some(Action::CropRatio(2))
+        );
+        assert_eq!(
+            Action::from_id("core.view.version_next"),
+            Some(Action::VersionNext)
+        );
+        assert_eq!(Action::Crop.id(), "core.version.new");
+        assert_eq!(Action::CropSave.id(), "core.version.save");
+        assert_eq!(Action::from_id("core.crop.nothing"), None);
     }
 
     #[test]

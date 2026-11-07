@@ -5,6 +5,15 @@ Decided on 2026-10-19 with the user, first piece of the "post-development" (see
 **instructions**, never copies: correcting the development is enough, all the versions
 follow at export.
 
+**One concept, "Version"** (2026-11-07, the user's feedback: crop and version were
+mixed up): a version is a frame (crop, ratio) with an **optional** export preset; a "crop
+alone" is a version without a preset. The interface says "Version" everywhere ("New
+version", "Version presets"); "crop" still finds the action in the help and the palette.
+Ids `core.version.*` (`core.version.new`, `.next`, `.prev`, `.save`, `.ratio.*`…); the old
+ones (`core.view.crop`, `core.view.version_next` / `_prev`, `core.crop.*`) are still
+accepted in `[keys]` (`actions::renamed_id`). Internal code names (`crop.rs`,
+`Action::Crop`) and TOML keys (`[versions.presets]`, `[gui.crop]`) unchanged.
+
 ## User decisions
 
 - **You crop what you see**: darktable's developed image (on top of its own crop, if any),
@@ -70,8 +79,10 @@ The interface only draws; all the computation is here.
 
 ## Interface (`gui/src/crop.rs`)
 
-- **`r`** (`core.view.crop`): crop the displayed image (from the grid, opens full screen).
-  You crop what you see, at the fitted scale.
+- **`v`** (`core.version.new`, 2026-11-07; `c` before, `r` at first): a new version of
+  the displayed image (from the grid, opens full screen). You crop what you see, at the
+  fitted scale. **`Shift+V`** / **`Ctrl+Shift+V`**: next / previous version (the original,
+  then each version).
 - Translucent grey **veil** around the frame, white frame with a dark edge, eight
   **handles**: corners and sides with the mouse, drag inside to move. The chosen overlay
   (`o`) snaps to the frame.
@@ -84,7 +95,7 @@ The interface only draws; all the computation is here.
   greyed out (Enter too: message). A reopened version keeps its own name
   (`Versions::without`). "Original" is **reserved** for the uncropped image in the
   versions list (feedback of 2026-10-23: two indistinguishable "Original" entries): a
-  version at the image's ratio is first named "Crop".
+  version at the image's ratio is first named "Version" ("Crop" before 2026-11-07).
 - **Keyboard**, "crop" context (`Scope::Crop`, takes precedence while the frame is shown):
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);

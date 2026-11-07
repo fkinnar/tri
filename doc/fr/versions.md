@@ -5,6 +5,16 @@ Décidé le 19/10/2026 avec l'utilisateur, première pièce de l'« après-déve
 4:5…). Ce sont des **instructions** de recadrage, jamais des copies : corriger le
 développement suffit, toutes les versions suivent à l'export.
 
+**Un seul concept, « Version »** (07/11/2026, retour de l'utilisateur : recadrage et
+version se confondaient) : une version est un cadre (recadrage, rapport) avec un
+préréglage d'export **facultatif** ; un « recadrage seul » est une version sans
+préréglage. L'interface dit « Version » partout (« Nouvelle version », « Préréglages de
+version ») ; « recadrer » trouve encore l'action dans l'aide et la palette. Identifiants
+`core.version.*` (`core.version.new`, `.next`, `.prev`, `.save`, `.ratio.*`…) ; les
+anciens (`core.view.crop`, `core.view.version_next` / `_prev`, `core.crop.*`) restent
+acceptés dans `[keys]` (`actions::renamed_id`). Noms internes du code (`crop.rs`,
+`Action::Crop`) et clés TOML (`[versions.presets]`, `[gui.crop]`) inchangés.
+
 ## Décisions de l'utilisateur
 
 - **On recadre ce qu'on voit** : le développé de darktable (par-dessus son éventuel
@@ -69,8 +79,10 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 
 ## Interface (`gui/src/crop.rs`)
 
-- **`r`** (`core.view.crop`) : recadrer l'image affichée (depuis la grille, ouvre le plein
-  écran). On recadre ce qu'on voit, à l'échelle ajustée.
+- **`v`** (`core.version.new`, 07/11/2026 ; `c` avant, `r` au départ) : nouvelle version
+  de l'image affichée (depuis la grille, ouvre le plein écran). On recadre ce qu'on voit,
+  à l'échelle ajustée. **`Maj+V`** / **`Ctrl+Maj+V`** : version suivante / précédente
+  (l'original, puis chaque version).
 - **Voile** gris translucide autour du cadre, cadre blanc avec liseré sombre, huit
   **poignées** : angles et côtés à la souris, glisser dedans pour déplacer. La
   superposition choisie (`o`) se cale sur le cadre.
@@ -83,7 +95,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   rouge et Enregistrer est grisé (Entrée aussi : message). Une version reprise garde son
   nom (`Versions::without`). « Original » est **réservé** à l'image non recadrée de la
   liste des versions (retour du 23/10/2026 : deux « Original » indiscernables) : une
-  version au rapport de l'image s'appelle d'abord « Recadrage ».
+  version au rapport de l'image s'appelle d'abord « Version » (« Recadrage » avant le
+  07/11/2026).
 - **Clavier**, contexte « recadrage » (`Scope::Crop`, prioritaire tant que le cadre est
   affiché) :
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
