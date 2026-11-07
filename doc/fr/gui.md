@@ -1545,7 +1545,11 @@ moitié transparente.
   sinon la dernière chargée) et son image garde son aperçu : sans cela, chaque image
   dessinée ensuite échouait sur elle (essai à `textures_mb = 2000` sur un vieux portable :
   écran figé, erreurs en rafale). Le budget de la session descend à ce qui tenait
-  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur.
+  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur. En
+  comparaison zoomée, une image sans sa pleine définition montre son aperçu à l'échelle
+  du 1:1 (taille connue ou estimée, `last_zoom_size`), avec un avertissement en haut à
+  droite expliqué au survol. Le terminal n'a qu'une ligne par session (« détails dans
+  …/crash.log ») ; une rafale d'erreurs (5 s) ne laisse que la première au journal.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

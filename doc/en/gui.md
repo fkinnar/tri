@@ -1473,7 +1473,11 @@ during a window's opening fade showed it half transparent.
   preview: otherwise every frame drawn afterwards failed on it (a try at
   `textures_mb = 2000` on an old laptop: frozen screen, errors in bursts). The session's
   budget goes down to what fitted (`textures_cap_mb`, `TriApp::gpu_failed`), and the
-  status bar gives the value.
+  status bar gives the value. In a zoomed comparison, an image without its full
+  definition shows its preview at the 1:1 scale (size known or estimated,
+  `last_zoom_size`), with a warning at the top right explained on hover. The terminal
+  gets one line per session ("détails dans …/crash.log"); a burst of errors (5 s) leaves
+  only the first one in the log.
 - `TRI_GUI_TRACE=1`: timed trace of the startup steps (configuration read, window opened,
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen
   on macOS) and of each step of image loading (request to the engine, image ready,

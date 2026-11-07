@@ -8,7 +8,9 @@
   1:1) : les grandes textures ont un budget (`[gui.view] textures_mb`, 1500 Mo) ; au-delà,
   une image garde son aperçu. Une erreur de la carte graphique est maintenant consignée et
   dite au lieu d'arrêter `tri` ; la texture en cause est libérée et le budget de la
-  session ramené à ce qui tenait.
+  session ramené à ce qui tenait. En comparaison zoomée, une telle image est agrandie à la
+  même échelle que les autres, avec un panneau d'avertissement. Une ligne dans le
+  terminal, le détail dans `crash.log`.
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
   de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
   barre d'état.

@@ -9384,7 +9384,10 @@ impl TriApp {
                 self.developed_level(&file.path),
                 |l| self.ready(index, l) && self.loaded(index, l),
             );
-            waiting |= shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level));
+            // Écartée faute de mémoire graphique : elle n'attend plus son 1:1.
+            let without_full = self.over_budget.iter().any(|(p, _)| *p == file.path);
+            waiting |= !without_full
+                && (shown != desired || shown.is_none() || (zoomed && shown != Some(zoom_level)));
             let drawable: Option<(TextureHandle, Vec2)> = match shown {
                 Some(Level::Thumbnail) => self
                     .thumbnail_texture(&ctx, index, deadline)
@@ -9396,10 +9399,24 @@ impl TriApp {
                 None => None,
             };
             if let Some((texture, original)) = drawable {
-                let image_rect = match (self.zoom, shown == Some(zoom_level)) {
-                    // 1:1 au même point relatif de chaque image.
-                    (Some(center), true) => {
-                        let size = original * self.zoom_scale / ctx.pixels_per_point();
+                let image_rect = match self.zoom {
+                    // 1:1 au même point relatif de chaque image ; sans son 1:1 (en chemin,
+                    // ou mémoire graphique pleine), l'aperçu à la même échelle, à la taille
+                    // du 1:1 connue ou estimée (retour du 07/11/2026 : il s'affichait
+                    // entier au milieu des autres zoomées).
+                    Some(center) => {
+                        let full = if shown == Some(zoom_level) {
+                            self.last_zoom_size.insert(zoom_level, original);
+                            original
+                        } else {
+                            self.last_zoom_size
+                                .get(&zoom_level)
+                                .map(|&last| {
+                                    view::estimate_zoom_size(last, original.x / original.y)
+                                })
+                                .unwrap_or(original)
+                        };
+                        let size = full * self.zoom_scale / ctx.pixels_per_point();
                         let mut c = new_center.unwrap_or(center);
                         if new_center.is_none() {
                             if response.dragged() {
@@ -9417,7 +9434,7 @@ impl TriApp {
                         let c = view::clamp_center(rect.size(), size, c);
                         view::zoom_rect(rect, size, c)
                     }
-                    _ => view::fit_rect(rect, original),
+                    None => view::fit_rect(rect, original),
                 };
                 if pointer.is_some_and(|p| rect.contains(p)) {
                     loupe_target = Some((index, image_rect.intersect(rect)));
@@ -9464,6 +9481,20 @@ impl TriApp {
                 size,
                 &self.gui.colors,
             );
+            // Pas de 1:1, faute de mémoire graphique : un avertissement en haut à droite,
+            // expliqué au survol (07/11/2026, idée de l'utilisateur).
+            if without_full {
+                let mark = Rect::from_min_size(
+                    rect.right_top() + vec2(-10.0 - size, 10.0),
+                    vec2(size, size),
+                );
+                marks::warning(&painter, mark, self.gui.colors.error.into());
+                let response = ui.interact(mark, id.with("over_budget"), Sense::hover());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Image, true, t!("compare-no-full"))
+                });
+                response.on_hover_text(t!("compare-no-full-tip", mb = self.textures_budget_mb()));
+            }
             // Image active : cadre de la couleur de sélection.
             if index == self.selected {
                 let color = self.gui.theme.selection(&self.gui.colors, ui.visuals());
@@ -19919,6 +19950,11 @@ mod tests {
         assert!(used <= 20 * 1024 * 1024, "{used} octets");
         let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
         assert!(notice.contains("textures_mb"), "{notice}");
+        // Zoomé : l'image sans 1:1 le dit (avertissement), sans attendre sans fin.
+        act(&mut h, Action::ToggleZoom);
+        h.run_steps(5);
+        assert!(h.state().zoom.is_some());
+        assert!(h.query_by_label(&t!("compare-no-full")).is_some());
         // Revenu à la grille : plus rien d'écarté, les 1:1 pourront revenir.
         act(&mut h, Action::Back);
         h.run_steps(3);
