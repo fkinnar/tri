@@ -86,7 +86,18 @@ jobs:
         shell: pwsh
         run: |
           vcpkg install libraw:x64-windows
+          # NASM (libjpeg-turbo) : Chocolatey, sinon directement depuis nasm.us (le 07/11/2026,
+          # une panne de Chocolatey, 503, laissait l'étape réussir sans NASM).
           choco install nasm -y --no-progress
+          if (-not (Test-Path "C:\Program Files\NASM\nasm.exe")) {
+            $version = "3.01"
+            $zip = "$env:RUNNER_TEMP\nasm.zip"
+            Invoke-WebRequest "https://www.nasm.us/pub/nasm/releasebuilds/$version/win64/nasm-$version-win64.zip" -OutFile $zip -MaximumRetryCount 3 -RetryIntervalSec 10
+            Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\nasm"
+            "$env:RUNNER_TEMP\nasm\nasm-$version" >> $env:GITHUB_PATH
+            & "$env:RUNNER_TEMP\nasm\nasm-$version\nasm.exe" -v
+            if ($LASTEXITCODE -ne 0) { throw "NASM introuvable" }
+          }
           $root = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
           "LIBRAW_DIR=$root" >> $env:GITHUB_ENV
           # Nom de la bibliothèque selon le port vcpkg (raw.lib, libraw.lib…).
