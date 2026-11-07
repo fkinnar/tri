@@ -2425,7 +2425,7 @@ pub fn digit(chord: Chord) -> Option<char> {
 }
 
 /// Nom lisible d'une combinaison (« Maj+Flèche gauche », « Ctrl+u », « g », « ° »).
-fn chord_label(c: &Chord) -> String {
+pub(crate) fn chord_label(c: &Chord) -> String {
     let name = match c.trigger {
         Trigger::Key(key) => key_label(key),
         Trigger::Char(ch) => ch.to_string(),

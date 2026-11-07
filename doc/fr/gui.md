@@ -187,7 +187,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
-- **1:1 depuis la grille** (17/10/2026) : `z` (ou le bouton « 1:1 » du bandeau) ouvre
+- **1:1 depuis la grille** (17/10/2026) : `z` (au clavier seulement depuis le 07/11/2026 :
+  en grille, le bouton « 1:1 » du bandeau a laissé la place à la loupe réglable) ouvre
   l'image sélectionnée directement à 100 %, pour vérifier vite la netteté ; Échap ramène
   à la grille. Au clavier et au bouton, le 1:1 est **centré sur le collimateur** quand le
   boîtier l'a enregistré (`[gui.view] zoom_on_focus_point`), sinon au milieu ; si les
@@ -253,7 +254,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   autres icônes (sans icône de page, retour du 21/10/2026), à la place de « Tout / RAW /
   Plates » ; allumé, le type est montré, l'un des deux reste allumé (`marks::file_type`). Curseur de sévérité du flou montré seulement avec un filtre sur
   la netteté, comme celui des piles avec les piles ; même largeur (90 points).
-- **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition) :
+- **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition ;
+  bouton de la barre du bas depuis le 07/11/2026, allumé en comparaison où il la quitte,
+  et le retour à la grille aussi en comparaison ; **sans sélection ni pile, toutes les
+  images montrées**, au plus `[gui.compare] max` autour de l'image courante) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; **31/10/2026 :
   la pile de rafale si elle est repliée, sinon la photo et ses développements** (JPEG
@@ -1256,6 +1260,10 @@ attendrait un second `m`, et un chiffre tapé pendant l'attente ouvrirait la sai
 noterait la photo). C'est la saisie qui reconnaît, avant tout chiffre, la touche qui l'a
 ouverte (`entry_trigger`, lue avec l'action ; aucune depuis la palette) ; `/` ferme la
 saisie vide puis agit comme toujours (ajusté).
+Dans le menu des suites, `m` et `z` sont des sous-menus (« +Loupe… », « +Zoom… ») ; la
+saisie ouverte, encore vide, a le sien (`TriApp::entry_menu`, même dessin :
+`key_menu_area`) : les chiffres, la touche retapée (et `*` pour le zoom) pour 100 %, `/`
+pour l'ajusté ; après le délai du menu, tout de suite s'il était déjà affiché.
 
 **Un seul réglage d'échelle dans la barre du bas** (retour du 07/11/2026 : deux réglages
 côte à côte, zoom et loupe, n'étaient pas clairs ; `TriApp::scale_control`) : une icône,
@@ -1596,7 +1604,9 @@ photos nettes.
   badges disparaissent, l'image prend la place du texte ; `[gui.grid] info`, retenu.
 - **Taille des vignettes** : curseur en bas à côté de ‹ › (logarithmique,
   `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
-  (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
+  (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré ; un
+  interrupteur depuis le 07/11/2026, `TriApp::toggle_grid_fit` : éteint, il rend la
+  taille d'avant ; changer la taille à la main l'éteint) ; au
   clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
   et `*` ; à la souris, Ctrl / Cmd + molette ou pince au pavé tactile, en continu
   (24/10/2026, issue n° 44). Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste

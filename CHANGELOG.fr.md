@@ -5,7 +5,17 @@
 ## Non publié
 
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
-  `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste.
+  `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
+  et `z` sont des sous-menus qui listent ce qui peut suivre.
+- **Comparaison depuis la barre du bas** : un bouton (allumé pendant la comparaison, où
+  il la quitte), et le retour à la grille aussi en comparaison. Sans sélection ni pile,
+  tout ce qui est montré est comparé (au plus `[gui.compare] max`, autour de l'image
+  courante).
+- **Cmd / Ctrl+clic prend aussi l'image courante** : sans sélection, l'image en
+  surbrillance compte comme choisie ; le premier Cmd / Ctrl+clic sur une autre
+  sélectionne les deux. Avec une sélection et le curseur de la grille masqué, `=` (et
+  les notes, les actions sur fichiers) agit aussitôt au lieu de seulement remontrer le
+  curseur.
 - **Un seul réglage de zoom dans la barre du bas** : les réglages du zoom et de la loupe
   sont fusionnés. Il règle le zoom (loupe ronde), ou la loupe tant que sa touche est
   tenue (loupe carrée). Un clic sur l'icône réinitialise, un clic sur la valeur permet de
@@ -43,6 +53,11 @@
   (`f` : « Filtre ») ; plus de précisions entre parenthèses (F1 et la palette les gardent) ;
   libellés plus courts pour les filtres d'étoiles et les couleurs
   (plus de « (ajouter / retirer) »).
+- **Plus de bouton 1:1 en grille** : la loupe réglable le remplace ; `z` ouvre toujours
+  l'image sélectionnée à 100 %.
+- **« Toutes les vignettes à l'écran » devient un interrupteur** (bouton et `*` en
+  grille) : allumé, les vignettes rétrécissent pour toutes les voir ; éteint, elles
+  reprennent leur taille. Changer la taille à la main l'éteint.
 - **Historique de la palette** : champ vide, la palette de commandes montre ce qu'on y a
   lancé, le plus récent d'abord ; ↑ / ↓ et Entrée le relancent. Gardé d'une session à
   l'autre (`[gui.dialogs] palette_history`, 20).
