@@ -15,6 +15,56 @@ pub enum Item {
     Action(Action),
     /// Ouvrir la fenêtre de réglages sur un réglage (section, clé).
     Setting(String, String),
+    /// Un contrôle de l'interface sans action à lui (« Taille des vignettes », 07/11/2026),
+    /// par son identifiant : la ligne montre le contrôle, Entrée lui donne le clavier.
+    Control(&'static str),
+}
+
+/// Identifiants des mots-clés des contrôles qui ont leur ligne (`kw-control-…` des
+/// catalogues).
+pub const CONTROL_KEYWORDS: &[&str] = &["control.grid_size"];
+
+/// Un contrôle de l'interface qui a sa propre ligne dans la palette.
+pub struct ControlRef {
+    /// Identifiant (`grid.size`).
+    pub id: &'static str,
+    /// Nom (« Taille des vignettes »).
+    pub title: String,
+    /// Mots cherchés en plus du nom (mots-clés).
+    pub texts: Vec<String>,
+}
+
+/// Lignes des contrôles `controls` pour `query`, placées avant les actions : seulement
+/// ceux qui correspondent de près (nom ou mots-clés ; « rendu » ne doit pas donner la
+/// taille des vignettes par une ressemblance lointaine). Aucun pour une recherche de
+/// réglages seulement.
+pub fn control_hits(query: &str, prefixes: Prefixes, controls: &[ControlRef]) -> Vec<Hit> {
+    let (only, query) = split_prefix(query, prefixes);
+    if only == Only::Settings || query.trim().is_empty() {
+        return Vec::new();
+    }
+    let mut found: Vec<(Hit, bool)> = controls
+        .iter()
+        .filter_map(|c| {
+            let mut fields = vec![c.title.as_str()];
+            fields.extend(c.texts.iter().map(String::as_str));
+            // Chaque mot tapé au début d'un mot du nom ou des mots-clés (« nettes » est
+            // dans « vignettes », pas au début ; « rendu » ressemble à « réduire »).
+            if !tri::fuzzy::starts_words(query, &fields) {
+                return None;
+            }
+            let close = tri::fuzzy::starts_words(query, &[&c.title]);
+            let hit = Hit {
+                item: Item::Control(c.id),
+                title: c.title.clone(),
+                keys: String::new(),
+                detail: String::new(),
+            };
+            Some((hit, close))
+        })
+        .collect();
+    found.sort_by_key(|(_, close)| std::cmp::Reverse(*close));
+    found.into_iter().map(|(h, _)| h).collect()
 }
 
 /// Une ligne de la palette.
@@ -167,7 +217,7 @@ pub fn search(
             Item::Action(a) => crate::actions::Group::ALL
                 .iter()
                 .position(|g| *g == a.group()),
-            Item::Setting(..) => None,
+            Item::Setting(..) | Item::Control(_) => None,
         });
         return found.into_iter().map(|((hit, _, _, _), _)| hit).collect();
     }
@@ -208,6 +258,7 @@ fn history_line(item: &Item) -> String {
     match item {
         Item::Action(a) => format!("action\t{}", a.id()),
         Item::Setting(section, key) => format!("setting\t{section}\t{key}"),
+        Item::Control(id) => format!("control\t{id}"),
     }
 }
 
@@ -269,7 +320,7 @@ pub fn history_hits(history: &[Item], keymap: &Keymap, settings: &[SettingRef]) 
                     keys: String::new(),
                     detail: s.doc.clone(),
                 }),
-            Item::Action(_) => None,
+            Item::Action(_) | Item::Control(_) => None,
         })
         .collect()
 }
@@ -525,8 +576,6 @@ mod tests {
             [Item::Action(Action::FilterWellExposed)]
         );
         assert_eq!(top("sens", 1), [Item::Action(Action::SortReverse)]);
-        let size = top("taille des vignettes", 2);
-        assert!(size.contains(&Item::Action(Action::ZoomIn)), "{size:?}");
         for q in ["loupe", "netteté", "grossissement"] {
             assert!(
                 matches!(top(q, 1).first(), Some(Item::Action(_))),

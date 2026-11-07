@@ -57,9 +57,22 @@ impl Control {
             Action::StackMode => Control::Stacks,
             Action::ReviewDevelopments => Control::ReviewDevelopments,
             Action::FileActionsAllow => Control::FileActions,
-            Action::ZoomIn | Action::ZoomOut => Control::GridSize,
             _ => return None,
         })
+    }
+
+    /// Les contrôles qui ont leur propre ligne dans la palette (pas d'action à eux) :
+    /// identifiant, pour [`crate::palette::Item::Control`].
+    pub(super) fn id(self) -> Option<&'static str> {
+        match self {
+            Control::GridSize => Some("grid.size"),
+            _ => None,
+        }
+    }
+
+    /// Le contrôle de l'identifiant `id` ([`Control::id`]).
+    pub(super) fn from_id(id: &str) -> Option<Control> {
+        [Control::GridSize].into_iter().find(|c| c.id() == Some(id))
     }
 }
 
@@ -133,6 +146,23 @@ impl TriApp {
         self.side_detached = detached;
     }
 
+    /// Les contrôles qui ont leur ligne dans la palette, ici : la taille des vignettes en
+    /// grille (retour du 07/11/2026 : sous « Zoom : palier supérieur », elle ne se
+    /// comprenait pas).
+    pub(super) fn palette_controls(&self) -> Vec<crate::palette::ControlRef> {
+        let mut list = Vec::new();
+        if self.mode == Mode::Grid {
+            list.push(crate::palette::ControlRef {
+                id: "grid.size",
+                title: t!("grid-size"),
+                texts: vec![crate::actions::keywords(
+                    crate::palette::CONTROL_KEYWORDS[0],
+                )],
+            });
+        }
+        list
+    }
+
     /// Les contrôles à montrer pour `action` dans la palette : le sien, s'il est utile
     /// ici (le filtre « développées » n'existe qu'avec un logiciel de développement).
     pub(super) fn palette_control(&self, action: Action) -> Option<Control> {
@@ -144,8 +174,6 @@ impl TriApp {
                 .any(|(t, _, _)| *t == a)
                 .then_some(control),
             Control::ReviewDevelopments if self.developers.is_empty() => None,
-            // En plein écran, + / - sont le zoom (son réglage est dans la barre du bas).
-            Control::GridSize if self.mode != Mode::Grid => None,
             _ => Some(control),
         }
     }

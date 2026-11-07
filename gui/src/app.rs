@@ -13516,15 +13516,7 @@ impl TriApp {
                 }
                 Step::Search(text) => {
                     if let Some(mut p) = self.palette.take() {
-                        p.hits = crate::palette::search(
-                            &self.keymap,
-                            &|a| self.action_unusable(a).is_none(),
-                            &text,
-                            self.gui.dialogs.palette_prefixes(),
-                            &p.places,
-                            &p.settings,
-                            self.gui.dialogs.palette_max,
-                        );
+                        p.hits = self.palette_search(&text, &p.places, &p.settings);
                         p.query = text;
                         self.palette = Some(p);
                     } else if let Some(window) = &mut self.settings_window {
@@ -13535,6 +13527,28 @@ impl TriApp {
                 }
             }
         }
+    }
+
+    /// Lignes de la palette pour `query` : les contrôles qui ont la leur (ceux dont le nom
+    /// correspond de près en tête), puis les actions et les réglages.
+    fn palette_search(
+        &self,
+        query: &str,
+        places: &[crate::cheatsheet::Place],
+        settings: &[crate::settings_window::SettingRef],
+    ) -> Vec<crate::palette::Hit> {
+        let prefixes = self.gui.dialogs.palette_prefixes();
+        let mut hits = crate::palette::control_hits(query, prefixes, &self.palette_controls());
+        hits.extend(crate::palette::search(
+            &self.keymap,
+            &|a| self.action_unusable(a).is_none(),
+            query,
+            prefixes,
+            places,
+            settings,
+            self.gui.dialogs.palette_max,
+        ));
+        hits
     }
 
     /// L'historique de la palette, montré quand son champ est vide (07/11/2026).
@@ -14687,9 +14701,15 @@ impl TriApp {
                             // (proposition du 07/11/2026) : son état, changeable ici.
                             // Pas dans l'historique (champ vide) : on y relance, ↓ va à la
                             // commande suivante.
-                            if let crate::palette::Item::Action(action) = hit.item
+                            let control = match hit.item {
+                                crate::palette::Item::Action(action) => {
+                                    self.palette_control(action)
+                                }
+                                crate::palette::Item::Control(id) => Control::from_id(id),
+                                crate::palette::Item::Setting(..) => None,
+                            };
+                            if let Some(control) = control
                                 && !state.query.trim().is_empty()
-                                && let Some(control) = self.palette_control(action)
                                 && controls.insert(control)
                             {
                                 let first = self.palette_items.as_ref().map_or(0, |p| p.next);
@@ -14717,29 +14737,29 @@ impl TriApp {
             state.hits = if query.trim().is_empty() {
                 self.palette_recent(&state.settings)
             } else {
-                crate::palette::search(
-                    &self.keymap,
-                    &|a| self.action_unusable(a).is_none(),
-                    &query,
-                    self.gui.dialogs.palette_prefixes(),
-                    &state.places,
-                    &state.settings,
-                    self.gui.dialogs.palette_max,
-                )
+                self.palette_search(&query, &state.places, &state.settings)
             };
             state.selected = 0;
             state.item = None;
             state.stops.clear();
             state.query = query;
         }
-        let chosen = clicked.or((run && count > 0).then_some(state.selected));
-        let chosen = chosen
-            .and_then(|i| state.hits.get(i))
-            .map(|h| h.item.clone());
-        if let Some(item) = &chosen {
+        let row = clicked.or((run && count > 0).then_some(state.selected));
+        let chosen = row.and_then(|i| state.hits.get(i)).map(|h| h.item.clone());
+        if let Some(item) = &chosen
+            && !matches!(item, crate::palette::Item::Control(_))
+        {
             self.remember_in_palette(item.clone());
         }
         match chosen {
+            // Un contrôle : il prend le clavier (← / → le règlent), la palette reste.
+            Some(crate::palette::Item::Control(_)) => {
+                let row = row.unwrap_or(state.selected);
+                if let Some(&(_, item)) = state.stops.iter().find(|s| s.0 == row && s.1.is_some()) {
+                    (state.selected, state.item) = (row, item);
+                }
+                self.palette = Some(state);
+            }
             Some(crate::palette::Item::Action(action)) => self.perform(ctx, action),
             Some(crate::palette::Item::Setting(section, key)) => {
                 self.open_settings();
@@ -16530,6 +16550,7 @@ fn palette_row(
                 let tag = match hit.item {
                     crate::palette::Item::Action(_) => t!("palette-action"),
                     crate::palette::Item::Setting(..) => t!("palette-setting"),
+                    crate::palette::Item::Control(_) => t!("palette-control"),
                 };
                 ui.label(egui::RichText::new(tag).small().weak());
                 ui.label(&hit.title);
@@ -17316,6 +17337,25 @@ mod tests {
             h.state().blur_strictness > strictness,
             "le curseur au clavier"
         );
+        // Un contrôle sans action à lui a sa ligne, à son nom (07/11/2026 : la taille des
+        // vignettes était sous « Zoom : palier supérieur ») ; Entrée lui donne le clavier.
+        for _ in 0.."nettes".len() {
+            press(&mut h, Key::Backspace, Modifiers::NONE);
+        }
+        type_text(&mut h, "taille");
+        let first = h.state().palette.as_ref().map(|p| p.hits[0].item.clone());
+        assert_eq!(first, Some(crate::palette::Item::Control("grid.size")));
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().palette.as_ref().is_some_and(|p| p.item.is_some()));
+        let cell = h.state().grid_cell;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(h.state().grid_cell > cell, "plus grandes");
+        for _ in 0.."taille".len() {
+            press(&mut h, Key::Backspace, Modifiers::NONE);
+        }
+        type_text(&mut h, "nettes");
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
         // ↑ jusqu'à la ligne : Entrée lance et ferme, comme avant.
         press(&mut h, Key::ArrowUp, Modifiers::NONE);
         press(&mut h, Key::ArrowUp, Modifiers::NONE);

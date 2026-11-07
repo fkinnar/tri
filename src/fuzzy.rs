@@ -17,6 +17,28 @@ fn fold(c: char) -> char {
     }
 }
 
+/// Vrai si chaque mot de `query` commence un mot d'un des champs `fields` (sans accents
+/// ni casse, au singulier comme au pluriel) : une correspondance stricte, pour ce qui ne
+/// doit pas sortir sur une ressemblance (« nettes » dans « vignettes », 07/11/2026).
+pub fn starts_words(query: &str, fields: &[&str]) -> bool {
+    let words: Vec<Vec<char>> = fields
+        .iter()
+        .flat_map(|f| f.split(|c: char| !c.is_alphanumeric()))
+        .filter(|w| !w.is_empty())
+        .map(|w| w.chars().map(fold).collect())
+        .collect();
+    let mut any = false;
+    for word in query.split_whitespace() {
+        let word: Vec<char> = word.chars().map(fold).collect();
+        let stem = singular(&word);
+        if !words.iter().any(|w| w.starts_with(stem)) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
 /// Score de `query` dans `text` à la façon de fzf : chaque mot de la requête (séparés par
 /// des espaces) doit s'y retrouver lettre par lettre, dans l'ordre, éventuellement avec
 /// des trous (« pnd » trouve « panneau des dossiers »), sans tenir compte des accents ni
@@ -225,6 +247,21 @@ impl crate::filter::Filter for NameFilter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn starts_words_wants_the_start_of_a_word() {
+        let fields = ["Taille des vignettes", "grille agrandir"];
+        assert!(starts_words("taille", &fields));
+        assert!(starts_words("vignette", &fields));
+        assert!(starts_words("tail vign", &fields));
+        assert!(starts_words("Grille", &fields));
+        assert!(
+            !starts_words("nettes", &fields),
+            "dans un mot, pas au début"
+        );
+        assert!(!starts_words("rendu", &fields));
+        assert!(!starts_words("", &fields));
+    }
     use crate::filter::Filter;
     use crate::media::{MediaFile, MediaKind};
 

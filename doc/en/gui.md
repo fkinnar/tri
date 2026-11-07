@@ -1059,8 +1059,11 @@ from the previous frame); on an item, ← / → change it (previous / next choic
 one step) and Enter activates it, without closing the palette (`PaletteItems`: the same
 pointing as the panel, `side_begin` / `side_end`, numbers from `PALETTE_ITEM`). On a
 row, ← / → stay with the field. No controls in the history (empty field): one
-relaunches there, ↓ goes to the next command. The thumbnail size is a control too
-(`Control::GridSize`, under `+` / `-` in the grid).
+relaunches there, ↓ goes to the next command. A control without an action of its own
+has **its own row**, by its name (`palette::Item::Control`, `ControlRef`, `Control::id`):
+"Thumbnail size" in the grid (feedback of 2026-11-07: under "Zoom: next step up" it made
+no sense); found only at the start of a word (`tri::fuzzy::starts_words`); Enter gives
+it the keyboard.
 **Search** (same feedback: "nettes", "taille des vignettes" not found): the labels of
 the controls that do an action (`interface_labels`: "Nettes", "Taille des vignettes"…)
 count as its name in the ranking; with equal names, an action comes before a setting,

@@ -30,3 +30,7 @@ serve:
   one-letter word).
 - **Plural** (2026-11-06): a final "s" or "x" (beyond 3 letters) does not count when
   judging a word exact ("rendus vignette" finds "Rendu des vignettes").
+- **Start of a word** (2026-11-07, `starts_words`): a strict match, each typed word at
+  the start of a word of the text (without accents or case, singular as plural). For
+  what must not come up on a resemblance: the control rows of the palette ("nettes" is
+  inside "vignettes", not at its start; "rendu" looks like "réduire").

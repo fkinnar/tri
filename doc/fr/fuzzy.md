@@ -32,3 +32,7 @@ servir aussi :
   touche, « x », « f f », ou un mot d'une lettre).
 - **Pluriel** (06/11/2026) : un « s » ou « x » final (au-delà de 3 lettres) ne compte pas
   pour juger un mot exact (« rendus vignette » trouve « Rendu des vignettes »).
+- **Début de mot** (07/11/2026, `starts_words`) : correspondance stricte, chaque mot tapé
+  au début d'un mot du texte (sans accents ni casse, au singulier comme au pluriel). Pour
+  ce qui ne doit pas sortir sur une ressemblance : les lignes de contrôle de la palette
+  (« nettes » est dans « vignettes », pas au début ; « rendu » ressemble à « réduire »).

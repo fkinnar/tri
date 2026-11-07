@@ -1116,8 +1116,11 @@ contrôle, relevés à l'image précédente) ; sur un élément, ← / → le ch
 précédent / suivant, curseur d'un cran) et Entrée l'active, sans fermer la palette
 (`PaletteItems` : le même pointage que le panneau, `side_begin` / `side_end`, numéros à
 partir de `PALETTE_ITEM`). Sur une ligne, ← / → restent au champ. Pas de contrôles dans l'historique (champ vide) :
-on y relance, ↓ va à la commande suivante. La taille des vignettes
-est aussi un contrôle (`Control::GridSize`, sous `+` / `-` en grille).
+on y relance, ↓ va à la commande suivante. Un contrôle sans action à lui a **sa propre
+ligne**, à son nom (`palette::Item::Control`, `ControlRef`, `Control::id`) : « Taille des
+vignettes » en grille (retour du 07/11/2026 : sous « Zoom : palier supérieur », elle ne
+se comprenait pas) ; trouvée seulement au début d'un mot (`tri::fuzzy::starts_words`) ;
+Entrée lui donne le clavier.
 **Recherche** (même retour : « nettes », « taille des vignettes » introuvables) : les
 libellés des contrôles qui font une action (`interface_labels` : « Nettes », « Taille des
 vignettes »…) comptent comme son nom dans le classement ; à nom égal, une action passe

@@ -31,8 +31,8 @@
   panneau de droite (une case, une liste, un curseur), la palette montre ce même
   contrôle, avec son état, pour le changer sans la fermer. Panneau et palette le
   dessinent avec le même code. Au clavier : ↓ va au contrôle, ← / → le changent,
-  Entrée l'active. La recherche trouve les mots du panneau (« nettes », « taille des
-  vignettes ») et met les actions avant les réglages.
+  Entrée l'active. La recherche trouve les mots du panneau (« nettes ») et met les
+  actions avant les réglages. La taille des vignettes a sa propre ligne.
 - **Un rendu affiché précis depuis la palette** : une action par rendu (JPEG boîtier,
   couverture, chaque logiciel de développement, rendu RAW), sans passer par les autres.
   Pas de touche par défaut ; `[keys]` peut leur en donner une.
