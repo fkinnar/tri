@@ -181,6 +181,8 @@ pub enum Action {
     FilterInvert,
     /// Filtre « développées » suivant : un développement, un logiciel, rien.
     FilterDeveloped,
+    /// Filtre « en conflit » : les images dont les notes sont à trancher (issue n° 368).
+    FilterConflicts,
     /// Ordre suivant : nom, date de prise de vue, date de modification.
     SortNext,
     /// Inverser le sens de l'ordre.
@@ -526,7 +528,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 230] = [
+    pub const ALL: [Action; 231] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -557,6 +559,7 @@ impl Action {
         Action::FilterStack,
         Action::FilterInvert,
         Action::FilterDeveloped,
+        Action::FilterConflicts,
         Action::SortNext,
         Action::SortReverse,
         Action::SortBy(tri::sort::SortKey::Name),
@@ -865,6 +868,7 @@ impl Action {
             FilterBlurry => &["panel-filter-sharp"],
             FilterWellExposed => &["panel-filter-exposed"],
             FilterDeveloped => &["panel-filter-developed"],
+            FilterConflicts => &["filter-conflicts"],
             FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
             // « Recadrer » : l'ancien nom de la nouvelle version (07/11/2026), trouvé en tête.
             Crop => &["version-crop-alias"],
@@ -896,8 +900,8 @@ impl Action {
             Stars(_) | Color(_) | Flag(_) | ToggleAutoAdvance => Group::Rating,
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
-            | FilterDeveloped | SortNext | SortReverse | SortBy(_) | FilterKind(_)
-            | GridRenderNext | Render(_) => Group::Filters,
+            | FilterDeveloped | FilterConflicts | SortNext | SortReverse | SortBy(_)
+            | FilterKind(_) | GridRenderNext | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
@@ -996,6 +1000,7 @@ impl Action {
             Action::FilterStack => "core.filter.stack",
             Action::FilterInvert => "core.filter.invert",
             Action::FilterDeveloped => "core.filter.developed",
+            Action::FilterConflicts => "core.filter.conflicts",
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
             Action::Render(r) => {

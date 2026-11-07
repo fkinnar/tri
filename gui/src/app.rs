@@ -2283,8 +2283,8 @@ impl TriApp {
             let toggled = row.inner || key == Some(SideKey::Activate);
             self.side_end(ui, item, row.response.rect, row.inner);
             if toggled {
-                self.conflicts_only = !self.conflicts_only;
-                self.apply_filter();
+                let ctx = ui.ctx().clone();
+                self.perform(&ctx, Action::FilterConflicts);
             }
         }
     }
@@ -7124,6 +7124,10 @@ impl TriApp {
             }
             Action::FilterInvert => {
                 self.filter_inverted = !self.filter_inverted;
+                self.apply_filter();
+            }
+            Action::FilterConflicts => {
+                self.conflicts_only = !self.conflicts_only;
                 self.apply_filter();
             }
             Action::FilterDeveloped => {
@@ -27009,6 +27013,15 @@ mod tests {
         h.get_by_label(&t!("filter-conflicts")).click();
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 3);
+        // Au clavier : f c.
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().conflicts_only, "f c");
+        press(&mut h, Key::F, Modifiers::NONE);
+        press(&mut h, Key::C, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(!h.state().conflicts_only);
         let inside = std::fs::read(&image).unwrap();
         for action in [Action::ImportNotes, Action::EmbedNotes] {
             act(&mut h, action);

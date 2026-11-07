@@ -83,9 +83,9 @@ their ratings.
   images in conflict in the folder": the same kind of source, field by field. One history
   step, undoable.
 
-- "In conflict" filter in the Filters section of the right panel, below the others
-  (a secondary filter: not in the top bar), only when there are conflicts
-  (`notes::ConflictFilter`).
+- "In conflict" filter (`f c`, `core.filter.conflicts`) in the Filters section of the
+  right panel, below the others (a secondary filter: not in the top bar), only when
+  there are conflicts (`notes::ConflictFilter`).
 - The thumbnail's triangle and clipping icons are on one row, centred on the height of
   the marks opposite.
 
