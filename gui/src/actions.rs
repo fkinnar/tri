@@ -176,6 +176,9 @@ pub enum Action {
     /// Rendu des vignettes suivant : JPEG boîtier, dernier développement, un logiciel,
     /// LibRaw (#114).
     GridRenderNext,
+    /// Ce rendu affiché, directement (07/11/2026 : depuis la palette, sans passer par les
+    /// autres, comme `SortBy`).
+    Render(crate::grid_render::GridRender),
     /// Afficher / masquer la barre de filtres.
     ToggleFilterBar,
     /// Afficher / masquer le bandeau de notation.
@@ -485,7 +488,7 @@ pub enum Action {
 
 impl Action {
     /// Toutes les actions, pour les listes (aide, fichier de raccourcis).
-    pub const ALL: [Action; 213] = [
+    pub const ALL: [Action; 220] = [
         Action::NavPrev,
         Action::NavNext,
         Action::NavUp,
@@ -528,6 +531,21 @@ impl Action {
         Action::FilterKind(tri::filter::KindFilter::RawOnly),
         Action::FilterKind(tri::filter::KindFilter::FlatOnly),
         Action::GridRenderNext,
+        Action::Render(crate::grid_render::GridRender::Embedded),
+        Action::Render(crate::grid_render::GridRender::Cover),
+        Action::Render(crate::grid_render::GridRender::Engine(
+            tri::develop::Engine::Darktable,
+        )),
+        Action::Render(crate::grid_render::GridRender::Engine(
+            tri::develop::Engine::RapidRaw,
+        )),
+        Action::Render(crate::grid_render::GridRender::Engine(
+            tri::develop::Engine::RawTherapee,
+        )),
+        Action::Render(crate::grid_render::GridRender::Engine(
+            tri::develop::Engine::Art,
+        )),
+        Action::Render(crate::grid_render::GridRender::LibRaw),
         Action::ToggleFilterBar,
         Action::ToggleRatingBar,
         Action::ToggleImageInfo,
@@ -790,7 +808,7 @@ impl Action {
             StackMode => &["panel-grid-stacks-on", "panel-grid-stacks"],
             StacksAll => &["panel-grid-unfold-all", "panel-grid-fold-all"],
             GroupingWindow => &["panel-grid-grouping", "panel-grid-similarity"],
-            GridRenderNext => &["panel-grid-render"],
+            GridRenderNext | Render(_) => &["panel-grid-render"],
             SortNext | SortBy(_) => &["panel-grid-sort"],
             ToggleSource => &["panel-view-source"],
             ReviewDevelopments => &["panel-view-review", "panel-view-developments"],
@@ -823,7 +841,7 @@ impl Action {
             FilterCycle | FilterStars(_) | FilterStarsOp | FilterFlag(_) | FilterColor(_)
             | FilterClear | FilterBlurry | FilterWellExposed | FilterStack | FilterInvert
             | FilterDeveloped | SortNext | SortReverse | SortBy(_) | FilterKind(_)
-            | GridRenderNext => Group::Filters,
+            | GridRenderNext | Render(_) => Group::Filters,
             ToggleFilterBar | ToggleRatingBar | ToggleImageInfo | BackgroundNext
             | ToggleGridInfo | ToggleFolderPanel | ToggleMetadata | RefreshFolders => Group::Panels,
             FileActionsAllow | FileRename | FileDelete | FileReveal | FileEdit | FileCopy
@@ -924,6 +942,19 @@ impl Action {
             Action::FilterDeveloped => "core.filter.developed",
             Action::SortNext => "core.filter.sort",
             Action::GridRenderNext => "core.grid.render",
+            Action::Render(r) => {
+                use crate::grid_render::GridRender;
+                use tri::develop::Engine;
+                match r {
+                    GridRender::Embedded => "core.view.render.embedded",
+                    GridRender::Cover => "core.view.render.cover",
+                    GridRender::Engine(Engine::Darktable) => "core.view.render.darktable",
+                    GridRender::Engine(Engine::RapidRaw) => "core.view.render.rapidraw",
+                    GridRender::Engine(Engine::RawTherapee) => "core.view.render.rawtherapee",
+                    GridRender::Engine(Engine::Art) => "core.view.render.art",
+                    GridRender::LibRaw => "core.view.render.libraw",
+                }
+            }
             Action::SortReverse => "core.filter.sort_reverse",
             Action::SortBy(tri::sort::SortKey::Name) => "core.filter.sort_by.name",
             Action::SortBy(tri::sort::SortKey::Captured) => "core.filter.sort_by.captured",

@@ -22,6 +22,9 @@
   (not at each digit), and the error shows the message alone.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
+- **A precise shown render from the palette**: one action per render (camera JPEG,
+  cover, each development software, RAW render), without going through the others. No
+  default key; `[keys]` can give them one.
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.

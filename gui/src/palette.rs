@@ -410,6 +410,17 @@ mod tests {
             first("rendus vignette"),
             Item::Action(Action::ToggleSource | Action::GridRenderNext)
         ));
+        // Un rendu précis (07/11/2026).
+        assert_eq!(
+            first("rendu darktable"),
+            Item::Action(Action::Render(crate::grid_render::GridRender::Engine(
+                tri::develop::Engine::Darktable
+            )))
+        );
+        assert_eq!(
+            first("rendu libraw"),
+            Item::Action(Action::Render(crate::grid_render::GridRender::LibRaw))
+        );
         // Les cases RAW / JPEG.
         let raw = Item::Action(Action::FilterKind(tri::filter::KindFilter::RawOnly));
         assert!(top("raw", 3).contains(&raw), "{:?}", top("raw", 5));

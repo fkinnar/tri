@@ -1083,6 +1083,13 @@ not find the review), with no line limit by default; on equal match, what applie
 
 ### One shown render (2026-11-06)
 
+**A precise render, directly** (2026-11-07, asked by the user): one action per render,
+`core.view.render.<id>` (`embedded`, `cover`, `darktable`, `rapidraw`, `rawtherapee`,
+`art`, `libraw`; `Action::Render`), like `SortBy` for sorting. No default key: the
+palette finds them ("render darktable"), and `[keys]` can give them one. A missing or
+disabled software, or the cover without any software: refused with the reason
+(`action_unusable`), greyed out in the palette.
+
 Discussed with the user (the full-screen View section had been confusing since
 2026-11-05): "Shown source" and "Development of each photo" become **one list, "Shown
 render"**, the same in the grid and full screen: camera JPEG, cover (preferred

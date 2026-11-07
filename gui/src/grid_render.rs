@@ -10,7 +10,7 @@ use tri::develop::{Engine, Preference};
 use tri::media::{MediaFile, MediaKind};
 
 /// Rendu des vignettes : `[gui.grid] render`, et la liste de la barre des filtres.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum GridRender {
     /// Le JPEG boîtier (vignette embarquée), comme au tri.
     #[default]

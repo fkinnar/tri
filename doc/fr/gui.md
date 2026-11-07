@@ -1142,6 +1142,13 @@ qui a le clavier et les images) passe devant.
 
 ### Un seul rendu affiché (06/11/2026)
 
+**Un rendu précis, directement** (07/11/2026, demandé par l'utilisateur) : une action par
+rendu, `core.view.render.<id>` (`embedded`, `cover`, `darktable`, `rapidraw`,
+`rawtherapee`, `art`, `libraw` ; `Action::Render`), comme `SortBy` pour le tri. Sans
+touche par défaut : la palette les trouve (« rendu darktable »), et `[keys]` peut leur en
+donner une. Un logiciel absent ou désactivé, ou la couverture sans aucun logiciel :
+refusé avec la raison (`action_unusable`), grisé dans la palette.
+
 Discuté avec l'utilisateur (la section Vue du plein écran déroutait depuis le 05/11) :
 « Source affichée » et « Développement de chaque photo » ne font plus qu'**une liste,
 « Rendu affiché »**, la même en grille et en plein écran : JPEG boîtier, couverture

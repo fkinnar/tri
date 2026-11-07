@@ -2102,6 +2102,11 @@ impl TriApp {
             {
                 Some(t!("review-unusable"))
             }
+            // Un rendu qu'on ne peut pas montrer : logiciel absent ou désactivé, ou la
+            // couverture sans aucun logiciel (07/11/2026).
+            Action::Render(render) if render.available(&self.developers.engines()) != render => {
+                Some(t!("render-unusable", render = render.name()))
+            }
             _ => None,
         }
     }
@@ -7106,6 +7111,13 @@ impl TriApp {
             Action::GridRenderNext => {
                 let prev = self.grid_render.prev(&self.developers.engines());
                 self.change_render(prev);
+            }
+            Action::Render(render) => {
+                if let Some(why) = self.action_unusable(action) {
+                    self.notice = Some((why, false));
+                    return;
+                }
+                self.change_render(render);
             }
             Action::SortNext => self.set_order(tri::sort::Order {
                 key: self.order.key.next(),
@@ -17083,6 +17095,33 @@ mod tests {
         act(&mut h, Action::SortBy(SortKey::Name));
         assert_eq!(h.state().order.key, SortKey::Name);
         assert_eq!(h.state().order.descending, descending);
+    }
+
+    #[test]
+    fn a_render_is_chosen_directly() {
+        // Demandé le 07/11/2026 : un rendu précis depuis la palette, sans passer par les
+        // autres.
+        use crate::grid_render::GridRender;
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        act(&mut h, Action::Render(GridRender::LibRaw));
+        assert_eq!(h.state().grid_render, GridRender::LibRaw);
+        act(&mut h, Action::Render(GridRender::Embedded));
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        // Un logiciel absent : refusé, avec la raison, rien ne change.
+        h.state_mut().developers = Default::default();
+        let darktable = Action::Render(GridRender::Engine(tri::develop::Engine::Darktable));
+        assert!(h.state().action_unusable(darktable).is_some());
+        act(&mut h, darktable);
+        assert_eq!(h.state().grid_render, GridRender::Embedded);
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("Darktable"), "{notice}");
+        assert!(
+            h.state()
+                .action_unusable(Action::Render(GridRender::Cover))
+                .is_some(),
+            "la couverture sans logiciel"
+        );
     }
 
     #[test]
