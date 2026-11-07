@@ -5,7 +5,8 @@
 ## Non publié
 
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
-  `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste.
+  `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
+  et `z` sont des sous-menus qui listent ce qui peut suivre.
 - **Un seul réglage de zoom dans la barre du bas** : les réglages du zoom et de la loupe
   sont fusionnés. Il règle le zoom (loupe ronde), ou la loupe tant que sa touche est
   tenue (loupe carrée). Un clic sur l'icône réinitialise, un clic sur la valeur permet de

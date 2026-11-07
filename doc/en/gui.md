@@ -1160,7 +1160,10 @@ Not sequences of the sequencer: `<leader> m` would have become ambiguous (it wou
 for a second `m`, and a digit typed meanwhile would open the entry *and* rate the photo).
 The entry recognises, before any digit, the key that opened it (`entry_trigger`, read
 with the action; none from the palette); `/` closes the empty entry then acts as always
-(fit).
+(fit). In the menu of continuations, `m` and `z` are sub-menus ("+Loupe…", "+Zoom…");
+the open entry, still empty, has its own (`TriApp::entry_menu`, same drawing:
+`key_menu_area`): the digits, the key retyped (and `*` for the zoom) for 100 %, `/` for
+fit; after the menu delay, at once if it was already shown.
 
 **One scale control in the bottom bar** (feedback of 2026-11-07: two controls side by
 side, zoom and loupe, were unclear; `TriApp::scale_control`): an icon, −, the value, +,

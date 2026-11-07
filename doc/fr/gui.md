@@ -1222,6 +1222,10 @@ attendrait un second `m`, et un chiffre tapé pendant l'attente ouvrirait la sai
 noterait la photo). C'est la saisie qui reconnaît, avant tout chiffre, la touche qui l'a
 ouverte (`entry_trigger`, lue avec l'action ; aucune depuis la palette) ; `/` ferme la
 saisie vide puis agit comme toujours (ajusté).
+Dans le menu des suites, `m` et `z` sont des sous-menus (« +Loupe… », « +Zoom… ») ; la
+saisie ouverte, encore vide, a le sien (`TriApp::entry_menu`, même dessin :
+`key_menu_area`) : les chiffres, la touche retapée (et `*` pour le zoom) pour 100 %, `/`
+pour l'ajusté ; après le délai du menu, tout de suite s'il était déjà affiché.
 
 **Un seul réglage d'échelle dans la barre du bas** (retour du 07/11/2026 : deux réglages
 côte à côte, zoom et loupe, n'étaient pas clairs ; `TriApp::scale_control`) : une icône,
