@@ -383,7 +383,9 @@ impl Crop {
         action
     }
 
-    /// Partie gauche de la barre : préréglages, rapports, orientation, nom et profil.
+    /// Partie gauche de la barre, en parties titrées d'un libellé gris (retour du
+    /// 07/11/2026 : « un peu le souk ») : Version (préréglage), Recadrage (rapports,
+    /// orientation), Export, Nom, puis la disquette (enregistrer comme préréglage).
     fn bar_left(
         &mut self,
         ui: &mut Ui,
@@ -391,8 +393,16 @@ impl Crop {
         presets: &[(String, String)],
         action: &mut Option<BarAction>,
     ) {
-        ui.label(t!("crop-bar-title"));
+        // De l'air entre deux parties, plus qu'entre deux boutons.
+        let gap = ui.spacing().item_spacing.x * 4.0;
+        // Le libellé d'une partie reste avec ce qui le suit (à la ligne ensemble).
+        let section = |ui: &mut Ui, label: &str, first: f32| {
+            keep_together(ui, label, first);
+            ui.weak(label);
+        };
+        // Version : le préréglage.
         if !presets.is_empty() {
+            section(ui, &t!("crop-bar-title"), ui.spacing().combo_width);
             let none = t!("crop-preset-none");
             let current = self
                 .preset
@@ -411,28 +421,26 @@ impl Crop {
                 })
                 .response
                 .on_hover_text(t!("crop-preset-tip"));
-            // Enregistrer comme préréglage : petite disquette collée à la liste.
-            let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
-            let (rect, response) = crate::marks::icon_button(
-                ui,
-                size,
-                &t!("crop-preset-save"),
-                &t!("crop-preset-save-tip"),
-            );
-            let color = ui.style().interact(&response).fg_stroke.color;
-            crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
-            if response.clicked() {
-                *action = Some(BarAction::SavePreset);
-            }
-            ui.separator();
+            ui.add_space(gap);
         }
-        for preset in Ratio::PRESETS {
-            let on = preset.same_shape(self.ratio);
-            // Allumé : dans l'orientation choisie (4:5 plutôt que 5:4).
-            let shown = if on { self.ratio } else { preset };
-            if ui.selectable_label(on, ratio_name(shown)).clicked() {
-                self.set_ratio(preset);
-            }
+        // Recadrage : le rapport dans une liste (retour du 07/11/2026 : plus lisible que
+        // sept boutons), puis l'orientation.
+        section(ui, &t!("crop-section-frame"), ui.spacing().combo_width);
+        let mut chosen = None;
+        egui::ComboBox::from_id_salt("crop_ratio")
+            .selected_text(ratio_name(self.ratio))
+            .show_ui(ui, |ui| {
+                for preset in Ratio::PRESETS {
+                    let on = preset.same_shape(self.ratio);
+                    // Dans l'orientation choisie (4:5 plutôt que 5:4) pour celui en cours.
+                    let shown = if on { self.ratio } else { preset };
+                    if ui.selectable_label(on, ratio_name(shown)).clicked() {
+                        chosen = Some(preset);
+                    }
+                }
+            });
+        if let Some(preset) = chosen {
+            self.set_ratio(preset);
         }
         // Orientation : le libellé dit celle d'arrivée.
         let portrait = self
@@ -448,26 +456,9 @@ impl Crop {
         if ui.add_enabled(can_turn, egui::Button::new(label)).clicked() {
             self.rotate();
         }
-        ui.separator();
-        // Chaque libellé reste avec son champ : à la ligne avant le libellé s'ils ne tiennent
-        // pas ensemble.
-        let name_width = 140.0;
-        keep_together(ui, &t!("crop-name"), name_width);
-        ui.label(t!("crop-name"));
-        let taken = self.name_taken();
-        let mut edit = egui::TextEdit::singleline(&mut self.name).desired_width(name_width);
-        if taken {
-            edit = edit.text_color(ui.visuals().error_fg_color);
-        }
-        let mut field = ui.add(edit);
-        if taken {
-            field = field.on_hover_text(t!("crop-name-taken"));
-        }
-        if field.changed() {
-            self.name_edited = true;
-        }
-        keep_together(ui, &t!("crop-profile"), ui.spacing().combo_width);
-        ui.label(t!("crop-profile"));
+        ui.add_space(gap);
+        // Export : le préréglage d'export, facultatif.
+        section(ui, &t!("crop-profile"), ui.spacing().combo_width);
         let none = t!("crop-profile-none");
         let current = self
             .profile
@@ -482,6 +473,36 @@ impl Crop {
                     ui.selectable_value(&mut self.profile, Some(id.clone()), name);
                 }
             });
+        ui.add_space(gap);
+        // Nom.
+        let name_width = 140.0;
+        section(ui, &t!("crop-name"), name_width);
+        let taken = self.name_taken();
+        let mut edit = egui::TextEdit::singleline(&mut self.name).desired_width(name_width);
+        if taken {
+            edit = edit.text_color(ui.visuals().error_fg_color);
+        }
+        let mut field = ui.add(edit);
+        if taken {
+            field = field.on_hover_text(t!("crop-name-taken"));
+        }
+        if field.changed() {
+            self.name_edited = true;
+        }
+        ui.add_space(gap);
+        // Enregistrer comme préréglage (rapport, nom, export) : la disquette, à la fin.
+        let size = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+        let (rect, response) = crate::marks::icon_button(
+            ui,
+            size,
+            &t!("crop-preset-save"),
+            &t!("crop-preset-save-tip"),
+        );
+        let color = ui.style().interact(&response).fg_stroke.color;
+        crate::marks::floppy(ui.painter(), rect.shrink(size * 0.22), color);
+        if response.clicked() {
+            *action = Some(BarAction::SavePreset);
+        }
     }
 }
 

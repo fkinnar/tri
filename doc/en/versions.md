@@ -86,9 +86,11 @@ The interface only draws; all the computation is here.
 - Translucent grey **veil** around the frame, white frame with a dark edge, eight
   **handles**: corners and sides with the mouse, drag inside to move. The chosen overlay
   (`o`) snaps to the frame.
-- **Bar** under the image: ratios (free, original, 1:1, 5:4, 3:2, 16:9, 4:3), the button
-  lit in the chosen orientation (4:5); Portrait / Landscape; name (it follows the ratio as
-  long as it has not been typed); optional export preset; Save / Cancel.
+- **Bar** under the image, in parts titled by a grey label (2026-11-07): **Version**
+  (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
+  shown in the chosen orientation, 4:5; then Portrait / Landscape); **Export** (optional
+  export preset); **Name** (it follows the ratio as long as it has not been typed); the
+  floppy (save as a preset); Save / Cancel on the right.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
   already exists, case and spaces aside (`Versions::name_taken`), turns red and Save is

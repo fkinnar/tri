@@ -334,6 +334,7 @@ crop-ratio-free = Libre
 crop-ratio-original = Original
 crop-portrait = Portrait
 crop-landscape = Paysage
+crop-section-frame = Recadrage
 crop-name = Nom
 crop-profile = Export
 crop-profile-none = Aucun

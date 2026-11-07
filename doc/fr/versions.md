@@ -86,9 +86,12 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Voile** gris translucide autour du cadre, cadre blanc avec liseré sombre, huit
   **poignées** : angles et côtés à la souris, glisser dedans pour déplacer. La
   superposition choisie (`o`) se cale sur le cadre.
-- **Barre** sous l'image : rapports (libre, original, 1:1, 5:4, 3:2, 16:9, 4:3), le
-  bouton allumé dans l'orientation choisie (4:5) ; Portrait / Paysage ; nom (il suit le
-  rapport tant qu'on ne l'a pas tapé) ; profil d'export facultatif ; Enregistrer / Annuler.
+- **Barre** sous l'image, en parties titrées d'un libellé gris (07/11/2026) : **Version**
+  (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
+  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; puis Portrait / Paysage) ;
+  **Export** (préréglage d'export facultatif) ; **Nom** (il suit le rapport tant qu'on ne
+  l'a pas tapé) ; la disquette (enregistrer comme préréglage) ; Enregistrer / Annuler à
+  droite.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
   nom tapé qui existe déjà, casse et espaces mis à part (`Versions::name_taken`), passe en

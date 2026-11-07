@@ -335,6 +335,7 @@ crop-ratio-free = Free
 crop-ratio-original = Original
 crop-portrait = Portrait
 crop-landscape = Landscape
+crop-section-frame = Crop
 crop-name = Name
 crop-profile = Export
 crop-profile-none = None
