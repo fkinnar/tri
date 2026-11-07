@@ -572,14 +572,18 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
         .on_hover_text(tip)
         .on_disabled_hover_text(tip)
         .on_hover_cursor(CursorIcon::PointingHand);
-    let visuals = ui.style().interact(&response);
-    ui.painter().rect(
-        rect,
-        visuals.corner_radius,
-        visuals.weak_bg_fill,
-        visuals.bg_stroke,
-        egui::StrokeKind::Inside,
-    );
+    // Fond au survol et au clic seulement, comme les autres icônes des barres (retour du
+    // 07/11/2026 : au repos, le fond d'un bouton tranchait légèrement sur la barre).
+    if response.hovered() || response.is_pointer_button_down_on() || response.has_focus() {
+        let visuals = ui.style().interact(&response);
+        ui.painter().rect(
+            rect,
+            visuals.corner_radius,
+            visuals.weak_bg_fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+    }
     (rect, response)
 }
 

@@ -222,6 +222,9 @@
   (`[gui.zoom] loupe_digits_ms`). The wheel, with the loupe held, changes it too (the grid
   does not scroll). The value shows in the bottom bar (loupe, −, value, +; a click on the
   value: 100 %). For the session.
+- **Bar icons without a background at rest**: the buttons on the right of the bottom bar
+  (grid, comparison, stacks, arrows…) had a slightly different background from the bar;
+  like the other icons, they only get one under the pointer.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

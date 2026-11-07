@@ -238,6 +238,9 @@
   pause (`[gui.zoom] loupe_digits_ms`). La roulette, la loupe tenue, change aussi le
   grossissement (la grille ne défile pas). La valeur se voit dans la barre du bas (loupe,
   −, valeur, + ; un clic sur la valeur : 100 %). Pour la session.
+- **Icônes des barres sans fond au repos** : les boutons à droite de la barre du bas
+  (grille, comparaison, piles, flèches…) avaient un fond légèrement différent de la
+  barre ; comme les autres icônes, ils n'en ont plus que sous le pointeur.
 
 ## 1.0.0-alpha.8 — 05/11/2026
 
