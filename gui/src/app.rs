@@ -2259,7 +2259,6 @@ impl TriApp {
     /// infos des vignettes, piles (réorganisation du 27/10/2026 : ces réglages
     /// encombraient la barre des filtres, ou se cachaient dans son menu « … »).
     fn grid_settings(&mut self, ui: &mut Ui) {
-        let mut clicked: Vec<Action> = Vec::new();
         // Ordre : la clé, puis le sens ; en tête de la section (retour du 27/10/2026).
         self.subheading(ui, t!("panel-grid-sort"));
         self.control(ui, Control::Sort, Host::Panel);
@@ -2268,6 +2267,13 @@ impl TriApp {
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
         self.subheading(ui, t!("panel-grid-stacks"));
         self.control(ui, Control::Stacks, Host::Panel);
+        self.file_actions_switch(ui);
+    }
+
+    /// Réglages des piles actives, en grille (sous « Empiler automatiquement ») : la
+    /// similarité, « Tout déplier » et « Réglages fins… » ; partie de [`Control::Stacks`].
+    fn stacks_settings(&mut self, ui: &mut Ui) {
+        let mut clicked: Vec<Action> = Vec::new();
         if self.stacking {
             ui.indent("stacks", |ui| {
                 let width = panel_slider_width(ui);
@@ -2323,7 +2329,6 @@ impl TriApp {
                 });
             });
         }
-        self.file_actions_switch(ui);
         let ctx = ui.ctx().clone();
         for action in clicked {
             self.perform(&ctx, action);
@@ -17506,6 +17511,27 @@ mod tests {
                 .palette_control(Action::SortBy(tri::sort::SortKey::Stars)),
             Some(Control::Sort)
         );
+    }
+
+    #[test]
+    fn the_stack_similarity_is_reached_from_the_palette() {
+        // Retour du 07/11/2026 : le curseur de similarité des piles ne s'atteignait pas.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().metadata_panel = false;
+        h.state_mut().stacking = true;
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        type_text(&mut h, "similarité");
+        assert!(h.query_by_label(&t!("panel-grid-similarity")).is_some());
+        // La case, puis le curseur.
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        let before = h.state().group_strictness;
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(h.state().group_strictness > before, "plus strict");
+        assert!(h.state().palette.is_some());
     }
 
     #[test]

@@ -1129,9 +1129,9 @@ Entrée lui donne le clavier.
 libellés des contrôles qui font une action (`interface_labels` : « Nettes », « Taille des
 vignettes »…) comptent comme son nom dans le classement ; à nom égal, une action passe
 avant un réglage, qui n'ouvre que la configuration.
-Restent hors du système (à convertir si la proposition est retenue) : le curseur de
-similarité des piles et les boutons « Tout déplier » / « Regroupement… », la taille des
-vignettes, les outils de la barre du bas (réglage d'échelle, curseur de sévérité), les
+Les piles comprennent, en grille et actives, la similarité et les boutons « Tout
+déplier » / « Réglages fins… » (`stacks_settings`). Restent hors du système (à convertir
+si la proposition est retenue) : les outils de la barre du bas (réglage d'échelle, curseur de sévérité), les
 interrupteurs de la barre des filtres ; les sous-titres restent au panneau (mise en
 page). La fenêtre de réglages est d'une autre nature (valeurs par défaut, pas l'état) :
 ses lignes « configuration » de la palette ouvrent toujours la fenêtre.

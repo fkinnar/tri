@@ -1072,9 +1072,9 @@ it the keyboard.
 the controls that do an action (`interface_labels`: "Nettes", "Taille des vignettes"…)
 count as its name in the ranking; with equal names, an action comes before a setting,
 which only opens the configuration.
-Still outside the system (to convert if the proposal is kept): the stacks similarity
-slider and the "Unfold all" / "Grouping…" buttons, the thumbnail size, the bottom-bar
-tools (scale control, strictness slider), the filter-bar switches; the sub-headings stay
+The stacks include, in the grid and when on, the similarity and the "Unfold all" /
+"Fine settings…" buttons (`stacks_settings`). Still outside the system (to convert if
+the proposal is kept): the bottom-bar tools (scale control, strictness slider), the filter-bar switches; the sub-headings stay
 in the panel (layout). The settings window is of another kind (default values, not the
 state): its "configuration" rows in the palette still open the window.
 

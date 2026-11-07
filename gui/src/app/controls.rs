@@ -24,7 +24,8 @@ pub(super) enum Control {
     Sort,
     /// Rendu affiché (liste).
     Render,
-    /// Empiler automatiquement (case).
+    /// Empiler automatiquement (case) ; en grille, piles actives, leurs réglages dessous
+    /// (similarité, « Tout déplier », « Réglages fins… »).
     Stacks,
     /// Passer en revue les développements (case, grisée en JPEG boîtier).
     ReviewDevelopments,
@@ -54,7 +55,7 @@ impl Control {
             }
             Action::SortNext | Action::SortReverse | Action::SortBy(_) => Control::Sort,
             Action::ToggleSource | Action::GridRenderNext | Action::Render(_) => Control::Render,
-            Action::StackMode => Control::Stacks,
+            Action::StackMode | Action::GroupingWindow | Action::StacksAll => Control::Stacks,
             Action::ReviewDevelopments => Control::ReviewDevelopments,
             Action::FileActionsAllow => Control::FileActions,
             _ => return None,
@@ -99,6 +100,10 @@ impl TriApp {
                 {
                     let ctx = ui.ctx().clone();
                     self.perform(&ctx, Action::StackMode);
+                }
+                // En grille, piles actives : leurs réglages dessous (la similarité…).
+                if self.mode == Mode::Grid && self.stacking {
+                    self.stacks_settings(ui);
                 }
             }
             Control::ReviewDevelopments => {
