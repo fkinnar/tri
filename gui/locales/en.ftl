@@ -989,6 +989,26 @@ folder-menu-import-notes = Read the ratings back from the images
 import-done = Ratings read from { $n } images
 import-none = Nothing to read (no ratings in the images, or the same)
 import-failed = Ratings of { $n } images not read: { $first }
+notes-merged = Ratings merged from other programs for { $n } images
+conflict-badge = Ratings disagree between their sources: click to settle
+conflict-title = Ratings disagree — { $name }
+conflict-intro = Several programs changed this photo's ratings differently ({ $fields }). Which ones to keep?
+conflict-before = Before
+conflict-keep = Keep
+conflict-all = Same choice for the { $n } other images in conflict in the folder
+conflict-resolved = Ratings settled for { $n } images
+conflict-source-image = In the image
+conflict-source-xmp = XMP (darktable, Lightroom…)
+conflict-field-stars = stars
+conflict-field-flag = flag
+conflict-field-colors = colours
+conflict-stars = { $n ->
+    [0] no stars
+    [one] 1 star
+   *[other] { $n } stars
+}
+conflict-flag-accepted = accepted
+conflict-flag-rejected = rejected
 folder-menu-sidecars = Generate the sidecars…
 action-core-file-sidecars = Generate the missing rating sidecars (one software, or all)
 kw-core-file-sidecars = sidecars rrdata xmp rapidraw ratings metadata generate create

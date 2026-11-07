@@ -988,6 +988,26 @@ folder-menu-import-notes = Relire les notes depuis les images
 import-done = Notes relues depuis { $n } images
 import-none = Rien à relire (pas de notes dans les images, ou les mêmes)
 import-failed = Notes de { $n } images non relues : { $first }
+notes-merged = Notes fusionnées depuis d'autres logiciels pour { $n } images
+conflict-badge = Notes en désaccord entre leurs sources : cliquer pour trancher
+conflict-title = Notes en désaccord — { $name }
+conflict-intro = Plusieurs logiciels ont changé les notes de cette photo différemment ({ $fields }). Lesquelles garder ?
+conflict-before = Avant
+conflict-keep = Garder
+conflict-all = Même choix pour les { $n } autres images en conflit du dossier
+conflict-resolved = Notes tranchées pour { $n } images
+conflict-source-image = Dans l'image
+conflict-source-xmp = XMP (darktable, Lightroom…)
+conflict-field-stars = étoiles
+conflict-field-flag = drapeau
+conflict-field-colors = couleurs
+conflict-stars = { $n ->
+    [0] sans étoile
+    [one] 1 étoile
+   *[other] { $n } étoiles
+}
+conflict-flag-accepted = acceptée
+conflict-flag-rejected = rejetée
 folder-menu-sidecars = Générer les sidecars…
 action-core-file-sidecars = Générer les sidecars de notes manquants (un logiciel, ou tous)
 kw-core-file-sidecars = sidecars rrdata xmp rapidraw notes métadonnées générer créer

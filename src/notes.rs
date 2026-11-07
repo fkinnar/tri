@@ -396,6 +396,7 @@ impl NoteBook {
     /// début de la lecture sont gardées, plus fraîches.
     pub fn adopt(&mut self, loaded: NoteBook) {
         let touched = self.touched.take().unwrap_or_default();
+        self.merged.extend(loaded.merged);
         for (image, entry) in loaded.entries {
             if !touched.contains(&image) {
                 self.entries.insert(image, entry);

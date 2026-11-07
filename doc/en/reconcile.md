@@ -59,8 +59,17 @@ Not in the XMP: darktable rewrites its XMP from its database and may erase our f
 `tri <folder> --conflicts`: merges made, and each image in conflict with its sources and
 their ratings.
 
+## Interface
+
+- A merge is told in the status bar ("Ratings merged from other programs for N images").
+- An image in conflict carries an orange triangle at the top left of its thumbnail
+  (`marks::conflict_sign`); a click, or a rating set on it, opens the "Ratings disagree"
+  dialog: each source (XMP, RapidRAW, RawTherapee, ART, "In the image") and its ratings,
+  a "Keep" button per source; "Same choice for the N other images in conflict in the
+  folder" takes the same kind of source for each. One history step, undoable.
+
 ## To come
 
-Interface (badge, filter, a dialog to settle), then automation (write everywhere, merge
+A "in conflict" filter, choosing field by field, then automation (write everywhere, merge
 on the fly on changes seen by watching). Renaming or moving an image does not carry its
 entry yet: it is read again as the first time.

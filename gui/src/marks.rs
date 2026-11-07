@@ -587,6 +587,22 @@ pub fn icon_button(ui: &mut Ui, size: f32, label: &str, tip: &str) -> (Rect, Res
     (rect, response)
 }
 
+/// Signe « notes en désaccord » (issue n° 368) dans `rect` : un triangle d'avertissement
+/// orange cerclé de sombre, avec son point d'exclamation.
+pub fn conflict_sign(painter: &Painter, rect: Rect) {
+    let (w, h) = (rect.width(), rect.height());
+    let p = |x: f32, y: f32| pos2(rect.left() + x * w, rect.top() + y * h);
+    let triangle = vec![p(0.5, 0.06), p(0.97, 0.92), p(0.03, 0.92)];
+    painter.add(Shape::convex_polygon(
+        triangle,
+        Color32::from_rgb(235, 150, 40),
+        Stroke::new(1.5, RIM),
+    ));
+    let stroke = Stroke::new((w * 0.12).max(1.5), Color32::from_gray(25));
+    painter.line_segment([p(0.5, 0.36), p(0.5, 0.64)], stroke);
+    painter.circle_filled(p(0.5, 0.78), w * 0.065, Color32::from_gray(25));
+}
+
 /// Icône d'une action sur un fichier dans `rect` : crayon (renommer), poubelle (corbeille),
 /// dossier (afficher dans le gestionnaire de fichiers), flèche sortant d'un cadre (ouvrir
 /// dans l'éditeur externe).

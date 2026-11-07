@@ -63,9 +63,20 @@ champs.
 `tri <dossier> --conflicts` : fusions faites, et chaque image en conflit avec ses
 sources et leurs notes.
 
+## Interface
+
+- Une fusion est dite dans la barre d'état (« Notes fusionnées depuis d'autres logiciels
+  pour N images »).
+- Une image en conflit porte un triangle orange en haut à gauche de sa vignette
+  (`marks::conflict_sign`) ; un clic, ou une note posée sur elle, ouvre la boîte « Notes
+  en désaccord » : chaque source (XMP, RapidRAW, RawTherapee, ART, « Dans l'image ») et
+  ses notes, un bouton « Garder » par source ; « Même choix pour les N autres images en
+  conflit du dossier » prend la même sorte de source pour chacune. Un pas d'historique,
+  annulable.
+
 ## À venir
 
-Interface (pastille, filtre, boîte pour trancher), puis l'automatisation (écrire
+Un filtre « en conflit », le choix champ par champ, puis l'automatisation (écrire
 partout, fusion à la volée sur les changements vus par la surveillance). Renommer ou
 déplacer une image n'emporte pas encore son entrée : elle est relue comme la première
 fois.
