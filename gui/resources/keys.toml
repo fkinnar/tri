@@ -28,8 +28,8 @@
 # below), in both profiles.
 #
 # How the keys are chosen (shortcut review of 2026-11-06, issue #280):
-# - one letter per domain, from its English name: c crop, i histogram, m magnify, n
-#   order, o overlays, p peaking, r render, s stacks, t text infos, v versions…;
+# - one letter per domain, from its English name: i histogram, m magnify, n order,
+#   o overlays, p peaking, r render, s stacks, t text infos, v versions…;
 # - the letter alone: the main action; Shift + the letter: its variant; Ctrl + the
 #   letter: the settings window of the domain;
 # - a setting changed now and then: <leader>, the letter of the domain, then the
@@ -224,12 +224,14 @@ loupe = "m"
 "core.dev.toggle" = []
 "core.dev.fold_all" = []
 
-# --- Crop (c) and versions (v) ---
-# c: crop (full screen; from the grid, opens it). v / Shift+V: the next / previous
-# version of the image (the original, then each version).
-"core.view.crop" = ["c"]
-"core.view.version_next" = ["v"]
-"core.view.version_prev" = ["Shift+v"]
+# --- Versions (v) ---
+# A version is a framing of the image (crop, ratio) with an optional export preset
+# (2026-11-07: one concept, no separate "crop"). v: a new version (full screen; from the
+# grid, opens it). Shift+V / Ctrl+Shift+V: the next / previous version of the image (the
+# original, then each version).
+"core.view.crop" = ["v"]
+"core.view.version_next" = ["Shift+v"]
+"core.view.version_prev" = ["Ctrl+Shift+v"]
 
 # --- External (e) and files ---
 # e: open in the external editor; Shift+E: reveal in the file manager (explorer);

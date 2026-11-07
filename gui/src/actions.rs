@@ -817,6 +817,8 @@ impl Action {
             FilterWellExposed => &["panel-filter-exposed"],
             FilterDeveloped => &["panel-filter-developed"],
             FilterCycle | FilterKind(_) => &["filter-bar-raw-tip", "filter-bar-flat-tip"],
+            // « Recadrer » : l'ancien nom de la nouvelle version (07/11/2026), trouvé en tête.
+            Crop => &["version-crop-alias"],
             // En grille, * met toutes les vignettes à l'écran ; leur taille est un contrôle
             // à part dans la palette (07/11/2026).
             Zoom100 => &["grid-fit"],

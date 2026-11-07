@@ -172,7 +172,15 @@ pub fn search(
         };
         if let Some(m) = found_here {
             let mut names = vec![title.clone()];
-            names.extend(action.interface_labels().iter().map(|id| t!(*id)));
+            // Dans toutes les langues, comme le reste de la recherche (« crop » trouve
+            // « Recadrer »).
+            for id in action.interface_labels() {
+                for language in tri::i18n::Language::ALL {
+                    if tri::i18n::has(language, id) {
+                        names.push(tri::i18n::translate_in(language, id, None));
+                    }
+                }
+            }
             let hit = Hit {
                 item: Item::Action(action),
                 title,

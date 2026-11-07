@@ -22936,7 +22936,8 @@ mod tests {
                 }
                 2 => {
                     press(&mut h, Key::A, Modifiers::CTRL);
-                    press(&mut h, Key::C, Modifiers::NONE);
+                    type_text(&mut h, "=");
+                    assert_eq!(h.state().mode, Mode::Compare);
                 }
                 _ => {}
             }
@@ -25799,8 +25800,8 @@ mod tests {
         let (mut h, dir) = harness();
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
-        // r depuis la grille : plein écran et recadrage.
-        press(&mut h, Key::C, Modifiers::NONE);
+        // v depuis la grille : plein écran et nouvelle version (07/11/2026 : c avant).
+        press(&mut h, Key::V, Modifiers::NONE);
         h.run_steps(3);
         assert_eq!(h.state().mode, Mode::View);
         assert!(h.state().crop.is_some());
@@ -25808,12 +25809,16 @@ mod tests {
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
-        // Rapport de l'image : « Recadrage », pas « Original », réservé à l'image non
-        // recadrée dans la liste des versions (retour du 23/10/2026).
-        assert_eq!(h.state().crop.as_ref().unwrap().name, "Recadrage");
+        // Rapport de l'image : « Version » (« Recadrage » avant le 07/11/2026), pas
+        // « Original », réservé à l'image non recadrée dans la liste des versions (retour
+        // du 23/10/2026).
+        assert_eq!(
+            h.state().crop.as_ref().unwrap().name,
+            t!("crop-name-original-ratio")
+        );
         h.state_mut().crop.as_mut().unwrap().name = "original".into();
         assert!(h.state().crop.as_ref().unwrap().name_taken());
-        h.state_mut().crop.as_mut().unwrap().name = "Recadrage".into();
+        h.state_mut().crop.as_mut().unwrap().name = t!("crop-name-original-ratio");
         // 5 : 3:2 ; flèches : le cadre bouge, l'image reste la même.
         press(&mut h, Key::Num5, Modifiers::NONE);
         let before = h.state().crop.as_ref().unwrap().rect;
@@ -25868,18 +25873,21 @@ mod tests {
             (f64::from(w) / f64::from(h2) - 1.5).abs() < 0.05,
             "3:2 : {w} × {h2}"
         );
-        // v : version suivante (ici la seule), puis l'original ; Maj+V dans l'autre sens.
-        press(&mut h, Key::V, Modifiers::NONE);
+        // Maj+V : version suivante (ici la seule), puis l'original ; Ctrl+Maj+V dans
+        // l'autre sens (07/11/2026 : v crée une version).
+        let shift = Modifiers::SHIFT;
+        let back = Modifiers::CTRL | Modifiers::SHIFT;
+        press(&mut h, Key::V, shift);
         assert_eq!(h.state().version_shown, None);
-        press(&mut h, Key::V, Modifiers::NONE);
+        press(&mut h, Key::V, shift);
         assert_eq!(h.state().version_shown, Some((image.clone(), 0)));
-        press(&mut h, Key::V, Modifiers::SHIFT);
-        assert_eq!(h.state().version_shown, None, "Maj+V : l'original");
-        press(&mut h, Key::V, Modifiers::SHIFT);
+        press(&mut h, Key::V, back);
+        assert_eq!(h.state().version_shown, None, "Ctrl+Maj+V : l'original");
+        press(&mut h, Key::V, back);
         assert_eq!(
             h.state().version_shown,
             Some((image.clone(), 0)),
-            "Maj+V : la dernière version"
+            "Ctrl+Maj+V : la dernière version"
         );
         // Supprimer (dans la liste, annulable), puis Ctrl+Z la remet.
         versions_list(&h);
@@ -25893,7 +25901,7 @@ mod tests {
         press(&mut h, Key::Z, Modifiers::CTRL);
         assert!(tri::versions::read(&image).unwrap().list.is_empty());
         // Échap abandonne sans rien écrire.
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert!(h.state().crop.is_none());
         assert_eq!(
@@ -25911,7 +25919,7 @@ mod tests {
         h.state_mut().config_path = Some(config.clone());
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
@@ -25937,8 +25945,7 @@ mod tests {
         assert_eq!(crop.name, "Story");
         assert_eq!(crop.profile.as_deref(), Some("web"));
         // Enregistrer comme préréglage : écrit dans le fichier, identifiant libre.
-        h.get_by_label("Enregistrer comme préréglage de recadrage")
-            .click();
+        h.get_by_label(&t!("crop-preset-save")).click();
         h.run_steps(2);
         let text = std::fs::read_to_string(&config).unwrap();
         assert!(text.contains("[versions.presets.story-2]"), "{text}");
@@ -25959,7 +25966,7 @@ mod tests {
         assert_eq!(saved.list[0].profile.as_deref(), Some("web"));
         // Issue n° 14 : pas deux versions du même nom. Le préréglage propose « Story (2) » ;
         // un nom tapé déjà pris (casse comprise) n'est pas enregistré, le recadrage reste.
-        press(&mut h, Key::C, Modifiers::NONE);
+        press(&mut h, Key::V, Modifiers::NONE);
         run_until(&mut h, |app| {
             app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
         });
