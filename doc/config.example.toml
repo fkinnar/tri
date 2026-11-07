@@ -835,6 +835,11 @@ max = 21
 gap = 4.0
 # Épaisseur du cadre de l'image active (celle que l'on note).
 frame = 3.0
+# Plus d'images que max : la bulle « Comparaison limitée à … images », durée d'affichage
+# en secondes (0 : jamais, la barre d'état le dit ; négatif : toujours) et place
+# ("center", "top-left", "top-right", "bottom-right" ou "bottom-left").
+limit_seconds = 3.0
+limit_place = "center"
 
 [gui.position]
 # Repère « où on en est » à chaque changement d'image, en grille et en plein écran :

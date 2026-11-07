@@ -427,6 +427,7 @@ cache-unavailable = cache unavailable: { $error }
 rating-not-saved = rating not saved: { $error }
 compare-needs-two = compare: select at least 2 images ({ $keys }, Shift+click), or stand on a stack or a developed photo
 compare-around = comparing the { $max } images around the current one ([gui.compare] max); select some to choose
+compare-limit-mark = Comparison limited to { $max } images
 compare-limited = comparison limited to the first { $max } ([gui.compare] max)
 view-info-selected = { " " }· selected
 view-info-peaking = { " " }· sharpness

@@ -248,7 +248,9 @@ system one ("cold" measurements, experiments).
 - **Side-by-side comparison** (2026-10-17, `c`, `gui/src/compare.rs` for the layout;
   a bottom-bar button since 2026-11-07, lit in comparison where it leaves it, and the
   back-to-grid button in comparison too; **without a selection or a stack, all the shown
-  images**, at most `[gui.compare] max` around the current one):
+  images**, at most `[gui.compare] max` around the current one; beyond `max`, a
+  "Comparison limited to N images" bubble, set like the position mark: `limit_seconds`,
+  `limit_place`, `TriApp::compare_limit_mark`):
   the selected images, or with no selection those of the current stack (2026-10-25,
   issue #52: `c` on a collapsed stack; Esc comes back to its cover; **2026-10-31: the
   burst stack if it is collapsed, else the photo and its developments** (camera JPEG,

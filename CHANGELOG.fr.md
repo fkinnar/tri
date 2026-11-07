@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
+  de position (`[gui.compare] limit_seconds`, `limit_place`), au lieu d'une ligne de la
+  barre d'état.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.
