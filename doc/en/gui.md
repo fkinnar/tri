@@ -1041,6 +1041,24 @@ force.
 
 ### Command palette (2026-11-06)
 
+**Controls as reusable blocks** (proposal of 2026-11-07, the user's idea: "a palette
+result should be a block strictly identical to the matching block of the interface"):
+`app/controls.rs`. Each control of the right panel is a `Control` (RAW / JPEG boxes,
+sharpness / exposure / developed filters with their sliders and boxes, order and
+direction, shown render, stacks, review of the developments, file actions), drawn and
+applied by one function, `TriApp::control(ui, control, host)`. The panel calls it
+(`Host::Panel`: reachable from the keyboard through `side_begin` / `side_end`); so does
+the palette, under the row of an action that has a control (`Control::of_action`,
+`palette_control`: once per control; `Host::Palette`: outside the panel's keyboard
+pointing, `side_detached`). One sees the state and changes it without closing the
+palette; the field takes the keyboard back after a click (unless a drop-down is open).
+Changing a control changes it in both places.
+Still outside the system (to convert if the proposal is kept): the stacks similarity
+slider and the "Unfold all" / "Grouping…" buttons, the thumbnail size, the bottom-bar
+tools (scale control, strictness slider), the filter-bar switches; the sub-headings stay
+in the panel (layout). The settings window is of another kind (default values, not the
+state): its "configuration" rows in the palette still open the window.
+
 **History** (2026-11-07, the user's choice): with an empty field, the palette shows what
 was launched from it, most recent at the top ("Recently launched"); ↑ / ↓ and Enter launch
 it again, typing searches, clearing comes back to it. Only what is launched from the

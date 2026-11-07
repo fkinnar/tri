@@ -48,9 +48,21 @@ mod tests {
     fn every_id_used_by_the_interface_exists_in_every_language() {
         register();
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        // Les sous-modules aussi (`app/controls.rs`, 07/11/2026).
+        let mut files = Vec::new();
+        let mut dirs = vec![dir];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
         let mut missing = Vec::new();
-        for entry in std::fs::read_dir(dir).unwrap() {
-            let path = entry.unwrap().path();
+        for path in files {
             let source = std::fs::read_to_string(&path).unwrap();
             for (i, _) in source.match_indices("t!(\"") {
                 // `t!(`, pas `format!(` ni `print!(`.

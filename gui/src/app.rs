@@ -37,6 +37,9 @@ use crate::textures::Lru;
 use crate::trace::trace;
 use crate::view::{self, Source};
 
+mod controls;
+use controls::{Control, Host};
+
 /// Ce qui occupe la fenêtre.
 /// Referme les coupes de `ranges` (piles de rafale, contiguës et ordonnées) qui tombent
 /// entre deux images de la même photo (`same_photo`) : ses développements restent avec
@@ -789,6 +792,8 @@ pub struct TriApp {
     /// pointables dessinés (vrai : un titre de section), dans l'ordre, au-dessus des
     /// lignes des EXIF.
     side_items: Vec<bool>,
+    /// Un contrôle est dessiné hors du panneau (palette) : pas de pointage au clavier.
+    side_detached: bool,
     /// Élément pointé parmi [`TriApp::side_items`] ; `None` : une ligne des EXIF
     /// ([`TriApp::meta_cursor`]).
     side_cursor: Option<usize>,
@@ -1352,6 +1357,7 @@ impl TriApp {
             meta_has_histogram: false,
             meta_anchor: None,
             side_items: Vec::new(),
+            side_detached: false,
             side_cursor: Some(0),
             side_key: None,
             filter_seen: Default::default(),
@@ -1971,6 +1977,10 @@ impl TriApp {
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
     /// son rang, et la touche à lui appliquer s'il est pointé.
     fn side_begin(&mut self, title: bool) -> (usize, Option<SideKey>) {
+        // Hors du panneau (un contrôle dans la palette) : rien à pointer.
+        if self.side_detached {
+            return (usize::MAX, None);
+        }
         let i = self.side_items.len();
         self.side_items.push(title);
         let here = self.focus == crate::actions::Scope::Metadata && self.side_cursor == Some(i);
@@ -1980,6 +1990,9 @@ impl TriApp {
     /// Fin de l'élément `i` dessiné dans `rect` : un clic le pointe ; pointé, il prend la
     /// bande du curseur (comme les lignes des EXIF et les dossiers).
     fn side_end(&mut self, ui: &mut Ui, i: usize, rect: Rect, clicked: bool) {
+        if i == usize::MAX {
+            return;
+        }
         if clicked {
             self.side_cursor = Some(i);
         }
@@ -2151,117 +2164,17 @@ impl TriApp {
     /// allumé (retour du 27/10/2026 : cachés quand ils ne servent pas). La place ne
     /// manquant plus, deux curseurs pour l'exposition et les logiciels en cases à plat.
     fn filter_settings(&mut self, ui: &mut Ui) {
-        let mut clicked = None;
-        let mut cycles = 0;
         // Fichiers montrés, RAW et JPEG, en tête et sans titre (retour du 28/10/2026 :
         // assez explicite ; dans la barre des filtres jusqu'au 27/10/2026, puis une journée
-        // dans la section « Grille »). Un des deux reste coché.
-        let (raw, jpeg) = match self.filter {
-            KindFilter::All => (true, true),
-            KindFilter::RawOnly => (true, false),
-            KindFilter::FlatOnly => (false, true),
-        };
-        ui.horizontal(|ui| {
-            for (is_raw, on, name, tip) in [
-                (true, raw, "RAW", t!("filter-bar-raw-tip")),
-                (false, jpeg, "JPEG", t!("filter-bar-flat-tip")),
-            ] {
-                let tip = format!("{tip}\n{}", self.action_tip(Action::FilterCycle));
-                let mut checked = on;
-                let alone = on && raw != jpeg;
-                let (item, key) = self.side_begin(false);
-                let mut response = ui
-                    .add_enabled(!alone, egui::Checkbox::new(&mut checked, name))
-                    .on_hover_text(&tip)
-                    .on_disabled_hover_text(&tip);
-                if key == Some(SideKey::Activate) && !alone {
-                    checked = !checked;
-                    response.mark_changed();
-                }
-                self.side_end(ui, item, response.rect, response.changed());
-                if response.changed() {
-                    let (raw, jpeg) = if is_raw {
-                        (checked, jpeg)
-                    } else {
-                        (raw, checked)
-                    };
-                    let kind = match (raw, jpeg) {
-                        (true, false) => KindFilter::RawOnly,
-                        (false, true) => KindFilter::FlatOnly,
-                        _ => KindFilter::All,
-                    };
-                    // Le type tourne en boucle (même action que le clavier) : autant de crans
-                    // que nécessaire.
-                    let order = [KindFilter::All, KindFilter::RawOnly, KindFilter::FlatOnly];
-                    let from = order.iter().position(|&k| k == self.filter).unwrap_or(0);
-                    let to = order.iter().position(|&k| k == kind).unwrap_or(0);
-                    cycles = (to + 3 - from) % 3;
-                }
-            }
-        });
+        // dans la section « Grille »).
+        self.control(ui, Control::FileKinds, Host::Panel);
         ui.add_space(self.gui.dialogs.spacing);
-        let size = self.gui.grid.marks + 4.0;
-        for (action, on, enabled) in self.content_toggles() {
-            let name = match action {
-                Action::FilterBlurry => t!("panel-filter-sharp"),
-                Action::FilterWellExposed => t!("panel-filter-exposed"),
-                _ => t!("panel-filter-developed"),
-            };
-            let tip = self.action_tip(action);
-            let (item, key) = self.side_begin(false);
-            let row = ui.horizontal(|ui| {
-                if !enabled {
-                    ui.disable();
-                }
-                let mut checked = on;
-                let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
-                let (rect, icon) = marks::clickable(ui, size, &tip);
-                let color = if on {
-                    marks::accent_mark(ui.ctx())
-                } else {
-                    ui.visuals().weak_text_color()
-                };
-                filter_icon(ui.painter(), rect, action, color);
-                let label = ui
-                    .add(egui::Label::new(name).sense(Sense::click()))
-                    .on_hover_text(&tip);
-                check.changed() || icon.clicked() || label.clicked()
-            });
-            self.side_end(ui, item, row.response.rect, row.inner);
-            if enabled && (row.inner || key == Some(SideKey::Activate)) {
-                clicked = Some(action);
+        for (action, on, _) in self.content_toggles() {
+            self.control(ui, Control::Filter(action), Host::Panel);
+            // Allumé : de l'air sous ses réglages.
+            if on {
+                ui.add_space(self.gui.dialogs.spacing);
             }
-            if !on {
-                continue;
-            }
-            ui.indent(action.id(), |ui| {
-                let width = panel_slider_width(ui);
-                match action {
-                    Action::FilterBlurry => {
-                        let (item, key) = self.side_begin(false);
-                        let slider = self.blur_slider(ui, width, key);
-                        self.side_end(ui, item, slider.rect, slider.drag_started());
-                        slider_ends(ui, width);
-                    }
-                    Action::FilterWellExposed => {
-                        for side in [tri::exposure::Clip::Over, tri::exposure::Clip::Under] {
-                            let (item, key) = self.side_begin(false);
-                            let slider = self.clip_slider(ui, side, width, key);
-                            self.side_end(ui, item, slider.rect, slider.drag_started());
-                        }
-                        slider_ends(ui, width);
-                    }
-                    _ => self.developed_checkboxes(ui),
-                }
-            });
-            ui.add_space(self.gui.dialogs.spacing);
-        }
-        let ctx = ui.ctx().clone();
-        for _ in 0..cycles {
-            self.perform(&ctx, Action::FilterCycle);
-        }
-        if let Some(action) = clicked {
-            self.perform(&ctx, action);
         }
     }
 
@@ -2310,54 +2223,14 @@ impl TriApp {
     /// encombraient la barre des filtres, ou se cachaient dans son menu « … »).
     fn grid_settings(&mut self, ui: &mut Ui) {
         let mut clicked: Vec<Action> = Vec::new();
-        let size = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
         // Ordre : la clé, puis le sens ; en tête de la section (retour du 27/10/2026).
         self.subheading(ui, t!("panel-grid-sort"));
-        let mut key = self.order.key;
-        ui.horizontal(|ui| {
-            // Au clavier : ← / → la clé précédente / suivante, Espace la suivante.
-            let (item, pressed) = self.side_begin(false);
-            let keys = tri::sort::SortKey::ALL;
-            let at = keys.iter().position(|&k| k == key).unwrap_or(0);
-            match pressed {
-                Some(SideKey::Left) => key = keys[at.saturating_sub(1)],
-                Some(SideKey::Right) => key = keys[(at + 1).min(keys.len() - 1)],
-                Some(SideKey::Activate) => key = keys[(at + 1) % keys.len()],
-                None => {}
-            }
-            let combo = egui::ComboBox::from_id_salt("sort")
-                .selected_text(sort_name(key))
-                .show_ui(ui, |ui| {
-                    for k in tri::sort::SortKey::ALL {
-                        ui.selectable_value(&mut key, k, sort_name(k));
-                    }
-                })
-                .response
-                .on_hover_text(self.action_tip(Action::SortNext));
-            self.side_end(ui, item, combo.rect, combo.clicked());
-            let (item, pressed) = self.side_begin(false);
-            let (rect, response) =
-                marks::clickable(ui, size, &self.action_tip(Action::SortReverse));
-            self.side_end(ui, item, rect, response.clicked());
-            if pressed == Some(SideKey::Activate) {
-                clicked.push(Action::SortReverse);
-            }
-            let color = ui.style().interact(&response).fg_stroke.color;
-            marks::sort_arrow(
-                ui.painter(),
-                rect.shrink(size * 0.1),
-                self.order.descending,
-                color,
-            );
-            if response.clicked() {
-                clicked.push(Action::SortReverse);
-            }
-        });
-        let render = self.render_choice(ui);
+        self.control(ui, Control::Sort, Host::Panel);
+        self.render_heading(ui);
+        self.control(ui, Control::Render, Host::Panel);
         // Piles : l'interrupteur, puis leurs réglages quand elles sont actives.
-        if self.stacks_switch(ui) {
-            clicked.push(Action::StackMode);
-        }
+        self.subheading(ui, t!("panel-grid-stacks"));
+        self.control(ui, Control::Stacks, Host::Panel);
         if self.stacking {
             ui.indent("stacks", |ui| {
                 let width = panel_slider_width(ui);
@@ -2414,12 +2287,6 @@ impl TriApp {
             });
         }
         self.file_actions_switch(ui);
-        if render != self.grid_render {
-            self.set_grid_render(render);
-        }
-        if key != self.order.key {
-            self.set_order(tri::sort::Order { key, ..self.order });
-        }
         let ctx = ui.ctx().clone();
         for action in clicked {
             self.perform(&ctx, action);
@@ -2474,44 +2341,14 @@ impl TriApp {
     /// par défaut, une case pour les autoriser, écrite dans la configuration.
     fn file_actions_switch(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-grid-files"));
-        let mut allowed = self.settings.files.allow_actions;
-        if self
-            .side_checkbox(ui, &mut allowed, t!("panel-grid-files-allow"))
-            .on_hover_text(t!("panel-grid-files-tip"))
-            .changed()
-        {
-            self.set_file_actions(allowed);
-        }
+        self.control(ui, Control::FileActions, Host::Panel);
     }
 
-    /// « Rendu affiché » (#114, un seul pour la grille et le plein écran depuis le
-    /// 06/11/2026) : JPEG boîtier, la couverture, chaque logiciel installé, le rendu RAW.
-    /// Renvoie le choix, à appliquer par l'appelant.
-    fn render_choice(&mut self, ui: &mut Ui) -> crate::grid_render::GridRender {
-        let tip = format!(
-            "{}\n{}\n{}",
-            t!("panel-render-tip"),
-            self.action_tip(Action::ToggleSource),
-            self.action_tip(Action::GridRenderNext)
-        );
+    /// Sous-titre « Rendu affiché », avec sa bulle (la liste : [`Control::Render`]).
+    fn render_heading(&mut self, ui: &mut Ui) {
+        let tip = self.render_tip();
         self.subheading(ui, t!("panel-grid-render"))
-            .on_hover_text(&tip);
-        let engines = self.developers.engines();
-        let mut render = self.grid_render;
-        let choices = crate::grid_render::GridRender::choices(&engines);
-        let weak = ui.visuals().weak_text_color();
-        self.side_combo(
-            ui,
-            "grid_render",
-            &mut render,
-            &choices,
-            |c| c.label(weak),
-            Some(tip),
-        );
-        if self.shown_render() != self.grid_render {
-            ui.weak(t!("panel-grid-render-filtered"));
-        }
-        render
+            .on_hover_text(tip);
     }
 
     /// Section « Vue » du panneau de droite, en plein écran (#239 : la section « Grille »
@@ -2549,19 +2386,14 @@ impl TriApp {
                 self.request_zoom();
             }
         } else {
-            let render = self.render_choice(ui);
-            if render != self.grid_render {
-                self.set_grid_render(render);
-                self.request_zoom();
-            }
+            self.render_heading(ui);
+            self.control(ui, Control::Render, Host::Panel);
         }
         if !self.developers.is_empty() {
             self.view_developments(ui);
         }
-        if self.stacks_switch(ui) {
-            let ctx = ui.ctx().clone();
-            self.perform(&ctx, Action::StackMode);
-        }
+        self.subheading(ui, t!("panel-grid-stacks"));
+        self.control(ui, Control::Stacks, Host::Panel);
         self.file_actions_switch(ui);
     }
 
@@ -2581,23 +2413,7 @@ impl TriApp {
 
     fn view_developments(&mut self, ui: &mut Ui) {
         self.subheading(ui, t!("panel-view-developments"));
-        // Source « JPEG boîtier » : pas de développement à voir, tout est grisé et la revue
-        // ne s'applique pas (retour du 05/11/2026 : le JPEG à un seul endroit, la source).
-        let jpeg = self.jpeg_source();
-        ui.add_enabled_ui(!jpeg, |ui| {
-            let mut review = self.review_developments;
-            if self
-                .side_checkbox(ui, &mut review, t!("panel-view-review"))
-                .on_hover_text(self.review_tip())
-                .changed()
-            {
-                self.review_developments = review;
-            }
-            // Dessous, sans titre (le sous-titre « Développements » suffit), le
-            // développement de chaque photo ; masqué pendant la revue (retours du
-            // 05/11/2026 : grisé sous la case cochée, il semblait en dépendre à l'envers) :
-            // ← / → passent alors par chaque développement, le choix ne s'applique plus.
-        });
+        self.control(ui, Control::ReviewDevelopments, Host::Panel);
     }
 
     fn jpeg_source(&self) -> bool {
@@ -2614,22 +2430,6 @@ impl TriApp {
     /// « JPEG boîtier » (grisée alors).
     fn reviewing(&self) -> bool {
         self.review_developments && !self.jpeg_source()
-    }
-
-    /// Sous-titre « Piles » et la case « Empiler automatiquement » (sections « Grille »
-    /// et « Vue » du panneau de droite : retour du 31/10/2026, elle manquait en plein
-    /// écran). Vrai quand la case vient d'être cochée ou décochée : à l'appelant de
-    /// déclencher `Action::StackMode`.
-    fn stacks_switch(&mut self, ui: &mut Ui) -> bool {
-        self.subheading(ui, t!("panel-grid-stacks"));
-        let mut stacking = self.stacking;
-        self.side_checkbox(ui, &mut stacking, t!("panel-grid-stacks-on"))
-            .on_hover_text(format!(
-                "{}\n{}",
-                t!("panel-grid-stacks-tip"),
-                self.action_tip(Action::StackMode)
-            ))
-            .changed()
     }
 
     /// Métadonnées de l'image sélectionnée (section « Exif » du panneau de droite) : une
@@ -14787,7 +14587,14 @@ impl TriApp {
                         ))
                         .desired_width(f32::INFINITY),
                 );
-                if !state.focused {
+                // À l'ouverture ; puis après un clic sur un contrôle (07/11/2026 : on
+                // continuait de taper dans le vide), sauf pendant qu'une liste déroulante
+                // est ouverte.
+                if !state.focused
+                    || (!field.has_focus()
+                        && !egui::Popup::is_any_open(ui.ctx())
+                        && ui.ctx().memory(|m| m.focused().is_none()))
+                {
                     field.request_focus();
                     state.focused = true;
                 }
@@ -14800,6 +14607,9 @@ impl TriApp {
                 ScrollArea::vertical()
                     .max_height(ctx.content_rect().height() * 0.6)
                     .show(ui, |ui| {
+                        // Chaque contrôle une fois (« trier par nom », « trier par
+                        // étoiles » : une seule liste de l'ordre, sous la première).
+                        let mut controls: HashSet<Control> = HashSet::new();
                         for (i, hit) in state.hits.iter().enumerate() {
                             let chosen = i == state.selected;
                             let row = palette_row(ui, hit, chosen, accent);
@@ -14808,6 +14618,18 @@ impl TriApp {
                             }
                             if row.clicked() {
                                 clicked = Some(i);
+                            }
+                            // Le contrôle de l'action, le même que dans le panneau
+                            // (proposition du 07/11/2026) : son état, changeable ici.
+                            if let crate::palette::Item::Action(action) = hit.item
+                                && let Some(control) = self.palette_control(action)
+                                && controls.insert(control)
+                            {
+                                ui.push_id(("palette_control", control), |ui| {
+                                    ui.indent("palette_control", |ui| {
+                                        self.control(ui, control, Host::Palette);
+                                    });
+                                });
                             }
                         }
                     });
@@ -17316,6 +17138,40 @@ mod tests {
             press(&mut h, Key::Backspace, Modifiers::NONE);
         }
         assert_eq!(shown(&h)[0], Item::Action(Action::SortBy(SortKey::Stars)));
+    }
+
+    #[test]
+    fn the_palette_shows_and_changes_the_controls_of_the_panel() {
+        // Proposition du 07/11/2026 (idée de l'utilisateur) : sous une action, le même
+        // contrôle que dans le panneau, son état, changeable sans quitter la palette.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().metadata_panel = false;
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        type_text(&mut h, "empiler");
+        let stacks = t!("panel-grid-stacks-on");
+        assert_eq!(h.query_all_by_label(&stacks).count(), 1, "une fois");
+        let before = h.state().stacking;
+        h.get_by_label(&stacks).click();
+        h.run_steps(3);
+        assert_ne!(h.state().stacking, before, "basculé");
+        assert!(h.state().palette.is_some(), "la palette reste ouverte");
+        // Plusieurs actions pour le même contrôle (l'ordre) : une seule liste.
+        for _ in 0.."empiler".len() {
+            press(&mut h, Key::Backspace, Modifiers::NONE);
+        }
+        type_text(&mut h, "trier par");
+        let hits = h.state().palette.as_ref().map_or(0, |p| p.hits.len());
+        assert!(hits > 1, "{hits}");
+        let reverse = h.state().action_tip(Action::SortReverse);
+        assert_eq!(h.query_all_by_label(&reverse).count(), 1);
+        // Une action sans contrôle : rien dessous.
+        assert_eq!(h.state().palette_control(Action::NavNext), None);
+        assert_eq!(
+            h.state()
+                .palette_control(Action::SortBy(tri::sort::SortKey::Stars)),
+            Some(Control::Sort)
+        );
     }
 
     #[test]

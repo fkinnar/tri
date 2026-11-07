@@ -27,6 +27,10 @@
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).
+- **Contrôles dans la palette de commandes** : sous une action qui a un contrôle dans le
+  panneau de droite (une case, une liste, un curseur), la palette montre ce même
+  contrôle, avec son état, pour le changer sans la fermer. Panneau et palette le
+  dessinent avec le même code.
 - **Un rendu affiché précis depuis la palette** : une action par rendu (JPEG boîtier,
   couverture, chaque logiciel de développement, rendu RAW), sans passer par les autres.
   Pas de touche par défaut ; `[keys]` peut leur en donner une.
