@@ -1091,6 +1091,14 @@ font défiler. En bas, le rappel de F1 et du leader en vigueur.
 
 ### Palette de commandes (06/11/2026)
 
+**Historique** (07/11/2026, choix de l'utilisateur) : champ vide, la palette montre ce
+qu'on y a lancé, le plus récent en haut (« Lancées récemment ») ; ↑ / ↓ et Entrée le
+relancent, taper cherche, effacer y revient. Seulement ce qui est lancé depuis la palette
+(actions et réglages ouverts), sans doublon, `[gui.dialogs] palette_history` au plus (20 ;
+0 : aucun). Gardé d'une session à l'autre dans le dossier de données (`palette-history`,
+une ligne par commande : `action<TAB>id`, `setting<TAB>section<TAB>clé` ; une action
+disparue ou une ligne illisible est sautée). `palette::remember`, `history_hits`.
+
 Idée née de la refonte de l'aide (« trop de résultats pour que ce soit utile ») : comme
 Ctrl+Maj+P dans VS Code, ou la ligne de commande de vim. `core.app.palette` :
 `Ctrl+Maj+P` en classique, `:` en vim (choix de l'utilisateur ; `:` rejoint les

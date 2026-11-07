@@ -1034,6 +1034,15 @@ force.
 
 ### Command palette (2026-11-06)
 
+**History** (2026-11-07, the user's choice): with an empty field, the palette shows what
+was launched from it, most recent at the top ("Recently launched"); ↑ / ↓ and Enter launch
+it again, typing searches, clearing comes back to it. Only what is launched from the
+palette (actions and settings opened), without duplicates, at most
+`[gui.dialogs] palette_history` (20; 0: none). Kept from one session to the next in the
+data folder (`palette-history`, one line per command: `action<TAB>id`,
+`setting<TAB>section<TAB>key`; a removed action or an unreadable line is skipped).
+`palette::remember`, `history_hits`.
+
 An idea from the help redesign ("too many results to be really useful"): like
 Ctrl+Shift+P in VS Code, or the command line of vim. `core.app.palette`: `Ctrl+Shift+P`
 in classic, `:` in vim (the user's choice; `:` joins the characters bound for

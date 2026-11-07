@@ -809,6 +809,10 @@ help_here_column = 420.0
 # scrolls).
 palette_width = 640.0
 palette_max = 0
+# Palette history: the commands launched from it, shown when the field is empty (most
+# recent at the top; up / down arrows and Enter), kept from one session to the next in
+# the data folder. Number kept; 0: no history.
+palette_history = 20
 # Palette prefixes: ">" only searches the actions (as in VS Code), "?" only the settings;
 # alone, they list everything. Empty: none.
 palette_actions_prefix = ">"

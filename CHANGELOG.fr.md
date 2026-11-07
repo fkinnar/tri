@@ -14,6 +14,9 @@
   (`f` : « Filtre ») ; plus de précisions entre parenthèses (F1 et la palette les gardent) ;
   libellés plus courts pour les filtres d'étoiles et les couleurs
   (plus de « (ajouter / retirer) »).
+- **Historique de la palette** : champ vide, la palette de commandes montre ce qu'on y a
+  lancé, le plus récent d'abord ; ↑ / ↓ et Entrée le relancent. Gardé d'une session à
+  l'autre (`[gui.dialogs] palette_history`, 20).
 - **Piles : pauses et progression du curseur** (#306) : une pause plus longue que la
   cadence du dossier éloigne deux images (en studio, un changement de pose tombe souvent
   sur une pause). Deux nouveaux curseurs dans la fenêtre de regroupement (`Ctrl+G`),

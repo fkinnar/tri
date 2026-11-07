@@ -809,6 +809,10 @@ help_here_column = 420.0
 # (0 : toutes ; elle défile).
 palette_width = 640.0
 palette_max = 0
+# Historique de la palette : les commandes qu'on y a lancées, montrées quand le champ est
+# vide (la plus récente en haut ; flèches haut / bas et Entrée), gardées d'une session à
+# l'autre dans le dossier de données. Nombre gardé ; 0 : pas d'historique.
+palette_history = 20
 # Préfixes de la palette : ">" ne cherche que les actions (comme dans VS Code), "?" que les
 # réglages ; seuls, ils listent tout. Vide : aucun.
 palette_actions_prefix = ">"
