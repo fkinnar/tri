@@ -9877,8 +9877,12 @@ impl TriApp {
             .filter(|(i, _)| *i == index)
             .zip(image_rect)
             .map(|((_, rel), r)| (r, r.min + vec2(rel.x * r.width(), rel.y * r.height())));
+        // Seulement sur la partie visible de l'image (retour du 07/11/2026 : une vignette
+        // coupée par la barre du bas continuait dessous, et la loupe restait quand on
+        // cliquait − et + pour la régler).
+        let visible = painter.clip_rect();
         let over = keyboard.or(match (image_rect, pointer) {
-            (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
+            (Some(r), Some(p)) => (r.contains(p) && visible.contains(p)).then_some((r, p)),
             _ => None,
         });
         if !held || self.zoom.is_some() || over.is_none() {
@@ -12336,6 +12340,24 @@ impl TriApp {
                     actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
+                // Infos sur l'image (repère de position, notes ; leur état se voit et se
+                // change à la souris, retour du 05/11/2026), tout à droite de la barre
+                // (retour du 07/11/2026).
+                if self.mode == Mode::View {
+                    let action = Action::ToggleImageInfo;
+                    let tip = self.action_tip(action);
+                    let (rect, response) = marks::icon_button(ui, icon, &action.label(), &tip);
+                    let color = if self.image_info {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
+                    marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
+                    if response.clicked() {
+                        clicked = Some(action);
+                    }
+                    ui.separator();
+                }
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keymap.keys_for(Action::Back).join(" / ");
@@ -12425,24 +12447,6 @@ impl TriApp {
                     self.blur_slider(ui, self.gui.grid.blur_slider, None);
                     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
                     marks::sharp_triangle(ui.painter(), rect, Color32::from(colors.blur_drop));
-                }
-                // Infos sur l'image (repère de position, notes ; leur état se voit et se
-                // change à la souris, retour du 05/11/2026), tout à gauche des outils
-                // (retour du 07/11/2026).
-                if self.mode == Mode::View {
-                    ui.separator();
-                    let action = Action::ToggleImageInfo;
-                    let tip = self.action_tip(action);
-                    let (rect, response) = marks::icon_button(ui, icon, &action.label(), &tip);
-                    let color = if self.image_info {
-                        marks::accent_mark(ui.ctx())
-                    } else {
-                        ui.style().interact(&response).fg_stroke.color
-                    };
-                    marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
-                    if response.clicked() {
-                        clicked = Some(action);
-                    }
                 }
                 self.rating_tail = right - ui.min_rect().left();
             });
@@ -18961,6 +18965,41 @@ mod tests {
             (moved - step).abs() < 1.0 || after.x >= 1.0,
             "{moved} points pour un pas de {step}"
         );
+    }
+
+    #[test]
+    fn no_loupe_over_the_bottom_bar() {
+        // Retour du 07/11/2026 : une vignette coupée par la barre du bas continuait
+        // dessous ; la loupe restait quand on cliquait − et + pour la régler.
+        let names: Vec<String> = (0..40).map(|i| format!("img{i:02}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&names, 640, 480);
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        run_until(&mut h, |app| app.grid_images.len() >= 2);
+        // Une hauteur de fenêtre où une vignette passe sous le + de la barre.
+        let mut found = None;
+        for height in (300..800).step_by(7) {
+            h.set_size(vec2(1800.0, height as f32));
+            h.run_steps(4);
+            let plus = h.get_by_label("+").rect().center();
+            if h.state().grid_images.iter().any(|(_, r)| r.contains(plus)) {
+                found = Some(plus);
+                break;
+            }
+        }
+        let plus = found.expect("une vignette sous la barre");
+        h.event(UiEvent::Key {
+            key: Key::M,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.hover_at(plus - vec2(1.0, 0.0));
+        h.run_steps(1);
+        h.hover_at(plus);
+        h.run_steps(3);
+        assert!(!h.state().loupe_on, "pas de loupe sous la barre");
     }
 
     #[test]

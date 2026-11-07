@@ -7,7 +7,8 @@
 - **One zoom control in the bottom bar**: the zoom and loupe controls are merged. It sets
   the zoom (round magnifier), or the loupe while its key is held (square magnifier). A
   click on the icon resets, a click on the value lets you type it. The pointer stays
-  visible while the loupe key is held, and the image info switch moves to the far left.
+  visible while the loupe key is held, the loupe no longer shows over the bar, and the
+  image info switch moves to the far right.
   `TRI_GUI_TRACE` also shows the keys received.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).

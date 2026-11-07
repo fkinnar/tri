@@ -1203,8 +1203,10 @@ sur l'**icône** réinitialise (zoom ajusté à la vue, loupe à `loupe_scale`) 
 la **valeur** la fait taper en pourcentage (`ScaleEdit` : Entrée applique, Échap ou un
 clic ailleurs annule ; la cible est fixée au clic, la touche de loupe peut être relâchée ;
 le champ prend tout le clavier). La touche de loupe tenue ne masque plus le pointeur
-(sa répétition le masquait, jusque sur la barre) ; main sur l'icône, − et +. L'interrupteur
-des infos sur l'image (`Ctrl+I`) est tout à gauche des outils.
+(sa répétition le masquait, jusque sur la barre) ; main sur l'icône, − et +. La loupe ne
+s'affiche que sur la partie visible d'une image (`painter.clip_rect()`) : une vignette
+coupée par la barre du bas continuait dessous, et la loupe restait pendant qu'on cliquait
+− et +. L'interrupteur des infos sur l'image (`Ctrl+I`) est tout à droite de la barre.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 

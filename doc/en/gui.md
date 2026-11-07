@@ -1141,8 +1141,10 @@ fitted to the view, loupe to `loupe_scale`); a click on the **value** lets one t
 a percentage (`ScaleEdit`: Enter applies, Esc or a click elsewhere cancels; the target is
 fixed at the click, the loupe key can be released; the field takes the whole keyboard).
 Holding the loupe key no longer hides the pointer (its repeat hid it, even over the bar);
-a hand over the icon, − and +. The image info switch (`Ctrl+I`) is at the far left of the
-tools.
+a hand over the icon, − and +. The loupe only shows over the visible part of an image
+(`painter.clip_rect()`): a thumbnail cut by the bottom bar went on beneath it, and the
+loupe stayed while clicking − and +. The image info switch (`Ctrl+I`) is at the far
+right of the bar.
 
 ### Shortcut review (2026-11-06, issue #280)
 
