@@ -5405,8 +5405,10 @@ impl TriApp {
         self.stacks =
             crate::stacks::Stacks::build(self.files.len(), ranges, self.stacking, cover, expanded)
                 .with_developments(same_photo, dev_cover, dev_unfolded_in);
-        // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile.
-        let browsing = self.mode == Mode::View && self.stacking;
+        // En mode pile (plein écran), on parcourt aussi les images cachées d'une pile ; en
+        // comparaison aussi (07/11/2026 : une pile recalculée pendant la comparaison, à
+        // l'arrivée d'une vignette, ramenait l'image active à la couverture).
+        let browsing = (self.mode == Mode::View && self.stacking) || self.mode == Mode::Compare;
         if !self.files.is_empty() && !browsing {
             let visible = self.stacks.visible(self.selected);
             if visible != self.selected {
@@ -17368,7 +17370,10 @@ mod tests {
         tri::versions::write(&image, &versions, tri::xmp::Convention::Darktable).unwrap();
         h.state_mut().versions.clear();
         h.run_steps(3);
-        h.get_by_label(&t!("badge-versions", n = 1)).click();
+        // Le badge une fois dessiné, à sa place (CI Windows lente, 07/11/2026).
+        let badge = t!("badge-versions", n = 1);
+        wait_for_label(&mut h, &badge);
+        click_settled(&mut h, &badge);
         h.run_steps(3);
         let app = h.state();
         assert_eq!(app.files[app.selected].path, image, "l'image du badge");
@@ -18632,7 +18637,9 @@ mod tests {
         let (mut h, _dir) = harness_with(640, 480);
         h.run_steps(3);
         press(&mut h, Key::Enter, Modifiers::NONE);
-        h.run_steps(5);
+        // L'image affichée d'abord (sa place) : sans elle, pas de loupe (CI Linux lente,
+        // 07/11/2026).
+        run_until(&mut h, |app| app.loupe_rects.contains_key(&app.selected));
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
             key: Key::M,
@@ -22627,6 +22634,11 @@ mod tests {
         );
         press(&mut h, Key::ArrowLeft, Modifiers::NONE);
         assert_eq!(selected_name(&h), "img0.jpg");
+        // Une pile recalculée pendant la comparaison (une vignette arrive) ne ramène pas
+        // l'image active à la couverture (vu sur Windows, plus lent).
+        h.state_mut().stacks_dirty = true;
+        h.run_steps(2);
+        assert_eq!(selected_name(&h), "img0.jpg", "toujours l'image active");
         press(&mut h, Key::Escape, Modifiers::NONE);
         assert_eq!(h.state().mode, Mode::Grid);
         h.run_steps(2);
