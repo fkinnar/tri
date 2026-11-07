@@ -7494,7 +7494,13 @@ impl TriApp {
     /// comprise, #167).
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
-        let stack = self.compare_stack();
+        // Curseur masqué et rien de sélectionné : rien n'est en surbrillance, donc tout
+        // (retour du 07/11/2026 : `=` ne faisait d'abord que remontrer le curseur).
+        let nothing = self.cursor_hidden && self.mode == Mode::Grid && self.selection.is_empty();
+        if nothing {
+            targets.clear();
+        }
+        let stack = self.compare_stack().filter(|_| !nothing);
         if targets.len() < 2
             && let Some(r) = stack.clone()
         {
@@ -15741,7 +15747,6 @@ fn uses_cursor(action: Action) -> bool {
             | Action::Send(_)
             | Action::SelectToggle
             | Action::SelectVisual
-            | Action::Compare
             | Action::StackToggle
             | Action::StackChoose
     )
@@ -19623,6 +19628,18 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().loupe_scale, 2.0);
         assert_eq!(h.state().scroll_offset, offset);
+    }
+
+    #[test]
+    fn with_nothing_highlighted_the_compare_key_compares_everything() {
+        // Retour du 07/11/2026 : curseur masqué, rien de sélectionné, le premier = ne
+        // faisait que remontrer le curseur (le bouton marchait du premier coup).
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().cursor_hidden = true;
+        type_text(&mut h, "=");
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 3);
     }
 
     #[test]
@@ -23567,8 +23584,10 @@ mod tests {
         assert_eq!(h.state().mode, Mode::Grid);
         h.state_mut().stacking = true;
         h.state_mut().stacks_dirty = true;
+        // L'image courante en surbrillance (curseur montré) : sa pile.
+        h.state_mut().cursor_hidden = false;
         h.run_steps(2);
-        act(&mut h, Action::Compare);
+        type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 1);
         press(&mut h, Key::Escape, Modifiers::NONE);

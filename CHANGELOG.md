@@ -10,7 +10,7 @@
 - **Comparison from the bottom bar**: a button (lit while comparing, where it leaves the
   comparison), and the back-to-grid button in comparison too. Without a selection or a
   stack, everything shown is compared (at most `[gui.compare] max`, around the current
-  image).
+  image); with nothing highlighted in the grid, `=` does it at the first press.
 - **Cmd / Ctrl+click takes the current image too**: without a selection, the highlighted
   image counts as chosen, so the first Cmd / Ctrl+click on another one selects both.
   With a selection and the grid cursor hidden, `=` (and ratings, file actions) act at
