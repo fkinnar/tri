@@ -30,6 +30,8 @@ pub(super) enum Control {
     ReviewDevelopments,
     /// Autoriser les actions sur les fichiers (case, écrite dans la configuration).
     FileActions,
+    /// Taille des vignettes (curseur de la barre du bas ; `+` / `-` en grille).
+    GridSize,
 }
 
 /// Où le contrôle est dessiné.
@@ -55,6 +57,7 @@ impl Control {
             Action::StackMode => Control::Stacks,
             Action::ReviewDevelopments => Control::ReviewDevelopments,
             Action::FileActionsAllow => Control::FileActions,
+            Action::ZoomIn | Action::ZoomOut => Control::GridSize,
             _ => return None,
         })
     }
@@ -100,6 +103,22 @@ impl TriApp {
                     }
                 });
             }
+            Control::GridSize => {
+                let (item, key) = self.side_begin(false);
+                if let Some(SideKey::Left | SideKey::Right) = key {
+                    let g = self.gui.grid;
+                    self.grid_cell = grid::step_cell(
+                        self.grid_cell,
+                        key == Some(SideKey::Right),
+                        g.cell_min,
+                        g.cell_max,
+                    );
+                    self.reveal = Some(Reveal::Minimal);
+                }
+                let width = panel_slider_width(ui);
+                let slider = self.grid_size_slider(ui, width);
+                self.side_end(ui, item, slider.rect, slider.drag_started());
+            }
             Control::FileActions => {
                 let mut allowed = self.settings.files.allow_actions;
                 if self
@@ -125,6 +144,8 @@ impl TriApp {
                 .any(|(t, _, _)| *t == a)
                 .then_some(control),
             Control::ReviewDevelopments if self.developers.is_empty() => None,
+            // En plein écran, + / - sont le zoom (son réglage est dans la barre du bas).
+            Control::GridSize if self.mode != Mode::Grid => None,
             _ => Some(control),
         }
     }

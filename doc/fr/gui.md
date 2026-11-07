@@ -1110,6 +1110,18 @@ qui a un contrôle (`Control::of_action`, `palette_control` : une fois par contr
 `Host::Palette` : hors du pointage du panneau, `side_detached`). On y voit l'état et on
 le change sans fermer la palette ; le champ reprend le clavier après un clic (sauf liste
 déroulante ouverte). Changer un contrôle le change aux deux endroits.
+**Au clavier** (retour du 07/11/2026) : ↑ / ↓ passent aussi par les éléments des
+contrôles montrés (`PaletteState::stops` : chaque ligne, puis les éléments de son
+contrôle, relevés à l'image précédente) ; sur un élément, ← / → le changent (choix
+précédent / suivant, curseur d'un cran) et Entrée l'active, sans fermer la palette
+(`PaletteItems` : le même pointage que le panneau, `side_begin` / `side_end`, numéros à
+partir de `PALETTE_ITEM`). Sur une ligne, ← / → restent au champ. Pas de contrôles dans l'historique (champ vide) :
+on y relance, ↓ va à la commande suivante. La taille des vignettes
+est aussi un contrôle (`Control::GridSize`, sous `+` / `-` en grille).
+**Recherche** (même retour : « nettes », « taille des vignettes » introuvables) : les
+libellés des contrôles qui font une action (`interface_labels` : « Nettes », « Taille des
+vignettes »…) comptent comme son nom dans le classement ; à nom égal, une action passe
+avant un réglage, qui n'ouvre que la configuration.
 Restent hors du système (à convertir si la proposition est retenue) : le curseur de
 similarité des piles et les boutons « Tout déplier » / « Regroupement… », la taille des
 vignettes, les outils de la barre du bas (réglage d'échelle, curseur de sévérité), les

@@ -1053,6 +1053,18 @@ the palette, under the row of an action that has a control (`Control::of_action`
 pointing, `side_detached`). One sees the state and changes it without closing the
 palette; the field takes the keyboard back after a click (unless a drop-down is open).
 Changing a control changes it in both places.
+**From the keyboard** (feedback of 2026-11-07): ↑ / ↓ also go through the items of the
+controls shown (`PaletteState::stops`: each row, then the items of its control, taken
+from the previous frame); on an item, ← / → change it (previous / next choice, slider by
+one step) and Enter activates it, without closing the palette (`PaletteItems`: the same
+pointing as the panel, `side_begin` / `side_end`, numbers from `PALETTE_ITEM`). On a
+row, ← / → stay with the field. No controls in the history (empty field): one
+relaunches there, ↓ goes to the next command. The thumbnail size is a control too
+(`Control::GridSize`, under `+` / `-` in the grid).
+**Search** (same feedback: "nettes", "taille des vignettes" not found): the labels of
+the controls that do an action (`interface_labels`: "Nettes", "Taille des vignettes"…)
+count as its name in the ranking; with equal names, an action comes before a setting,
+which only opens the configuration.
 Still outside the system (to convert if the proposal is kept): the stacks similarity
 slider and the "Unfold all" / "Grouping…" buttons, the thumbnail size, the bottom-bar
 tools (scale control, strictness slider), the filter-bar switches; the sub-headings stay

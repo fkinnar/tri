@@ -792,8 +792,10 @@ pub struct TriApp {
     /// pointables dessinés (vrai : un titre de section), dans l'ordre, au-dessus des
     /// lignes des EXIF.
     side_items: Vec<bool>,
-    /// Un contrôle est dessiné hors du panneau (palette) : pas de pointage au clavier.
+    /// Un contrôle est dessiné hors du panneau (palette) : pas de pointage du panneau.
     side_detached: bool,
+    /// Pendant le dessin des contrôles de la palette : leur pointage au clavier à elle.
+    palette_items: Option<PaletteItems>,
     /// Élément pointé parmi [`TriApp::side_items`] ; `None` : une ligne des EXIF
     /// ([`TriApp::meta_cursor`]).
     side_cursor: Option<usize>,
@@ -1358,6 +1360,7 @@ impl TriApp {
             meta_anchor: None,
             side_items: Vec::new(),
             side_detached: false,
+            palette_items: None,
             side_cursor: Some(0),
             side_key: None,
             filter_seen: Default::default(),
@@ -1977,9 +1980,19 @@ impl TriApp {
     /// Ajoute un élément pointable au panneau de droite (`title` : un titre de section) :
     /// son rang, et la touche à lui appliquer s'il est pointé.
     fn side_begin(&mut self, title: bool) -> (usize, Option<SideKey>) {
-        // Hors du panneau (un contrôle dans la palette) : rien à pointer.
+        // Hors du panneau (un contrôle dans la palette) : le pointage de la palette.
         if self.side_detached {
-            return (usize::MAX, None);
+            let Some(p) = &mut self.palette_items else {
+                return (usize::MAX, None);
+            };
+            let i = p.next;
+            p.next += 1;
+            let key = if p.cursor == Some(i) {
+                p.key.take()
+            } else {
+                None
+            };
+            return (PALETTE_ITEM + i, key);
         }
         let i = self.side_items.len();
         self.side_items.push(title);
@@ -1991,6 +2004,19 @@ impl TriApp {
     /// bande du curseur (comme les lignes des EXIF et les dossiers).
     fn side_end(&mut self, ui: &mut Ui, i: usize, rect: Rect, clicked: bool) {
         if i == usize::MAX {
+            return;
+        }
+        if i >= PALETTE_ITEM {
+            let tint = self.gui.dialogs.cursor_tint;
+            if let Some(p) = &mut self.palette_items {
+                let i = i - PALETTE_ITEM;
+                if clicked {
+                    p.clicked = Some(i);
+                }
+                if p.cursor == Some(i) {
+                    cursor_row(ui, rect, tint);
+                }
+            }
             return;
         }
         if clicked {
@@ -4719,7 +4745,7 @@ impl TriApp {
 
     /// Curseur de taille des vignettes (barre du bas, en grille) ; double-clic : taille
     /// de la configuration.
-    fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) {
+    fn grid_size_slider(&mut self, ui: &mut Ui, width: f32) -> egui::Response {
         let g = self.gui.grid;
         ui.spacing_mut().slider_width = width;
         let mut cell = self.grid_cell;
@@ -4740,6 +4766,7 @@ impl TriApp {
             self.grid_cell = cell;
             self.reveal = Some(Reveal::Minimal);
         }
+        slider
     }
 
     /// Seuil de regroupement en vigueur : le centre du dossier à la sévérité choisie.
@@ -12298,7 +12325,7 @@ impl TriApp {
                         self.grid_fit_all();
                     }
                     if room >= buttons + self.gui.grid.size_slider + spacing {
-                        self.grid_size_slider(ui, self.gui.grid.size_slider);
+                        let _ = self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
                 }
                 // Grille : le réglage de la loupe (demandé le 06/11/2026 : réglable, il se
@@ -14512,8 +14539,22 @@ impl TriApp {
         let Some(mut state) = self.palette.take() else {
             return;
         };
+        // Sur un élément d'un contrôle : ← / → et Entrée sont pour lui (07/11/2026).
+        let on_item = state.item.is_some();
+        let mut item_key = None;
         // Avant le champ, qui ne s'en sert pas (Entrée lui ferait perdre le clavier).
         let (down, up, run) = ctx.input_mut(|i| {
+            if on_item {
+                for (k, side) in [
+                    (egui::Key::ArrowLeft, SideKey::Left),
+                    (egui::Key::ArrowRight, SideKey::Right),
+                    (egui::Key::Enter, SideKey::Activate),
+                ] {
+                    if i.consume_key(egui::Modifiers::NONE, k) {
+                        item_key = Some(side);
+                    }
+                }
+            }
             let mut down = 0;
             let mut up = 0;
             for (m, k) in [
@@ -14542,8 +14583,19 @@ impl TriApp {
         });
         let count = state.hits.len();
         if count > 0 {
-            state.selected = (state.selected + down).min(count - 1);
-            state.selected = state.selected.saturating_sub(up);
+            // Les arrêts de la dernière image (lignes et éléments des contrôles) ; avant
+            // la première, les lignes seules.
+            let stops = if state.stops.is_empty() {
+                (0..count).map(|i| (i, None)).collect()
+            } else {
+                state.stops.clone()
+            };
+            let at = stops
+                .iter()
+                .position(|&s| s == (state.selected, state.item))
+                .unwrap_or(0);
+            let to = (at + down).min(stops.len() - 1).saturating_sub(up);
+            (state.selected, state.item) = stops[to];
         }
         let width = self
             .gui
@@ -14610,8 +14662,16 @@ impl TriApp {
                         // Chaque contrôle une fois (« trier par nom », « trier par
                         // étoiles » : une seule liste de l'ordre, sous la première).
                         let mut controls: HashSet<Control> = HashSet::new();
+                        self.palette_items = Some(PaletteItems {
+                            next: 0,
+                            cursor: state.item,
+                            key: item_key,
+                            clicked: None,
+                        });
+                        let mut stops = Vec::new();
                         for (i, hit) in state.hits.iter().enumerate() {
-                            let chosen = i == state.selected;
+                            stops.push((i, None));
+                            let chosen = i == state.selected && state.item.is_none();
                             let row = palette_row(ui, hit, chosen, accent);
                             if chosen && (down > 0 || up > 0) {
                                 row.scroll_to_me(None);
@@ -14621,17 +14681,30 @@ impl TriApp {
                             }
                             // Le contrôle de l'action, le même que dans le panneau
                             // (proposition du 07/11/2026) : son état, changeable ici.
+                            // Pas dans l'historique (champ vide) : on y relance, ↓ va à la
+                            // commande suivante.
                             if let crate::palette::Item::Action(action) = hit.item
+                                && !state.query.trim().is_empty()
                                 && let Some(control) = self.palette_control(action)
                                 && controls.insert(control)
                             {
+                                let first = self.palette_items.as_ref().map_or(0, |p| p.next);
                                 ui.push_id(("palette_control", control), |ui| {
                                     ui.indent("palette_control", |ui| {
                                         self.control(ui, control, Host::Palette);
                                     });
                                 });
+                                let last = self.palette_items.as_ref().map_or(0, |p| p.next);
+                                stops.extend((first..last).map(|k| (i, Some(k))));
                             }
                         }
+                        if let Some(p) = self.palette_items.take()
+                            && let Some(k) = p.clicked
+                            && let Some(&(row, _)) = stops.iter().find(|s| s.1 == Some(k))
+                        {
+                            (state.selected, state.item) = (row, Some(k));
+                        }
+                        state.stops = stops;
                     });
                 ui.weak(t!("palette-keys"));
             });
@@ -14651,6 +14724,8 @@ impl TriApp {
                 )
             };
             state.selected = 0;
+            state.item = None;
+            state.stops.clear();
             state.query = query;
         }
         let chosen = clicked.or((run && count > 0).then_some(state.selected));
@@ -16396,7 +16471,29 @@ struct PaletteState {
     settings: Vec<crate::settings_window::SettingRef>,
     /// Le champ a reçu le clavier (une fois, à l'ouverture).
     focused: bool,
+    /// Élément choisi d'un contrôle montré sous une ligne (07/11/2026 : ← / → le
+    /// changent, Entrée l'active) ; `None` : la ligne `selected` elle-même.
+    item: Option<usize>,
+    /// Les arrêts de ↑ / ↓ à la dernière image : chaque ligne, puis les éléments de son
+    /// contrôle (ligne, élément).
+    stops: Vec<(usize, Option<usize>)>,
 }
+
+/// Les éléments des contrôles dessinés dans la palette, numérotés comme ils viennent :
+/// celui qui a le clavier, et la touche qu'il reçoit.
+struct PaletteItems {
+    /// Numéro du prochain élément.
+    next: usize,
+    /// Élément qui a le clavier.
+    cursor: Option<usize>,
+    /// Touche pour lui, cette image.
+    key: Option<SideKey>,
+    /// Élément cliqué à la souris (il prend le clavier).
+    clicked: Option<usize>,
+}
+
+/// Numéros d'éléments du panneau réservés à la palette ([`TriApp::side_begin`]).
+const PALETTE_ITEM: usize = usize::MAX / 2;
 
 /// Une ligne de la palette : étiquette (action ou réglage), titre, touches à droite,
 /// description dessous ; fond à l'accent si elle est choisie.
@@ -17172,6 +17269,47 @@ mod tests {
                 .palette_control(Action::SortBy(tri::sort::SortKey::Stars)),
             Some(Control::Sort)
         );
+    }
+
+    #[test]
+    fn the_controls_of_the_palette_work_from_the_keyboard() {
+        // Retour du 07/11/2026 : listes et curseurs se changeaient à la souris seulement.
+        // ↓ passe de la ligne aux éléments de son contrôle ; ← / → les changent, Entrée
+        // les active, sans fermer la palette.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        h.state_mut().metadata_panel = false;
+        press(&mut h, Key::P, Modifiers::CTRL | Modifiers::SHIFT);
+        type_text(&mut h, "rendu");
+        let before = h.state().grid_render;
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(h.state().palette.as_ref().and_then(|p| p.item), Some(0));
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert_ne!(h.state().grid_render, before, "la liste au clavier");
+        assert!(h.state().palette.is_some());
+        // Une case, puis le curseur qu'elle fait apparaître.
+        for _ in 0.."rendu".len() {
+            press(&mut h, Key::Backspace, Modifiers::NONE);
+        }
+        type_text(&mut h, "nettes");
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        assert!(h.state().blur_rule.is_none());
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().blur_rule.is_some(), "la case à Entrée");
+        assert!(h.state().palette.is_some(), "toujours ouverte");
+        let strictness = h.state().blur_strictness;
+        press(&mut h, Key::ArrowDown, Modifiers::NONE);
+        press(&mut h, Key::ArrowRight, Modifiers::NONE);
+        assert!(
+            h.state().blur_strictness > strictness,
+            "le curseur au clavier"
+        );
+        // ↑ jusqu'à la ligne : Entrée lance et ferme, comme avant.
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        press(&mut h, Key::ArrowUp, Modifiers::NONE);
+        assert_eq!(h.state().palette.as_ref().and_then(|p| p.item), None);
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().palette.is_none());
     }
 
     #[test]

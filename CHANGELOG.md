@@ -27,6 +27,9 @@
 - **Controls in the command palette**: under an action that has a control in the right
   panel (a box, a list, a slider), the palette shows that same control, with its state,
   to change it without closing the palette. Panel and palette draw it with the same code.
+  From the keyboard: ↓ goes to the control, ← / → change it, Enter activates it. The
+  search finds the panel's words ("sharp", "thumbnail size") and puts actions before
+  settings.
 - **A precise shown render from the palette**: one action per render (camera JPEG,
   cover, each development software, RAW render), without going through the others. No
   default key; `[keys]` can give them one.
