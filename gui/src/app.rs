@@ -11898,7 +11898,7 @@ impl TriApp {
                                     &t!("conflict-keep-tip"),
                                 );
                                 let color = ui.style().interact(&response).fg_stroke.color;
-                                marks::take_row_arrow(ui.painter(), rect.shrink(icon * 0.2), color);
+                                marks::take_row_arrow(ui.painter(), rect.shrink(icon * 0.3), color);
                                 take = response.clicked();
                             });
                             if take {
