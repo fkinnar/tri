@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Loupe in the bottom bar**: − and + change the magnification (they did nothing), and
+  the magnifier icon is no longer a button.
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.

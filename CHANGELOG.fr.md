@@ -4,6 +4,8 @@
 
 ## Non publié
 
+- **Loupe dans la barre du bas** : − et + changent le grossissement (ils ne faisaient
+  rien), et l'icône de loupe n'est plus un bouton.
 - **Un seul style pour les listes de raccourcis** (F1, `?`, le menu des suites, la
   palette) : touches à la couleur d'accent, une ligne sur deux sur fond plus clair, et
   le « / » entre plusieurs touches en gris, pour faire ressortir les touches.
