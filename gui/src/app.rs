@@ -15987,6 +15987,22 @@ enum SideKey {
     Right,
 }
 
+/// Les éléments des contrôles dessinés dans la palette, numérotés comme ils viennent :
+/// celui qui a le clavier, et la touche qu'il reçoit.
+struct PaletteItems {
+    /// Numéro du prochain élément.
+    next: usize,
+    /// Élément qui a le clavier.
+    cursor: Option<usize>,
+    /// Touche pour lui, cette image.
+    key: Option<SideKey>,
+    /// Élément cliqué à la souris (il prend le clavier).
+    clicked: Option<usize>,
+}
+
+/// Numéros d'éléments du panneau réservés à la palette ([`TriApp::side_begin`]).
+const PALETTE_ITEM: usize = usize::MAX / 2;
+
 /// Téléchargement depuis l'aide ([`TriApp::start_download`]).
 enum DownloadState {
     /// Recherche des paquets, dans un fil à part.
@@ -16478,22 +16494,6 @@ struct PaletteState {
     /// contrôle (ligne, élément).
     stops: Vec<(usize, Option<usize>)>,
 }
-
-/// Les éléments des contrôles dessinés dans la palette, numérotés comme ils viennent :
-/// celui qui a le clavier, et la touche qu'il reçoit.
-struct PaletteItems {
-    /// Numéro du prochain élément.
-    next: usize,
-    /// Élément qui a le clavier.
-    cursor: Option<usize>,
-    /// Touche pour lui, cette image.
-    key: Option<SideKey>,
-    /// Élément cliqué à la souris (il prend le clavier).
-    clicked: Option<usize>,
-}
-
-/// Numéros d'éléments du panneau réservés à la palette ([`TriApp::side_begin`]).
-const PALETTE_ITEM: usize = usize::MAX / 2;
 
 /// Une ligne de la palette : étiquette (action ou réglage), titre, touches à droite,
 /// description dessous ; fond à l'accent si elle est choisie.
