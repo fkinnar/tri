@@ -57,7 +57,10 @@ déjà présents par winit — sous Zlib OR Apache-2.0 OR MIT ; `windows-sys` �
 déjà présent par winit et d'autres — sous MIT OR Apache-2.0 ; `toml_edit` — fenêtre de
 réglages : modifier le fichier sans perdre commentaires ni mise en page, mêmes
 mainteneurs que `toml` (toml-rs), très actif, déjà présent en dépendance indirecte — sous
-MIT OR Apache-2.0, avec `indexmap` et `toml_writer` sous MIT OR Apache-2.0 ; `quick-xml` — sidecars XMP —
+MIT OR Apache-2.0, avec `indexmap` et `toml_writer` sous MIT OR Apache-2.0 ; `img-parts` — notes inscrites dans les PNG et WebP (`tri::embedded`), découpage en
+chunks sans recompression, paolobarbolini/img-parts, actif (0.4.2 du 03/11/2026), ses
+dépendances `bytes`, `crc32fast` et `miniz_oxide` déjà présentes — sous MIT OR
+Apache-2.0 ; `quick-xml` — sidecars XMP —
 sous MIT, avec `memchr` sous Unlicense OR MIT ; `kamadak-exif` — EXIF des images
 plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` sous
 BSD-2-Clause ; `trash` — corbeille du système, maintenu, version du 13/09/2026 — sous

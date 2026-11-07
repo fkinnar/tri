@@ -680,6 +680,14 @@ const NEW_PACKET: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 </x:xmpmeta>
 "#;
 
+/// Corps d'un paquet neuf, sans la déclaration XML (un paquet embarqué dans une image a
+/// son enveloppe `xpacket` à la place, voir [`crate::embedded`]).
+pub(crate) fn new_packet_body() -> &'static str {
+    NEW_PACKET
+        .split_once("?>\n")
+        .map_or(NEW_PACKET, |(_, body)| body)
+}
+
 /// Nos champs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {

@@ -634,6 +634,14 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
             painter.line_segment([p(0.5, 0.22), p(0.68, 0.22)], stroke);
             painter.circle_filled(p(0.86, 0.8), w * 0.1, color);
         }
+        Action::EmbedNotes => {
+            // Notes dans l'image : un cadre (la photo) et une étoile dedans.
+            painter.add(Shape::closed_line(
+                vec![p(0.04, 0.14), p(0.96, 0.14), p(0.96, 0.86), p(0.04, 0.86)],
+                stroke,
+            ));
+            star(painter, p(0.5, 0.5), w * 0.24, color);
+        }
         Action::FileReveal => {
             // Dossier : onglet puis corps.
             painter.add(Shape::closed_line(

@@ -172,6 +172,7 @@ pub fn navigate(
         | Action::DevPrev
         | Action::DevFoldAll
         | Action::Sidecars
+        | Action::EmbedNotes
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit

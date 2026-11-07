@@ -120,6 +120,17 @@ cache-no-user-dir = user cache folder not found
 xmp-io = XMP sidecar: { $error }
 xmp-malformed = malformed XMP sidecar (left unchanged): { $error }
 xmp-no-description = XMP sidecar without rdf:Description (left unchanged)
+embed-unsupported = this image format cannot carry ratings (JPEG, PNG, WebP, TIFF, HEIC only)
+embed-io = ratings in the image: { $error }
+embed-write-failed = could not write the ratings into the image ({ $error }); a full copy is kept next to it: { $copy }
+embed-verify-failed = the ratings read back from the image differ from those written
+embed-malformed = malformed image, left as it is
+embed-malformed-detail = malformed image, left as it is: { $error }
+embed-bigtiff = TIFF over 4 GB (BigTIFF): ratings not written
+embed-too-large = ratings too large for the image header
+embed-compressed = compressed XMP in the PNG: ratings not written (nothing of it would be kept)
+embed-heif-sequence = animated HEIF or image sequence: ratings not written
+embed-xmp-not-utf8 = unreadable XMP in the image (not UTF-8), left as it is
 settings-auto-or-integer = "auto" or a positive integer
 offload-no-data-dir = data folder not found (no HOME)
 offload-unnamed-file = file without a name
@@ -166,6 +177,7 @@ cli-usage =
       tri --check-update
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
+      tri <folder> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
       tri <folder> --groups [--threshold X]
@@ -236,6 +248,15 @@ cli-sidecars-summary = { $n } images: { $created } sidecars { $mode ->
     [dry-run] to rewrite
    *[write] rewritten
 }, { $unchanged } left alone (already provided), { $skipped } skipped (unrated, or developments), { $errors } errors
+cli-embed-written = { $mode ->
+    [dry-run] to write
+   *[write] written
+}
+cli-embed-summary = { $n } images: ratings { $mode ->
+    [dry-run] to write into { $written }
+   *[write] written into { $written }
+}, { $unchanged } unchanged, { $skipped } skipped (RAW and other formats), { $errors } errors
+cli-embed-some-failed = some images could not receive their ratings
 cli-rename-shared-copy = (copy: shared)
 cli-delete-trash = trash:
 cli-delete-permanent = deleted:
