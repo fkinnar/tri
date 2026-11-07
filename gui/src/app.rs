@@ -860,12 +860,12 @@ pub struct TriApp {
     /// Grossissement en cours de saisie après `<leader> m` : les chiffres tapés et
     /// l'instant du dernier.
     loupe_entry: Option<(String, Instant)>,
+    /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
+    loupe_wheel: f32,
     /// Saisie close par la pause, avec ses chiffres et l'instant de clôture : un chiffre
     /// tapé peu après la complète encore (07/11/2026 : avec Maj sur un clavier AZERTY, plus
     /// lent, le chiffre suivant changeait la note).
     loupe_entry_done: Option<(String, Instant)>,
-    /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
-    loupe_wheel: f32,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1365,8 +1365,8 @@ impl TriApp {
             loupe_sizes: HashMap::new(),
             loupe_scale: gui.zoom.loupe_scale,
             loupe_entry: None,
-            loupe_entry_done: None,
             loupe_wheel: 0.0,
+            loupe_entry_done: None,
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.

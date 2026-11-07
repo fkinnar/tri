@@ -4,9 +4,6 @@
 
 ## Unreleased
 
-- **Typed loupe magnification** (`<leader> m`): one second between digits (600 ms
-  before), and a digit typed just after still completes the number instead of rating the
-  photo (with Shift on an AZERTY keyboard, typing is slower).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.
@@ -59,6 +56,9 @@
   in a long enough word ("histrogramme"); keywords per theme ("rate" finds the stars);
   an action with the word in its label comes first. Typos and ranking also apply to the
   settings search.
+- **Typed loupe magnification** (`<leader> m`): one second between digits (600 ms
+  before), and a digit typed just after still completes the number instead of rating the
+  photo (with Shift on an AZERTY keyboard, typing is slower).
 - **Command palette**: `Ctrl+Shift+P` (classic) or `:` (vim), type a few letters, Enter
   runs the action found or opens the setting found in the settings window. Each action
   shows its keys; actions without a shortcut become reachable from the keyboard.
