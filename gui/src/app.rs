@@ -11886,6 +11886,23 @@ impl TriApp {
                     cli,
                     work_dir: engine.cache.root().join("rapidraw-export"),
                 }),
+            profile_tools: [
+                (
+                    tri::develop::Engine::RawTherapee,
+                    &self.settings.develop.rawtherapee,
+                ),
+                (tri::develop::Engine::Art, &self.settings.develop.art),
+            ]
+            .into_iter()
+            .filter(|(e, _)| self.developers.get(*e).is_some())
+            .filter_map(|(which, setting)| {
+                Some(tri::develop::ProfileTool {
+                    engine: which,
+                    cli: tri::develop::find_profile_cli(which, setting)?,
+                    work_dir: engine.cache.root().join(format!("{}-export", which.id())),
+                })
+            })
+            .collect(),
             render,
         };
         trace(|| format!("export : {} images vers {folder}", images.len()));

@@ -6,6 +6,10 @@
 
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position
   mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
+- **Big bug: RawTherapee and ART developments were exported without their development**
+  (as their photo, a plain LibRaw render). They are now rendered by RawTherapee / ART, in
+  full resolution (16-bit TIFF in the colour space of their profile), then converted,
+  cropped, reduced and sharpened like the other exports. Interface and command line.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.

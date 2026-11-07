@@ -293,6 +293,7 @@ develop-unavailable = { $engine } introuvable (réglage [develop] { $id })
 develop-rapidraw-open = interface ouverte : l'export en ligne de commande ne tourne pas en même temps, fermez-la puis recommencez
 develop-rapidraw-black = image toute noire : l'interface de RapidRAW est sans doute ouverte, fermez-la puis recommencez
 develop-failed = { $engine } : { $error }
+export-no-profile = pas de développement à appliquer (pas de profil, ou un profil qui ne porte que des notes)
 export-bad-bits = préréglage d'export « { $profile } » : { $bits } bits impossible en { $format }
 export-bad-quality = préréglage d'export « { $profile } » : qualité { $quality } hors de 1 à 100
 export-bad-color = préréglage d'export « { $profile } » : espace couleur inconnu « { $value } »

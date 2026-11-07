@@ -165,7 +165,8 @@ line of explanation says so. On the command line: darktable if available, `--lib
 model, see `developments.md`): a RapidRAW copy in the selection goes through RapidRAW, a
 darktable clone through darktable, whatever else is being looked at; the table above only
 applies to photos. `Renderers` carries the software of an export (`photos` for the photos,
-`darktable` and `rapidraw` for their developments), `Renderers::split` sorts the RAWs,
+`darktable`, `rapidraw` and `profile_tools` — RawTherapee, ART — for their developments),
+`Renderers::split` sorts the RAWs,
 `run` launches each part in turn, with a single progress. A development whose software is
 missing is exported as its photo. The file takes the name **its software** gives to its
 exports (`export_name`): `IMG_01` for darktable clone no. 1, `IMG_VC01` for the photo's
@@ -321,6 +322,26 @@ renders (`develop.md`):
 - A photo **without** a RapidRAW development also goes through it when a RapidRAW render
   is being looked at in full screen (`Render::Developed(RapidRaw)`): RapidRAW's default
   settings.
+
+## Through RawTherapee and ART
+
+**Big bug fixed on 2026-11-07**: the export only knew darktable, RapidRAW and LibRaw; a
+RawTherapee or ART development went out as its photo (LibRaw render), without its
+development, silently. It is now rendered by its software (`export_profile_tool`,
+`Renderer::Profile`, `Renderers::profile_tool`), like RapidRAW:
+
+- **One launch per image**: `rawtherapee-cli` / `ART-cli -o <folder> -p <profile> -t
+  -b16 -Y -c <photo>` (`ProfileTool::render_tiff`): the development's profile
+  (`IMAGE.RAF.pp3` / `.arp`), **full resolution**, temporary 16-bit TIFF.
+- **Color space**: the one of the user's profile, whose ICC is embedded in the TIFF and
+  read (`developed`, "Original space"); then converted to the preset's space, cropped
+  (version), reduced, sharpened and written like the others (`finish`). Same spaces as
+  with LibRaw (`libraw_check`).
+- An image without a development to apply (no profile, or one holding only ratings):
+  an error, without stopping the others. Temporary files removed.
+- A photo looked at in a RawTherapee or ART render in full screen
+  (`Render::Developed(RawTherapee | Art)`) goes through it too; on the command line,
+  RawTherapee and ART render their developments when found.
 
 ## Creating a profile from the interface
 

@@ -166,7 +166,8 @@ s'il est là, `--libraw` ou `--embedded` pour les autres.
 développements, voir `developments.md`) : une copie RapidRAW de la sélection part par
 RapidRAW, un clone darktable par darktable, quoi qu'on regarde par ailleurs ; le tableau
 ci-dessus ne vaut que pour les photos. `Renderers` porte les logiciels d'un export
-(`photos` pour les photos, `darktable` et `rapidraw` pour leurs développements),
+(`photos` pour les photos, `darktable`, `rapidraw` et `profile_tools` — RawTherapee, ART —
+pour leurs développements),
 `Renderers::split` range les RAW, `run` lance chaque part à la suite, avec une seule
 progression. Un développement dont le logiciel manque est exporté comme sa photo. Le
 fichier porte le nom que **son logiciel** donne à ses exports (`export_name`) : `IMG_01`
@@ -326,6 +327,26 @@ ses rendus (`develop.md`) :
 - Une photo **sans** développement RapidRAW passe aussi par là quand on regarde un rendu
   RapidRAW en plein écran (`Render::Developed(RapidRaw)`) : réglages par défaut de
   RapidRAW.
+
+## Par RawTherapee et ART
+
+**Gros bug corrigé le 07/11/2026** : l'export ne connaissait que darktable, RapidRAW et
+LibRaw ; un développement RawTherapee ou ART partait comme sa photo (rendu LibRaw), sans
+son développement, sans rien dire. Il est maintenant rendu par son logiciel
+(`export_profile_tool`, `Renderer::Profile`, `Renderers::profile_tool`), comme RapidRAW :
+
+- **Un lancement par image** : `rawtherapee-cli` / `ART-cli -o <dossier> -p <profil> -t
+  -b16 -Y -c <photo>` (`ProfileTool::render_tiff`) : le profil du développement
+  (`IMAGE.RAF.pp3` / `.arp`), **pleine résolution**, TIFF 16 bits temporaire.
+- **Espace couleur** : celui du profil de l'utilisateur, dont l'ICC est intégré au TIFF et
+  lu (`developed`, « Espace d'origine ») ; puis conversion dans l'espace du préréglage,
+  recadrage (version), réduction, accentuation et écriture comme les autres (`finish`).
+  Mêmes espaces qu'avec LibRaw (`libraw_check`).
+- Une image sans développement à appliquer (profil absent, ou qui ne porte que des notes)
+  : en erreur, sans arrêter les autres. Fichiers temporaires effacés.
+- Une photo regardée dans un rendu RawTherapee ou ART en plein écran
+  (`Render::Developed(RawTherapee | Art)`) passe aussi par là ; en ligne de commande,
+  RawTherapee et ART rendent leurs développements s'ils sont trouvés.
 
 ## Créer un profil depuis l'interface
 
