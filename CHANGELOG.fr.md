@@ -31,7 +31,8 @@
   peut s'y taper (`17:23`, `1.91:1`) et s'ajouter à la liste avec « + » (gardé dans
   `[versions] ratios`). Chaque partie a ses touches (`v` préréglage de version, `r` rapport, `x`
   orientation, `o` superpositions sur le cadre, `:` personnalisé, `e` export, `n` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au cadre
-  d'origine) ; l'orientation est une icône (le rectangle du cadre, debout ou couché). La
+  d'origine) ; Échap ramène à la grille si la version y a été commencée ; l'orientation
+  est une icône (le rectangle du cadre, debout ou couché). La
   barre des filtres, et les filtres, la vue et l'histogramme du panneau de droite,
   disparaissent pendant l'édition.
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,

@@ -745,8 +745,16 @@ fn orientation_icon(ui: &egui::Ui, response: &egui::Response, portrait: bool, sq
     } else {
         ui.visuals().weak_text_color()
     };
+    // Calé sur les pixels, largeur et hauteur arrondies une fois : sinon l'anticrénelage
+    // d'un bord à cheval sur deux pixels amincissait le rectangle couché (retour du
+    // 07/11/2026), debout et couché doivent avoir exactement les mêmes côtés.
+    let ppp = ui.ctx().pixels_per_point();
+    let px = |v: f32| (v * ppp).round() / ppp;
+    let size = egui::vec2(px(size.x), px(size.y));
+    let min = rect.center() - size / 2.0;
+    let icon = egui::Rect::from_min_size(egui::pos2(px(min.x), px(min.y)), size);
     ui.painter().rect_stroke(
-        egui::Rect::from_center_size(rect.center(), size),
+        icon,
         1.0,
         egui::Stroke::new(1.5, color),
         egui::StrokeKind::Inside,

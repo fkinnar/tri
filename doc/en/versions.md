@@ -99,6 +99,8 @@ The interface only draws; all the computation is here.
   filter bar, and the filters and histogram of the right panel, disappear while editing (nothing to filter on one
   image; the histogram is the whole image's, following the frame would need a RAW
   histogram recomputed on the area, later).
+- **Esc** (or Cancel) goes back to where the version was started: the grid or full
+  screen (2026-11-07); once saved, it is shown full screen.
 - **Each part from the keyboard** (2026-11-07): `v` / `Shift+V` next / previous version
   preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio
   (added ones included, `Crop::step_ratio`), `:` a ratio of one's own (the list opens on

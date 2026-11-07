@@ -100,6 +100,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   filtres et l'histogramme du panneau de droite disparaissent pendant l'édition (rien à filtrer sur une
   image ; l'histogramme vaut pour l'image entière, le faire suivre le cadre demanderait
   un histogramme RAW recalculé sur la zone, plus tard).
+- **Échap** (ou Annuler) ramène là où la version a été commencée : la grille ou le plein
+  écran (07/11/2026) ; enregistrée, elle est montrée en plein écran.
 - **Chaque partie au clavier** (07/11/2026) : `v` / `Maj+V` préréglage de version
   suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant / précédent
   (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son

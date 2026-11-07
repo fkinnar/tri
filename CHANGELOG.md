@@ -28,7 +28,8 @@
   ratio can be typed there (`17:23`, `1.91:1`) and added to the list with "+" (kept in
   `[versions] ratios`). Each part has its keys (`v` version preset, `r` ratio, `x` orientation, `o` overlays on the frame, `:`
   custom, `e` export, `n` name, `Ctrl+S` save as a preset, `0` or Ctrl+click on "Original": back to the original
-  frame); the orientation is an icon (the frame's rectangle, standing or lying). The
+  frame); Esc goes back to the grid when the version was started there; the orientation
+  is an icon (the frame's rectangle, standing or lying). The
   filter bar, and the filters, view settings and histogram of the right panel, disappear
   while editing.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to

@@ -504,6 +504,9 @@ pub struct TriApp {
     background_transfers: Vec<crate::files::FileDialog>,
     /// Recadrage en cours (plein écran, `r`) : une version de l'image.
     crop: Option<crate::crop::Crop>,
+    /// Version commencée depuis la grille : on y revient en la quittant (retour du
+    /// 07/11/2026).
+    crop_from_grid: bool,
     /// Version montrée en plein écran : (image, place dans sa liste).
     version_shown: Option<(PathBuf, usize)>,
     /// Versions lues dans les sidecars (à la demande ; vidé quand elles changent).
@@ -1200,6 +1203,7 @@ impl TriApp {
             file_dialog: None,
             background_transfers: Vec::new(),
             crop: None,
+            crop_from_grid: false,
             version_shown: None,
             versions: HashMap::new(),
             versions_pending: HashSet::new(),
@@ -6049,7 +6053,7 @@ impl TriApp {
             // Recadrage : ses touches, Échap abandonne.
             if self.crop.is_some() {
                 match action {
-                    Action::Back => self.crop = None,
+                    Action::Back => self.close_crop(),
                     Action::CropMove(_)
                     | Action::CropSize(_)
                     | Action::CropRatio(_)
@@ -9019,6 +9023,7 @@ impl TriApp {
             return;
         };
         let path = file.path.clone();
+        self.crop_from_grid = self.mode == Mode::Grid;
         if self.mode != Mode::View {
             self.mode = Mode::View;
         }
@@ -9033,6 +9038,19 @@ impl TriApp {
         let others = self.versions_of(&path).clone();
         self.crop = Some(crate::crop::Crop::new(path, source, aspect, others));
         self.request_zoom();
+    }
+
+    /// Abandonne la version en cours : retour à la grille si elle a été commencée là
+    /// (retour du 07/11/2026), plein écran sinon. Enregistrée, elle reste montrée en plein
+    /// écran (issue n° 5).
+    fn close_crop(&mut self) {
+        self.crop = None;
+        if std::mem::take(&mut self.crop_from_grid) && self.mode == Mode::View {
+            self.mode = Mode::Grid;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Minimal);
+        }
     }
 
     /// Applique le préréglage n° `index` au recadrage en cours.
@@ -9235,6 +9253,8 @@ impl TriApp {
                     change,
                 });
                 self.notice = Some((t!("crop-saved", name = name), false));
+                // Enregistrée : montrée en plein écran (issue n° 5), même depuis la grille.
+                self.crop_from_grid = false;
             }
             Err(e) => {
                 self.notice = Some((t!("crop-failed", error = e.to_string()), true));
@@ -15903,7 +15923,7 @@ impl eframe::App for TriApp {
             });
             match action {
                 Some(crate::crop::BarAction::Save) => self.save_crop(),
-                Some(crate::crop::BarAction::Cancel) => self.crop = None,
+                Some(crate::crop::BarAction::Cancel) => self.close_crop(),
                 Some(crate::crop::BarAction::Preset(i)) => self.apply_preset(i),
                 Some(crate::crop::BarAction::SavePreset) => self.save_preset(),
                 Some(crate::crop::BarAction::AddRatio(ratio)) => self.add_ratio(ratio),
@@ -26189,6 +26209,31 @@ mod tests {
         assert_ne!(preset(&h), first, "v : le suivant");
         press(&mut h, Key::V, Modifiers::SHIFT);
         assert_eq!(preset(&h), first, "Maj+V : le précédent");
+    }
+
+    #[test]
+    fn leaving_a_version_goes_back_where_it_was_started() {
+        // Retour du 07/11/2026 : commencée depuis la grille, Échap y ramène ; depuis le
+        // plein écran, on y reste.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        assert_eq!(h.state().mode, Mode::Grid);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_some());
+        assert_eq!(h.state().mode, Mode::View);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_none());
+        assert_eq!(h.state().mode, Mode::Grid, "de retour dans la grille");
+        act(&mut h, Action::Open);
+        h.run_steps(2);
+        press(&mut h, Key::V, Modifiers::NONE);
+        h.run_steps(2);
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        h.run_steps(2);
+        assert!(h.state().crop.is_none());
+        assert_eq!(h.state().mode, Mode::View, "le plein écran reste");
     }
 
     #[test]
