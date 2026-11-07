@@ -1115,7 +1115,9 @@ or for next time; with the loupe held, `+` / `-` too. `<leader> m`
 (`core.view.loupe_scale`) opens an entry without Enter, like a brush's opacity in
 Photoshop (`TriApp::loupe_entry_keys`): digits go to the number (not to the stars), three
 apply at once, one or two after `loupe_digits_ms` as hundreds or tens
-(`loupe_entry_percent`: `2` and `20` = 200 %, `01` = 10 %); 0 is ignored, Esc cancels,
+(`loupe_entry_percent`: `2` and `20` = 200 %, `01` = 10 %); a digit typed within the same
+time afterwards still completes the number (`loupe_entry_done`: with Shift on an AZERTY
+keyboard one types slower, and the next digit changed the rating); 0 is ignored, Esc cancels,
 another key applies what was typed then acts. For the session (`TriApp::loupe_scale`);
 `loupe_scale` stays the starting value. The wheel, with the loupe held, changes the magnification one step
 per notch (`loupe_wheel_step` points; `TriApp::loupe_wheel_input` removes the scrolling:

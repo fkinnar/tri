@@ -864,6 +864,10 @@ pub struct TriApp {
     entry_for_zoom: bool,
     /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
     loupe_wheel: f32,
+    /// Saisie close par la pause, avec ses chiffres et l'instant de clôture : un chiffre
+    /// tapé peu après la complète encore (07/11/2026 : avec Maj sur un clavier AZERTY, plus
+    /// lent, le chiffre suivant changeait la note).
+    loupe_entry_done: Option<(String, Instant)>,
     /// Image regardée à la loupe : l'image affichée, ou en comparaison celle sous le
     /// pointeur.
     loupe_index: usize,
@@ -1365,6 +1369,7 @@ impl TriApp {
             loupe_entry: None,
             entry_for_zoom: false,
             loupe_wheel: 0.0,
+            loupe_entry_done: None,
             loupe_index: 0,
             zoom_anchor: None,
             // En comparaison, chaque image garde son aperçu et son 1:1.
@@ -9587,10 +9592,22 @@ impl TriApp {
             && !digits.is_empty()
             && now.duration_since(*last) >= pause
         {
+            let digits = digits.clone();
             self.apply_loupe_entry();
+            if digits.len() < 3 {
+                self.loupe_entry_done = Some((digits, now));
+            }
         }
         let mut rest = Vec::new();
         for (chord, repeated) in chords {
+            // Juste après une saisie close par la pause : un chiffre la reprend.
+            if self.loupe_entry.is_none()
+                && crate::actions::digit(chord).is_some()
+                && let Some((digits, closed)) = self.loupe_entry_done.take()
+                && now.duration_since(closed) < pause
+            {
+                self.loupe_entry = Some((digits, now));
+            }
             if self.loupe_entry.is_none() {
                 rest.push((chord, repeated));
                 continue;
@@ -18879,6 +18896,33 @@ mod tests {
         }
         h.run_steps(2);
         assert_eq!(h.state().loupe_scale, 2.0);
+        // Un chiffre tapé lentement après la pause (Maj sur AZERTY, 07/11/2026) complète
+        // encore le nombre, sans noter la photo.
+        press(&mut h, Key::Num5, Modifiers::SHIFT);
+        assert_eq!(
+            h.state().loupe_entry.as_ref().map(|e| e.0.as_str()),
+            Some("25")
+        );
+        press(&mut h, Key::Num0, Modifiers::SHIFT);
+        assert_eq!(h.state().loupe_scale, 2.5);
+        assert_eq!(
+            h.state().folder.notes.notes(&file).stars,
+            0,
+            "toujours pas noté"
+        );
+        // Bien plus tard, un chiffre redevient une note.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        press(&mut h, Key::Num2, Modifiers::NONE);
+        if let Some((_, last)) = &mut h.state_mut().loupe_entry {
+            *last -= Duration::from_secs(5);
+        }
+        h.run_steps(2);
+        if let Some((_, closed)) = &mut h.state_mut().loupe_entry_done {
+            *closed -= Duration::from_secs(5);
+        }
+        press(&mut h, Key::Num3, Modifiers::NONE);
+        assert_eq!(h.state().loupe_scale, 2.0);
+        assert_eq!(h.state().folder.notes.notes(&file).stars, 3, "noté");
         // Échap annule ; 0 est ignoré.
         leader(&mut h, &[(Key::M, Modifiers::NONE)]);
         press(&mut h, Key::Num4, Modifiers::NONE);

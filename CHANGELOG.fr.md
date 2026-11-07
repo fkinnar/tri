@@ -67,6 +67,9 @@
   des mots-clés par thème (« noter » trouve les étoiles) ; une action qui a le mot dans
   son libellé passe devant. Fautes de frappe et classement valent aussi pour la recherche
   des réglages.
+- **Grossissement de la loupe tapé** (`<leader> m`) : une seconde entre deux chiffres
+  (600 ms avant), et un chiffre tapé juste après complète encore le nombre au lieu de
+  noter la photo (avec Maj sur un clavier AZERTY, on tape moins vite).
 - **Palette de commandes** : `Ctrl+Maj+P` (classique) ou `:` (vim), on tape quelques
   lettres, Entrée lance l'action trouvée ou ouvre le réglage trouvé dans la fenêtre de
   réglages. Chaque action montre ses touches ; les actions sans raccourci deviennent

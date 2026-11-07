@@ -1176,7 +1176,9 @@ loupe tenue ou pour la prochaine fois ; la loupe tenue, `+` / `-` aussi. `<leade
 (`core.view.loupe_scale`) ouvre une saisie sans Entrée, comme l'opacité d'un pinceau dans
 Photoshop (`TriApp::loupe_entry_keys`) : les chiffres vont au nombre (pas aux étoiles),
 trois s'appliquent aussitôt, un ou deux après `loupe_digits_ms` en centaines ou en
-dizaines (`loupe_entry_percent` : `2` et `20` = 200 %, `01` = 10 %) ; 0 est ignoré, Échap
+dizaines (`loupe_entry_percent` : `2` et `20` = 200 %, `01` = 10 %) ; un chiffre tapé
+dans la même durée après coup complète encore le nombre (`loupe_entry_done` : avec Maj
+sur un clavier AZERTY, on tape moins vite, et le chiffre suivant changeait la note) ; 0 est ignoré, Échap
 annule, une autre touche applique ce qui est tapé puis agit. Pour la session
 (`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ. La roulette, la loupe
 tenue, change le grossissement d'un palier par cran (`loupe_wheel_step` points ;

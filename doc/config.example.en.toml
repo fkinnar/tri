@@ -766,9 +766,10 @@ loupe_step = 80.0
 loupe_step_large = 320.0
 # Loupe magnification typed after the leader and m, without Enter: three digits apply at
 # once (150: 150 %); one or two digits after this pause (ms), as hundreds or tens
-# (2: 200 %, 20: 200 %, 01: 10 %). Ctrl+K / Ctrl+J: one step (steps) up or down. For the
+# (2: 200 %, 20: 200 %, 01: 10 %). Ctrl+K / Ctrl+J: one step (steps) up or down. A digit
+# typed just after this pause still completes the number (never a rating). For the
 # session; loupe_scale stays the starting value.
-loupe_digits_ms = 600
+loupe_digits_ms = 1000
 # Wheel, with the loupe held: one magnification step every loupe_wheel_step points of
 # scrolling (a mouse notch; on a touchpad, a swipe); the grid does not scroll.
 loupe_wheel_step = 50.0
