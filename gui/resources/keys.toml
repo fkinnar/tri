@@ -250,7 +250,7 @@ loupe = "m"
 "core.file.move" = ["Ctrl+x"]
 # Write the missing rating sidecars (one software, or all of them).
 "core.file.sidecars" = []
-# Write the ratings into the images themselves (JPEG, PNG, WebP, TIFF).
+# Write the ratings into the images themselves (JPEG, PNG, WebP, TIFF, HEIC).
 "core.file.embed_notes" = []
 # Send by AirDrop (macOS).
 "plugin.airdrop.send" = []

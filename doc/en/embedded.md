@@ -15,8 +15,10 @@ darktable, digiKam… And it reads those another program put there.
 | PNG | `iTXt` chunk `XML:com.adobe.xmp` | uncompressed; an existing compressed XMP: refused |
 | WebP | `XMP ` chunk | a simple WebP becomes extended (`VP8X`), through `img-parts` |
 | TIFF | tag 700 (`XMLPacket`) | in place if it fits (padding spaces), otherwise at the end of the file with a copy of IFD0 |
+| HEIC / HEIF | `mime` item `application/rdf+xml`, `cdsc` reference to the primary image | in place if it fits; otherwise its data in an `mdat` added at the end of the file, `meta` rebuilt (`iinf`, `iref`, `iloc`) and the offsets of the data after it shifted accordingly; not sequences (`moov`) |
 
-Never a RAW: its ratings stay in the sidecars. HEIC / HEIF: to come.
+Never a RAW: its ratings stay in the sidecars. Checked with ExifTool (`-validate`) and macOS:
+tile grids like an iPhone's, decoded pixels identical.
 
 ## What is written
 
@@ -62,4 +64,4 @@ In [notes.md](notes.md), an image **without a sidecar** takes the ratings writte
 
 - Windows Explorer: it reads `xmp:Rating` and the EXIF; a packet that also carries
   `MicrosoftPhoto:Rating` (written by Windows) is not updated yet.
-- HEIC / HEIF (ISOBMFF container: a `mime` item to add, offsets to shift).
+- HEIC files from a real iPhone (tested on files produced by macOS).

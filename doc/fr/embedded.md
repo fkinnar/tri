@@ -15,8 +15,10 @@ Lightroom, darktable, digiKam… Et il lit celles qu'un autre logiciel y a mises
 | PNG | chunk `iTXt` `XML:com.adobe.xmp` | non compressé ; un XMP compressé existant : refus |
 | WebP | chunk `XMP ` | un WebP simple devient étendu (`VP8X`), par `img-parts` |
 | TIFF | balise 700 (`XMLPacket`) | à sa place s'il y tient (espaces de remplissage), sinon en fin de fichier avec une copie de l'IFD0 |
+| HEIC / HEIF | élément `mime` `application/rdf+xml`, référence `cdsc` vers l'image principale | à sa place s'il y tient ; sinon ses données dans un `mdat` ajouté en fin de fichier, `meta` reconstruite (`iinf`, `iref`, `iloc`) et les adresses des données qui la suivent décalées d'autant ; pas les séquences (`moov`) |
 
-Jamais un RAW : ses notes restent dans les sidecars. HEIC / HEIF : à venir.
+Jamais un RAW : ses notes restent dans les sidecars. Vérifié avec ExifTool (`-validate`) et
+macOS : grilles de tuiles comme celles d'un iPhone, pixels décodés identiques.
 
 ## Ce qui est écrit
 
@@ -64,4 +66,4 @@ Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites 
 
 - L'Explorateur Windows : il lit `xmp:Rating` et l'EXIF ; un paquet qui porte aussi
   `MicrosoftPhoto:Rating` (écrit par Windows) n'est pas encore mis à jour.
-- HEIC / HEIF (conteneur ISOBMFF : élément `mime` à ajouter, adresses à décaler).
+- Les HEIC d'un vrai iPhone (testé sur des fichiers produits par macOS).

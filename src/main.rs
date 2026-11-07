@@ -31,7 +31,7 @@
 //!       recopie les notes (étoiles, couleurs, accepté / rejeté) dans les sidecars de
 //!       l'autre convention (`--dry-run` : sans rien écrire), voir `tri::xmp::convert` ;
 //!   tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
-//!       inscrit les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF ; les RAW
+//!       inscrit les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; les RAW
 //!       sont passés), voir `tri::embedded` ;
 //!   tri --rename <image> <nom> [--dry-run]
 //!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;

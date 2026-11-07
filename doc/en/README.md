@@ -52,7 +52,7 @@ exists.
 | [rrdata.md](rrdata.md) | Module `tri::rrdata`: notes in RapidRAW sidecars (`.rrdata`, virtual copies included) |
 | [pp3.md](pp3.md) | Module `tri::pp3`: ratings in RawTherapee (`.pp3`) and ART (`.arp`) profiles, same format |
 | [sidecars.md](sidecars.md) | Module `tri::sidecars`: the formats of the notes sidecars (XMP, `.rrdata`, `.pp3`, `.arp`), all written, the missing ones created according to `[sidecars]` or on demand |
-| [embedded.md](embedded.md) | Module `tri::embedded`: ratings written into the images themselves (JPEG, PNG, WebP, TIFF), read without a sidecar, written on demand or on each rating |
+| [embedded.md](embedded.md) | Module `tri::embedded`: ratings written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC), read without a sidecar, written on demand or on each rating |
 | [xmp.md](xmp.md) | Module `tri::xmp`: notes (stars, colors, accepted/rejected) in XMP sidecars |
 | [bitmap.md](bitmap.md) | Module `tri::bitmap`: common RGB8 image type |
 | [flat.md](flat.md) | Module `tri::flat`: decoding JPEG, PNG, TIFF, WebP, HEIC |

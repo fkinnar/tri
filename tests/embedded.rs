@@ -42,8 +42,20 @@ fn ratings_round_trip_in_every_supported_format() {
 }
 
 #[test]
+fn heic_ratings_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("q.heic");
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    std::fs::copy(fixtures.join("quadrants.heic"), &path).unwrap();
+    let mut wanted = Notes::default();
+    wanted.set_stars(5);
+    assert!(embedded::write(&path, &wanted).unwrap());
+    assert_eq!(embedded::read(&path).unwrap().unwrap().stars, 5);
+}
+
+#[test]
 fn raws_and_unknown_files_carry_no_ratings() {
-    for name in ["a.RAF", "b.CR3", "c.dng", "d.heic", "e.txt"] {
+    for name in ["a.RAF", "b.CR3", "c.dng", "e.txt"] {
         assert_eq!(Container::of(std::path::Path::new(name)), None, "{name}");
     }
 }

@@ -5,7 +5,8 @@
 //! demande.
 //!
 //! - **Formats** : JPEG (segment APP1 `http://ns.adobe.com/xap/1.0/`), PNG (chunk `iTXt`
-//!   `XML:com.adobe.xmp`), WebP (chunk `XMP `), TIFF (balise 700). Jamais un RAW.
+//!   `XML:com.adobe.xmp`), WebP (chunk `XMP `), TIFF (balise 700), HEIF / HEIC (élément
+//!   `mime`). Jamais un RAW.
 //! - **Sans recompression** : seul le bloc de métadonnées change, le reste du fichier est
 //!   gardé octet pour octet. Le paquet existant est complété par [`crate::xmp::apply`]
 //!   (nos champs seulement, comme pour les sidecars), jamais remplacé.
@@ -37,6 +38,8 @@ pub enum Container {
     Webp,
     /// TIFF (pas un RAW en TIFF : DNG, NEF… sont exclus par leur extension).
     Tiff,
+    /// HEIF / HEIC (iPhone, appareils récents).
+    Heif,
 }
 
 impl Container {
@@ -48,6 +51,7 @@ impl Container {
             "png" => Some(Container::Png),
             "webp" => Some(Container::Webp),
             "tif" | "tiff" => Some(Container::Tiff),
+            "heic" | "heif" | "hif" => Some(Container::Heif),
             _ => None,
         }
     }
@@ -94,6 +98,7 @@ pub fn read(path: &Path) -> io::Result<Option<Notes>> {
         Container::Png => scan_png(&mut file)?,
         Container::Webp => scan_webp(&mut file)?,
         Container::Tiff => scan_tiff(&mut file)?,
+        Container::Heif => scan_heif(&mut file)?,
     };
     Ok(notes_of(&found))
 }
@@ -156,6 +161,7 @@ fn updated(path: &Path, notes: &Notes) -> Result<Option<Vec<u8>>, String> {
         Container::Png => update_png(&bytes, notes),
         Container::Webp => update_webp(&bytes, notes),
         Container::Tiff => update_tiff(&bytes, notes),
+        Container::Heif => update_heif(&bytes, notes),
     }
 }
 
@@ -828,6 +834,600 @@ fn update_webp(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
     Ok(changed.then(|| webp.encoder().bytes().to_vec()))
 }
 
+// --- HEIF (HEIC) --------------------------------------------------------------------------
+//
+// Conteneur ISOBMFF : une boîte `meta` décrit les éléments (`iinf`), leurs adresses
+// (`iloc`) et leurs liens (`iref`) ; les données sont dans `mdat`. Le XMP est un élément
+// `mime` (`application/rdf+xml`), relié à l'image principale par une référence `cdsc`.
+// Réécrit à sa place s'il y tient ; sinon ses données vont dans un `mdat` ajouté en fin
+// de fichier, et `meta` est reconstruite : comme elle grandit, les adresses des données
+// qui la suivent sont décalées d'autant.
+
+/// Type MIME de l'élément XMP.
+const HEIF_XMP: &[u8] = b"application/rdf+xml";
+
+/// Une boîte : type, début, début du contenu, fin.
+#[derive(Clone, Copy, Debug)]
+struct IsoBox {
+    kind: [u8; 4],
+    start: usize,
+    body: usize,
+    end: usize,
+}
+
+/// Boîtes de `bytes[from..to]`.
+fn iso_boxes(bytes: &[u8], from: usize, to: usize) -> Option<Vec<IsoBox>> {
+    let mut out = Vec::new();
+    let mut at = from;
+    while at < to {
+        let size = u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as u64;
+        let kind: [u8; 4] = bytes.get(at + 4..at + 8)?.try_into().ok()?;
+        let (size, header) = match size {
+            0 => ((to - at) as u64, 8),
+            1 => (
+                u64::from_be_bytes(bytes.get(at + 8..at + 16)?.try_into().ok()?),
+                16,
+            ),
+            n => (n, 8),
+        };
+        let end = at.checked_add(usize::try_from(size).ok()?)?;
+        if size < header as u64 || end > to {
+            return None;
+        }
+        out.push(IsoBox {
+            kind,
+            start: at,
+            body: at + header,
+            end,
+        });
+        at = end;
+    }
+    Some(out)
+}
+
+/// Lecteur gros-boutiste dans une tranche.
+struct Cursor<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Cursor<'a> {
+    fn new(bytes: &'a [u8], at: usize) -> Self {
+        Cursor { bytes, at }
+    }
+    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
+        let s = self.bytes.get(self.at..self.at.checked_add(n)?)?;
+        self.at += n;
+        Some(s)
+    }
+    fn u8(&mut self) -> Option<u8> {
+        self.take(1).map(|b| b[0])
+    }
+    fn u16(&mut self) -> Option<u16> {
+        Some(u16::from_be_bytes(self.take(2)?.try_into().ok()?))
+    }
+    fn u32(&mut self) -> Option<u32> {
+        Some(u32::from_be_bytes(self.take(4)?.try_into().ok()?))
+    }
+    /// Entier de `size` octets (0, 4 ou 8).
+    fn sized(&mut self, size: u8) -> Option<u64> {
+        match size {
+            0 => Some(0),
+            4 => self.u32().map(u64::from),
+            8 => Some(u64::from_be_bytes(self.take(8)?.try_into().ok()?)),
+            _ => None,
+        }
+    }
+    /// Chaîne terminée par un 0.
+    fn cstr(&mut self) -> Option<&'a [u8]> {
+        let rest = self.bytes.get(self.at..)?;
+        let n = rest.iter().position(|&b| b == 0)?;
+        self.at += n + 1;
+        Some(&rest[..n])
+    }
+}
+
+/// Entier gros-boutiste de `size` octets (0, 4 ou 8).
+fn put_sized(out: &mut Vec<u8>, size: u8, value: u64) {
+    match size {
+        4 => out.extend_from_slice(&(value as u32).to_be_bytes()),
+        8 => out.extend_from_slice(&value.to_be_bytes()),
+        _ => {}
+    }
+}
+
+/// Un élément de `iloc`.
+#[derive(Clone, Debug)]
+struct Located {
+    id: u32,
+    method: u16,
+    reference: u16,
+    base: u64,
+    /// (index, adresse, longueur).
+    extents: Vec<(u64, u64, u64)>,
+}
+
+/// Boîte `iloc` décodée.
+#[derive(Clone, Debug)]
+struct Iloc {
+    version: u8,
+    flags: [u8; 3],
+    offset_size: u8,
+    length_size: u8,
+    base_size: u8,
+    index_size: u8,
+    items: Vec<Located>,
+}
+
+impl Iloc {
+    fn parse(body: &[u8]) -> Option<Iloc> {
+        let mut c = Cursor::new(body, 0);
+        let version = c.u8()?;
+        let flags: [u8; 3] = c.take(3)?.try_into().ok()?;
+        let a = c.u8()?;
+        let b = c.u8()?;
+        let (offset_size, length_size, base_size) = (a >> 4, a & 15, b >> 4);
+        let index_size = if version > 0 { b & 15 } else { 0 };
+        let count = if version < 2 {
+            u32::from(c.u16()?)
+        } else {
+            c.u32()?
+        };
+        let mut items = Vec::new();
+        for _ in 0..count {
+            let id = if version < 2 {
+                u32::from(c.u16()?)
+            } else {
+                c.u32()?
+            };
+            let method = if version > 0 { c.u16()? & 15 } else { 0 };
+            let reference = c.u16()?;
+            let base = c.sized(base_size)?;
+            let n = c.u16()?;
+            let mut extents = Vec::new();
+            for _ in 0..n {
+                let index = if version > 0 && index_size > 0 {
+                    c.sized(index_size)?
+                } else {
+                    0
+                };
+                extents.push((index, c.sized(offset_size)?, c.sized(length_size)?));
+            }
+            items.push(Located {
+                id,
+                method,
+                reference,
+                base,
+                extents,
+            });
+        }
+        Some(Iloc {
+            version,
+            flags,
+            offset_size,
+            length_size,
+            base_size,
+            index_size,
+            items,
+        })
+    }
+
+    /// Boîte complète.
+    fn encode(&self) -> Vec<u8> {
+        let mut out = vec![0, 0, 0, 0];
+        out.extend_from_slice(b"iloc");
+        out.push(self.version);
+        out.extend_from_slice(&self.flags);
+        out.push((self.offset_size << 4) | self.length_size);
+        out.push((self.base_size << 4) | self.index_size);
+        if self.version < 2 {
+            out.extend_from_slice(&(self.items.len() as u16).to_be_bytes());
+        } else {
+            out.extend_from_slice(&(self.items.len() as u32).to_be_bytes());
+        }
+        for item in &self.items {
+            if self.version < 2 {
+                out.extend_from_slice(&(item.id as u16).to_be_bytes());
+            } else {
+                out.extend_from_slice(&item.id.to_be_bytes());
+            }
+            if self.version > 0 {
+                out.extend_from_slice(&item.method.to_be_bytes());
+            }
+            out.extend_from_slice(&item.reference.to_be_bytes());
+            put_sized(&mut out, self.base_size, item.base);
+            out.extend_from_slice(&(item.extents.len() as u16).to_be_bytes());
+            for &(index, offset, length) in &item.extents {
+                if self.version > 0 && self.index_size > 0 {
+                    put_sized(&mut out, self.index_size, index);
+                }
+                put_sized(&mut out, self.offset_size, offset);
+                put_sized(&mut out, self.length_size, length);
+            }
+        }
+        let size = out.len() as u32;
+        out[..4].copy_from_slice(&size.to_be_bytes());
+        out
+    }
+}
+
+/// Une entrée `infe` (versions 2 et 3, les seules des HEIF).
+#[derive(Clone, Debug)]
+struct ItemInfo {
+    id: u32,
+    kind: [u8; 4],
+    content_type: Vec<u8>,
+}
+
+/// Entrées de `iinf` ; `None` si une entrée n'est pas de version 2 ou 3.
+fn item_infos(bytes: &[u8], iinf: &IsoBox) -> Option<Vec<ItemInfo>> {
+    let version = *bytes.get(iinf.body)?;
+    let first = iinf.body + 4 + if version == 0 { 2 } else { 4 };
+    iso_boxes(bytes, first, iinf.end)?
+        .iter()
+        .filter(|b| &b.kind == b"infe")
+        .map(|b| {
+            let mut c = Cursor::new(&bytes[..b.end], b.body);
+            let v = c.u8()?;
+            c.take(3)?;
+            let id = match v {
+                2 => u32::from(c.u16()?),
+                3 => c.u32()?,
+                _ => return None,
+            };
+            c.u16()?;
+            let kind: [u8; 4] = c.take(4)?.try_into().ok()?;
+            c.cstr()?;
+            let content_type = if &kind == b"mime" {
+                c.cstr()?.to_vec()
+            } else {
+                Vec::new()
+            };
+            Some(ItemInfo {
+                id,
+                kind,
+                content_type,
+            })
+        })
+        .collect()
+}
+
+/// Ce que dit la boîte `meta` : ses enfants, les éléments, leurs adresses, l'image
+/// principale.
+struct Meta {
+    children: Vec<IsoBox>,
+    infos: Vec<ItemInfo>,
+    iloc: Iloc,
+    primary: u32,
+}
+
+impl Meta {
+    /// `bytes` : le fichier en entier, ou au moins jusqu'à la fin de `meta`.
+    fn parse(bytes: &[u8], meta: IsoBox) -> Option<Meta> {
+        let children = iso_boxes(bytes, meta.body + 4, meta.end)?;
+        let find = |k: &[u8; 4]| children.iter().find(|b| &b.kind == k).copied();
+        let infos = item_infos(bytes, &find(b"iinf")?)?;
+        let iloc_box = find(b"iloc")?;
+        let iloc = Iloc::parse(&bytes[iloc_box.body..iloc_box.end])?;
+        let pitm = find(b"pitm")?;
+        let mut c = Cursor::new(&bytes[..pitm.end], pitm.body);
+        let primary = match c.u8()? {
+            0 => {
+                c.take(3)?;
+                u32::from(c.u16()?)
+            }
+            _ => {
+                c.take(3)?;
+                c.u32()?
+            }
+        };
+        Some(Meta {
+            children,
+            infos,
+            iloc,
+            primary,
+        })
+    }
+
+    /// Identifiant de l'élément XMP.
+    fn xmp_id(&self) -> Option<u32> {
+        self.infos
+            .iter()
+            .find(|i| &i.kind == b"mime" && i.content_type == HEIF_XMP)
+            .map(|i| i.id)
+    }
+
+    /// Adresses (dans le fichier) et longueurs des données de l'élément `id`, rangées
+    /// dans le fichier (`iloc` méthode 0) ou dans la boîte `idat` (méthode 1).
+    fn ranges(&self, bytes_idat: Option<usize>, id: u32) -> Option<Vec<(u64, u64)>> {
+        let item = self.iloc.items.iter().find(|i| i.id == id)?;
+        let origin = match item.method {
+            0 => 0,
+            1 => bytes_idat? as u64,
+            _ => return None,
+        };
+        Some(
+            item.extents
+                .iter()
+                .map(|&(_, offset, length)| (origin + item.base + offset, length))
+                .collect(),
+        )
+    }
+
+    /// Début du contenu de la boîte `idat`, s'il y en a une.
+    fn idat(&self) -> Option<usize> {
+        self.children
+            .iter()
+            .find(|b| &b.kind == b"idat")
+            .map(|b| b.body)
+    }
+}
+
+/// En-tête d'un fichier HEIF : boîtes de tête parcourues par sauts jusqu'à `meta`, lue en
+/// entier, puis les données de l'élément XMP.
+fn scan_heif<R: Read + Seek>(r: &mut R) -> io::Result<Found> {
+    let mut found = Found::default();
+    let mut at = 0u64;
+    loop {
+        let mut head = [0u8; 16];
+        if r.read_exact(&mut head[..8]).is_err() {
+            return Ok(found);
+        }
+        let mut size = u64::from(u32::from_be_bytes([head[0], head[1], head[2], head[3]]));
+        let mut header = 8;
+        if size == 1 {
+            r.read_exact(&mut head[8..16])?;
+            size = u64::from_be_bytes(head[8..16].try_into().unwrap_or_default());
+            header = 16;
+        }
+        if size < header || (at == 0 && &head[4..8] != b"ftyp") {
+            return Ok(found);
+        }
+        if &head[4..8] == b"meta" {
+            let len = usize::try_from(size).unwrap_or(usize::MAX).min(MAX_XMP);
+            let mut meta = vec![0u8; len];
+            meta[..header as usize].copy_from_slice(&head[..header as usize]);
+            r.read_exact(&mut meta[header as usize..])?;
+            let boxes = iso_boxes(&meta, 0, meta.len()).unwrap_or_default();
+            let Some(parsed) = boxes.first().and_then(|b| Meta::parse(&meta, *b)) else {
+                return Ok(found);
+            };
+            let Some(ranges) = parsed.xmp_id().and_then(|id| {
+                // `idat` est dans `meta` : adresse relative à la copie lue, ramenée au
+                // fichier.
+                let idat = parsed.idat().map(|i| i + at as usize);
+                parsed.ranges(idat, id)
+            }) else {
+                return Ok(found);
+            };
+            let mut xmp = Vec::new();
+            for (offset, length) in ranges {
+                if xmp.len() as u64 + length > MAX_XMP as u64 {
+                    return Ok(found);
+                }
+                r.seek(SeekFrom::Start(offset))?;
+                let mut part = vec![0u8; length as usize];
+                r.read_exact(&mut part)?;
+                xmp.extend_from_slice(&part);
+            }
+            found.xmp = Some(xmp);
+            return Ok(found);
+        }
+        at += size;
+        r.seek(SeekFrom::Start(at))?;
+    }
+}
+
+/// HEIF mis à jour (voir l'en-tête de cette partie).
+fn update_heif(bytes: &[u8], notes: &Notes) -> Result<Option<Vec<u8>>, String> {
+    let malformed = || t!("embed-malformed");
+    let top = iso_boxes(bytes, 0, bytes.len()).ok_or_else(malformed)?;
+    if top.first().map(|b| &b.kind) != Some(b"ftyp") {
+        return Err(malformed());
+    }
+    if top.iter().any(|b| &b.kind == b"moov") {
+        // Séquence d'images (adresses aussi dans `moov`) : pas prise en charge.
+        return Err(t!("embed-heif-sequence"));
+    }
+    let meta_box = *top
+        .iter()
+        .find(|b| &b.kind == b"meta")
+        .ok_or_else(malformed)?;
+    let meta = Meta::parse(bytes, meta_box).ok_or_else(malformed)?;
+    let xmp_id = meta.xmp_id();
+    let ranges = xmp_id.and_then(|id| meta.ranges(meta.idat(), id));
+    let existing: Option<Vec<u8>> = match &ranges {
+        Some(ranges) => {
+            let mut xmp = Vec::new();
+            for &(offset, length) in ranges {
+                let (o, l) = (offset as usize, length as usize);
+                xmp.extend_from_slice(bytes.get(o..o + l).ok_or_else(malformed)?);
+            }
+            Some(xmp)
+        }
+        None => None,
+    };
+    let Some(packet) = updated_packet(existing.as_deref(), notes)? else {
+        return Ok(None);
+    };
+    // À sa place, s'il y tient (une seule plage).
+    if let Some(ranges) = &ranges
+        && let [(offset, length)] = ranges.as_slice()
+        && packet.len() <= *length as usize
+        && let Some(padded) = pad_packet(&packet, *length as usize)
+    {
+        let mut out = bytes.to_vec();
+        let o = *offset as usize;
+        out[o..o + padded.len()].copy_from_slice(&padded);
+        return Ok(Some(out));
+    }
+    // Sinon : `meta` reconstruite, les données du XMP dans un `mdat` en fin de fichier.
+    let old_end = meta_box.end as u64;
+    let mut iloc = meta.iloc.clone();
+    let new_id = xmp_id.unwrap_or_else(|| {
+        meta.infos
+            .iter()
+            .map(|i| i.id)
+            .chain(iloc.items.iter().map(|i| i.id))
+            .max()
+            .unwrap_or(0)
+            + 1
+    });
+    if iloc.version < 2 && new_id > u32::from(u16::MAX) {
+        return Err(malformed());
+    }
+    // Tailles des champs : de quoi loger les adresses (une adresse absente, taille 0,
+    // vaut 0 : la garder lisible en passant à 4 ne change rien).
+    let big = bytes.len() as u64 + packet.len() as u64 + (1 << 20) > u64::from(u32::MAX);
+    let wide = if big { 8 } else { 4 };
+    iloc.offset_size = iloc.offset_size.max(wide);
+    iloc.length_size = iloc.length_size.max(4);
+    iloc.items.retain(|i| i.id != new_id);
+    iloc.items.push(Located {
+        id: new_id,
+        method: 0,
+        reference: 0,
+        base: 0,
+        extents: vec![(0, 0, packet.len() as u64)],
+    });
+    if iloc.version == 0 && iloc.items.iter().any(|i| i.method != 0) {
+        return Err(malformed());
+    }
+    // Enfants de `meta` : `iinf` et `iref` complétés si l'élément est nouveau, `iloc`
+    // remplacée (taille connue d'avance : ses valeurs n'en changent pas la longueur).
+    let mut children: Vec<Vec<u8>> = Vec::new();
+    let mut has_iref = false;
+    for child in &meta.children {
+        let raw = &bytes[child.start..child.end];
+        match &child.kind {
+            b"iloc" => children.push(Vec::new()), // remplie plus bas
+            b"iinf" if xmp_id.is_none() => children.push(grow_iinf(raw, new_id)?),
+            b"iref" if xmp_id.is_none() => {
+                has_iref = true;
+                children.push(grow_iref(raw, new_id, meta.primary));
+            }
+            _ => children.push(raw.to_vec()),
+        }
+    }
+    if xmp_id.is_none() && !has_iref {
+        let mut iref = vec![0, 0, 0, 0];
+        iref.extend_from_slice(b"iref");
+        let wide_ids = new_id > u32::from(u16::MAX) || meta.primary > u32::from(u16::MAX);
+        iref.extend_from_slice(&[u8::from(wide_ids), 0, 0, 0]);
+        let mut iref = grow_iref(&iref, new_id, meta.primary);
+        let size = iref.len() as u32;
+        iref[..4].copy_from_slice(&size.to_be_bytes());
+        children.push(iref);
+    }
+    let iloc_at = meta
+        .children
+        .iter()
+        .position(|b| &b.kind == b"iloc")
+        .ok_or_else(malformed)?;
+    let iloc_len = iloc.encode().len();
+    let others: usize = children.iter().map(Vec::len).sum();
+    let header = &bytes[meta_box.start..meta_box.body + 4];
+    let new_meta_len = 8 + 4 + others + iloc_len;
+    let delta = new_meta_len as i64 - (meta_box.end - meta_box.start) as i64;
+    // Adresses des données qui suivent `meta` : décalées d'autant.
+    let shift = |v: u64| (v as i64 + delta) as u64;
+    for item in iloc
+        .items
+        .iter_mut()
+        .filter(|i| i.method == 0 && i.id != new_id)
+    {
+        if iloc.base_size > 0 && item.base >= old_end {
+            item.base = shift(item.base);
+        } else {
+            for extent in &mut item.extents {
+                if item.base + extent.1 >= old_end {
+                    extent.1 = shift(extent.1);
+                }
+            }
+        }
+    }
+    let file_len =
+        meta_box.start as u64 + new_meta_len as u64 + (bytes.len() - meta_box.end) as u64;
+    if let Some(item) = iloc.items.iter_mut().find(|i| i.id == new_id) {
+        item.extents[0].1 = file_len + 8;
+    }
+    children[iloc_at] = iloc.encode();
+    debug_assert_eq!(children[iloc_at].len(), iloc_len);
+    let mut out = bytes[..meta_box.start].to_vec();
+    out.extend_from_slice(&(new_meta_len as u32).to_be_bytes());
+    out.extend_from_slice(b"meta");
+    out.extend_from_slice(&header[header.len() - 4..]);
+    for child in &children {
+        out.extend_from_slice(child);
+    }
+    out.extend_from_slice(&bytes[meta_box.end..]);
+    let mdat_len = u32::try_from(8 + packet.len()).map_err(|_| t!("embed-too-large"))?;
+    out.extend_from_slice(&mdat_len.to_be_bytes());
+    out.extend_from_slice(b"mdat");
+    out.extend_from_slice(&packet);
+    Ok(Some(out))
+}
+
+/// `iinf` avec une entrée de plus : l'élément XMP `id`.
+fn grow_iinf(raw: &[u8], id: u32) -> Result<Vec<u8>, String> {
+    let malformed = || t!("embed-malformed");
+    let version = *raw.get(8).ok_or_else(malformed)?;
+    let mut out = raw.to_vec();
+    if version == 0 {
+        let n = u16::from_be_bytes([raw[12], raw[13]])
+            .checked_add(1)
+            .ok_or_else(malformed)?;
+        out[12..14].copy_from_slice(&n.to_be_bytes());
+    } else {
+        let n = u32::from_be_bytes(raw[12..16].try_into().map_err(|_| malformed())?) + 1;
+        out[12..16].copy_from_slice(&n.to_be_bytes());
+    }
+    let mut infe = vec![0, 0, 0, 0];
+    infe.extend_from_slice(b"infe");
+    if id > u32::from(u16::MAX) {
+        infe.extend_from_slice(&[3, 0, 0, 0]);
+        infe.extend_from_slice(&id.to_be_bytes());
+    } else {
+        infe.extend_from_slice(&[2, 0, 0, 0]);
+        infe.extend_from_slice(&(id as u16).to_be_bytes());
+    }
+    infe.extend_from_slice(&[0, 0]);
+    infe.extend_from_slice(b"mime");
+    infe.push(0);
+    infe.extend_from_slice(HEIF_XMP);
+    infe.push(0);
+    let size = infe.len() as u32;
+    infe[..4].copy_from_slice(&size.to_be_bytes());
+    out.extend_from_slice(&infe);
+    let size = out.len() as u32;
+    out[..4].copy_from_slice(&size.to_be_bytes());
+    Ok(out)
+}
+
+/// `iref` avec une référence de plus : `cdsc` de l'élément `from` vers `to` (le XMP
+/// décrit l'image principale).
+fn grow_iref(raw: &[u8], from: u32, to: u32) -> Vec<u8> {
+    let wide = raw.get(8).is_some_and(|&v| v > 0);
+    let mut out = raw.to_vec();
+    let mut child = vec![0, 0, 0, 0];
+    child.extend_from_slice(b"cdsc");
+    if wide {
+        child.extend_from_slice(&from.to_be_bytes());
+        child.extend_from_slice(&1u16.to_be_bytes());
+        child.extend_from_slice(&to.to_be_bytes());
+    } else {
+        child.extend_from_slice(&(from as u16).to_be_bytes());
+        child.extend_from_slice(&1u16.to_be_bytes());
+        child.extend_from_slice(&(to as u16).to_be_bytes());
+    }
+    let size = child.len() as u32;
+    child[..4].copy_from_slice(&size.to_be_bytes());
+    out.extend_from_slice(&child);
+    let size = out.len() as u32;
+    out[..4].copy_from_slice(&size.to_be_bytes());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -989,6 +1589,90 @@ mod tests {
         std::fs::write(&broken, b"\xFF\xD8abc").unwrap();
         assert!(write(&broken, &notes(3, Flag::None, &[])).is_err());
         assert_eq!(std::fs::read(&broken).unwrap(), b"\xFF\xD8abc");
+    }
+
+    /// Données de chaque élément d'un HEIF (sauf le XMP), par identifiant.
+    fn heif_items(bytes: &[u8]) -> Vec<(u32, Vec<u8>)> {
+        let top = iso_boxes(bytes, 0, bytes.len()).unwrap();
+        let meta_box = *top.iter().find(|b| &b.kind == b"meta").unwrap();
+        let meta = Meta::parse(bytes, meta_box).unwrap();
+        let xmp = meta.xmp_id();
+        let mut items: Vec<(u32, Vec<u8>)> = meta
+            .iloc
+            .items
+            .iter()
+            .filter(|i| Some(i.id) != xmp)
+            .map(|i| {
+                let data = meta
+                    .ranges(meta.idat(), i.id)
+                    .unwrap()
+                    .iter()
+                    .flat_map(|&(o, l)| bytes[o as usize..(o + l) as usize].to_vec())
+                    .collect();
+                (i.id, data)
+            })
+            .collect();
+        items.sort();
+        items
+    }
+
+    fn fixture(name: &str) -> Vec<u8> {
+        std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures")
+                .join(name),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn heic_ratings_are_added_and_every_tile_is_kept() {
+        // Une grille de 6 tuiles (comme un iPhone), sans XMP : `meta` grandit, les
+        // adresses des tuiles sont décalées.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("grid.HEIC");
+        let original = fixture("grid.heic");
+        std::fs::write(&path, &original).unwrap();
+        assert_eq!(read(&path).unwrap(), None);
+        let wanted = notes(5, Flag::Accepted, &[Color::Red]);
+        assert!(write(&path, &wanted).unwrap());
+        let written = std::fs::read(&path).unwrap();
+        assert_eq!(
+            heif_items(&written),
+            heif_items(&original),
+            "tuiles intactes"
+        );
+        assert!(same_notes(&read(&path).unwrap().unwrap(), &wanted));
+        // Une autre note : à sa place, le fichier ne grandit plus.
+        let other = notes(2, Flag::None, &[Color::Red]);
+        assert!(write(&path, &other).unwrap());
+        assert_eq!(std::fs::read(&path).unwrap().len(), written.len());
+        assert!(same_notes(&read(&path).unwrap().unwrap(), &other));
+        #[cfg(feature = "heif")]
+        {
+            let before = crate::flat::decode(dir.path().join("grid.HEIC")).unwrap();
+            let copy = dir.path().join("orig.heic");
+            std::fs::write(&copy, &original).unwrap();
+            let orig = crate::flat::decode(&copy).unwrap();
+            assert_eq!(before.data, orig.data, "image décodée à l'identique");
+        }
+    }
+
+    #[test]
+    fn heic_with_a_packet_from_another_program() {
+        // XMP posé par ExifTool (Rating 2), dans `mdat` : lu, puis complété.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.heic");
+        let original = fixture("xmp.heic");
+        std::fs::write(&path, &original).unwrap();
+        assert_eq!(read(&path).unwrap().unwrap().stars, 2);
+        let wanted = notes(4, Flag::None, &[Color::Green, Color::Blue]);
+        assert!(write(&path, &wanted).unwrap());
+        assert!(same_notes(&read(&path).unwrap().unwrap(), &wanted));
+        assert_eq!(
+            heif_items(&std::fs::read(&path).unwrap()),
+            heif_items(&original)
+        );
     }
 
     #[test]
