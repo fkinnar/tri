@@ -399,6 +399,9 @@ pub struct TriApp {
     grid_width: f32,
     /// « Tout à l'écran » demandé avant que la grille soit mise en page (au démarrage).
     grid_fit_pending: bool,
+    /// « Toutes les vignettes à l'écran » allumé : la taille d'avant, rendue au second
+    /// clic (retour du 07/11/2026 : un interrupteur). Changer la taille à la main l'éteint.
+    grid_fit_from: Option<f32>,
     /// Clic sur un badge d'une vignette (versions, écrêtage) : l'image et l'action,
     /// faite après la grille.
     cell_action: Option<(usize, Vec<Action>)>,
@@ -1170,6 +1173,7 @@ impl TriApp {
             grid_cell: gui.grid.cell,
             grid_width: 0.0,
             grid_fit_pending: false,
+            grid_fit_from: None,
             cell_action: None,
             rating_dialog: None,
             mark_picker: None,
@@ -4945,6 +4949,7 @@ impl TriApp {
         }
         if cell != self.grid_cell {
             self.grid_cell = cell;
+            self.grid_fit_from = None;
             self.reveal = Some(Reveal::Minimal);
         }
     }
@@ -6747,9 +6752,10 @@ impl TriApp {
                     g.cell_min,
                     g.cell_max,
                 );
+                self.grid_fit_from = None;
                 self.reveal = Some(Reveal::Minimal);
             }
-            Action::Zoom100 if self.mode == Mode::Grid => self.grid_fit_all(),
+            Action::Zoom100 if self.mode == Mode::Grid => self.toggle_grid_fit(),
             // Paliers (+, -), 100 % (*), ajusté (/) : comme Lightroom.
             Action::ZoomIn | Action::ZoomOut | Action::ZoomFit | Action::Zoom100
                 if matches!(self.mode, Mode::View | Mode::Compare) =>
@@ -12418,7 +12424,11 @@ impl TriApp {
                     // précédent soit à gauche (retour du 31/10/2026).
                     actions.extend([Action::DevNext, Action::DevPrev]);
                 }
-                actions.push(Action::ToggleZoom);
+                // 1:1 : en plein écran seulement (retour du 07/11/2026 : en grille, la loupe
+                // réglable le remplace ; l'action reste, au clavier).
+                if self.mode != Mode::Grid {
+                    actions.push(Action::ToggleZoom);
+                }
                 // Infos sur l'image (repère de position, notes ; leur état se voit et se
                 // change à la souris, retour du 05/11/2026), tout à droite de la barre
                 // (retour du 07/11/2026).
@@ -12496,12 +12506,17 @@ impl TriApp {
                         clicked = Some(Action::ToggleGridInfo);
                     }
                     let keys = self.keymap.keys_for(Action::Zoom100).join(" / ");
-                    let tip = format!("{} ({keys})", t!("grid-fit"));
+                    let tip = format!("{} ({keys})\n{}", t!("grid-fit"), t!("grid-fit-back"));
                     let (rect, response) = marks::icon_button(ui, icon, &t!("grid-fit"), &tip);
-                    let color = ui.style().interact(&response).fg_stroke.color;
+                    // Allumé = à l'accent, comme les autres interrupteurs de la barre.
+                    let color = if self.grid_fit_from.is_some() {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
                     marks::grid_fit_icon(ui.painter(), rect.shrink(icon * 0.25), color);
                     if response.clicked() {
-                        self.grid_fit_all();
+                        self.toggle_grid_fit();
                     }
                     if room >= buttons + self.gui.grid.size_slider + spacing {
                         self.grid_size_slider(ui, self.gui.grid.size_slider);
@@ -13000,6 +13015,23 @@ impl TriApp {
 
     /// Vignettes à la plus grande taille qui les montre toutes à l'écran (bouton du bas,
     /// `*` en grille), dans les bornes du curseur.
+    /// « Toutes les vignettes à l'écran », en interrupteur (bouton de la barre du bas, `*`
+    /// en grille ; retour du 07/11/2026) : allumé, les vignettes réduites pour toutes les
+    /// voir ; éteint, la taille d'avant.
+    fn toggle_grid_fit(&mut self) {
+        match self.grid_fit_from.take() {
+            Some(cell) => {
+                self.grid_cell = cell;
+                self.grid_fit_pending = false;
+                self.reveal = Some(Reveal::Minimal);
+            }
+            None => {
+                self.grid_fit_from = Some(self.grid_cell);
+                self.grid_fit_all();
+            }
+        }
+    }
+
     fn grid_fit_all(&mut self) {
         let g = self.gui.grid;
         let n = if self.stacks.shown.is_empty() {
@@ -13032,6 +13064,7 @@ impl TriApp {
             let cell = (self.grid_cell * factor).clamp(g.cell_min, g.cell_max.max(g.cell_min));
             if cell != self.grid_cell {
                 self.grid_cell = cell;
+                self.grid_fit_from = None;
                 self.reveal = Some(Reveal::Minimal);
             }
         }
@@ -19976,6 +20009,50 @@ mod tests {
             .click();
         h.run_steps(3);
         assert!(h.state().auto_advance);
+    }
+
+    #[test]
+    fn all_thumbnails_on_screen_is_a_switch() {
+        // Retour du 07/11/2026 : allumé, toutes les vignettes à l'écran ; éteint, la
+        // taille d'avant. Changer la taille à la main l'éteint.
+        let names: Vec<String> = (0..60).map(|i| format!("img{i:02}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&names, 64, 48);
+        h.set_size(vec2(1800.0, 700.0));
+        h.state_mut().rating_bar = true;
+        h.run_steps(5);
+        let before = h.state().grid_cell;
+        act(&mut h, Action::Zoom100);
+        h.run_steps(2);
+        assert_eq!(h.state().grid_fit_from, Some(before));
+        assert!(h.state().grid_cell < before, "réduites");
+        act(&mut h, Action::Zoom100);
+        assert_eq!(h.state().grid_cell, before, "la taille d'avant");
+        assert_eq!(h.state().grid_fit_from, None);
+        // Le bouton de la barre fait de même.
+        click_settled(&mut h, &t!("grid-fit"));
+        h.run_steps(2);
+        assert!(h.state().grid_fit_from.is_some());
+        // + : la taille à la main, l'interrupteur s'éteint.
+        act(&mut h, Action::ZoomIn);
+        assert_eq!(h.state().grid_fit_from, None);
+    }
+
+    #[test]
+    fn the_one_to_one_button_is_only_in_full_screen() {
+        // Retour du 07/11/2026 : en grille, la loupe réglable le remplace ; l'action reste.
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        let one = Action::ToggleZoom.label();
+        assert!(h.query_by_label(&one).is_none(), "pas en grille");
+        act(&mut h, Action::Open);
+        assert!(h.query_by_label(&one).is_some(), "en plein écran");
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::Grid);
+        act(&mut h, Action::ToggleZoom);
+        assert_eq!(h.state().mode, Mode::View, "l'action reste");
+        assert!(h.state().zoom.is_some());
     }
 
     #[test]

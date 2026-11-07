@@ -38,6 +38,11 @@
   (`f` : « Filtre ») ; plus de précisions entre parenthèses (F1 et la palette les gardent) ;
   libellés plus courts pour les filtres d'étoiles et les couleurs
   (plus de « (ajouter / retirer) »).
+- **Plus de bouton 1:1 en grille** : la loupe réglable le remplace ; `z` ouvre toujours
+  l'image sélectionnée à 100 %.
+- **« Toutes les vignettes à l'écran » devient un interrupteur** (bouton et `*` en
+  grille) : allumé, les vignettes rétrécissent pour toutes les voir ; éteint, elles
+  reprennent leur taille. Changer la taille à la main l'éteint.
 - **Historique de la palette** : champ vide, la palette de commandes montre ce qu'on y a
   lancé, le plus récent d'abord ; ↑ / ↓ et Entrée le relancent. Gardé d'une session à
   l'autre (`[gui.dialogs] palette_history`, 20).

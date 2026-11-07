@@ -187,7 +187,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Aide-mémoire des touches** en haut à droite du plein écran (« b : rendu boîtier / RAW,
   z : 1:1… ») : masqué par défaut depuis le 17/10/2026 (il mordait sur l'image, F1 ouvre
   l'aide complète avec recherche) ; `[gui.view] key_hints = true` pour le retrouver.
-- **1:1 depuis la grille** (17/10/2026) : `z` (ou le bouton « 1:1 » du bandeau) ouvre
+- **1:1 depuis la grille** (17/10/2026) : `z` (au clavier seulement depuis le 07/11/2026 :
+  en grille, le bouton « 1:1 » du bandeau a laissé la place à la loupe réglable) ouvre
   l'image sélectionnée directement à 100 %, pour vérifier vite la netteté ; Échap ramène
   à la grille. Au clavier et au bouton, le 1:1 est **centré sur le collimateur** quand le
   boîtier l'a enregistré (`[gui.view] zoom_on_focus_point`), sinon au milieu ; si les
@@ -1566,7 +1567,9 @@ photos nettes.
   badges disparaissent, l'image prend la place du texte ; `[gui.grid] info`, retenu.
 - **Taille des vignettes** : curseur en bas à côté de ‹ › (logarithmique,
   `[gui.grid] cell_min` / `cell_max`, double-clic : `cell`), bouton « tout à l'écran »
-  (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré) ; au
+  (`grid::fit_all` : la plus grande taille qui montre tout le dossier filtré ; un
+  interrupteur depuis le 07/11/2026, `TriApp::toggle_grid_fit` : éteint, il rend la
+  taille d'avant ; changer la taille à la main l'éteint) ; au
   clavier, comme Lightroom, `+` / `-` (un quart de plus ou de moins, `grid::step_cell`)
   et `*` ; à la souris, Ctrl / Cmd + molette ou pince au pavé tactile, en continu
   (24/10/2026, issue n° 44). Taille retenue d'un lancement à l'autre. Contrôles montrés seulement s'il reste
