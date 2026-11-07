@@ -1468,7 +1468,12 @@ during a window's opening fade showed it half transparent.
   the status bar says so. Safety net: a graphics card error no longer stops the program
   (wgpu's default handler did); it is recorded in `crash.log` ("sans plantage") and shown
   in the status bar (`crash::gpu_error`, hooked to `Device::on_uncaptured_error` in
-  `main.rs`).
+  `main.rs`). The texture in cause leaves the cache (named in the message,
+  `egui_texid_Managed(n)`; otherwise the last one loaded) and its image keeps its
+  preview: otherwise every frame drawn afterwards failed on it (a try at
+  `textures_mb = 2000` on an old laptop: frozen screen, errors in bursts). The session's
+  budget goes down to what fitted (`textures_cap_mb`, `TriApp::gpu_failed`), and the
+  status bar gives the value.
 - `TRI_GUI_TRACE=1`: timed trace of the startup steps (configuration read, window opened,
   folder read, tree, first image, engine; added on 2026-10-19 for a startup slowness seen
   on macOS) and of each step of image loading (request to the engine, image ready,

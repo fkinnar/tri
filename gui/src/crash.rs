@@ -63,9 +63,12 @@ pub fn install(dir: PathBuf) {
     }));
 }
 
-/// Dernière erreur de la carte graphique, pas encore montrée ([`gpu_error`],
-/// [`take_gpu_error`]).
-static GPU_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+thread_local! {
+    /// Dernière erreur de la carte graphique, pas encore montrée ([`gpu_error`],
+    /// [`take_gpu_error`]). Par fil : wgpu la signale sur le fil qui dessine, celui de
+    /// l'interface (et chaque test a ainsi la sienne).
+    static GPU_ERROR: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
 
 /// Une erreur de la carte graphique (mémoire pleine…), qui plantait `tri` avant le
 /// 07/11/2026 (le gestionnaire de wgpu par défaut arrête le programme) : consignée dans le
@@ -77,14 +80,12 @@ pub fn gpu_error(dir: Option<&Path>, message: &str) {
         let text = report("(carte graphique, sans plantage)", "wgpu", message, "");
         let _ = append(dir, &text);
     }
-    if let Ok(mut last) = GPU_ERROR.lock() {
-        *last = Some(message.to_string());
-    }
+    GPU_ERROR.with(|last| *last.borrow_mut() = Some(message.to_string()));
 }
 
 /// L'erreur de la carte graphique à montrer, une fois.
 pub fn take_gpu_error() -> Option<String> {
-    GPU_ERROR.lock().ok()?.take()
+    GPU_ERROR.with(|last| last.borrow_mut().take())
 }
 
 #[cfg(test)]

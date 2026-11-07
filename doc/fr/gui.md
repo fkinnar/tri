@@ -1540,7 +1540,12 @@ moitié transparente.
   et la barre d'état le dit. Filet de sécurité : une erreur de la carte graphique n'arrête
   plus le programme (le gestionnaire de wgpu par défaut le faisait) ; elle est consignée
   dans `crash.log` (« sans plantage ») et dite dans la barre d'état
-  (`crash::gpu_error`, branché sur `Device::on_uncaptured_error` dans `main.rs`).
+  (`crash::gpu_error`, branché sur `Device::on_uncaptured_error` dans `main.rs`). La
+  texture en cause sort du cache (nommée dans le message, `egui_texid_Managed(n)` ;
+  sinon la dernière chargée) et son image garde son aperçu : sans cela, chaque image
+  dessinée ensuite échouait sur elle (essai à `textures_mb = 2000` sur un vieux portable :
+  écran figé, erreurs en rafale). Le budget de la session descend à ce qui tenait
+  (`textures_cap_mb`, `TriApp::gpu_failed`), et la barre d'état donne la valeur.
 - `TRI_GUI_TRACE=1` : trace minutée des étapes du démarrage (configuration lue, fenêtre
   ouverte, dossier lu, arborescence, première image, moteur ; ajoutées le 19/10/2026
   pour une lenteur de démarrage vue sur macOS) et de chaque étape du chargement des images (demande au

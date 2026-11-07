@@ -911,6 +911,10 @@ pub struct TriApp {
     /// Grandes images non chargées faute de mémoire graphique (`[gui.view] textures_mb`) :
     /// elles gardent leur aperçu, sans être redemandées tant qu'elles restent affichées.
     over_budget: HashSet<(PathBuf, Level)>,
+    /// Budget des grandes textures abaissé pour la session après une erreur de la carte
+    /// graphique (Mo) : ce qui tenait alors (07/11/2026 : à 2000 Mo, la carte n'avait pas
+    /// la place).
+    textures_cap_mb: Option<u64>,
     /// Dernière liste envoyée au chargeur (pour ne pas la renvoyer à chaque image).
     wanted: Vec<(PathBuf, Level)>,
     /// Entrées annoncées prêtes mais introuvables dans le cache : ne pas les redemander.
@@ -1422,6 +1426,7 @@ impl TriApp {
             // En comparaison, chaque image garde son aperçu et son 1:1.
             big: Lru::new(gui.view.textures.max(gui.compare.max * 2 + 2)),
             over_budget: HashSet::new(),
+            textures_cap_mb: None,
             wanted: Vec::new(),
             missing: HashSet::new(),
             view_waiting: false,
@@ -7624,12 +7629,64 @@ impl TriApp {
         }
     }
 
+    /// Budget des grandes textures en vigueur (Mo) : le réglage, abaissé après une erreur
+    /// de la carte graphique.
+    fn textures_budget_mb(&self) -> u64 {
+        let mine = self.gui.view.textures_mb;
+        self.textures_cap_mb.map_or(mine, |cap| cap.min(mine))
+    }
+
+    /// Mémoire graphique des grandes textures chargées (octets).
+    fn textures_used(&self) -> u64 {
+        self.big
+            .values()
+            .map(|b| {
+                let [w, h] = b.texture.size();
+                (w * h * 4) as u64
+            })
+            .sum()
+    }
+
+    /// Erreur de la carte graphique (07/11/2026 : à `textures_mb = 2000`, une texture n'a
+    /// pas pu être créée, et chaque image dessinée ensuite échouait sur elle) : la texture
+    /// en cause sort du cache (nommée dans le message, `egui_texid_Managed(n)` ; sinon la
+    /// dernière chargée), son image garde son aperçu, et le budget de la session descend à
+    /// ce qui tenait.
+    fn gpu_failed(&mut self, error: &str) {
+        let named = error
+            .split("egui_texid_Managed(")
+            .nth(1)
+            .and_then(|rest| rest.split(')').next())
+            .and_then(|n| n.parse::<u64>().ok())
+            .and_then(|n| {
+                self.big
+                    .key_where(|b| b.texture.id() == egui::TextureId::Managed(n))
+            });
+        let culprit = named.or_else(|| self.big.newest());
+        if let Some(key) = culprit {
+            self.big.remove(&key);
+            self.over_budget.insert(key);
+        }
+        let used = (self.textures_used() / (1024 * 1024)).max(64);
+        if used < self.textures_budget_mb() {
+            self.textures_cap_mb = Some(used);
+        }
+        self.notice = Some((
+            t!(
+                "gpu-error-budget",
+                mb = self.textures_budget_mb(),
+                error = error.lines().next().unwrap_or_default()
+            ),
+            true,
+        ));
+    }
+
     /// Fait de la place pour `image` dans la mémoire graphique (`[gui.view] textures_mb`) :
     /// sortent les grandes textures les moins récentes, sauf celles des images affichées.
     /// Faux si elle ne tient toujours pas (dit une fois dans la barre d'état).
     fn make_room(&mut self, key: &(PathBuf, Level), image: &ColorImage) -> bool {
         let bytes = |w: usize, h: usize| (w * h * 4) as u64;
-        let budget = self.gui.view.textures_mb * 1024 * 1024;
+        let budget = self.textures_budget_mb() * 1024 * 1024;
         let needed = bytes(image.size[0], image.size[1]);
         let shown: HashSet<PathBuf> = self
             .displayed()
@@ -7654,7 +7711,7 @@ impl TriApp {
                 None => {
                     if self.over_budget.is_empty() {
                         self.notice = Some((
-                            t!("textures-over-budget", mb = self.gui.view.textures_mb),
+                            t!("textures-over-budget", mb = self.textures_budget_mb()),
                             false,
                         ));
                     }
@@ -15340,7 +15397,7 @@ impl eframe::App for TriApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         // Une erreur de la carte graphique (sans plantage, voir `crash::gpu_error`).
         if let Some(e) = crate::crash::take_gpu_error() {
-            self.notice = Some((t!("gpu-error", error = e), true));
+            self.gpu_failed(&e);
         }
         let ctx = ui.ctx().clone();
         let mut steps = crate::trace::Steps::start();
@@ -19866,6 +19923,50 @@ mod tests {
         act(&mut h, Action::Back);
         h.run_steps(3);
         assert!(h.state().over_budget.is_empty());
+    }
+
+    #[test]
+    fn a_graphics_error_drops_its_texture_and_lowers_the_budget() {
+        // Retour du 07/11/2026 : à `textures_mb = 2000`, la carte n'avait pas la place ; la
+        // texture non créée faisait échouer chaque image ensuite (« BindGroup with
+        // 'egui_texid_Managed(68)' label is invalid »).
+        let (mut h, _dir) = harness_with(2400, 1600);
+        h.run_steps(3);
+        act(&mut h, Action::Compare);
+        run_until(&mut h, |app| app.textures_used() > 0);
+        let (key, id) = {
+            let app = h.state();
+            let key = app.big.newest().unwrap();
+            let id = app.big.values().map(|b| b.texture.id()).next().unwrap();
+            (key, id)
+        };
+        let key = h
+            .state()
+            .big
+            .key_where(|b| b.texture.id() == id)
+            .unwrap_or(key);
+        let egui::TextureId::Managed(n) = id else {
+            panic!("{id:?}")
+        };
+        crate::crash::gpu_error(
+            None,
+            &format!(
+                "Validation Error\n  BindGroup with 'egui_texid_Managed({n})' label is invalid"
+            ),
+        );
+        h.run_steps(2);
+        assert!(
+            !h.state().big.contains(&key),
+            "la texture fautive est sortie"
+        );
+        assert!(
+            h.state().over_budget.contains(&key),
+            "son image garde l'aperçu"
+        );
+        let cap = h.state().textures_cap_mb.expect("budget abaissé");
+        assert!(cap < h.state().gui.view.textures_mb);
+        let notice = h.state().notice.clone().map(|n| n.0).unwrap_or_default();
+        assert!(notice.contains("textures_mb"), "{notice}");
     }
 
     #[test]

@@ -59,6 +59,22 @@ impl<K: Eq + Hash + Clone, V> Lru<K, V> {
         self.entries.values().map(|(v, _)| v)
     }
 
+    /// La clé d'une entrée dont la valeur satisfait `wanted`.
+    pub fn key_where(&self, wanted: impl Fn(&V) -> bool) -> Option<K> {
+        self.entries
+            .iter()
+            .find(|(_, (v, _))| wanted(v))
+            .map(|(k, _)| k.clone())
+    }
+
+    /// La plus récemment ajoutée ou utilisée des entrées.
+    pub fn newest(&self) -> Option<K> {
+        self.entries
+            .iter()
+            .max_by_key(|(_, (_, used))| *used)
+            .map(|(k, _)| k.clone())
+    }
+
     /// La moins récemment utilisée des entrées que `evictable` accepte.
     pub fn oldest_where(&self, evictable: impl Fn(&K) -> bool) -> Option<K> {
         self.entries
