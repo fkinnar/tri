@@ -8777,6 +8777,29 @@ impl TriApp {
         Some((w.round() as u32, h.round() as u32))
     }
 
+    /// Taille du 100 % d'un développement, pour le zoom (07/11/2026 : darktable et
+    /// RapidRAW le rendent à la taille de l'aperçu ; à « 100 % » de ses pixels, il était
+    /// ~2,4 fois plus petit que la photo à côté en comparaison) : sa vraie résolution si
+    /// elle est connue (darktable : recadrage lu dans le sidecar), sinon le côté long du
+    /// capteur à la proportion du rendu `aspect` (exact sans recadrage). `None` : la photo
+    /// n'est pas encore lue.
+    fn developed_full_size(
+        &mut self,
+        ctx: &egui::Context,
+        file: &MediaFile,
+        aspect: f32,
+    ) -> Option<Vec2> {
+        let read = self
+            .meta
+            .get_or_insert_with(|| MetaLoader::new(ctx.clone()))
+            .get(file)
+            .and_then(|m| m.as_ref().ok())
+            .cloned();
+        let full = read?.size?;
+        let known = self.developed_size(&file.path, full);
+        Some(view::developed_zoom_size(full, known, aspect))
+    }
+
     /// Taille du développé darktable de `path` (image de `full` pixels) : recadrage lu
     /// dans le sidecar (`develop::developed_size`), relu seulement s'il a changé.
     fn developed_size(&mut self, path: &Path, full: (u32, u32)) -> Option<(u32, u32)> {
@@ -9430,8 +9453,15 @@ impl TriApp {
                     // entier au milieu des autres zoomées).
                     Some(center) => {
                         let full = if shown == Some(zoom_level) {
-                            self.last_zoom_size.insert(zoom_level, original);
-                            original
+                            // Un développé : à l'échelle de la photo, pas de ses pixels.
+                            let full = match zoom_level {
+                                Level::Developed(_) => self
+                                    .developed_full_size(&ctx, &file, original.x / original.y)
+                                    .unwrap_or(original),
+                                _ => original,
+                            };
+                            self.last_zoom_size.insert(zoom_level, full);
+                            full
                         } else {
                             self.last_zoom_size
                                 .get(&zoom_level)
@@ -10221,6 +10251,14 @@ impl TriApp {
             // attendant le 1:1, l'aperçu est ainsi déjà affiché à l'échelle 1:1 (flou un
             // instant), sans repasser par la vue ajustée.
             let zoom_px = match (self.zoom, shown) {
+                // Un développé : à l'échelle de la photo, pas de ses pixels.
+                (Some(_), Some(level @ Level::Developed(_))) if level == zoom_level => {
+                    let full = self
+                        .developed_full_size(&ctx, &file, original.x / original.y)
+                        .unwrap_or(original);
+                    self.last_zoom_size.insert(zoom_level, full);
+                    Some(full)
+                }
                 (Some(_), Some(level)) if level == zoom_level => {
                     self.last_zoom_size.insert(zoom_level, original);
                     Some(original)

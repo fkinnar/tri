@@ -143,6 +143,18 @@ pub fn center_keeping(view: Rect, size: Vec2, point: Vec2, pointer: Pos2) -> Vec
     vec2(point.x - offset.x / size.x, point.y - offset.y / size.y)
 }
 
+/// Taille du 100 % d'un développement (pixels) : sa vraie résolution `known` si elle est
+/// connue (darktable : recadrage lu dans le sidecar), sinon le côté long du capteur `full`
+/// à la proportion du rendu `aspect` (largeur / hauteur ; exact sans recadrage). Un
+/// développement rendu à la taille de l'aperçu s'affiche ainsi à l'échelle de la photo.
+pub fn developed_zoom_size(full: (u32, u32), known: Option<(u32, u32)>, aspect: f32) -> Vec2 {
+    if let Some((w, h)) = known {
+        return vec2(w as f32, h as f32);
+    }
+    let long = full.0.max(full.1) as f32;
+    estimate_zoom_size(vec2(long, long), aspect)
+}
+
 /// Palier suivant (`up`) ou précédent de l'échelle `current` (1,0 = 100 %), parmi
 /// `steps`, entre `min` et `max` ; `None` : rien au-delà (déjà au bout). On peut dézoomer
 /// sous l'ajusté (retour du 18/10/2026 : l'image plus petite que l'écran, centrée).
@@ -188,6 +200,23 @@ fn origin(r: Rect) -> Pos2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_development_is_zoomed_at_the_scale_of_its_photo() {
+        // 07/11/2026 : rendu à 1707 × 2560 (aperçu), photo de 4170 × 6246 : à 100 %, à la
+        // taille de la photo.
+        let size = developed_zoom_size((4170, 6246), None, 1707.0 / 2560.0);
+        assert_eq!(size.y, 6246.0);
+        assert!((size.x - 4164.8).abs() < 1.0, "{size:?}");
+        // Paysage.
+        let size = developed_zoom_size((6246, 4170), None, 1.5);
+        assert_eq!(size, vec2(6246.0, 4164.0));
+        // Recadrage connu (darktable) : sa vraie résolution.
+        assert_eq!(
+            developed_zoom_size((6246, 4170), Some((3000, 2000)), 1.5),
+            vec2(3000.0, 2000.0)
+        );
+    }
 
     /// Niveau développé de darktable.
     const DT: Level = Level::Developed(tri::develop::Engine::Darktable);

@@ -1191,6 +1191,14 @@ the grid stays in place). The value shows in the bottom bar (scale control, belo
 
 ### Zoom like the loupe (2026-11-07)
 
+**A development at the scale of its photo** (same day): darktable and RapidRAW render at
+the preview size; at "100 %" of its own pixels, a development looked ~2.4 times smaller
+than the photo next to it in comparison. Zoomed, it takes the size of the photo's 100 %
+(`view::developed_zoom_size`, `TriApp::developed_full_size`): its real resolution when
+known (darktable: crop read in the sidecar), otherwise the long side of the sensor at the
+proportion of the render (exact without a crop; approximate for a crop made in RapidRAW,
+RawTherapee or ART, which is not read).
+
 Decided with the user: what applies to the loupe applies to the full-screen zoom.
 `<leader> z` (`core.view.zoom_scale`) opens the same entry as `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centred like `+` / `-`). `Ctrl+K` / `Ctrl+J`

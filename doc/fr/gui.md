@@ -1254,6 +1254,14 @@ se voit dans la barre du bas (réglage d'échelle, ci-dessous).
 
 ### Le zoom comme la loupe (07/11/2026)
 
+**Un développement à l'échelle de sa photo** (même jour) : darktable et RapidRAW rendent
+à la taille de l'aperçu ; à « 100 % » de ses pixels, un développement apparaissait ~2,4
+fois plus petit que la photo à côté en comparaison. Zoomé, il prend la taille du 100 %
+de la photo (`view::developed_zoom_size`, `TriApp::developed_full_size`) : sa vraie
+résolution si elle est connue (darktable : recadrage lu dans le sidecar), sinon le côté
+long du capteur à la proportion du rendu (exact sans recadrage ; approché pour un
+recadrage fait dans RapidRAW, RawTherapee ou ART, qu'on ne lit pas).
+
 Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du plein écran.
 `<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centré comme `+` / `-`). `Ctrl+K` / `Ctrl+J`

@@ -12,6 +12,9 @@
   même échelle que les autres, avec un panneau d'avertissement. Une ligne dans le
   terminal, le détail dans `crash.log`. Un bouton « Garder N Mo » écrit la limite
   abaissée dans la configuration.
+- **Un développement zoomé à l'échelle de sa photo** : à 100 %, un développement
+  darktable ou RapidRAW (rendu à la taille de l'aperçu) apparaissait ~2,4 fois plus petit
+  que la photo à côté ; il correspond maintenant au 100 % de la photo.
 - **Sortir d'une comparaison de tout** rend la grille telle qu'elle était : rien en
   surbrillance, la comparaison suivante reprend donc tout.
 - **« Comparaison limitée à N images »** : une bulle, placée et minutée comme le repère
