@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Typed loupe magnification** (`<leader> m`): one second between digits (600 ms
+  before), and a digit typed just after still completes the number instead of rating the
+  photo (with Shift on an AZERTY keyboard, typing is slower).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):
   keys in the accent colour, one row in two on a lighter background, and the "/"
   between several keys in grey so the keys stand out.

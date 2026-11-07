@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Grossissement de la loupe tapé** (`<leader> m`) : une seconde entre deux chiffres
+  (600 ms avant), et un chiffre tapé juste après complète encore le nombre au lieu de
+  noter la photo (avec Maj sur un clavier AZERTY, on tape moins vite).
 - **Un seul style pour les listes de raccourcis** (F1, `?`, le menu des suites, la
   palette) : touches à la couleur d'accent, une ligne sur deux sur fond plus clair, et
   le « / » entre plusieurs touches en gris, pour faire ressortir les touches.
