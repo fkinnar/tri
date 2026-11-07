@@ -27004,13 +27004,19 @@ mod tests {
         // Relire depuis les images : pas tranché en silence (retour du 07/11/2026), la
         // boîte s'ouvre.
         // Filtre « en conflit », dans le panneau de droite : elle seule.
+        // La case est là ; elle déclenche l'action, éprouvée ici directement (un clic
+        // simulé n'est pas toujours vu sur la CI Windows, voir les tests du 31/10/2026).
         h.state_mut().metadata_panel = true;
         h.run_steps(2);
-        h.get_by_label(&t!("filter-conflicts")).click();
+        assert!(
+            h.query_by_label(&t!("filter-conflicts")).is_some(),
+            "dans le panneau"
+        );
+        act(&mut h, Action::FilterConflicts);
         h.run_steps(2);
         assert!(h.state().conflicts_only);
         assert_eq!(h.state().files.len(), 1, "l'image en conflit seule");
-        h.get_by_label(&t!("filter-conflicts")).click();
+        act(&mut h, Action::FilterConflicts);
         h.run_steps(2);
         assert_eq!(h.state().files.len(), 3);
         // Au clavier : f c.
