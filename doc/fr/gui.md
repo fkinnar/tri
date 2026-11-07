@@ -1260,7 +1260,10 @@ fois plus petit que la photo à côté en comparaison. Zoomé, il prend la taill
 de la photo (`view::developed_zoom_size`, `TriApp::developed_full_size`) : sa vraie
 résolution si elle est connue (darktable : recadrage lu dans le sidecar), sinon le côté
 long du capteur à la proportion du rendu (exact sans recadrage ; approché pour un
-recadrage fait dans RapidRAW, RawTherapee ou ART, qu'on ne lit pas).
+recadrage fait dans RapidRAW, RawTherapee ou ART, qu'on ne lit pas). Agrandi ainsi, il
+porte une petite icône d'info en haut à droite (`resampled_mark`, plein écran et
+comparaison) : au survol, la taille du rendu et celle de la photo, et que sa netteté à
+cette échelle n'est pas celle du fichier.
 
 Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du plein écran.
 `<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`

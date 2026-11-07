@@ -13,7 +13,8 @@
   button writes the lowered limit into the configuration.
 - **A development zoomed at the scale of its photo**: at 100 %, a darktable or RapidRAW
   development (rendered at the preview size) looked ~2.4 times smaller than the photo
-  next to it; it now matches the photo's 100 %.
+  next to it; it now matches the photo's 100 %. An info icon says it is enlarged, so its
+  sharpness at that scale is not the file's.
 - **Leaving a comparison of everything** gives back the grid as it was: nothing
   highlighted, so the next comparison takes everything again.
 - **"Comparison limited to N images"**: a bubble, placed and timed like the position

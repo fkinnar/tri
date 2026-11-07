@@ -1197,7 +1197,9 @@ than the photo next to it in comparison. Zoomed, it takes the size of the photo'
 (`view::developed_zoom_size`, `TriApp::developed_full_size`): its real resolution when
 known (darktable: crop read in the sidecar), otherwise the long side of the sensor at the
 proportion of the render (exact without a crop; approximate for a crop made in RapidRAW,
-RawTherapee or ART, which is not read).
+RawTherapee or ART, which is not read). Enlarged this way, it carries a small info icon
+at the top right (`resampled_mark`, full screen and comparison): on hover, the size of
+the render and of the photo, and that its sharpness at this scale is not the file's.
 
 Decided with the user: what applies to the loupe applies to the full-screen zoom.
 `<leader> z` (`core.view.zoom_scale`) opens the same entry as `<leader> m`

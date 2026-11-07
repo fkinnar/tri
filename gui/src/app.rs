@@ -8777,6 +8777,33 @@ impl TriApp {
         Some((w.round() as u32, h.round() as u32))
     }
 
+    /// Petite icône d'info en haut à droite de `area` (après `slot` autres marques) : un
+    /// développement rendu en `render` pixels, agrandi à l'échelle de sa photo (`full`) ;
+    /// sa netteté n'est pas celle du fichier (idée de l'utilisateur, 07/11/2026).
+    fn resampled_mark(
+        &self,
+        ui: &Ui,
+        painter: &egui::Painter,
+        area: Rect,
+        slot: usize,
+        id: egui::Id,
+        (render, full): (Vec2, Vec2),
+    ) {
+        let size = self.gui.view.marks;
+        let right = area.right() - 10.0 - slot as f32 * (size + 6.0);
+        let mark = Rect::from_min_size(
+            egui::pos2(right - size, area.top() + 10.0),
+            vec2(size, size),
+        );
+        painter.circle_filled(mark.center(), size * 0.55, Color32::from_black_alpha(140));
+        marks::info_icon(painter, mark, Color32::WHITE);
+        let response = ui.interact(mark, id.with("resampled"), Sense::hover());
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, t!("resampled")));
+        let px = |v: Vec2| format!("{} × {}", v.x.round() as u32, v.y.round() as u32);
+        response.on_hover_text(t!("resampled-tip", render = px(render), full = px(full)));
+    }
+
     /// Taille du 100 % d'un développement, pour le zoom (07/11/2026 : darktable et
     /// RapidRAW le rendent à la taille de l'aperçu ; à « 100 % » de ses pixels, il était
     /// ~2,4 fois plus petit que la photo à côté en comparaison) : sa vraie résolution si
@@ -9445,6 +9472,7 @@ impl TriApp {
                     .map(|b| (b.texture.clone(), b.original)),
                 None => None,
             };
+            let mut resampled = None;
             if let Some((texture, original)) = drawable {
                 let image_rect = match self.zoom {
                     // 1:1 au même point relatif de chaque image ; sans son 1:1 (en chemin,
@@ -9460,6 +9488,9 @@ impl TriApp {
                                     .unwrap_or(original),
                                 _ => original,
                             };
+                            if full.x > original.x * 1.05 {
+                                resampled = Some((original, full));
+                            }
                             self.last_zoom_size.insert(zoom_level, full);
                             full
                         } else {
@@ -9548,6 +9579,9 @@ impl TriApp {
                     egui::WidgetInfo::labeled(egui::Role::Image, true, t!("compare-no-full"))
                 });
                 response.on_hover_text(t!("compare-no-full-tip", mb = self.textures_budget_mb()));
+            }
+            if let Some(sizes) = resampled {
+                self.resampled_mark(ui, &painter, rect, usize::from(without_full), id, sizes);
             }
             // Image active : cadre de la couleur de sélection.
             if index == self.selected {
@@ -10237,6 +10271,7 @@ impl TriApp {
         };
         let mut image_rect = None;
         let mut sensor_ratio = None;
+        let mut resampled = None;
         // Version montrée (ni zoomée ni en cours de recadrage) : son cadre.
         let shown_crop = self
             .version_shown
@@ -10256,6 +10291,9 @@ impl TriApp {
                     let full = self
                         .developed_full_size(&ctx, &file, original.x / original.y)
                         .unwrap_or(original);
+                    if full.x > original.x * 1.05 {
+                        resampled = Some((original, full));
+                    }
                     self.last_zoom_size.insert(zoom_level, full);
                     Some(full)
                 }
@@ -10353,6 +10391,10 @@ impl TriApp {
         let sensor_rect = image_rect
             .filter(|_| !matches!(shown, Some(Level::Developed(_))) && shown_crop.is_none());
         self.draw_focus_point(&ctx, &painter, &file, sensor_rect);
+        if let Some(sizes) = resampled {
+            let id = ui.scope_id().with(("viewer", &file.path));
+            self.resampled_mark(ui, &painter, view_rect, 0, id, sizes);
+        }
         self.loupe(&ctx, &painter, index, image_rect);
         // Carte de netteté, sur l'image affichée (ajustée ou 1:1 ; une version : son cadre).
         let peaking_uv = match shown_crop {
