@@ -87,9 +87,22 @@ sources et leurs notes.
   gardées ; « Valider » en bas à droite. « Même choix pour les N autres images en conflit du dossier » : la même
   sorte de source, champ par champ. Un pas d'historique, annulable.
 
+- Filtre « En conflit (N) » dans la section Filtres du panneau de droite, sous les
+  autres (filtre secondaire : pas dans la barre du haut), seulement quand il y a des
+  conflits (`notes::ConflictFilter`).
+- Le triangle et les icônes d'écrêtage de la vignette sont sur une rangée, centrés sur
+  la hauteur des marques d'en face.
+
+## Fichiers renommés, déplacés, supprimés
+
+`files::rename`, `files::transfer` (copier ou déplacer) et `files::delete` font suivre la
+mémoire (`reconcile::carry`, `reconcile::forget`) : l'entrée de l'image change de nom et
+de dossier, ses sources renommées comme elles. Sans cela, une image dont une source est
+en retard (l'image non réécrite) passerait en conflit à sa nouvelle place. Un dossier
+copié ou déplacé emporte son `.tri` avec lui. L'annulation passe par les mêmes
+fonctions.
+
 ## À venir
 
-Un filtre « en conflit », puis l'automatisation (écrire
-partout, fusion à la volée sur les changements vus par la surveillance). Renommer ou
-déplacer une image n'emporte pas encore son entrée : elle est relue comme la première
-fois.
+L'automatisation : écrire partout, fusion à la volée sur les changements vus par la
+surveillance.

@@ -535,6 +535,72 @@ impl Memory {
     }
 }
 
+/// Fichiers renommés, déplacés ou copiés (`files`, (ancien, nouveau), images et
+/// sidecars) : ce qu'on retenait de chaque image suit, sous son nouveau nom et dans son
+/// nouveau dossier, ses sources renommées comme elles ; `copy` : l'original le garde
+/// aussi. Au mieux : une mémoire illisible ou impossible à écrire est laissée.
+pub fn carry(files: &[(PathBuf, PathBuf)], copy: bool) {
+    let renamed: std::collections::HashMap<&Path, &Path> = files
+        .iter()
+        .map(|(a, b)| (a.as_path(), b.as_path()))
+        .collect();
+    // Une mémoire par dossier touché, ouverte une fois.
+    let mut memories: BTreeMap<PathBuf, Memory> = BTreeMap::new();
+    let dir = |p: &Path| p.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let name = |p: &Path| {
+        p.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    for (from, to) in files {
+        let (from_dir, to_dir) = (dir(from), dir(to));
+        let from_memory = memories
+            .entry(from_dir.clone())
+            .or_insert_with(|| Memory::open(&from_dir));
+        let Some(entry) = from_memory.get(&name(from)).cloned() else {
+            continue;
+        };
+        if !copy {
+            from_memory.set(&name(from), None);
+        }
+        let mut moved = entry;
+        moved.sources = std::mem::take(&mut moved.sources)
+            .into_iter()
+            .map(|(source, seen)| {
+                let old = from_dir.join(&source);
+                let new = renamed.get(old.as_path()).map_or(source, |n| name(n));
+                (new, seen)
+            })
+            .collect();
+        memories
+            .entry(to_dir.clone())
+            .or_insert_with(|| Memory::open(&to_dir))
+            .set(&name(to), Some(moved));
+    }
+    for memory in memories.values_mut() {
+        let _ = memory.save();
+    }
+}
+
+/// Images supprimées : on oublie ce qu'on en retenait.
+pub fn forget(images: &[PathBuf]) {
+    let mut memories: BTreeMap<PathBuf, Memory> = BTreeMap::new();
+    for image in images {
+        let dir = image.parent().unwrap_or(Path::new(".")).to_path_buf();
+        let name = image
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        memories
+            .entry(dir.clone())
+            .or_insert_with(|| Memory::open(&dir))
+            .set(&name, None);
+    }
+    for memory in memories.values_mut() {
+        let _ = memory.save();
+    }
+}
+
 /// `.tri/notes.json` de `dir`.
 fn own_path(dir: &Path) -> PathBuf {
     dir.join(DIR).join(FILE)
@@ -827,6 +893,37 @@ mod tests {
         again.set("a.jpg", None);
         again.save().unwrap();
         assert!(!dir.path().join(DIR).exists(), "vide : retiré");
+    }
+
+    #[test]
+    fn the_memory_follows_renamed_moved_copied_and_deleted_images() {
+        let src = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let (s, d) = (src.path(), dest.path());
+        let n = notes(3, Flag::None, &[]);
+        let mut memory = Memory::load(s, None);
+        let sources = [source("A.jpg.xmp", 1, &n), source("A.jpg", 1, &n)];
+        memory.set("A.jpg", Some(Remembered::agreed(&n, &sources)));
+        memory.save().unwrap();
+        // Renommé (sidecar compris) : la clé et les sources suivent.
+        carry(
+            &[
+                (s.join("A.jpg"), s.join("B.jpg")),
+                (s.join("A.jpg.xmp"), s.join("B.jpg.xmp")),
+            ],
+            false,
+        );
+        let memory = Memory::load(s, None);
+        assert!(memory.get("A.jpg").is_none());
+        let b = memory.get("B.jpg").unwrap();
+        assert!(b.sources.contains_key("B.jpg.xmp") && b.sources.contains_key("B.jpg"));
+        // Copié ailleurs : les deux l'ont.
+        carry(&[(s.join("B.jpg"), d.join("B.jpg"))], true);
+        assert!(Memory::load(s, None).get("B.jpg").is_some());
+        assert_eq!(Memory::load(d, None).get("B.jpg").unwrap().notes(), n);
+        // Supprimé : oublié (et le fichier, vide, retiré).
+        forget(&[s.join("B.jpg")]);
+        assert!(!s.join(DIR).exists());
     }
 
     #[cfg(unix)]

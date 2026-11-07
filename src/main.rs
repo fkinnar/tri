@@ -945,7 +945,7 @@ fn embed_notes(
     let images: Vec<PathBuf> = files
         .iter()
         .map(|f| f.path.clone())
-        .filter(|p| tri::embedded::supports(p))
+        .filter(|p| tri::embedded::supports(p) && tri::developments::get(p).is_none())
         .collect();
     let report = if import {
         book.import(&images, dry_run)

@@ -444,6 +444,8 @@ pub struct TriApp {
     blur_refilter_pending: bool,
     /// Filtre « bien exposées » (ni brûlées ni bouchées, seuils des badges).
     well_exposed: bool,
+    /// Filtre « en conflit » (issue n° 368) : les images dont les notes sont à trancher.
+    conflicts_only: bool,
     /// Filtre « développées » allumé (icône de la barre des filtres, `f Maj+D`).
     developed_on: bool,
     /// Logiciels cochés du filtre « développées » ; `None` : tous les installés. Retenus
@@ -1232,6 +1234,7 @@ impl TriApp {
             blurry_applied: HashSet::new(),
             blur_refilter_pending: false,
             well_exposed: false,
+            conflicts_only: false,
             developed_on: false,
             developed_checked: None,
             filter_inverted: false,
@@ -2250,6 +2253,34 @@ impl TriApp {
             // Allumé : de l'air sous ses réglages.
             if on {
                 ui.add_space(self.gui.dialogs.spacing);
+            }
+        }
+        // Notes en conflit (issue n° 368) : un filtre secondaire, ici seulement (pas dans
+        // la barre du haut), et seulement quand il y en a (ou qu'il est allumé).
+        let conflicts = self.folder.notes.conflicts().len();
+        if conflicts > 0 || self.conflicts_only {
+            // Même forme que les autres filtres : case, icône, libellé (tout se clique).
+            let tip = t!("filter-conflicts-tip");
+            let size = self.gui.grid.marks + 4.0;
+            let (item, key) = self.side_begin(false);
+            let row = ui.horizontal(|ui| {
+                let mut checked = self.conflicts_only;
+                let check = ui.checkbox(&mut checked, "").on_hover_text(&tip);
+                let (rect, icon) = marks::clickable(ui, size, &tip);
+                marks::conflict_sign(ui.painter(), rect.shrink(size * 0.12));
+                let label = ui
+                    .add(
+                        egui::Label::new(t!("filter-conflicts", n = conflicts))
+                            .sense(Sense::click()),
+                    )
+                    .on_hover_text(&tip);
+                check.changed() || icon.clicked() || label.clicked()
+            });
+            let toggled = row.inner || key == Some(SideKey::Activate);
+            self.side_end(ui, item, row.response.rect, row.inner);
+            if toggled {
+                self.conflicts_only = !self.conflicts_only;
+                self.apply_filter();
             }
         }
     }
@@ -4697,6 +4728,14 @@ impl TriApp {
             .apply(groups),
             None => groups,
         };
+        let groups = if self.conflicts_only {
+            tri::notes::ConflictFilter {
+                book: &self.folder.notes,
+            }
+            .apply(groups)
+        } else {
+            groups
+        };
         // Inversé : ce que les filtres sur le contenu ont retiré de la base.
         let groups = if self.filter_inverted && self.content_filtered() {
             tri::filter::invert(base, &groups)
@@ -4981,6 +5020,7 @@ impl TriApp {
             || self.blur_rule.is_some()
             || self.well_exposed
             || self.developed_on
+            || self.conflicts_only
     }
 
     /// Parts saturées / bouchées des images de la grille dont l'analyse est prête, lues
@@ -7025,6 +7065,7 @@ impl TriApp {
                 self.blur_rule = None;
                 self.well_exposed = false;
                 self.developed_on = false;
+                self.conflicts_only = false;
                 self.leave_stack_only();
                 self.filter_inverted = false;
                 self.apply_filter();
@@ -14317,7 +14358,16 @@ impl TriApp {
         if !stacked && let Some((over, under)) = self.clip_fractions(index, deadline) {
             let (over_max, under_max) = self.clip_thresholds();
             let side = g.marks * 1.3;
-            let mut at = image_area.min + vec2(4.0, 4.0);
+            // Sur la ligne des marques d'en face, un peu plus haut : la pointe les fait
+            // paraître plus bas (retour du 07/11/2026, comme le signe de conflit) ; après
+            // ce signe s'il est là.
+            let line = image_area.min.y + g.marks / 2.0 + 3.0 - 1.5;
+            let after_conflict = if self.folder.notes.conflict(&file.path).is_some() {
+                g.marks + 9.0
+            } else {
+                4.0
+            };
+            let mut at = pos2(image_area.min.x + after_conflict, line - side / 2.0);
             for (fraction, threshold, what, is_over) in [
                 (over, over_max, "badge-over", true),
                 (under, under_max, "badge-under", false),
@@ -14647,6 +14697,7 @@ impl TriApp {
             .into_iter()
             .filter(|p| {
                 tri::embedded::supports(p)
+                    && tri::developments::get(p).is_none()
                     && self.folder.notes.error(p).is_none()
                     && self.folder.notes.conflict(p).is_none()
             })
@@ -14685,9 +14736,10 @@ impl TriApp {
     /// Relit les notes inscrites dans `images` et les recopie dans leurs sidecars (notes
     /// changées dans un autre logiciel), en un pas d'historique : annulable comme une note.
     fn import_notes(&mut self, images: &[PathBuf]) {
+        // Les vrais fichiers seulement : pas les développements (bug du 07/11/2026).
         let images: Vec<PathBuf> = images
             .iter()
-            .filter(|p| tri::embedded::supports(p))
+            .filter(|p| tri::embedded::supports(p) && tri::developments::get(p).is_none())
             .cloned()
             .collect();
         // Les images en conflit ne sont pas tranchées en silence (retour du 07/11/2026) :
@@ -26943,6 +26995,16 @@ mod tests {
         assert!(h.state().folder.notes.conflict(&image).is_some());
         // Relire depuis les images : pas tranché en silence (retour du 07/11/2026), la
         // boîte s'ouvre.
+        // Filtre « en conflit », dans le panneau de droite : elle seule.
+        h.state_mut().metadata_panel = true;
+        h.run_steps(2);
+        h.get_by_label(&t!("filter-conflicts", n = 1)).click();
+        h.run_steps(2);
+        assert!(h.state().conflicts_only);
+        assert_eq!(h.state().files.len(), 1, "l'image en conflit seule");
+        h.get_by_label(&t!("filter-conflicts", n = 1)).click();
+        h.run_steps(2);
+        assert_eq!(h.state().files.len(), 3);
         let inside = std::fs::read(&image).unwrap();
         for action in [Action::ImportNotes, Action::EmbedNotes] {
             act(&mut h, action);

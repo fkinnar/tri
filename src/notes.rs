@@ -301,6 +301,9 @@ impl NoteBook {
             .map(|image| {
                 let notes = self.notes(image);
                 let result = match self.error(image) {
+                    // Un développement n'est pas un fichier : ses notes sont dans son
+                    // sidecar (bug du 07/11/2026 : « No such file » sur `IMG@dt.jpg`).
+                    _ if crate::developments::get(image).is_some() => Ok(false),
                     Some(error) => Err(error.to_string()),
                     // En conflit : l'image est l'une des sources en désaccord, on ne
                     // l'écrase pas.
@@ -337,6 +340,10 @@ impl NoteBook {
                             .iter()
                             .all(|s| read_sidecar(s).is_ok_and(|n| n == *inside))
                 };
+                // Un développement n'est pas un fichier : rien d'inscrit dedans.
+                if crate::developments::get(image).is_some() {
+                    return (image.clone(), Ok(false));
+                }
                 // En conflit : jamais tranché en silence (retour du 07/11/2026), on
                 // demande d'abord ([`NoteBook::resolve`], boîte de l'interface).
                 if self.conflict(image).is_some() {
@@ -1057,6 +1064,19 @@ impl Filter for NotesFilter<'_> {
     }
 }
 
+/// Filtre « en conflit » (issue n° 368) : les images dont les sources de notes se
+/// contredisent, à trancher.
+pub struct ConflictFilter<'a> {
+    /// Les notes du dossier.
+    pub book: &'a NoteBook,
+}
+
+impl Filter for ConflictFilter<'_> {
+    fn apply(&self, groups: Groups) -> Groups {
+        retain(groups, |f| self.book.conflict(&f.path).is_some())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1236,6 +1256,16 @@ mod tests {
         assert_eq!(book.notes(&b).stars, 2);
         assert!(book.conflict(&b).is_some(), "image et sidecar en désaccord");
         assert_eq!(book.conflicts(), [b.as_path()]);
+        let file = |p: &Path| MediaFile {
+            path: p.to_path_buf(),
+            kind: crate::media::MediaKind::Flat,
+        };
+        let groups = vec![vec![file(&a), file(&b)]];
+        let kept = ConflictFilter { book: &book }.apply(groups);
+        assert_eq!(
+            kept.concat().iter().map(|f| &f.path).collect::<Vec<_>>(),
+            [&b]
+        );
         assert!(
             book.edit(&b, |n| n.set_stars(3)).is_err(),
             "à trancher d'abord"
@@ -1291,6 +1321,76 @@ mod tests {
             "son image aussi"
         );
         assert_eq!(book.import(std::slice::from_ref(&a), false)[0].1, Ok(false));
+    }
+
+    #[test]
+    fn renaming_or_moving_an_image_keeps_what_was_remembered() {
+        // Issue n° 368 : une image en retard sur son sidecar (notée dans `tri` après y
+        // avoir été inscrite) n'est pas un désaccord ; renommée ou déplacée, toujours pas.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let a = d.join("A.jpg");
+        std::fs::write(&a, jpeg()).unwrap();
+        let mut two = Notes::default();
+        two.set_stars(2);
+        crate::embedded::write(&a, &two).unwrap();
+        let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+        book.edit(&a, |n| n.set_stars(4)).unwrap();
+        book.reload();
+        assert!(book.conflict(&a).is_none());
+        let settings = crate::files::FileSettings::default();
+        let plan = crate::files::plan_rename(&a, "B", &settings).unwrap();
+        crate::files::rename(&plan).unwrap();
+        let b = d.join("B.jpg");
+        let book = NoteBook::load([b.as_path()], Convention::Darktable);
+        assert!(book.conflict(&b).is_none(), "renommée : mémoire suivie");
+        assert_eq!(book.notes(&b).stars, 4);
+        let other = d.join("ailleurs");
+        std::fs::create_dir(&other).unwrap();
+        let plan = crate::files::plan_transfer(
+            std::slice::from_ref(&b),
+            &other,
+            crate::files::TransferMode::Move,
+            &settings,
+        )
+        .unwrap();
+        crate::files::transfer(&plan, |_, _| {}).unwrap();
+        let moved = other.join("B.jpg");
+        let book = NoteBook::load([moved.as_path()], Convention::Darktable);
+        assert!(book.conflict(&moved).is_none(), "déplacée : mémoire suivie");
+        assert_eq!(book.notes(&moved).stars, 4);
+        assert!(
+            !d.join(crate::reconcile::DIR).exists(),
+            "plus rien à l'ancienne place"
+        );
+    }
+
+    #[test]
+    fn developments_are_not_files_to_read_or_write_ratings_in() {
+        // Bug du 07/11/2026 : « Relire les notes depuis les images » sur un dossier avec
+        // un JPEG développé dans darktable : « No such file » pour `A@dt.jpg`.
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::fs::write(d.join("A.jpg"), jpeg()).unwrap();
+        let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:Rating="3" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#;
+        std::fs::write(d.join("A.jpg.xmp"), darktable).unwrap();
+        let files = crate::media::scan(d, 1).unwrap();
+        let images: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
+        let dev = images
+            .iter()
+            .find(|p| crate::developments::get(p).is_some())
+            .expect("le développement darktable")
+            .clone();
+        let mut book = NoteBook::load_files(&files, Convention::Darktable);
+        assert_eq!(
+            book.import(std::slice::from_ref(&dev), false)[0].1,
+            Ok(false)
+        );
+        assert_eq!(
+            book.embed(std::slice::from_ref(&dev), false)[0].1,
+            Ok(false)
+        );
+        assert!(book.import(&images, false).iter().all(|(_, r)| r.is_ok()));
     }
 
     #[test]

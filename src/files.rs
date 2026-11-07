@@ -384,6 +384,8 @@ pub fn rename(plan: &Rename) -> Result<()> {
         }
         done.push((from, to));
     }
+    // Ce que `tri` retenait des notes suit (issue n° 368).
+    crate::reconcile::carry(&plan.moves, false);
     Ok(())
 }
 
@@ -525,15 +527,19 @@ pub fn delete_with_progress(
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Vec<Trashed>> {
     let files: Vec<&PathBuf> = group.files().collect();
-    if trash {
-        return to_trash(&files, &mut progress);
-    }
-    let total = files.len();
-    for (i, file) in files.into_iter().enumerate() {
-        std::fs::remove_file(file).map_err(|e| FileError::Io(file.clone(), e))?;
-        progress(i + 1, total);
-    }
-    Ok(Vec::new())
+    let trashed = if trash {
+        to_trash(&files, &mut progress)?
+    } else {
+        let total = files.len();
+        for (i, file) in files.into_iter().enumerate() {
+            std::fs::remove_file(file).map_err(|e| FileError::Io(file.clone(), e))?;
+            progress(i + 1, total);
+        }
+        Vec::new()
+    };
+    // Plus rien à retenir de leurs notes (issue n° 368).
+    crate::reconcile::forget(&group.images);
+    Ok(trashed)
 }
 
 /// macOS : le crate `trash` ne dit pas où il met les fichiers ; on demande au système
@@ -935,6 +941,9 @@ pub fn transfer(plan: &Transfer, mut progress: impl FnMut(usize, usize)) -> Resu
     for from in sources_to_remove {
         std::fs::remove_file(from).map_err(|e| FileError::Io(from.clone(), e))?;
     }
+    // Ce que `tri` retenait des notes suit (issue n° 368).
+    let carried: Vec<(PathBuf, PathBuf)> = plan.files.iter().chain(&plan.shared).cloned().collect();
+    crate::reconcile::carry(&carried, plan.mode == TransferMode::Copy);
     Ok(())
 }
 

@@ -83,8 +83,20 @@ their ratings.
   images in conflict in the folder": the same kind of source, field by field. One history
   step, undoable.
 
+- "In conflict (N)" filter in the Filters section of the right panel, below the others
+  (a secondary filter: not in the top bar), only when there are conflicts
+  (`notes::ConflictFilter`).
+- The thumbnail's triangle and clipping icons are on one row, centred on the height of
+  the marks opposite.
+
+## Renamed, moved, deleted files
+
+`files::rename`, `files::transfer` (copy or move) and `files::delete` carry the memory
+(`reconcile::carry`, `reconcile::forget`): the image's entry changes name and folder, its
+sources renamed like them. Without it, an image with a source left behind (the image,
+not rewritten) would be in conflict at its new place. A copied or moved folder takes its
+`.tri` with it. Undo goes through the same functions.
+
 ## To come
 
-An "in conflict" filter, then automation (write everywhere, merge
-on the fly on changes seen by watching). Renaming or moving an image does not carry its
-entry yet: it is read again as the first time.
+Automation: write everywhere, merge on the fly on changes seen by watching.
