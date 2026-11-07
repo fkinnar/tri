@@ -1104,6 +1104,40 @@ font défiler. En bas, le rappel de F1 et du leader en vigueur.
 
 ### Palette de commandes (06/11/2026)
 
+**Contrôles en blocs réutilisables** (proposition du 07/11/2026, idée de l'utilisateur :
+« que le résultat de la palette soit un bloc strictement similaire au bloc correspondant
+dans l'interface ») : `app/controls.rs`. Chaque contrôle du panneau de droite est un
+`Control` (cases RAW / JPEG, filtres netteté / exposition / développées avec leurs
+curseurs et cases, ordre et sens, rendu affiché, piles, revue des développements,
+actions sur les fichiers), dessiné et appliqué par une seule fonction,
+`TriApp::control(ui, control, host)`. Le panneau l'appelle (`Host::Panel` : pointable au
+clavier par `side_begin` / `side_end`) ; la palette aussi, sous la ligne d'une action
+qui a un contrôle (`Control::of_action`, `palette_control` : une fois par contrôle ;
+`Host::Palette` : hors du pointage du panneau, `side_detached`). On y voit l'état et on
+le change sans fermer la palette ; le champ reprend le clavier après un clic (sauf liste
+déroulante ouverte). Changer un contrôle le change aux deux endroits.
+**Au clavier** (retour du 07/11/2026) : ↑ / ↓ passent aussi par les éléments des
+contrôles montrés (`PaletteState::stops` : chaque ligne, puis les éléments de son
+contrôle, relevés à l'image précédente) ; sur un élément, ← / → le changent (choix
+précédent / suivant, curseur d'un cran) et Entrée l'active, sans fermer la palette
+(`PaletteItems` : le même pointage que le panneau, `side_begin` / `side_end`, numéros à
+partir de `PALETTE_ITEM`). Sur une ligne, ← / → restent au champ. Pas de contrôles dans l'historique (champ vide) :
+on y relance, ↓ va à la commande suivante. Un contrôle sans action à lui a **sa propre
+ligne**, à son nom (`palette::Item::Control`, `ControlRef`, `Control::id`) : « Taille des
+vignettes » en grille (retour du 07/11/2026 : sous « Zoom : palier supérieur », elle ne
+se comprenait pas) ; trouvée seulement au début d'un mot (`tri::fuzzy::starts_words`) ;
+Entrée lui donne le clavier.
+**Recherche** (même retour : « nettes », « taille des vignettes » introuvables) : les
+libellés des contrôles qui font une action (`interface_labels` : « Nettes », « Taille des
+vignettes »…) comptent comme son nom dans le classement ; à nom égal, une action passe
+avant un réglage, qui n'ouvre que la configuration.
+Les piles comprennent, en grille et actives, la similarité et les boutons « Tout
+déplier » / « Réglages fins… » (`stacks_settings`). Restent hors du système (à convertir
+si la proposition est retenue) : les outils de la barre du bas (réglage d'échelle, curseur de sévérité), les
+interrupteurs de la barre des filtres ; les sous-titres restent au panneau (mise en
+page). La fenêtre de réglages est d'une autre nature (valeurs par défaut, pas l'état) :
+ses lignes « configuration » de la palette ouvrent toujours la fenêtre.
+
 **Historique** (07/11/2026, choix de l'utilisateur) : champ vide, la palette montre ce
 qu'on y a lancé, le plus récent en haut (« Lancées récemment ») ; ↑ / ↓ et Entrée le
 relancent, taper cherche, effacer y revient. Seulement ce qui est lancé depuis la palette

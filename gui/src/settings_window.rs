@@ -2281,6 +2281,11 @@ mod tests {
     fn every_search_keyword_names_a_setting_a_section_or_an_action() {
         crate::i18n::ensure();
         let mut known: Vec<String> = Action::ALL.iter().map(|a| a.id().to_string()).collect();
+        known.extend(
+            crate::palette::CONTROL_KEYWORDS
+                .iter()
+                .map(|id| id.to_string()),
+        );
         for section in &schema().sections {
             known.push(section.name.clone());
             for group in &section.groups {

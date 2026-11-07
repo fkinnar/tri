@@ -33,6 +33,12 @@
   (not at each digit), and the error shows the message alone.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
+- **Controls in the command palette**: under an action that has a control in the right
+  panel (a box, a list, a slider), the palette shows that same control, with its state,
+  to change it without closing the palette. Panel and palette draw it with the same code.
+  From the keyboard: ↓ goes to the control, ← / → change it, Enter activates it. The
+  search finds the panel's words ("sharp") and puts actions before settings. The
+  thumbnail size has its own row.
 - **A precise shown render from the palette**: one action per render (camera JPEG,
   cover, each development software, RAW render), without going through the others. No
   default key; `[keys]` can give them one.

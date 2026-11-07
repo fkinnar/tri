@@ -15,6 +15,56 @@ pub enum Item {
     Action(Action),
     /// Ouvrir la fenêtre de réglages sur un réglage (section, clé).
     Setting(String, String),
+    /// Un contrôle de l'interface sans action à lui (« Taille des vignettes », 07/11/2026),
+    /// par son identifiant : la ligne montre le contrôle, Entrée lui donne le clavier.
+    Control(&'static str),
+}
+
+/// Identifiants des mots-clés des contrôles qui ont leur ligne (`kw-control-…` des
+/// catalogues).
+pub const CONTROL_KEYWORDS: &[&str] = &["control.grid_size"];
+
+/// Un contrôle de l'interface qui a sa propre ligne dans la palette.
+pub struct ControlRef {
+    /// Identifiant (`grid.size`).
+    pub id: &'static str,
+    /// Nom (« Taille des vignettes »).
+    pub title: String,
+    /// Mots cherchés en plus du nom (mots-clés).
+    pub texts: Vec<String>,
+}
+
+/// Lignes des contrôles `controls` pour `query`, placées avant les actions : seulement
+/// ceux qui correspondent de près (nom ou mots-clés ; « rendu » ne doit pas donner la
+/// taille des vignettes par une ressemblance lointaine). Aucun pour une recherche de
+/// réglages seulement.
+pub fn control_hits(query: &str, prefixes: Prefixes, controls: &[ControlRef]) -> Vec<Hit> {
+    let (only, query) = split_prefix(query, prefixes);
+    if only == Only::Settings || query.trim().is_empty() {
+        return Vec::new();
+    }
+    let mut found: Vec<(Hit, bool)> = controls
+        .iter()
+        .filter_map(|c| {
+            let mut fields = vec![c.title.as_str()];
+            fields.extend(c.texts.iter().map(String::as_str));
+            // Chaque mot tapé au début d'un mot du nom ou des mots-clés (« nettes » est
+            // dans « vignettes », pas au début ; « rendu » ressemble à « réduire »).
+            if !tri::fuzzy::starts_words(query, &fields) {
+                return None;
+            }
+            let close = tri::fuzzy::starts_words(query, &[&c.title]);
+            let hit = Hit {
+                item: Item::Control(c.id),
+                title: c.title.clone(),
+                keys: String::new(),
+                detail: String::new(),
+            };
+            Some((hit, close))
+        })
+        .collect();
+    found.sort_by_key(|(_, close)| std::cmp::Reverse(*close));
+    found.into_iter().map(|(h, _)| h).collect()
 }
 
 /// Une ligne de la palette.
@@ -30,6 +80,10 @@ pub struct Hit {
     /// Précision en dessous (description d'un réglage), vide sinon.
     pub detail: String,
 }
+
+/// Une ligne trouvée, avant le classement : la ligne, action (1) ou réglage (0), si elle
+/// vaut à l'endroit où l'on est, et ses noms (titre, libellés des contrôles).
+type Candidate = (Hit, u8, bool, Vec<String>);
 
 /// Ce que la palette cherche, d'après le préfixe tapé.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,8 +147,11 @@ pub fn search(
     }
     // Une touche tapée (« ctrl f ») : les actions qui lui sont liées, seulement.
     let typed = keymap.actions_for_typed_keys(query);
-    // (ligne, action ou réglage, vaut ici), correspondance.
-    let mut found: Vec<((Hit, u8, bool), tri::fuzzy::Match)> = Vec::new();
+    // (ligne, action ou réglage, vaut ici, ses noms), correspondance. Les noms : le titre,
+    // et pour une action les libellés des contrôles qui la font (« Nettes », « Taille des
+    // vignettes » : retour du 07/11/2026, trouvés après des réglages qui n'avaient ces
+    // mots qu'en partie).
+    let mut found: Vec<(Candidate, tri::fuzzy::Match)> = Vec::new();
     for &action in Action::ALL.iter().filter(|_| only != Only::Settings) {
         if action == Action::Palette || !action.available() {
             continue;
@@ -114,13 +171,15 @@ pub fn search(
             None => tri::fuzzy::find(query, &fields),
         };
         if let Some(m) = found_here {
+            let mut names = vec![title.clone()];
+            names.extend(action.interface_labels().iter().map(|id| t!(*id)));
             let hit = Hit {
                 item: Item::Action(action),
                 title,
                 keys,
                 detail: String::new(),
             };
-            found.push(((hit, 1, here), m));
+            found.push(((hit, 1, here, names), m));
         }
     }
     for s in settings
@@ -145,33 +204,40 @@ pub fn search(
                 keys: String::new(),
                 detail: s.doc.clone(),
             };
-            found.push(((hit, 0, true), m));
+            let names = vec![hit.title.clone()];
+            // Un réglage ne « vaut » pas ici plus qu'ailleurs : il passe après les actions
+            // à nom égal, même celles d'un autre endroit (07/11/2026 : « netteté » donnait
+            // des réglages avant la carte de netteté).
+            found.push(((hit, 0, false, names), m));
         }
     }
     if browsing {
         // Tout parcourir : dans l'ordre (thèmes de l'aide, fichier d'exemple).
-        found.sort_by_key(|((hit, _, _), _)| match hit.item {
+        found.sort_by_key(|((hit, _, _, _), _)| match hit.item {
             Item::Action(a) => crate::actions::Group::ALL
                 .iter()
                 .position(|g| *g == a.group()),
-            Item::Setting(..) => None,
+            Item::Setting(..) | Item::Control(_) => None,
         });
-        return found.into_iter().map(|((hit, _, _), _)| hit).collect();
+        return found.into_iter().map(|((hit, _, _, _), _)| hit).collect();
     }
     let mut found = tri::fuzzy::relevant(found);
     // Trouvée dans son titre d'abord (« rendus vignette » : l'action « Rendu des
     // vignettes » avant un réglage qui n'a ces mots que dans sa description).
-    found.sort_by_cached_key(|((hit, kind, here), m)| {
-        // Des mots du titre, pas des lettres éparpillées (« crop » dans « Recadrage ›
-        // shade_opacity »).
-        let in_title = tri::fuzzy::find(query, &[&hit.title])
+    found.sort_by_cached_key(|((hit, kind, here, names), m)| {
+        // Des mots d'un de ses noms, pas des lettres éparpillées (« crop » dans
+        // « Recadrage › shade_opacity »).
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let in_title = tri::fuzzy::find(query, &names)
             .filter(|t| t.close)
             .map(|t| t.exact);
+        // Puis une action avant un réglage (07/11/2026 : « loupe » donnait d'abord
+        // « Zoom et loupe › max », qui n'ouvre que la configuration).
         (
             std::cmp::Reverse(in_title),
             std::cmp::Reverse(*here),
-            std::cmp::Reverse(*m),
             std::cmp::Reverse(*kind),
+            std::cmp::Reverse(*m),
             hit.title.chars().count(),
         )
     });
@@ -179,7 +245,7 @@ pub fn search(
     found
         .into_iter()
         .take(max)
-        .map(|((hit, _, _), _)| hit)
+        .map(|((hit, _, _, _), _)| hit)
         .collect()
 }
 
@@ -192,6 +258,7 @@ fn history_line(item: &Item) -> String {
     match item {
         Item::Action(a) => format!("action\t{}", a.id()),
         Item::Setting(section, key) => format!("setting\t{section}\t{key}"),
+        Item::Control(id) => format!("control\t{id}"),
     }
 }
 
@@ -253,7 +320,7 @@ pub fn history_hits(history: &[Item], keymap: &Keymap, settings: &[SettingRef]) 
                     keys: String::new(),
                     detail: s.doc.clone(),
                 }),
-            Item::Action(_) => None,
+            Item::Action(_) | Item::Control(_) => None,
         })
         .collect()
 }
@@ -481,6 +548,41 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, Action::ZoomIn.label());
         assert!(!hits[0].keys.is_empty());
+    }
+
+    #[test]
+    fn panel_words_find_their_action_before_the_settings() {
+        // Retours du 07/11/2026 : « nettes » (la case du panneau) ne trouvait que des
+        // réglages, « taille des vignettes » rien ; « loupe » et « netteté » donnaient
+        // d'abord des réglages, qui n'ouvrent que la configuration.
+        let top = |q: &str, n: usize| -> Vec<Item> {
+            search(
+                &keymap(),
+                &|_| true,
+                q,
+                PREFIXES,
+                &[Place::Grid],
+                &settings(),
+                20,
+            )
+            .into_iter()
+            .take(n)
+            .map(|h| h.item)
+            .collect()
+        };
+        assert_eq!(top("nettes", 1), [Item::Action(Action::FilterBlurry)]);
+        assert_eq!(
+            top("exposées", 1),
+            [Item::Action(Action::FilterWellExposed)]
+        );
+        assert_eq!(top("sens", 1), [Item::Action(Action::SortReverse)]);
+        for q in ["loupe", "netteté", "grossissement"] {
+            assert!(
+                matches!(top(q, 1).first(), Some(Item::Action(_))),
+                "{q} : {:?}",
+                top(q, 3)
+            );
+        }
     }
 
     #[test]

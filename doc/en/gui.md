@@ -1046,6 +1046,39 @@ force.
 
 ### Command palette (2026-11-06)
 
+**Controls as reusable blocks** (proposal of 2026-11-07, the user's idea: "a palette
+result should be a block strictly identical to the matching block of the interface"):
+`app/controls.rs`. Each control of the right panel is a `Control` (RAW / JPEG boxes,
+sharpness / exposure / developed filters with their sliders and boxes, order and
+direction, shown render, stacks, review of the developments, file actions), drawn and
+applied by one function, `TriApp::control(ui, control, host)`. The panel calls it
+(`Host::Panel`: reachable from the keyboard through `side_begin` / `side_end`); so does
+the palette, under the row of an action that has a control (`Control::of_action`,
+`palette_control`: once per control; `Host::Palette`: outside the panel's keyboard
+pointing, `side_detached`). One sees the state and changes it without closing the
+palette; the field takes the keyboard back after a click (unless a drop-down is open).
+Changing a control changes it in both places.
+**From the keyboard** (feedback of 2026-11-07): ↑ / ↓ also go through the items of the
+controls shown (`PaletteState::stops`: each row, then the items of its control, taken
+from the previous frame); on an item, ← / → change it (previous / next choice, slider by
+one step) and Enter activates it, without closing the palette (`PaletteItems`: the same
+pointing as the panel, `side_begin` / `side_end`, numbers from `PALETTE_ITEM`). On a
+row, ← / → stay with the field. No controls in the history (empty field): one
+relaunches there, ↓ goes to the next command. A control without an action of its own
+has **its own row**, by its name (`palette::Item::Control`, `ControlRef`, `Control::id`):
+"Thumbnail size" in the grid (feedback of 2026-11-07: under "Zoom: next step up" it made
+no sense); found only at the start of a word (`tri::fuzzy::starts_words`); Enter gives
+it the keyboard.
+**Search** (same feedback: "nettes", "taille des vignettes" not found): the labels of
+the controls that do an action (`interface_labels`: "Nettes", "Taille des vignettes"…)
+count as its name in the ranking; with equal names, an action comes before a setting,
+which only opens the configuration.
+The stacks include, in the grid and when on, the similarity and the "Unfold all" /
+"Fine settings…" buttons (`stacks_settings`). Still outside the system (to convert if
+the proposal is kept): the bottom-bar tools (scale control, strictness slider), the filter-bar switches; the sub-headings stay
+in the panel (layout). The settings window is of another kind (default values, not the
+state): its "configuration" rows in the palette still open the window.
+
 **History** (2026-11-07, the user's choice): with an empty field, the palette shows what
 was launched from it, most recent at the top ("Recently launched"); ↑ / ↓ and Enter launch
 it again, typing searches, clearing comes back to it. Only what is launched from the
