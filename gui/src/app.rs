@@ -13970,7 +13970,6 @@ impl TriApp {
         }
         let style = ctx.global_style();
         let body = egui::TextStyle::Body.resolve(&style);
-        let mono = egui::TextStyle::Monospace.resolve(&style);
         let rows = help_rows(&self.keymap, "");
         let widths = ctx.fonts_mut(|fonts| {
             let mut width = |text: String, font: egui::FontId| {
@@ -13979,7 +13978,7 @@ impl TriApp {
             rows.iter().fold((0.0f32, 0.0f32), |(l, k), (a, keys)| {
                 (
                     l.max(width(a.label(), body.clone())),
-                    k.max(width(keys.clone(), mono.clone())),
+                    k.max(width(keys.clone(), body.clone())),
                 )
             })
         });
@@ -14063,8 +14062,8 @@ impl TriApp {
                 .as_ref()
                 .map(|m| t!("key-menu-more", group = m.as_str()));
             let text = match (n.action, menu) {
-                (Some(a), Some(m)) => format!("{}  {m}", a.label()),
-                (Some(a), None) => a.label(),
+                (Some(a), Some(m)) => format!("{}  {m}", without_aside(&a.label())),
+                (Some(a), None) => without_aside(&a.label()),
                 (None, Some(m)) => m,
                 (None, None) => String::new(),
             };
@@ -14077,6 +14076,16 @@ impl TriApp {
                 None => rows.push((n.key.clone(), text, n.action.is_none())),
             }
         }
+        // « Filtre : » sur presque toutes les lignes du menu `f` : dans le titre plutôt
+        // (retour du 07/11/2026, plus lisible).
+        let theme = shared_label_prefix(rows.iter().filter(|r| !r.2).map(|r| r.1.as_str()));
+        if let Some(theme) = &theme {
+            for row in rows.iter_mut().filter(|r| !r.2) {
+                if let Some(rest) = strip_label_prefix(&row.1, theme) {
+                    row.1 = rest;
+                }
+            }
+        }
         let font = egui::TextStyle::Body.resolve(&ctx.global_style());
         let width_of = |text: &str| {
             ctx.fonts_mut(|f| {
@@ -14085,6 +14094,7 @@ impl TriApp {
                     .x
             })
         };
+        let body = egui::TextStyle::Body.resolve(&ctx.global_style());
         let key_width = rows.iter().map(|r| width_of(&r.0)).fold(0.0, f32::max);
         let text_width = rows.iter().map(|r| width_of(&r.1)).fold(0.0, f32::max);
         // Entre les colonnes, de l'air et un trait (retour du 06/11/2026 : la deuxième
@@ -14106,6 +14116,9 @@ impl TriApp {
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new(&title).strong().color(accent));
+                            if let Some(theme) = &theme {
+                                ui.label(egui::RichText::new(theme).strong());
+                            }
                             ui.weak(t!("key-menu-cancel"));
                         });
                         ui.separator();
@@ -14147,22 +14160,24 @@ impl TriApp {
                                         else {
                                             break;
                                         };
+                                        // Une ligne sur deux sur fond plus clair, comme F1.
+                                        let slot = ui.painter().add(egui::Shape::Noop);
                                         let row = ui.horizontal(|ui| {
                                             ui.set_min_height(ui.spacing().interact_size.y);
-                                            let key = ui.label(
-                                                egui::RichText::new(key).strong().color(accent),
-                                            );
+                                            let weak = ui.visuals().weak_text_color();
+                                            let key =
+                                                ui.label(keys_job(key, body.clone(), accent, weak));
                                             ui.add_space(col_key - key.rect.width() + key_gap);
                                             let text = egui::RichText::new(text);
                                             ui.label(if *menu { text.italics() } else { text });
                                         });
-                                        if line + 1 < lines && col * lines + line + 1 < rows.len() {
+                                        if line % 2 == 1 {
                                             let r = row.response.rect;
-                                            ui.painter().hline(
-                                                r.left()..=r.left() + col_inner,
-                                                r.bottom(),
-                                                egui::Stroke::new(1.0, line_color),
+                                            let band = Rect::from_min_size(
+                                                r.min,
+                                                vec2(col_inner, r.height()),
                                             );
+                                            stripe(ui, slot, band);
                                         }
                                     }
                                 });
@@ -14585,12 +14600,10 @@ impl TriApp {
                                                     ui.label(label.as_str()).on_hover_text(*id);
                                                 },
                                             );
-                                            // Chasse fixe : « l » et « I » restent distincts.
-                                            ui.label(
-                                                egui::RichText::new(keys.as_str())
-                                                    .monospace()
-                                                    .strong(),
-                                            );
+                                            let font = egui::TextStyle::Body.resolve(ui.style());
+                                            let weak = ui.visuals().weak_text_color();
+                                            let accent = crate::marks::accent_mark(ui.ctx());
+                                            ui.label(keys_job(keys, font, accent, weak));
                                         }
                                     }
                                 },
@@ -16062,7 +16075,9 @@ fn palette_row(
                 ui.label(&hit.title);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if !hit.keys.is_empty() {
-                        ui.label(egui::RichText::new(&hit.keys).color(accent));
+                        let font = egui::TextStyle::Body.resolve(ui.style());
+                        let weak = ui.visuals().weak_text_color();
+                        ui.label(keys_job(&hit.keys, font, accent, weak));
                     }
                 });
             });
@@ -16080,8 +16095,8 @@ fn palette_row(
     .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// Couleur des traits entre les lignes d'une liste (menu des suites, aide « ici ») : un
-/// poil plus claire que le fond, pour guider l'œil sans se voir.
+/// Couleur des traits entre les colonnes d'une liste (menu des suites) : un poil plus
+/// claire que le fond, pour guider l'œil sans se voir.
 fn row_line_color(ui: &Ui) -> Color32 {
     ui.visuals()
         .widgets
@@ -16089,6 +16104,83 @@ fn row_line_color(ui: &Ui) -> Color32 {
         .bg_stroke
         .color
         .gamma_multiply(0.6)
+}
+
+/// Les touches d'une ligne d'aide (« h / ← », un style pour F1, `?`, le menu des suites
+/// et la palette, retour du 07/11/2026) : à l'accent, les « / » qui les séparent en gris
+/// discret. Police du texte, pas la chasse fixe : celle-ci a ses propres flèches, minuscules.
+pub(crate) fn keys_job(
+    keys: &str,
+    font: egui::FontId,
+    accent: Color32,
+    weak: Color32,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    let format = |color| egui::TextFormat {
+        font_id: font.clone(),
+        color,
+        ..Default::default()
+    };
+    for (i, part) in keys.split(" / ").enumerate() {
+        if i > 0 {
+            job.append(" / ", 0.0, format(weak));
+        }
+        job.append(part, 0.0, format(accent));
+    }
+    job
+}
+
+/// `label` sans sa précision finale entre parenthèses : le menu des suites se lit d'un
+/// coup d'œil (retour du 07/11/2026 : « ça alourdit ») ; F1 et la palette la gardent.
+fn without_aside(label: &str) -> String {
+    match label
+        .strip_suffix(')')
+        .and_then(|l| l.rfind(" (").map(|i| &label[..i]))
+    {
+        Some(short) if !short.trim().is_empty() => short.trim_end().to_string(),
+        _ => label.to_string(),
+    }
+}
+
+/// Le début commun « Thème : » de la plupart des `labels` (au moins la moitié, et deux
+/// lignes) : `Filtre` pour « Filtre : rouge », « Filtre : 1 étoile »… Rien sinon.
+fn shared_label_prefix<'a>(labels: impl Iterator<Item = &'a str>) -> Option<String> {
+    let labels: Vec<&str> = labels.collect();
+    let mut counts: Vec<(&str, usize)> = Vec::new();
+    for label in &labels {
+        let Some((head, _)) = label.split_once(':') else {
+            continue;
+        };
+        let head = head.trim_end();
+        match counts.iter_mut().find(|c| c.0 == head) {
+            Some(c) => c.1 += 1,
+            None => counts.push((head, 1)),
+        }
+    }
+    let (head, n) = counts.into_iter().max_by_key(|c| c.1)?;
+    (n >= 2 && n * 2 >= labels.len() && !head.is_empty()).then(|| head.to_string())
+}
+
+/// `label` sans son début « `theme` : », première lettre en capitale ; `None` s'il ne
+/// commence pas ainsi.
+fn strip_label_prefix(label: &str, theme: &str) -> Option<String> {
+    let (head, rest) = label.split_once(':')?;
+    if head.trim_end() != theme {
+        return None;
+    }
+    let rest = rest.trim_start();
+    let mut chars = rest.chars();
+    let first = chars.next()?;
+    Some(first.to_uppercase().chain(chars).collect())
+}
+
+/// Fond d'une ligne sur deux (le même que F1), posé sous une ligne déjà dessinée à la
+/// place réservée `slot`.
+fn stripe(ui: &Ui, slot: egui::layers::ShapeIdx, rect: Rect) {
+    ui.painter().set(
+        slot,
+        egui::Shape::rect_filled(rect, 0.0, ui.visuals().faint_bg_color),
+    );
 }
 
 /// Une carte de l'aide « ici » : le thème, puis une ligne par action (touches à
@@ -16122,32 +16214,33 @@ fn help_here_card(
                 })
                 .fold(0.0, f32::max);
             let keys_width = widest.min(ui.available_width() * 0.38);
-            let line_color = row_line_color(ui);
+            let weak = ui.visuals().weak_text_color();
             for (i, row) in rows.iter().enumerate() {
-                // Un trait discret entre deux lignes (retour du 06/11/2026), au milieu de
-                // l'espace qui les sépare.
-                if i > 0 {
-                    let y = ui.cursor().top() - ui.spacing().item_spacing.y / 2.0;
-                    let x = ui.max_rect().x_range();
-                    ui.painter().hline(x, y, egui::Stroke::new(1.0, line_color));
-                }
-                ui.horizontal_top(|ui| {
+                // Une ligne sur deux sur fond plus clair, comme F1 (retour du 07/11/2026).
+                let slot = ui.painter().add(egui::Shape::Noop);
+                let line = ui.horizontal_top(|ui| {
                     ui.allocate_ui_with_layout(
                         vec2(keys_width, 0.0),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
                             ui.set_width(keys_width);
                             ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&row.keys).size(size).color(accent),
-                                )
-                                .wrap(),
+                                egui::Label::new(keys_job(&row.keys, font.clone(), accent, weak))
+                                    .wrap(),
                             );
                         },
                     );
                     ui.add_space(size * 0.5);
                     ui.add(egui::Label::new(egui::RichText::new(&row.label).size(size)).wrap());
                 });
+                if i % 2 == 1 {
+                    let r = line.response.rect;
+                    let band = Rect::from_x_y_ranges(
+                        ui.max_rect().x_range(),
+                        r.top() - size * 0.15..=r.bottom() + size * 0.15,
+                    );
+                    stripe(ui, slot, band);
+                }
                 ui.add_space(size * 0.3);
             }
         });
@@ -16282,6 +16375,31 @@ enum VersionAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shared_theme_goes_to_the_title() {
+        let labels = [
+            "Filtre de type : tout",
+            "Filtre : rouge (ajouter / retirer)",
+            "Filtre : 1 étoile",
+            "Effacer tous les filtres",
+        ];
+        let theme = shared_label_prefix(labels.into_iter()).unwrap();
+        assert_eq!(theme, "Filtre");
+        assert_eq!(
+            strip_label_prefix(labels[1], &theme).as_deref(),
+            Some("Rouge (ajouter / retirer)")
+        );
+        assert_eq!(strip_label_prefix(labels[0], &theme), None);
+        assert_eq!(strip_label_prefix(labels[3], &theme), None);
+        assert_eq!(
+            without_aside("Filtre : bien exposées (ni brûlées ni bouchées)"),
+            "Filtre : bien exposées"
+        );
+        assert_eq!(without_aside("Retirer les étoiles"), "Retirer les étoiles");
+        // Un seul, ou une minorité : pas de thème.
+        assert_eq!(shared_label_prefix(["A : b", "c", "d"].into_iter()), None);
+    }
 
     /// Niveau développé de darktable.
     const DT: Level = Level::Developed(tri::develop::Engine::Darktable);
@@ -17975,7 +18093,7 @@ mod tests {
         h.run_steps(3);
         h.get_by_label("Rejeter").click();
         h.run_steps(3);
-        h.get_by_label("Couleur verte (ajouter / retirer)").click();
+        h.get_by_label("Couleur verte").click();
         h.run_steps(3);
         let on_disk = tri::xmp::read(&image).unwrap();
         assert_eq!(on_disk.stars, 3);
@@ -19524,7 +19642,7 @@ mod tests {
         // Les couleurs : la boîte reste ouverte pour en cocher plusieurs, Échap la ferme.
         h.state_mut().mark_picker = Some((image.clone(), marks::MarkKind::Colors, flag));
         h.run_steps(2);
-        h.get_by_label("Couleur rouge (ajouter / retirer)").click();
+        h.get_by_label("Couleur rouge").click();
         h.run_steps(3);
         assert!(h.state().mark_picker.is_some(), "reste ouvert");
         assert_eq!(
