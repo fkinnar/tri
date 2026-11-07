@@ -6229,15 +6229,7 @@ impl TriApp {
                 self.perform(ctx, zoom);
             }
             Action::LoupeZoomIn | Action::LoupeZoomOut => {
-                let z = &self.gui.zoom;
-                if let Some(scale) = view::next_step(
-                    self.loupe_scale,
-                    &z.steps,
-                    action == Action::LoupeZoomIn,
-                    (z.min, z.max),
-                ) {
-                    self.set_loupe_scale(scale);
-                }
+                self.step_loupe(action == Action::LoupeZoomIn)
             }
             Action::LoupeScaleEntry | Action::ZoomScaleEntry => {
                 self.entry_for_zoom = action == Action::ZoomScaleEntry;
@@ -9571,6 +9563,14 @@ impl TriApp {
         self.notice = Some((t!("zoom-scale", percent = percent), false));
     }
 
+    /// Grossissement de la loupe d'un palier (`[gui.zoom] steps`) vers le haut ou le bas.
+    fn step_loupe(&mut self, up: bool) {
+        let z = &self.gui.zoom;
+        if let Some(scale) = view::next_step(self.loupe_scale, &z.steps, up, (z.min, z.max)) {
+            self.set_loupe_scale(scale);
+        }
+    }
+
     /// Les touches pendant la saisie du grossissement : les chiffres s'ajoutent (trois :
     /// appliqué), Échap annule ; une autre touche applique ce qui est tapé puis agit
     /// normalement. Renvoie les touches qui restent à traiter.
@@ -12286,7 +12286,9 @@ impl TriApp {
                             .on_hover_text(tip)
                             .clicked()
                         {
-                            clicked = Some(action);
+                            // La loupe directement : l'action, sans la loupe tenue (un
+                            // clic), réglerait le zoom.
+                            self.step_loupe(action == Action::LoupeZoomIn);
                         }
                     }
                     let tip = self.action_tip(Action::Loupe);
