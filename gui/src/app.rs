@@ -15906,6 +15906,8 @@ impl eframe::App for TriApp {
             && !self.focus_mode
             && matches!(self.mode, Mode::Grid | Mode::View)
             && self.error.is_none()
+            // Pas pendant l'édition d'une version (retour du 07/11/2026 : sans objet).
+            && self.crop.is_none()
         {
             egui::Panel::top("filters").show(ui, |ui| self.filter_bar(ui));
         }
@@ -26148,7 +26150,11 @@ mod tests {
         press(&mut h, Key::V, Modifiers::NONE);
         h.run_steps(3);
         assert!(h.state().crop.is_some());
-        assert_eq!(count(&h), shown - 1, "pas la section des filtres");
+        assert_eq!(
+            count(&h),
+            0,
+            "ni la section des filtres, ni la barre du haut"
+        );
         let histogram = t!("panel-section-histogram").to_uppercase();
         assert!(h.query_by_label(&histogram).is_none(), "ni l'histogramme");
         press(&mut h, Key::Escape, Modifiers::NONE);

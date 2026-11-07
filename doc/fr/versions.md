@@ -95,8 +95,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   l'a pas tapé) et, collée à lui, la disquette (enregistrer comme préréglage ; grisée
   sans nom) ; Enregistrer / Annuler à droite. Dans la liste des rapports, le champ du
   rapport personnalisé (« Personnalisé » en gris dedans) et un « + » qui l'ajoute à la
-  liste, gardé dans la configuration (`[versions] ratios`). Les filtres et
-  l'histogramme quittent le panneau de droite pendant l'édition (rien à filtrer sur une
+  liste, gardé dans la configuration (`[versions] ratios`). La barre des filtres, les
+  filtres et l'histogramme du panneau de droite disparaissent pendant l'édition (rien à filtrer sur une
   image ; l'histogramme vaut pour l'image entière, le faire suivre le cadre demanderait
   un histogramme RAW recalculé sur la zone, plus tard).
 - **Chaque partie au clavier** (07/11/2026) : `r` / `Maj+R` rapport suivant / précédent

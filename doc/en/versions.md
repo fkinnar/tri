@@ -95,7 +95,7 @@ The interface only draws; all the computation is here.
   next to it, the floppy (save as a preset; greyed out without a name); Save / Cancel on
   the right. In the ratio list, the custom ratio field ("Custom" in grey inside it) and a
   "+" that adds it to the list, kept in the configuration (`[versions] ratios`). The
-  filters and the histogram leave the right panel while editing (nothing to filter on one
+  filter bar, and the filters and histogram of the right panel, disappear while editing (nothing to filter on one
   image; the histogram is the whole image's, following the frame would need a RAW
   histogram recomputed on the area, later).
 - **Each part from the keyboard** (2026-11-07): `r` / `Shift+R` next / previous ratio
