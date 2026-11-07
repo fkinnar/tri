@@ -549,12 +549,11 @@ impl Crop {
                 ui.separator();
                 ui.horizontal(|ui| {
                     let ok = Ratio::parse_custom(&self.custom);
-                    let size = ui.spacing().interact_size.y;
+                    // Largeur fixe (07/11/2026 : celle « disponible » grandissait avec la
+                    // liste, qui s'élargissait à chaque image).
                     let field = ui.add(
                         egui::TextEdit::singleline(&mut self.custom)
-                            .desired_width(
-                                ui.available_width() - size - ui.spacing().item_spacing.x,
-                            )
+                            .desired_width(ui.spacing().combo_width)
                             .hint_text(t!("crop-ratio-custom")),
                     );
                     if focus_custom {

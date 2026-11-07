@@ -26035,6 +26035,16 @@ mod tests {
             .expect("la liste du rapport");
         list.click();
         h.run_steps(3);
+        // La liste ouverte garde sa largeur (07/11/2026 : elle s'élargissait à chaque
+        // image).
+        let width = |h: &Harness<'_, TriApp>| {
+            h.get_all_by_role(egui::accesskit::Role::TextInput)
+                .map(|n| n.rect().width())
+                .fold(0.0, f32::max)
+        };
+        let before = width(&h);
+        h.run_steps(20);
+        assert_eq!(width(&h), before, "largeur stable");
         // Le champ du rapport : vide (celui du nom porte le nom).
         let name = h.state().crop.as_ref().unwrap().name.clone();
         h.get_all_by_role(egui::accesskit::Role::TextInput)
