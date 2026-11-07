@@ -439,6 +439,7 @@ impl Crop {
         profiles: &[(String, String)],
         presets: &[(String, String)],
         ratios: &[Ratio],
+        label_scale: f32,
     ) -> Option<BarAction> {
         let mut action = None;
         // Enregistrer et Annuler à droite, à part (retour du 20/10/2026) ; le reste à gauche,
@@ -457,7 +458,7 @@ impl Crop {
             ui.add_space(ui.spacing().item_spacing.x * 4.0);
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    self.bar_left(ui, profiles, presets, ratios, &mut action)
+                    self.bar_left(ui, profiles, presets, ratios, label_scale, &mut action)
                 });
             });
         });
@@ -465,7 +466,7 @@ impl Crop {
         action
     }
 
-    /// Partie gauche de la barre, en parties titrées d'un libellé gris (retour du
+    /// Partie gauche de la barre, en parties titrées d'un libellé à l'accent (retour du
     /// 07/11/2026 : « un peu le souk ») : Version (préréglage), Recadrage (rapports,
     /// orientation), Export, Nom, puis la disquette (enregistrer comme préréglage).
     fn bar_left(
@@ -474,14 +475,17 @@ impl Crop {
         profiles: &[(String, String)],
         presets: &[(String, String)],
         ratios: &[Ratio],
+        label_scale: f32,
         action: &mut Option<BarAction>,
     ) {
         // De l'air entre deux parties, plus qu'entre deux boutons.
         let gap = ui.spacing().item_spacing.x * 4.0;
         // Le libellé d'une partie reste avec ce qui le suit (à la ligne ensemble).
+        // À l'accent, en majuscules, comme les libellés des autres barres (retour du
+        // 07/11/2026).
         let section = |ui: &mut Ui, label: &str, first: f32| {
             keep_together(ui, label, first);
-            ui.weak(label);
+            crate::app::bar_label(ui, label, label_scale);
         };
         // Version : le préréglage.
         if !presets.is_empty() {

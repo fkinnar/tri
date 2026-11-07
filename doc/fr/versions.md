@@ -86,7 +86,7 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Voile** gris translucide autour du cadre, cadre blanc avec liseré sombre, huit
   **poignées** : angles et côtés à la souris, glisser dedans pour déplacer. La
   superposition choisie (`o`) se cale sur le cadre.
-- **Barre** sous l'image, en parties titrées d'un libellé gris (07/11/2026) : **Version**
+- **Barre** sous l'image, en parties titrées d'un libellé à l'accent, comme les autres barres (07/11/2026) : **Version**
   (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
   16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
   « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers

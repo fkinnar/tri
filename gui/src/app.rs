@@ -15892,7 +15892,13 @@ impl eframe::App for TriApp {
             let mut action = None;
             egui::Panel::bottom("crop").show(ui, |ui| {
                 if let Some(crop) = &mut self.crop {
-                    action = crop.bar(ui, &profiles, &presets, &self.settings.versions.ratios);
+                    action = crop.bar(
+                        ui,
+                        &profiles,
+                        &presets,
+                        &self.settings.versions.ratios,
+                        self.gui.grid.bar_label_scale,
+                    );
                 }
             });
             match action {
@@ -16435,10 +16441,11 @@ fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerRe
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
 }
 
-/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche) : en majuscules, un peu plus petit
+/// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche, parties de la
+/// barre des versions) : en majuscules, un peu plus petit
 /// que le texte (`scale`), à l'accent, comme les titres des sections des panneaux (retour
 /// du 27/10/2026).
-fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
+pub(crate) fn bar_label(ui: &mut Ui, text: &str, scale: f32) {
     let size = egui::TextStyle::Body.resolve(ui.style()).size * scale;
     ui.label(
         egui::RichText::new(text.to_uppercase())

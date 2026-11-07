@@ -86,7 +86,7 @@ The interface only draws; all the computation is here.
 - Translucent grey **veil** around the frame, white frame with a dark edge, eight
   **handles**: corners and sides with the mouse, drag inside to move. The chosen overlay
   (`o`) snaps to the frame.
-- **Bar** under the image, in parts titled by a grey label (2026-11-07): **Version**
+- **Bar** under the image, in parts titled by a label in the accent colour, like the other bars (2026-11-07): **Version**
   (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
   shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
   `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
