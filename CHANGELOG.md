@@ -120,6 +120,9 @@
   `keys.toml` (purple with the other colours, no longer first because of "°"); columns
   separated by a rule and some room, each at its own width. A faint line between rows,
   there and in the help here (`?`).
+- **Developments of active software only**: without development software, or with one
+  disabled, its developments leave the grid (no more badge nor stack to unfold); its
+  sidecars stay, enabling it again brings them back.
 
 ## 1.0.0-alpha.8 — 2026-11-05
 

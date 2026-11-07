@@ -72,6 +72,16 @@ demande, `b` fait le tour des rendus).
   photo (couverture de sa pile), un par photo, dans `preferred-developments.txt` du dossier
   de données.
 
+## Logiciels actifs seulement
+
+`ActiveEngines` (filtre, même trait que les autres) retire les développements des
+logiciels absents ou désactivés ; l'interface l'applique à la base de sa liste (retour
+du 07/11/2026 : sans logiciel, ou darktable décoché, ses développements restaient en
+grille, badge et pile compris). Le registre (`set_for`) les connaît toujours, et les
+sidecars ne bougent pas : réactiver le logiciel les retrouve. Le filtre est côté
+interface, pas dans le parcours du dossier : le registre est commun au programme, la
+ligne de commande les garde tous.
+
 ## Ordre dans la liste
 
 `media::compare` range un développement **avec sa photo**, juste après elle et avant

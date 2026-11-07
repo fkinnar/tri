@@ -70,6 +70,16 @@ on demand, `b` cycles through the renders).
 - `preferred(data)`, `prefer(data, development, on)`: a photo's preferred development
   (cover of its stack), one per photo, in `preferred-developments.txt` of the data folder.
 
+## Active software only
+
+`ActiveEngines` (a filter, same trait as the others) removes the developments of
+software that is missing or disabled; the interface applies it to the base of its list
+(feedback of 2026-11-07: without software, or with darktable unticked, its developments
+stayed in the grid, badge and stack included). The registry (`set_for`) still knows them,
+and the sidecars stay: enabling the software again brings them back. The filter is on
+the interface side, not in the folder scan: the registry is shared by the program, the
+command line keeps them all.
+
 ## Order in the list
 
 `media::compare` puts a development **with its photo**, right after it and before the

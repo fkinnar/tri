@@ -1010,6 +1010,8 @@ impl TriApp {
         self.developers = developers;
         self.fit_grid_render();
         self.refresh_any_developed();
+        // Les développements des seuls logiciels actifs (un logiciel coché ou décoché).
+        self.refilter(Reveal::Minimal);
     }
 
     /// Vrai s'il y a au moins un développement dans le dossier (#305) : une image de
@@ -4705,11 +4707,16 @@ impl TriApp {
         let anchor = (reveal == Reveal::Minimal && self.mode == Mode::Grid)
             .then(|| self.grid_anchor())
             .flatten();
-        // Type de fichier et recherche par nom (`/`) : la base, jamais inversée.
+        // Type de fichier et recherche par nom (`/`) : la base, jamais inversée. Sans les
+        // développements des logiciels absents ou désactivés (07/11/2026).
+        let engines = self.developers.engines();
         let base = tri::fuzzy::NameFilter {
             query: &self.name_query,
         }
-        .apply(self.folder.filtered(self.filter, &NotesRule::default()));
+        .apply(
+            tri::developments::ActiveEngines(&engines)
+                .apply(self.folder.filtered(self.filter, &NotesRule::default())),
+        );
         // Seulement la pile courante (`f c`, issue n° 52).
         let base: Vec<Vec<MediaFile>> = match &self.stack_only {
             Some(only) => base
@@ -17155,6 +17162,8 @@ mod tests {
             )
             .unwrap();
         }
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().metadata_panel = false;
@@ -17217,6 +17226,8 @@ mod tests {
             )
             .unwrap();
         }
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().review_developments = true;
@@ -17277,6 +17288,8 @@ mod tests {
             )
             .unwrap();
         }
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().stacking = true;
@@ -17362,6 +17375,8 @@ mod tests {
             )
             .unwrap();
         }
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.state_mut().metadata_panel = false;
@@ -17422,6 +17437,8 @@ mod tests {
             r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1" xmp:Rating="2"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         // Rendu « Couverture » (31/10/2026) : la pile se replie sur le développement
         // préféré, sinon le plus récent (en JPEG boîtier, sur la photo).
@@ -17559,6 +17576,8 @@ mod tests {
         let darktable = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#;
         std::fs::write(photos.join("img0_01.jpg.xmp"), darktable).unwrap();
         std::fs::write(photos.join("img0.jpg.xmp"), darktable).unwrap();
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 5);
         h.run_steps(2);
@@ -17618,6 +17637,8 @@ mod tests {
             ),
         )
         .unwrap();
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         // Rendu « Couverture » (31/10/2026) : la pile se replie sur le développement.
         h.state_mut()
@@ -19051,6 +19072,8 @@ mod tests {
             r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         run_until(&mut h, |app| app.loading.is_none() && app.files.len() == 4);
         assert_eq!(
@@ -22178,6 +22201,8 @@ mod tests {
             r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:darktable="http://darktable.sf.net/" darktable:xmp_version="5" darktable:history_end="1"/></rdf:RDF></x:xmpmeta>"#,
         )
         .unwrap();
+        // Les développements des seuls logiciels actifs (07/11/2026).
+        h.state_mut().developers = fake_darktable();
         h.state_mut().reload_folder(None);
         h.state_mut()
             .set_grid_render(crate::grid_render::GridRender::Cover);
