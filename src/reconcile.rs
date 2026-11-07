@@ -297,7 +297,10 @@ pub fn reconcile(
                     .then(|| Remembered::agreed(&first, sources)),
             );
         }
+        // Les plus récentes ; à égalité (dates grossières de Windows, de la FAT), la
+        // première source : un sidecar avant l'image (bug de la CI Windows, 07/11/2026).
         let newest = speaking()
+            .rev()
             .max_by_key(|s| s.stamp.modified)
             .map(|s| s.notes.clone())
             .unwrap_or_default();
@@ -785,6 +788,15 @@ mod tests {
         );
         assert_eq!(shown.stars, 4);
         assert!(matches!(outcome, Outcome::Conflict(ref c) if c.fields == [Field::Stars]));
+        // À égalité de dates : la première source (un sidecar avant l'image).
+        let (shown, _, _) = reconcile(
+            None,
+            &[
+                source("a.xmp", 5, &notes(2, Flag::None, &[])),
+                source("a.jpg", 5, &notes(4, Flag::None, &[])),
+            ],
+        );
+        assert_eq!(shown.stars, 2);
         assert!(keep.is_none());
         // D'accord : retenues sans rien demander.
         let n = notes(2, Flag::None, &[]);
