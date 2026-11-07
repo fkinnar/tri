@@ -6251,7 +6251,11 @@ impl TriApp {
             // Curseur masqué : une action sur l'image courante (noter, supprimer, ouvrir,
             // se déplacer…) le fait seulement réapparaître, sans agir sur une image qu'on
             // ne voit pas.
-            if self.cursor_hidden && self.mode == Mode::Grid && uses_cursor(action) {
+            // Avec une sélection, ce qui la vise agit tout de suite (retour du 07/11/2026 :
+            // après Ctrl+A, le premier = ne faisait que remontrer le curseur).
+            let on_selection = !self.selection.is_empty() && acts_on_selection(action);
+            if self.cursor_hidden && self.mode == Mode::Grid && uses_cursor(action) && !on_selection
+            {
                 self.cursor_hidden = false;
                 continue;
             }
@@ -7484,8 +7488,9 @@ impl TriApp {
     /// comprise, #167).
     fn start_compare(&mut self) {
         let mut targets = self.selection.targets(&self.files, self.selected);
+        let stack = self.compare_stack();
         if targets.len() < 2
-            && let Some(r) = self.compare_stack()
+            && let Some(r) = stack.clone()
         {
             // Une pile de développements : toutes ses images ; une rafale : ce que la
             // grille montrerait dépliée, chaque photo par la couverture de sa pile de
@@ -7504,7 +7509,34 @@ impl TriApp {
                 .map(|i| self.files[i].path.clone())
                 .collect();
         }
-        if targets.is_empty() || (targets.len() < 2 && !self.stacking) {
+        // Rien de sélectionné, pas de pile : toutes les images montrées (retour du
+        // 07/11/2026), au plus `[gui.compare] max` autour de l'image courante.
+        let mut around = false;
+        if targets.len() < 2 && stack.is_none() {
+            let shown: Vec<usize> = if self.stacks.shown.is_empty() {
+                (0..self.files.len()).collect()
+            } else {
+                self.stacks.shown.clone()
+            };
+            if shown.len() >= 2 {
+                let max = self.gui.compare.max.max(2);
+                let at = shown
+                    .iter()
+                    .position(|&i| i == self.stacks.visible(self.selected))
+                    .unwrap_or(0);
+                let start = at
+                    .saturating_sub(max / 2)
+                    .min(shown.len().saturating_sub(max));
+                around = shown.len() > max;
+                targets = shown[start..(start + max).min(shown.len())]
+                    .iter()
+                    .map(|&i| self.files[i].path.clone())
+                    .collect();
+            }
+        }
+        // Une seule image : seulement si c'est sa pile (#167 : une photo seule, piles
+        // actives, se compare à ses développements).
+        if targets.is_empty() || (targets.len() < 2 && stack.is_none()) {
             let keys = [
                 Action::SelectToggle,
                 Action::SelectVisual,
@@ -7519,6 +7551,9 @@ impl TriApp {
         if targets.len() > max {
             self.hint = Some(t!("compare-limited", max = max));
             targets.truncate(max);
+        }
+        if around {
+            self.hint = Some(t!("compare-around", max = max));
         }
         // Image active : l'image courante si elle est comparée, sinon la première.
         let current = self.files.get(self.selected).map(|f| f.path.clone());
@@ -12386,9 +12421,12 @@ impl TriApp {
                 // Plein écran : l'interrupteur des piles, toujours là ; piles actives, ↑ / ↓
                 // (pile d'avant, d'après) à côté de ‹ ›.
                 let mut actions = vec![Action::ToggleAutoAdvance, Action::NavNext, Action::NavPrev];
+                // Retour à la grille à la souris, tout à droite (issue n° 193 : seul Échap
+                // ramenait à la grille) ; en comparaison aussi (retour du 07/11/2026).
+                if self.mode == Mode::Compare {
+                    actions.insert(0, Action::Back);
+                }
                 if self.mode == Mode::View {
-                    // Retour à la grille à la souris, tout à droite (issue n° 193 : seul
-                    // Échap ramenait à la grille).
                     actions.insert(0, Action::Back);
                     if self.stacking {
                         actions.extend([Action::NavDown, Action::NavUp]);
@@ -12407,6 +12445,9 @@ impl TriApp {
                     }
                     actions.push(Action::StackMode);
                 }
+                // Comparer (retour du 07/11/2026) : la sélection, sinon la pile, sinon tout ;
+                // allumé en comparaison, où il la quitte.
+                actions.push(Action::Compare);
                 // Développer dans darktable (si darktable est là), à côté du 1:1.
                 if self.mode == Mode::View && !self.developers.is_empty() {
                     actions.push(Action::Develop);
@@ -12452,6 +12493,7 @@ impl TriApp {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
                         Action::StackMode => self.stacking,
+                        Action::Compare => self.mode == Mode::Compare,
                         Action::StackEnterToggle => {
                             self.stack_enter == crate::settings::StackEnter::First
                         }
@@ -13210,6 +13252,17 @@ impl TriApp {
             if modifiers.shift {
                 self.selection.add_range(&self.files, self.selected, index);
             } else if modifiers.command || modifiers.ctrl {
+                // L'image courante, en surbrillance, compte comme choisie : le premier
+                // Cmd / Ctrl+clic sur une autre les prend toutes les deux (retour du
+                // 07/11/2026, comme Lightroom ; la comparaison n'en avait qu'une).
+                if self.selection.is_empty()
+                    && !self.cursor_hidden
+                    && index != self.selected
+                    && let Some(current) = self.files.get(self.selected)
+                {
+                    let current = current.path.clone();
+                    self.selection.toggle(&current);
+                }
                 self.selection.toggle(&path);
             } else if !self.selection.is_visual() {
                 self.selection.clear();
@@ -15658,6 +15711,26 @@ fn uses_cursor(action: Action) -> bool {
             | Action::Compare
             | Action::StackToggle
             | Action::StackChoose
+    )
+}
+
+/// Action qui vise la sélection quand il y en a une (noter, fichiers, comparer) : elle
+/// n'a pas besoin du curseur de la grille.
+fn acts_on_selection(action: Action) -> bool {
+    matches!(
+        action,
+        Action::Stars(_)
+            | Action::Color(_)
+            | Action::Flag(_)
+            | Action::FileRename
+            | Action::FileDelete
+            | Action::FileReveal
+            | Action::FileEdit
+            | Action::FileCopy
+            | Action::FileMove
+            | Action::FileExport
+            | Action::Send(_)
+            | Action::Compare
     )
 }
 
@@ -19111,6 +19184,13 @@ mod tests {
             h.state().selection.is_empty(),
             "clic simple : sélection effacée"
         );
+        // Retour du 07/11/2026 : l'image courante (en surbrillance, d) compte ; le premier
+        // Cmd+clic sur une autre les prend toutes les deux, et = les compare aussitôt.
+        click(&mut h, 2, Modifiers::COMMAND);
+        assert_eq!(h.state().selection.len(), 2, "c et d");
+        type_text(&mut h, "=");
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 2);
     }
 
     #[test]
@@ -19513,17 +19593,66 @@ mod tests {
     }
 
     #[test]
+    fn after_select_all_the_first_compare_key_compares() {
+        // Retour du 07/11/2026 : Ctrl+A masque le curseur ; le premier = ne faisait que
+        // le remontrer, il fallait le taper deux fois. Ce qui vise la sélection agit.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        // Curseur masqué (Échap, clic dans le vide), puis tout sélectionné.
+        h.state_mut().cursor_hidden = true;
+        press(&mut h, Key::A, Modifiers::CTRL);
+        assert_eq!(h.state().selection.len(), 3);
+        type_text(&mut h, "=");
+        assert_eq!(h.state().mode, Mode::Compare);
+    }
+
+    #[test]
+    fn without_a_selection_everything_shown_is_compared() {
+        // Retour du 07/11/2026 : des images sélectionnées, on les compare ; rien de
+        // sélectionné, tout (au plus `[gui.compare] max`, autour de l'image courante).
+        let names: Vec<String> = (0..10).map(|i| format!("img{i}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&names, 64, 48);
+        h.state_mut().rating_bar = true;
+        h.state_mut().gui.compare.max = 6;
+        h.run_steps(3);
+        h.state_mut().select(8);
+        // Le bouton de la barre.
+        click_settled(&mut h, &Action::Compare.label());
+        h.run_steps(2);
+        assert_eq!(h.state().mode, Mode::Compare);
+        let max = h.state().gui.compare.max;
+        let compared: Vec<String> = h.state().compare.iter().map(|p| shown_name(p)).collect();
+        assert_eq!(compared.len(), max);
+        assert!(compared.contains(&"img8.jpg".to_string()), "{compared:?}");
+        assert!(
+            compared.contains(&"img9.jpg".to_string()),
+            "la fin du dossier"
+        );
+        assert!(h.state().hint.is_some(), "dit qu'il en a pris {max}");
+        // Le retour à la grille, à la souris.
+        click_settled(&mut h, &t!("view-back-grid"));
+        h.run_steps(2);
+        assert_eq!(h.state().mode, Mode::Grid);
+        // Peu d'images : toutes.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 3);
+    }
+
+    #[test]
     fn compare_needs_two_images_then_rates_and_eliminates_the_active_one() {
         let names = ["a.jpg", "b.jpg", "c.jpg", "d.jpg"];
         let (mut h, dir) = harness_files(&names, 64, 48);
         h.run_steps(3);
+        // Rien de sélectionné : toutes les images (07/11/2026).
         type_text(&mut h, "=");
-        assert_eq!(
-            h.state().mode,
-            Mode::Grid,
-            "une seule image : pas de comparaison"
-        );
-        assert!(h.query_by_label_contains("au moins 2 images").is_some());
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 4);
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::Grid);
         // a, b, c sélectionnées (mode visuel), puis c.
         press(&mut h, Key::Space, Modifiers::SHIFT);
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -23353,13 +23482,16 @@ mod tests {
         // #167 : piles actives, `c` sur une photo seule (pile d'une image) la compare.
         let (mut h, _dir) = harness();
         h.run_steps(3);
+        // Sans piles ni sélection : toutes les images (07/11/2026).
         type_text(&mut h, "=");
-        assert_eq!(h.state().mode, Mode::Grid, "sans piles : il en faut deux");
-        assert!(h.state().hint.is_some());
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert_eq!(h.state().compare.len(), 3);
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::Grid);
         h.state_mut().stacking = true;
         h.state_mut().stacks_dirty = true;
         h.run_steps(2);
-        type_text(&mut h, "=");
+        act(&mut h, Action::Compare);
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 1);
         press(&mut h, Key::Escape, Modifiers::NONE);

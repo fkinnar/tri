@@ -74,7 +74,7 @@ action-core-view-grid_info = Afficher / masquer les infos des vignettes (nom, fo
 action-core-rate-auto_advance = Avance automatique après une note : oui / non
 action-core-select-toggle = Sélectionner / désélectionner l'image
 action-core-select-visual = Mode visuel : sélectionner une plage (la même touche valide)
-action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : la pile repliée, ou la photo et ses développements)
+action-core-view-compare = Comparer les images sélectionnées côte à côte (sans sélection : la pile repliée, la photo et ses développements, sinon toutes les images)
 action-core-view-peaking = Afficher / masquer la netteté (contours nets)
 action-core-view-sharpness_lenient = Netteté plus souple (moins de photos floues, plus de contours nets)
 action-core-view-sharpness_strict = Netteté plus stricte (plus de photos floues, moins de contours nets)
@@ -425,6 +425,7 @@ cache-unavailable = cache inaccessible : { $error }
 
 rating-not-saved = note non enregistrée : { $error }
 compare-needs-two = comparer : sélectionnez au moins 2 images ({ $keys }, Maj+clic), ou placez-vous sur une pile ou une photo développée
+compare-around = comparaison des { $max } images autour de l'image courante ([gui.compare] max) ; sélectionnez-en pour choisir
 compare-limited = comparaison limitée aux { $max } premières ([gui.compare] max)
 view-info-selected = { " " }· sélectionnée
 view-info-peaking = { " " }· netteté

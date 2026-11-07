@@ -822,6 +822,14 @@ pub fn bar_icon(painter: &Painter, rect: Rect, action: Action, color: Color32) {
         }
         // Retour à la grille (issue n° 193) : la grille de neuf cases.
         Action::Back => grid_fit_icon(painter, rect.shrink(w * 0.05), color),
+        Action::Compare => {
+            // Comparer : deux cadres côte à côte.
+            let thin = Stroke::new(stroke.width * 0.8, color);
+            for x in [0.08, 0.54] {
+                let frame = Rect::from_min_max(p(x, 0.22), p(x + 0.38, 0.78));
+                painter.rect_stroke(frame, w * 0.04, thin, egui::StrokeKind::Middle);
+            }
+        }
         _ => {
             // Petite étoile à gauche, flèche à droite.
             // Toute l'icône d'une couleur, l'accent quand l'avance est active (retour du

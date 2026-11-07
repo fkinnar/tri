@@ -7,6 +7,15 @@
 - **Retour à 100 % et à l'ajusté au clavier** : `<leader> m m` remet la loupe à 100 %,
   `<leader> z z` le zoom à 100 %, `<leader> z /` l'ajuste. Dans le menu des suites, `m`
   et `z` sont des sous-menus qui listent ce qui peut suivre.
+- **Comparaison depuis la barre du bas** : un bouton (allumé pendant la comparaison, où
+  il la quitte), et le retour à la grille aussi en comparaison. Sans sélection ni pile,
+  tout ce qui est montré est comparé (au plus `[gui.compare] max`, autour de l'image
+  courante).
+- **Cmd / Ctrl+clic prend aussi l'image courante** : sans sélection, l'image en
+  surbrillance compte comme choisie ; le premier Cmd / Ctrl+clic sur une autre
+  sélectionne les deux. Avec une sélection et le curseur de la grille masqué, `=` (et
+  les notes, les actions sur fichiers) agit aussitôt au lieu de seulement remontrer le
+  curseur.
 - **Un seul réglage de zoom dans la barre du bas** : les réglages du zoom et de la loupe
   sont fusionnés. Il règle le zoom (loupe ronde), ou la loupe tant que sa touche est
   tenue (loupe carrée). Un clic sur l'icône réinitialise, un clic sur la valeur permet de
