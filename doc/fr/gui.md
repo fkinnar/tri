@@ -1215,6 +1215,14 @@ Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du ple
 règlent la loupe si sa touche est tenue, sinon le zoom (une paire de touches, la touche
 tenue choisit).
 
+**Retour à 100 % et à l'ajusté** (idée de l'utilisateur, 07/11/2026) : `<leader> m m`
+remet la loupe à `loupe_scale` (100 %), `<leader> z z` le zoom à 100 %, `<leader> z /`
+l'ajuste. Pas des séquences du séquenceur : `<leader> m` serait devenu ambigu (il
+attendrait un second `m`, et un chiffre tapé pendant l'attente ouvrirait la saisie *et*
+noterait la photo). C'est la saisie qui reconnaît, avant tout chiffre, la touche qui l'a
+ouverte (`entry_trigger`, lue avec l'action ; aucune depuis la palette) ; `/` ferme la
+saisie vide puis agit comme toujours (ajusté).
+
 **Un seul réglage d'échelle dans la barre du bas** (retour du 07/11/2026 : deux réglages
 côte à côte, zoom et loupe, n'étaient pas clairs ; `TriApp::scale_control`) : une icône,
 −, la valeur, +, à gauche du bouton 1:1. Il règle le **zoom** (loupe ronde,

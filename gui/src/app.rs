@@ -865,6 +865,13 @@ pub struct TriApp {
     loupe_entry: Option<(String, Instant)>,
     /// La saisie en cours règle le zoom (`<leader> z`), pas la loupe (`<leader> m`).
     entry_for_zoom: bool,
+    /// Touche qui a ouvert la saisie (`m` de `<leader> m`) : retapée avant tout chiffre,
+    /// elle remet à 100 % (`<leader> m m`, `<leader> z z` ; idée de l'utilisateur,
+    /// 07/11/2026). Aucune si la saisie vient de la palette.
+    entry_trigger: Option<crate::actions::Chord>,
+    /// La touche lue avec l'action qui ouvre la saisie, prise à son ouverture (une saisie
+    /// ouverte depuis la palette n'en a pas).
+    entry_trigger_pending: Option<crate::actions::Chord>,
     /// Valeur du zoom ou de la loupe tapée dans la barre du bas (un clic sur la valeur,
     /// 07/11/2026).
     scale_edit: Option<ScaleEdit>,
@@ -1378,6 +1385,8 @@ impl TriApp {
             loupe_scale: gui.zoom.loupe_scale,
             loupe_entry: None,
             entry_for_zoom: false,
+            entry_trigger: None,
+            entry_trigger_pending: None,
             scale_edit: None,
             loupe_wheel: 0.0,
             loupe_entry_done: None,
@@ -6030,6 +6039,14 @@ impl TriApp {
                 continue;
             }
             let fed = self.sequencer.feed(&self.keymap, chord, now);
+            // La touche qui ouvre une saisie de grossissement (`m` de `<leader> m`) : tapée
+            // de nouveau tout de suite, elle remet à 100 % (07/11/2026).
+            if fed
+                .iter()
+                .any(|a| matches!(a, Action::LoupeScaleEntry | Action::ZoomScaleEntry))
+            {
+                self.entry_trigger_pending = Some(chord);
+            }
             // Touche tenue : seules les actions faites pour se répéter (#160).
             actions.extend(fed.into_iter().filter(|a| !repeated || a.repeats()));
         }
@@ -6286,6 +6303,7 @@ impl TriApp {
             }
             Action::LoupeScaleEntry | Action::ZoomScaleEntry => {
                 self.entry_for_zoom = action == Action::ZoomScaleEntry;
+                self.entry_trigger = self.entry_trigger_pending.take();
                 self.loupe_entry = Some((String::new(), Instant::now()));
                 self.notice = Some((self.entry_notice("_"), false));
             }
@@ -9805,6 +9823,19 @@ impl TriApp {
             if chord == crate::actions::Chord::key(egui::Key::Escape) {
                 self.loupe_entry = None;
                 self.notice = None;
+                continue;
+            }
+            // Sa touche retapée avant tout chiffre : 100 % (la loupe : son grossissement
+            // de la configuration, 100 % par défaut, comme l'icône de la barre du bas).
+            if self.entry_trigger == Some(chord)
+                && self.loupe_entry.as_ref().is_some_and(|(d, _)| d.is_empty())
+            {
+                self.loupe_entry = None;
+                if self.entry_for_zoom {
+                    self.set_zoom_scale(1.0);
+                } else {
+                    self.set_loupe_scale(self.gui.zoom.loupe_scale);
+                }
                 continue;
             }
             self.apply_loupe_entry();
@@ -19189,6 +19220,38 @@ mod tests {
         press(&mut h, Key::J, Modifiers::CTRL);
         assert_eq!(h.state().zoom_scale, 1.0);
         assert_eq!(h.state().loupe_scale, 1.0);
+        // Idée de l'utilisateur, 07/11/2026 : `<leader> z /` ajusté, `<leader> z z` 100 %,
+        // `<leader> m m` la loupe à 100 %.
+        leader(&mut h, &[(Key::Z, Modifiers::NONE)]);
+        type_text(&mut h, "/");
+        assert!(h.state().zoom.is_none(), "ajusté");
+        assert!(h.state().loupe_entry.is_none());
+        leader(
+            &mut h,
+            &[(Key::Z, Modifiers::NONE), (Key::Z, Modifiers::NONE)],
+        );
+        assert!(h.state().loupe_entry.is_none());
+        assert!(h.state().zoom.is_some());
+        assert_eq!(h.state().zoom_scale, 1.0);
+        h.state_mut().set_loupe_scale(2.0);
+        leader(
+            &mut h,
+            &[(Key::M, Modifiers::NONE), (Key::M, Modifiers::NONE)],
+        );
+        assert!(h.state().loupe_entry.is_none());
+        assert_eq!(h.state().loupe_scale, 1.0);
+        // Après un chiffre, la touche ne remet plus à 100 % : elle applique ce qui est
+        // tapé.
+        leader(
+            &mut h,
+            &[(Key::M, Modifiers::NONE), (Key::Num3, Modifiers::NONE)],
+        );
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert_eq!(h.state().loupe_scale, 3.0);
+        // Ouverte depuis la palette : pas de touche qui remet à 100 %.
+        act(&mut h, Action::LoupeScaleEntry);
+        press(&mut h, Key::M, Modifiers::NONE);
+        assert_eq!(h.state().loupe_scale, 3.0);
     }
 
     #[test]

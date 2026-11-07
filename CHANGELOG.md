@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
+  100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it.
 - **One zoom control in the bottom bar**: the zoom and loupe controls are merged. It sets
   the zoom (round magnifier), or the loupe while its key is held (square magnifier). A
   click on the icon resets, a click on the value lets you type it. The pointer stays
