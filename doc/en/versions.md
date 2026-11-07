@@ -88,7 +88,9 @@ The interface only draws; all the computation is here.
   (`o`) snaps to the frame.
 - **Bar** under the image, in parts titled by a grey label (2026-11-07): **Version**
   (preset); **Crop** (ratio in a drop-down: free, original, 1:1, 5:4, 3:2, 16:9, 4:3,
-  shown in the chosen orientation, 4:5; then Portrait / Landscape); **Export** (optional
+  shown in the chosen orientation, 4:5; a ratio of one's own is typed there, "Custom":
+  `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, reduced to simple whole numbers; then
+  Portrait / Landscape); **Export** (optional
   export preset); **Name** (it follows the ratio as long as it has not been typed); the
   floppy (save as a preset); Save / Cancel on the right.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)

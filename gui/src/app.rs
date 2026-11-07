@@ -25913,6 +25913,44 @@ mod tests {
     }
 
     #[test]
+    fn a_custom_ratio_is_typed_in_the_ratio_list() {
+        // Idée de l'utilisateur (07/11/2026) : un rapport à soi, « 17:23 ».
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        press(&mut h, Key::V, Modifiers::NONE);
+        run_until(&mut h, |app| {
+            app.crop.as_ref().is_some_and(crate::crop::Crop::ready)
+        });
+        // La liste du rapport s'ouvre (elle montre le rapport en cours).
+        let current = crate::crop::ratio_name(h.state().crop.as_ref().unwrap().ratio);
+        let list = h
+            .get_all_by_role(egui::accesskit::Role::ComboBox)
+            .find(|n| n.value().as_deref() == Some(current.as_str()))
+            .expect("la liste du rapport");
+        list.click();
+        h.run_steps(3);
+        let custom = t!("crop-ratio-custom");
+        assert!(h.query_by_label(&custom).is_some(), "le champ personnalisé");
+        // Le champ du rapport : vide (celui du nom porte le nom).
+        let name = h.state().crop.as_ref().unwrap().name.clone();
+        h.get_all_by_role(egui::accesskit::Role::TextInput)
+            .find(|n| n.value().as_deref() != Some(name.as_str()))
+            .expect("le champ du rapport")
+            .click();
+        h.run_steps(2);
+        type_text(&mut h, "17:23");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        h.run_steps(2);
+        let crop = h
+            .state()
+            .crop
+            .as_ref()
+            .expect("toujours en cours, Entrée ne l'a pas fermé");
+        assert_eq!(crop.ratio, tri::versions::Ratio::Fixed(17, 23));
+        assert_eq!(crop.name, "17:23", "le nom suit le rapport");
+    }
+
+    #[test]
     fn presets_set_ratio_name_and_profile_and_new_ones_are_saved() {
         let (mut h, dir) = harness();
         let config = dir.path().join("config.toml");

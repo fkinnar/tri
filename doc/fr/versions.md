@@ -88,7 +88,9 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   superposition choisie (`o`) se cale sur le cadre.
 - **Barre** sous l'image, en parties titrées d'un libellé gris (07/11/2026) : **Version**
   (préréglage) ; **Recadrage** (rapport dans une liste : libre, original, 1:1, 5:4, 3:2,
-  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; puis Portrait / Paysage) ;
+  16:9, 4:3, montré dans l'orientation choisie, 4:5 ; un rapport à soi s'y tape,
+  « Personnalisé » : `17:23`, `4/5`, `1.91:1`, `Ratio::parse_custom`, ramené à des entiers
+  simplifiés ; puis Portrait / Paysage) ;
   **Export** (préréglage d'export facultatif) ; **Nom** (il suit le rapport tant qu'on ne
   l'a pas tapé) ; la disquette (enregistrer comme préréglage) ; Enregistrer / Annuler à
   droite.

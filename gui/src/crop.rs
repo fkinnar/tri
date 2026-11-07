@@ -36,6 +36,8 @@ pub struct Crop {
     pub fresh: bool,
     /// Préréglage appliqué (identifiant).
     pub preset: Option<String>,
+    /// Rapport personnalisé en cours de saisie dans la liste des rapports (« 17:23 »).
+    custom: String,
     /// Les autres versions de l'image : un nom déjà pris est refusé (issue n° 14).
     others: Versions,
 }
@@ -90,6 +92,7 @@ impl Crop {
             source,
             drag: None,
             fresh: true,
+            custom: String::new(),
             preset: None,
             others,
         };
@@ -111,6 +114,7 @@ impl Crop {
             source: version.source,
             drag: None,
             fresh: true,
+            custom: String::new(),
             preset: None,
             others,
         }
@@ -429,6 +433,9 @@ impl Crop {
         let mut chosen = None;
         egui::ComboBox::from_id_salt("crop_ratio")
             .selected_text(ratio_name(self.ratio))
+            // Ouverte tant qu'on tape un rapport à soi : fermée par un choix ou un clic
+            // dehors (sinon, cliquer dans le champ la fermait).
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show_ui(ui, |ui| {
                 for preset in Ratio::PRESETS {
                     let on = preset.same_shape(self.ratio);
@@ -436,8 +443,27 @@ impl Crop {
                     let shown = if on { self.ratio } else { preset };
                     if ui.selectable_label(on, ratio_name(shown)).clicked() {
                         chosen = Some(preset);
+                        ui.close();
                     }
                 }
+                // Un rapport à soi (idée de l'utilisateur, 07/11/2026) : « 17:23 », « 1.91:1 »,
+                // Entrée l'applique.
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.weak(t!("crop-ratio-custom"));
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut self.custom)
+                            .desired_width(70.0)
+                            .hint_text("17:23"),
+                    );
+                    let ok = Ratio::parse_custom(&self.custom);
+                    if !self.custom.trim().is_empty() && ok.is_none() {
+                        field.on_hover_text(t!("crop-ratio-custom-bad"));
+                    } else if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        chosen = ok;
+                        ui.close();
+                    }
+                });
             });
         if let Some(preset) = chosen {
             self.set_ratio(preset);
