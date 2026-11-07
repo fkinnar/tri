@@ -4,6 +4,24 @@
 
 ## Non publié
 
+- **Un seul réglage de zoom dans la barre du bas** : les réglages du zoom et de la loupe
+  sont fusionnés. Il règle le zoom (loupe ronde), ou la loupe tant que sa touche est
+  tenue (loupe carrée). Un clic sur l'icône réinitialise, un clic sur la valeur permet de
+  la taper. Le pointeur reste visible pendant qu'on tient la touche de loupe, la loupe ne
+  s'affiche plus sur la barre, et l'interrupteur des infos sur l'image passe tout à
+  droite. `TRI_GUI_TRACE` montre aussi
+  les touches reçues.
+- **Zoom et loupe tapés sous Linux** : après `<leader> m` ou `<leader> z`, les chiffres
+  de la rangée du haut d'un clavier AZERTY (avec Maj) changeaient la note au lieu de la
+  valeur : Linux envoie aussi Maj comme une touche, ce qui fermait la saisie. Un
+  modificateur seul est maintenant ignoré.
+- **Réglages du zoom en pourcentages** : `[gui.zoom] steps`, `max`, `min` et
+  `loupe_scale` s'écrivent en pourcentages (`max = 400`), et les valeurs absurdes sont
+  refusées (hors de 1 à 999 %, `max` sous 100 %, `min` au-dessus). Un fichier avec les
+  anciennes valeurs (`max = 4.0`) est signalé comme invalide. La valeur de la barre du
+  bas garde une largeur fixe. Dans la fenêtre de réglages, un nombre tapé est vérifié à
+  Entrée ou en quittant le champ (pas à chaque chiffre), et l'erreur montre le message
+  seul.
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).

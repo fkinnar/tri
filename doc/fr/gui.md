@@ -463,7 +463,14 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`steps`), `*` 100 %, `/` ajusté (inversés le 18/10/2026, comme Lightroom), `z` et le
   double-clic basculent ajusté / 100 % ; on peut **dézoomer sous l'ajusté** jusqu'à
   `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
-  qu'à 100 %.
+  qu'à 100 %. Dans la configuration, `steps`, `max`, `min` et `loupe_scale` s'écrivent
+  en **pourcentages** (07/11/2026 : `max = 400`, plus lisible que `4.0`), triés à la
+  lecture ; garde-fou : refusés hors de 1 à 999 %, `max` sous 100 % et `min` au-dessus
+  (`ZOOM_PERCENT`, bornes de bon sens, pas des réglages ; 999 % : la saisie au clavier
+  prend trois chiffres). Dans la fenêtre de réglages, l'erreur sous la valeur est le
+  message seul (`tri::settings::parse_message`), sans la ligne du fichier. Un nombre tapé
+  n'est vérifié qu'à Entrée ou en quittant le champ (`update_while_editing(false)`) :
+  « 800 » passait par « 8 », refusé, et `max` ne se changeait pas au clavier.
 - **Retour à la grille à la souris** (issue n° 193) : en plein écran, une icône de grille
   tout à droite de la barre du bas (comme Échap).
   Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour
@@ -1183,8 +1190,7 @@ annule, une autre touche applique ce qui est tapé puis agit. Pour la session
 (`TriApp::loupe_scale`) ; `loupe_scale` reste la valeur de départ. La roulette, la loupe
 tenue, change le grossissement d'un palier par cran (`loupe_wheel_step` points ;
 `TriApp::loupe_wheel_input` retire le défilement : la grille reste en place). La valeur
-se voit dans la barre du bas (`marks::loupe_icon`, −, la valeur, + ; un clic sur la
-valeur : 100 %).
+se voit dans la barre du bas (réglage d'échelle, ci-dessous).
 
 ### Le zoom comme la loupe (07/11/2026)
 
@@ -1192,9 +1198,22 @@ Décidé avec l'utilisateur : ce qui vaut pour la loupe vaut pour le zoom du ple
 `<leader> z` (`core.view.zoom_scale`) ouvre la même saisie que `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centré comme `+` / `-`). `Ctrl+K` / `Ctrl+J`
 règlent la loupe si sa touche est tenue, sinon le zoom (une paire de touches, la touche
-tenue choisit). Dans la barre du bas, le bouton 1:1 (ajusté ↔ 100 %) est suivi de −, la
-valeur (« Ajusté », son pourcentage en bulle, ou le pourcentage ; un clic : `z`) et +
-(`TriApp::zoom_controls`).
+tenue choisit).
+
+**Un seul réglage d'échelle dans la barre du bas** (retour du 07/11/2026 : deux réglages
+côte à côte, zoom et loupe, n'étaient pas clairs ; `TriApp::scale_control`) : une icône,
+−, la valeur, +, à gauche du bouton 1:1. Il règle le **zoom** (loupe ronde,
+`marks::loupe_icon`), ou la **loupe** tant que sa touche est tenue (loupe carrée,
+`marks::square_loupe_icon` ; un compte-fil, essayé, ne se lisait pas à cette taille). En
+grille, sans zoom, il règle toujours la loupe, et seulement s'il reste la place. Un clic
+sur l'**icône** réinitialise (zoom ajusté à la vue, loupe à `loupe_scale`) ; un clic sur
+la **valeur** la fait taper en pourcentage (`ScaleEdit` : Entrée applique, Échap ou un
+clic ailleurs annule ; la cible est fixée au clic, la touche de loupe peut être relâchée ;
+le champ prend tout le clavier). La touche de loupe tenue ne masque plus le pointeur
+(sa répétition le masquait, jusque sur la barre) ; main sur l'icône, − et +. La loupe ne
+s'affiche que sur la partie visible d'une image (`painter.clip_rect()`) : une vignette
+coupée par la barre du bas continuait dessous, et la loupe restait pendant qu'on cliquait
+− et +. L'interrupteur des infos sur l'image (`Ctrl+I`) est tout à droite de la barre.
 
 ### Revue des raccourcis (06/11/2026, issue n° 280)
 
@@ -1451,6 +1470,13 @@ moitié transparente.
   `[gui] trace_slow_ms` (100 ms) est tracée avec la durée de ses étapes (« image lente :
   850 ms (événements 2, chargements 3, centre 840) ») : de quoi trouver un accès disque
   resté dans le fil de l'interface.
+  Depuis le 07/11/2026, aussi les touches et le texte reçus de la fenêtre (« touche
+  reçue : Key { key: Num1, … } », « Text("1") ») et les raccourcis qu'en tire `tri`
+  (« raccourcis lus ») : de quoi voir ce qu'envoie un clavier ou un système particulier.
+  C'est elle qui a montré que sous Linux, egui-winit envoie aussi Maj et Ctrl comme
+  touches (`ShiftRight`…) : Maj, tapé avant un chiffre de la rangée du haut d'un clavier
+  AZERTY, fermait la saisie de `<leader> m` et le chiffre changeait la note. Un
+  modificateur seul n'est plus un raccourci (`Chord::from_event`).
 
 **Fermeture** : les calculs en fond (moteur, chargement des images, surveillance du
 dossier et des volumes) s'arrêtent sans être attendus (`detach`) ; une vignette en cours

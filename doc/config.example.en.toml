@@ -741,13 +741,14 @@ overlay_line_width = 1.0
 overlay_opacity = 0.6
 
 [gui.zoom]
-# Full-screen zoom: steps of + and - (1.0 = 100 %: one image pixel per screen
+# Full-screen zoom, in percent: steps of + and - (100: one image pixel per screen
 # pixel; * goes to 100 %, / back to fit, z toggles fit / 100 %). With the mouse
 # and the trackpad, continuous: pinch, or Ctrl / Cmd + wheel (scrolling moves
-# the image). Between min and max; below fit, the image is smaller than the screen.
-steps = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0]
-max = 4.0
-min = 0.1
+# the image). Between min (at most 100) and max (at least 100); below fit, the image
+# is smaller than the screen. Values outside 1 to 999 are refused.
+steps = [12.5, 25, 50, 100, 200, 400]
+max = 400
+min = 10
 # Loupe, in the fitted view and in comparison: while this key is held (a free key,
 # written as in [keys]: "m", "F3"…; or "shift", "ctrl", "alt"; "none": no loupe), the
 # image at 100 % (loupe_scale) under the pointer, in a square of loupe_size points,
@@ -757,7 +758,7 @@ min = 0.1
 loupe_key = ""
 loupe_delay_ms = 150
 loupe_size = 320.0
-loupe_scale = 1.0
+loupe_scale = 100
 # Loupe from the keyboard, its key held: the navigation keys (arrows, hjkl in vim) move it
 # by loupe_step points, with Shift (as in a zoomed image) by loupe_step_large, measured in
 # the loupe (the image at 100 %), the same in the grid and full screen: a quarter of a

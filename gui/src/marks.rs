@@ -1465,6 +1465,22 @@ pub fn loupe_icon(painter: &Painter, rect: Rect, color: Color32) {
     );
 }
 
+/// Loupe carrée (réglage de la loupe de la barre du bas, 07/11/2026) : le pendant de
+/// [`loupe_icon`] (le zoom), un verre carré et son manche. Un compte-fil, essayé d'abord,
+/// ne se lisait pas à cette taille.
+pub fn square_loupe_icon(painter: &Painter, rect: Rect, color: Color32) {
+    let s = rect.width().min(rect.height());
+    let c = rect.center() + vec2(-s * 0.08, -s * 0.08);
+    let r = s * 0.27;
+    let stroke = Stroke::new((s * 0.1).max(1.3), color);
+    let glass = Rect::from_center_size(c, vec2(2.0 * r, 2.0 * r));
+    painter.rect_stroke(glass, s * 0.06, stroke, egui::StrokeKind::Middle);
+    painter.line_segment(
+        [glass.right_bottom(), c + vec2(s * 0.44, s * 0.44)],
+        Stroke::new((s * 0.14).max(1.6), color),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

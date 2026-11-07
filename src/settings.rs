@@ -499,6 +499,13 @@ pub fn parse<T: DeserializeOwned>(text: &str) -> Result<T, String> {
     toml::from_str(text).map_err(|e| e.to_string().trim_end().to_string())
 }
 
+/// Comme [`parse`], mais l'erreur sans sa position ni l'extrait du fichier : pour un
+/// message montré sous la valeur en cause (fenêtre de réglages, retour du 07/11/2026 :
+/// « TOML parse error at line 22 » et ses `^^^^` n'y disaient rien de plus).
+pub fn parse_message<T: DeserializeOwned>(text: &str) -> Result<T, String> {
+    toml::from_str(text).map_err(|e| e.message().trim_end().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

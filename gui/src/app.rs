@@ -862,6 +862,9 @@ pub struct TriApp {
     loupe_entry: Option<(String, Instant)>,
     /// La saisie en cours règle le zoom (`<leader> z`), pas la loupe (`<leader> m`).
     entry_for_zoom: bool,
+    /// Valeur du zoom ou de la loupe tapée dans la barre du bas (un clic sur la valeur,
+    /// 07/11/2026).
+    scale_edit: Option<ScaleEdit>,
     /// Défilement de la roulette accumulé, la loupe tenue (un palier par cran).
     loupe_wheel: f32,
     /// Saisie close par la pause, avec ses chiffres et l'instant de clôture : un chiffre
@@ -1368,6 +1371,7 @@ impl TriApp {
             loupe_scale: gui.zoom.loupe_scale,
             loupe_entry: None,
             entry_for_zoom: false,
+            scale_edit: None,
             loupe_wheel: 0.0,
             loupe_entry_done: None,
             loupe_index: 0,
@@ -5948,14 +5952,42 @@ impl TriApp {
     /// Traduit les touches pressées en actions et les applique.
     fn handle_keys(&mut self, ctx: &egui::Context) {
         let mut chords = ctx.input(|i| self.keymap.chords_repeated(&i.events, i.modifiers));
+        // Diagnostic (`TRI_GUI_TRACE`, 07/11/2026 : chiffres de la rangée du haut sous
+        // Linux) : les touches et le texte reçus, et ce qu'en fait le clavier de `tri`.
+        ctx.input(|i| {
+            for e in &i.events {
+                if matches!(
+                    e,
+                    egui::Event::Key { pressed: true, .. } | egui::Event::Text(_)
+                ) {
+                    trace(|| format!("touche reçue : {e:?}"));
+                }
+            }
+        });
+        if !chords.is_empty() {
+            trace(|| format!("raccourcis lus : {chords:?}"));
+        }
         // Saisie dans un champ de texte (nom de dossier, recherche) : les touches sont du
         // texte, pas des raccourcis ; seules les touches qui ne tapent rien (Échap, F1…)
         // agissent. Sans cela, taper « q » dans le nom d'un dossier quittait l'application.
         if ctx.egui_wants_keyboard_input() {
             chords.retain(|(c, _)| c.trigger.types_no_text());
         }
-        if !chords.is_empty() {
-            self.mouse_active = false; // on tape : pointeur masqué
+        // La valeur du zoom tapée dans la barre du bas : Échap la referme, sans revenir à
+        // la grille.
+        if self.scale_edit.is_some() {
+            chords.clear();
+        }
+        // On tape : pointeur masqué. Pas pour la touche de loupe tenue (retour du
+        // 07/11/2026 : sa répétition masquait le pointeur jusque sur la barre du bas, où
+        // − et + règlent alors la loupe).
+        let loupe = self.keymap.loupe();
+        let is_loupe = |c: &crate::actions::Chord| {
+            matches!(c.trigger, crate::actions::Trigger::Key(k)
+                if loupe == crate::settings::LoupeKey::Key(k) && !c.ctrl)
+        };
+        if chords.iter().any(|(c, _)| !is_loupe(c)) {
+            self.mouse_active = false;
         }
         // Grossissement de la loupe en cours de saisie : les chiffres sont pour lui.
         let chords = self.loupe_entry_keys(ctx, chords);
@@ -9472,44 +9504,169 @@ impl TriApp {
         }
     }
 
-    /// −, la valeur du zoom et + dans la barre du bas (posés de droite à gauche) ; l'action
-    /// cliquée, s'il y en a une.
-    fn zoom_controls(&mut self, ui: &mut Ui) -> Option<Action> {
-        let mut clicked = None;
-        let percent = |scale: f32| (scale * 100.0).round() as u32;
-        let (value, tip) = match self.zoom {
-            Some(_) => (
-                format!("{} %", percent(self.zoom_scale)),
-                self.action_tip(Action::ToggleZoom),
-            ),
-            None => (
-                t!("zoom-fit-value"),
-                format!(
-                    "{}\n{}",
-                    t!("zoom-fit-tip", percent = percent(self.fit_scale)),
-                    self.action_tip(Action::ToggleZoom)
-                ),
-            ),
+    /// Réglage d'échelle de la barre du bas (07/11/2026, retour de l'utilisateur : un seul
+    /// pour le zoom et la loupe) : une icône, −, la valeur, + (posés de droite à gauche).
+    /// La touche de loupe tenue (et en grille, sans zoom), il règle la loupe et l'icône
+    /// devient une loupe carrée ; sinon le zoom, avec une loupe ronde. Un clic sur l'icône
+    /// réinitialise (ajusté, ou le grossissement de la configuration) ; un clic sur la
+    /// valeur la fait taper (Entrée applique, Échap annule). L'action cliquée, s'il y en a
+    /// une.
+    fn scale_control(&mut self, ui: &mut Ui, icon: f32) -> Option<Action> {
+        let key = self.keymap.loupe();
+        let held = ui.input(|i| key.held(i));
+        let loupe = match &self.scale_edit {
+            Some(edit) => edit.loupe,
+            None => key != crate::settings::LoupeKey::None && (self.mode == Mode::Grid || held),
         };
-        for (action, text) in [(Action::ZoomIn, "+"), (Action::ZoomOut, "−")] {
-            if action == Action::ZoomOut
-                && ui
-                    .add(egui::Button::new(value.clone()).frame(false))
-                    .on_hover_text(&tip)
-                    .clicked()
-            {
-                clicked = Some(Action::ToggleZoom);
+        let percent = |scale: f32| (scale * 100.0).round() as u32;
+        let hand = egui::CursorIcon::PointingHand;
+        let mut clicked = None;
+        let (plus, minus) = if loupe {
+            (Action::LoupeZoomIn, Action::LoupeZoomOut)
+        } else {
+            (Action::ZoomIn, Action::ZoomOut)
+        };
+        for (action, text) in [(plus, "+"), (minus, "−")] {
+            if action == minus {
+                self.scale_value(ui, loupe);
             }
             let tip = self.action_tip(action);
             if ui
                 .add(egui::Button::new(text).frame(false))
                 .on_hover_text(tip)
+                .on_hover_cursor(hand)
                 .clicked()
             {
-                clicked = Some(action);
+                if loupe {
+                    // La loupe directement : l'action, la touche relâchée, réglerait le
+                    // zoom.
+                    self.step_loupe(action == Action::LoupeZoomIn);
+                } else {
+                    clicked = Some(action);
+                }
+            }
+        }
+        let tip = if loupe {
+            let default = percent(self.gui.zoom.loupe_scale);
+            format!(
+                "{}\n{}",
+                t!("loupe-reset-tip", percent = default),
+                self.action_tip(Action::Loupe)
+            )
+        } else {
+            t!("zoom-reset-tip", percent = percent(self.fit_scale))
+        };
+        let (rect, response) = ui.allocate_exact_size(vec2(icon, icon), Sense::click());
+        let name = if loupe {
+            t!("loupe-reset")
+        } else {
+            t!("zoom-reset")
+        };
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &name));
+        let response = response.on_hover_text(tip).on_hover_cursor(hand);
+        let color = ui.style().interact(&response).fg_stroke.color;
+        if loupe {
+            marks::square_loupe_icon(ui.painter(), rect.shrink(icon * 0.2), color);
+        } else {
+            marks::loupe_icon(ui.painter(), rect.shrink(icon * 0.2), color);
+        }
+        if response.clicked() {
+            if loupe {
+                self.set_loupe_scale(self.gui.zoom.loupe_scale);
+            } else {
+                clicked = Some(Action::ZoomFit);
             }
         }
         clicked
+    }
+
+    /// La valeur du réglage d'échelle (« Ajusté » ou le pourcentage), ou son champ de
+    /// saisie après un clic.
+    fn scale_value(&mut self, ui: &mut Ui, loupe: bool) {
+        let percent = |scale: f32| (scale * 100.0).round() as u32;
+        let (value, tip) = if loupe {
+            (
+                format!("{} %", percent(self.loupe_scale)),
+                t!("scale-edit-tip"),
+            )
+        } else if self.zoom.is_some() {
+            (
+                format!("{} %", percent(self.zoom_scale)),
+                t!("scale-edit-tip"),
+            )
+        } else {
+            (
+                t!("zoom-fit-value"),
+                format!(
+                    "{}\n{}",
+                    t!("zoom-fit-tip", percent = percent(self.fit_scale)),
+                    t!("scale-edit-tip")
+                ),
+            )
+        };
+        // Largeur fixe, la plus large des valeurs possibles (retour du 07/11/2026 : sous
+        // 100 %, le réglage rétrécissait), la valeur centrée entre − et +.
+        let widest = [
+            t!("zoom-fit-value"),
+            format!("{} %", percent(self.gui.zoom.max)),
+            format!("{} %", percent(self.gui.zoom.min)),
+        ]
+        .into_iter()
+        .map(|text| {
+            egui::WidgetText::from(text)
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Extend),
+                    f32::INFINITY,
+                    egui::TextStyle::Button,
+                )
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+        let size = vec2(
+            widest + 2.0 * ui.spacing().button_padding.x,
+            ui.spacing().interact_size.y,
+        );
+        let Some(edit) = &mut self.scale_edit else {
+            if ui
+                .add_sized(size, egui::Button::new(value).frame(false))
+                .on_hover_text(tip)
+                .on_hover_cursor(egui::CursorIcon::Text)
+                .clicked()
+            {
+                self.scale_edit = Some(ScaleEdit {
+                    loupe,
+                    text: String::new(),
+                    focused: false,
+                });
+            }
+            return;
+        };
+        let response = ui.add_sized(
+            size,
+            egui::TextEdit::singleline(&mut edit.text)
+                .char_limit(3)
+                .align(egui::Align2::CENTER_CENTER)
+                .hint_text(value.trim_end_matches(" %")),
+        );
+        edit.text.retain(|c| c.is_ascii_digit());
+        if !edit.focused {
+            response.request_focus();
+            edit.focused = true;
+            return;
+        }
+        if response.lost_focus() {
+            let apply = ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let edit = self.scale_edit.take();
+            match edit.and_then(|e| e.text.parse::<u32>().ok().map(|p| (e.loupe, p))) {
+                Some((_, 0)) | None => {}
+                Some((true, p)) if apply => self.set_loupe_scale(p as f32 / 100.0),
+                Some((false, p)) if apply => self.set_zoom_scale(p as f32 / 100.0),
+                Some(_) => {}
+            }
+        }
     }
 
     /// Grossissement de la loupe pour la session, dans les bornes du zoom, et le dit.
@@ -9741,8 +9898,12 @@ impl TriApp {
             .filter(|(i, _)| *i == index)
             .zip(image_rect)
             .map(|((_, rel), r)| (r, r.min + vec2(rel.x * r.width(), rel.y * r.height())));
+        // Seulement sur la partie visible de l'image (retour du 07/11/2026 : une vignette
+        // coupée par la barre du bas continuait dessous, et la loupe restait quand on
+        // cliquait − et + pour la régler).
+        let visible = painter.clip_rect();
         let over = keyboard.or(match (image_rect, pointer) {
-            (Some(r), Some(p)) => r.contains(p).then_some((r, p)),
+            (Some(r), Some(p)) => (r.contains(p) && visible.contains(p)).then_some((r, p)),
             _ => None,
         });
         if !held || self.zoom.is_some() || over.is_none() {
@@ -12200,19 +12361,25 @@ impl TriApp {
                     actions.extend([Action::DevNext, Action::DevPrev]);
                 }
                 actions.push(Action::ToggleZoom);
-                // Infos sur l'image (repère de position, notes ; Ctrl+I), à gauche du 1:1 :
-                // leur état se voit, et se change à la souris (retour du 05/11/2026 :
-                // masquées sans le savoir).
+                // Infos sur l'image (repère de position, notes ; leur état se voit et se
+                // change à la souris, retour du 05/11/2026), tout à droite de la barre
+                // (retour du 07/11/2026).
                 if self.mode == Mode::View {
-                    actions.push(Action::ToggleImageInfo);
+                    let action = Action::ToggleImageInfo;
+                    let tip = self.action_tip(action);
+                    let (rect, response) = marks::icon_button(ui, icon, &action.label(), &tip);
+                    let color = if self.image_info {
+                        marks::accent_mark(ui.ctx())
+                    } else {
+                        ui.style().interact(&response).fg_stroke.color
+                    };
+                    marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
+                    if response.clicked() {
+                        clicked = Some(action);
+                    }
+                    ui.separator();
                 }
                 for action in actions {
-                    // Plein écran : le zoom comme la loupe (07/11/2026) : −, la valeur
-                    // (« Ajusté » ou le pourcentage ; un clic : ajusté ↔ 100 %), + ; posés
-                    // de droite à gauche, avant son icône.
-                    if action == Action::ToggleZoom && self.mode != Mode::Grid {
-                        clicked = self.zoom_controls(ui).or(clicked);
-                    }
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keymap.keys_for(Action::Back).join(" / ");
                         (
@@ -12226,7 +12393,6 @@ impl TriApp {
                     let active = match action {
                         Action::ToggleAutoAdvance => self.auto_advance,
                         Action::ToggleZoom => zoomed,
-                        Action::ToggleImageInfo => self.image_info,
                         Action::StackMode => self.stacking,
                         Action::StackEnterToggle => {
                             self.stack_enter == crate::settings::StackEnter::First
@@ -12245,6 +12411,10 @@ impl TriApp {
                     marks::bar_icon(ui.painter(), rect.shrink(icon * 0.2), action, color);
                     if response.clicked() {
                         clicked = Some(action);
+                    }
+                    // Plein écran : le réglage du zoom et de la loupe, à gauche du 1:1.
+                    if action == Action::ToggleZoom && self.mode != Mode::Grid {
+                        clicked = self.scale_control(ui, icon).or(clicked);
                     }
                 }
                 // Grille : infos des vignettes, tout à l'écran et taille des vignettes, à
@@ -12279,44 +12449,16 @@ impl TriApp {
                         self.grid_size_slider(ui, self.gui.grid.size_slider);
                     }
                 }
-                // Grossissement de la loupe (demandé le 06/11/2026 : réglable, il se voit) :
-                // loupe, −, la valeur (un clic : 100 %), + ; posés de droite à gauche.
-                // Après les outils de la grille : seulement s'il reste la place (fenêtre
+                // Grille : le réglage de la loupe (demandé le 06/11/2026 : réglable, il se
+                // voit), après les outils de la grille, s'il reste la place (fenêtre
                 // étroite : les notes d'abord).
-                let loupe_room = 4.0 * (icon + ui.spacing().item_spacing.x);
-                if self.keymap.loupe() != crate::settings::LoupeKey::None
-                    && ui.available_width() - self.gui.dialogs.spacing >= loupe_room
+                let scale_room = 4.0 * (icon + ui.spacing().item_spacing.x);
+                if self.mode == Mode::Grid
+                    && self.keymap.loupe() != crate::settings::LoupeKey::None
+                    && ui.available_width() - self.gui.dialogs.spacing >= scale_room
                 {
                     ui.separator();
-                    for (action, text) in [(Action::LoupeZoomIn, "+"), (Action::LoupeZoomOut, "−")]
-                    {
-                        if action == Action::LoupeZoomOut {
-                            let percent = (self.loupe_scale * 100.0).round() as u32;
-                            let reset = ui
-                                .add(egui::Button::new(format!("{percent} %")).frame(false))
-                                .on_hover_text(t!("loupe-reset-tip"));
-                            if reset.clicked() {
-                                self.set_loupe_scale(1.0);
-                            }
-                        }
-                        let tip = self.action_tip(action);
-                        if ui
-                            .add(egui::Button::new(text).frame(false))
-                            .on_hover_text(tip)
-                            .clicked()
-                        {
-                            // La loupe directement : l'action, sans la loupe tenue (un
-                            // clic), réglerait le zoom.
-                            self.step_loupe(action == Action::LoupeZoomIn);
-                        }
-                    }
-                    // Un repère, pas un bouton (retour du 07/11/2026 : il en avait l'air) : la
-                    // loupe se tient au clavier.
-                    let tip = self.action_tip(Action::Loupe);
-                    let (rect, response) = ui.allocate_exact_size(vec2(icon, icon), Sense::hover());
-                    response.on_hover_text(tip);
-                    let color = ui.visuals().weak_text_color();
-                    marks::loupe_icon(ui.painter(), rect.shrink(icon * 0.2), color);
+                    clicked = self.scale_control(ui, icon).or(clicked);
                 }
                 // Carte de netteté affichée : son curseur de sévérité (le même que celui de
                 // la barre des filtres), précédé du triangle de netteté (posés de droite à
@@ -16487,6 +16629,18 @@ fn stripe(ui: &Ui, slot: egui::layers::ShapeIdx, rect: Rect) {
     );
 }
 
+/// Saisie de la valeur du réglage d'échelle de la barre du bas.
+#[derive(Debug)]
+struct ScaleEdit {
+    /// Elle règle la loupe (sinon le zoom) : fixé au clic, la touche de loupe peut ensuite
+    /// être relâchée.
+    loupe: bool,
+    /// Chiffres tapés (pourcentage).
+    text: String,
+    /// Le champ a déjà reçu le clavier.
+    focused: bool,
+}
+
 /// Pourcentage d'un grossissement tapé : trois chiffres tels quels, deux en dizaines, un
 /// en centaines (`2` : 200, `20` : 200, `01` : 10, `150` : 150) ; `None` sans chiffre.
 fn loupe_entry_percent(digits: &str) -> Option<u32> {
@@ -18835,6 +18989,49 @@ mod tests {
     }
 
     #[test]
+    fn no_loupe_over_the_bottom_bar() {
+        // Retour du 07/11/2026 : une vignette coupée par la barre du bas continuait
+        // dessous ; la loupe restait quand on cliquait − et + pour la régler.
+        let names: Vec<String> = (0..40).map(|i| format!("img{i:02}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (mut h, _dir) = harness_files(&names, 640, 480);
+        h.state_mut().gui.zoom.loupe_delay_ms = 0;
+        // Toutes les vignettes calculées d'abord (lentes sur les machines de la CI : une
+        // vignette sans texture n'a pas de place dans `grid_images`).
+        run_until(&mut h, |app| {
+            app.status.iter().all(|s| s.thumbnail == Avail::Ready)
+        });
+        // Une hauteur de fenêtre où une vignette passe sous le + de la barre ; quelques
+        // images pour que les textures des vignettes devenues visibles arrivent.
+        let mut found = None;
+        'heights: for height in (300..800).step_by(7) {
+            h.set_size(vec2(1800.0, height as f32));
+            for _ in 0..10 {
+                h.run_steps(1);
+                let plus = h.get_by_label("+").rect().center();
+                if h.state().grid_images.iter().any(|(_, r)| r.contains(plus)) {
+                    found = Some(plus);
+                    break 'heights;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let plus = found.expect("une vignette sous la barre");
+        h.event(UiEvent::Key {
+            key: Key::M,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.hover_at(plus - vec2(1.0, 0.0));
+        h.run_steps(1);
+        h.hover_at(plus);
+        h.run_steps(3);
+        assert!(!h.state().loupe_on, "pas de loupe sous la barre");
+    }
+
+    #[test]
     fn the_zoom_is_typed_or_stepped_like_the_loupe() {
         // Décidé le 07/11/2026 : tout ce qui vaut pour la loupe (m) vaut pour le zoom (z).
         let (mut h, _dir) = harness_with(640, 480);
@@ -18889,7 +19086,18 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().loupe_scale, 2.0);
         // Un chiffre tapé lentement après la pause (Maj sur AZERTY, 07/11/2026) complète
-        // encore le nombre, sans noter la photo.
+        // encore le nombre, sans noter la photo. Sous Linux, Maj arrive aussi comme une
+        // touche, avant le chiffre : elle ne ferme pas la saisie.
+        for key in [Key::ShiftLeft, Key::ShiftRight, Key::ControlLeft] {
+            h.event(UiEvent::Key {
+                key,
+                physical_key: Some(key),
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        h.run_steps(2);
         press(&mut h, Key::Num5, Modifiers::SHIFT);
         assert_eq!(
             h.state().loupe_entry.as_ref().map(|e| e.0.as_str()),
@@ -18915,6 +19123,27 @@ mod tests {
         press(&mut h, Key::Num3, Modifiers::NONE);
         assert_eq!(h.state().loupe_scale, 2.0);
         assert_eq!(h.state().folder.notes.notes(&file).stars, 3, "noté");
+        // Linux (trace de l'utilisateur, 07/11/2026) : Maj arrive comme une touche juste
+        // après `<leader> m`, puis les chiffres avec Maj.
+        leader(&mut h, &[(Key::M, Modifiers::NONE)]);
+        h.event(UiEvent::Key {
+            key: Key::ShiftRight,
+            physical_key: Some(Key::ShiftRight),
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        });
+        h.run_steps(2);
+        for key in [Key::Num1, Key::Num2, Key::Num5] {
+            press(&mut h, key, Modifiers::SHIFT);
+        }
+        assert_eq!(h.state().loupe_scale, 1.25);
+        assert_eq!(
+            h.state().folder.notes.notes(&file).stars,
+            3,
+            "note inchangée"
+        );
+        h.state_mut().set_loupe_scale(2.0);
         // Échap annule ; 0 est ignoré.
         leader(&mut h, &[(Key::M, Modifiers::NONE)]);
         press(&mut h, Key::Num4, Modifiers::NONE);
@@ -19329,12 +19558,15 @@ mod tests {
     }
 
     #[test]
-    fn the_loupe_buttons_of_the_bottom_bar_change_the_magnification() {
-        // 07/11/2026 : − et + partaient dans la notation et ne faisaient rien. Fenêtre
-        // large : le groupe ne s'affiche que s'il reste la place.
-        let (mut h, _dir) = harness();
+    fn one_scale_control_sets_the_zoom_or_the_loupe() {
+        // 07/11/2026 : − et + de la loupe partaient dans la notation ; puis un seul réglage
+        // pour le zoom et la loupe (la touche de loupe tenue), la valeur tapée, l'icône
+        // qui réinitialise. Fenêtre large : en grille, il ne s'affiche que s'il reste la
+        // place. Des images plus grandes que la vue, pour que + zoome.
+        let (mut h, _dir) = harness_with(2400, 1600);
         h.set_size(vec2(1800.0, 700.0));
         h.run_steps(3);
+        // En grille : la loupe.
         assert_eq!(h.state().loupe_scale, 1.0);
         click_settled(&mut h, "+");
         h.run_steps(2);
@@ -19343,13 +19575,59 @@ mod tests {
         click_settled(&mut h, "−");
         h.run_steps(2);
         assert!(h.state().loupe_scale < 1.0, "{}", h.state().loupe_scale);
-        // La valeur, cliquée : 100 %.
-        let value = format!("{} %", (h.state().loupe_scale * 100.0).round() as u32);
-        click_settled(&mut h, &value);
+        click_settled(&mut h, &t!("loupe-reset"));
         h.run_steps(2);
         assert_eq!(h.state().loupe_scale, 1.0);
         let file = h.state().files[h.state().selected].path.clone();
         assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
+        // En plein écran : le zoom.
+        act(&mut h, Action::Open);
+        click_settled(&mut h, "+");
+        h.run_steps(2);
+        assert!(h.state().zoom.is_some(), "zoomé");
+        assert_eq!(h.state().loupe_scale, 1.0, "la loupe ne bouge pas");
+        click_settled(&mut h, &t!("zoom-reset"));
+        h.run_steps(2);
+        assert!(h.state().zoom.is_none(), "ajusté");
+        // La valeur cliquée se tape : Entrée applique.
+        click_settled(&mut h, &t!("zoom-fit-value"));
+        h.run_steps(3);
+        assert!(h.state().scale_edit.is_some());
+        type_text(&mut h, "150");
+        press(&mut h, Key::Enter, Modifiers::NONE);
+        assert!(h.state().scale_edit.is_none());
+        assert_eq!(h.state().zoom_scale, 1.5);
+        assert!(h.state().zoom.is_some());
+        // Échap annule, sans revenir à la grille.
+        click_settled(&mut h, "150 %");
+        h.run_steps(3);
+        type_text(&mut h, "40");
+        press(&mut h, Key::Escape, Modifiers::NONE);
+        assert!(h.state().scale_edit.is_none());
+        assert_eq!(h.state().zoom_scale, 1.5);
+        assert_eq!(h.state().mode, Mode::View);
+        click_settled(&mut h, &t!("zoom-reset"));
+        h.run_steps(2);
+        // La touche de loupe tenue : la loupe, et le pointeur reste visible.
+        h.state_mut().mouse_active = true;
+        for repeat in [false, true] {
+            h.event(UiEvent::Key {
+                key: Key::M,
+                physical_key: None,
+                pressed: true,
+                repeat,
+                modifiers: Modifiers::NONE,
+            });
+            h.run_steps(2);
+        }
+        assert!(h.state().mouse_active, "pointeur gardé");
+        click_settled(&mut h, "+");
+        h.run_steps(2);
+        assert!(h.state().loupe_scale > 1.0, "{}", h.state().loupe_scale);
+        assert!(h.state().zoom.is_none(), "le zoom ne bouge pas");
+        click_settled(&mut h, &t!("loupe-reset"));
+        h.run_steps(2);
+        assert_eq!(h.state().loupe_scale, 1.0);
     }
 
     #[test]

@@ -840,7 +840,8 @@ impl SettingsWindow {
                 Ok(())
             }
         };
-        let checked = written.and_then(|()| tri::settings::parse::<AppSettings>(&self.file.text()));
+        let checked =
+            written.and_then(|()| tri::settings::parse_message::<AppSettings>(&self.file.text()));
         match checked {
             Ok(settings) => {
                 self.errors.remove(&id);
@@ -1639,7 +1640,10 @@ impl SettingsWindow {
                 }
                 Value::Int(i) => {
                     let mut v = *i;
-                    let r = ui.add(egui::DragValue::new(&mut v));
+                    // Appliquée à Entrée ou en quittant le champ, pas à chaque chiffre
+                    // tapé (07/11/2026 : « 800 » passait par « 8 », refusé sous 100 %, et
+                    // la valeur ne changeait jamais). Le glisser reste en direct.
+                    let r = ui.add(egui::DragValue::new(&mut v).update_while_editing(false));
                     if r.changed() {
                         new = Some(Value::Int(v));
                     }
@@ -1653,7 +1657,8 @@ impl SettingsWindow {
                     };
                     let drag = egui::DragValue::new(&mut v)
                         .speed(scale * 0.01)
-                        .max_decimals(6);
+                        .max_decimals(6)
+                        .update_while_editing(false);
                     let r = ui.add(drag);
                     if r.changed() {
                         new = Some(Value::Float(v));
@@ -2474,6 +2479,47 @@ mod tests {
     }
 
     #[test]
+    fn a_number_is_typed_whole_before_being_checked() {
+        // Retour du 07/11/2026 : `max` (zoom, 100 % au moins) ne se changeait pas au
+        // clavier : « 800 » passait par « 8 », refusé.
+        use egui_kittest::kittest::Queryable;
+        crate::i18n::ensure();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.show_section("gui.zoom");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 1400.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(2);
+        h.get_by_value("400").click();
+        h.run_steps(2);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        for c in ["8", "0", "0"] {
+            h.event(egui::Event::Text(c.into()));
+            h.run_steps(1);
+            assert!(
+                h.state().errors.is_empty(),
+                "pas vérifié en cours de frappe"
+            );
+        }
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().errors.is_empty(), "{:?}", h.state().errors);
+        assert!(
+            h.state().file.text().contains("max = 800"),
+            "{}",
+            h.state().file.text()
+        );
+    }
+
+    #[test]
     fn a_colour_that_follows_the_accent_is_a_box_then_a_picker() {
         // Retour du 05/11/2026 : « accent » s'écrivait dans un champ de texte.
         use egui_kittest::kittest::Queryable;
@@ -3005,6 +3051,27 @@ mod tests {
                 .contains_key(&("preview".into(), "thumbnail".into()))
         );
         assert_eq!(w.file.get("preview", "thumbnail"), None, "ancienne valeur");
+        // Le message seul, sans la ligne du fichier ni ses `^^^^` (retour du 07/11/2026).
+        assert!(
+            w.commit("gui.zoom", "max", Some(Value::Int(4000)))
+                .is_none()
+        );
+        let message = &w.errors[&("gui.zoom".into(), "max".into())];
+        assert!(message.contains("4000 %"), "{message}");
+        assert!(
+            !message.contains("line") && !message.contains('^'),
+            "{message}"
+        );
+        // Puis des valeurs correctes passent (retour du 07/11/2026 : le message restait).
+        for (key, value) in [
+            ("max", Value::Int(800)),
+            ("max", Value::Float(800.0)),
+            ("min", Value::Int(5)),
+            ("min", Value::Float(20.0)),
+        ] {
+            let r = w.commit("gui.zoom", key, Some(value.clone()));
+            assert!(r.is_some(), "{key} = {value:?} : {:?}", w.errors);
+        }
         let s = w
             .commit("preview", "thumbnail", Some(Value::Int(500)))
             .expect("valide");

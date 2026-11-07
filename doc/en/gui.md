@@ -442,7 +442,14 @@ system one ("cold" measurements, experiments).
   depending on the layout) next step up / down (`steps`), `*` 100 %, `/` fit (swapped on
   2026-10-18, like Lightroom), `z` and double-click toggle fit / 100 %; you can **zoom out
   below fit** down to `min` (10 %), the image smaller than the screen, centred; the 1:1
-  button is lit only at 100 %.
+  button is lit only at 100 %. In the configuration, `steps`, `max`, `min` and
+  `loupe_scale` are written in **percent** (2026-11-07: `max = 400`, easier to read than
+  `4.0`), sorted when read; safeguard: refused outside 1 to 999 %, `max` below 100 % and
+  `min` above (`ZOOM_PERCENT`, common-sense bounds, not settings; 999 %: typed entry takes three
+  digits). In the settings window, the error under the value is the message alone
+  (`tri::settings::parse_message`), without the file line. A typed number is only
+  checked on Enter or when leaving the field (`update_while_editing(false)`): "800"
+  went through "8", refused, and `max` could not be changed from the keyboard.
   Mouse and trackpad, **continuous**: pinch, or Ctrl / Cmd + wheel, zooms around the
   pointer; scrolling moves the zoomed image. Beyond fit, the 1:1 is what is displayed,
   reduced or enlarged; the scale is shown ("200 %"); it is kept from one image to the
@@ -1121,8 +1128,7 @@ keyboard one types slower, and the next digit changed the rating); 0 is ignored,
 another key applies what was typed then acts. For the session (`TriApp::loupe_scale`);
 `loupe_scale` stays the starting value. The wheel, with the loupe held, changes the magnification one step
 per notch (`loupe_wheel_step` points; `TriApp::loupe_wheel_input` removes the scrolling:
-the grid stays in place). The value shows in the bottom bar (`marks::loupe_icon`, −, the
-value, +; a click on the value: 100 %), when there is room.
+the grid stays in place). The value shows in the bottom bar (scale control, below).
 
 ### Zoom like the loupe (2026-11-07)
 
@@ -1130,9 +1136,22 @@ Decided with the user: what applies to the loupe applies to the full-screen zoom
 `<leader> z` (`core.view.zoom_scale`) opens the same entry as `<leader> m`
 (`entry_for_zoom`, `TriApp::set_zoom_scale`, centred like `+` / `-`). `Ctrl+K` / `Ctrl+J`
 set the loupe if its key is held, otherwise the zoom (one pair of keys, the held key
-chooses). In the bottom bar, the 1:1 button (fit ↔ 100 %) is followed by −, the value
-("Fit", its percentage in a tooltip, or the percentage; a click: `z`) and +
-(`TriApp::zoom_controls`).
+chooses).
+
+**One scale control in the bottom bar** (feedback of 2026-11-07: two controls side by
+side, zoom and loupe, were unclear; `TriApp::scale_control`): an icon, −, the value, +,
+left of the 1:1 button. It sets the **zoom** (round magnifier, `marks::loupe_icon`), or
+the **loupe** while its key is held (square magnifier, `marks::square_loupe_icon`; a
+linen tester, tried, could not be read at that size). In the grid, without zoom, it
+always sets the loupe, and only when there is room. A click on the **icon** resets (zoom
+fitted to the view, loupe to `loupe_scale`); a click on the **value** lets one type it as
+a percentage (`ScaleEdit`: Enter applies, Esc or a click elsewhere cancels; the target is
+fixed at the click, the loupe key can be released; the field takes the whole keyboard).
+Holding the loupe key no longer hides the pointer (its repeat hid it, even over the bar);
+a hand over the icon, − and +. The loupe only shows over the visible part of an image
+(`painter.clip_rect()`): a thumbnail cut by the bottom bar went on beneath it, and the
+loupe stayed while clicking − and +. The image info switch (`Ctrl+I`) is at the far
+right of the bar.
 
 ### Shortcut review (2026-11-06, issue #280)
 
@@ -1381,6 +1400,13 @@ during a window's opening fade showed it half transparent.
   frame of the interface slower than `[gui] trace_slow_ms` (100 ms) is traced with the
   duration of its steps ("image lente : 850 ms (événements 2, chargements 3, centre
   840)"): a way to find a disk access left in the interface thread.
+  Since 2026-11-07, also the keys and text received from the window ("touche reçue :
+  Key { key: Num1, … }", "Text("1")") and the shortcuts `tri` reads from them
+  ("raccourcis lus"): a way to see what a particular keyboard or system sends.
+  It showed that on Linux, egui-winit also sends Shift and Ctrl as keys (`ShiftRight`…):
+  Shift, typed before a top-row digit of an AZERTY keyboard, closed the `<leader> m`
+  entry and the digit changed the rating. A lone modifier is no longer a shortcut
+  (`Chord::from_event`).
 
 **Closing**: background work (engine, image loading, folder and volume watches) stops
 without being waited for (`detach`); a thumbnail in progress on a NAS no longer holds the
