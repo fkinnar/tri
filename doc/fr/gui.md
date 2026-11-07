@@ -257,9 +257,7 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition ;
   bouton de la barre du bas depuis le 07/11/2026, allumé en comparaison où il la quitte,
   et le retour à la grille aussi en comparaison ; **sans sélection ni pile, toutes les
-  images montrées**, au plus `[gui.compare] max` autour de l'image courante ; au-delà de
-  `max`, une bulle « Comparaison limitée à N images », réglable comme le repère de
-  position : `limit_seconds`, `limit_place`, `TriApp::compare_limit_mark`) :
+  images montrées**, au plus `[gui.compare] max` autour de l'image courante) :
   les images sélectionnées, ou sans sélection celles de la pile courante (25/10/2026,
   issue n° 52 : `c` sur une pile repliée ; Échap revient sur sa couverture ; **31/10/2026 :
   la pile de rafale si elle est repliée, sinon la photo et ses développements** (JPEG
@@ -285,6 +283,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   image, déplacé ensemble (glisser n'importe laquelle, Maj + flèches) ; `b` change la
   source de toutes ; `w` superpose les zones. Le moteur sert toutes les images comparées
   (`Scheduler::set_shown`), pas seulement l'image courante et ses voisines.
+- **« Comparaison limitée à N images »** (07/11/2026, idée de l'utilisateur) : au-delà de
+  `[gui.compare] max`, une bulle le dit, réglable comme le repère de position
+  (`limit_seconds`, `limit_place` ; `TriApp::compare_limit_mark`) ; durée 0 : la barre
+  d'état le dit.
 - **Sélection multiple** (17/10/2026, moteur : `tri::selection`, voir `selection.md`) :
   `Espace` marque, `v` mode visuel (plage qui suit le curseur, `v` valide, Échap annule),
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap
