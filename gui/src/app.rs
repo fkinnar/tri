@@ -19632,7 +19632,18 @@ mod tests {
         // Le pas se mesure dans la loupe (retour du 06/11/2026 : sur une vignette, il
         // sautait des centaines de pixels).
         // La taille de l'image dans la loupe au moment de l'appui : le 1:1 peut finir de
-        // charger juste après et la changer (vu sur la CI Windows le 07/11/2026).
+        // charger juste après et la changer (vu sur la CI Windows le 07/11/2026). Son 1:1
+        // d'abord (sur la CI Ubuntu, la mesure tombait encore pendant ce chargement).
+        run_until(&mut h, |app| {
+            let file = &app.files[selected];
+            let level = view::zoom_level(
+                file.kind,
+                app.source_for(file),
+                app.developed_level(&file.path),
+            );
+            app.loaded(selected, level)
+        });
+        h.run_steps(3);
         let before = h.state().loupe_point.unwrap().1;
         let whole = h.state().loupe_sizes[&selected];
         press(&mut h, Key::ArrowRight, Modifiers::NONE);
