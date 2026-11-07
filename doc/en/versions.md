@@ -102,8 +102,8 @@ The interface only draws; all the computation is here.
 - **Each part from the keyboard** (2026-11-07): `v` / `Shift+V` next / previous version
   preset (like `Tab` / `Shift+Tab`), `r` / `Shift+R` next / previous ratio
   (added ones included, `Crop::step_ratio`), `:` a ratio of one's own (the list opens on
-  its field), `e` / `Shift+E` next / previous export preset ("none" included), `o` /
-  `Shift+O` the orientation (both turn it; `x` too), `n` (or `F2`) the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also Ctrl+click on
+  its field), `e` / `Shift+E` next / previous export preset ("none" included), `x`
+  the orientation, `o` / `Shift+O` the overlays (fitted to the frame), `n` (or `F2`) the name, `Ctrl+S` the floppy, `0` the original frame (the whole image; also Ctrl+click on
   "Original", `Crop::reset_frame`); with `1`–`7`, `x`, `Tab` / `Shift+Tab`, Enter, Esc.
 - **Unique names** per image (issue #14, 2026-10-22): the proposed name (ratio or preset)
   is already numbered if taken ("Story (2)", `Versions::new_name`); a typed name that
@@ -116,7 +116,7 @@ The interface only draws; all the computation is here.
   - arrows (classic) or `hjkl` (vim) to move;
   - with Shift: right side (left / right) and bottom (up / down);
   - digits 1 to 7 (with or without Shift, AZERTY) for the ratio;
-  - `o` / `Shift+O` (or `x`) for the orientation;
+  - `x` for the orientation, `o` / `Shift+O` for the overlays;
   - Enter to save, Esc to abandon.
 
   The keyboard step: `[gui.crop] step`. Everything is configurable in `[keys]`.

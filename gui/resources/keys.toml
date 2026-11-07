@@ -294,8 +294,8 @@ loupe = "m"
 "core.histogram.camera" = ["j"]
 
 # --- Crop (while cropping) ---
-# Digits for the ratio (with or without Shift, for AZERTY), o / Shift+O for the
-# orientation (both turn it; also "x", like Lightroom), Enter to save.
+# Digits for the ratio (with or without Shift, for AZERTY), "x" for the orientation
+# (like Lightroom), Enter to save; o / Shift+O keep the overlays (guides on the frame).
 "core.version.ratio.free" = ["1", "Shift+1"]
 "core.version.ratio.original" = ["2", "Shift+2"]
 "core.version.ratio.square" = ["3", "Shift+3"]
@@ -303,7 +303,7 @@ loupe = "m"
 "core.version.ratio.3_2" = ["5", "Shift+5"]
 "core.version.ratio.16_9" = ["6", "Shift+6"]
 "core.version.ratio.4_3" = ["7", "Shift+7"]
-"core.version.rotate" = ["o", "Shift+o", "x"]
+"core.version.rotate" = ["x"]
 "core.version.save" = ["Enter"]
 # Each part of the version bar from the keyboard (2026-11-07): v / Shift+V (or Tab /
 # Shift+Tab) the next / previous version preset; r / Shift+R the next / previous ratio

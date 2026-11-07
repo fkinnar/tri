@@ -29,8 +29,8 @@
   marchent encore dans `[keys]`. La barre des versions est rangée en parties titrées
   (Version, Recadrage avec les rapports dans une liste, Export, Nom) ; un rapport à soi
   peut s'y taper (`17:23`, `1.91:1`) et s'ajouter à la liste avec « + » (gardé dans
-  `[versions] ratios`). Chaque partie a ses touches (`v` préréglage de version, `r` rapport, `o`
-  orientation, `:` personnalisé, `e` export, `n` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au cadre
+  `[versions] ratios`). Chaque partie a ses touches (`v` préréglage de version, `r` rapport, `x`
+  orientation, `o` superpositions sur le cadre, `:` personnalisé, `e` export, `n` nom, `Ctrl+S` préréglage, `0` ou Ctrl+clic sur « Original » : retour au cadre
   d'origine) ; l'orientation est une icône (le rectangle du cadre, debout ou couché). La
   barre des filtres, et les filtres, la vue et l'histogramme du panneau de droite,
   disparaissent pendant l'édition.

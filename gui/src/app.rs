@@ -6065,8 +6065,12 @@ impl TriApp {
                     | Action::VersionName
                     | Action::VersionSavePreset
                     | Action::VersionReset
-                    // La carte de netteté s'éteint aussi pendant le recadrage.
-                    | Action::TogglePeaking => self.perform(ctx, action),
+                    // La carte de netteté s'éteint aussi pendant le recadrage ; les
+                    // superpositions s'y calent sur le cadre (o / Maj+O, retour du
+                    // 07/11/2026 : elles ne s'allumaient pas).
+                    | Action::TogglePeaking
+                    | Action::OverlayNext
+                    | Action::OverlayOrient => self.perform(ctx, action),
                     _ if action.works_over_overlay() => self.perform(ctx, action),
                     _ => {}
                 }
@@ -26097,7 +26101,7 @@ mod tests {
     #[test]
     fn every_part_of_the_version_bar_has_its_keys() {
         // Demandé le 07/11/2026 : chaque partie de la barre au clavier. v / Maj+V le
-        // préréglage de version, r / Maj+R le rapport, o / Maj+O l'orientation, : un
+        // préréglage de version, r / Maj+R le rapport, x l'orientation, o les guides, : un
         // rapport à soi, e / Maj+E l'export, n (ou F2) le nom, Ctrl+S la disquette.
         use tri::versions::Ratio;
         let (mut h, _dir) = harness();
@@ -26140,11 +26144,19 @@ mod tests {
             h.state().crop.as_ref().unwrap().rect,
             tri::versions::Rect::FULL
         );
-        // o / Maj+O : l'orientation (les deux la tournent).
+        // x : l'orientation ; o : les superpositions, qui se calent sur le cadre.
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: true }, "x : tournée");
+        press(&mut h, Key::X, Modifiers::NONE);
+        assert_eq!(ratio(&h), Ratio::Original { flipped: false });
+        let overlay = h.state().overlay;
         press(&mut h, Key::O, Modifiers::NONE);
-        assert_eq!(ratio(&h), Ratio::Original { flipped: true }, "o : tournée");
-        press(&mut h, Key::O, Modifiers::SHIFT);
-        assert_eq!(ratio(&h), Ratio::Original { flipped: false }, "Maj+O aussi");
+        assert_ne!(h.state().overlay, overlay, "o : une superposition");
+        assert_eq!(
+            ratio(&h),
+            Ratio::Original { flipped: false },
+            "o ne tourne pas"
+        );
         // n : le nom (F2 aussi) ; Ctrl+S : un préréglage (dans la configuration du test).
         press(&mut h, Key::N, Modifiers::NONE);
         h.run_steps(2);

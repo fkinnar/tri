@@ -103,8 +103,8 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
 - **Chaque partie au clavier** (07/11/2026) : `v` / `Maj+V` préréglage de version
   suivant / précédent (comme `Tab` / `Maj+Tab`), `r` / `Maj+R` rapport suivant / précédent
   (ajoutés compris, `Crop::step_ratio`), `:` un rapport à soi (la liste s'ouvre sur son
-  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `o` /
-  `Maj+O` l'orientation (les deux la tournent ; `x` aussi), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
+  champ), `e` / `Maj+E` préréglage d'export suivant / précédent (« aucun » compris), `x`
+  l'orientation, `o` / `Maj+O` les superpositions (calées sur le cadre), `n` (ou `F2`) le nom, `Ctrl+S` la disquette, `0` le cadre d'origine (l'image entière ; aussi
   Ctrl+clic sur « Original », `Crop::reset_frame`) ; avec `1`–`7`, `x`, `Tab` / `Maj+Tab`, Entrée, Échap.
 - **Noms uniques** par image (issue n° 14, 22/10/2026) : le nom proposé (rapport ou
   préréglage) est déjà numéroté s'il est pris (« Story (2) », `Versions::new_name`) ; un
@@ -119,7 +119,7 @@ L'interface ne fait que dessiner ; tout le calcul est ici.
   - flèches (classique) ou `hjkl` (vim) pour déplacer ;
   - avec Maj : côté droit (gauche / droite) et bas (haut / bas) ;
   - chiffres 1 à 7 (avec ou sans Maj, AZERTY) pour le rapport ;
-  - `o` / `Maj+O` (ou `x`) pour l'orientation ;
+  - `x` pour l'orientation, `o` / `Maj+O` pour les superpositions ;
   - Entrée pour enregistrer, Échap pour abandonner.
 
   Le pas du clavier : `[gui.crop] step`. Tout est réglable dans `[keys]`.
