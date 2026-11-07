@@ -19779,8 +19779,10 @@ mod tests {
         assert_eq!(h.state().loupe_scale, 1.0);
         let file = h.state().files[h.state().selected].path.clone();
         assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
-        // En plein écran : le zoom.
+        // En plein écran : le zoom. L'image en grand d'abord (CI lente, 07/11/2026 : sur la
+        // vignette, l'ajusté dépassait le zoom maximal, et + ne faisait rien).
         act(&mut h, Action::Open);
+        run_until(&mut h, |app| app.fit_scale < 1.0);
         click_settled(&mut h, "+");
         h.run_steps(2);
         assert!(h.state().zoom.is_some(), "zoomé");
