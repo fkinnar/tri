@@ -33,6 +33,9 @@
 //!   tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
 //!       inscrit les notes dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; les RAW
 //!       sont passés), voir `tri::embedded` ;
+//!   tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
+//!       recopie dans les sidecars les notes inscrites dans les images (changées dans un
+//!       autre logiciel), voir `tri::embedded` ;
 //!   tri --rename <image> <nom> [--dry-run]
 //!       renomme l'image (extension gardée), sa paire RAW+JPEG et ses sidecars ;
 //!   tri --delete <image>... [--permanent] [--dry-run]
@@ -120,6 +123,8 @@ struct Args {
     convert: Option<Convention>,
     /// `--embed-notes`.
     embed_notes: bool,
+    /// `--import-notes`.
+    import_notes: bool,
     /// `--sidecars <format|all>` : créer les sidecars manquants des photos notées.
     sidecars: Option<Vec<&'static dyn tri::sidecars::Format>>,
     /// `--rewrite` : réécrire aussi les notes des sidecars existants.
@@ -193,6 +198,7 @@ fn parse() -> AnyResult<Args> {
             }
             "--dry-run" => args.dry_run = true,
             "--embed-notes" => args.embed_notes = true,
+            "--import-notes" => args.import_notes = true,
             "--rewrite" => args.rewrite = true,
             "--sidecars" => {
                 let wanted = value()?;
@@ -920,20 +926,27 @@ fn convert_xmp(
     }
 }
 
-/// `--embed-notes` : inscrit les notes dans les images elles-mêmes (voir
-/// `tri::embedded`) ; les RAW et autres formats sans notes sont passés.
+/// `--embed-notes` : inscrit les notes dans les images elles-mêmes ; `--import-notes`
+/// (`import`) : les recopie des images dans les sidecars (voir `tri::embedded`). Les RAW
+/// et autres formats sans notes sont passés.
 fn embed_notes(
     settings: &EngineSettings,
     files: &[tri::media::MediaFile],
     dry_run: bool,
+    import: bool,
 ) -> AnyResult<()> {
-    let book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
+    let mut book = tri::notes::NoteBook::load_files(files, settings.xmp.sidecar);
     let images: Vec<PathBuf> = files
         .iter()
         .map(|f| f.path.clone())
         .filter(|p| tri::embedded::supports(p))
         .collect();
-    let report = book.embed(&images, dry_run);
+    let report = if import {
+        book.import(&images, dry_run)
+    } else {
+        book.embed(&images, dry_run)
+    };
+    let prefix = if import { "cli-import" } else { "cli-embed" };
     let mode = if dry_run { "dry-run" } else { "write" };
     let mut errors = 0;
     let mut written = 0;
@@ -943,7 +956,7 @@ fn embed_notes(
                 written += 1;
                 println!(
                     "{}\t{}",
-                    t!("cli-embed-written", mode = mode),
+                    t!(&format!("{prefix}-written"), mode = mode),
                     image.display()
                 );
             }
@@ -957,7 +970,7 @@ fn embed_notes(
     println!(
         "{}",
         t!(
-            "cli-embed-summary",
+            &format!("{prefix}-summary"),
             n = images.len(),
             written = written,
             mode = mode,
@@ -969,7 +982,7 @@ fn embed_notes(
     if errors == 0 {
         Ok(())
     } else {
-        Err(t!("cli-embed-some-failed").into())
+        Err(t!(&format!("{prefix}-some-failed")).into())
     }
 }
 
@@ -1409,7 +1422,11 @@ fn run() -> AnyResult<()> {
     }
     if args.embed_notes {
         let files: Vec<_> = groups.into_iter().flatten().collect();
-        return embed_notes(&settings, &files, args.dry_run);
+        return embed_notes(&settings, &files, args.dry_run, false);
+    }
+    if args.import_notes {
+        let files: Vec<_> = groups.into_iter().flatten().collect();
+        return embed_notes(&settings, &files, args.dry_run, true);
     }
     if let Some(formats) = &args.sidecars {
         let files: Vec<_> = groups.into_iter().flatten().collect();

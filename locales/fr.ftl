@@ -179,6 +179,7 @@ cli-usage =
       tri <dossier> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
+      tri <dossier> --import-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <dossier> --exposure [--raw|--flat] [--depth N]
       tri <dossier> --metadata [--raw|--flat] [--depth N]
       tri <dossier> --groups [--threshold X]
@@ -258,6 +259,15 @@ cli-embed-summary = { $n } images : notes { $mode ->
    *[write] inscrites dans { $written }
 }, { $unchanged } inchangées, { $skipped } passées (RAW et autres formats), { $errors } erreurs
 cli-embed-some-failed = certaines images n'ont pas pu recevoir leurs notes
+cli-import-written = { $mode ->
+    [dry-run] à relire
+   *[write] relues
+}
+cli-import-summary = { $n } images : notes { $mode ->
+    [dry-run] à relire depuis { $written }
+   *[write] relues depuis { $written }
+}, { $unchanged } inchangées (sans notes inscrites, ou les mêmes), { $skipped } passées (RAW et autres formats), { $errors } erreurs
+cli-import-some-failed = les notes de certaines images n'ont pas pu être relues
 cli-rename-shared-copy = (copie : partagé)
 cli-delete-trash = corbeille :
 cli-delete-permanent = supprimé :

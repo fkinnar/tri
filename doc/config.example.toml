@@ -75,12 +75,6 @@ sidecar = "darktable"
 # Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
 # remplace la précédente (comme Lightroom).
 multiple_colors = false
-# Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais un
-# RAW), pour les retrouver dans l'Explorateur Windows, Spotlight, Lightroom… à chaque
-# note : "never" (sur demande seulement : action « Inscrire les notes dans les images »,
-# tri --embed-notes), "internal" (disques internes et fixés, pas une carte ni un partage
-# réseau), "everywhere". Les notes vont toujours aussi dans le sidecar.
-embed = "never"
 
 # Sidecars des logiciels de développement (31/10/2026) : une sous-section par logiciel qui
 # a le sien. Un sidecar existant reçoit toujours les notes ; un sidecar manquant est créé

@@ -173,6 +173,7 @@ pub fn navigate(
         | Action::DevFoldAll
         | Action::Sidecars
         | Action::EmbedNotes
+        | Action::ImportNotes
         | Action::ZoomIn
         | Action::ZoomOut
         | Action::ZoomFit

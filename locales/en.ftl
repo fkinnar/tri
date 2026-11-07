@@ -178,6 +178,7 @@ cli-usage =
       tri <folder> --convert-xmp darktable|adobe [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --sidecars rapidraw|xmp|all [--rewrite] [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --embed-notes [--dry-run] [--raw|--flat] [--depth N]
+      tri <folder> --import-notes [--dry-run] [--raw|--flat] [--depth N]
       tri <folder> --exposure [--raw|--flat] [--depth N]
       tri <folder> --metadata [--raw|--flat] [--depth N]
       tri <folder> --groups [--threshold X]
@@ -257,6 +258,15 @@ cli-embed-summary = { $n } images: ratings { $mode ->
    *[write] written into { $written }
 }, { $unchanged } unchanged, { $skipped } skipped (RAW and other formats), { $errors } errors
 cli-embed-some-failed = some images could not receive their ratings
+cli-import-written = { $mode ->
+    [dry-run] to read
+   *[write] read
+}
+cli-import-summary = { $n } images: ratings { $mode ->
+    [dry-run] to read from { $written }
+   *[write] read from { $written }
+}, { $unchanged } unchanged (nothing written inside, or the same), { $skipped } skipped (RAW and other formats), { $errors } errors
+cli-import-some-failed = the ratings of some images could not be read
 cli-rename-shared-copy = (copy: shared)
 cli-delete-trash = trash:
 cli-delete-permanent = deleted:

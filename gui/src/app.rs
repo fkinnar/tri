@@ -3131,6 +3131,7 @@ impl TriApp {
                         if row.path == self.folder.dir {
                             entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
                             entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
+                            entry(ui, Action::ImportNotes, t!("folder-menu-import-notes"));
                         }
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
@@ -3291,6 +3292,11 @@ impl TriApp {
                     let images: Vec<PathBuf> =
                         self.folder.files.iter().map(|f| f.path.clone()).collect();
                     self.embed_notes(images);
+                }
+                Action::ImportNotes => {
+                    let images: Vec<PathBuf> =
+                        self.folder.files.iter().map(|f| f.path.clone()).collect();
+                    self.import_notes(&images);
                 }
                 Action::FolderOpen => self.start_mount(&ctx, path),
                 Action::FolderOffload | Action::FolderEject => {
@@ -5086,15 +5092,6 @@ impl TriApp {
             .sidecars
             .creates(&installed, |f| notes.has_format(f));
         self.folder.notes.set_creates(creates);
-        // Notes aussi dans les images (`[xmp] embed`, issue n° 276) : les racines
-        // amovibles et réseau, seulement si le niveau « internes » en a besoin.
-        let embed = self.settings.xmp.embed;
-        let outside = if embed == tri::embedded::Auto::Internal {
-            tri::places::outside_roots(&self.settings.places)
-        } else {
-            Vec::new()
-        };
-        self.folder.notes.set_embed(embed, outside);
     }
 
     /// Filtres ou tri changés depuis la dernière fois : retenus pour le dossier ouvert.
@@ -6937,6 +6934,7 @@ impl TriApp {
             | Action::FileExport
             | Action::Sidecars
             | Action::EmbedNotes
+            | Action::ImportNotes
             | Action::Send(_) => {
                 // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
@@ -6947,6 +6945,7 @@ impl TriApp {
                     | Action::FileExport
                     | Action::Sidecars
                     | Action::EmbedNotes
+                    | Action::ImportNotes
                     | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
@@ -12006,6 +12005,10 @@ impl TriApp {
                 self.embed_notes(paths.clone());
                 Ok(())
             }
+            Action::ImportNotes => {
+                self.import_notes(&paths);
+                Ok(())
+            }
             Action::Send(_) => {
                 let Some(sender) = action.sender() else {
                     return;
@@ -12520,6 +12523,7 @@ impl TriApp {
                         Action::FileEdit,
                         Action::Sidecars,
                         Action::EmbedNotes,
+                        Action::ImportNotes,
                         Action::Send("plugin.airdrop.send"),
                     ]
                     .into_iter()
@@ -14369,6 +14373,41 @@ impl TriApp {
             })
             .ok();
         self.embed_job = Some(rx);
+    }
+
+    /// Relit les notes inscrites dans `images` et les recopie dans leurs sidecars (notes
+    /// changées dans un autre logiciel), en un pas d'historique : annulable comme une note.
+    fn import_notes(&mut self, images: &[PathBuf]) {
+        let images: Vec<PathBuf> = images
+            .iter()
+            .filter(|p| tri::embedded::supports(p))
+            .cloned()
+            .collect();
+        let before = tri::history::snapshot(&self.folder.notes, &images);
+        let report = self.folder.notes.import(&images, false);
+        if let Some(step) = tri::history::notes_step(&self.folder.notes, before) {
+            self.history.push(step);
+        }
+        let changed = report.iter().filter(|(_, r)| *r == Ok(true)).count();
+        let errors: Vec<String> = report
+            .iter()
+            .filter_map(|(p, r)| {
+                r.as_ref()
+                    .err()
+                    .map(|e| format!("{} : {e}", folder_name(p)))
+            })
+            .collect();
+        self.notice = Some(match errors.first() {
+            Some(first) => (
+                t!("import-failed", n = errors.len(), first = first.clone()),
+                true,
+            ),
+            None if changed == 0 => (t!("import-none"), false),
+            None => (t!("import-done", n = changed), false),
+        });
+        if changed > 0 {
+            self.notes_changed();
+        }
     }
 
     /// Bilan de l'inscription des notes en fond, une fois finie.
@@ -26338,8 +26377,9 @@ mod tests {
     }
 
     #[test]
-    fn ratings_are_written_into_the_images_on_demand() {
-        // Issue n° 276 : sur demande, les notes vont dans les images elles-mêmes.
+    fn ratings_are_written_into_the_images_and_read_back_on_demand() {
+        // Issue n° 276 : sur demande, les notes vont dans les images elles-mêmes, et en
+        // reviennent.
         let (mut h, _dir) = harness();
         h.run_steps(3);
         let image = h.state().files[0].path.clone();
@@ -26360,6 +26400,17 @@ mod tests {
             Some(false),
             "pas d'erreur"
         );
+        // Changées dans un autre logiciel (XnView…) : relues sur demande, annulables.
+        let mut two = tri::xmp::Notes::default();
+        two.set_stars(2);
+        tri::embedded::write(&image, &two).unwrap();
+        act(&mut h, Action::ImportNotes);
+        h.run_steps(2);
+        assert_eq!(h.state().folder.notes.notes(&image).stars, 2, "relues");
+        assert_eq!(tri::xmp::read(&image).unwrap().stars, 2, "dans le sidecar");
+        act(&mut h, Action::Undo);
+        h.run_steps(2);
+        assert_eq!(h.state().folder.notes.notes(&image).stars, 4, "annulé");
     }
 
     #[test]

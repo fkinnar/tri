@@ -49,16 +49,22 @@ WebP chunks, the TIFF's IFD0): fast on a whole folder. The XMP first; otherwise 
 
 In [notes.md](notes.md), an image **without a sidecar** takes the ratings written in it
 (stars set in Windows Explorer…). Rating it creates its sidecar, with those ratings.
+After that the sidecar wins: a rating changed later in the image is read with "Read the
+ratings back from the images".
 
 ## When
 
-- **On demand** (default): action "Write the ratings into the images"
-  (`core.file.embed_notes`, on the selection, or the folder menu for the whole folder; in
-  the background), `tri <folder> --embed-notes [--dry-run]`, `NoteBook::embed`.
-- **On each rating**, according to `[xmp] embed` (`embedded::Auto`): `"never"`
-  (default), `"internal"` (internal and fixed disks; not a removable disk or a network
-  share, `places::outside_roots`), `"everywhere"`. The ratings always go to the sidecar
-  too. Undo follows (`NoteBook::write_only`).
+On demand only (decided on 2026-11-07: automatic writing will come after some thought),
+two symmetric actions, on the selection or, from the folder menu, the whole folder:
+
+- **"Write the ratings into the images"** (`core.file.embed_notes`, in the background):
+  `tri`'s ratings go into the images. `tri <folder> --embed-notes [--dry-run]`,
+  `NoteBook::embed`.
+- **"Read the ratings back from the images"** (`core.file.import_notes`): the ratings
+  written in the images (changed in another program: XnView MP, Windows Explorer…)
+  replace those of the sidecars, like a rating set in `tri` (the RAW+JPEG pair follows;
+  one history step, undoable). An image with nothing written inside is not touched.
+  `tri <folder> --import-notes [--dry-run]`, `NoteBook::import`.
 
 ## With other programs
 
@@ -66,7 +72,8 @@ In [notes.md](notes.md), an image **without a sidecar** takes the ratings writte
   catalogue, read from the files the first time a folder is opened; after that, ratings
   written by `tri` only show after "Update catalog from files". The other way round, a
   rating changed in XnView only goes into the image with "Metadata › Update file from
-  catalog"; `tri` then sees it at once (folder watching), if the image has no sidecar.
+  catalog"; `tri` then sees it at once (folder watching) if the image has no sidecar,
+  otherwise with "Read the ratings back from the images".
 
 ## To check
 

@@ -50,17 +50,22 @@ d'abord ; à défaut, la note EXIF `Rating`.
 
 Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites en elle
 (étoiles posées dans l'Explorateur Windows…). Noter crée son sidecar, avec ces notes.
+Ensuite le sidecar l'emporte : une note changée plus tard dans l'image se relit avec
+« Relire les notes depuis les images ».
 
 ## Quand
 
-- **Sur demande** (défaut) : action « Inscrire les notes dans les images »
-  (`core.file.embed_notes`, sur la sélection, ou le menu du dossier pour tout le
-  dossier ; en fond), `tri <dossier> --embed-notes [--dry-run]`,
+Sur demande seulement (décidé le 07/11/2026 : l'automatique viendra après réflexion),
+deux actions symétriques, sur la sélection ou, par le menu du dossier, tout le dossier :
+
+- **« Inscrire les notes dans les images »** (`core.file.embed_notes`, en fond) : les
+  notes de `tri` vont dans les images. `tri <dossier> --embed-notes [--dry-run]`,
   `NoteBook::embed`.
-- **À chaque note**, selon `[xmp] embed` (`embedded::Auto`) : `"never"` (défaut),
-  `"internal"` (disques internes et fixés ; pas un disque amovible ni un partage réseau,
-  `places::outside_roots`), `"everywhere"`. Les notes vont toujours aussi dans le sidecar.
-  L'annulation suit (`NoteBook::write_only`).
+- **« Relire les notes depuis les images »** (`core.file.import_notes`) : les notes
+  inscrites dans les images (changées dans un autre logiciel : XnView MP, l'Explorateur
+  Windows…) remplacent celles des sidecars, comme une note posée dans `tri` (la paire
+  RAW+JPEG suit ; un pas d'historique, annulable). Une image sans notes inscrites n'est
+  pas touchée. `tri <dossier> --import-notes [--dry-run]`, `NoteBook::import`.
 
 ## Avec les autres logiciels
 
@@ -69,7 +74,8 @@ Dans [notes.md](notes.md), une image **sans sidecar** prend les notes inscrites 
   les notes inscrites par `tri` n'apparaissent qu'après « Mise à jour du catalogue à
   partir des fichiers ». Dans l'autre sens, une note changée dans XnView ne va dans
   l'image qu'avec « Métadonnées › Mettre à jour le fichier à partir du catalogue » ;
-  `tri` la voit alors aussitôt (surveillance du dossier), si l'image n'a pas de sidecar.
+  `tri` la voit alors aussitôt (surveillance du dossier) si l'image n'a pas de sidecar,
+  sinon avec « Relire les notes depuis les images ».
 
 ## À vérifier
 

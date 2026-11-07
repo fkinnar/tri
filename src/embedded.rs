@@ -62,21 +62,6 @@ pub fn supports(path: &Path) -> bool {
     Container::of(path).is_some()
 }
 
-/// Quand inscrire les notes dans les images sans qu'on le demande (`[xmp] embed`). Elles
-/// vont toujours dans le sidecar ; sur demande, n'importe quand (`tri --embed-notes`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Auto {
-    /// Jamais : sur demande seulement (défaut).
-    #[default]
-    Never,
-    /// Sur les disques internes et les disques fixés (`[places] fixed`), pas sur un disque
-    /// amovible (carte SD) ni un partage réseau.
-    Internal,
-    /// Partout, cartes et partages compris.
-    Everywhere,
-}
-
 /// Ce que l'en-tête d'une image dit des notes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Found {
