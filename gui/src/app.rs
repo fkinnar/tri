@@ -533,6 +533,9 @@ pub struct TriApp {
     export_notice: Option<String>,
     /// Échec de la dernière action sur un fichier (barre d'état).
     file_error: Option<String>,
+    /// Notes en cours d'inscription dans les images ([`TriApp::embed_notes`]) : le bilan
+    /// (images changées, erreurs) arrive par ce canal.
+    embed_job: Option<std::sync::mpsc::Receiver<EmbedReport>>,
     files: Vec<MediaFile>,
     status: Vec<Status>,
     progress: [Progress; 6],
@@ -1218,6 +1221,7 @@ impl TriApp {
             export_report_since: 0,
             export_notice: None,
             file_error: None,
+            embed_job: None,
             selection: Default::default(),
             scores: HashMap::new(),
             judgements: HashMap::new(),
@@ -3126,6 +3130,7 @@ impl TriApp {
                         // les notes sont connues.
                         if row.path == self.folder.dir {
                             entry(ui, Action::Sidecars, t!("folder-menu-sidecars"));
+                            entry(ui, Action::EmbedNotes, t!("folder-menu-embed-notes"));
                         }
                         // Ouvrir le dossier dans un logiciel installé qui le sait
                         // (darktable ; demandé le 28/10/2026).
@@ -3281,6 +3286,11 @@ impl TriApp {
                     let at = ctx.content_rect().center() - vec2(160.0, 80.0);
                     let title = t!("sidecars-title-folder", folder = folder_name(&path));
                     self.open_sidecars_dialog(images, title, at);
+                }
+                Action::EmbedNotes => {
+                    let images: Vec<PathBuf> =
+                        self.folder.files.iter().map(|f| f.path.clone()).collect();
+                    self.embed_notes(images);
                 }
                 Action::FolderOpen => self.start_mount(&ctx, path),
                 Action::FolderOffload | Action::FolderEject => {
@@ -5076,6 +5086,15 @@ impl TriApp {
             .sidecars
             .creates(&installed, |f| notes.has_format(f));
         self.folder.notes.set_creates(creates);
+        // Notes aussi dans les images (`[xmp] embed`, issue n° 276) : les racines
+        // amovibles et réseau, seulement si le niveau « internes » en a besoin.
+        let embed = self.settings.xmp.embed;
+        let outside = if embed == tri::embedded::Auto::Internal {
+            tri::places::outside_roots(&self.settings.places)
+        } else {
+            Vec::new()
+        };
+        self.folder.notes.set_embed(embed, outside);
     }
 
     /// Filtres ou tri changés depuis la dernière fois : retenus pour le dossier ouvert.
@@ -6917,6 +6936,7 @@ impl TriApp {
             | Action::FileMove
             | Action::FileExport
             | Action::Sidecars
+            | Action::EmbedNotes
             | Action::Send(_) => {
                 // Renommer, afficher : l'image courante ; les autres : la sélection.
                 let paths = match action {
@@ -6926,6 +6946,7 @@ impl TriApp {
                     | Action::FileMove
                     | Action::FileExport
                     | Action::Sidecars
+                    | Action::EmbedNotes
                     | Action::Send(_) => self.selection.targets(&self.files, self.selected),
                     _ => self
                         .files
@@ -11981,6 +12002,10 @@ impl TriApp {
                 self.open_sidecars_dialog(paths.clone(), title, at);
                 Ok(())
             }
+            Action::EmbedNotes => {
+                self.embed_notes(paths.clone());
+                Ok(())
+            }
             Action::Send(_) => {
                 let Some(sender) = action.sender() else {
                     return;
@@ -12494,6 +12519,7 @@ impl TriApp {
                         Action::FileReveal,
                         Action::FileEdit,
                         Action::Sidecars,
+                        Action::EmbedNotes,
                         Action::Send("plugin.airdrop.send"),
                     ]
                     .into_iter()
@@ -14302,6 +14328,68 @@ impl TriApp {
         true
     }
 
+    /// Inscrit les notes de `images` dans les images elles-mêmes (issue n° 276), en fond :
+    /// une image se lit et s'écrit en entier. Les RAW et autres formats sans notes sont
+    /// passés, comme les images sans note ni notes déjà inscrites.
+    fn embed_notes(&mut self, images: Vec<PathBuf>) {
+        if self.embed_job.is_some() {
+            self.notice = Some((t!("embed-busy"), false));
+            return;
+        }
+        let jobs: Vec<(PathBuf, tri::xmp::Notes)> = images
+            .into_iter()
+            .filter(|p| tri::embedded::supports(p) && self.folder.notes.error(p).is_none())
+            .map(|p| {
+                let notes = self.folder.notes.notes(&p).clone();
+                (p, notes)
+            })
+            .collect();
+        if jobs.is_empty() {
+            self.notice = Some((t!("embed-none"), false));
+            return;
+        }
+        self.notice = Some((t!("embed-running", n = jobs.len()), false));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let repaint = self.repaint.clone();
+        std::thread::Builder::new()
+            .name("tri-embed".into())
+            .spawn(move || {
+                let mut report = EmbedReport::default();
+                for (path, notes) in jobs {
+                    match tri::embedded::write(&path, &notes) {
+                        Ok(true) => report.written += 1,
+                        Ok(false) => report.unchanged += 1,
+                        Err(e) => report.errors.push(format!("{} : {e}", folder_name(&path))),
+                    }
+                }
+                let _ = tx.send(report);
+                if let Some(ctx) = repaint {
+                    ctx.request_repaint();
+                }
+            })
+            .ok();
+        self.embed_job = Some(rx);
+    }
+
+    /// Bilan de l'inscription des notes en fond, une fois finie.
+    fn poll_embed(&mut self) {
+        let Some(rx) = &self.embed_job else { return };
+        let Ok(report) = rx.try_recv() else { return };
+        self.embed_job = None;
+        self.notice = Some(match report.errors.first() {
+            Some(first) => (
+                t!(
+                    "embed-failed",
+                    n = report.errors.len(),
+                    first = first.clone()
+                ),
+                true,
+            ),
+            None if report.written == 0 => (t!("embed-none"), false),
+            None => (t!("embed-done", n = report.written), false),
+        });
+    }
+
     /// Créer, renommer, supprimer un dossier depuis le panneau des dossiers : la boîte
     /// (nom à saisir, ou confirmation avec ce que contient le dossier). Les emplacements
     /// (volume, dossier personnel, racine) ne se renomment ni ne se suppriment.
@@ -15760,6 +15848,7 @@ impl eframe::App for TriApp {
             trace(|| "moteur démarré".into());
         }
         self.drain_events();
+        self.poll_embed();
         steps.mark("événements");
         // Piles à jour avant les touches et le dessin : leur vue ne doit jamais retarder
         // sur la liste (filtre changé, image renommée…).
@@ -16476,6 +16565,14 @@ fn tail_visible<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerRe
     rect.max.y = rect.min.y + ui.spacing().interact_size.y;
     let layout = egui::Layout::right_to_left(egui::Align::Center);
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(layout), add)
+}
+
+/// Bilan de l'inscription des notes dans les images ([`TriApp::embed_notes`]).
+#[derive(Debug, Default)]
+struct EmbedReport {
+    written: usize,
+    unchanged: usize,
+    errors: Vec<String>,
 }
 
 /// Libellé d'une barre (notes en bas, filtres en haut, dossiers à gauche, parties de la
@@ -26238,6 +26335,31 @@ mod tests {
         assert_ne!(preset(&h), first, "v : le suivant");
         press(&mut h, Key::V, Modifiers::SHIFT);
         assert_eq!(preset(&h), first, "Maj+V : le précédent");
+    }
+
+    #[test]
+    fn ratings_are_written_into_the_images_on_demand() {
+        // Issue n° 276 : sur demande, les notes vont dans les images elles-mêmes.
+        let (mut h, _dir) = harness();
+        h.run_steps(3);
+        let image = h.state().files[0].path.clone();
+        press(&mut h, Key::Num4, Modifiers::NONE);
+        h.run_steps(2);
+        assert_eq!(h.state().folder.notes.notes(&image).stars, 4);
+        assert_eq!(
+            tri::embedded::read(&image).unwrap(),
+            None,
+            "pas dans l'image sans le demander"
+        );
+        act(&mut h, Action::EmbedNotes);
+        run_until(&mut h, |app| app.embed_job.is_none());
+        let inside = tri::embedded::read(&image).unwrap().expect("inscrites");
+        assert_eq!(inside.stars, 4);
+        assert_eq!(
+            h.state().notice.as_ref().map(|n| n.1),
+            Some(false),
+            "pas d'erreur"
+        );
     }
 
     #[test]

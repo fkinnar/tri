@@ -52,6 +52,11 @@ pub struct NoteBook {
     /// Pendant une lecture en fond ([`NoteBook::pending`]) : les images lues ou écrites
     /// depuis, plus fraîches que ce que rapportera la lecture ([`NoteBook::adopt`]).
     touched: Option<HashSet<PathBuf>>,
+    /// Inscrire aussi les notes dans les images à chaque écriture ([`crate::embedded`],
+    /// `[xmp] embed`), et les racines exclues au niveau « internes » (disques amovibles,
+    /// partages réseau).
+    embed: crate::embedded::Auto,
+    embed_outside: Vec<PathBuf>,
 }
 
 /// Notes de `images` (toutes dans `dir`), lues avec une seule liste du dossier ; un
@@ -97,7 +102,15 @@ fn read_notes(image: &Path, index: &SidecarIndex) -> Entry {
         });
     }
     let (notes, error) = match sidecars.first() {
-        None => (Notes::default(), None),
+        // Sans sidecar : les notes inscrites dans l'image elle-même, s'il y en a (étoiles
+        // posées dans l'Explorateur Windows, Lightroom…, issue n° 276). Illisibles : rien.
+        None => (
+            crate::embedded::read(image)
+                .ok()
+                .flatten()
+                .unwrap_or_default(),
+            None,
+        ),
         Some(sidecar) => match read_sidecar(sidecar) {
             Ok(notes) => (notes, None),
             Err(e) => (Notes::default(), Some(e)),
@@ -178,6 +191,46 @@ impl NoteBook {
                 .push(image.to_path_buf());
         }
         book
+    }
+
+    /// Inscrire aussi les notes dans les images à chaque écriture, selon `auto` ;
+    /// `outside` : racines des disques amovibles et partages réseau, exclues au niveau
+    /// [`crate::embedded::Auto::Internal`].
+    pub fn set_embed(&mut self, auto: crate::embedded::Auto, outside: Vec<PathBuf>) {
+        self.embed = auto;
+        self.embed_outside = outside;
+    }
+
+    /// Vrai si les notes de `image` vont aussi dans l'image à chaque écriture.
+    fn embeds(&self, image: &Path) -> bool {
+        use crate::embedded::Auto;
+        crate::embedded::supports(image)
+            && match self.embed {
+                Auto::Never => false,
+                Auto::Everywhere => true,
+                Auto::Internal => !self.embed_outside.iter().any(|r| image.starts_with(r)),
+            }
+    }
+
+    /// Inscrit les notes actuelles de `images` dans les images elles-mêmes (sur demande,
+    /// `tri --embed-notes`, action de l'interface). Pour chaque image : vrai si le fichier
+    /// a changé, ou l'erreur (format sans notes, image mal formée…). Les sidecars ne
+    /// changent pas.
+    /// `dry_run` : rien n'est écrit, le bilan dit ce qui changerait. Une image sans note
+    /// ni notes déjà inscrites reste telle quelle.
+    pub fn embed(&self, images: &[PathBuf], dry_run: bool) -> Vec<(PathBuf, Result<bool, String>)> {
+        images
+            .iter()
+            .map(|image| {
+                let notes = self.notes(image);
+                let result = match self.error(image) {
+                    Some(error) => Err(error.to_string()),
+                    None if dry_run => crate::embedded::would_change(image, notes),
+                    None => crate::embedded::write(image, notes),
+                };
+                (image.clone(), result)
+            })
+            .collect()
     }
 
     /// Convention des sidecars créés par une écriture.
@@ -527,6 +580,12 @@ impl NoteBook {
                     message,
                 })?;
             }
+            if self.embeds(image) {
+                crate::embedded::write(image, notes).map_err(|message| XmpError::Image {
+                    image: image.to_path_buf(),
+                    message,
+                })?;
+            }
         }
         // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
         // tout le dossier coûtait cher sur un disque lent ou un NAS (issue n° 15).
@@ -600,6 +659,18 @@ impl NoteBook {
                 };
                 match result {
                     Ok(()) => written.push(sidecar),
+                    Err(message) => {
+                        failure.get_or_insert(XmpError::Image {
+                            image: target.clone(),
+                            message,
+                        });
+                    }
+                }
+            }
+            // Aussi dans l'image, si `[xmp] embed` le veut pour elle.
+            if self.embeds(target) {
+                match crate::embedded::write(target, &notes) {
+                    Ok(_) => written.push(target.clone()),
                     Err(message) => {
                         failure.get_or_insert(XmpError::Image {
                             image: target.clone(),
@@ -933,6 +1004,79 @@ mod tests {
             [d.join("B.RAF")]
         );
         assert_eq!(book.notes(&d.join("B.RAF")).stars, 0);
+    }
+
+    /// Petit JPEG valide.
+    fn jpeg() -> Vec<u8> {
+        let mut out = Vec::new();
+        image::RgbImage::new(4, 4)
+            .write_to(
+                &mut std::io::Cursor::new(&mut out),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn notes_inside_an_image_are_read_when_it_has_no_sidecar() {
+        // Issue n° 276 : étoiles posées ailleurs (Explorateur Windows, Lightroom…).
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let (a, b) = (d.join("A.jpg"), d.join("B.jpg"));
+        std::fs::write(&a, jpeg()).unwrap();
+        std::fs::write(&b, jpeg()).unwrap();
+        let mut four = Notes::default();
+        four.set_stars(4);
+        crate::embedded::write(&a, &four).unwrap();
+        crate::embedded::write(&b, &four).unwrap();
+        // B a un sidecar : c'est lui qui compte.
+        let mut two = Notes::default();
+        two.set_stars(2);
+        xmp::write(&b, &two, Convention::Darktable).unwrap();
+        let mut book = NoteBook::load([a.as_path(), b.as_path()], Convention::Darktable);
+        assert_eq!(book.notes(&a).stars, 4, "lues dans l'image");
+        assert_eq!(book.notes(&b).stars, 2, "le sidecar d'abord");
+        // Noter A crée son sidecar (avec ce qui venait de l'image) ; l'image ne change pas
+        // (sur demande seulement, par défaut).
+        let before = std::fs::read(&a).unwrap();
+        book.edit(&a, |n| n.flag = Flag::Accepted).unwrap();
+        let sidecar = xmp::read(&a).unwrap();
+        assert_eq!((sidecar.stars, sidecar.flag), (4, Flag::Accepted));
+        assert_eq!(std::fs::read(&a).unwrap(), before, "image intacte");
+        // Sur demande : inscrites dans l'image.
+        let report = book.embed(std::slice::from_ref(&a), false);
+        assert_eq!(report[0].1, Ok(true));
+        let inside = crate::embedded::read(&a).unwrap().unwrap();
+        assert_eq!((inside.stars, inside.flag), (4, Flag::Accepted));
+    }
+
+    #[test]
+    fn notes_go_into_the_images_on_each_rating_where_the_setting_says() {
+        use crate::embedded::Auto;
+        let dir = tempfile::tempdir().unwrap();
+        let (inside, card) = (dir.path().join("disque"), dir.path().join("carte"));
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::create_dir_all(&card).unwrap();
+        let (a, b) = (inside.join("A.jpg"), card.join("B.jpg"));
+        std::fs::write(&a, jpeg()).unwrap();
+        std::fs::write(&b, jpeg()).unwrap();
+        let mut book = NoteBook::load([a.as_path(), b.as_path()], Convention::Darktable);
+        book.set_embed(Auto::Internal, vec![card.clone()]);
+        book.edit(&a, |n| n.set_stars(3)).unwrap();
+        book.edit(&b, |n| n.set_stars(3)).unwrap();
+        let stars = |p: &Path| crate::embedded::read(p).unwrap().map(|n| n.stars);
+        assert_eq!(stars(&a), Some(3), "disque interne : dans l'image");
+        assert_eq!(stars(&b), None, "carte : le sidecar seulement");
+        book.set_embed(Auto::Everywhere, vec![card.clone()]);
+        book.edit(&b, |n| n.set_stars(5)).unwrap();
+        assert_eq!(stars(&b), Some(5), "partout");
+        assert_eq!(xmp::read(&b).unwrap().stars, 5, "et toujours le sidecar");
+        // Annuler (écriture de l'image seule) suit aussi.
+        let mut one = Notes::default();
+        one.set_stars(1);
+        book.write_only(&b, &one).unwrap();
+        assert_eq!(stars(&b), Some(1));
     }
 
     #[test]

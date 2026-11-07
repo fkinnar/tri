@@ -4,6 +4,13 @@
 
 ## Non publié
 
+- **Notes dans les images elles-mêmes** (#276) : JPEG, PNG, WebP et TIFF peuvent porter
+  leurs notes (XMP embarqué, sans recompression, rien d'autre perdu), pour les retrouver
+  dans l'Explorateur Windows, Spotlight, Lightroom… Lues quand une image n'a pas de
+  sidecar (étoiles posées ailleurs) ; inscrites sur demande (« Inscrire les notes dans les
+  images », sur la sélection ou depuis le menu du dossier ; `tri <dossier>
+  --embed-notes`), ou à chaque note avec `[xmp] embed` = `internal` (disques internes et
+  fixés) ou `everywhere`. Jamais dans un RAW.
 - **Plus de plantage quand la mémoire graphique est pleine** (21 images comparées à
   1:1) : les grandes textures ont un budget (`[gui.view] textures_mb`, 1500 Mo) ; au-delà,
   une image garde son aperçu. Une erreur de la carte graphique est maintenant consignée et

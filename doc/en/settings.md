@@ -34,7 +34,7 @@ cannot change without updating its documentation.
 | `[render]` | LibRaw development: white balance, brightness, automatic brightness | engine |
 | `[cache]` | Folder, JPEG quality, maximum size of 1:1 previews (least recently used eviction) | engine |
 | `[scheduler]` | Light workers ("auto" = half the cores), thumbnails first, background exposure analysis | engine |
-| `[xmp]` | Convention for a new sidecar (`darktable` / `adobe`), one or several colors | engine |
+| `[xmp]` | Convention for a new sidecar (`darktable` / `adobe`), one or several colors, ratings also in the images (`embed`) | engine |
 | `[sidecars.<software>]` | Creation of a software's missing sidecar when rating (`auto` / `always` / `never`, `sidecars.md`) | engine |
 | `[sort]` | Order of the colours for the sort by colour (`color_order`, `sort.md`) | engine |
 | `[places]` | Places in the folders panel: hide Time Machine, patterns to exclude, fixed volumes (no ejection), volume monitoring interval | engine |
