@@ -362,6 +362,27 @@ pub fn file_is_darktable(path: &Path) -> bool {
     is_darktable(&String::from_utf8_lossy(&head[..n]))
 }
 
+/// Filtre : les développements des seuls logiciels `active` (installés et activés) ; ceux
+/// des autres sont retirés, les photos restent (retour du 07/11/2026 : sans logiciel, ou
+/// darktable décoché, ses développements restaient en grille, badge et pile compris). Les
+/// sidecars ne bougent pas : réactiver le logiciel les retrouve.
+pub struct ActiveEngines<'a>(pub &'a [Engine]);
+
+impl crate::filter::Filter for ActiveEngines<'_> {
+    fn apply(&self, groups: crate::filter::Groups) -> crate::filter::Groups {
+        groups
+            .into_iter()
+            .map(|group| {
+                group
+                    .into_iter()
+                    .filter(|f| get(&f.path).is_none_or(|d| self.0.contains(&d.engine)))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|group| !group.is_empty())
+            .collect()
+    }
+}
+
 /// Les développements de `photo` d'après les noms des fichiers de son dossier : `names`
 /// (noms réels, à côté de la photo). darktable : `IMG.RAF.xmp` s'il est de darktable
 /// (`is_darktable` lit son début), ses clones `IMG_NN.RAF.xmp` (sans image `IMG_NN.RAF`,
