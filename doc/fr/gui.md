@@ -463,7 +463,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   (`steps`), `*` 100 %, `/` ajusté (inversés le 18/10/2026, comme Lightroom), `z` et le
   double-clic basculent ajusté / 100 % ; on peut **dézoomer sous l'ajusté** jusqu'à
   `min` (10 %), l'image plus petite que l'écran, centrée ; le bouton 1:1 n'est allumé
-  qu'à 100 %.
+  qu'à 100 %. Dans la configuration, `steps`, `max`, `min` et `loupe_scale` s'écrivent
+  en **pourcentages** (07/11/2026 : `max = 400`, plus lisible que `4.0`), triés à la
+  lecture ; garde-fou : refusés hors de 1 à 3200 %, `max` sous 100 % et `min` au-dessus
+  (`ZOOM_PERCENT`, bornes de bon sens, pas des réglages).
 - **Retour à la grille à la souris** (issue n° 193) : en plein écran, une icône de grille
   tout à droite de la barre du bas (comme Échap).
   Souris et pavé tactile, en **continu** : pincer, ou Ctrl / Cmd + molette, zoome autour

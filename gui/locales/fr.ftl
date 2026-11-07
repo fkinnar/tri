@@ -1359,5 +1359,7 @@ scale-edit-tip = Un clic : taper la valeur (Entrée applique, Échap annule)
 zoom-entry = Zoom : { $digits } %
 zoom-scale = Zoom : { $percent } %
 kw-core-view-zoom-scale = zoom pourcentage agrandir
+zoom-percent-range = { $value } % : hors des bornes ({ $low } à { $high } %)
+zoom-steps-empty = au moins un palier de zoom
 zoom-fit-value = Ajusté
 zoom-fit-tip = Ajusté à la vue : { $percent } %

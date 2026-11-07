@@ -1011,15 +1011,79 @@ impl LoupeKey {
     }
 }
 
+/// Bornes de bon sens d'un pourcentage de zoom de la configuration (garde-fou demandé le
+/// 07/11/2026 : « une valeur débile, genre 20000 ») : en dehors, la valeur est refusée
+/// (fenêtre de réglages : message ; fichier : réglages par défaut et avertissement). Pas
+/// des réglages : seulement ce qui n'a aucun sens.
+const ZOOM_PERCENT: (f32, f32) = (1.0, 3200.0);
+
+/// Un pourcentage de zoom entre `low` et `high` (`ZOOM_PERCENT` au plus large), rendu en
+/// échelle (100 % : 1,0).
+fn zoom_percent<'de, D: serde::Deserializer<'de>>(
+    d: D,
+    low: f32,
+    high: f32,
+) -> Result<f32, D::Error> {
+    let percent = f32::deserialize(d)?;
+    if !(low..=high).contains(&percent) {
+        return Err(serde::de::Error::custom(t!(
+            "zoom-percent-range",
+            value = percent.to_string(),
+            low = low.to_string(),
+            high = high.to_string()
+        )));
+    }
+    Ok(percent / 100.0)
+}
+
+/// Zoom maximal : 100 % au moins.
+fn zoom_max<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    zoom_percent(d, 100.0, ZOOM_PERCENT.1)
+}
+
+/// Zoom minimal : 100 % au plus.
+fn zoom_min<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    zoom_percent(d, ZOOM_PERCENT.0, 100.0)
+}
+
+/// Un grossissement (loupe).
+fn zoom_any<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    zoom_percent(d, ZOOM_PERCENT.0, ZOOM_PERCENT.1)
+}
+
+/// Les paliers, triés.
+fn zoom_steps<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<f32>, D::Error> {
+    let (low, high) = ZOOM_PERCENT;
+    let mut steps = Vec::<f32>::deserialize(d)?;
+    if let Some(&bad) = steps.iter().find(|p| !(low..=high).contains(*p)) {
+        return Err(serde::de::Error::custom(t!(
+            "zoom-percent-range",
+            value = bad.to_string(),
+            low = low.to_string(),
+            high = high.to_string()
+        )));
+    }
+    if steps.is_empty() {
+        return Err(serde::de::Error::custom(t!("zoom-steps-empty")));
+    }
+    steps.sort_by(f32::total_cmp);
+    Ok(steps.into_iter().map(|p| p / 100.0).collect())
+}
+
 /// Section `[gui.zoom]` : zoom continu et loupe (décidé le 18/10/2026).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ZoomSettings {
     /// Paliers de `+` / `-` (1,0 = 100 % : un pixel de l'image par pixel de l'écran).
+    /// Écrits en pourcentages dans la configuration, comme `max`, `min` et `loupe_scale`
+    /// (retour du 07/11/2026 : plus lisible), et triés.
+    #[serde(deserialize_with = "zoom_steps")]
     pub steps: Vec<f32>,
     /// Zoom maximal (4,0 = 400 %).
+    #[serde(deserialize_with = "zoom_max")]
     pub max: f32,
     /// Zoom minimal (0,1 = 10 %) : sous l'ajusté, l'image plus petite que l'écran.
+    #[serde(deserialize_with = "zoom_min")]
     pub min: f32,
     /// Loupe : touche à maintenir (en vue ajustée, sous le pointeur).
     pub loupe_key: LoupeKey,
@@ -1029,6 +1093,7 @@ pub struct ZoomSettings {
     /// Loupe : côté (points).
     pub loupe_size: f32,
     /// Loupe : grossissement (1,0 = 100 %).
+    #[serde(deserialize_with = "zoom_any")]
     pub loupe_scale: f32,
     /// Loupe au clavier : pas d'un déplacement (touches de navigation), en points de la
     /// loupe (l'image à son échelle).
@@ -1907,6 +1972,37 @@ mod tests {
             egui::ThemePreference::from(Theme::Neutral),
             egui::ThemePreference::Dark
         );
+    }
+
+    #[test]
+    fn zoom_values_are_percentages_within_bounds() {
+        // Retour du 07/11/2026 : des pourcentages, plus lisibles, et un garde-fou.
+        let parse = |body: &str| {
+            tri::settings::parse::<AppSettings>(&format!("[gui.zoom]\n{body}\n"))
+                .map(|s| s.gui.zoom)
+        };
+        let z = parse("steps = [400, 100, 12.5]\nmax = 800\nmin = 5\nloupe_scale = 150").unwrap();
+        assert_eq!(z.steps, [0.125, 1.0, 4.0], "triés, en échelle");
+        assert_eq!((z.max, z.min, z.loupe_scale), (8.0, 0.05, 1.5));
+        for bad in [
+            "max = 20000",
+            "max = 50",
+            "min = 200",
+            "min = 0",
+            "loupe_scale = 20000",
+            "steps = [100, 20000]",
+            "steps = []",
+        ] {
+            let err = parse(bad).unwrap_err();
+            assert!(
+                err.contains("max")
+                    || err.contains("min")
+                    || err.contains("loupe_scale")
+                    || err.contains("steps"),
+                "{bad} : {err}"
+            );
+        }
+        assert!(parse("max = 20000").unwrap_err().contains("20000"));
     }
 
     #[test]

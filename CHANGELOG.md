@@ -14,6 +14,10 @@
   digits of an AZERTY keyboard (with Shift) changed the rating instead of the value:
   Linux also sends Shift itself as a key, which closed the entry. A lone modifier is now
   ignored.
+- **Zoom settings in percent**: `[gui.zoom] steps`, `max`, `min` and `loupe_scale` are
+  written as percentages (`max = 400`), and absurd values are refused (outside 1 to
+  3200 %, `max` below 100 %, `min` above). An existing file with the old values
+  (`max = 4.0`) is reported as invalid. The value in the bottom bar keeps a fixed width.
 - **Comparison**: the active image no longer jumps back to its stack's cover when the
   stacks are recomputed during the comparison (a thumbnail arriving, slower machines).
 - **One style for the key lists** (F1, `?`, the menu of continuations, the palette):

@@ -1357,5 +1357,7 @@ scale-edit-tip = A click: type the value (Enter applies, Escape cancels)
 zoom-entry = Zoom: { $digits } %
 zoom-scale = Zoom: { $percent } %
 kw-core-view-zoom-scale = zoom percent enlarge
+zoom-percent-range = { $value } %: out of bounds ({ $low } to { $high } %)
+zoom-steps-empty = at least one zoom step
 zoom-fit-value = Fit
 zoom-fit-tip = Fit to the view: { $percent } %

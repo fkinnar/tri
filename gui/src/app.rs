@@ -9605,9 +9605,33 @@ impl TriApp {
                 ),
             )
         };
+        // Largeur fixe, la plus large des valeurs possibles (retour du 07/11/2026 : sous
+        // 100 %, le réglage rétrécissait), la valeur centrée entre − et +.
+        let widest = [
+            t!("zoom-fit-value"),
+            format!("{} %", percent(self.gui.zoom.max)),
+            format!("{} %", percent(self.gui.zoom.min)),
+        ]
+        .into_iter()
+        .map(|text| {
+            egui::WidgetText::from(text)
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Extend),
+                    f32::INFINITY,
+                    egui::TextStyle::Button,
+                )
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+        let size = vec2(
+            widest + 2.0 * ui.spacing().button_padding.x,
+            ui.spacing().interact_size.y,
+        );
         let Some(edit) = &mut self.scale_edit else {
             if ui
-                .add(egui::Button::new(value).frame(false))
+                .add_sized(size, egui::Button::new(value).frame(false))
                 .on_hover_text(tip)
                 .on_hover_cursor(egui::CursorIcon::Text)
                 .clicked()
@@ -9620,13 +9644,10 @@ impl TriApp {
             }
             return;
         };
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        // Trois chiffres et un peu d'air.
-        let width = font.size * 2.4;
-        let response = ui.add(
+        let response = ui.add_sized(
+            size,
             egui::TextEdit::singleline(&mut edit.text)
-                .desired_width(width)
-                .char_limit(3)
+                .char_limit(4)
                 .align(egui::Align2::CENTER_CENTER)
                 .hint_text(value.trim_end_matches(" %")),
         );

@@ -442,7 +442,10 @@ system one ("cold" measurements, experiments).
   depending on the layout) next step up / down (`steps`), `*` 100 %, `/` fit (swapped on
   2026-10-18, like Lightroom), `z` and double-click toggle fit / 100 %; you can **zoom out
   below fit** down to `min` (10 %), the image smaller than the screen, centred; the 1:1
-  button is lit only at 100 %.
+  button is lit only at 100 %. In the configuration, `steps`, `max`, `min` and
+  `loupe_scale` are written in **percent** (2026-11-07: `max = 400`, easier to read than
+  `4.0`), sorted when read; safeguard: refused outside 1 to 3200 %, `max` below 100 % and
+  `min` above (`ZOOM_PERCENT`, common-sense bounds, not settings).
   Mouse and trackpad, **continuous**: pinch, or Ctrl / Cmd + wheel, zooms around the
   pointer; scrolling moves the zoomed image. Beyond fit, the 1:1 is what is displayed,
   reduced or enlarged; the scale is shown ("200 %"); it is kept from one image to the

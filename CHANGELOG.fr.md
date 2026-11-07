@@ -15,6 +15,11 @@
   de la rangée du haut d'un clavier AZERTY (avec Maj) changeaient la note au lieu de la
   valeur : Linux envoie aussi Maj comme une touche, ce qui fermait la saisie. Un
   modificateur seul est maintenant ignoré.
+- **Réglages du zoom en pourcentages** : `[gui.zoom] steps`, `max`, `min` et
+  `loupe_scale` s'écrivent en pourcentages (`max = 400`), et les valeurs absurdes sont
+  refusées (hors de 1 à 3200 %, `max` sous 100 %, `min` au-dessus). Un fichier avec les
+  anciennes valeurs (`max = 4.0`) est signalé comme invalide. La valeur de la barre du
+  bas garde une largeur fixe.
 - **Comparaison** : l'image active ne revient plus à la couverture de sa pile quand
   les piles sont recalculées pendant la comparaison (arrivée d'une vignette, machines
   plus lentes).
