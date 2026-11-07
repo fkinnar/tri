@@ -88,6 +88,8 @@
   automatically"), the plural ("thumbnails render"), and three actions for the RAW / JPEG
   switches (RAW only, JPEG only, both). A line found by the words of its title comes
   first (palette and help).
+- **Loupe in the bottom bar**: − and + change the magnification (they did nothing), and
+  the magnifier icon is no longer a button.
 - **Greyed-out filter**: "Developed", greyed out when no photo of the folder is
   developed, no longer turns on from the palette (left out) nor with `f r` (refused, with
   the reason in the status bar); turning it off still works.

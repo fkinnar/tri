@@ -12310,8 +12310,11 @@ impl TriApp {
                             self.step_loupe(action == Action::LoupeZoomIn);
                         }
                     }
+                    // Un repère, pas un bouton (retour du 07/11/2026 : il en avait l'air) : la
+                    // loupe se tient au clavier.
                     let tip = self.action_tip(Action::Loupe);
-                    let (rect, _) = marks::icon_button(ui, icon, &Action::Loupe.label(), &tip);
+                    let (rect, response) = ui.allocate_exact_size(vec2(icon, icon), Sense::hover());
+                    response.on_hover_text(tip);
                     let color = ui.visuals().weak_text_color();
                     marks::loupe_icon(ui.painter(), rect.shrink(icon * 0.2), color);
                 }
@@ -12329,28 +12332,17 @@ impl TriApp {
         });
         match clicked {
             Some(Action::ToggleAutoAdvance) => self.auto_advance = !self.auto_advance,
-            Some(
-                action @ (Action::Back
-                | Action::NavPrev
-                | Action::NavNext
-                | Action::NavUp
-                | Action::NavDown
-                | Action::StackMode
-                | Action::StackEnterToggle
-                | Action::Develop
-                // #240 : ils partaient dans la notation, et avançaient d'une photo.
-                | Action::DevPrev
-                | Action::DevNext
-                | Action::ToggleZoom
-                | Action::ToggleImageInfo
-                | Action::ToggleGridInfo
-                | Action::HistogramLarge
-                | Action::TogglePeaking),
-            ) => {
+            // Les notes vont à la sélection (avance automatique comprise) ; tout le reste
+            // est une action ordinaire. Plus de liste des actions à exécuter : chaque
+            // bouton oublié partait dans la notation et ne faisait rien (#240, puis le
+            // 07/11/2026 : − et + de la loupe).
+            Some(action @ (Action::Stars(_) | Action::Color(_) | Action::Flag(_))) => {
+                self.rate_selected(action)
+            }
+            Some(action) => {
                 let ctx = ui.ctx().clone();
                 self.perform(&ctx, action);
             }
-            Some(action) => self.rate_selected(action),
             None => {}
         }
         match version_action {
@@ -19334,6 +19326,30 @@ mod tests {
         settings.gui.remember_display = false;
         let third = TriApp::new(None, settings, None);
         assert!(third.focus_point);
+    }
+
+    #[test]
+    fn the_loupe_buttons_of_the_bottom_bar_change_the_magnification() {
+        // 07/11/2026 : − et + partaient dans la notation et ne faisaient rien. Fenêtre
+        // large : le groupe ne s'affiche que s'il reste la place.
+        let (mut h, _dir) = harness();
+        h.set_size(vec2(1800.0, 700.0));
+        h.run_steps(3);
+        assert_eq!(h.state().loupe_scale, 1.0);
+        click_settled(&mut h, "+");
+        h.run_steps(2);
+        assert!(h.state().loupe_scale > 1.0, "{}", h.state().loupe_scale);
+        click_settled(&mut h, "−");
+        click_settled(&mut h, "−");
+        h.run_steps(2);
+        assert!(h.state().loupe_scale < 1.0, "{}", h.state().loupe_scale);
+        // La valeur, cliquée : 100 %.
+        let value = format!("{} %", (h.state().loupe_scale * 100.0).round() as u32);
+        click_settled(&mut h, &value);
+        h.run_steps(2);
+        assert_eq!(h.state().loupe_scale, 1.0);
+        let file = h.state().files[h.state().selected].path.clone();
+        assert_eq!(h.state().folder.notes.notes(&file).stars, 0, "pas noté");
     }
 
     #[test]
