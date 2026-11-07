@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **"Comparison limited to N images"**: a bubble, placed and timed like the position
+  mark (`[gui.compare] limit_seconds`, `limit_place`), instead of a status-bar line.
 - **Back to 100 % and to fit from the keyboard**: `<leader> m m` sets the loupe back to
   100 %, `<leader> z z` the zoom to 100 %, `<leader> z /` fits it. In the menu of
   continuations, `m` and `z` are sub-menus listing what can follow.

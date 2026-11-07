@@ -285,6 +285,10 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   image, déplacé ensemble (glisser n'importe laquelle, Maj + flèches) ; `b` change la
   source de toutes ; `w` superpose les zones. Le moteur sert toutes les images comparées
   (`Scheduler::set_shown`), pas seulement l'image courante et ses voisines.
+- **« Comparaison limitée à N images »** (07/11/2026, idée de l'utilisateur) : au-delà de
+  `[gui.compare] max`, une bulle le dit, réglable comme le repère de position
+  (`limit_seconds`, `limit_place` ; `TriApp::compare_limit_mark`) ; durée 0 : la barre
+  d'état le dit.
 - **Sélection multiple** (17/10/2026, moteur : `tri::selection`, voir `selection.md`) :
   `Espace` marque, `v` mode visuel (plage qui suit le curseur, `v` valide, Échap annule),
   `Ctrl+A` / `Ctrl+Maj+A`, Maj+clic (plage), Cmd/Ctrl+clic (ajout / retrait) ; Échap

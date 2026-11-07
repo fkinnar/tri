@@ -944,6 +944,12 @@ pub struct CompareSettings {
     pub gap: f32,
     /// Épaisseur du cadre de l'image active (celle que l'on note).
     pub frame: f32,
+    /// Bulle « Comparaison limitée à N images » quand il y en avait plus que `max`
+    /// (07/11/2026, idée de l'utilisateur) : durée d'affichage (secondes) ; 0 : jamais
+    /// (la barre d'état le dit alors) ; négatif : toujours.
+    pub limit_seconds: f32,
+    /// Sa place, comme le repère de position.
+    pub limit_place: PositionPlace,
 }
 
 impl Default for CompareSettings {
@@ -952,6 +958,8 @@ impl Default for CompareSettings {
             max: 21,
             gap: 4.0,
             frame: 3.0,
+            limit_seconds: 3.0,
+            limit_place: PositionPlace::Center,
         }
     }
 }

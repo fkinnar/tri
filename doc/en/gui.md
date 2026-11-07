@@ -275,6 +275,9 @@ system one ("cold" measurements, experiments).
   Shift + arrows); `b` changes the source of all of them; `w` overlays the zones. The
   engine serves all compared images (`Scheduler::set_shown`), not just the current image
   and its neighbours.
+- **"Comparison limited to N images"** (2026-11-07, the user's idea): beyond
+  `[gui.compare] max`, a bubble says so, set like the position mark (`limit_seconds`,
+  `limit_place`; `TriApp::compare_limit_mark`); time 0: the status bar says it.
 - **Multiple selection** (2026-10-17, engine: `tri::selection`, see `selection.md`):
   `Space` marks, `v` visual mode (range following the cursor, `v` confirms, Esc cancels),
   `Ctrl+A` / `Ctrl+Shift+A`, Shift+click (range), Cmd/Ctrl+click (add / remove); Esc

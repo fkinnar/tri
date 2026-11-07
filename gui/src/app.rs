@@ -589,6 +589,9 @@ pub struct TriApp {
     /// et l'image où il a été atteint ([`TriApp::end_mark`] : il s'efface quand on la
     /// quitte).
     end_notice: Option<(String, Instant, usize)>,
+    /// Comparaison réduite à `[gui.compare] max` images : le texte de la bulle et son
+    /// départ ([`TriApp::compare_limit_mark`]).
+    compare_limit: Option<(String, Instant)>,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -1265,6 +1268,7 @@ impl TriApp {
             any_developed: false,
             developed_in: Vec::new(),
             end_notice: None,
+            compare_limit: None,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -7392,12 +7396,23 @@ impl TriApp {
             return;
         }
         let max = self.gui.compare.max.max(2);
+        let mut limited = None;
         if targets.len() > max {
-            self.hint = Some(t!("compare-limited", max = max));
+            limited = Some(t!("compare-limited", max = max));
             targets.truncate(max);
         }
         if around {
-            self.hint = Some(t!("compare-around", max = max));
+            limited = Some(t!("compare-around", max = max));
+        }
+        // Dans une bulle, comme le repère de position (07/11/2026) ; sans bulle, dans la
+        // barre d'état.
+        self.compare_limit = None;
+        if let Some(text) = limited {
+            if self.gui.compare.limit_seconds != 0.0 {
+                self.compare_limit = Some((t!("compare-limit-mark", max = max), Instant::now()));
+            } else {
+                self.hint = Some(text);
+            }
         }
         // Image active : l'image courante si elle est comparée, sinon la première.
         let current = self.files.get(self.selected).map(|f| f.path.clone());
@@ -8224,6 +8239,41 @@ impl TriApp {
         let align = e.place.align();
         let at = align.pos_in_rect(&area.shrink(16.0));
         egui::Area::new(egui::Id::unique("end_mark"))
+            .pivot(align)
+            .fixed_pos(at)
+            .interactable(false)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.set_opacity(opacity);
+                mark_frame(ui.style()).show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text).size(self.gui.dialogs.title_size),
+                        )
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                });
+            });
+    }
+
+    /// « Comparaison limitée à N images » (`[gui.compare] limit_seconds`, `limit_place`),
+    /// au début de la comparaison, dans le cadre du repère de position.
+    fn compare_limit_mark(&mut self, ctx: &egui::Context, area: Rect) {
+        let c = self.gui.compare;
+        let Some((text, since)) = self.compare_limit.clone() else {
+            return;
+        };
+        if self.mode != Mode::Compare {
+            self.compare_limit = None;
+            return;
+        }
+        let Some(opacity) = mark_opacity(c.limit_seconds, since, ctx) else {
+            self.compare_limit = None;
+            return;
+        };
+        let align = c.limit_place.align();
+        let at = align.pos_in_rect(&area.shrink(16.0));
+        egui::Area::new(egui::Id::unique("compare_limit_mark"))
             .pivot(align)
             .fixed_pos(at)
             .interactable(false)
@@ -15527,6 +15577,7 @@ impl eframe::App for TriApp {
         self.click_focus(&ctx, folders_rect, metadata_rect, center.response.rect);
         self.position_mark(&ctx, center.response.rect);
         self.end_mark(&ctx, center.response.rect);
+        self.compare_limit_mark(&ctx, center.response.rect);
         self.key_menu(&ctx);
         self.entry_menu(&ctx);
         self.help_here_overlay(&ctx);
@@ -19751,11 +19802,21 @@ mod tests {
             compared.contains(&"img9.jpg".to_string()),
             "la fin du dossier"
         );
-        assert!(h.state().hint.is_some(), "dit qu'il en a pris {max}");
+        // Dit dans une bulle (07/11/2026), pas dans la barre d'état.
+        h.run_steps(2);
+        let mark = t!("compare-limit-mark", max = max);
+        assert!(h.query_by_label(&mark).is_some(), "{mark}");
+        assert!(h.state().hint.is_none());
         // Le retour à la grille, à la souris.
         click_settled(&mut h, &t!("view-back-grid"));
         h.run_steps(2);
         assert_eq!(h.state().mode, Mode::Grid);
+        // Bulle désactivée : la barre d'état le dit.
+        h.state_mut().gui.compare.limit_seconds = 0.0;
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        assert!(h.state().compare_limit.is_none());
+        assert!(h.state().hint.is_some());
         // Peu d'images : toutes.
         let (mut h, _dir) = harness();
         h.run_steps(3);

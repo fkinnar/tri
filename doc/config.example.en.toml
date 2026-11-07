@@ -835,6 +835,11 @@ max = 21
 gap = 4.0
 # Thickness of the frame of the active image (the one being rated).
 frame = 3.0
+# More images than max: the "Comparison limited to … images" bubble, display time in
+# seconds (0: never, the status bar says it; negative: always) and place ("center",
+# "top-left", "top-right", "bottom-right" or "bottom-left").
+limit_seconds = 3.0
+limit_place = "center"
 
 [gui.position]
 # "Where am I" mark on each image change, in the grid and in full screen: "Photo 12 /
