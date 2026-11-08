@@ -256,7 +256,8 @@ le 100 % RAW de 4,5 à 7 s. `--cache` utilise un autre dossier de cache que celu
   la netteté, comme celui des piles avec les piles ; même largeur (90 points).
 - **Comparaison côte à côte** (17/10/2026, `c`, `gui/src/compare.rs` pour la disposition ;
   bouton de la barre du bas depuis le 07/11/2026, allumé en comparaison où il la quitte,
-  et le retour à la grille aussi en comparaison ; **sans sélection ni pile, toutes les
+  et le retour à la grille aussi en comparaison ; **ouverte du plein écran, elle y
+  ramène** sur l'image active, bouton « Retour au plein écran » (#376) ; **sans sélection ni pile, toutes les
   images montrées**, au plus `[gui.compare] max` autour de l'image courante ; curseur de
   la grille masqué et rien de sélectionné : rien n'est en surbrillance, donc tout, et `=`
   agit du premier coup ; à la sortie, la grille revient à l'identique, curseur masqué

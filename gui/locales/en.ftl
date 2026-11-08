@@ -1103,6 +1103,7 @@ view-info-developed-none = { " · " }not developed yet ({ $keys })
 develop-not-found = no development software found (Darktable, RapidRAW: [develop] settings)
 develop-not-installed = { $engine } is not installed (or not found: [develop] settings)
 view-back-grid = Back to the grid
+view-back-view = Back to full screen
 grid-render-embedded = Camera JPEG
 grid-render-cover = Cover
 grid-render-libraw = RAW (LibRaw)
