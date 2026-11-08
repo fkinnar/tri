@@ -605,6 +605,8 @@ pub struct TriApp {
     /// La grille quand la comparaison a commencé : l'image courante et si le curseur
     /// était masqué, pour y revenir à l'identique.
     compare_from: Option<(Option<PathBuf>, bool)>,
+    /// Comparaison ouverte depuis le plein écran : on y revient en la quittant (#376).
+    compare_from_view: bool,
     /// Lot de la grille à lancer dès que possible (dossier ouvert, rendu changé).
     auto_develop_pending: bool,
     /// Rendu des vignettes (#114, `[gui.grid] render`, `f d`).
@@ -1303,6 +1305,7 @@ impl TriApp {
             end_notice: None,
             compare_limit: None,
             compare_from: None,
+            compare_from_view: false,
             auto_develop_pending: false,
             grid_render: gui.grid.render,
             shown_render: (gui.grid.render, None),
@@ -7705,6 +7708,7 @@ impl TriApp {
         };
         self.compare = targets;
         // La grille telle qu'on la quitte : rendue à la sortie (07/11/2026).
+        self.compare_from_view = self.mode == Mode::View;
         self.compare_from = (self.mode == Mode::Grid).then(|| {
             let path = self.files.get(self.selected).map(|f| f.path.clone());
             (path, self.cursor_hidden)
@@ -7739,10 +7743,22 @@ impl TriApp {
         developments.or(burst)
     }
 
-    /// Quitte la comparaison vers la grille, sur l'image active.
+    /// Quitte la comparaison vers là d'où on l'a ouverte (#376) : le plein écran sur
+    /// l'image active, ou la grille.
     fn leave_compare(&mut self) {
-        self.mode = Mode::Grid;
         self.compare.clear();
+        if std::mem::take(&mut self.compare_from_view) && self.selected < self.files.len() {
+            self.compare_from = None;
+            self.mode = Mode::View;
+            self.zoom = None;
+            self.zoom_anchor = None;
+            self.reveal = Some(Reveal::Minimal);
+            self.sync_source();
+            self.tell_shown();
+            self.request_zoom();
+            return;
+        }
+        self.mode = Mode::Grid;
         // Entrée depuis la grille sans rien en surbrillance (« tout comparer ») : on y
         // revient à l'identique, curseur masqué sur l'image d'avant (retour du 07/11/2026 :
         // une image restait en surbrillance, et la comparaison suivante ne prenait plus que
@@ -13276,10 +13292,14 @@ impl TriApp {
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
                         let keys = self.keys_text(Action::Back);
-                        (
-                            t!("view-back-grid"),
-                            format!("{} ({keys})", t!("view-back-grid")),
-                        )
+                        // Comparaison ouverte du plein écran : on y retourne (#376).
+                        let name = if self.mode == Mode::Compare && self.compare_from_view {
+                            t!("view-back-view")
+                        } else {
+                            t!("view-back-grid")
+                        };
+                        let tip = format!("{name} ({keys})");
+                        (name, tip)
                     } else {
                         (action.label(), self.action_tip(action))
                     };
@@ -21273,6 +21293,37 @@ mod tests {
         act(&mut h, Action::Compare);
         assert_eq!(h.state().mode, Mode::Compare);
         assert_eq!(h.state().compare.len(), 3);
+    }
+
+    #[test]
+    fn leaving_a_comparison_goes_back_where_it_was_opened() {
+        // #376 : ouverte du plein écran, la comparaison y ramène (sur l'image active),
+        // et le bouton le dit ; ouverte de la grille, elle ramène à la grille.
+        let (mut h, _dir) = harness();
+        h.state_mut().rating_bar = true;
+        h.run_steps(3);
+        h.state_mut().select(1);
+        act(&mut h, Action::Open);
+        assert_eq!(h.state().mode, Mode::View);
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("view-back-view")).is_some());
+        assert!(h.query_by_label(&t!("view-back-grid")).is_none());
+        act(&mut h, Action::NavNext);
+        let active = h.state().selected;
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::View);
+        assert_eq!(h.state().selected, active, "sur l'image active");
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::Grid);
+        // De la grille : retour à la grille.
+        act(&mut h, Action::Compare);
+        assert_eq!(h.state().mode, Mode::Compare);
+        h.run_steps(2);
+        assert!(h.query_by_label(&t!("view-back-grid")).is_some());
+        act(&mut h, Action::Back);
+        assert_eq!(h.state().mode, Mode::Grid);
     }
 
     #[test]

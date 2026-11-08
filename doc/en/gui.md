@@ -247,7 +247,8 @@ system one ("cold" measurements, experiments).
   points).
 - **Side-by-side comparison** (2026-10-17, `c`, `gui/src/compare.rs` for the layout;
   a bottom-bar button since 2026-11-07, lit in comparison where it leaves it, and the
-  back-to-grid button in comparison too; **without a selection or a stack, all the shown
+  back-to-grid button in comparison too; **opened from full screen, it goes back to it**
+  on the active image, "Back to full screen" button (#376); **without a selection or a stack, all the shown
   images**, at most `[gui.compare] max` around the current one; grid cursor hidden and
   nothing selected: nothing is highlighted, so everything, and `=` acts at once; when
   leaving, the grid comes back as it was, cursor hidden on the image before,

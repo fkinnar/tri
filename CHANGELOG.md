@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- **Leaving a comparison opened from full screen** (#379, fixes #376): it went back to
+  the grid; it now goes back to full screen, on the active image ("Back to full screen"
+  button). Opened from the grid, it still goes back to the grid.
 - **Clearer note icons** (#374): "Write ratings into the images" and "Read ratings
   back from the images" share the same picture (a photo with its star) with an arrow
   going in or coming out, so one reads as the reverse of the other; "Generate sidecars"

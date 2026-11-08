@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Sortie d'une comparaison ouverte du plein écran** (#379, corrige #376) : elle
+  ramenait à la grille ; elle ramène maintenant au plein écran, sur l'image active
+  (bouton « Retour au plein écran »). Ouverte de la grille, elle ramène toujours à la
+  grille.
 - **Icônes des notes plus parlantes** (#374) : « Inscrire les notes dans les images » et
   « Relire les notes depuis les images » ont le même dessin (une photo et son étoile)
   avec une flèche qui entre ou qui sort, pour qu'on voie que l'une est l'inverse de
