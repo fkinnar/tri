@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Icônes des notes plus parlantes** (#374) : « Inscrire les notes dans les images » et
+  « Relire les notes depuis les images » ont le même dessin (une photo et son étoile)
+  avec une flèche qui entre ou qui sort, pour qu'on voie que l'une est l'inverse de
+  l'autre ; « Générer les sidecars » montre une feuille avec une étoile et un « + ».
 - **Afficher un dossier dans le gestionnaire de fichiers** (#375) : clic droit sur un
   dossier, « Afficher dans le Finder » (l'Explorateur, le gestionnaire de fichiers), comme
   pour une image.
