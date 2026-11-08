@@ -446,7 +446,6 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
         ("gui", "raw_previews") => &["on-demand", "background"],
         ("xmp", "sidecar") => &["darktable", "adobe"],
         ("xmp", "embed") => &["never", "internal", "everywhere"],
-        ("xmp", "color_priority") => &["darktable", "label"],
         ("sidecars.rapidraw", "create") => &["auto", "always", "never"],
         ("i18n", "language") => &["auto", "fr", "en"],
         ("gui.view", "focus_marker") => &["square", "cross", "circle", "heart"],
@@ -1748,6 +1747,13 @@ impl SettingsWindow {
                     widget = Some(r);
                     new = changed;
                 }
+                // Ordre de lecture des couleurs (08/11/2026) : les champs dans l'ordre, en
+                // colonne, un bouton entre deux voisins pour les échanger.
+                value if section == "xmp" && entry.key == "color_sources" => {
+                    let (r, changed) = color_sources_editor(ui, value);
+                    widget = Some(r);
+                    new = changed;
+                }
                 // Couleur qui peut suivre l'accent (`"accent"` par défaut : liseré des
                 // boîtes, étoiles) : une case plutôt que le mot à taper (retour du
                 // 05/11/2026), décochée = sélecteur de couleur comme les autres.
@@ -2225,6 +2231,58 @@ impl SettingsWindow {
     }
 }
 
+/// Éditeur de `[xmp] color_sources` : les trois champs dans l'ordre de lecture, numérotés,
+/// en colonne, un bouton entre deux voisins pour les échanger. Rend la réponse du premier bouton
+/// (focus) et la nouvelle valeur si elle a changé.
+fn color_sources_editor(ui: &mut Ui, value: &Value) -> (egui::Response, Option<Value>) {
+    use tri::xmp::ColorSource;
+    let before = color_sources_of(value);
+    let mut order = before;
+    let mut first: Option<egui::Response> = None;
+    ui.vertical(|ui| {
+        for (i, source) in before.0.into_iter().enumerate() {
+            if i > 0 {
+                let swap = ui
+                    .small_button(t!("settings-color-sources-swap-short"))
+                    .on_hover_text(t!("settings-color-sources-swap"));
+                if swap.clicked() {
+                    order.0.swap(i - 1, i);
+                }
+                first.get_or_insert(swap);
+            }
+            let name = t!(&format!("settings-color-source-{}", source.id()));
+            ui.label(format!("{}. {name}", i + 1));
+        }
+    });
+    let response = first.expect("trois sources");
+    let changed = (order != before).then(|| {
+        Value::Toml(format!(
+            "[{}]",
+            order
+                .0
+                .iter()
+                .map(|s: &ColorSource| format!("\"{}\"", s.id()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    });
+    (response, changed)
+}
+
+/// L'ordre de la valeur TOML de `[xmp] color_sources` (`["label", "darktable"]`) ; une
+/// entrée inconnue est ignorée, une oubliée ajoutée à la fin.
+fn color_sources_of(value: &Value) -> tri::xmp::ColorSources {
+    let text = match value {
+        Value::Strings(list) => list.join(","),
+        Value::Str(s) | Value::Toml(s) => s.clone(),
+        _ => String::new(),
+    };
+    text.split(|c: char| !c.is_ascii_alphabetic())
+        .filter_map(tri::xmp::ColorSource::from_id)
+        .collect::<Vec<_>>()
+        .into()
+}
+
 /// Ce qu'on glisse dans l'éditeur de `[sort] color_order`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ColorDrag {
@@ -2667,7 +2725,6 @@ mod tests {
             ("gui", "raw_previews"),
             ("xmp", "sidecar"),
             ("xmp", "embed"),
-            ("xmp", "color_priority"),
             ("sidecars.rapidraw", "create"),
             ("i18n", "language"),
             ("gui.view", "focus_marker"),
@@ -3041,6 +3098,56 @@ mod tests {
                 Color::Green,
                 Color::Purple,
                 Color::Blue
+            ]
+        );
+    }
+
+    #[test]
+    fn the_colour_sources_are_reordered_by_swapping_neighbours() {
+        // 08/11/2026 : un ordre plutôt qu'un gagnant (darktable, Label, digiKam).
+        crate::i18n::ensure();
+        use egui_kittest::kittest::Queryable;
+        use tri::xmp::ColorSource;
+        assert_eq!(
+            color_sources_of(&Value::Toml(r#"["digikam", "nope", "digikam"]"#.into())).0,
+            [
+                ColorSource::Digikam,
+                ColorSource::Darktable,
+                ColorSource::Label
+            ]
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut w = SettingsWindow::open(&path).unwrap();
+        w.show_section("xmp");
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(1400.0, 1000.0))
+            .with_accessibility_check(false)
+            .build_ui_state(
+                |ui, w: &mut SettingsWindow| {
+                    w.show(ui.ctx());
+                },
+                w,
+            );
+        h.run_steps(3);
+        // Premier bouton : darktable et Label échangés.
+        h.get_all_by_label("échanger").next().unwrap().click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .file
+                .get("xmp", "color_sources")
+                .map(|v| v.to_string()),
+            Some(r#"["label", "darktable", "digikam"]"#.to_string())
+        );
+        let loaded = tri::settings::load::<crate::settings::AppSettings>(Some(&path));
+        assert!(loaded.warning.is_none(), "{:?}", loaded.warning);
+        assert_eq!(
+            loaded.settings.xmp.color_sources.0,
+            [
+                ColorSource::Label,
+                ColorSource::Darktable,
+                ColorSource::Digikam
             ]
         );
     }

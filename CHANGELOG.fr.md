@@ -6,12 +6,13 @@
 
 - **Couleurs : une ou plusieurs, et champs par logiciel** (#371) : en mode une couleur,
   `xmp:Label`, la liste de darktable et digiKam sont écrits ; quand `Label` et la couleur
-  de darktable diffèrent (darktable ne touche jamais `Label`, qui pouvait masquer une
-  couleur changée chez lui), `[xmp] color_priority` choisit (`darktable` par défaut, ou
-  `label`). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
+  de darktable ou de digiKam diffèrent (darktable ne touche jamais `Label`, qui pouvait
+  masquer une couleur changée chez lui), l'ordre de lecture `[xmp] color_sources` décide
+  (darktable, Label, digiKam par défaut ; boutons « échanger » dans la fenêtre de
+  réglages). En mode plusieurs couleurs, comme darktable, seule sa liste est lue et écrite.
   `[xmp.write]` : cases par logiciel (Label, darktable, digiKam, Lightroom), toutes
-  cochées ; un champ décoché reste tel quel. Listes déroulantes pour `[xmp] embed` et
-  `color_priority` dans la fenêtre de réglages.
+  cochées ; un champ décoché reste tel quel. Liste déroulante pour `[xmp] embed` dans la
+  fenêtre de réglages.
 - **Notes tenues à jour d'elles-mêmes** (#368) : avec `[xmp] embed` = `internal`
   (disques internes et fixés) ou `everywhere`, chaque note va aussi dans l'image (JPEG,
   PNG, WebP, TIFF, HEIC), et une note fusionnée depuis un autre logiciel est récrite

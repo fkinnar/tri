@@ -62,10 +62,12 @@ liste à `0`, rouge, dans darktable).
 
 - **Une couleur** (défaut, comme Lightroom) : écrite dans `xmp:Label`,
   `darktable:colorlabels` (darktable trouve sa liste) et `digiKam:ColorLabel`. Lue dans
-  `xmp:Label` ; sans `Label`, la couleur unique de darktable en tient lieu (numéro
-  traduit). Quand les deux diffèrent, `[xmp] color_priority` décide : `darktable` (défaut,
-  la couleur qu'il affiche) ou `label`. Plusieurs couleurs posées dans darktable sont lues
-  toutes : la prochaine écriture ne les efface pas.
+  l'ordre de `[xmp] color_sources` (défaut : `["darktable", "label", "digikam"]`) : le
+  premier champ qui porte une couleur l'emporte (darktable seulement s'il n'en a qu'une,
+  numéro traduit). darktable en tête : sa couleur est celle qu'il affiche. Un champ oublié
+  est lu en dernier ; dans la fenêtre de réglages, un bouton « échanger » entre deux
+  champs. Plusieurs couleurs posées dans darktable sont lues toutes : la prochaine
+  écriture ne les efface pas.
 - **Plusieurs** (comme darktable) : seul `darktable:colorlabels` est lu et écrit ;
   `xmp:Label` et `digiKam:ColorLabel` restent tels quels. Faute de liste (fichier de
   Lightroom, XnView…), `xmp:Label` puis digiKam sont lus. Dans une image (JPEG…), les

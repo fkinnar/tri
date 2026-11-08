@@ -78,10 +78,11 @@ sidecar = "darktable"
 # darktable, only darktable:colorlabels; xmp:Label and digiKam:ColorLabel are no longer
 # touched (they hold a single colour).
 multiple_colors = false
-# One colour: the one read when xmp:Label and darktable's colour differ. darktable rewrites
-# its own at every change but never touches xmp:Label, which can lag behind: "darktable"
-# (its colour, the one it shows) or "label".
-color_priority = "darktable"
+# One colour: reading order of the fields that hold one, the first found wins: "darktable"
+# (darktable:colorlabels, if it holds a single colour), "label" (xmp:Label) and "digikam"
+# (digiKam:ColorLabel). darktable rewrites its colour at every change but never touches
+# xmp:Label, which can lag behind: hence darktable first. A field left out is read last.
+color_sources = ["darktable", "label", "digikam"]
 # Ratings also written into the images themselves (JPEG, PNG, WebP, TIFF, HEIC; never a
 # RAW) on each rating, and merges coming from other programs propagated to every source:
 # "never" (on demand only: "Write the ratings into the images", tri --embed-notes),

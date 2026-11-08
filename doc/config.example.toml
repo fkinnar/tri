@@ -79,10 +79,12 @@ sidecar = "darktable"
 # darktable:colorlabels ; xmp:Label et digiKam:ColorLabel ne sont plus touchés (ils ne
 # portent qu'une couleur).
 multiple_colors = false
-# Une seule couleur : celle qui est lue quand xmp:Label et la couleur de darktable diffèrent.
-# darktable réécrit la sienne à chaque changement mais ne touche jamais xmp:Label, qui peut
-# rester en arrière : "darktable" (sa couleur, celle qu'il affiche) ou "label".
-color_priority = "darktable"
+# Une seule couleur : ordre de lecture des champs qui en portent une, le premier trouvé
+# l'emporte : "darktable" (darktable:colorlabels, s'il n'a qu'une couleur), "label"
+# (xmp:Label) et "digikam" (digiKam:ColorLabel). darktable réécrit sa couleur à chaque
+# changement mais ne touche jamais xmp:Label, qui peut rester en arrière : d'où darktable en
+# tête. Un champ oublié est lu en dernier.
+color_sources = ["darktable", "label", "digikam"]
 # Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais
 # un RAW) à chaque note, et fusions venues d'autres logiciels propagées à toutes les
 # sources : "never" (sur demande seulement : « Inscrire les notes dans les images »,

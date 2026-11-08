@@ -62,10 +62,11 @@ darktable).
 
 - **One color** (default, like Lightroom): written into `xmp:Label`,
   `darktable:colorlabels` (darktable finds its list) and `digiKam:ColorLabel`. Read from
-  `xmp:Label`; without a `Label`, darktable's single color stands in for it (number
-  translated). When they differ, `[xmp] color_priority` decides: `darktable` (default, the
-  color it shows) or `label`. Several colors set in darktable are all read: the next write
-  does not erase them.
+  the order of `[xmp] color_sources` (default: `["darktable", "label", "digikam"]`): the
+  first field that holds a color wins (darktable only if it holds a single one, number
+  translated). darktable first: its color is the one it shows. A field left out is read
+  last; in the settings window, a "swap" button between two fields. Several colors set in
+  darktable are all read: the next write does not erase them.
 - **Several** (like darktable): only `darktable:colorlabels` is read and written;
   `xmp:Label` and `digiKam:ColorLabel` stay as they are. Without a list (Lightroom,
   XnView… file), `xmp:Label` then digiKam are read. In an image (JPEG…), software that only
