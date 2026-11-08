@@ -8,6 +8,10 @@
   back from the images" share the same picture (a photo with its star) with an arrow
   going in or coming out, so one reads as the reverse of the other; "Generate sidecars"
   shows a sheet with a star and a "+".
+- **darktable sees colors set in tri** (#373): the `darktable:colorlabels` list was
+  written after darktable's history, and darktable then ignored it when syncing changed
+  XMP files at startup. It now goes before the history, where darktable puts it. Sidecars
+  already written move it at their next color change.
 - **Cited shortcuts up to date** (#372): setting descriptions and a few messages
   (full-screen key reminder, "Before" of a development, version presets…) cited
   hard-coded shortcuts, some of them stale ("Shift+B" to see one's developments, "b" for
