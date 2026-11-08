@@ -20727,9 +20727,6 @@ mod tests {
         press(&mut h, Key::Space, Modifiers::SHIFT);
         type_text(&mut h, "=");
         assert_eq!(h.state().mode, Mode::Compare);
-        // Les images comparées affichées d'abord (leur place) : sans elles, pas de loupe
-        // (CI Windows lente, 08/11/2026, comme le test voisin le 07/11/2026).
-        run_until(&mut h, |app| app.loupe_rects.len() >= 2);
         h.state_mut().gui.zoom.loupe_delay_ms = 0;
         h.event(UiEvent::Key {
             key: Key::M,
@@ -20738,23 +20735,31 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::NONE,
         });
-        // `t` maintenue, le pointeur passe sur chaque image : la loupe suit.
+        // `t` maintenue, le pointeur passe sur chaque image : la loupe suit. Balayé tant
+        // qu'il faut : une image pas encore affichée n'a pas de loupe (CI Windows lente,
+        // 08/11/2026 ; seule l'image survolée enregistre sa place, `loupe_rects`).
         let area = h.ctx.content_rect();
         let mut seen = HashSet::new();
-        for k in 1..20 {
-            for y in [0.35, 0.5, 0.65] {
-                let at = pos2(
-                    area.left() + area.width() * k as f32 / 20.0,
-                    area.top() + area.height() * y,
-                );
-                h.hover_at(at);
-                h.run_steps(2);
-                if h.state().loupe_on {
-                    seen.insert(h.state().loupe_index);
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while seen.len() < 2 {
+            assert!(
+                Instant::now() < deadline,
+                "loupe sur plusieurs images : {seen:?}"
+            );
+            for k in 1..20 {
+                for y in [0.35, 0.5, 0.65] {
+                    let at = pos2(
+                        area.left() + area.width() * k as f32 / 20.0,
+                        area.top() + area.height() * y,
+                    );
+                    h.hover_at(at);
+                    h.run_steps(2);
+                    if h.state().loupe_on {
+                        seen.insert(h.state().loupe_index);
+                    }
                 }
             }
         }
-        assert!(seen.len() >= 2, "loupe sur plusieurs images : {seen:?}");
         assert_eq!(selected_name(&h), "c.jpg", "l'image active ne change pas");
     }
 
