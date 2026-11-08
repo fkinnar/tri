@@ -4,6 +4,9 @@
 
 ## Non publié
 
+- **Afficher un dossier dans le gestionnaire de fichiers** (#375) : clic droit sur un
+  dossier, « Afficher dans le Finder » (l'Explorateur, le gestionnaire de fichiers), comme
+  pour une image.
 - **darktable voit les couleurs posées dans tri** (#373) : la liste
   `darktable:colorlabels` était écrite après l'historique de darktable, qui l'ignorait
   alors en resynchronisant les XMP modifiés au démarrage. Elle va maintenant avant

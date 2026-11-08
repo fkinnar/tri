@@ -594,8 +594,8 @@ system one ("cold" measurements, experiments).
   favourite (2026-10-22): that name in the favourites section, the path on hover; a
   favourite unfolds without touching the same folder in the tree. With the mouse:
   **right click** on a folder, menu of the same actions (new folder, rename, delete,
-  favourite; offload a card here, or on a removable drive: offload, eject), shortcut on
-  hover.
+  favourite; offload a card here, or on a removable drive: offload, eject; show in the
+  Finder / Explorer, 2026-11-08), shortcut on hover.
   **Right panel** (2026-10-27, `TriApp::side_begin` / `side_end`): ↑ ↓ / `j` `k` also go
   through the **settings** above the EXIF (section titles included), one at a time;
   **Space** / Enter use the pointed setting (check, choose, fold a section, slider to the
