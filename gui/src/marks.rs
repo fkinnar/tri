@@ -662,40 +662,42 @@ pub fn file_action(painter: &Painter, rect: Rect, action: Action, color: Color32
             }
         }
         Action::Sidecars => {
-            // Sidecar : une feuille au coin corné, et un point (la note) à côté.
-            painter.add(Shape::closed_line(
+            // Générer les sidecars : une feuille au coin corné portant une étoile (les
+            // notes), et un « + » (création) en bas à droite.
+            painter.add(Shape::line(
                 vec![
-                    p(0.06, 0.04),
-                    p(0.5, 0.04),
-                    p(0.68, 0.22),
-                    p(0.68, 0.96),
-                    p(0.06, 0.96),
+                    p(0.62, 0.62),
+                    p(0.62, 0.22),
+                    p(0.44, 0.04),
+                    p(0.04, 0.04),
+                    p(0.04, 0.96),
+                    p(0.56, 0.96),
                 ],
                 stroke,
             ));
-            painter.line_segment([p(0.5, 0.04), p(0.5, 0.22)], stroke);
-            painter.line_segment([p(0.5, 0.22), p(0.68, 0.22)], stroke);
-            painter.circle_filled(p(0.86, 0.8), w * 0.1, color);
+            painter.line_segment([p(0.44, 0.04), p(0.44, 0.22)], stroke);
+            painter.line_segment([p(0.44, 0.22), p(0.62, 0.22)], stroke);
+            star(painter, p(0.33, 0.52), w * 0.22, color);
+            painter.line_segment([p(0.8, 0.62), p(0.8, 1.0)], stroke);
+            painter.line_segment([p(0.61, 0.81), p(0.99, 0.81)], stroke);
         }
-        Action::EmbedNotes => {
-            // Notes dans l'image : un cadre (la photo) et une étoile dedans.
+        Action::EmbedNotes | Action::ImportNotes => {
+            // Notes dans l'image / relues de l'image : le même cadre (la photo) avec son
+            // étoile, et une flèche qui y entre (inscrire) ou qui en sort (relire), pour
+            // qu'on voie que l'une est l'inverse de l'autre.
             painter.add(Shape::closed_line(
-                vec![p(0.04, 0.14), p(0.96, 0.14), p(0.96, 0.86), p(0.04, 0.86)],
+                vec![p(0.0, 0.36), p(1.0, 0.36), p(1.0, 1.0), p(0.0, 1.0)],
                 stroke,
             ));
-            star(painter, p(0.5, 0.5), w * 0.24, color);
-        }
-        Action::ImportNotes => {
-            // Notes relues de l'image : le cadre, et une étoile qui en sort (flèche vers le
-            // bas, vers le sidecar).
-            painter.add(Shape::closed_line(
-                vec![p(0.04, 0.04), p(0.96, 0.04), p(0.96, 0.6), p(0.04, 0.6)],
-                stroke,
-            ));
-            star(painter, p(0.5, 0.32), w * 0.18, color);
-            painter.line_segment([p(0.5, 0.66), p(0.5, 0.98)], stroke);
-            painter.line_segment([p(0.32, 0.8), p(0.5, 0.98)], stroke);
-            painter.line_segment([p(0.68, 0.8), p(0.5, 0.98)], stroke);
+            star(painter, p(0.5, 0.69), w * 0.25, color);
+            painter.line_segment([p(0.5, 0.0), p(0.5, 0.28)], stroke);
+            let (tip, back) = if action == Action::EmbedNotes {
+                (0.28, 0.12)
+            } else {
+                (0.0, 0.16)
+            };
+            painter.line_segment([p(0.32, back), p(0.5, tip)], stroke);
+            painter.line_segment([p(0.68, back), p(0.5, tip)], stroke);
         }
         Action::FileReveal => {
             // Dossier : onglet puis corps.

@@ -4,6 +4,10 @@
 
 ## Non publié
 
+- **Icônes des notes plus parlantes** (#374) : « Inscrire les notes dans les images » et
+  « Relire les notes depuis les images » ont le même dessin (une photo et son étoile)
+  avec une flèche qui entre ou qui sort, pour qu'on voie que l'une est l'inverse de
+  l'autre ; « Générer les sidecars » montre une feuille avec une étoile et un « + ».
 - **Raccourcis cités à jour** (#372) : les descriptions des réglages et quelques messages
   (aide-mémoire du plein écran, « Avant » d'un développement, préréglages de version…)
   citaient des raccourcis écrits en dur, parfois périmés (« Maj+B » pour voir ses

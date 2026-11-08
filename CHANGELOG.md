@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- **Clearer note icons** (#374): "Write ratings into the images" and "Read ratings
+  back from the images" share the same picture (a photo with its star) with an arrow
+  going in or coming out, so one reads as the reverse of the other; "Generate sidecars"
+  shows a sheet with a star and a "+".
 - **Cited shortcuts up to date** (#372): setting descriptions and a few messages
   (full-screen key reminder, "Before" of a development, version presets…) cited
   hard-coded shortcuts, some of them stale ("Shift+B" to see one's developments, "b" for
