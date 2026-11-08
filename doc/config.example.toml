@@ -68,13 +68,12 @@ thumbnails_first = true
 exposure = true
 
 [xmp]
-# Nom d'un NOUVEAU sidecar : "darktable" (IMAGE.RAF.xmp, un par fichier) ou "adobe"
-# (IMAGE.xmp, Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire).
-# Un sidecar existant est toujours réutilisé, le plus récent si les deux existent.
+# Nom d'un NOUVEAU sidecar : "darktable" (IMAGE.RAF.xmp, un par fichier), "adobe"
+# (IMAGE.xmp, Lightroom, Capture One, Bridge ; partagé par le RAF et le JPG d'une paire) ou
+# "both" (les deux, pour passer d'un logiciel à l'autre). Un sidecar existant est toujours
+# réutilisé ; s'il y en a deux, les deux sont lus (fusionnés) et écrits. « Générer les
+# sidecars » crée ceux que la convention attend et qui manquent.
 sidecar = "darktable"
-# Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
-# remplace la précédente (comme Lightroom).
-multiple_colors = false
 # Notes inscrites aussi dans les images elles-mêmes (JPEG, PNG, WebP, TIFF, HEIC ; jamais
 # un RAW) à chaque note, et fusions venues d'autres logiciels propagées à toutes les
 # sources : "never" (sur demande seulement : « Inscrire les notes dans les images »,
@@ -82,6 +81,37 @@ multiple_colors = false
 # réseau), "everywhere". Un dossier peut avoir son propre réglage (clic droit sur le
 # dossier), prioritaire. Les notes vont toujours aussi dans les sidecars.
 embed = "never"
+# Plusieurs couleurs par image (comme Darktable) ; false : une seule, une nouvelle couleur
+# remplace la précédente (comme Lightroom). Une seule : écrite dans xmp:Label (lu par
+# Lightroom, XnView, l'Explorateur Windows…), darktable:colorlabels et
+# digiKam:ColorLabel. Plusieurs : comme darktable, seulement
+# darktable:colorlabels ; xmp:Label et digiKam:ColorLabel ne sont plus touchés (ils ne
+# portent qu'une couleur).
+multiple_colors = false
+# Une seule couleur : ordre de lecture des champs qui en portent une, le premier trouvé
+# l'emporte : "darktable" (darktable:colorlabels, s'il n'a qu'une couleur), "label"
+# (xmp:Label) et "digikam" (digiKam:ColorLabel). darktable réécrit sa couleur à chaque
+# changement mais ne touche jamais xmp:Label, qui peut rester en arrière : d'où darktable en
+# tête. Un champ oublié est lu en dernier ; un champ décoché dans [xmp.fields] n'est pas lu.
+# Plusieurs couleurs : la liste de darktable est toujours lue en premier ; l'ordre ne
+# départage que les autres (fichier sans liste darktable).
+color_sources = ["darktable", "label", "digikam"]
+
+# Champs gérés par logiciel (lus et écrits), dans les sidecars et les images : décocher
+# ceux d'un logiciel qu'on n'utilise pas. Un champ décoché est ignoré : ni lu, ni écrit, ni
+# retiré (il reste tel quel), et il sort de color_sources. Les étoiles (xmp:Rating, le
+# standard) sont toujours gérées. Plusieurs couleurs demandent darktable (sa liste est le
+# seul champ qui en porte plusieurs) : sans lui, une seule.
+[xmp.fields]
+# xmp:Label : la couleur, en mode une couleur (Lightroom, Capture One, XnView, Explorateur
+# Windows…).
+label = true
+# darktable:colorlabels : les couleurs de darktable.
+darktable = true
+# digiKam:ColorLabel (en mode une couleur) et digiKam:PickLabel (accepté / rejeté).
+digikam = true
+# xmpDM:pick et xmpDM:good : accepté / rejeté de Lightroom Classic.
+lightroom = true
 
 # Sidecars des logiciels de développement (31/10/2026) : une sous-section par logiciel qui
 # a le sien. Un sidecar existant reçoit toujours les notes ; un sidecar manquant est créé

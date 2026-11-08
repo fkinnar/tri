@@ -3752,6 +3752,7 @@ dependencies = [
 name = "tri-gui"
 version = "1.0.0-alpha.8"
 dependencies = [
+ "chrono",
  "eframe",
  "egui_kittest",
  "image",

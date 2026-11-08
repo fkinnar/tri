@@ -174,6 +174,10 @@ pub struct Conflict {
     pub fields: Vec<Field>,
     /// Chaque source et ses notes.
     pub sources: Vec<(String, Notes)>,
+    /// Date de modification de chaque source, dans l'ordre de `sources` (nanosecondes
+    /// depuis 1970 ; 0 : inconnue) : un indice pour choisir (08/11/2026, idée de
+    /// l'utilisateur : un sidecar de 2012 face à un de 2026).
+    pub modified: Vec<u64>,
     /// Les notes retenues la dernière fois, s'il y en a.
     pub before: Option<Notes>,
     /// Les champs qui ne sont pas en désaccord, déjà fusionnés (ceux en désaccord : les
@@ -308,6 +312,7 @@ pub fn reconcile(
         let conflict = Conflict {
             fields,
             sources: named(sources),
+            modified: modified(sources),
             before: None,
             merged: newest.clone(),
         };
@@ -373,6 +378,7 @@ pub fn reconcile(
         let conflict = Conflict {
             fields: conflicts,
             sources: named(sources),
+            modified: modified(sources),
             before: Some(before.clone()),
             merged,
         };
@@ -402,6 +408,15 @@ fn disagreeing<'a>(notes: impl Iterator<Item = &'a Notes> + Clone) -> Vec<Field>
         }
     }
     fields
+}
+
+/// Dates de modification des sources qui parlent, dans l'ordre de [`named`].
+fn modified(sources: &[Source]) -> Vec<u64> {
+    sources
+        .iter()
+        .filter(|s| !s.silent)
+        .map(|s| s.stamp.modified)
+        .collect()
 }
 
 fn named(sources: &[Source]) -> Vec<(String, Notes)> {
@@ -762,6 +777,7 @@ mod tests {
         assert_eq!(c.merged.stars, 3, "en désaccord : celles d'avant");
         assert_eq!(c.before, Some(base));
         assert_eq!(c.sources.len(), 2);
+        assert_eq!(c.modified.len(), 2, "une date par source");
     }
 
     #[test]

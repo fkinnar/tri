@@ -89,6 +89,7 @@ fn main() -> eframe::Result {
     // Journal des plantages, dans le dossier de données (voir `crash.rs`).
     // Repli de la mémoire des notes pour les dossiers en lecture seule (issue n° 368).
     tri::reconcile::set_data_dir(settings.engine().data_dir());
+    tri::xmp::set_rules(settings.engine().xmp.rules());
     if let Some(data) = settings.engine().data_dir() {
         crash::install(data);
     }

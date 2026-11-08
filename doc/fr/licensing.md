@@ -65,8 +65,8 @@ sous MIT, avec `memchr` sous Unlicense OR MIT ; `kamadak-exif` — EXIF des imag
 plates et du JPEG embarqué des RAW — sous BSD-2-Clause, avec `mutate_once` sous
 BSD-2-Clause ; `trash` — corbeille du système, maintenu, version du 13/09/2026 — sous
 MIT, avec `objc2`, `objc2-foundation`, `objc2-encode`, `urlencoding` sous MIT et
-`percent-encoding`, `scopeguard`, `once_cell`, `chrono`, `windows` sous MIT OR
-Apache-2.0 ; `fluent-bundle`, `fluent-syntax`, `fluent-langneg`, `intl-memoizer`,
+`percent-encoding`, `scopeguard`, `once_cell`, `chrono` (aussi utilisé directement par
+l'interface pour l'heure locale des dates, 08/11/2026), `windows` sous MIT OR Apache-2.0 ; `fluent-bundle`, `fluent-syntax`, `fluent-langneg`, `intl-memoizer`,
 `intl_pluralrules`, `unic-langid` — traductions — sous MIT OR Apache-2.0, avec `tinystr`
 sous Unicode-3.0 et `self_cell` sous Apache-2.0 OR GPL-2.0-only, dont on retient
 l'Apache-2.0 ; `sys-locale` — langue du système — sous MIT OR Apache-2.0 ; `moxcms` —
