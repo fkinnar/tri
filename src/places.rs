@@ -222,6 +222,17 @@ pub fn removable_roots(filter: &PlaceSettings) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Racines hors des « disques internes » : disques amovibles ([`removable_roots`]) et
+/// partages réseau montés. Le niveau « internes » de `[xmp] embed` n'y écrit pas
+/// d'office (voir [`crate::embedded::Auto`]).
+pub fn outside_roots(filter: &PlaceSettings) -> Vec<PathBuf> {
+    places_filtered(filter)
+        .into_iter()
+        .filter(|p| filter.ejectable(p) || p.kind == PlaceKind::Network)
+        .map(|p| p.path)
+        .collect()
+}
+
 /// Emplacements de cette machine, sauf ceux que `filter` masque.
 pub fn places_filtered(filter: &PlaceSettings) -> Vec<Place> {
     places().into_iter().filter(|p| !filter.hides(p)).collect()

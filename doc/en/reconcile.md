@@ -97,6 +97,23 @@ sources renamed like them. Without it, an image with a source left behind (the i
 not rewritten) would be in conflict at its new place. A copied or moved folder takes its
 `.tri` with it. Undo goes through the same functions.
 
-## To come
+## Automation (2026-11-07)
 
-Automation: write everywhere, merge on the fly on changes seen by watching.
+- **Writing by itself** (`[xmp] embed`): `never` (default), `internal` (internal and
+  fixed disks; not a removable disk or a network share, `places::outside_roots`),
+  `everywhere`. On each rating (and undo, settling a conflict), the ratings also go into
+  the image (`NoteBook::embeds`). Never an image in conflict.
+- **Folder setting**, which wins ("this removable disk, yes"): as in the settings,
+  always or never; kept in `.tri/notes.json` (`embed` field, `Memory::embed`), so it
+  travels with the folder; the folder alone, not its subfolders (exceptions set
+  knowingly). Right-click on the folder, "Ratings in the images"; a mark in the folder
+  panel (accent: always; grey crossed out: never). `NoteBook::folder_embed`,
+  `set_folder_embed`.
+- **Merge on the fly**: watching reads the folder again when an image or a sidecar
+  moves; the merge happens on reading, and a conflict shows the triangle.
+- **Propagation**: a merge coming from one source is written at once into the others
+  (existing sidecars; the image if it receives ratings by itself), where `tri` writes by
+  itself (`NoteBook::writes_automatically`, `propagate`).
+- After its own writes into images, `tri` resets watching (`own_writes_done`): no
+  reading the folder again as for a change made elsewhere.
+- Dropped for now: a "ratings in the files, no sidecar" folder.

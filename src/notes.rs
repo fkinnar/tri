@@ -58,6 +58,11 @@ pub struct NoteBook {
     /// Images dont les notes viennent d'être fusionnées depuis d'autres sources, et
     /// lesquelles (à dire à l'utilisateur, [`NoteBook::take_merged`]).
     merged: Vec<(PathBuf, Vec<String>)>,
+    /// Écriture automatique (`[xmp] embed`) et racines exclues au niveau « internes »
+    /// (disques amovibles, partages réseau) ; réglages propres aux dossiers, lus une fois.
+    auto: crate::embedded::Auto,
+    outside: Vec<PathBuf>,
+    folder_embed: std::cell::RefCell<HashMap<PathBuf, Option<bool>>>,
 }
 
 /// Notes de `images` (toutes dans `dir`), lues avec une seule liste du dossier ; un
@@ -287,6 +292,100 @@ impl NoteBook {
                 .push(image.to_path_buf());
         }
         book
+    }
+
+    /// Écriture automatique (`[xmp] embed`, issue n° 368) : `auto`, et `outside` les
+    /// racines des disques amovibles et partages réseau, exclues au niveau
+    /// [`crate::embedded::Auto::Internal`].
+    pub fn set_embed(&mut self, auto: crate::embedded::Auto, outside: Vec<PathBuf>) {
+        self.auto = auto;
+        self.outside = outside;
+    }
+
+    /// Réglage propre au dossier `dir` : `Some(true)` toujours écrire, `Some(false)`
+    /// jamais, `None` selon `[xmp] embed` ([`crate::reconcile::Memory::embed`]).
+    pub fn folder_embed(&self, dir: &Path) -> Option<bool> {
+        if let Some(&known) = self.folder_embed.borrow().get(dir) {
+            return known;
+        }
+        let value = crate::reconcile::Memory::open(dir).embed();
+        self.folder_embed
+            .borrow_mut()
+            .insert(dir.to_path_buf(), value);
+        value
+    }
+
+    /// Change le réglage propre au dossier `dir` (gardé dans son `.tri/notes.json`).
+    pub fn set_folder_embed(&mut self, dir: &Path, embed: Option<bool>) -> std::io::Result<()> {
+        let mut memory = crate::reconcile::Memory::open(dir);
+        memory.set_embed(embed);
+        memory.save()?;
+        self.folder_embed
+            .borrow_mut()
+            .insert(dir.to_path_buf(), embed);
+        Ok(())
+    }
+
+    /// Vrai si `tri` écrit de lui-même les notes de `image` partout (son image, la
+    /// propagation d'une fusion) : réglage du dossier, sinon `[xmp] embed` d'après le
+    /// disque.
+    pub fn writes_automatically(&self, image: &Path) -> bool {
+        use crate::embedded::Auto;
+        match self.folder_embed(&dir_of(image)) {
+            Some(on) => on,
+            None => match self.auto {
+                Auto::Never => false,
+                Auto::Everywhere => true,
+                Auto::Internal => !self.outside.iter().any(|r| image.starts_with(r)),
+            },
+        }
+    }
+
+    /// Vrai si les notes de `image` vont aussi dans l'image à chaque écriture.
+    fn embeds(&self, image: &Path) -> bool {
+        crate::embedded::supports(image)
+            && crate::developments::get(image).is_none()
+            && self.writes_automatically(image)
+    }
+
+    /// Propage à toutes leurs sources les notes fusionnées de `images` (issue n° 368 :
+    /// une couleur posée dans XnView va aussitôt dans le XMP de darktable) : leurs
+    /// sidecars existants, et l'image si elle les reçoit d'office. Seulement là où `tri`
+    /// écrit de lui-même ([`NoteBook::writes_automatically`]) ; jamais une image en conflit
+    /// ou au sidecar illisible. Renvoie les images écrites, et la première erreur.
+    pub fn propagate(&mut self, images: &[PathBuf]) -> (Vec<PathBuf>, Option<String>) {
+        let mut written = Vec::new();
+        let mut error = None;
+        for image in images {
+            let Some(entry) = self.entries.get(image) else {
+                continue;
+            };
+            if entry.conflict.is_some()
+                || entry.error.is_some()
+                || !self.writes_automatically(image)
+            {
+                continue;
+            }
+            let notes = entry.notes.clone();
+            let mut failed = false;
+            for sidecar in entry.sidecars.clone() {
+                if let Err(e) = write_sidecar(&sidecar, &notes) {
+                    error.get_or_insert(format!("{} : {e}", sidecar.display()));
+                    failed = true;
+                }
+            }
+            if self.embeds(image)
+                && let Err(e) = crate::embedded::write(image, &notes)
+            {
+                error.get_or_insert(format!("{} : {e}", image.display()));
+                failed = true;
+            }
+            remember(image, &notes);
+            if !failed {
+                written.push(image.clone());
+            }
+        }
+        (written, error)
     }
 
     /// Inscrit les notes actuelles de `images` dans les images elles-mêmes (sur demande,
@@ -759,6 +858,12 @@ impl NoteBook {
                     message,
                 })?;
             }
+            if self.embeds(image) {
+                crate::embedded::write(image, notes).map_err(|message| XmpError::Image {
+                    image: image.to_path_buf(),
+                    message,
+                })?;
+            }
             remember(image, notes);
         }
         // L'image et sa paire seulement (un sidecar n'est partagé qu'entre elles) : relire
@@ -880,6 +985,21 @@ impl NoteBook {
         }
         if written.is_empty() && failure.is_none() {
             return Ok(Vec::new());
+        }
+        // Aussi dans l'image, là où `tri` écrit de lui-même (`[xmp] embed`, réglage du
+        // dossier).
+        for target in &remembered {
+            if self.embeds(target) {
+                match crate::embedded::write(target, &notes) {
+                    Ok(_) => written.push(target.clone()),
+                    Err(message) => {
+                        failure.get_or_insert(XmpError::Image {
+                            image: target.clone(),
+                            message,
+                        });
+                    }
+                }
+            }
         }
         // Ce que `tri` vient d'écrire fait foi (une source restée en retard n'est pas un
         // changement, ni, sans mémoire, un désaccord).
@@ -1391,6 +1511,89 @@ mod tests {
             Ok(false)
         );
         assert!(book.import(&images, false).iter().all(|(_, r)| r.is_ok()));
+    }
+
+    #[test]
+    fn ratings_go_into_the_images_where_tri_writes_by_itself() {
+        // Issue n° 368, automatisation : `[xmp] embed`, et le réglage du dossier qui
+        // l'emporte (« ce support amovible-là, oui »).
+        use crate::embedded::Auto;
+        let dir = tempfile::tempdir().unwrap();
+        let (inside, card) = (dir.path().join("disque"), dir.path().join("carte"));
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::create_dir_all(&card).unwrap();
+        let (a, b) = (inside.join("A.jpg"), card.join("B.jpg"));
+        std::fs::write(&a, jpeg()).unwrap();
+        std::fs::write(&b, jpeg()).unwrap();
+        let mut book = NoteBook::load([a.as_path(), b.as_path()], Convention::Darktable);
+        let stars = |p: &Path| crate::embedded::read(p).unwrap().map(|n| n.stars);
+        // Par défaut : jamais.
+        book.edit(&a, |n| n.set_stars(1)).unwrap();
+        assert_eq!(stars(&a), None);
+        // Internes : le disque oui, la carte non.
+        book.set_embed(Auto::Internal, vec![card.clone()]);
+        book.edit(&a, |n| n.set_stars(3)).unwrap();
+        book.edit(&b, |n| n.set_stars(3)).unwrap();
+        assert_eq!(stars(&a), Some(3));
+        assert_eq!(stars(&b), None, "carte : non");
+        // Cette carte-là, oui (réglage du dossier, gardé à côté des photos).
+        book.set_folder_embed(&card, Some(true)).unwrap();
+        assert_eq!(crate::reconcile::Memory::open(&card).embed(), Some(true));
+        book.edit(&b, |n| n.set_stars(4)).unwrap();
+        assert_eq!(stars(&b), Some(4));
+        // Et ce disque-là, non.
+        book.set_folder_embed(&inside, Some(false)).unwrap();
+        book.edit(&a, |n| n.set_stars(5)).unwrap();
+        assert_eq!(stars(&a), Some(3), "plus d'écriture ici");
+        // L'annulation suit le même réglage.
+        let mut two = Notes::default();
+        two.set_stars(2);
+        book.write_only(&b, &two).unwrap();
+        assert_eq!(stars(&b), Some(2));
+        // Rien de tout cela n'est un désaccord.
+        book.reload();
+        assert!(book.conflicts().is_empty());
+    }
+
+    #[test]
+    fn a_merge_is_propagated_to_every_source_where_tri_writes_by_itself() {
+        // Une couleur posée ailleurs dans l'image (XnView) va aussitôt dans le sidecar ;
+        // et inversement une note du sidecar va dans l'image.
+        use crate::embedded::Auto;
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("A.jpg");
+        std::fs::write(&a, jpeg()).unwrap();
+        let mut book = NoteBook::load([a.as_path()], Convention::Darktable);
+        book.set_embed(Auto::Everywhere, Vec::new());
+        book.edit(&a, |n| n.set_stars(3)).unwrap();
+        assert_eq!(crate::embedded::read(&a).unwrap().unwrap().stars, 3);
+        let mut red = Notes::default();
+        red.set_stars(3);
+        red.colors = vec![Color::Red];
+        crate::embedded::write(&a, &red).unwrap();
+        book.reload();
+        let merged: Vec<PathBuf> = book.take_merged().into_iter().map(|(p, _)| p).collect();
+        assert_eq!(merged.as_slice(), std::slice::from_ref(&a));
+        let (written, error) = book.propagate(&merged);
+        assert_eq!((written, error), (vec![a.clone()], None));
+        assert_eq!(
+            xmp::read(&a).unwrap().colors,
+            [Color::Red],
+            "le sidecar a suivi"
+        );
+        book.reload();
+        assert!(book.take_merged().is_empty(), "plus rien de neuf");
+        // Là où `tri` n'écrit pas de lui-même : rien.
+        book.set_embed(Auto::Never, Vec::new());
+        crate::embedded::write(&a, &Notes::default()).unwrap();
+        book.reload();
+        let merged: Vec<PathBuf> = book.take_merged().into_iter().map(|(p, _)| p).collect();
+        assert_eq!(book.propagate(&merged).0, Vec::<PathBuf>::new());
+        assert_eq!(
+            xmp::read(&a).unwrap().colors,
+            [Color::Red],
+            "sidecar inchangé"
+        );
     }
 
     #[test]

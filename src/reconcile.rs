@@ -423,6 +423,10 @@ pub const FILE: &str = "notes.json";
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Document {
     version: u32,
+    /// Réglage propre au dossier : notes inscrites dans les images ou non, prioritaire
+    /// sur `[xmp] embed` ([`Memory::embed`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    embed: Option<bool>,
     #[serde(default)]
     images: BTreeMap<String, Remembered>,
 }
@@ -434,6 +438,7 @@ struct Document {
 pub struct Memory {
     dir: PathBuf,
     images: BTreeMap<String, Remembered>,
+    embed: Option<bool>,
     fallback: Option<PathBuf>,
     changed: bool,
 }
@@ -463,18 +468,33 @@ impl Memory {
     /// seront signalées).
     pub fn load(dir: &Path, data: Option<&Path>) -> Memory {
         let fallback = data.map(|d| fallback_path(d, dir));
-        let images = [Some(own_path(dir)), fallback.clone()]
+        let document = [Some(own_path(dir)), fallback.clone()]
             .into_iter()
             .flatten()
             .find_map(|p| std::fs::read(&p).ok())
             .and_then(|bytes| serde_json::from_slice::<Document>(&bytes).ok())
-            .map(|d| d.images)
             .unwrap_or_default();
         Memory {
             dir: dir.to_path_buf(),
-            images,
+            images: document.images,
+            embed: document.embed,
             fallback,
             changed: false,
+        }
+    }
+
+    /// Réglage propre au dossier (décidé le 07/11/2026 : « ce support amovible-là,
+    /// oui ») : `Some(true)` toujours inscrire les notes dans les images, `Some(false)`
+    /// jamais, `None` selon `[xmp] embed`. Le dossier seul, pas ses sous-dossiers.
+    pub fn embed(&self) -> Option<bool> {
+        self.embed
+    }
+
+    /// Change le réglage propre au dossier ([`Memory::embed`]).
+    pub fn set_embed(&mut self, embed: Option<bool>) {
+        if self.embed != embed {
+            self.embed = embed;
+            self.changed = true;
         }
     }
 
@@ -503,7 +523,7 @@ impl Memory {
             return Ok(());
         }
         let own = own_path(&self.dir);
-        if self.images.is_empty() {
+        if self.images.is_empty() && self.embed.is_none() {
             let _ = std::fs::remove_file(&own);
             let _ = std::fs::remove_dir(self.dir.join(DIR));
             if let Some(f) = &self.fallback {
@@ -514,6 +534,7 @@ impl Memory {
         }
         let document = Document {
             version: 1,
+            embed: self.embed,
             images: std::mem::take(&mut self.images),
         };
         let json = serde_json::to_vec_pretty(&document).map_err(io::Error::other);
@@ -936,6 +957,20 @@ mod tests {
         // Supprimé : oublié (et le fichier, vide, retiré).
         forget(&[s.join("B.jpg")]);
         assert!(!s.join(DIR).exists());
+    }
+
+    #[test]
+    fn a_folder_setting_is_kept_even_without_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut memory = Memory::load(dir.path(), None);
+        assert_eq!(memory.embed(), None);
+        memory.set_embed(Some(true));
+        memory.save().unwrap();
+        assert_eq!(Memory::load(dir.path(), None).embed(), Some(true));
+        let mut memory = Memory::load(dir.path(), None);
+        memory.set_embed(None);
+        memory.save().unwrap();
+        assert!(!dir.path().join(DIR).exists(), "plus rien : retiré");
     }
 
     #[cfg(unix)]

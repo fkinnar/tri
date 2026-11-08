@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- **Ratings kept in step by themselves** (#368): with `[xmp] embed` = `internal`
+  (internal and fixed disks) or `everywhere`, each rating also goes into the image
+  (JPEG, PNG, WebP, TIFF, HEIC), and a rating merged from another program is written at
+  once into the other sources (an XnView colour reaches darktable's XMP). A folder can
+  have its own setting, which wins (right-click on the folder, "Ratings in the images":
+  as in the settings, always, never), kept in its `.tri` folder and marked in the folder
+  panel; it does not apply to subfolders.
 - **Ratings changed in several programs are merged** (#368): when darktable changes the
   stars and RapidRAW the colour (or XnView the image itself), both are kept, field by
   field, instead of the most recent sidecar winning, and the status bar says so. `tri`

@@ -145,6 +145,11 @@ pub struct XmpSection {
     /// Plusieurs couleurs par image (comme darktable) ; sinon une seule, une nouvelle
     /// couleur remplaçant la précédente (comme Lightroom).
     pub multiple_colors: bool,
+    /// Inscrire aussi les notes dans les images (JPEG, PNG, WebP, TIFF, HEIC) à chaque
+    /// note, et y propager une fusion venue d'un autre logiciel : jamais (défaut), sur les
+    /// disques internes, ou partout ; un dossier peut avoir son propre réglage. Voir
+    /// [`crate::embedded`], [`crate::reconcile`].
+    pub embed: crate::embedded::Auto,
 }
 
 /// Section `[preview]` : voir [`preview::Settings`].
