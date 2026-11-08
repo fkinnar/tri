@@ -2177,14 +2177,14 @@ impl SettingsWindow {
                     let name = RichText::new(t!(programs));
                     ui.label(if in_file { name.strong() } else { name });
                     ui.label(RichText::new(fields).monospace());
-                    ui.weak(t!(what));
+                    ui.label(t!(what));
                     ui.end_row();
                 }
                 let mut always = true;
                 ui.add_enabled(false, egui::Checkbox::new(&mut always, ""));
-                ui.weak(t!("settings-fields-all"));
+                ui.label(t!("settings-fields-all"));
                 ui.label(RichText::new("xmp:Rating").monospace());
-                ui.weak(t!("settings-fields-for-stars"));
+                ui.label(t!("settings-fields-for-stars"));
                 ui.end_row();
             });
         if let Some((key, on)) = set {
