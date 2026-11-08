@@ -180,7 +180,10 @@ action-core-stack-enter = En entrant dans une pile : sa première photo (allumé
 dev-count-tip = { $n ->
     [one] { $n } développement
    *[other] { $n } développements
-  } · { $keys } : déplier / replier
+  } · { $has ->
+    [yes] clic ou { $keys }
+   *[no] clic
+  } : déplier / replier
 dev-clone = clone { $n }
 dev-copy = copie { $n }
 dev-none = Cette photo n'a pas de développement (darktable, RapidRAW)
@@ -188,7 +191,10 @@ dev-before = Avant : le JPEG boîtier à la place du développement (<core.view.
 dev-after = Après : le développement
 dev-preferred = { $name } : couverture de la photo
 dev-preferred-none = Plus de développement préféré : la pile se replie sur le plus récent
-dev-fold-tip = Replier les développements ({ $keys }) · Alt+clic : replier et garder celui-ci en couverture
+dev-fold-tip = Replier les développements{ $has ->
+    [yes] {" "}({ $keys })
+   *[no] {""}
+  } · Alt+clic : replier et garder celui-ci en couverture
 dev-folded-already = Toutes les piles de développements sont repliées
 dev-badge-tip = Développement : { $name }
 dev-badge-tip-pending = Développement : { $name } (vignette de la photo en attendant son rendu)

@@ -2370,7 +2370,7 @@ impl TriApp {
                     self.group_strictness,
                     t!(
                         "stack-slider-tip",
-                        keys = self.keymap.keys_for(Action::GroupingWindow).join(" / ")
+                        keys = self.keys_text(Action::GroupingWindow)
                     ),
                     pressed,
                     self.gui.metadata.slider_step,
@@ -2433,7 +2433,7 @@ impl TriApp {
                 let camera = self.camera_exposure_of(self.selected);
                 let mut tip = t!(
                     "histogram-enlarge",
-                    keys = self.keymap.keys_for(Action::HistogramLarge).join(" / ")
+                    keys = self.keys_text(Action::HistogramLarge)
                 );
                 if camera.is_some() {
                     tip = format!("{tip}\n{}", t!("histogram-camera-tip-short"));
@@ -4938,7 +4938,7 @@ impl TriApp {
         ui.spacing_mut().slider_width = width;
         let mut cell = self.grid_cell;
         let keys = [Action::ZoomOut, Action::ZoomIn]
-            .map(|a| self.keymap.keys_for(a).join(" / "))
+            .map(|a| self.keys_text(a))
             .join(" ; ");
         let slider = ui
             .add(
@@ -6369,7 +6369,7 @@ impl TriApp {
             }
             // La loupe se tient (palette, aide) : rappeler sa touche.
             Action::Loupe => {
-                let keys = self.keymap.keys_for(Action::Loupe).join(" / ");
+                let keys = self.keys_text(Action::Loupe);
                 self.notice = Some((t!("loupe-hold", keys = keys), false));
             }
             Action::ReviewDevelopments => {
@@ -7032,7 +7032,7 @@ impl TriApp {
                     t!(
                         "stack-enter-needs-stacks",
                         now = now,
-                        keys = self.keymap.keys_for(Action::StackMode).join(" / ")
+                        keys = self.keys_text(Action::StackMode)
                     )
                 });
             }
@@ -7059,7 +7059,7 @@ impl TriApp {
                         self.file_action(file_action, paths, at);
                     }
                     None => {
-                        let keys = self.keymap.keys_for(Action::StackMode).join(" / ");
+                        let keys = self.keys_text(Action::StackMode);
                         self.notice = Some((t!("stack-actions-need-stacks", keys = keys), true));
                     }
                 }
@@ -7348,18 +7348,26 @@ impl TriApp {
         }
     }
 
-    /// Raccourcis d'une action, lisibles, pour un texte qui les cite (« <leader> Maj+h »).
+    /// Raccourcis d'une action, lisibles, pour un texte qui les cite (« <leader> Maj+h ») ;
+    /// « sans raccourci » s'il n'y en a pas (08/11/2026 : un vide laissait « () »).
     fn keys_text(&self, action: Action) -> String {
-        self.keymap.keys_for(action).join(" / ")
+        let keys = self.keymap.keys_for(action);
+        if keys.is_empty() {
+            t!("keys-none-short")
+        } else {
+            keys.join(" / ")
+        }
     }
 
-    /// Bulle d'un contrôle : libellé de l'action et ses raccourcis.
+    /// Bulle d'un contrôle : libellé de l'action, et ses raccourcis entre parenthèses s'il
+    /// en a (retour du 08/11/2026 : « … () » pour une action sans raccourci).
     fn action_tip(&self, action: Action) -> String {
-        format!(
-            "{} ({})",
-            action.label(),
-            self.keymap.keys_for(action).join(" / ")
-        )
+        let keys = self.keymap.keys_for(action);
+        if keys.is_empty() {
+            action.label()
+        } else {
+            format!("{} ({})", action.label(), keys.join(" / "))
+        }
     }
 
     /// Note l'image sélectionnée ; avec l'avance automatique, passe ensuite à la suivante.
@@ -8579,7 +8587,7 @@ impl TriApp {
             return;
         }
         ctx.request_repaint_after(duration - since.elapsed());
-        let keys = self.keymap.keys_for(Action::FocusMode).join(" / ");
+        let keys = self.keys_text(Action::FocusMode);
         egui::Area::new(egui::Id::unique("focus_mode_hint"))
             .anchor(Align2::CENTER_TOP, vec2(0.0, 16.0))
             .interactable(false)
@@ -8940,7 +8948,7 @@ impl TriApp {
             if index == self.selected
                 && let Level::Developed(engine) = level
             {
-                let keys = self.keymap.keys_for(Action::Develop).join(" / ");
+                let keys = self.keys_text(Action::Develop);
                 self.notice = Some((
                     t!("develop-stale", engine = engine.name(), keys = keys),
                     false,
@@ -10853,7 +10861,7 @@ impl TriApp {
                 _ if asked => t!("view-info-developed-pending"),
                 _ => t!(
                     "view-info-developed-none",
-                    keys = self.keymap.keys_for(Action::Develop).join(" / ")
+                    keys = self.keys_text(Action::Develop)
                 ),
             });
         } else if raw_pending {
@@ -12244,7 +12252,7 @@ impl TriApp {
                             "histogram-scale-tip",
                             current = current,
                             other = other,
-                            keys = self.keymap.keys_for(Action::HistogramScale).join(" / ")
+                            keys = self.keys_text(Action::HistogramScale)
                         );
                         let response = ui
                             .interact(button, egui::Id::unique("histogram_scale"), Sense::click())
@@ -12262,7 +12270,7 @@ impl TriApp {
                         // Photo d'analyse : icône à gauche de l'échelle, en couleur d'accent
                         // quand elle est montrée.
                         let button = histogram::photo_button(rect, self.gui.histogram.channel_dot);
-                        let key = self.keymap.keys_for(Action::HistogramPhoto).join(" / ");
+                        let key = self.keys_text(Action::HistogramPhoto);
                         let response = ui
                             .interact(button, egui::Id::unique("histogram_photo"), Sense::click())
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -12283,7 +12291,7 @@ impl TriApp {
                         if is_raw {
                             let button =
                                 histogram::camera_button(rect, self.gui.histogram.channel_dot);
-                            let key = self.keymap.keys_for(Action::HistogramCamera).join(" / ");
+                            let key = self.keys_text(Action::HistogramCamera);
                             let response = ui
                                 .interact(
                                     button,
@@ -12308,8 +12316,8 @@ impl TriApp {
                             let tip = t!(
                                 "histogram-channel-tip",
                                 channel = name,
-                                key = self.keymap.keys_for(direct[i]).join(" / "),
-                                keys = self.keymap.keys_for(Action::HistogramChannel).join(" / ")
+                                key = self.keys_text(direct[i]),
+                                keys = self.keys_text(Action::HistogramChannel)
                             );
                             if ui
                                 .interact(
@@ -13259,7 +13267,7 @@ impl TriApp {
                 }
                 for action in actions {
                     let (name, tip) = if action == Action::Back {
-                        let keys = self.keymap.keys_for(Action::Back).join(" / ");
+                        let keys = self.keys_text(Action::Back);
                         (
                             t!("view-back-grid"),
                             format!("{} ({keys})", t!("view-back-grid")),
@@ -13316,7 +13324,7 @@ impl TriApp {
                     if response.clicked() {
                         clicked = Some(Action::ToggleGridInfo);
                     }
-                    let keys = self.keymap.keys_for(Action::Zoom100).join(" / ");
+                    let keys = self.keys_text(Action::Zoom100);
                     let tip = format!("{} ({keys})\n{}", t!("grid-fit"), t!("grid-fit-back"));
                     let (rect, response) = marks::icon_button(ui, icon, &t!("grid-fit"), &tip);
                     // Allumé = à l'accent, comme les autres interrupteurs de la barre.
@@ -13663,7 +13671,7 @@ impl TriApp {
             // règle d'un clic).
             let settings_tip = t!(
                 "filter-settings-in-panel",
-                keys = self.keymap.keys_for(Action::ToggleMetadata).join(" / ")
+                keys = self.keys_text(Action::ToggleMetadata)
             );
             for (action, on, enabled) in self.content_toggles() {
                 let tip = format!("{}\n{settings_tip}", self.action_tip(action));
@@ -14163,7 +14171,8 @@ impl TriApp {
                 .count();
             marks::film_reel(painter, reel_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
-            let tip = t!("dev-count-tip", n = n, keys = keys);
+            let has = if keys.is_empty() { "no" } else { "yes" };
+            let tip = t!("dev-count-tip", n = n, keys = keys, has = has);
             let badge = ui.interact(
                 reel_rect.expand(2.0),
                 response.id.with("developments"),
@@ -14187,7 +14196,8 @@ impl TriApp {
             // 31/10/2026).
             marks::fold(painter, reel_rect, mark_color);
             let keys = self.keymap.keys_for(Action::DevToggle).join(" / ");
-            let tip = t!("dev-fold-tip", keys = keys);
+            let has = if keys.is_empty() { "no" } else { "yes" };
+            let tip = t!("dev-fold-tip", keys = keys, has = has);
             let badge = ui.interact(
                 reel_rect.expand(2.0),
                 response.id.with("fold"),
@@ -15286,7 +15296,7 @@ impl TriApp {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let tip = |a: Action| self.keymap.keys_for(a).join(" / ");
+                    let tip = |a: Action| self.keys_text(a);
                     undo = ui
                         .add_enabled(
                             self.history.can_undo(),
@@ -15998,7 +16008,7 @@ impl TriApp {
         let title = t!("help-here-title", place = place.label());
         let footer = t!(
             "help-here-footer",
-            help = self.keymap.keys_for(Action::Help).join(" / "),
+            help = self.keys_text(Action::Help),
             leader = t!("key-leader"),
             keys = self.keymap.leader_label()
         );
@@ -19879,7 +19889,9 @@ mod tests {
         act(&mut h, Action::DevNext);
         assert_eq!(h.state().selected, i - 1, "en boucle : la photo");
         let keys = h.state().keymap.keys_for(Action::DevToggle).join(" / ");
-        let badge = t!("dev-count-tip", n = 1, keys = keys.clone());
+        let has = if keys.is_empty() { "no" } else { "yes" };
+        let badge = t!("dev-count-tip", n = 1, keys = keys.clone(), has = has);
+        assert!(!badge.contains("· :") && !badge.contains("()"), "{badge}");
         h.get_by_label(&badge);
         act(&mut h, Action::DevPrev);
         assert_eq!(h.state().selected, i);
@@ -19896,7 +19908,7 @@ mod tests {
         assert_eq!(h.state().stacks.shown.len(), 3);
         assert_eq!(h.state().selected, i, "la sélection reste sur le clone");
         // Pastille « replier » sur chaque vignette dépliée (31/10/2026) : clic = replier.
-        let fold_tip = t!("dev-fold-tip", keys = keys);
+        let fold_tip = t!("dev-fold-tip", keys = keys, has = has);
         assert!(
             h.query_by_label(&fold_tip).is_none(),
             "repliée : pas de pastille"
@@ -23286,6 +23298,22 @@ mod tests {
         click_settled(&mut h, &t!("panel-view-review"));
         h.run_steps(2);
         assert!(h.state().review_developments);
+    }
+
+    #[test]
+    fn a_tip_without_shortcut_has_no_empty_parentheses() {
+        // Retour du 08/11/2026 : « Relire les notes depuis les images (…) () ».
+        let (mut h, _dir) = harness();
+        h.run_steps(2);
+        let app = h.state();
+        assert!(app.keymap.keys_for(Action::ImportNotes).is_empty());
+        let tip = app.action_tip(Action::ImportNotes);
+        assert_eq!(tip, Action::ImportNotes.label());
+        assert!(!tip.ends_with("()"), "{tip}");
+        // Avec un raccourci : entre parenthèses.
+        assert!(app.action_tip(Action::Help).ends_with("(F1)"));
+        // Cité dans une phrase : « sans raccourci » plutôt qu'un vide.
+        assert_eq!(app.keys_text(Action::ImportNotes), t!("keys-none-short"));
     }
 
     #[test]

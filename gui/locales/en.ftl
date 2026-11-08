@@ -181,7 +181,10 @@ action-core-stack-enter = Entering a stack: its first photo (on) or its cover
 dev-count-tip = { $n ->
     [one] { $n } development
    *[other] { $n } developments
-  } · { $keys }: unfold / fold
+  } · { $has ->
+    [yes] click or { $keys }
+   *[no] click
+  }: unfold / fold
 dev-clone = clone { $n }
 dev-copy = copy { $n }
 dev-none = This photo has no development (darktable, RapidRAW)
@@ -189,7 +192,10 @@ dev-before = Before: the camera JPEG instead of the development (<core.view.sour
 dev-after = After: the development
 dev-preferred = { $name }: cover of the photo
 dev-preferred-none = No preferred development any more: the stack folds on the latest one
-dev-fold-tip = Fold the developments ({ $keys }) · Alt+click: fold and keep this one as the cover
+dev-fold-tip = Fold the developments{ $has ->
+    [yes] {" "}({ $keys })
+   *[no] {""}
+  } · Alt+click: fold and keep this one as the cover
 dev-folded-already = Every development stack is folded
 dev-badge-tip = Development: { $name }
 dev-badge-tip-pending = Development: { $name } (the photo's thumbnail until it is rendered)
