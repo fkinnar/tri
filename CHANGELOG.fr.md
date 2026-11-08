@@ -4,6 +4,11 @@
 
 ## Non publié
 
+- **darktable voit les couleurs posées dans tri** (#373) : la liste
+  `darktable:colorlabels` était écrite après l'historique de darktable, qui l'ignorait
+  alors en resynchronisant les XMP modifiés au démarrage. Elle va maintenant avant
+  l'historique, là où darktable la met. Les sidecars déjà écrits la déplacent au prochain
+  changement de couleur.
 - **Raccourcis cités à jour** (#372) : les descriptions des réglages et quelques messages
   (aide-mémoire du plein écran, « Avant » d'un développement, préréglages de version…)
   citaient des raccourcis écrits en dur, parfois périmés (« Maj+B » pour voir ses

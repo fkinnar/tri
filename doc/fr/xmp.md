@@ -77,6 +77,12 @@ liste à `0`, rouge, dans darktable).
   logiciels qui ne lisent que `Label` (XnView, l'Explorateur Windows) ne voient alors pas
   les couleurs.
 
+**Place de la liste** : `darktable:colorlabels` est écrit juste avant `darktable:history`,
+comme darktable lui-même. Placée après l'historique, darktable ne relisait pas les
+couleurs (« garder le XMP » au démarrage sans effet ; constaté par un utilisateur, bien
+que l'ordre des éléments n'ait pas de sens en XMP). Sans historique, la liste va à la fin
+de la description.
+
 Règles de lecture : rejeté si `xmp:Rating = -1`, `xmpDM:pick = -1` ou
 `digiKam:PickLabel = 1` ; accepté si `xmpDM:pick = 1` ou `digiKam:PickLabel = 3`. Les
 étoiles écrites « 3.0 » (certains logiciels) sont acceptées. Les règles (mode, priorité,
