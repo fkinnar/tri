@@ -477,14 +477,35 @@ fn choices(section: &str, key: &str) -> Option<&'static [&'static str]> {
 
 /// Libellé d'une valeur de liste déroulante : traduit s'il existe
 /// (`settings-choice-<section>-<clé>-<valeur>`, 08/11/2026 : « Darktable », « Adobe »,
-/// « Les deux »), sinon la valeur telle qu'écrite dans le fichier.
-fn choice_text(section: &str, key: &str, value: &str) -> String {
+/// « Les deux »), suivi en gris d'un exemple s'il y en a un (`…-hint` : `IMAGE.RAF.xmp`) ;
+/// sinon la valeur telle qu'écrite dans le fichier.
+fn choice_text(ui: &Ui, section: &str, key: &str, value: &str) -> egui::WidgetText {
     let id = format!("settings-choice-{section}-{key}-{value}").replace(['.', '_'], "-");
-    if tri::i18n::has(tri::i18n::language(), &id) {
-        t!(&id)
-    } else {
-        value.to_string()
+    let language = tri::i18n::language();
+    if !tri::i18n::has(language, &id) {
+        return value.into();
     }
+    let hint = format!("{id}-hint");
+    if !tri::i18n::has(language, &hint) {
+        return t!(&id).into();
+    }
+    let style = ui.style();
+    let mut job = egui::text::LayoutJob::default();
+    RichText::new(t!(&id)).append_to(
+        &mut job,
+        style,
+        egui::FontSelection::Default,
+        egui::Align::Center,
+    );
+    RichText::new(format!("  {}", t!(&hint)))
+        .color(ui.visuals().weak_text_color())
+        .append_to(
+            &mut job,
+            style,
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        );
+    job.into()
 }
 
 fn is_folder_key(key: &str) -> bool {
@@ -1744,14 +1765,14 @@ impl SettingsWindow {
                 Value::Str(s) if choices(section, &entry.key).is_some() => {
                     let mut v = s.clone();
                     let combo = egui::ComboBox::from_id_salt(("settings_choice", &id))
-                        .selected_text(choice_text(section, &entry.key, &v))
+                        .selected_text(choice_text(ui, section, &entry.key, &v))
                         .show_ui(ui, |ui| {
                             for choice in choices(section, &entry.key).unwrap_or_default() {
                                 if self.fits(section, &entry.key, choice) {
                                     ui.selectable_value(
                                         &mut v,
                                         choice.to_string(),
-                                        choice_text(section, &entry.key, choice),
+                                        choice_text(ui, section, &entry.key, choice),
                                     );
                                 }
                             }

@@ -11912,16 +11912,17 @@ impl TriApp {
         let others = self.folder.notes.conflicts().len().saturating_sub(1);
         let names: Vec<String> = conflict.fields.iter().map(|f| field_name(*f)).collect();
         let mut apply = false;
-        // Lignes : (choix, libellé, notes).
-        let mut rows: Vec<(Pick, String, tri::xmp::Notes)> = Vec::new();
+        // Lignes : (choix, libellé, notes, date de modification de la source).
+        let mut rows: Vec<(Pick, String, tri::xmp::Notes, Option<u64>)> = Vec::new();
         if let Some(before) = &conflict.before {
-            rows.push((Pick::Before, t!("conflict-before"), before.clone()));
+            rows.push((Pick::Before, t!("conflict-before"), before.clone(), None));
         }
-        for (source, notes) in &conflict.sources {
+        for (i, (source, notes)) in conflict.sources.iter().enumerate() {
             rows.push((
                 Pick::Source(source.clone()),
                 source_label(source, &image_name),
                 notes.clone(),
+                conflict.modified.get(i).copied().filter(|&m| m > 0),
             ));
         }
         // Se choisissent : les champs en désaccord, et ceux où les lignes diffèrent sans
@@ -11943,6 +11944,9 @@ impl TriApp {
                 // largeur fixe, valeurs centrées.
                 let h = ui.spacing().interact_size.y + 6.0;
                 let (label_w, field_w, icon) = (210.0, 110.0, self.gui.dialogs.icon_size);
+                // Date de modification de chaque source (08/11/2026, idée de
+                // l'utilisateur) : un indice, un sidecar de 2012 face à un de 2026.
+                let date_w = 140.0;
                 let accent = marks::accent_mark(ui.ctx());
                 // Cellules de taille fixe, dessinées ici : texte centré ; une valeur à
                 // choisir est une zone cliquable à sa taille, fond de sélection du thème.
@@ -12010,11 +12014,16 @@ impl TriApp {
                     );
                 };
                 egui::Grid::new("conflict_sources")
-                    .num_columns(5)
+                    .num_columns(6)
                     .striped(true)
                     .spacing(vec2(0.0, 0.0))
                     .show(ui, |ui| {
                         first(ui, egui::RichText::new(""));
+                        text_cell(
+                            ui,
+                            date_w,
+                            egui::RichText::new(t!("conflict-modified")).weak(),
+                        );
                         for field in Field::ALL {
                             let title = egui::RichText::new(field_title(field));
                             let title = if conflict.fields.contains(&field) {
@@ -12028,7 +12037,7 @@ impl TriApp {
                         }
                         cell(ui, icon + 12.0, &mut |_| {});
                         ui.end_row();
-                        for (pick, label, notes) in &rows {
+                        for (pick, label, notes, modified) in &rows {
                             let text = egui::RichText::new(label.as_str());
                             first(
                                 ui,
@@ -12038,6 +12047,8 @@ impl TriApp {
                                     text
                                 },
                             );
+                            let date = modified.map_or_else(String::new, modified_text);
+                            text_cell(ui, date_w, egui::RichText::new(date).weak());
                             for field in Field::ALL {
                                 let text = field_text(field, notes);
                                 if choosable.contains(&field) {
@@ -12082,6 +12093,7 @@ impl TriApp {
                         // Le résultat du choix, à l'accent : il ne se clique pas.
                         let result = dialog.result(&conflict);
                         first(ui, egui::RichText::new(t!("conflict-result")).color(accent));
+                        cell(ui, date_w, &mut |_| {});
                         for field in Field::ALL {
                             let text =
                                 egui::RichText::new(field_text(field, &result)).color(accent);
@@ -17279,6 +17291,14 @@ fn source_kind(source: &str, image_name: &str) -> String {
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default()
+}
+/// Date de modification d'une source (nanosecondes depuis 1970), à l'heure locale, au
+/// format de la langue (`conflict-modified-format`).
+fn modified_text(nanos: u64) -> String {
+    let at = std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos);
+    chrono::DateTime::<chrono::Local>::from(at)
+        .format(&t!("conflict-modified-format"))
+        .to_string()
 }
 
 /// Nom lisible d'une source de notes.
@@ -27232,6 +27252,22 @@ mod tests {
             h.query_all_by_label(&t!("conflict-keep")).count(),
             2,
             "un « Garder » par source"
+        );
+        // La date de modification de chaque source (08/11/2026), à l'heure locale :
+        // celle du sidecar, telle que la montre la boîte (cellules dessinées, pas de
+        // libellé accessible : vérifié par capture).
+        let conflict = h.state().folder.notes.conflict(&image).cloned().unwrap();
+        let sidecar = tri::xmp::sidecar_path(&image, Default::default());
+        let stamp = tri::reconcile::Stamp::of(&sidecar).unwrap().modified;
+        assert!(
+            conflict.modified.contains(&stamp),
+            "{:?}",
+            conflict.modified
+        );
+        assert!(
+            modified_text(stamp).contains(':'),
+            "{}",
+            modified_text(stamp)
         );
         // Champ par champ (retour du 07/11/2026) : les étoiles du sidecar (choisies
         // d'office : les plus récentes), la couleur de l'image.

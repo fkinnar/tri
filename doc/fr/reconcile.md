@@ -75,7 +75,8 @@ sources et leurs notes.
 - Une image en conflit porte un triangle orange en haut à gauche de sa vignette
   (`marks::conflict_sign`) ; un clic, ou une note posée sur elle, ouvre la boîte « Notes
   en désaccord » : un tableau, une ligne par source (XMP, RapidRAW, RawTherapee, ART,
-  « Dans l'image ») et les notes d'avant, une colonne par champ. Seuls les champs en
+  « Dans l'image ») et les notes d'avant, la date de modification de chaque source
+  (`Conflict::modified`, à l'heure locale : un indice), une colonne par champ. Seuls les champs en
   désaccord (titre en gras) se choisissent, d'un clic sur la valeur voulue ; un champ où
   les lignes diffèrent sans conflit (une seule source l'a changé) est présélectionné sur
   la valeur fusionnée, et modifiable aussi (retour du 07/11/2026 : une couleur différente

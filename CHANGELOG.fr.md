@@ -9,7 +9,9 @@
   d'une même photo sont désormais lus tous les deux et fusionnés (avant : le plus récent
   seul). « Générer les sidecars » crée ceux que la convention attend (réglé sur Adobe, un
   dossier de sidecars darktable reçoit ses `IMG.xmp`). Liste déroulante en clair :
-  « Darktable », « Adobe », « Les deux ».
+  « Darktable », « Adobe », « Les deux », avec le nom du fichier en gris. La boîte des
+  notes en désaccord montre la date de modification de chaque source (un indice : un
+  sidecar de 2012 face à un de 2026).
 - **Couleurs : une ou plusieurs, et champs par logiciel** (#371) : en mode une couleur,
   `xmp:Label`, la liste de darktable et digiKam sont écrits ; quand `Label` et la couleur
   de darktable ou de digiKam diffèrent (darktable ne touche jamais `Label`, qui pouvait
