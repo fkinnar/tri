@@ -93,6 +93,8 @@ multiple_colors = false
 # (xmp:Label) et "digikam" (digiKam:ColorLabel). darktable réécrit sa couleur à chaque
 # changement mais ne touche jamais xmp:Label, qui peut rester en arrière : d'où darktable en
 # tête. Un champ oublié est lu en dernier ; un champ décoché dans [xmp.fields] n'est pas lu.
+# Plusieurs couleurs : la liste de darktable est toujours lue en premier ; l'ordre ne
+# départage que les autres (fichier sans liste darktable).
 color_sources = ["darktable", "label", "digikam"]
 
 # Champs gérés par logiciel (lus et écrits), dans les sidecars et les images : décocher

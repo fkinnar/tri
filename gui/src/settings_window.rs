@@ -1793,7 +1793,13 @@ impl SettingsWindow {
                 // colonne, un bouton entre deux voisins pour les échanger.
                 value if section == "xmp" && entry.key == "color_sources" => {
                     let managed = self.managed_color_sources();
-                    let (r, changed) = color_sources_editor(ui, value, &managed);
+                    // Plusieurs couleurs : d'après la case de la même section, telle
+                    // qu'affichée (fichier, sinon défaut).
+                    let several = matches!(
+                        self.file.get("xmp", "multiple_colors"),
+                        Some(Value::Bool(true))
+                    );
+                    let (r, changed) = color_sources_editor(ui, value, &managed, several);
                     widget = Some(r);
                     new = changed;
                 }
@@ -2382,29 +2388,94 @@ impl SettingsWindow {
 /// Éditeur de `[xmp] color_sources` (08/11/2026, idée de l'utilisateur : comme l'ordre
 /// des couleurs du tri, mais vertical) : les champs gérés (`managed`, cochés dans
 /// `[xmp.fields]`) dans l'ordre de lecture, numérotés, une ligne par champ qu'on glisse à
-/// sa place ; grisé s'il en reste un seul (rien à ordonner). Les champs non gérés gardent
-/// leur place dans la valeur. Rend la réponse de la première ligne (focus) et la nouvelle
-/// valeur si elle a changé.
+/// sa place ; le logiciel en clair, son champ XMP en gris. Grisé s'il n'y a rien à
+/// ordonner. Plusieurs couleurs (`several`) : la liste de darktable est toujours lue en
+/// premier, sa ligne est fixée en tête. Les champs non gérés gardent leur place dans la
+/// valeur. Rend la réponse de la première ligne (focus) et la nouvelle valeur si elle a
+/// changé.
 fn color_sources_editor(
     ui: &mut Ui,
     value: &Value,
     managed: &[tri::xmp::ColorSource],
+    several: bool,
 ) -> (egui::Response, Option<Value>) {
     use eframe::egui::{Sense, Stroke, pos2};
+    use tri::xmp::ColorSource;
     let before = color_sources_of(value);
     let mut order = before;
-    // Rangs, dans la valeur complète, des champs montrés.
-    let shown: Vec<usize> = (0..3).filter(|&i| managed.contains(&before.0[i])).collect();
+    let pinned = several && managed.contains(&ColorSource::Darktable);
+    // Rangs, dans la valeur complète, des champs qu'on peut glisser.
+    let shown: Vec<usize> = (0..3)
+        .filter(|&i| managed.contains(&before.0[i]))
+        .filter(|&i| !(pinned && before.0[i] == ColorSource::Darktable))
+        .collect();
     let movable = shown.len() > 1;
-    let row_size = vec2(300.0, 24.0);
+    let row_size = vec2(440.0, 24.0);
+    // Une ligne : numéro et logiciel, champ XMP en gris ; poignée si elle se glisse.
+    let paint = |ui: &Ui, rect: egui::Rect, n: usize, source: ColorSource, grip: bool| {
+        let visuals = ui.visuals();
+        let enabled = ui.is_enabled();
+        let text_color = if enabled {
+            visuals.text_color()
+        } else {
+            visuals.weak_text_color()
+        };
+        if grip {
+            for k in -1..=1 {
+                let y = rect.center().y + k as f32 * 3.5;
+                ui.painter().line_segment(
+                    [pos2(rect.left() + 7.0, y), pos2(rect.left() + 15.0, y)],
+                    Stroke::new(1.2, visuals.weak_text_color()),
+                );
+            }
+        }
+        let hint = match source {
+            ColorSource::Darktable if pinned => t!("settings-color-source-darktable-hint-several"),
+            _ => t!(&format!("settings-color-source-{}-hint", source.id())),
+        };
+        let mut job = egui::text::LayoutJob::default();
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        job.append(
+            &format!(
+                "{n}. {}",
+                t!(&format!("settings-color-source-{}", source.id()))
+            ),
+            0.0,
+            egui::TextFormat::simple(font.clone(), text_color),
+        );
+        job.append(
+            &hint,
+            10.0,
+            egui::TextFormat::simple(font, visuals.weak_text_color()),
+        );
+        let galley = ui.fonts_mut(|f| f.layout_job(job));
+        ui.painter().galley(
+            pos2(rect.left() + 24.0, rect.center().y - galley.size().y / 2.0),
+            galley,
+            text_color,
+        );
+    };
     let response = ui
-        .add_enabled_ui(movable, |ui| {
-            ui.vertical(|ui| {
+        .vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 3.0;
+            if shown.is_empty() && !pinned {
+                return ui.weak(t!("settings-color-sources-none"));
+            }
+            let mut first: Option<egui::Response> = None;
+            if pinned {
+                // Toujours en tête, fixée : pas de poignée.
+                let (rect, response) = ui.allocate_exact_size(row_size, Sense::hover());
+                ui.painter().rect_filled(
+                    rect,
+                    4.0,
+                    ui.visuals().widgets.noninteractive.weak_bg_fill,
+                );
+                paint(ui, rect, 1, ColorSource::Darktable, false);
+                first = Some(response);
+            }
+            let offset = usize::from(pinned);
+            ui.add_enabled_ui(movable, |ui| {
                 ui.spacing_mut().item_spacing.y = 3.0;
-                if shown.is_empty() {
-                    return ui.weak(t!("settings-color-sources-none"));
-                }
-                let mut first: Option<egui::Response> = None;
                 for (n, &i) in shown.iter().enumerate() {
                     let source = before.0[i];
                     let name = t!(&format!("settings-color-source-{}", source.id()));
@@ -2425,28 +2496,7 @@ fn color_sources_editor(
                         visuals.widgets.inactive.weak_bg_fill
                     };
                     ui.painter().rect_filled(rect, 4.0, fill);
-                    let text_color = if movable {
-                        visuals.text_color()
-                    } else {
-                        visuals.weak_text_color()
-                    };
-                    // Poignée : trois traits à gauche.
-                    if movable {
-                        for k in -1..=1 {
-                            let y = rect.center().y + k as f32 * 3.5;
-                            ui.painter().line_segment(
-                                [pos2(rect.left() + 7.0, y), pos2(rect.left() + 15.0, y)],
-                                Stroke::new(1.2, visuals.weak_text_color()),
-                            );
-                        }
-                    }
-                    ui.painter().text(
-                        pos2(rect.left() + 24.0, rect.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        format!("{}. {name}", n + 1),
-                        egui::TextStyle::Body.resolve(ui.style()),
-                        text_color,
-                    );
+                    paint(ui, rect, n + 1 + offset, source, movable);
                     response.widget_info(|| {
                         egui::WidgetInfo::labeled(egui::accesskit::Role::ListItem, true, &name)
                     });
@@ -2469,9 +2519,8 @@ fn color_sources_editor(
                     }
                     first.get_or_insert(response);
                 }
-                first.expect("au moins un champ")
-            })
-            .inner
+            });
+            first.expect("au moins une ligne")
         })
         .inner;
     // La ligne glissée suit le pointeur.
@@ -3418,6 +3467,20 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(rows(&h).len(), 3, "{:?}", rows(&h));
+        // Plusieurs couleurs : la liste de darktable toujours lue en premier, sa ligne
+        // fixée en tête (elle ne se glisse plus) ; les deux autres restent à ordonner.
+        h.state_mut()
+            .file
+            .set("xmp", "multiple_colors", &Value::Bool(true))
+            .unwrap();
+        h.run_steps(2);
+        assert_eq!(rows(&h).len(), 2, "{:?}", rows(&h));
+        assert!(!rows(&h).iter().any(|r| r == "darktable"), "{:?}", rows(&h));
+        h.state_mut()
+            .file
+            .set("xmp", "multiple_colors", &Value::Bool(false))
+            .unwrap();
+        h.run_steps(2);
         // darktable décoché : il disparaît de la liste.
         h.state_mut()
             .file
@@ -3425,7 +3488,7 @@ mod tests {
             .unwrap();
         h.run_steps(2);
         assert_eq!(rows(&h).len(), 2, "{:?}", rows(&h));
-        assert!(rows(&h)[0].contains("xmp:Label"), "{:?}", rows(&h));
+        assert!(rows(&h)[0].contains("Lightroom"), "{:?}", rows(&h));
         // Label seul géré : une ligne, rien à ordonner (grisée).
         h.state_mut()
             .file

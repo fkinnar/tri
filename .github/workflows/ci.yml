@@ -85,7 +85,22 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          vcpkg install libraw:x64-windows
+          # vcpkg télécharge son propre CMake depuis GitHub : le 08/11/2026, des 504 en
+          # série faisaient échouer l'étape. Trois essais, puis les outils déjà installés
+          # sur la machine (CMake, Ninja de l'image GitHub).
+          $ok = $false
+          foreach ($try in 1..3) {
+            vcpkg install libraw:x64-windows
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Host "vcpkg : échec (essai $try), nouvel essai dans 20 s"
+            Start-Sleep -Seconds 20
+          }
+          if (-not $ok) {
+            Write-Host "vcpkg : outils du système (VCPKG_FORCE_SYSTEM_BINARIES)"
+            $env:VCPKG_FORCE_SYSTEM_BINARIES = "1"
+            vcpkg install libraw:x64-windows
+            if ($LASTEXITCODE -ne 0) { throw "vcpkg : LibRaw non installée" }
+          }
           # NASM (libjpeg-turbo) : Chocolatey, sinon directement depuis nasm.us (le 07/11/2026,
           # une panne de Chocolatey, 503, laissait l'étape réussir sans NASM).
           choco install nasm -y --no-progress
